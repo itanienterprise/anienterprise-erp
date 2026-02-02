@@ -3,7 +3,7 @@ import {
   MenuIcon, SearchIcon, BellIcon, HomeIcon, BoxIcon, UsersIcon, AnchorIcon,
   BarChartIcon, SettingsIcon, TrendingUpIcon, DollarSignIcon,
   ShoppingCartIcon, EditIcon, TrashIcon, FunnelIcon, XIcon,
-  ChevronUpIcon, ChevronDownIcon, EyeIcon
+  ChevronUpIcon, ChevronDownIcon, ChevronLeftIcon, ChevronRightIcon, EyeIcon, CalendarIcon
 } from './components/Icons';
 
 import { encryptData, decryptData } from './utils/encryption';
@@ -25,6 +25,118 @@ const formatDate = (dateString) => {
   const month = String(date.getMonth() + 1).padStart(2, '0');
   const year = date.getFullYear();
   return `${day}/${month}/${year}`;
+};
+
+const CustomDatePicker = ({ value, onChange, placeholder, label, required = false, name }) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const [viewDate, setViewDate] = useState(value ? new Date(value) : new Date());
+  const containerRef = useRef(null);
+
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (containerRef.current && !containerRef.current.contains(event.target)) {
+        setIsOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const years = [];
+  const currentYear = new Date().getFullYear();
+  for (let i = currentYear - 10; i <= currentYear + 10; i++) {
+    years.push(i);
+  }
+
+  const months = [
+    'January', 'February', 'March', 'April', 'May', 'June',
+    'July', 'August', 'September', 'October', 'November', 'December'
+  ];
+
+  const getDaysInMonth = (month, year) => new Date(year, month + 1, 0).getDate();
+  const getFirstDayOfMonth = (month, year) => new Date(year, month, 1).getDay();
+
+  const handlePrevMonth = () => {
+    setViewDate(new Date(viewDate.getFullYear(), viewDate.getMonth() - 1, 1));
+  };
+
+  const handleNextMonth = () => {
+    setViewDate(new Date(viewDate.getFullYear(), viewDate.getMonth() + 1, 1));
+  };
+
+  const handleDateSelect = (day) => {
+    const selectedDate = new Date(viewDate.getFullYear(), viewDate.getMonth(), day);
+    // Format as YYYY-MM-DD for consistency with existing state
+    const formatted = selectedDate.toISOString().split('T')[0];
+    onChange({ target: { name, value: formatted } });
+    setIsOpen(false);
+  };
+
+  const daysInMonth = getDaysInMonth(viewDate.getMonth(), viewDate.getFullYear());
+  const firstDay = getFirstDayOfMonth(viewDate.getMonth(), viewDate.getFullYear());
+  const days = Array.from({ length: daysInMonth }, (_, i) => i + 1);
+  const blanks = Array.from({ length: firstDay }, (_, i) => i);
+
+  return (
+    <div className="space-y-2 relative" ref={containerRef}>
+      {label && <label className="text-sm font-medium text-gray-700">{label}</label>}
+      <div className="relative">
+        <input
+          type="text"
+          readOnly
+          value={value ? formatDate(value) : ''}
+          onClick={() => setIsOpen(!isOpen)}
+          placeholder={placeholder || 'Select Date'}
+          required={required}
+          className="w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm cursor-pointer pr-10"
+        />
+        <CalendarIcon className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+      </div>
+
+      {isOpen && (
+        <div className="absolute z-[100] mt-2 p-4 bg-white/95 backdrop-blur-xl border border-gray-200 rounded-2xl shadow-2xl animate-in fade-in zoom-in duration-200 w-[280px]">
+          <div className="flex items-center justify-between mb-4">
+            <button type="button" onClick={handlePrevMonth} className="p-1 hover:bg-gray-100 rounded-lg text-gray-600 transition-colors">
+              <ChevronLeftIcon className="w-4 h-4" />
+            </button>
+            <div className="text-sm font-bold text-gray-800">
+              {months[viewDate.getMonth()]} {viewDate.getFullYear()}
+            </div>
+            <button type="button" onClick={handleNextMonth} className="p-1 hover:bg-gray-100 rounded-lg text-gray-600 transition-colors">
+              <ChevronRightIcon className="w-4 h-4" />
+            </button>
+          </div>
+
+          <div className="grid grid-cols-7 gap-1 mb-2">
+            {['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'].map(d => (
+              <div key={d} className="text-[10px] font-bold text-gray-400 text-center uppercase py-1">{d}</div>
+            ))}
+          </div>
+
+          <div className="grid grid-cols-7 gap-1">
+            {blanks.map(b => <div key={`b-${b}`} className="h-8"></div>)}
+            {days.map(d => {
+              const isToday = new Date().toDateString() === new Date(viewDate.getFullYear(), viewDate.getMonth(), d).toDateString();
+              const isSelected = value && new Date(value).toDateString() === new Date(viewDate.getFullYear(), viewDate.getMonth(), d).toDateString();
+              return (
+                <button
+                  key={d}
+                  type="button"
+                  onClick={() => handleDateSelect(d)}
+                  className={`h-8 w-8 rounded-lg text-xs font-medium flex items-center justify-center transition-all
+                    ${isSelected ? 'bg-blue-600 text-white shadow-md' :
+                      isToday ? 'bg-blue-50 text-blue-600 border border-blue-100' :
+                        'hover:bg-gray-100 text-gray-700'}`}
+                >
+                  {d}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+    </div>
+  );
 };
 
 
@@ -391,7 +503,35 @@ function App() {
       }
     }, 700); // 700ms for long press
   };
+  const toggleInventoryGroupSelection = (productName) => {
+    const records = inventoryRecords.filter(item =>
+      (item.productName || '').trim().toLowerCase() === productName.toLowerCase()
+    );
+    const ids = records.map(r => r._id);
+    const newSelection = new Set(selectedItems);
 
+    // Check if the whole group is already selected
+    const allSelected = ids.every(id => newSelection.has(id));
+
+    if (allSelected) {
+      // Deselect all
+      ids.forEach(id => newSelection.delete(id));
+    } else {
+      // Select all
+      ids.forEach(id => newSelection.add(id));
+    }
+
+    setSelectedItems(newSelection);
+    setIsSelectionMode(newSelection.size > 0);
+  };
+
+  const isInventoryGroupSelected = (productName) => {
+    const records = inventoryRecords.filter(item =>
+      (item.productName || '').trim().toLowerCase() === productName.toLowerCase()
+    );
+    if (records.length === 0) return false;
+    return records.every(r => selectedItems.has(r._id));
+  };
   const endLongPress = () => {
     if (longPressTimer.current) {
       clearTimeout(longPressTimer.current);
@@ -399,8 +539,8 @@ function App() {
     }
   };
 
-  const handleDelete = (type, id) => {
-    setDeleteConfirm({ show: true, type, id, isBulk: false });
+  const handleDelete = (type, id, isBulk = false) => {
+    setDeleteConfirm({ show: true, type, id, isBulk });
   };
 
   const confirmDelete = async () => {
@@ -806,19 +946,23 @@ function App() {
                   <div className="space-y-3">
                     <label className="text-xs font-bold text-gray-500 uppercase tracking-wider block">Date Range</label>
                     <div className="flex items-center space-x-2">
-                      <input
-                        type="date"
-                        value={filters.startDate}
-                        onChange={(e) => setFilters(prev => ({ ...prev, startDate: e.target.value, quickRange: 'custom' }))}
-                        className="w-full px-3 py-2 text-xs bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-all"
-                      />
+                      <div className="flex-1 min-w-0 pointer-cursor">
+                        <CustomDatePicker
+                          value={filters.startDate}
+                          onChange={(e) => setFilters(prev => ({ ...prev, startDate: e.target.value, quickRange: 'custom' }))}
+                          name="startDate"
+                          placeholder="From"
+                        />
+                      </div>
                       <span className="text-gray-400">to</span>
-                      <input
-                        type="date"
-                        value={filters.endDate}
-                        onChange={(e) => setFilters(prev => ({ ...prev, endDate: e.target.value, quickRange: 'custom' }))}
-                        className="w-full px-3 py-2 text-xs bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-all"
-                      />
+                      <div className="flex-1 min-w-0">
+                        <CustomDatePicker
+                          value={filters.endDate}
+                          onChange={(e) => setFilters(prev => ({ ...prev, endDate: e.target.value, quickRange: 'custom' }))}
+                          name="endDate"
+                          placeholder="To"
+                        />
+                      </div>
                     </div>
                   </div>
 
@@ -953,29 +1097,21 @@ function App() {
 
                 <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-6 relative z-10">
                   {/* Opening Date */}
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium text-gray-700">Opening Date</label>
-                    <input
-                      type="date"
-                      name="openingDate"
-                      value={formData.openingDate}
-                      onChange={handleInputChange}
-                      required
-                      className="w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm"
-                    />
-                  </div>
+                  <CustomDatePicker
+                    label="Opening Date"
+                    name="openingDate"
+                    value={formData.openingDate}
+                    onChange={handleInputChange}
+                    required
+                  />
 
                   {/* Close Date */}
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium text-gray-700">Close Date</label>
-                    <input
-                      type="date"
-                      name="closeDate"
-                      value={formData.closeDate}
-                      onChange={handleInputChange}
-                      className="w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm"
-                    />
-                  </div>
+                  <CustomDatePicker
+                    label="Close Date"
+                    name="closeDate"
+                    value={formData.closeDate}
+                    onChange={handleInputChange}
+                  />
 
                   {/* IP Number */}
                   <div className="space-y-2">
@@ -1028,7 +1164,7 @@ function App() {
                       </button>
                     </div>
                     {activeDropdown === 'ipImporter' && (
-                      <div className="absolute z-[60] w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-xl max-h-60 overflow-y-auto animate-in fade-in zoom-in duration-200">
+                      <div className="absolute z-[60] w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-xl max-h-48 overflow-y-auto animate-in fade-in zoom-in duration-200">
                         {importers
                           .filter(imp => imp.status === 'Active' && (!formData.ipParty || importers.some(x => x.name === formData.ipParty) || imp.name.toLowerCase().includes(formData.ipParty.toLowerCase())))
                           .map((importer) => (
@@ -1106,7 +1242,7 @@ function App() {
                       </button>
                     </div>
                     {activeDropdown === 'ipPort' && (
-                      <div className="absolute z-[60] w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-xl max-h-60 overflow-y-auto animate-in fade-in zoom-in duration-200">
+                      <div className="absolute z-[60] w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-xl max-h-48 overflow-y-auto animate-in fade-in zoom-in duration-200">
                         {ports
                           .filter(p => p.status === 'Active' && (!formData.port || ports.some(x => x.name === formData.port) || p.name.toLowerCase().includes(formData.port.toLowerCase())))
                           .map((port) => (
@@ -1781,12 +1917,14 @@ function App() {
           <div className="space-y-6">
             <div className="flex items-center justify-between">
               <h2 className="text-2xl font-bold text-gray-800">Inventory Management</h2>
-              <button
-                onClick={() => setShowInventoryForm(!showInventoryForm)}
-                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg shadow-lg shadow-blue-500/30 transition-all transform hover:scale-105 flex items-center"
-              >
-                <span className="mr-2 text-xl">+</span> Add New
-              </button>
+              <div className="flex items-center space-x-3">
+                <button
+                  onClick={() => setShowInventoryForm(!showInventoryForm)}
+                  className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg shadow-lg shadow-blue-500/30 transition-all transform hover:scale-105 flex items-center"
+                >
+                  <span className="mr-2 text-xl">+</span> Add New
+                </button>
+              </div>
             </div>
 
             {showInventoryForm && (
@@ -1803,13 +1941,13 @@ function App() {
 
                 <form onSubmit={handleInventorySubmit} className="grid grid-cols-1 md:grid-cols-2 gap-6 relative z-10">
                   <div className="col-span-1 md:col-span-2 grid grid-cols-1 md:grid-cols-4 gap-6">
-                    <div className="space-y-2">
-                      <label className="text-sm font-medium text-gray-700">Date</label>
-                      <input
-                        type="date" name="date" value={inventoryFormData.date} onChange={handleInventoryInputChange} required
-                        className="w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm"
-                      />
-                    </div>
+                    <CustomDatePicker
+                      label="Date"
+                      name="date"
+                      value={inventoryFormData.date}
+                      onChange={handleInventoryInputChange}
+                      required
+                    />
                     <div className="space-y-2">
                       <label className="text-sm font-medium text-gray-700">LC No</label>
                       <input
@@ -1839,7 +1977,7 @@ function App() {
                         </button>
                       </div>
                       {activeDropdown === 'port' && (
-                        <div className="absolute z-[60] w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-xl max-h-60 overflow-y-auto animate-in fade-in zoom-in duration-200">
+                        <div className="absolute z-[60] w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-xl max-h-48 overflow-y-auto animate-in fade-in zoom-in duration-200">
                           {ports
                             .filter(p => p.status === 'Active' && (!inventoryFormData.port || ports.some(x => x.name === inventoryFormData.port) || p.name.toLowerCase().includes(inventoryFormData.port.toLowerCase())))
                             .map((port) => (
@@ -1882,7 +2020,7 @@ function App() {
                         </button>
                       </div>
                       {activeDropdown === 'importer' && (
-                        <div className="absolute z-[60] w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-xl max-h-60 overflow-y-auto animate-in fade-in zoom-in duration-200">
+                        <div className="absolute z-[60] w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-xl max-h-48 overflow-y-auto animate-in fade-in zoom-in duration-200">
                           {importers
                             .filter(imp => imp.status === 'Active' && (!inventoryFormData.importer || importers.some(x => x.name === inventoryFormData.importer) || imp.name.toLowerCase().includes(inventoryFormData.importer.toLowerCase())))
                             .map((imp) => (
@@ -1936,8 +2074,6 @@ function App() {
                     </select>
                   </div>
 
-
-
                   <div className="space-y-2">
                     <label className="text-sm font-medium text-gray-700">Status</label>
                     <select
@@ -1977,6 +2113,25 @@ function App() {
 
             {!showInventoryForm && (
               <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+                {selectedItems.size > 0 && (
+                  <div className="bg-blue-50 px-6 py-3 border-b border-blue-100 flex items-center justify-between animate-in fade-in slide-in-from-top-2">
+                    <span className="text-sm font-medium text-blue-700">{displayRecords.filter(item => isInventoryGroupSelected(item.productName)).length} products selected</span>
+                    <div className="flex items-center space-x-3">
+                      <button
+                        onClick={() => { setSelectedItems(new Set()); setIsSelectionMode(false); }}
+                        className="px-3 py-1 text-gray-600 hover:text-gray-800 text-xs font-medium transition-colors"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        onClick={() => setDeleteConfirm({ show: true, type: 'inventory', id: null, isBulk: true })}
+                        className="px-3 py-1 bg-red-600 hover:bg-red-700 text-white text-xs font-medium rounded-md transition-colors flex items-center"
+                      >
+                        <TrashIcon className="w-3.5 h-3.5 mr-1" /> Delete Bulk
+                      </button>
+                    </div>
+                  </div>
+                )}
                 {isLoading ? (
                   <div className="flex items-center justify-center p-20">
                     <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
@@ -1985,7 +2140,33 @@ function App() {
                   <div className="overflow-x-auto">
                     <table className="w-full text-left">
                       <thead>
-                        <tr className="bg-gray-50 border-b border-gray-100">
+                        <tr
+                          className="bg-gray-50 border-b border-gray-100 select-none cursor-pointer"
+                          onMouseDown={() => startLongPress(null)}
+                          onMouseUp={endLongPress}
+                          onMouseLeave={endLongPress}
+                          onTouchStart={() => startLongPress(null)}
+                          onTouchEnd={endLongPress}
+                        >
+                          {isSelectionMode && (
+                            <th className="px-6 py-4 w-10">
+                              <input
+                                type="checkbox"
+                                checked={displayRecords.length > 0 && displayRecords.every(item => isInventoryGroupSelected(item.productName))}
+                                onChange={() => {
+                                  if (displayRecords.every(item => isInventoryGroupSelected(item.productName))) {
+                                    setSelectedItems(new Set());
+                                    setIsSelectionMode(false);
+                                  } else {
+                                    const allIds = inventoryRecords.map(r => r._id);
+                                    setSelectedItems(new Set(allIds));
+                                    setIsSelectionMode(true);
+                                  }
+                                }}
+                                className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                              />
+                            </th>
+                          )}
                           <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Product Name</th>
                           <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Quantity</th>
                           <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider text-center">Status</th>
@@ -2001,7 +2182,34 @@ function App() {
 
                       <tbody className="divide-y divide-gray-100">
                         {displayRecords.map((item) => (
-                          <tr key={item.originalId} className="hover:bg-gray-50 transition-colors">
+                          <tr
+                            key={item.originalId}
+                            className={`${isInventoryGroupSelected(item.productName) ? 'bg-blue-50/30' : 'hover:bg-gray-50'} transition-colors cursor-pointer select-none`}
+                            onMouseDown={() => {
+                              longPressTimer.current = setTimeout(() => {
+                                toggleInventoryGroupSelection(item.productName);
+                              }, 700);
+                            }}
+                            onMouseUp={endLongPress}
+                            onMouseLeave={endLongPress}
+                            onTouchStart={() => {
+                              longPressTimer.current = setTimeout(() => {
+                                toggleInventoryGroupSelection(item.productName);
+                              }, 700);
+                            }}
+                            onTouchEnd={endLongPress}
+                            onClick={() => isSelectionMode && toggleInventoryGroupSelection(item.productName)}
+                          >
+                            {isSelectionMode && (
+                              <td className="px-6 py-4">
+                                <input
+                                  type="checkbox"
+                                  checked={isInventoryGroupSelected(item.productName)}
+                                  onChange={(e) => { e.stopPropagation(); toggleInventoryGroupSelection(item.productName); }}
+                                  className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                                />
+                              </td>
+                            )}
                             <td className="px-6 py-4 text-sm font-medium text-gray-900">{item.productName}</td>
                             <td className="px-6 py-4 text-sm text-gray-900 font-medium">{item.quantity} {item.unit}</td>
                             <td className="px-6 py-4 text-center">
@@ -2011,13 +2219,13 @@ function App() {
                             </td>
                             <td className="px-6 py-4 text-center">
                               <div className="flex items-center justify-center space-x-3">
-                                <button onClick={() => handleView('inventory', item)} className="text-gray-400 hover:text-indigo-600 transition-colors">
+                                <button onClick={(e) => { e.stopPropagation(); handleView('inventory', item); }} className="text-gray-400 hover:text-indigo-600 transition-colors">
                                   <EyeIcon className="w-5 h-5" />
                                 </button>
-                                <button onClick={() => handleEdit('inventory', item)} className="text-gray-400 hover:text-blue-600 transition-colors">
+                                <button onClick={(e) => { e.stopPropagation(); handleEdit('inventory', item); }} className="text-gray-400 hover:text-blue-600 transition-colors">
                                   <EditIcon className="w-5 h-5" />
                                 </button>
-                                <button onClick={() => handleDelete('inventory', item._id)} className="text-gray-400 hover:text-red-600 transition-colors">
+                                <button onClick={(e) => { e.stopPropagation(); handleDelete('inventory', item._id); }} className="text-gray-400 hover:text-red-600 transition-colors">
                                   <TrashIcon className="w-5 h-5" />
                                 </button>
                               </div>
