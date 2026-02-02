@@ -3,8 +3,9 @@ import {
   MenuIcon, SearchIcon, BellIcon, HomeIcon, BoxIcon, UsersIcon, AnchorIcon,
   BarChartIcon, SettingsIcon, TrendingUpIcon, DollarSignIcon,
   ShoppingCartIcon, EditIcon, TrashIcon, FunnelIcon, XIcon,
-  ChevronUpIcon, ChevronDownIcon
+  ChevronUpIcon, ChevronDownIcon, EyeIcon
 } from './components/Icons';
+
 import { encryptData, decryptData } from './utils/encryption';
 
 const API_BASE_URL = `http://${window.location.hostname}:5000`;
@@ -15,6 +16,17 @@ const SortIcon = ({ config, columnKey }) => {
     ? <ChevronUpIcon className="w-4 h-4 ml-1 text-blue-600" />
     : <ChevronDownIcon className="w-4 h-4 ml-1 text-blue-600" />;
 };
+
+const formatDate = (dateString) => {
+  if (!dateString) return '-';
+  const date = new Date(dateString);
+  if (isNaN(date.getTime())) return '-';
+  const day = String(date.getDate()).padStart(2, '0');
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const year = date.getFullYear();
+  return `${day}/${month}/${year}`;
+};
+
 
 function App() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -30,6 +42,9 @@ function App() {
   const [isLoading, setIsLoading] = useState(false);
   const [showImporterForm, setShowImporterForm] = useState(false);
   const [showPortForm, setShowPortForm] = useState(false);
+  const [showInventoryForm, setShowInventoryForm] = useState(false);
+  const [inventoryRecords, setInventoryRecords] = useState([]);
+
   const [selectedItems, setSelectedItems] = useState(new Set());
   const [isSelectionMode, setIsSelectionMode] = useState(false);
   const longPressTimer = useRef(null);
@@ -43,6 +58,15 @@ function App() {
     port: '',
     importer: ''
   });
+  const [viewRecord, setViewRecord] = useState(null);
+  const [activeDropdown, setActiveDropdown] = useState(null);
+  const portRef = useRef(null);
+  const importerRef = useRef(null);
+  const ipPortRef = useRef(null);
+  const ipImporterRef = useRef(null);
+  const filterPortRef = useRef(null);
+  const filterImporterRef = useRef(null);
+
 
   const [sortConfig, setSortConfig] = useState({
     ip: { key: null, direction: 'asc' },
@@ -68,6 +92,23 @@ function App() {
     status: 'Active'
   });
 
+  const [inventoryFormData, setInventoryFormData] = useState({
+    date: new Date().toISOString().split('T')[0],
+    lcNo: '',
+    productName: '',
+    quantity: '',
+    unit: 'kg',
+    port: '',
+    importer: '',
+    status: 'In Stock'
+  });
+
+
+
+
+
+
+
   const [formData, setFormData] = useState({
     openingDate: '',
     closeDate: '',
@@ -86,14 +127,12 @@ function App() {
     setFormData(prev => {
       const newData = { ...prev, [name]: value };
 
-      // Automatically calculate Close Date if Opening Date is changed
       if (name === 'openingDate' && value) {
         const openingDate = new Date(value);
         if (!isNaN(openingDate.getTime())) {
           const closeDate = new Date(openingDate);
           closeDate.setMonth(closeDate.getMonth() + 4);
 
-          // Format back to YYYY-MM-DD for the input[type="date"]
           const year = closeDate.getFullYear();
           const month = String(closeDate.getMonth() + 1).padStart(2, '0');
           const day = String(closeDate.getDate()).padStart(2, '0');
@@ -103,6 +142,10 @@ function App() {
 
       return newData;
     });
+
+    if (name === 'port' || name === 'ipParty') {
+      setActiveDropdown(name === 'port' ? 'ipPort' : 'ipImporter');
+    }
   };
 
   const resetFilters = () => {
@@ -156,6 +199,27 @@ function App() {
     setEditingId(null);
     setSubmitStatus(null);
   };
+
+  const resetInventoryForm = () => {
+    setInventoryFormData({
+      date: new Date().toISOString().split('T')[0],
+      lcNo: '',
+      productName: '',
+      quantity: '',
+      unit: 'kg',
+      port: '',
+      importer: '',
+      status: 'In Stock'
+    });
+
+    setEditingId(null);
+    setSubmitStatus(null);
+  };
+
+
+
+
+
 
   const requestSort = (type, key) => {
     setSortConfig(prev => {
@@ -249,6 +313,15 @@ function App() {
     setSelectedItems(new Set());
     setEditingId(null);
     localStorage.setItem('currentView', currentView);
+
+    // Close all forms when changing sections
+    setShowIpForm(false);
+    setShowImporterForm(false);
+    setShowPortForm(false);
+    setShowInventoryForm(false);
+    setActiveDropdown(null);
+    setViewRecord(null);
+
     if (currentView === 'ip-section') {
       fetchIpRecords();
       fetchImporters(); // Fetch importers to populate the dropdown
@@ -257,8 +330,32 @@ function App() {
       fetchImporters();
     } else if (currentView === 'port-section') {
       fetchPorts();
+    } else if (currentView === 'inventory-section') {
+      fetchInventoryRecords();
+      fetchPorts(); // Fetch ports to populate the dropdown
+      fetchImporters(); // Fetch importers to populate the dropdown
     }
+
+
+
   }, [currentView]);
+
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (
+        (portRef.current && !portRef.current.contains(event.target)) &&
+        (importerRef.current && !importerRef.current.contains(event.target)) &&
+        (ipPortRef.current && !ipPortRef.current.contains(event.target)) &&
+        (ipImporterRef.current && !ipImporterRef.current.contains(event.target)) &&
+        (filterPortRef.current && !filterPortRef.current.contains(event.target)) &&
+        (filterImporterRef.current && !filterImporterRef.current.contains(event.target))
+      ) {
+        setActiveDropdown(null);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
 
   const toggleSelection = (id) => {
     const newSelection = new Set(selectedItems);
@@ -308,7 +405,8 @@ function App() {
 
   const confirmDelete = async () => {
     const { type, id, isBulk } = deleteConfirm;
-    const endpoint = type === 'ip' ? 'ip-records' : type === 'importer' ? 'importers' : 'ports';
+    const endpoint = type === 'ip' ? 'ip-records' : type === 'importer' ? 'importers' : type === 'port' ? 'ports' : 'inventory';
+
 
     try {
       if (isBulk) {
@@ -325,6 +423,8 @@ function App() {
       if (type === 'ip') fetchIpRecords();
       else if (type === 'importer') fetchImporters();
       else if (type === 'port') fetchPorts();
+      else if (type === 'inventory') fetchInventoryRecords();
+
       setDeleteConfirm({ show: false, type: '', id: null, isBulk: false });
     } catch (error) {
       console.error('Error deleting:', error);
@@ -342,8 +442,12 @@ function App() {
     } else if (type === 'port') {
       setPortFormData(item);
       setShowPortForm(true);
+    } else if (type === 'inventory') {
+      setInventoryFormData(item);
+      setShowInventoryForm(true);
     }
   };
+
 
   const fetchImporters = async () => {
     setIsLoading(true);
@@ -362,6 +466,10 @@ function App() {
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const handleView = (type, record) => {
+    setViewRecord({ type, data: record });
   };
 
   const handleImporterInputChange = (e) => {
@@ -489,6 +597,113 @@ function App() {
     }
   };
 
+  const fetchInventoryRecords = async () => {
+    setIsLoading(true);
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/inventory`);
+      if (response.ok) {
+        const rawData = await response.json();
+        const decryptedRecords = rawData.map(record => {
+          const decrypted = decryptData(record.data);
+          return { ...decrypted, _id: record._id, createdAt: record.createdAt };
+        });
+        setInventoryRecords(decryptedRecords);
+      }
+    } catch (error) {
+      console.error('Error fetching inventory:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleInventoryInputChange = (e) => {
+    const { name, value } = e.target;
+    setInventoryFormData(prev => ({
+      ...prev,
+      [name]: value
+    }));
+    if (name === 'port' || name === 'importer') {
+      setActiveDropdown(name);
+    }
+  };
+
+  const handleInventoryDropdownSelect = (name, value) => {
+    setInventoryFormData(prev => ({
+      ...prev,
+      [name]: value
+    }));
+    setActiveDropdown(null);
+  };
+
+  const handleIpDropdownSelect = (name, value) => {
+    setFormData(prev => ({
+      ...prev,
+      [name]: value
+    }));
+    setActiveDropdown(null);
+  };
+
+  const handleFilterDropdownSelect = (name, value) => {
+    setFilters(prev => ({
+      ...prev,
+      [name]: value
+    }));
+    setActiveDropdown(null);
+  };
+
+  const handleInventorySubmit = async (e) => {
+    e.preventDefault();
+    setIsSubmitting(true);
+    setSubmitStatus(null);
+
+    try {
+      const url = editingId
+        ? `${API_BASE_URL}/api/inventory/${editingId}`
+        : `${API_BASE_URL}/api/inventory`;
+      const encryptedPayload = { data: encryptData(inventoryFormData) };
+      const response = await fetch(url, {
+        method: editingId ? 'PUT' : 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(encryptedPayload),
+      });
+
+      if (response.ok) {
+        setSubmitStatus('success');
+        fetchInventoryRecords();
+        setTimeout(() => {
+          setShowInventoryForm(false);
+          setEditingId(null);
+          setInventoryFormData({
+            date: new Date().toISOString().split('T')[0],
+            lcNo: '',
+            productName: '',
+            quantity: '',
+            unit: 'kg',
+            port: '',
+            importer: '',
+            status: 'In Stock'
+          });
+
+
+
+
+
+          setSubmitStatus(null);
+        }, 2000);
+      } else {
+        setSubmitStatus('error');
+      }
+    } catch (error) {
+      console.error('Error saving inventory:', error);
+      setSubmitStatus('error');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setIsSubmitting(true);
@@ -608,38 +823,108 @@ function App() {
                   </div>
 
                   {/* Port */}
-                  <div className="space-y-3">
+                  <div className="space-y-3 relative" ref={filterPortRef}>
                     <label className="text-xs font-bold text-gray-500 uppercase tracking-wider block">Port</label>
-                    <input
-                      type="text"
-                      value={filters.port}
-                      onChange={(e) => setFilters(prev => ({ ...prev, port: e.target.value }))}
-                      list="filter-ports-list"
-                      placeholder="All Ports"
-                      className="w-full px-3 py-2 text-xs bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-all"
-                    />
-                    <datalist id="filter-ports-list">
-                      <option value="" />
-                      {ports.map(port => <option key={port._id} value={port.name} />)}
-                    </datalist>
+                    <div className="relative">
+                      <input
+                        type="text"
+                        value={filters.port}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setFilters(prev => ({ ...prev, port: val }));
+                          setActiveDropdown('filterPort');
+                        }}
+                        onFocus={() => setActiveDropdown('filterPort')}
+                        placeholder="All Ports"
+                        className="w-full px-3 py-2 text-xs bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-all pr-8"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setActiveDropdown(activeDropdown === 'filterPort' ? null : 'filterPort')}
+                        className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                      >
+                        <ChevronDownIcon className={`w-3 h-3 transition-transform ${activeDropdown === 'filterPort' ? 'rotate-180' : ''}`} />
+                      </button>
+                    </div>
+                    {activeDropdown === 'filterPort' && (
+                      <div className="absolute z-[60] w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-xl max-h-48 overflow-y-auto animate-in fade-in zoom-in duration-200">
+                        <button
+                          type="button"
+                          onClick={() => handleFilterDropdownSelect('port', '')}
+                          className="w-full text-left px-3 py-2 hover:bg-blue-50 text-[10px] transition-colors flex items-center justify-between"
+                        >
+                          <span className="italic text-gray-400">All Ports</span>
+                          {filters.port === '' && <span className="w-1.5 h-1.5 bg-blue-500 rounded-full"></span>}
+                        </button>
+                        {ports
+                          .filter(p => !filters.port || ports.some(x => x.name === filters.port) || p.name.toLowerCase().includes(filters.port.toLowerCase()))
+                          .map((port) => (
+                            <button
+                              key={port._id}
+                              type="button"
+                              onClick={() => handleFilterDropdownSelect('port', port.name)}
+                              className="w-full text-left px-3 py-2 hover:bg-blue-50 text-[10px] transition-colors flex items-center justify-between"
+                            >
+                              <span>{port.name}</span>
+                              {filters.port === port.name && <span className="w-1.5 h-1.5 bg-blue-500 rounded-full"></span>}
+                            </button>
+                          ))}
+                      </div>
+                    )}
                   </div>
 
+
                   {/* Importer */}
-                  <div className="space-y-3">
+                  <div className="space-y-3 relative" ref={filterImporterRef}>
                     <label className="text-xs font-bold text-gray-500 uppercase tracking-wider block">Importer</label>
-                    <input
-                      type="text"
-                      value={filters.importer}
-                      onChange={(e) => setFilters(prev => ({ ...prev, importer: e.target.value }))}
-                      list="filter-importers-list"
-                      placeholder="All Importers"
-                      className="w-full px-3 py-2 text-xs bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-all"
-                    />
-                    <datalist id="filter-importers-list">
-                      <option value="" />
-                      {importers.map(i => <option key={i._id} value={i.name} />)}
-                    </datalist>
+                    <div className="relative">
+                      <input
+                        type="text"
+                        value={filters.importer}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setFilters(prev => ({ ...prev, importer: val }));
+                          setActiveDropdown('filterImporter');
+                        }}
+                        onFocus={() => setActiveDropdown('filterImporter')}
+                        placeholder="All Importers"
+                        className="w-full px-3 py-2 text-xs bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-all pr-8"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setActiveDropdown(activeDropdown === 'filterImporter' ? null : 'filterImporter')}
+                        className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                      >
+                        <ChevronDownIcon className={`w-3 h-3 transition-transform ${activeDropdown === 'filterImporter' ? 'rotate-180' : ''}`} />
+                      </button>
+                    </div>
+                    {activeDropdown === 'filterImporter' && (
+                      <div className="absolute z-[60] w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-xl max-h-48 overflow-y-auto animate-in fade-in zoom-in duration-200">
+                        <button
+                          type="button"
+                          onClick={() => handleFilterDropdownSelect('importer', '')}
+                          className="w-full text-left px-3 py-2 hover:bg-blue-50 text-[10px] transition-colors flex items-center justify-between"
+                        >
+                          <span className="italic text-gray-400">All Importers</span>
+                          {filters.importer === '' && <span className="w-1.5 h-1.5 bg-blue-500 rounded-full"></span>}
+                        </button>
+                        {importers
+                          .filter(imp => !filters.importer || importers.some(x => x.name === filters.importer) || imp.name.toLowerCase().includes(filters.importer.toLowerCase()))
+                          .map((imp) => (
+                            <button
+                              key={imp._id}
+                              type="button"
+                              onClick={() => handleFilterDropdownSelect('importer', imp.name)}
+                              className="w-full text-left px-3 py-2 hover:bg-blue-50 text-[10px] transition-colors flex items-center justify-between"
+                            >
+                              <span>{imp.name}</span>
+                              {filters.importer === imp.name && <span className="w-1.5 h-1.5 bg-blue-500 rounded-full"></span>}
+                            </button>
+                          ))}
+                      </div>
+                    )}
                   </div>
+
                 </div>
 
                 <div className="flex justify-end mt-6 pt-4 border-t border-gray-100">
@@ -721,24 +1006,49 @@ function App() {
                   </div>
 
                   {/* Importer Select Dropdown */}
-                  <div className="col-span-1 md:col-span-2 space-y-2">
+                  <div className="col-span-1 md:col-span-2 space-y-2 relative" ref={ipImporterRef}>
                     <label className="text-sm font-medium text-gray-700">Importer</label>
-                    <input
-                      type="text"
-                      name="ipParty"
-                      value={formData.ipParty}
-                      onChange={handleInputChange}
-                      list="importers-list"
-                      required
-                      placeholder="Select or type importer name"
-                      className="w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm"
-                    />
-                    <datalist id="importers-list">
-                      {importers.map(importer => (
-                        <option key={importer._id} value={importer.name} />
-                      ))}
-                    </datalist>
+                    <div className="relative">
+                      <input
+                        type="text"
+                        name="ipParty"
+                        value={formData.ipParty}
+                        onChange={handleInputChange}
+                        onFocus={() => setActiveDropdown('ipImporter')}
+                        required
+                        placeholder="Select or type importer name"
+                        className="w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm pr-10"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setActiveDropdown(activeDropdown === 'ipImporter' ? null : 'ipImporter')}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                      >
+                        <ChevronDownIcon className={`w-4 h-4 transition-transform ${activeDropdown === 'ipImporter' ? 'rotate-180' : ''}`} />
+                      </button>
+                    </div>
+                    {activeDropdown === 'ipImporter' && (
+                      <div className="absolute z-[60] w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-xl max-h-60 overflow-y-auto animate-in fade-in zoom-in duration-200">
+                        {importers
+                          .filter(imp => imp.status === 'Active' && (!formData.ipParty || importers.some(x => x.name === formData.ipParty) || imp.name.toLowerCase().includes(formData.ipParty.toLowerCase())))
+                          .map((importer) => (
+                            <button
+                              key={importer._id}
+                              type="button"
+                              onClick={() => handleIpDropdownSelect('ipParty', importer.name)}
+                              className="w-full text-left px-4 py-2 hover:bg-blue-50 text-sm transition-colors flex items-center justify-between"
+                            >
+                              <span>{importer.name}</span>
+                              {formData.ipParty === importer.name && <span className="w-2 h-2 bg-blue-500 rounded-full"></span>}
+                            </button>
+                          ))}
+                        {importers.filter(imp => imp.status === 'Active' && imp.name.toLowerCase().includes(formData.ipParty.toLowerCase())).length === 0 && (
+                          <div className="px-4 py-3 text-sm text-gray-500 italic">No importers found</div>
+                        )}
+                      </div>
+                    )}
                   </div>
+
 
                   {/* Product Name */}
                   <div className="space-y-2">
@@ -774,24 +1084,49 @@ function App() {
                   </div>
 
                   {/* Port */}
-                  <div className="space-y-2">
+                  <div className="space-y-2 relative" ref={ipPortRef}>
                     <label className="text-sm font-medium text-gray-700">Port</label>
-                    <input
-                      type="text"
-                      name="port"
-                      value={formData.port}
-                      onChange={handleInputChange}
-                      list="ports-list"
-                      required
-                      placeholder="Select or type port name"
-                      className="w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm"
-                    />
-                    <datalist id="ports-list">
-                      {ports.map((port) => (
-                        <option key={port._id} value={port.name} />
-                      ))}
-                    </datalist>
+                    <div className="relative">
+                      <input
+                        type="text"
+                        name="port"
+                        value={formData.port}
+                        onChange={handleInputChange}
+                        onFocus={() => setActiveDropdown('ipPort')}
+                        required
+                        placeholder="Select or type port name"
+                        className="w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm pr-10"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setActiveDropdown(activeDropdown === 'ipPort' ? null : 'ipPort')}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                      >
+                        <ChevronDownIcon className={`w-4 h-4 transition-transform ${activeDropdown === 'ipPort' ? 'rotate-180' : ''}`} />
+                      </button>
+                    </div>
+                    {activeDropdown === 'ipPort' && (
+                      <div className="absolute z-[60] w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-xl max-h-60 overflow-y-auto animate-in fade-in zoom-in duration-200">
+                        {ports
+                          .filter(p => p.status === 'Active' && (!formData.port || ports.some(x => x.name === formData.port) || p.name.toLowerCase().includes(formData.port.toLowerCase())))
+                          .map((port) => (
+                            <button
+                              key={port._id}
+                              type="button"
+                              onClick={() => handleIpDropdownSelect('port', port.name)}
+                              className="w-full text-left px-4 py-2 hover:bg-blue-50 text-sm transition-colors flex items-center justify-between"
+                            >
+                              <span>{port.name}</span>
+                              {formData.port === port.name && <span className="w-2 h-2 bg-blue-500 rounded-full"></span>}
+                            </button>
+                          ))}
+                        {ports.filter(p => p.status === 'Active' && p.name.toLowerCase().includes(formData.port.toLowerCase())).length === 0 && (
+                          <div className="px-4 py-3 text-sm text-gray-500 italic">No ports found</div>
+                        )}
+                      </div>
+                    )}
                   </div>
+
 
                   {/* Status */}
                   <div className="space-y-2">
@@ -934,8 +1269,9 @@ function App() {
                               </td>
                             )}
                             <td className="px-6 py-4 text-sm text-gray-600">
-                              {new Date(record.openingDate).toLocaleDateString()}
+                              {formatDate(record.openingDate)}
                             </td>
+
                             <td className="px-6 py-4 text-sm font-medium text-blue-600">{record.ipNumber}</td>
                             <td className="px-6 py-4 text-sm text-gray-900">{record.ipParty}</td>
                             <td className="px-6 py-4 text-sm text-gray-500">{record.productName}</td>
@@ -1423,6 +1759,287 @@ function App() {
             )}
           </div>
         );
+      case 'inventory-section':
+        const groupedInventory = inventoryRecords.reduce((acc, item) => {
+          const name = (item.productName || '').trim().toLowerCase();
+          if (!acc[name]) {
+            acc[name] = {
+              ...item,
+              productName: item.productName.trim(),
+              quantity: parseFloat(item.quantity) || 0,
+              originalId: item._id
+            };
+          } else {
+            acc[name].quantity += parseFloat(item.quantity) || 0;
+          }
+          return acc;
+        }, {});
+        const displayRecords = Object.values(groupedInventory);
+
+        return (
+
+          <div className="space-y-6">
+            <div className="flex items-center justify-between">
+              <h2 className="text-2xl font-bold text-gray-800">Inventory Management</h2>
+              <button
+                onClick={() => setShowInventoryForm(!showInventoryForm)}
+                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg shadow-lg shadow-blue-500/30 transition-all transform hover:scale-105 flex items-center"
+              >
+                <span className="mr-2 text-xl">+</span> Add New
+              </button>
+            </div>
+
+            {showInventoryForm && (
+              <div className="relative overflow-hidden rounded-2xl bg-white/60 backdrop-blur-xl border border-white/50 shadow-2xl p-8 transition-all duration-300">
+                <div className="absolute -top-24 -right-24 w-64 h-64 bg-blue-400/10 rounded-full blur-3xl pointer-events-none"></div>
+                <div className="absolute -bottom-24 -left-24 w-64 h-64 bg-indigo-400/10 rounded-full blur-3xl pointer-events-none"></div>
+
+                <div className="flex items-center justify-between mb-6 border-b border-gray-200/50 pb-4 relative z-10">
+                  <h3 className="text-xl font-semibold text-gray-800">{editingId ? 'Edit Inventory' : 'New Inventory Entry'}</h3>
+                  <button onClick={() => { setShowInventoryForm(false); resetInventoryForm(); }} className="text-gray-400 hover:text-red-500 transition-colors">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                  </button>
+                </div>
+
+                <form onSubmit={handleInventorySubmit} className="grid grid-cols-1 md:grid-cols-2 gap-6 relative z-10">
+                  <div className="col-span-1 md:col-span-2 grid grid-cols-1 md:grid-cols-4 gap-6">
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium text-gray-700">Date</label>
+                      <input
+                        type="date" name="date" value={inventoryFormData.date} onChange={handleInventoryInputChange} required
+                        className="w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium text-gray-700">LC No</label>
+                      <input
+                        type="text" name="lcNo" value={inventoryFormData.lcNo} onChange={handleInventoryInputChange} required
+                        placeholder="LC Number" className="w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm"
+                      />
+                    </div>
+                    <div className="space-y-2 relative" ref={portRef}>
+                      <label className="text-sm font-medium text-gray-700">Port</label>
+                      <div className="relative">
+                        <input
+                          type="text"
+                          name="port"
+                          value={inventoryFormData.port}
+                          onChange={handleInventoryInputChange}
+                          onFocus={() => setActiveDropdown('port')}
+                          required
+                          placeholder="Select or type port name"
+                          className="w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm pr-10"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setActiveDropdown(activeDropdown === 'port' ? null : 'port')}
+                          className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                        >
+                          <ChevronDownIcon className={`w-4 h-4 transition-transform ${activeDropdown === 'port' ? 'rotate-180' : ''}`} />
+                        </button>
+                      </div>
+                      {activeDropdown === 'port' && (
+                        <div className="absolute z-[60] w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-xl max-h-60 overflow-y-auto animate-in fade-in zoom-in duration-200">
+                          {ports
+                            .filter(p => p.status === 'Active' && (!inventoryFormData.port || ports.some(x => x.name === inventoryFormData.port) || p.name.toLowerCase().includes(inventoryFormData.port.toLowerCase())))
+                            .map((port) => (
+                              <button
+                                key={port._id}
+                                type="button"
+                                onClick={() => handleInventoryDropdownSelect('port', port.name)}
+                                className="w-full text-left px-4 py-2 hover:bg-blue-50 text-sm transition-colors flex items-center justify-between"
+                              >
+                                <span>{port.name}</span>
+                                {inventoryFormData.port === port.name && <span className="w-2 h-2 bg-blue-500 rounded-full"></span>}
+                              </button>
+                            ))}
+                          {ports.filter(p => p.status === 'Active' && p.name.toLowerCase().includes(inventoryFormData.port.toLowerCase())).length === 0 && (
+                            <div className="px-4 py-3 text-sm text-gray-500 italic">No ports found</div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="space-y-2 relative" ref={importerRef}>
+                      <label className="text-sm font-medium text-gray-700">Importer</label>
+                      <div className="relative">
+                        <input
+                          type="text"
+                          name="importer"
+                          value={inventoryFormData.importer}
+                          onChange={handleInventoryInputChange}
+                          onFocus={() => setActiveDropdown('importer')}
+                          required
+                          placeholder="Select or type importer"
+                          className="w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm pr-10"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setActiveDropdown(activeDropdown === 'importer' ? null : 'importer')}
+                          className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                        >
+                          <ChevronDownIcon className={`w-4 h-4 transition-transform ${activeDropdown === 'importer' ? 'rotate-180' : ''}`} />
+                        </button>
+                      </div>
+                      {activeDropdown === 'importer' && (
+                        <div className="absolute z-[60] w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-xl max-h-60 overflow-y-auto animate-in fade-in zoom-in duration-200">
+                          {importers
+                            .filter(imp => imp.status === 'Active' && (!inventoryFormData.importer || importers.some(x => x.name === inventoryFormData.importer) || imp.name.toLowerCase().includes(inventoryFormData.importer.toLowerCase())))
+                            .map((imp) => (
+                              <button
+                                key={imp._id}
+                                type="button"
+                                onClick={() => handleInventoryDropdownSelect('importer', imp.name)}
+                                className="w-full text-left px-4 py-2 hover:bg-blue-50 text-sm transition-colors flex items-center justify-between"
+                              >
+                                <span>{imp.name}</span>
+                                {inventoryFormData.importer === imp.name && <span className="w-2 h-2 bg-blue-500 rounded-full"></span>}
+                              </button>
+                            ))}
+                          {importers.filter(imp => imp.status === 'Active' && imp.name.toLowerCase().includes(inventoryFormData.importer.toLowerCase())).length === 0 && (
+                            <div className="px-4 py-3 text-sm text-gray-500 italic">No importers found</div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+
+                  </div>
+
+
+                  <div className="space-y-2">
+
+                    <label className="text-sm font-medium text-gray-700">Product Name</label>
+                    <input
+                      type="text" name="productName" value={inventoryFormData.productName} onChange={handleInventoryInputChange} required
+                      placeholder="Product Name" className="w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm"
+                    />
+                  </div>
+
+
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-gray-700">Quantity</label>
+                    <input
+                      type="number" name="quantity" value={inventoryFormData.quantity} onChange={handleInventoryInputChange} required
+                      placeholder="0.00" className="w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-gray-700">Unit</label>
+                    <select
+                      name="unit" value={inventoryFormData.unit} onChange={handleInventoryInputChange}
+                      className="w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm"
+                    >
+                      <option>kg</option>
+                      <option>pcs</option>
+                      <option>boxes</option>
+                      <option>liters</option>
+                    </select>
+                  </div>
+
+
+
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-gray-700">Status</label>
+                    <select
+                      name="status" value={inventoryFormData.status} onChange={handleInventoryInputChange}
+                      className="w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm"
+                    >
+                      <option>In Stock</option>
+                      <option>Out of Stock</option>
+                      <option>Reserved</option>
+                    </select>
+                  </div>
+
+                  <div className="col-span-1 md:col-span-2 pt-4 flex items-center justify-between">
+                    {submitStatus === 'success' && (
+                      <p className="text-green-600 font-medium flex items-center animate-bounce">
+                        <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"></path></svg>
+                        Inventory saved successfully!
+                      </p>
+                    )}
+                    {submitStatus === 'error' && (
+                      <p className="text-red-600 font-medium flex items-center">
+                        <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                        Failed to save inventory.
+                      </p>
+                    )}
+                    <div className="flex-1"></div>
+                    <button
+                      type="submit" disabled={isSubmitting}
+                      className="px-6 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-medium rounded-lg shadow-lg shadow-blue-500/30 transition-all transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {isSubmitting ? 'Saving...' : editingId ? 'Update Inventory' : 'Add to Inventory'}
+                    </button>
+                  </div>
+                </form>
+              </div>
+            )}
+
+            {!showInventoryForm && (
+              <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+                {isLoading ? (
+                  <div className="flex items-center justify-center p-20">
+                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+                  </div>
+                ) : inventoryRecords.length > 0 ? (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left">
+                      <thead>
+                        <tr className="bg-gray-50 border-b border-gray-100">
+                          <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Product Name</th>
+                          <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Quantity</th>
+                          <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider text-center">Status</th>
+                          <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider text-center">Actions</th>
+                        </tr>
+
+
+
+
+
+
+                      </thead>
+
+                      <tbody className="divide-y divide-gray-100">
+                        {displayRecords.map((item) => (
+                          <tr key={item.originalId} className="hover:bg-gray-50 transition-colors">
+                            <td className="px-6 py-4 text-sm font-medium text-gray-900">{item.productName}</td>
+                            <td className="px-6 py-4 text-sm text-gray-900 font-medium">{item.quantity} {item.unit}</td>
+                            <td className="px-6 py-4 text-center">
+                              <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${item.quantity > 0 ? 'bg-green-50 text-green-700 border border-green-100' : 'bg-red-50 text-red-700 border border-red-100'}`}>
+                                {item.quantity > 0 ? 'In Stock' : 'Out of Stock'}
+                              </span>
+                            </td>
+                            <td className="px-6 py-4 text-center">
+                              <div className="flex items-center justify-center space-x-3">
+                                <button onClick={() => handleView('inventory', item)} className="text-gray-400 hover:text-indigo-600 transition-colors">
+                                  <EyeIcon className="w-5 h-5" />
+                                </button>
+                                <button onClick={() => handleEdit('inventory', item)} className="text-gray-400 hover:text-blue-600 transition-colors">
+                                  <EditIcon className="w-5 h-5" />
+                                </button>
+                                <button onClick={() => handleDelete('inventory', item._id)} className="text-gray-400 hover:text-red-600 transition-colors">
+                                  <TrashIcon className="w-5 h-5" />
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+
+                    </table>
+                  </div>
+                ) : (
+                  <div className="flex flex-col items-center justify-center p-12">
+                    <div className="p-4 bg-gray-50 rounded-full mb-4">
+                      <ShoppingCartIcon className="w-8 h-8 text-gray-400" />
+                    </div>
+                    <p className="text-gray-500 font-medium">No inventory items found</p>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        );
       default:
         return null;
     }
@@ -1458,6 +2075,10 @@ function App() {
           <button onClick={() => { setCurrentView('ip-section'); setSidebarOpen(false); }} className={`w-full flex items-center px-4 py-3 rounded-lg transition-all ${currentView === 'ip-section' ? 'bg-blue-50 text-blue-600 shadow-sm' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'}`}>
             <BoxIcon className="w-5 h-5 mr-3" />
             <span className="font-medium">IP</span>
+          </button>
+          <button onClick={() => { setCurrentView('inventory-section'); setSidebarOpen(false); }} className={`w-full flex items-center px-4 py-3 rounded-lg transition-all ${currentView === 'inventory-section' ? 'bg-blue-50 text-blue-600 shadow-sm' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'}`}>
+            <ShoppingCartIcon className="w-5 h-5 mr-3" />
+            <span className="font-medium">Inventory</span>
           </button>
         </nav>
         <div className="p-4 border-t border-gray-200">
@@ -1531,8 +2152,98 @@ function App() {
           </div>
         </div>
       )}
+      {/* View Detail Modal */}
+      {viewRecord && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-gray-900/60 backdrop-blur-sm" onClick={() => setViewRecord(null)}></div>
+          <div className="relative bg-white/95 backdrop-blur-2xl border border-white/50 rounded-3xl shadow-2xl overflow-hidden max-w-4xl w-full animate-in zoom-in duration-300">
+            {/* Modal Header */}
+            <div className="px-8 py-6 border-b border-gray-100 flex items-center justify-between bg-white">
+              <div>
+                <h3 className="text-2xl font-bold text-gray-900">Stock History</h3>
+                <p className="text-sm text-gray-500 mt-1">Full history for {viewRecord.data.productName}</p>
+              </div>
+              <button onClick={() => setViewRecord(null)} className="p-2 hover:bg-gray-100 rounded-full transition-colors">
+                <XIcon className="w-6 h-6 text-gray-400" />
+              </button>
+            </div>
+
+            {/* Modal Content */}
+            <div className="p-8">
+              {(() => {
+                const history = inventoryRecords.filter(item =>
+                  (item.productName || '').trim().toLowerCase() === (viewRecord.data.productName || '').trim().toLowerCase()
+                );
+                const total = history.reduce((sum, item) => sum + (parseFloat(item.quantity) || 0), 0);
+                const unit = history[0]?.unit || '';
+
+                return (
+                  <div className="bg-gray-50 rounded-2xl border border-gray-100 overflow-x-auto">
+                    <table className="w-full text-left min-w-[600px]">
+                      <thead>
+                        <tr className="bg-white border-b border-gray-100">
+                          <th className="px-6 py-4 text-xs font-semibold text-gray-400 uppercase tracking-wider">Date</th>
+                          <th className="px-6 py-4 text-xs font-semibold text-gray-400 uppercase tracking-wider">LC No</th>
+                          <th className="px-6 py-4 text-xs font-semibold text-gray-400 uppercase tracking-wider">Port</th>
+                          <th className="px-6 py-4 text-xs font-semibold text-gray-400 uppercase tracking-wider">Importer</th>
+                          <th className="px-6 py-4 text-xs font-semibold text-gray-400 uppercase tracking-wider">Quantity</th>
+                          <th className="px-6 py-4 text-xs font-semibold text-gray-400 uppercase tracking-wider text-right">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-100 bg-white/50">
+                        {history.map((historyItem, idx) => (
+                          <tr key={idx} className={historyItem._id === viewRecord.data._id ? 'bg-blue-50/50' : ''}>
+                            <td className="px-6 py-4 text-sm text-gray-600">
+                              {formatDate(historyItem.date)}
+                            </td>
+                            <td className="px-6 py-4 text-sm font-bold text-gray-900">{historyItem.lcNo || '-'}</td>
+                            <td className="px-6 py-4 text-sm text-gray-600">{historyItem.port || '-'}</td>
+                            <td className="px-6 py-4 text-sm text-gray-600">{historyItem.importer || '-'}</td>
+                            <td className="px-6 py-4 text-sm font-medium text-gray-900">{historyItem.quantity} {historyItem.unit}</td>
+                            <td className="px-6 py-4 text-right">
+                              <div className="flex items-center justify-end space-x-2">
+                                <button
+                                  onClick={() => {
+                                    setViewRecord(null);
+                                    handleEdit('inventory', historyItem);
+                                  }}
+                                  className="text-gray-400 hover:text-blue-600 transition-colors"
+                                >
+                                  <EditIcon className="w-4 h-4" />
+                                </button>
+                                <button
+                                  onClick={() => handleDelete('inventory', historyItem._id)}
+                                  className="text-gray-400 hover:text-red-600 transition-colors"
+                                >
+                                  <TrashIcon className="w-4 h-4" />
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                      <tfoot className="bg-gray-100/50 border-t-2 border-gray-200">
+                        <tr>
+                          <td colSpan="4" className="px-6 py-4 text-sm font-bold text-gray-900 text-right">Total Quantity:</td>
+                          <td className="px-6 py-4 text-sm font-bold text-blue-600">{total} {unit}</td>
+                          <td></td>
+                        </tr>
+                      </tfoot>
+                    </table>
+                  </div>
+                );
+              })()}
+            </div>
+
+
+          </div>
+        </div>
+      )}
     </div>
   );
 }
 
 export default App;
+/*
+
+*/

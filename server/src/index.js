@@ -20,6 +20,8 @@ mongoose.connect(process.env.MONGODB_URI || 'mongodb://mongo:27017/erp_db')
 const IpRecord = require('./models/IpRecord');
 const Importer = require('./models/Importer');
 const Port = require('./models/Port');
+const Inventory = require('./models/Inventory');
+
 
 // Routes
 app.get('/', (req, res) => {
@@ -149,6 +151,47 @@ app.get('/api/ports', async (req, res) => {
     res.status(500).json({ message: err.message });
   }
 });
+
+// Inventory APIs
+app.post('/api/inventory', async (req, res) => {
+  try {
+    const newInventory = new Inventory(req.body);
+    const savedInventory = await newInventory.save();
+    res.status(201).json(savedInventory);
+  } catch (err) {
+    res.status(400).json({ message: err.message });
+  }
+});
+
+app.delete('/api/inventory/:id', async (req, res) => {
+  try {
+    const deletedInventory = await Inventory.findByIdAndDelete(req.params.id);
+    if (!deletedInventory) return res.status(404).json({ message: 'Item not found' });
+    res.json({ message: 'Item deleted' });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+app.put('/api/inventory/:id', async (req, res) => {
+  try {
+    const updatedInventory = await Inventory.findByIdAndUpdate(req.params.id, req.body, { new: true });
+    if (!updatedInventory) return res.status(404).json({ message: 'Item not found' });
+    res.json(updatedInventory);
+  } catch (err) {
+    res.status(400).json({ message: err.message });
+  }
+});
+
+app.get('/api/inventory', async (req, res) => {
+  try {
+    const inventory = await Inventory.find().sort({ createdAt: -1 });
+    res.json(inventory);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
 
 app.get('/health', (req, res) => {
   res.status(200).json({ status: 'ok', message: 'Server is healthy' });
