@@ -207,7 +207,14 @@ function App() {
   const [inventoryFormData, setInventoryFormData] = useState({
     date: new Date().toISOString().split('T')[0],
     lcNo: '',
+    indianCnF: '',
+    indCnFCost: '',
+    bdCnF: '',
+    bdCnFCost: '',
     productName: '',
+    trackNo: '',
+    packet: '',
+    packetSize: '',
     quantity: '',
     unit: 'kg',
     port: '',
@@ -316,7 +323,14 @@ function App() {
     setInventoryFormData({
       date: new Date().toISOString().split('T')[0],
       lcNo: '',
+      indianCnF: '',
+      indCnFCost: '',
+      bdCnF: '',
+      bdCnFCost: '',
       productName: '',
+      trackNo: '',
+      packet: '',
+      packetSize: '',
       quantity: '',
       unit: 'kg',
       port: '',
@@ -758,10 +772,21 @@ function App() {
 
   const handleInventoryInputChange = (e) => {
     const { name, value } = e.target;
-    setInventoryFormData(prev => ({
-      ...prev,
-      [name]: value
-    }));
+    setInventoryFormData(prev => {
+      const updated = {
+        ...prev,
+        [name]: value
+      };
+
+      // Auto-calculate quantity when packet or packetSize changes
+      if (name === 'packet' || name === 'packetSize') {
+        const packet = name === 'packet' ? parseFloat(value) || 0 : parseFloat(prev.packet) || 0;
+        const packetSize = name === 'packetSize' ? parseFloat(value) || 0 : parseFloat(prev.packetSize) || 0;
+        updated.quantity = packet && packetSize ? (packet * packetSize).toString() : '';
+      }
+
+      return updated;
+    });
     if (name === 'port' || name === 'importer') {
       setActiveDropdown(name);
     }
@@ -816,11 +841,6 @@ function App() {
           setShowInventoryForm(false);
           setEditingId(null);
           setInventoryFormData({
-            date: new Date().toISOString().split('T')[0],
-            lcNo: '',
-            productName: '',
-            quantity: '',
-            unit: 'kg',
             port: '',
             importer: '',
             status: 'In Stock'
@@ -2044,12 +2064,69 @@ function App() {
                   </div>
 
 
-                  <div className="space-y-2">
+                  <div className="col-span-1 md:col-span-2 grid grid-cols-1 md:grid-cols-4 gap-6">
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium text-gray-700">IND C&F</label>
+                      <input
+                        type="text" name="indianCnF" value={inventoryFormData.indianCnF} onChange={handleInventoryInputChange}
+                        placeholder="IND C&F" className="w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm"
+                      />
+                    </div>
 
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium text-gray-700">IN C&F comm</label>
+                      <input
+                        type="number" name="indCnFCost" value={inventoryFormData.indCnFCost} onChange={handleInventoryInputChange}
+                        placeholder="0.00" className="w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                      />
+                    </div>
+
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium text-gray-700">BD C&F</label>
+                      <input
+                        type="text" name="bdCnF" value={inventoryFormData.bdCnF} onChange={handleInventoryInputChange}
+                        placeholder="BD C&F" className="w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm"
+                      />
+                    </div>
+
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium text-gray-700">BD C&F Cost</label>
+                      <input
+                        type="number" name="bdCnFCost" value={inventoryFormData.bdCnFCost} onChange={handleInventoryInputChange}
+                        placeholder="0.00" className="w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
                     <label className="text-sm font-medium text-gray-700">Product Name</label>
                     <input
                       type="text" name="productName" value={inventoryFormData.productName} onChange={handleInventoryInputChange} required
                       placeholder="Product Name" className="w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm"
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-gray-700">Track No.</label>
+                    <input
+                      type="text" name="trackNo" value={inventoryFormData.trackNo} onChange={handleInventoryInputChange}
+                      placeholder="Track No." className="w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm"
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-gray-700">Packet</label>
+                    <input
+                      type="text" name="packet" value={inventoryFormData.packet} onChange={handleInventoryInputChange}
+                      placeholder="Packet" className="w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm"
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-gray-700">Packet Size</label>
+                    <input
+                      type="text" name="packetSize" value={inventoryFormData.packetSize} onChange={handleInventoryInputChange}
+                      placeholder="Packet Size" className="w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm"
                     />
                   </div>
 
@@ -2058,7 +2135,7 @@ function App() {
                     <label className="text-sm font-medium text-gray-700">Quantity</label>
                     <input
                       type="number" name="quantity" value={inventoryFormData.quantity} onChange={handleInventoryInputChange} required
-                      placeholder="0.00" className="w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm"
+                      placeholder="0.00" className="w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                     />
                   </div>
                   <div className="space-y-2">
@@ -2331,7 +2408,7 @@ function App() {
 
       {/* Custom Deletion Confirmation Modal */}
       {deleteConfirm.show && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-[70] flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-gray-900/60 backdrop-blur-sm" onClick={() => setDeleteConfirm({ show: false, type: '', id: null, isBulk: false })}></div>
           <div className="relative bg-white/80 backdrop-blur-2xl border border-white/50 rounded-2xl shadow-2xl p-8 max-w-md w-full animate-in zoom-in duration-300">
             <div className="flex items-center justify-center w-16 h-16 bg-red-100/50 rounded-full mx-auto mb-6">
@@ -2364,12 +2441,11 @@ function App() {
       {viewRecord && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-gray-900/60 backdrop-blur-sm" onClick={() => setViewRecord(null)}></div>
-          <div className="relative bg-white/95 backdrop-blur-2xl border border-white/50 rounded-3xl shadow-2xl overflow-hidden max-w-4xl w-full animate-in zoom-in duration-300">
+          <div className="relative bg-white/95 backdrop-blur-2xl border border-white/50 rounded-3xl shadow-2xl overflow-hidden max-w-[95vw] w-full animate-in zoom-in duration-300">
             {/* Modal Header */}
             <div className="px-8 py-6 border-b border-gray-100 flex items-center justify-between bg-white">
               <div>
-                <h3 className="text-2xl font-bold text-gray-900">Stock History</h3>
-                <p className="text-sm text-gray-500 mt-1">Full history for {viewRecord.data.productName}</p>
+                <h3 className="text-2xl font-bold text-gray-900">Stock History - {viewRecord.data.productName}</h3>
               </div>
               <button onClick={() => setViewRecord(null)} className="p-2 hover:bg-gray-100 rounded-full transition-colors">
                 <XIcon className="w-6 h-6 text-gray-400" />
@@ -2394,47 +2470,38 @@ function App() {
                           <th className="px-6 py-4 text-xs font-semibold text-gray-400 uppercase tracking-wider">LC No</th>
                           <th className="px-6 py-4 text-xs font-semibold text-gray-400 uppercase tracking-wider">Port</th>
                           <th className="px-6 py-4 text-xs font-semibold text-gray-400 uppercase tracking-wider">Importer</th>
+                          <th className="px-6 py-4 text-xs font-semibold text-gray-400 uppercase tracking-wider whitespace-nowrap">IND C&F</th>
+                          <th className="px-6 py-4 text-xs font-semibold text-gray-400 uppercase tracking-wider whitespace-nowrap">IN C&F comm</th>
+                          <th className="px-6 py-4 text-xs font-semibold text-gray-400 uppercase tracking-wider whitespace-nowrap">BD (C&F)</th>
+                          <th className="px-6 py-4 text-xs font-semibold text-gray-400 uppercase tracking-wider whitespace-nowrap">BD C&F Cost</th>
+                          <th className="px-6 py-4 text-xs font-semibold text-gray-400 uppercase tracking-wider">Track No.</th>
+                          <th className="px-6 py-4 text-xs font-semibold text-gray-400 uppercase tracking-wider">Packet</th>
                           <th className="px-6 py-4 text-xs font-semibold text-gray-400 uppercase tracking-wider">Quantity</th>
-                          <th className="px-6 py-4 text-xs font-semibold text-gray-400 uppercase tracking-wider text-right">Actions</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-gray-100 bg-white/50">
                         {history.map((historyItem, idx) => (
-                          <tr key={idx} className={historyItem._id === viewRecord.data._id ? 'bg-blue-50/50' : ''}>
+                          <tr key={idx} className={`${historyItem._id === viewRecord.data._id ? 'bg-blue-50/50' : ''} whitespace-nowrap`}>
                             <td className="px-6 py-4 text-sm text-gray-600">
                               {formatDate(historyItem.date)}
                             </td>
                             <td className="px-6 py-4 text-sm font-bold text-gray-900">{historyItem.lcNo || '-'}</td>
                             <td className="px-6 py-4 text-sm text-gray-600">{historyItem.port || '-'}</td>
                             <td className="px-6 py-4 text-sm text-gray-600">{historyItem.importer || '-'}</td>
+                            <td className="px-6 py-4 text-sm text-gray-600">{historyItem.indianCnF || '-'}</td>
+                            <td className="px-6 py-4 text-sm text-gray-600">{historyItem.indCnFCost || '-'}</td>
+                            <td className="px-6 py-4 text-sm text-gray-600">{historyItem.bdCnF || '-'}</td>
+                            <td className="px-6 py-4 text-sm text-gray-600">{historyItem.bdCnFCost || '-'}</td>
+                            <td className="px-6 py-4 text-sm text-gray-600">{historyItem.trackNo || '-'}</td>
+                            <td className="px-6 py-4 text-sm text-gray-600">{historyItem.packet || '-'}</td>
                             <td className="px-6 py-4 text-sm font-medium text-gray-900">{historyItem.quantity} {historyItem.unit}</td>
-                            <td className="px-6 py-4 text-right">
-                              <div className="flex items-center justify-end space-x-2">
-                                <button
-                                  onClick={() => {
-                                    setViewRecord(null);
-                                    handleEdit('inventory', historyItem);
-                                  }}
-                                  className="text-gray-400 hover:text-blue-600 transition-colors"
-                                >
-                                  <EditIcon className="w-4 h-4" />
-                                </button>
-                                <button
-                                  onClick={() => handleDelete('inventory', historyItem._id)}
-                                  className="text-gray-400 hover:text-red-600 transition-colors"
-                                >
-                                  <TrashIcon className="w-4 h-4" />
-                                </button>
-                              </div>
-                            </td>
                           </tr>
                         ))}
                       </tbody>
                       <tfoot className="bg-gray-100/50 border-t-2 border-gray-200">
                         <tr>
-                          <td colSpan="4" className="px-6 py-4 text-sm font-bold text-gray-900 text-right">Total Quantity:</td>
+                          <td colSpan="10" className="px-6 py-4 text-sm font-bold text-gray-900 text-right">Total Quantity:</td>
                           <td className="px-6 py-4 text-sm font-bold text-blue-600">{total} {unit}</td>
-                          <td></td>
                         </tr>
                       </tfoot>
                     </table>
