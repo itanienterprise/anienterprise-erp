@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import {
   MenuIcon, SearchIcon, BellIcon, HomeIcon, BoxIcon, UsersIcon, AnchorIcon,
   BarChartIcon, SettingsIcon, TrendingUpIcon, DollarSignIcon,
-  ShoppingCartIcon, EditIcon, TrashIcon, FunnelIcon, XIcon,
+  ShoppingCartIcon, EditIcon, TrashIcon, FunnelIcon, XIcon, PlusIcon,
   ChevronUpIcon, ChevronDownIcon, ChevronLeftIcon, ChevronRightIcon, EyeIcon, CalendarIcon
 } from './components/Icons';
 
@@ -88,6 +88,7 @@ const CustomDatePicker = ({ value, onChange, placeholder, label, required = fals
           onClick={() => setIsOpen(!isOpen)}
           placeholder={placeholder || 'Select Date'}
           required={required}
+          autoComplete="off"
           className="w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm cursor-pointer pr-10"
         />
         <CalendarIcon className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
@@ -172,6 +173,7 @@ function App() {
   });
   const [viewRecord, setViewRecord] = useState(null);
   const [activeDropdown, setActiveDropdown] = useState(null);
+  const [highlightedIndex, setHighlightedIndex] = useState(-1);
   const portRef = useRef(null);
   const importerRef = useRef(null);
   const ipPortRef = useRef(null);
@@ -183,7 +185,8 @@ function App() {
   const [sortConfig, setSortConfig] = useState({
     ip: { key: null, direction: 'asc' },
     importer: { key: null, direction: 'asc' },
-    port: { key: null, direction: 'asc' }
+    port: { key: null, direction: 'asc' },
+    history: { key: 'date', direction: 'desc' }
   });
 
   const [importerFormData, setImporterFormData] = useState({
@@ -212,14 +215,20 @@ function App() {
     bdCnF: '',
     bdCnFCost: '',
     productName: '',
-    trackNo: '',
-    packet: '',
-    packetSize: '',
-    quantity: '',
-    unit: 'kg',
+    truckNo: '',
     port: '',
     importer: '',
-    status: 'In Stock'
+    status: 'In Stock',
+    isMultiBrand: false,
+    brandEntries: [
+      {
+        brand: '',
+        packet: '',
+        packetSize: '',
+        quantity: '',
+        unit: 'kg'
+      }
+    ]
   });
 
 
@@ -328,14 +337,20 @@ function App() {
       bdCnF: '',
       bdCnFCost: '',
       productName: '',
-      trackNo: '',
-      packet: '',
-      packetSize: '',
-      quantity: '',
-      unit: 'kg',
+      truckNo: '',
       port: '',
       importer: '',
-      status: 'In Stock'
+      status: 'In Stock',
+      isMultiBrand: false,
+      brandEntries: [
+        {
+          brand: '',
+          packet: '',
+          packetSize: '',
+          quantity: '',
+          unit: 'kg'
+        }
+      ]
     });
 
     setEditingId(null);
@@ -483,6 +498,50 @@ function App() {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
+  useEffect(() => {
+    setHighlightedIndex(-1);
+  }, [activeDropdown]);
+
+  const getFilteredOptions = (type) => {
+    switch (type) {
+      case 'port':
+        return ports.filter(p => p.status === 'Active' && (!inventoryFormData.port || ports.some(x => x.name === inventoryFormData.port) || p.name.toLowerCase().includes(inventoryFormData.port.toLowerCase())));
+      case 'importer':
+        return importers.filter(imp => imp.status === 'Active' && (!inventoryFormData.importer || importers.some(x => x.name === inventoryFormData.importer) || imp.name.toLowerCase().includes(inventoryFormData.importer.toLowerCase())));
+      case 'ipPort':
+        return ports.filter(p => p.status === 'Active' && (!formData.port || ports.some(x => x.name === formData.port) || p.name.toLowerCase().includes(formData.port.toLowerCase())));
+      case 'ipImporter':
+        return importers.filter(imp => imp.status === 'Active' && (!formData.ipParty || importers.some(x => x.name === formData.ipParty) || imp.name.toLowerCase().includes(formData.ipParty.toLowerCase())));
+      case 'filterPort':
+        return ports.filter(p => p.status === 'Active' && (!filters.port || ports.some(x => x.name === filters.port) || p.name.toLowerCase().includes(filters.port.toLowerCase())));
+      case 'filterImporter':
+        return importers.filter(imp => imp.status === 'Active' && (!filters.importer || importers.some(x => x.name === filters.importer) || imp.name.toLowerCase().includes(filters.importer.toLowerCase())));
+      default:
+        return [];
+    }
+  };
+
+  const handleDropdownKeyDown = (e, type, selectHandler, fieldName) => {
+    const options = getFilteredOptions(type);
+
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      if (activeDropdown !== type) setActiveDropdown(type);
+      setHighlightedIndex(prev => (prev < options.length - 1 ? prev + 1 : 0));
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      if (activeDropdown !== type) setActiveDropdown(type);
+      setHighlightedIndex(prev => (prev > 0 ? prev - 1 : options.length - 1));
+    } else if (e.key === 'Enter') {
+      if (highlightedIndex >= 0 && highlightedIndex < options.length) {
+        e.preventDefault();
+        selectHandler(fieldName, options[highlightedIndex].name);
+      }
+    } else if (e.key === 'Escape') {
+      setActiveDropdown(null);
+    }
+  };
+
   const toggleSelection = (id) => {
     const newSelection = new Set(selectedItems);
     if (newSelection.has(id)) {
@@ -597,7 +656,31 @@ function App() {
       setPortFormData(item);
       setShowPortForm(true);
     } else if (type === 'inventory') {
-      setInventoryFormData(item);
+      // Convert single record to brandEntries format for editing
+      const formattedData = {
+        date: item.date,
+        lcNo: item.lcNo,
+        indianCnF: item.indianCnF,
+        indCnFCost: item.indCnFCost,
+        bdCnF: item.bdCnF,
+        bdCnFCost: item.bdCnFCost,
+        productName: item.productName,
+        truckNo: item.truckNo,
+        port: item.port,
+        importer: item.importer,
+        status: item.status,
+        isMultiBrand: item.isMultiBrand || false,
+        brandEntries: [
+          {
+            brand: item.brand || '',
+            packet: item.packet || '',
+            packetSize: item.packetSize || '',
+            quantity: item.quantity || '',
+            unit: item.unit || 'kg'
+          }
+        ]
+      };
+      setInventoryFormData(formattedData);
       setShowInventoryForm(true);
     }
   };
@@ -751,6 +834,24 @@ function App() {
     }
   };
 
+  const deleteInventoryGroup = async (ids) => {
+    if (!window.confirm(`Are you sure you want to delete this shipment (${ids.length} records)?`)) return;
+    try {
+      const results = await Promise.all(ids.map(async (id) => {
+        const response = await fetch(`${API_BASE_URL}/api/inventory/${id}`, { method: 'DELETE' });
+        return response.ok;
+      }));
+
+      if (results.every(res => res)) {
+        fetchInventoryRecords();
+      } else {
+        alert('Some records could not be deleted');
+      }
+    } catch (err) {
+      console.error('Delete error:', err);
+    }
+  };
+
   const fetchInventoryRecords = async () => {
     setIsLoading(true);
     try {
@@ -772,24 +873,61 @@ function App() {
 
   const handleInventoryInputChange = (e) => {
     const { name, value } = e.target;
-    setInventoryFormData(prev => {
-      const updated = {
-        ...prev,
-        [name]: value
-      };
-
-      // Auto-calculate quantity when packet or packetSize changes
-      if (name === 'packet' || name === 'packetSize') {
-        const packet = name === 'packet' ? parseFloat(value) || 0 : parseFloat(prev.packet) || 0;
-        const packetSize = name === 'packetSize' ? parseFloat(value) || 0 : parseFloat(prev.packetSize) || 0;
-        updated.quantity = packet && packetSize ? (packet * packetSize).toString() : '';
-      }
-
-      return updated;
-    });
+    setInventoryFormData(prev => ({
+      ...prev,
+      [name]: value
+    }));
     if (name === 'port' || name === 'importer') {
       setActiveDropdown(name);
     }
+  };
+
+  // Handle brand entry field changes
+  const handleBrandEntryChange = (index, field, value) => {
+    setInventoryFormData(prev => {
+      const updatedEntries = [...prev.brandEntries];
+      updatedEntries[index] = {
+        ...updatedEntries[index],
+        [field]: value
+      };
+
+      // Auto-calculate quantity when packet or packetSize changes
+      if (field === 'packet' || field === 'packetSize') {
+        const packet = field === 'packet' ? parseFloat(value) || 0 : parseFloat(updatedEntries[index].packet) || 0;
+        const packetSize = field === 'packetSize' ? parseFloat(value) || 0 : parseFloat(updatedEntries[index].packetSize) || 0;
+        updatedEntries[index].quantity = packet && packetSize ? (packet * packetSize).toString() : '';
+      }
+
+      return {
+        ...prev,
+        brandEntries: updatedEntries
+      };
+    });
+  };
+
+  // Add new brand entry
+  const addBrandEntry = () => {
+    setInventoryFormData(prev => ({
+      ...prev,
+      brandEntries: [
+        ...prev.brandEntries,
+        {
+          brand: '',
+          packet: '',
+          packetSize: '',
+          quantity: '',
+          unit: 'kg'
+        }
+      ]
+    }));
+  };
+
+  // Remove brand entry
+  const removeBrandEntry = (index) => {
+    setInventoryFormData(prev => ({
+      ...prev,
+      brandEntries: prev.brandEntries.filter((_, i) => i !== index)
+    }));
   };
 
   const handleInventoryDropdownSelect = (name, value) => {
@@ -822,38 +960,94 @@ function App() {
     setSubmitStatus(null);
 
     try {
-      const url = editingId
-        ? `${API_BASE_URL}/api/inventory/${editingId}`
-        : `${API_BASE_URL}/api/inventory`;
-      const encryptedPayload = { data: encryptData(inventoryFormData) };
-      const response = await fetch(url, {
-        method: editingId ? 'PUT' : 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(encryptedPayload),
-      });
+      let isSuccess = false;
+      if (editingId) {
+        // For editing, first entry updates the existing record, subsequent ones are created as new
+        const results = await Promise.all(inventoryFormData.brandEntries.map(async (entry, index) => {
+          const isUpdate = index === 0;
+          const url = isUpdate ? `${API_BASE_URL}/api/inventory/${editingId}` : `${API_BASE_URL}/api/inventory`;
+          const method = isUpdate ? 'PUT' : 'POST';
 
-      if (response.ok) {
-        setSubmitStatus('success');
-        fetchInventoryRecords();
+          const flattenedData = {
+            date: inventoryFormData.date,
+            lcNo: inventoryFormData.lcNo,
+            indianCnF: inventoryFormData.indianCnF,
+            indCnFCost: inventoryFormData.indCnFCost,
+            bdCnF: inventoryFormData.bdCnF,
+            bdCnFCost: inventoryFormData.bdCnFCost,
+            productName: inventoryFormData.productName,
+            truckNo: inventoryFormData.truckNo,
+            port: inventoryFormData.port,
+            importer: inventoryFormData.importer,
+            status: inventoryFormData.status,
+            isMultiBrand: inventoryFormData.isMultiBrand,
+            brand: entry.brand || inventoryFormData.productName,
+            packet: entry.packet,
+            packetSize: entry.packetSize,
+            quantity: entry.quantity,
+            unit: entry.unit
+          };
+
+          const encryptedPayload = { data: encryptData(flattenedData) };
+          return fetch(url, {
+            method,
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(encryptedPayload),
+          });
+        }));
+
+        if (results.every(res => res.ok)) {
+          isSuccess = true;
+          setSubmitStatus('success');
+          fetchInventoryRecords();
+        } else {
+          setSubmitStatus('error');
+        }
+      } else {
+        // For new records, send separate POST requests for each brand entry
+        const results = await Promise.all(inventoryFormData.brandEntries.map(async (entry) => {
+          const url = `${API_BASE_URL}/api/inventory`;
+          const flattenedData = {
+            date: inventoryFormData.date,
+            lcNo: inventoryFormData.lcNo,
+            indianCnF: inventoryFormData.indianCnF,
+            indCnFCost: inventoryFormData.indCnFCost,
+            bdCnF: inventoryFormData.bdCnF,
+            bdCnFCost: inventoryFormData.bdCnFCost,
+            productName: inventoryFormData.productName,
+            truckNo: inventoryFormData.truckNo,
+            port: inventoryFormData.port,
+            importer: inventoryFormData.importer,
+            status: inventoryFormData.status,
+            isMultiBrand: inventoryFormData.isMultiBrand,
+            brand: entry.brand || inventoryFormData.productName,
+            packet: entry.packet,
+            packetSize: entry.packetSize,
+            quantity: entry.quantity,
+            unit: entry.unit
+          };
+          const encryptedPayload = { data: encryptData(flattenedData) };
+          return fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(encryptedPayload),
+          });
+        }));
+
+        if (results.every(res => res.ok)) {
+          isSuccess = true;
+          setSubmitStatus('success');
+          fetchInventoryRecords();
+        } else {
+          setSubmitStatus('error');
+        }
+      }
+
+      if (isSuccess) {
         setTimeout(() => {
           setShowInventoryForm(false);
-          setEditingId(null);
-          setInventoryFormData({
-            port: '',
-            importer: '',
-            status: 'In Stock'
-          });
-
-
-
-
-
-          setSubmitStatus(null);
+          resetInventoryForm();
         }, 2000);
-      } else {
-        setSubmitStatus('error');
       }
     } catch (error) {
       console.error('Error saving inventory:', error);
@@ -999,6 +1193,7 @@ function App() {
                           setActiveDropdown('filterPort');
                         }}
                         onFocus={() => setActiveDropdown('filterPort')}
+                        onKeyDown={(e) => handleDropdownKeyDown(e, 'filterPort', handleFilterDropdownSelect, 'port')}
                         placeholder="All Ports"
                         className="w-full px-3 py-2 text-xs bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-all pr-8"
                       />
@@ -1015,24 +1210,24 @@ function App() {
                         <button
                           type="button"
                           onClick={() => handleFilterDropdownSelect('port', '')}
-                          className="w-full text-left px-3 py-2 hover:bg-blue-50 text-[10px] transition-colors flex items-center justify-between"
+                          onMouseEnter={() => setHighlightedIndex(0)}
+                          className={`w-full text-left px-3 py-2 text-[10px] transition-colors flex items-center justify-between ${highlightedIndex === 0 ? 'bg-blue-50 text-blue-700' : 'hover:bg-blue-50'}`}
                         >
                           <span className="italic text-gray-400">All Ports</span>
                           {filters.port === '' && <span className="w-1.5 h-1.5 bg-blue-500 rounded-full"></span>}
                         </button>
-                        {ports
-                          .filter(p => !filters.port || ports.some(x => x.name === filters.port) || p.name.toLowerCase().includes(filters.port.toLowerCase()))
-                          .map((port) => (
-                            <button
-                              key={port._id}
-                              type="button"
-                              onClick={() => handleFilterDropdownSelect('port', port.name)}
-                              className="w-full text-left px-3 py-2 hover:bg-blue-50 text-[10px] transition-colors flex items-center justify-between"
-                            >
-                              <span>{port.name}</span>
-                              {filters.port === port.name && <span className="w-1.5 h-1.5 bg-blue-500 rounded-full"></span>}
-                            </button>
-                          ))}
+                        {getFilteredOptions('filterPort').map((port, index) => (
+                          <button
+                            key={port._id}
+                            type="button"
+                            onClick={() => handleFilterDropdownSelect('port', port.name)}
+                            onMouseEnter={() => setHighlightedIndex(index + 1)}
+                            className={`w-full text-left px-3 py-2 text-[10px] transition-colors flex items-center justify-between ${highlightedIndex === index + 1 ? 'bg-blue-50 text-blue-700' : 'hover:bg-blue-50'}`}
+                          >
+                            <span>{port.name}</span>
+                            {filters.port === port.name && <span className="w-1.5 h-1.5 bg-blue-500 rounded-full"></span>}
+                          </button>
+                        ))}
                       </div>
                     )}
                   </div>
@@ -1051,6 +1246,7 @@ function App() {
                           setActiveDropdown('filterImporter');
                         }}
                         onFocus={() => setActiveDropdown('filterImporter')}
+                        onKeyDown={(e) => handleDropdownKeyDown(e, 'filterImporter', handleFilterDropdownSelect, 'importer')}
                         placeholder="All Importers"
                         className="w-full px-3 py-2 text-xs bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-all pr-8"
                       />
@@ -1067,24 +1263,24 @@ function App() {
                         <button
                           type="button"
                           onClick={() => handleFilterDropdownSelect('importer', '')}
-                          className="w-full text-left px-3 py-2 hover:bg-blue-50 text-[10px] transition-colors flex items-center justify-between"
+                          onMouseEnter={() => setHighlightedIndex(0)}
+                          className={`w-full text-left px-3 py-2 text-[10px] transition-colors flex items-center justify-between ${highlightedIndex === 0 ? 'bg-blue-50 text-blue-700' : 'hover:bg-blue-50'}`}
                         >
                           <span className="italic text-gray-400">All Importers</span>
                           {filters.importer === '' && <span className="w-1.5 h-1.5 bg-blue-500 rounded-full"></span>}
                         </button>
-                        {importers
-                          .filter(imp => !filters.importer || importers.some(x => x.name === filters.importer) || imp.name.toLowerCase().includes(filters.importer.toLowerCase()))
-                          .map((imp) => (
-                            <button
-                              key={imp._id}
-                              type="button"
-                              onClick={() => handleFilterDropdownSelect('importer', imp.name)}
-                              className="w-full text-left px-3 py-2 hover:bg-blue-50 text-[10px] transition-colors flex items-center justify-between"
-                            >
-                              <span>{imp.name}</span>
-                              {filters.importer === imp.name && <span className="w-1.5 h-1.5 bg-blue-500 rounded-full"></span>}
-                            </button>
-                          ))}
+                        {getFilteredOptions('filterImporter').map((imp, index) => (
+                          <button
+                            key={imp._id}
+                            type="button"
+                            onClick={() => handleFilterDropdownSelect('importer', imp.name)}
+                            onMouseEnter={() => setHighlightedIndex(index + 1)}
+                            className={`w-full text-left px-3 py-2 text-[10px] transition-colors flex items-center justify-between ${highlightedIndex === index + 1 ? 'bg-blue-50 text-blue-700' : 'hover:bg-blue-50'}`}
+                          >
+                            <span>{imp.name}</span>
+                            {filters.importer === imp.name && <span className="w-1.5 h-1.5 bg-blue-500 rounded-full"></span>}
+                          </button>
+                        ))}
                       </div>
                     )}
                   </div>
@@ -1171,6 +1367,7 @@ function App() {
                         value={formData.ipParty}
                         onChange={handleInputChange}
                         onFocus={() => setActiveDropdown('ipImporter')}
+                        onKeyDown={(e) => handleDropdownKeyDown(e, 'ipImporter', handleIpDropdownSelect, 'ipParty')}
                         required
                         placeholder="Select or type importer name"
                         className="w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm pr-10"
@@ -1185,20 +1382,19 @@ function App() {
                     </div>
                     {activeDropdown === 'ipImporter' && (
                       <div className="absolute z-[60] w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-xl max-h-48 overflow-y-auto animate-in fade-in zoom-in duration-200">
-                        {importers
-                          .filter(imp => imp.status === 'Active' && (!formData.ipParty || importers.some(x => x.name === formData.ipParty) || imp.name.toLowerCase().includes(formData.ipParty.toLowerCase())))
-                          .map((importer) => (
-                            <button
-                              key={importer._id}
-                              type="button"
-                              onClick={() => handleIpDropdownSelect('ipParty', importer.name)}
-                              className="w-full text-left px-4 py-2 hover:bg-blue-50 text-sm transition-colors flex items-center justify-between"
-                            >
-                              <span>{importer.name}</span>
-                              {formData.ipParty === importer.name && <span className="w-2 h-2 bg-blue-500 rounded-full"></span>}
-                            </button>
-                          ))}
-                        {importers.filter(imp => imp.status === 'Active' && imp.name.toLowerCase().includes(formData.ipParty.toLowerCase())).length === 0 && (
+                        {getFilteredOptions('ipImporter').map((importer, index) => (
+                          <button
+                            key={importer._id}
+                            type="button"
+                            onClick={() => handleIpDropdownSelect('ipParty', importer.name)}
+                            onMouseEnter={() => setHighlightedIndex(index)}
+                            className={`w-full text-left px-4 py-2 text-sm transition-colors flex items-center justify-between ${highlightedIndex === index ? 'bg-blue-50 text-blue-700' : 'hover:bg-blue-50'}`}
+                          >
+                            <span>{importer.name}</span>
+                            {formData.ipParty === importer.name && <span className="w-2 h-2 bg-blue-500 rounded-full"></span>}
+                          </button>
+                        ))}
+                        {getFilteredOptions('ipImporter').length === 0 && (
                           <div className="px-4 py-3 text-sm text-gray-500 italic">No importers found</div>
                         )}
                       </div>
@@ -1249,6 +1445,7 @@ function App() {
                         value={formData.port}
                         onChange={handleInputChange}
                         onFocus={() => setActiveDropdown('ipPort')}
+                        onKeyDown={(e) => handleDropdownKeyDown(e, 'ipPort', handleIpDropdownSelect, 'port')}
                         required
                         placeholder="Select or type port name"
                         className="w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm pr-10"
@@ -1263,20 +1460,19 @@ function App() {
                     </div>
                     {activeDropdown === 'ipPort' && (
                       <div className="absolute z-[60] w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-xl max-h-48 overflow-y-auto animate-in fade-in zoom-in duration-200">
-                        {ports
-                          .filter(p => p.status === 'Active' && (!formData.port || ports.some(x => x.name === formData.port) || p.name.toLowerCase().includes(formData.port.toLowerCase())))
-                          .map((port) => (
-                            <button
-                              key={port._id}
-                              type="button"
-                              onClick={() => handleIpDropdownSelect('port', port.name)}
-                              className="w-full text-left px-4 py-2 hover:bg-blue-50 text-sm transition-colors flex items-center justify-between"
-                            >
-                              <span>{port.name}</span>
-                              {formData.port === port.name && <span className="w-2 h-2 bg-blue-500 rounded-full"></span>}
-                            </button>
-                          ))}
-                        {ports.filter(p => p.status === 'Active' && p.name.toLowerCase().includes(formData.port.toLowerCase())).length === 0 && (
+                        {getFilteredOptions('ipPort').map((port, index) => (
+                          <button
+                            key={port._id}
+                            type="button"
+                            onClick={() => handleIpDropdownSelect('port', port.name)}
+                            onMouseEnter={() => setHighlightedIndex(index)}
+                            className={`w-full text-left px-4 py-2 text-sm transition-colors flex items-center justify-between ${highlightedIndex === index ? 'bg-blue-50 text-blue-700' : 'hover:bg-blue-50'}`}
+                          >
+                            <span>{port.name}</span>
+                            {formData.port === port.name && <span className="w-2 h-2 bg-blue-500 rounded-full"></span>}
+                          </button>
+                        ))}
+                        {getFilteredOptions('ipPort').length === 0 && (
                           <div className="px-4 py-3 text-sm text-gray-500 italic">No ports found</div>
                         )}
                       </div>
@@ -1923,10 +2119,24 @@ function App() {
               ...item,
               productName: item.productName.trim(),
               quantity: parseFloat(item.quantity) || 0,
-              originalId: item._id
+              originalId: item._id,
+              entries: [
+                {
+                  brand: item.brand || item.productName,
+                  packet: item.packet,
+                  quantity: item.quantity,
+                  unit: item.unit
+                }
+              ]
             };
           } else {
             acc[name].quantity += parseFloat(item.quantity) || 0;
+            acc[name].entries.push({
+              brand: item.brand || item.productName,
+              packet: item.packet,
+              quantity: item.quantity,
+              unit: item.unit
+            });
           }
           return acc;
         }, {});
@@ -1959,7 +2169,7 @@ function App() {
                   </button>
                 </div>
 
-                <form onSubmit={handleInventorySubmit} className="grid grid-cols-1 md:grid-cols-2 gap-6 relative z-10">
+                <form onSubmit={handleInventorySubmit} autoComplete="off" className="grid grid-cols-1 md:grid-cols-2 gap-6 relative z-10">
                   <div className="col-span-1 md:col-span-2 grid grid-cols-1 md:grid-cols-4 gap-6">
                     <CustomDatePicker
                       label="Date"
@@ -1972,7 +2182,7 @@ function App() {
                       <label className="text-sm font-medium text-gray-700">LC No</label>
                       <input
                         type="text" name="lcNo" value={inventoryFormData.lcNo} onChange={handleInventoryInputChange} required
-                        placeholder="LC Number" className="w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm"
+                        placeholder="LC Number" autoComplete="off" className="w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm"
                       />
                     </div>
                     <div className="space-y-2 relative" ref={portRef}>
@@ -1984,8 +2194,10 @@ function App() {
                           value={inventoryFormData.port}
                           onChange={handleInventoryInputChange}
                           onFocus={() => setActiveDropdown('port')}
+                          onKeyDown={(e) => handleDropdownKeyDown(e, 'port', handleInventoryDropdownSelect, 'port')}
                           required
                           placeholder="Select or type port name"
+                          autoComplete="off"
                           className="w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm pr-10"
                         />
                         <button
@@ -1998,20 +2210,19 @@ function App() {
                       </div>
                       {activeDropdown === 'port' && (
                         <div className="absolute z-[60] w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-xl max-h-48 overflow-y-auto animate-in fade-in zoom-in duration-200">
-                          {ports
-                            .filter(p => p.status === 'Active' && (!inventoryFormData.port || ports.some(x => x.name === inventoryFormData.port) || p.name.toLowerCase().includes(inventoryFormData.port.toLowerCase())))
-                            .map((port) => (
-                              <button
-                                key={port._id}
-                                type="button"
-                                onClick={() => handleInventoryDropdownSelect('port', port.name)}
-                                className="w-full text-left px-4 py-2 hover:bg-blue-50 text-sm transition-colors flex items-center justify-between"
-                              >
-                                <span>{port.name}</span>
-                                {inventoryFormData.port === port.name && <span className="w-2 h-2 bg-blue-500 rounded-full"></span>}
-                              </button>
-                            ))}
-                          {ports.filter(p => p.status === 'Active' && p.name.toLowerCase().includes(inventoryFormData.port.toLowerCase())).length === 0 && (
+                          {getFilteredOptions('port').map((port, index) => (
+                            <button
+                              key={port._id}
+                              type="button"
+                              onClick={() => handleInventoryDropdownSelect('port', port.name)}
+                              onMouseEnter={() => setHighlightedIndex(index)}
+                              className={`w-full text-left px-4 py-2 text-sm transition-colors flex items-center justify-between ${highlightedIndex === index ? 'bg-blue-50 text-blue-700' : 'hover:bg-blue-50'}`}
+                            >
+                              <span>{port.name}</span>
+                              {inventoryFormData.port === port.name && <span className="w-2 h-2 bg-blue-500 rounded-full"></span>}
+                            </button>
+                          ))}
+                          {getFilteredOptions('port').length === 0 && (
                             <div className="px-4 py-3 text-sm text-gray-500 italic">No ports found</div>
                           )}
                         </div>
@@ -2027,8 +2238,10 @@ function App() {
                           value={inventoryFormData.importer}
                           onChange={handleInventoryInputChange}
                           onFocus={() => setActiveDropdown('importer')}
+                          onKeyDown={(e) => handleDropdownKeyDown(e, 'importer', handleInventoryDropdownSelect, 'importer')}
                           required
                           placeholder="Select or type importer"
+                          autoComplete="off"
                           className="w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm pr-10"
                         />
                         <button
@@ -2041,20 +2254,19 @@ function App() {
                       </div>
                       {activeDropdown === 'importer' && (
                         <div className="absolute z-[60] w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-xl max-h-48 overflow-y-auto animate-in fade-in zoom-in duration-200">
-                          {importers
-                            .filter(imp => imp.status === 'Active' && (!inventoryFormData.importer || importers.some(x => x.name === inventoryFormData.importer) || imp.name.toLowerCase().includes(inventoryFormData.importer.toLowerCase())))
-                            .map((imp) => (
-                              <button
-                                key={imp._id}
-                                type="button"
-                                onClick={() => handleInventoryDropdownSelect('importer', imp.name)}
-                                className="w-full text-left px-4 py-2 hover:bg-blue-50 text-sm transition-colors flex items-center justify-between"
-                              >
-                                <span>{imp.name}</span>
-                                {inventoryFormData.importer === imp.name && <span className="w-2 h-2 bg-blue-500 rounded-full"></span>}
-                              </button>
-                            ))}
-                          {importers.filter(imp => imp.status === 'Active' && imp.name.toLowerCase().includes(inventoryFormData.importer.toLowerCase())).length === 0 && (
+                          {getFilteredOptions('importer').map((imp, index) => (
+                            <button
+                              key={imp._id}
+                              type="button"
+                              onClick={() => handleInventoryDropdownSelect('importer', imp.name)}
+                              onMouseEnter={() => setHighlightedIndex(index)}
+                              className={`w-full text-left px-4 py-2 text-sm transition-colors flex items-center justify-between ${highlightedIndex === index ? 'bg-blue-50 text-blue-700' : 'hover:bg-blue-50'}`}
+                            >
+                              <span>{imp.name}</span>
+                              {inventoryFormData.importer === imp.name && <span className="w-2 h-2 bg-blue-500 rounded-full"></span>}
+                            </button>
+                          ))}
+                          {getFilteredOptions('importer').length === 0 && (
                             <div className="px-4 py-3 text-sm text-gray-500 italic">No importers found</div>
                           )}
                         </div>
@@ -2069,7 +2281,7 @@ function App() {
                       <label className="text-sm font-medium text-gray-700">IND C&F</label>
                       <input
                         type="text" name="indianCnF" value={inventoryFormData.indianCnF} onChange={handleInventoryInputChange}
-                        placeholder="IND C&F" className="w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm"
+                        placeholder="IND C&F" autoComplete="off" className="w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm"
                       />
                     </div>
 
@@ -2077,7 +2289,7 @@ function App() {
                       <label className="text-sm font-medium text-gray-700">IN C&F comm</label>
                       <input
                         type="number" name="indCnFCost" value={inventoryFormData.indCnFCost} onChange={handleInventoryInputChange}
-                        placeholder="0.00" className="w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                        placeholder="0.00" autoComplete="off" className="w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                       />
                     </div>
 
@@ -2085,7 +2297,7 @@ function App() {
                       <label className="text-sm font-medium text-gray-700">BD C&F</label>
                       <input
                         type="text" name="bdCnF" value={inventoryFormData.bdCnF} onChange={handleInventoryInputChange}
-                        placeholder="BD C&F" className="w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm"
+                        placeholder="BD C&F" autoComplete="off" className="w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm"
                       />
                     </div>
 
@@ -2093,74 +2305,286 @@ function App() {
                       <label className="text-sm font-medium text-gray-700">BD C&F Cost</label>
                       <input
                         type="number" name="bdCnFCost" value={inventoryFormData.bdCnFCost} onChange={handleInventoryInputChange}
-                        placeholder="0.00" className="w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                        placeholder="0.00" autoComplete="off" className="w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                       />
                     </div>
                   </div>
 
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium text-gray-700">Product Name</label>
-                    <input
-                      type="text" name="productName" value={inventoryFormData.productName} onChange={handleInventoryInputChange} required
-                      placeholder="Product Name" className="w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm"
-                    />
-                  </div>
 
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium text-gray-700">Track No.</label>
-                    <input
-                      type="text" name="trackNo" value={inventoryFormData.trackNo} onChange={handleInventoryInputChange}
-                      placeholder="Track No." className="w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm"
-                    />
-                  </div>
+                  {/* Product Name and Truck No */}
 
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium text-gray-700">Packet</label>
-                    <input
-                      type="text" name="packet" value={inventoryFormData.packet} onChange={handleInventoryInputChange}
-                      placeholder="Packet" className="w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm"
-                    />
-                  </div>
+                  {/* Product Info, Brand Entries, and Status */}
+                  <div className="md:col-span-2 space-y-6">
+                    {/* Product Name, Truck No, Total Quantity, and Entry Mode (Conditional Layout) */}
+                    {inventoryFormData.isMultiBrand ? (
+                      /* Multi-Brand Top Row: Standard 4 Columns */
+                      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 animate-in fade-in duration-300">
+                        <div className="space-y-2">
+                          <label className="text-sm font-medium text-gray-700">Product Name</label>
+                          <input
+                            type="text" name="productName" value={inventoryFormData.productName} onChange={handleInventoryInputChange} required
+                            placeholder="Product Name" autoComplete="off" className="w-full h-[42px] px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm"
+                          />
+                        </div>
 
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium text-gray-700">Packet Size</label>
-                    <input
-                      type="text" name="packetSize" value={inventoryFormData.packetSize} onChange={handleInventoryInputChange}
-                      placeholder="Packet Size" className="w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm"
-                    />
-                  </div>
+                        <div className="space-y-2">
+                          <label className="text-sm font-medium text-gray-700">Truck No.</label>
+                          <input
+                            type="text" name="truckNo" value={inventoryFormData.truckNo} onChange={handleInventoryInputChange}
+                            placeholder="Truck No." autoComplete="off" className="w-full h-[42px] px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm"
+                          />
+                        </div>
 
+                        <div className="space-y-2">
+                          <label className="text-sm font-medium text-gray-700">Total Quantity</label>
+                          <div className="relative h-[42px]">
+                            <input
+                              type="text"
+                              value={inventoryFormData.brandEntries.reduce((sum, entry) => sum + (parseFloat(entry.quantity) || 0), 0).toFixed(2)}
+                              readOnly
+                              className="w-full h-full px-4 py-2 bg-gray-50/80 border border-gray-200/60 rounded-lg text-gray-600 font-semibold outline-none cursor-default"
+                            />
+                            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-medium text-gray-400">
+                              {inventoryFormData.brandEntries[0]?.unit || 'kg'}
+                            </span>
+                          </div>
+                        </div>
 
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium text-gray-700">Quantity</label>
-                    <input
-                      type="number" name="quantity" value={inventoryFormData.quantity} onChange={handleInventoryInputChange} required
-                      placeholder="0.00" className="w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium text-gray-700">Unit</label>
-                    <select
-                      name="unit" value={inventoryFormData.unit} onChange={handleInventoryInputChange}
-                      className="w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm"
-                    >
-                      <option>kg</option>
-                      <option>pcs</option>
-                      <option>boxes</option>
-                      <option>liters</option>
-                    </select>
-                  </div>
+                        <div className="space-y-2">
+                          <label className="text-sm font-medium text-gray-700">Entry Mode</label>
+                          <div className="h-[42px] flex items-center gap-1 p-1 bg-gray-100/50 rounded-lg w-full">
+                            <button
+                              type="button"
+                              onClick={() => setInventoryFormData(prev => ({ ...prev, isMultiBrand: false }))}
+                              className={`flex-1 h-full text-xs font-semibold rounded-md transition-all ${!inventoryFormData.isMultiBrand ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+                            >
+                              Single
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setInventoryFormData(prev => ({ ...prev, isMultiBrand: true }))}
+                              className={`flex-1 h-full text-xs font-semibold rounded-md transition-all ${inventoryFormData.isMultiBrand ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+                            >
+                              Multi-Brand
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    ) : (
+                      /* Single Mode: All in one line (Brand hidden) */
+                      <div className="w-full grid grid-cols-1 md:grid-cols-12 gap-4 items-end animate-in fade-in duration-300">
+                        <div className="md:col-span-4 space-y-1.5">
+                          <label className="text-sm font-medium text-gray-700">Product Name</label>
+                          <input
+                            type="text" name="productName" value={inventoryFormData.productName} onChange={handleInventoryInputChange} required
+                            placeholder="Product Name" autoComplete="off" className="w-full h-[42px] px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm text-sm"
+                          />
+                        </div>
 
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium text-gray-700">Status</label>
-                    <select
-                      name="status" value={inventoryFormData.status} onChange={handleInventoryInputChange}
-                      className="w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm"
-                    >
-                      <option>In Stock</option>
-                      <option>Out of Stock</option>
-                      <option>Reserved</option>
-                    </select>
+                        <div className="md:col-span-2 space-y-1.5">
+                          <label className="text-sm font-medium text-gray-700">Truck No.</label>
+                          <input
+                            type="text" name="truckNo" value={inventoryFormData.truckNo} onChange={handleInventoryInputChange}
+                            placeholder="Truck #" autoComplete="off" className="w-full h-[42px] px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm text-sm"
+                          />
+                        </div>
+
+                        <div className="md:col-span-1 space-y-1.5">
+                          <label className="text-sm font-medium text-gray-700 text-center block w-full">Packet</label>
+                          <input
+                            type="text"
+                            value={inventoryFormData.brandEntries[0].packet}
+                            onChange={(e) => handleBrandEntryChange(0, 'packet', e.target.value)}
+                            placeholder="Qty" autoComplete="off" className="w-full h-[42px] px-2 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm text-sm text-center"
+                          />
+                        </div>
+
+                        <div className="md:col-span-1 space-y-1.5">
+                          <label className="text-sm font-medium text-gray-700 text-center block w-full">Size</label>
+                          <input
+                            type="text"
+                            value={inventoryFormData.brandEntries[0].packetSize}
+                            onChange={(e) => handleBrandEntryChange(0, 'packetSize', e.target.value)}
+                            placeholder="Size" autoComplete="off" className="w-full h-[42px] px-2 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm text-sm text-center"
+                          />
+                        </div>
+
+                        <div className="md:col-span-1 space-y-1.5">
+                          <label className="text-sm font-medium text-gray-700 text-center block w-full">Unit</label>
+                          <select
+                            value={inventoryFormData.brandEntries[0].unit}
+                            onChange={(e) => handleBrandEntryChange(0, 'unit', e.target.value)}
+                            className="w-full h-[42px] px-1 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-all backdrop-blur-sm text-sm"
+                          >
+                            <option>kg</option>
+                            <option>pcs</option>
+                            <option>boxes</option>
+                            <option>liters</option>
+                          </select>
+                        </div>
+
+                        <div className="md:col-span-1 space-y-1.5">
+                          <label className="text-sm font-medium text-gray-700 text-center block w-full">Total</label>
+                          <div className="relative h-[42px]">
+                            <input
+                              type="text"
+                              value={inventoryFormData.brandEntries.reduce((sum, entry) => sum + (parseFloat(entry.quantity) || 0), 0).toFixed(2)}
+                              readOnly
+                              className="w-full h-full px-1 py-2 bg-gray-50/80 border border-gray-200/60 rounded-lg text-gray-600 font-bold outline-none cursor-default text-xs text-center"
+                            />
+                          </div>
+                        </div>
+
+                        <div className="md:col-span-2 space-y-1.5">
+                          <label className="text-sm font-medium text-gray-700 text-center block w-full">Mode</label>
+                          <div className="h-[42px] flex items-center gap-1 p-1 bg-gray-100/50 rounded-lg w-full">
+                            <button
+                              type="button"
+                              onClick={() => setInventoryFormData(prev => ({ ...prev, isMultiBrand: false }))}
+                              className={`flex-1 h-full text-[10px] font-bold rounded flex items-center justify-center transition-all ${!inventoryFormData.isMultiBrand ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+                            >
+                              SINGLE
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setInventoryFormData(prev => ({ ...prev, isMultiBrand: true }))}
+                              className={`flex-1 h-full text-[10px] font-bold rounded flex items-center justify-center transition-all ${inventoryFormData.isMultiBrand ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+                            >
+                              MULTI
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Brand Entries - Tabular Row Layout (Multi-Brand Only) */}
+                    {inventoryFormData.isMultiBrand && (
+                      <div className="space-y-2 animate-in fade-in slide-in-from-top-2 duration-300">
+                        <div className="flex items-center justify-between mb-2">
+                          <label className="text-sm font-medium text-gray-700">Brand Entries</label>
+                        </div>
+
+                        {/* Table Header Labels */}
+                        <div className="hidden md:grid grid-cols-5 gap-3 px-1 mb-1 pr-12">
+                          <div className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Brand</div>
+                          <div className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Packet</div>
+                          <div className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Packet Size</div>
+                          <div className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Quantity</div>
+                          <div className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Unit</div>
+                        </div>
+
+                        <div className="space-y-2">
+                          {inventoryFormData.brandEntries.map((entry, index) => (
+                            <div key={index} className="flex items-center gap-3">
+                              <div className="flex-1 grid grid-cols-2 md:grid-cols-5 gap-3">
+                                <div className="space-y-1">
+                                  <label className="md:hidden text-xs font-medium text-gray-600">Brand</label>
+                                  <input
+                                    type="text"
+                                    value={entry.brand}
+                                    onChange={(e) => handleBrandEntryChange(index, 'brand', e.target.value)}
+                                    placeholder="Brand"
+                                    autoComplete="off"
+                                    className="w-full h-[40px] px-3 py-2 text-sm bg-white border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all"
+                                  />
+                                </div>
+
+                                <div className="space-y-1">
+                                  <label className="md:hidden text-xs font-medium text-gray-600">Packet</label>
+                                  <input
+                                    type="text"
+                                    value={entry.packet}
+                                    onChange={(e) => handleBrandEntryChange(index, 'packet', e.target.value)}
+                                    placeholder="Packet"
+                                    autoComplete="off"
+                                    className="w-full h-[40px] px-3 py-2 text-sm bg-white border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all"
+                                  />
+                                </div>
+
+                                <div className="space-y-1">
+                                  <label className="md:hidden text-xs font-medium text-gray-600">Packet Size</label>
+                                  <input
+                                    type="text"
+                                    value={entry.packetSize}
+                                    onChange={(e) => handleBrandEntryChange(index, 'packetSize', e.target.value)}
+                                    placeholder="Packet Size"
+                                    autoComplete="off"
+                                    className="w-full h-[40px] px-3 py-2 text-sm bg-white border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all"
+                                  />
+                                </div>
+
+                                <div className="space-y-1">
+                                  <label className="md:hidden text-xs font-medium text-gray-600">Quantity</label>
+                                  <input
+                                    type="number"
+                                    value={entry.quantity}
+                                    onChange={(e) => handleBrandEntryChange(index, 'quantity', e.target.value)}
+                                    placeholder="0.00"
+                                    className="w-full h-[40px] px-3 py-2 text-sm bg-gray-50/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                                    readOnly
+                                  />
+                                </div>
+
+                                <div className="space-y-1">
+                                  <label className="md:hidden text-xs font-medium text-gray-600">Unit</label>
+                                  <div className="flex items-center gap-2">
+                                    <select
+                                      value={entry.unit}
+                                      onChange={(e) => handleBrandEntryChange(index, 'unit', e.target.value)}
+                                      className="w-full h-[40px] px-3 py-2 text-sm bg-white border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all"
+                                    >
+                                      <option>kg</option>
+                                      <option>pcs</option>
+                                      <option>boxes</option>
+                                      <option>liters</option>
+                                    </select>
+                                  </div>
+                                </div>
+                              </div>
+
+                              <div className="flex items-center gap-1 min-w-[80px]">
+                                <button
+                                  type="button"
+                                  onClick={addBrandEntry}
+                                  className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-all group"
+                                  title="Add Brand"
+                                >
+                                  <PlusIcon className="w-5 h-5 group-hover:scale-125 transition-transform" />
+                                </button>
+
+                                {inventoryFormData.brandEntries.length > 1 && (
+                                  <button
+                                    type="button"
+                                    onClick={() => removeBrandEntry(index)}
+                                    className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all group"
+                                    title="Remove"
+                                  >
+                                    <TrashIcon className="w-4 h-4 group-hover:scale-110" />
+                                  </button>
+                                )}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Status - Moved under brand entries */}
+                    <div className="pt-4 border-t border-gray-100">
+                      <div className="flex flex-col sm:flex-row sm:items-center gap-4">
+                        <div className="w-full sm:w-64 space-y-2">
+                          <label className="text-sm font-medium text-gray-700">Status</label>
+                          <select
+                            name="status" value={inventoryFormData.status} onChange={handleInventoryInputChange}
+                            className="w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm"
+                          >
+                            <option>In Stock</option>
+                            <option>Out of Stock</option>
+                            <option>Reserved</option>
+                          </select>
+                        </div>
+                      </div>
+                    </div>
                   </div>
 
                   <div className="col-span-1 md:col-span-2 pt-4 flex items-center justify-between">
@@ -2245,6 +2669,8 @@ function App() {
                             </th>
                           )}
                           <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Product Name</th>
+                          <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Brand</th>
+                          <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Packet</th>
                           <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Quantity</th>
                           <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider text-center">Status</th>
                           <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider text-center">Actions</th>
@@ -2287,8 +2713,38 @@ function App() {
                                 />
                               </td>
                             )}
-                            <td className="px-6 py-4 text-sm font-medium text-gray-900">{item.productName}</td>
-                            <td className="px-6 py-4 text-sm text-gray-900 font-medium">{item.quantity} {item.unit}</td>
+                            <td className="px-6 py-4 text-sm font-medium text-gray-900 align-top">{item.productName}</td>
+                            <td className="px-6 py-4 text-sm text-gray-600 leading-relaxed align-top">
+                              {item.entries.map((ent, i) => (
+                                <div key={i}>{ent.brand || '-'}</div>
+                              ))}
+                              {item.entries.length > 1 && (
+                                <div className="text-[11px] text-gray-500 mt-1 font-medium italic pt-1 border-t border-gray-100">Total Packet</div>
+                              )}
+                            </td>
+                            <td className="px-6 py-4 text-sm text-gray-600 leading-relaxed align-top">
+                              {item.entries.map((ent, i) => (
+                                <div key={i}>{ent.packet || '-'}</div>
+                              ))}
+                              {item.entries.length > 1 && (
+                                <div className="flex items-center justify-between gap-2 mt-1 pt-1 border-t border-gray-100">
+                                  <div className="text-gray-900 font-bold">
+                                    {item.entries.reduce((sum, ent) => sum + (parseFloat(ent.packet) || 0), 0)}
+                                  </div>
+                                  <div className="text-[11px] text-gray-500 font-medium italic whitespace-nowrap">Total Qty</div>
+                                </div>
+                              )}
+                            </td>
+                            <td className="px-6 py-4 text-sm font-medium text-gray-900 leading-relaxed align-top">
+                              {item.entries.map((ent, i) => (
+                                <div key={i}>{ent.quantity} {ent.unit}</div>
+                              ))}
+                              {item.entries.length > 1 && (
+                                <div className="text-gray-900 mt-1 font-bold pt-1 border-t border-gray-100">
+                                  {Math.round(item.quantity)} {item.unit}
+                                </div>
+                              )}
+                            </td>
                             <td className="px-6 py-4 text-center">
                               <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${item.quantity > 0 ? 'bg-green-50 text-green-700 border border-green-100' : 'bg-red-50 text-red-700 border border-red-100'}`}>
                                 {item.quantity > 0 ? 'In Stock' : 'Out of Stock'}
@@ -2455,10 +2911,47 @@ function App() {
             {/* Modal Content */}
             <div className="p-8">
               {(() => {
-                const history = inventoryRecords.filter(item =>
+                const filteredRaw = inventoryRecords.filter(item =>
                   (item.productName || '').trim().toLowerCase() === (viewRecord.data.productName || '').trim().toLowerCase()
                 );
-                const total = history.reduce((sum, item) => sum + (parseFloat(item.quantity) || 0), 0);
+
+                // Group by date, lcNo, and truckNo
+                const groupedHistoryMap = filteredRaw.reduce((acc, item) => {
+                  const key = `${item.date}_${item.lcNo}_${item.truckNo}`;
+                  if (!acc[key]) {
+                    acc[key] = {
+                      ...item,
+                      allIds: [item._id],
+                      totalQuantity: parseFloat(item.quantity) || 0,
+                      isGrouped: false,
+                      entries: [
+                        {
+                          brand: item.brand || item.productName,
+                          packet: item.packet,
+                          quantity: item.quantity,
+                          unit: item.unit
+                        }
+                      ]
+                    };
+                  } else {
+                    acc[key].allIds.push(item._id);
+                    acc[key].totalQuantity += parseFloat(item.quantity) || 0;
+                    acc[key].isGrouped = true;
+                    acc[key].entries.push({
+                      brand: item.brand || item.productName,
+                      packet: item.packet,
+                      quantity: item.quantity,
+                      unit: item.unit
+                    });
+                  }
+                  return acc;
+                }, {});
+
+                const history = sortData(Object.values(groupedHistoryMap), 'history');
+                const totalQuantity = history.reduce((sum, item) => sum + item.totalQuantity, 0);
+                const totalPackets = history.reduce((sum, item) => {
+                  return sum + item.entries.reduce((pSum, ent) => pSum + (parseFloat(ent.packet) || 0), 0);
+                }, 0);
                 const unit = history[0]?.unit || '';
 
                 return (
@@ -2466,17 +2959,43 @@ function App() {
                     <table className="w-full text-left min-w-[600px]">
                       <thead>
                         <tr className="bg-white border-b border-gray-100">
-                          <th className="px-6 py-4 text-xs font-semibold text-gray-400 uppercase tracking-wider">Date</th>
-                          <th className="px-6 py-4 text-xs font-semibold text-gray-400 uppercase tracking-wider">LC No</th>
-                          <th className="px-6 py-4 text-xs font-semibold text-gray-400 uppercase tracking-wider">Port</th>
-                          <th className="px-6 py-4 text-xs font-semibold text-gray-400 uppercase tracking-wider">Importer</th>
-                          <th className="px-6 py-4 text-xs font-semibold text-gray-400 uppercase tracking-wider whitespace-nowrap">IND C&F</th>
-                          <th className="px-6 py-4 text-xs font-semibold text-gray-400 uppercase tracking-wider whitespace-nowrap">IN C&F comm</th>
-                          <th className="px-6 py-4 text-xs font-semibold text-gray-400 uppercase tracking-wider whitespace-nowrap">BD (C&F)</th>
-                          <th className="px-6 py-4 text-xs font-semibold text-gray-400 uppercase tracking-wider whitespace-nowrap">BD C&F Cost</th>
-                          <th className="px-6 py-4 text-xs font-semibold text-gray-400 uppercase tracking-wider">Track No.</th>
-                          <th className="px-6 py-4 text-xs font-semibold text-gray-400 uppercase tracking-wider">Packet</th>
-                          <th className="px-6 py-4 text-xs font-semibold text-gray-400 uppercase tracking-wider">Quantity</th>
+                          <th onClick={() => requestSort('history', 'date')} className="px-6 py-4 text-xs font-semibold text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-50 transition-colors">
+                            <div className="flex items-center">Date <SortIcon config={sortConfig.history} columnKey="date" /></div>
+                          </th>
+                          <th onClick={() => requestSort('history', 'lcNo')} className="px-6 py-4 text-xs font-semibold text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-50 transition-colors">
+                            <div className="flex items-center">LC No <SortIcon config={sortConfig.history} columnKey="lcNo" /></div>
+                          </th>
+                          <th onClick={() => requestSort('history', 'port')} className="px-6 py-4 text-xs font-semibold text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-50 transition-colors">
+                            <div className="flex items-center">Port <SortIcon config={sortConfig.history} columnKey="port" /></div>
+                          </th>
+                          <th onClick={() => requestSort('history', 'importer')} className="px-6 py-4 text-xs font-semibold text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-50 transition-colors">
+                            <div className="flex items-center">Importer <SortIcon config={sortConfig.history} columnKey="importer" /></div>
+                          </th>
+                          <th onClick={() => requestSort('history', 'indianCnF')} className="px-6 py-4 text-xs font-semibold text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-50 transition-colors whitespace-nowrap">
+                            <div className="flex items-center">IND C&F <SortIcon config={sortConfig.history} columnKey="indianCnF" /></div>
+                          </th>
+                          <th onClick={() => requestSort('history', 'indCnFCost')} className="px-6 py-4 text-xs font-semibold text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-50 transition-colors whitespace-nowrap">
+                            <div className="flex items-center">IN C&F comm <SortIcon config={sortConfig.history} columnKey="indCnFCost" /></div>
+                          </th>
+                          <th onClick={() => requestSort('history', 'bdCnF')} className="px-6 py-4 text-xs font-semibold text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-50 transition-colors whitespace-nowrap">
+                            <div className="flex items-center">BD (C&F) <SortIcon config={sortConfig.history} columnKey="bdCnF" /></div>
+                          </th>
+                          <th onClick={() => requestSort('history', 'bdCnFCost')} className="px-6 py-4 text-xs font-semibold text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-50 transition-colors whitespace-nowrap">
+                            <div className="flex items-center">BD C&F Cost <SortIcon config={sortConfig.history} columnKey="bdCnFCost" /></div>
+                          </th>
+                          <th onClick={() => requestSort('history', 'truckNo')} className="px-6 py-4 text-xs font-semibold text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-50 transition-colors">
+                            <div className="flex items-center">Truck No. <SortIcon config={sortConfig.history} columnKey="truckNo" /></div>
+                          </th>
+                          <th onClick={() => requestSort('history', 'brand')} className="px-6 py-4 text-xs font-semibold text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-50 transition-colors">
+                            <div className="flex items-center">Brand <SortIcon config={sortConfig.history} columnKey="brand" /></div>
+                          </th>
+                          <th onClick={() => requestSort('history', 'packet')} className="px-6 py-4 text-xs font-semibold text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-50 transition-colors">
+                            <div className="flex items-center">Packet <SortIcon config={sortConfig.history} columnKey="packet" /></div>
+                          </th>
+                          <th onClick={() => requestSort('history', 'quantity')} className="px-6 py-4 text-xs font-semibold text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-50 transition-colors">
+                            <div className="flex items-center">Quantity <SortIcon config={sortConfig.history} columnKey="quantity" /></div>
+                          </th>
+                          <th className="px-6 py-4 text-xs font-semibold text-gray-400 uppercase tracking-wider text-center">Actions</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-gray-100 bg-white/50">
@@ -2492,16 +3011,67 @@ function App() {
                             <td className="px-6 py-4 text-sm text-gray-600">{historyItem.indCnFCost || '-'}</td>
                             <td className="px-6 py-4 text-sm text-gray-600">{historyItem.bdCnF || '-'}</td>
                             <td className="px-6 py-4 text-sm text-gray-600">{historyItem.bdCnFCost || '-'}</td>
-                            <td className="px-6 py-4 text-sm text-gray-600">{historyItem.trackNo || '-'}</td>
-                            <td className="px-6 py-4 text-sm text-gray-600">{historyItem.packet || '-'}</td>
-                            <td className="px-6 py-4 text-sm font-medium text-gray-900">{historyItem.quantity} {historyItem.unit}</td>
+                            <td className="px-6 py-4 text-sm text-gray-600">
+                              {historyItem.truckNo || '-'}
+                            </td>
+                            <td className="px-6 py-4 text-sm text-gray-600 leading-relaxed">
+                              {historyItem.entries.map((ent, i) => (
+                                <div key={i}>{ent.brand || '-'}</div>
+                              ))}
+                              {historyItem.isGrouped && (
+                                <div className="text-[11px] text-gray-500 mt-1 font-medium italic">Total Packet</div>
+                              )}
+                            </td>
+                            <td className="px-6 py-4 text-sm text-gray-600 leading-relaxed">
+                              {historyItem.entries.map((ent, i) => (
+                                <div key={i}>{ent.packet || '-'}</div>
+                              ))}
+                              {historyItem.isGrouped && (
+                                <div className="flex items-center justify-between gap-2 mt-1">
+                                  <div className="text-gray-900 font-bold">
+                                    {historyItem.entries.reduce((sum, ent) => sum + (parseFloat(ent.packet) || 0), 0)}
+                                  </div>
+                                  <div className="text-[11px] text-gray-500 font-medium italic whitespace-nowrap">Total Qty</div>
+                                </div>
+                              )}
+                            </td>
+                            <td className="px-6 py-4 text-sm font-medium text-gray-900 leading-relaxed">
+                              {historyItem.entries.map((ent, i) => (
+                                <div key={i}>{ent.quantity} {ent.unit}</div>
+                              ))}
+                              {historyItem.isGrouped && (
+                                <div className="text-gray-900 mt-1 font-bold">
+                                  {Math.round(historyItem.totalQuantity)} {historyItem.unit}
+                                </div>
+                              )}
+                            </td>
+                            <td className="px-6 py-4 text-sm">
+                              <div className="flex items-center justify-center space-x-2">
+                                <button
+                                  onClick={() => { setViewRecord(null); handleEdit('inventory', historyItem); }}
+                                  className="p-1.5 hover:bg-blue-50 rounded-lg transition-colors group"
+                                  title="Edit"
+                                >
+                                  <EditIcon className="w-4 h-4 text-gray-400 group-hover:text-blue-600" />
+                                </button>
+                                <button
+                                  onClick={() => { setViewRecord(null); deleteInventoryGroup(historyItem.allIds || [historyItem._id]); }}
+                                  className="p-1.5 hover:bg-red-50 rounded-lg transition-colors group"
+                                  title="Delete"
+                                >
+                                  <TrashIcon className="w-4 h-4 text-gray-400 group-hover:text-red-600" />
+                                </button>
+                              </div>
+                            </td>
                           </tr>
                         ))}
                       </tbody>
                       <tfoot className="bg-gray-100/50 border-t-2 border-gray-200">
                         <tr>
-                          <td colSpan="10" className="px-6 py-4 text-sm font-bold text-gray-900 text-right">Total Quantity:</td>
-                          <td className="px-6 py-4 text-sm font-bold text-blue-600">{total} {unit}</td>
+                          <td colSpan="10" className="px-6 py-4 text-sm font-bold text-gray-900 text-right">Total:</td>
+                          <td className="px-6 py-4 text-sm font-bold text-blue-600">{totalPackets}</td>
+                          <td className="px-6 py-4 text-sm font-bold text-blue-600">{Math.round(totalQuantity)} {unit}</td>
+                          <td></td>
                         </tr>
                       </tfoot>
                     </table>
@@ -2520,5 +3090,8 @@ function App() {
 
 export default App;
 /*
-
+ <div >
+ clasename 
+ inmovable
+ </div> 
 */
