@@ -19,6 +19,14 @@ const SortIcon = ({ config, columnKey }) => {
 
 const formatDate = (dateString) => {
   if (!dateString) return '-';
+  // Parse YYYY-MM-DD manually to avoid timezone shifts
+  const parts = dateString.split('-');
+  if (parts.length === 3) {
+    const day = parts[2].padStart(2, '0');
+    const month = parts[1].padStart(2, '0');
+    const year = parts[0];
+    return `${day}/${month}/${year}`;
+  }
   const date = new Date(dateString);
   if (isNaN(date.getTime())) return '-';
   const day = String(date.getDate()).padStart(2, '0');
@@ -27,9 +35,24 @@ const formatDate = (dateString) => {
   return `${day}/${month}/${year}`;
 };
 
+const parseDate = (dateString) => {
+  if (!dateString) return new Date();
+  if (typeof dateString === 'string' && dateString.includes('-')) {
+    const [y, m, d] = dateString.split('-').map(Number);
+    return new Date(y, m - 1, d);
+  }
+  return new Date(dateString);
+};
+
 const CustomDatePicker = ({ value, onChange, placeholder, label, required = false, name }) => {
   const [isOpen, setIsOpen] = useState(false);
-  const [viewDate, setViewDate] = useState(value ? new Date(value) : new Date());
+  const [viewDate, setViewDate] = useState(() => {
+    if (value && value.includes('-')) {
+      const [y, m] = value.split('-').map(Number);
+      return new Date(y, m - 1, 1);
+    }
+    return new Date();
+  });
   const containerRef = useRef(null);
 
   useEffect(() => {
@@ -41,12 +64,6 @@ const CustomDatePicker = ({ value, onChange, placeholder, label, required = fals
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
-
-  const years = [];
-  const currentYear = new Date().getFullYear();
-  for (let i = currentYear - 10; i <= currentYear + 10; i++) {
-    years.push(i);
-  }
 
   const months = [
     'January', 'February', 'March', 'April', 'May', 'June',
@@ -65,9 +82,11 @@ const CustomDatePicker = ({ value, onChange, placeholder, label, required = fals
   };
 
   const handleDateSelect = (day) => {
-    const selectedDate = new Date(viewDate.getFullYear(), viewDate.getMonth(), day);
-    // Format as YYYY-MM-DD for consistency with existing state
-    const formatted = selectedDate.toISOString().split('T')[0];
+    const year = viewDate.getFullYear();
+    const month = String(viewDate.getMonth() + 1).padStart(2, '0');
+    const d = String(day).padStart(2, '0');
+    const formatted = `${year}-${month}-${d}`;
+
     onChange({ target: { name, value: formatted } });
     setIsOpen(false);
   };
@@ -117,8 +136,19 @@ const CustomDatePicker = ({ value, onChange, placeholder, label, required = fals
           <div className="grid grid-cols-7 gap-1">
             {blanks.map(b => <div key={`b-${b}`} className="h-8"></div>)}
             {days.map(d => {
-              const isToday = new Date().toDateString() === new Date(viewDate.getFullYear(), viewDate.getMonth(), d).toDateString();
-              const isSelected = value && new Date(value).toDateString() === new Date(viewDate.getFullYear(), viewDate.getMonth(), d).toDateString();
+              const today = new Date();
+              const isToday = today.getFullYear() === viewDate.getFullYear() &&
+                today.getMonth() === viewDate.getMonth() &&
+                today.getDate() === d;
+
+              let isSelected = false;
+              if (value && value.includes('-')) {
+                const [vY, vM, vD] = value.split('-').map(Number);
+                isSelected = vY === viewDate.getFullYear() &&
+                  vM === (viewDate.getMonth() + 1) &&
+                  vD === d;
+              }
+
               return (
                 <button
                   key={d}
@@ -155,12 +185,13 @@ function App() {
   const [isLoading, setIsLoading] = useState(false);
   const [showImporterForm, setShowImporterForm] = useState(false);
   const [showPortForm, setShowPortForm] = useState(false);
-  const [showInventoryForm, setShowInventoryForm] = useState(false);
-  const [inventoryRecords, setInventoryRecords] = useState([]);
+  const [showStockForm, setShowStockForm] = useState(false);
+  const [stockRecords, setStockRecords] = useState([]);
 
   const [selectedItems, setSelectedItems] = useState(new Set());
   const [isSelectionMode, setIsSelectionMode] = useState(false);
   const longPressTimer = useRef(null);
+  const isLongPressTriggered = useRef(false);
   const [editingId, setEditingId] = useState(null);
   const [deleteConfirm, setDeleteConfirm] = useState({ show: false, type: '', id: null, isBulk: false });
   const [showFilters, setShowFilters] = useState(false);
@@ -207,26 +238,30 @@ function App() {
     status: 'Active'
   });
 
-  const [inventoryFormData, setInventoryFormData] = useState({
+  const [stockFormData, setStockFormData] = useState({
     date: new Date().toISOString().split('T')[0],
     lcNo: '',
     indianCnF: '',
     indCnFCost: '',
     bdCnF: '',
     bdCnFCost: '',
-    productName: '',
-    truckNo: '',
     port: '',
     importer: '',
     status: 'In Stock',
-    isMultiBrand: false,
-    brandEntries: [
+    productEntries: [
       {
-        brand: '',
-        packet: '',
-        packetSize: '',
-        quantity: '',
-        unit: 'kg'
+        productName: '',
+        truckNo: '',
+        isMultiBrand: true,
+        brandEntries: [
+          {
+            brand: '',
+            packet: '',
+            packetSize: '',
+            quantity: '',
+            unit: 'kg'
+          }
+        ]
       }
     ]
   });
@@ -255,8 +290,8 @@ function App() {
     setFormData(prev => {
       const newData = { ...prev, [name]: value };
 
-      if (name === 'openingDate' && value) {
-        const openingDate = new Date(value);
+      if (name === 'openingDate') {
+        const openingDate = parseDate(value);
         if (!isNaN(openingDate.getTime())) {
           const closeDate = new Date(openingDate);
           closeDate.setMonth(closeDate.getMonth() + 4);
@@ -328,27 +363,36 @@ function App() {
     setSubmitStatus(null);
   };
 
-  const resetInventoryForm = () => {
-    setInventoryFormData({
+  const resetStockForm = () => {
+    setStockFormData({
       date: new Date().toISOString().split('T')[0],
       lcNo: '',
       indianCnF: '',
       indCnFCost: '',
       bdCnF: '',
       bdCnFCost: '',
-      productName: '',
-      truckNo: '',
       port: '',
       importer: '',
       status: 'In Stock',
-      isMultiBrand: false,
-      brandEntries: [
+      productEntries: [
         {
-          brand: '',
-          packet: '',
-          packetSize: '',
-          quantity: '',
-          unit: 'kg'
+          productName: '',
+          truckNo: '',
+          isMultiBrand: true,
+          brandEntries: [
+            {
+              brand: '',
+              packet: '',
+              packetSize: '',
+              sweepedPacket: '',
+              sweepedSize: '',
+              sweepedQuantity: '',
+              inHousePacket: '',
+              inHouseQuantity: '',
+              quantity: '',
+              unit: 'kg'
+            }
+          ]
         }
       ]
     });
@@ -399,7 +443,7 @@ function App() {
   };
 
   const filteredIpRecords = ipRecords.filter(record => {
-    const recordDate = new Date(record.openingDate);
+    const recordDate = parseDate(record.openingDate);
     const now = new Date();
 
     // Quick Range Filter
@@ -418,8 +462,8 @@ function App() {
     }
 
     // Custom Date Range
-    if (filters.startDate && new Date(record.openingDate) < new Date(filters.startDate)) return false;
-    if (filters.endDate && new Date(record.openingDate) > new Date(filters.endDate)) return false;
+    if (filters.startDate && parseDate(record.openingDate) < parseDate(filters.startDate)) return false;
+    if (filters.endDate && parseDate(record.openingDate) > parseDate(filters.endDate)) return false;
 
     // Port Filter
     if (filters.port && record.port !== filters.port) return false;
@@ -459,7 +503,7 @@ function App() {
     setShowIpForm(false);
     setShowImporterForm(false);
     setShowPortForm(false);
-    setShowInventoryForm(false);
+    setShowStockForm(false);
     setActiveDropdown(null);
     setViewRecord(null);
 
@@ -471,8 +515,8 @@ function App() {
       fetchImporters();
     } else if (currentView === 'port-section') {
       fetchPorts();
-    } else if (currentView === 'inventory-section') {
-      fetchInventoryRecords();
+    } else if (currentView === 'stock-section') {
+      fetchStockRecords();
       fetchPorts(); // Fetch ports to populate the dropdown
       fetchImporters(); // Fetch importers to populate the dropdown
     }
@@ -505,9 +549,9 @@ function App() {
   const getFilteredOptions = (type) => {
     switch (type) {
       case 'port':
-        return ports.filter(p => p.status === 'Active' && (!inventoryFormData.port || ports.some(x => x.name === inventoryFormData.port) || p.name.toLowerCase().includes(inventoryFormData.port.toLowerCase())));
+        return ports.filter(p => p.status === 'Active' && (!stockFormData.port || ports.some(x => x.name === stockFormData.port) || p.name.toLowerCase().includes(stockFormData.port.toLowerCase())));
       case 'importer':
-        return importers.filter(imp => imp.status === 'Active' && (!inventoryFormData.importer || importers.some(x => x.name === inventoryFormData.importer) || imp.name.toLowerCase().includes(inventoryFormData.importer.toLowerCase())));
+        return importers.filter(imp => imp.status === 'Active' && (!stockFormData.importer || importers.some(x => x.name === stockFormData.importer) || imp.name.toLowerCase().includes(stockFormData.importer.toLowerCase())));
       case 'ipPort':
         return ports.filter(p => p.status === 'Active' && (!formData.port || ports.some(x => x.name === formData.port) || p.name.toLowerCase().includes(formData.port.toLowerCase())));
       case 'ipImporter':
@@ -568,7 +612,9 @@ function App() {
   };
 
   const startLongPress = (id) => {
+    isLongPressTriggered.current = false;
     longPressTimer.current = setTimeout(() => {
+      isLongPressTriggered.current = true;
       if (id) {
         toggleSelection(id);
       } else {
@@ -576,8 +622,8 @@ function App() {
       }
     }, 700); // 700ms for long press
   };
-  const toggleInventoryGroupSelection = (productName) => {
-    const records = inventoryRecords.filter(item =>
+  const toggleStockGroupSelection = (productName) => {
+    const records = stockRecords.filter(item =>
       (item.productName || '').trim().toLowerCase() === productName.toLowerCase()
     );
     const ids = records.map(r => r._id);
@@ -598,8 +644,8 @@ function App() {
     setIsSelectionMode(newSelection.size > 0);
   };
 
-  const isInventoryGroupSelected = (productName) => {
-    const records = inventoryRecords.filter(item =>
+  const isStockGroupSelected = (productName) => {
+    const records = stockRecords.filter(item =>
       (item.productName || '').trim().toLowerCase() === productName.toLowerCase()
     );
     if (records.length === 0) return false;
@@ -618,7 +664,7 @@ function App() {
 
   const confirmDelete = async () => {
     const { type, id, isBulk } = deleteConfirm;
-    const endpoint = type === 'ip' ? 'ip-records' : type === 'importer' ? 'importers' : type === 'port' ? 'ports' : 'inventory';
+    const endpoint = type === 'ip' ? 'ip-records' : type === 'importer' ? 'importers' : type === 'port' ? 'ports' : 'stock';
 
 
     try {
@@ -636,7 +682,7 @@ function App() {
       if (type === 'ip') fetchIpRecords();
       else if (type === 'importer') fetchImporters();
       else if (type === 'port') fetchPorts();
-      else if (type === 'inventory') fetchInventoryRecords();
+      else if (type === 'stock') fetchStockRecords();
 
       setDeleteConfirm({ show: false, type: '', id: null, isBulk: false });
     } catch (error) {
@@ -655,8 +701,8 @@ function App() {
     } else if (type === 'port') {
       setPortFormData(item);
       setShowPortForm(true);
-    } else if (type === 'inventory') {
-      // Convert single record to brandEntries format for editing
+    } else if (type === 'stock') {
+      // Convert single record to productEntries format for editing
       const formattedData = {
         date: item.date,
         lcNo: item.lcNo,
@@ -664,24 +710,28 @@ function App() {
         indCnFCost: item.indCnFCost,
         bdCnF: item.bdCnF,
         bdCnFCost: item.bdCnFCost,
-        productName: item.productName,
-        truckNo: item.truckNo,
         port: item.port,
         importer: item.importer,
         status: item.status,
-        isMultiBrand: item.isMultiBrand || false,
-        brandEntries: [
+        productEntries: [
           {
-            brand: item.brand || '',
-            packet: item.packet || '',
-            packetSize: item.packetSize || '',
-            quantity: item.quantity || '',
-            unit: item.unit || 'kg'
+            productName: item.productName,
+            truckNo: item.truckNo,
+            isMultiBrand: item.isMultiBrand,
+            brandEntries: [
+              {
+                brand: item.brand,
+                packet: item.packet,
+                packetSize: item.packetSize,
+                quantity: item.quantity,
+                unit: item.unit
+              }
+            ]
           }
         ]
       };
-      setInventoryFormData(formattedData);
-      setShowInventoryForm(true);
+      setStockFormData(formattedData);
+      setShowStockForm(true);
     }
   };
 
@@ -834,16 +884,16 @@ function App() {
     }
   };
 
-  const deleteInventoryGroup = async (ids) => {
+  const deleteStockGroup = async (ids) => {
     if (!window.confirm(`Are you sure you want to delete this shipment (${ids.length} records)?`)) return;
     try {
       const results = await Promise.all(ids.map(async (id) => {
-        const response = await fetch(`${API_BASE_URL}/api/inventory/${id}`, { method: 'DELETE' });
+        const response = await fetch(`${API_BASE_URL}/api/stock/${id}`, { method: 'DELETE' });
         return response.ok;
       }));
 
       if (results.every(res => res)) {
-        fetchInventoryRecords();
+        fetchStockRecords();
       } else {
         alert('Some records could not be deleted');
       }
@@ -852,86 +902,180 @@ function App() {
     }
   };
 
-  const fetchInventoryRecords = async () => {
+  const fetchStockRecords = async () => {
     setIsLoading(true);
     try {
-      const response = await fetch(`${API_BASE_URL}/api/inventory`);
+      const response = await fetch(`${API_BASE_URL}/api/stock`);
       if (response.ok) {
         const rawData = await response.json();
         const decryptedRecords = rawData.map(record => {
           const decrypted = decryptData(record.data);
           return { ...decrypted, _id: record._id, createdAt: record.createdAt };
         });
-        setInventoryRecords(decryptedRecords);
+        setStockRecords(decryptedRecords);
       }
     } catch (error) {
-      console.error('Error fetching inventory:', error);
+      console.error('Error fetching stock:', error);
     } finally {
       setIsLoading(false);
     }
   };
 
-  const handleInventoryInputChange = (e) => {
+  const handleStockInputChange = (e, productIndex = null) => {
     const { name, value } = e.target;
-    setInventoryFormData(prev => ({
-      ...prev,
-      [name]: value
-    }));
-    if (name === 'port' || name === 'importer') {
-      setActiveDropdown(name);
-    }
-  };
-
-  // Handle brand entry field changes
-  const handleBrandEntryChange = (index, field, value) => {
-    setInventoryFormData(prev => {
-      const updatedEntries = [...prev.brandEntries];
-      updatedEntries[index] = {
-        ...updatedEntries[index],
-        [field]: value
-      };
-
-      // Auto-calculate quantity when packet or packetSize changes
-      if (field === 'packet' || field === 'packetSize') {
-        const packet = field === 'packet' ? parseFloat(value) || 0 : parseFloat(updatedEntries[index].packet) || 0;
-        const packetSize = field === 'packetSize' ? parseFloat(value) || 0 : parseFloat(updatedEntries[index].packetSize) || 0;
-        updatedEntries[index].quantity = packet && packetSize ? (packet * packetSize).toString() : '';
+    setStockFormData(prev => {
+      if (productIndex !== null) {
+        const updatedProducts = [...prev.productEntries];
+        updatedProducts[productIndex] = {
+          ...updatedProducts[productIndex],
+          [name]: value
+        };
+        return { ...prev, productEntries: updatedProducts };
       }
-
-      return {
-        ...prev,
-        brandEntries: updatedEntries
-      };
+      return { ...prev, [name]: value };
     });
   };
 
-  // Add new brand entry
-  const addBrandEntry = () => {
-    setInventoryFormData(prev => ({
+  const handleProductModeToggle = (index, isMulti) => {
+    setStockFormData(prev => {
+      const updatedProducts = [...prev.productEntries];
+      updatedProducts[index] = {
+        ...updatedProducts[index],
+        isMultiBrand: isMulti
+      };
+      return { ...prev, productEntries: updatedProducts };
+    });
+  };
+
+  // Handle brand entry field changes
+  const handleBrandEntryChange = (productIndex, brandIndex, field, value) => {
+    setStockFormData(prev => {
+      const updatedProducts = [...prev.productEntries];
+      const updatedEntries = [...updatedProducts[productIndex].brandEntries];
+
+      const newEntry = { ...updatedEntries[brandIndex], [field]: value };
+
+      if (['packet', 'packetSize', 'sweepedPacket', 'sweepedQuantity'].includes(field)) {
+        const pkt = parseFloat(field === 'packet' ? value : newEntry.packet) || 0;
+        const size = parseFloat(field === 'packetSize' ? value : newEntry.packetSize) || 0;
+        const swpPkt = parseFloat(field === 'sweepedPacket' ? value : newEntry.sweepedPacket) || 0;
+        const swpQty = parseFloat(field === 'sweepedQuantity' ? value : newEntry.sweepedQuantity) || 0;
+
+        // Calculate total quantity
+        const totalQty = pkt * size;
+        newEntry.quantity = Math.round(totalQty);
+
+        if (field === 'sweepedPacket') {
+          // If packet changed, update quantity
+          const newSwpQty = swpPkt * size;
+          newEntry.sweepedQuantity = newSwpQty.toFixed(2);
+          const ihQty = totalQty - newSwpQty;
+          newEntry.inHouseQuantity = ihQty.toFixed(2);
+          newEntry.inHousePacket = size > 0 ? (ihQty / size).toFixed(2) : 0;
+        } else if (field === 'sweepedQuantity') {
+          // If quantity changed, update packet
+          const ihQty = totalQty - swpQty;
+          newEntry.inHouseQuantity = ihQty.toFixed(2);
+          newEntry.inHousePacket = size > 0 ? (ihQty / size).toFixed(2) : 0;
+          newEntry.sweepedPacket = size > 0 ? (swpQty / size).toFixed(2) : 0;
+        } else {
+          // If total packet or size changed, update everything based on current sweeped packet
+          const currentSwpQty = swpPkt * size;
+          newEntry.sweepedQuantity = currentSwpQty.toFixed(2);
+          const ihQty = totalQty - currentSwpQty;
+          newEntry.inHouseQuantity = ihQty.toFixed(2);
+          newEntry.inHousePacket = size > 0 ? (ihQty / size).toFixed(2) : 0;
+        }
+      }
+
+      updatedEntries[brandIndex] = newEntry;
+      updatedProducts[productIndex] = {
+        ...updatedProducts[productIndex],
+        brandEntries: updatedEntries
+      };
+
+      return { ...prev, productEntries: updatedProducts };
+    });
+  };
+
+  // Add new product entry
+  const addProductEntry = () => {
+    setStockFormData(prev => ({
       ...prev,
-      brandEntries: [
-        ...prev.brandEntries,
+      productEntries: [
+        ...prev.productEntries,
         {
-          brand: '',
-          packet: '',
-          packetSize: '',
-          quantity: '',
-          unit: 'kg'
+          productName: '',
+          truckNo: '',
+          isMultiBrand: true,
+          brandEntries: [
+            {
+              brand: '',
+              packet: '',
+              packetSize: '',
+              sweepedPacket: '',
+              sweepedSize: '',
+              sweepedQuantity: '',
+              inHousePacket: '',
+              inHouseQuantity: '',
+              quantity: '',
+              unit: 'kg'
+            }
+          ]
         }
       ]
     }));
   };
 
-  // Remove brand entry
-  const removeBrandEntry = (index) => {
-    setInventoryFormData(prev => ({
+  // Remove product entry
+  const removeProductEntry = (index) => {
+    if (stockFormData.productEntries.length === 1) return;
+    setStockFormData(prev => ({
       ...prev,
-      brandEntries: prev.brandEntries.filter((_, i) => i !== index)
+      productEntries: prev.productEntries.filter((_, i) => i !== index)
     }));
   };
 
-  const handleInventoryDropdownSelect = (name, value) => {
-    setInventoryFormData(prev => ({
+  // Add new brand entry
+  const addBrandEntry = (productIndex) => {
+    setStockFormData(prev => {
+      const updatedProducts = [...prev.productEntries];
+      updatedProducts[productIndex] = {
+        ...updatedProducts[productIndex],
+        brandEntries: [
+          ...updatedProducts[productIndex].brandEntries,
+          {
+            brand: '',
+            packet: '',
+            packetSize: '',
+            sweepedPacket: '',
+            sweepedSize: '',
+            sweepedQuantity: '',
+            inHousePacket: '',
+            inHouseQuantity: '',
+            quantity: '',
+            unit: 'kg'
+          }
+        ]
+      };
+      return { ...prev, productEntries: updatedProducts };
+    });
+  };
+
+  // Remove brand entry
+  const removeBrandEntry = (productIndex, brandIndex) => {
+    setStockFormData(prev => {
+      const updatedProducts = [...prev.productEntries];
+      updatedProducts[productIndex] = {
+        ...updatedProducts[productIndex],
+        brandEntries: updatedProducts[productIndex].brandEntries.filter((_, i) => i !== brandIndex)
+      };
+      return { ...prev, productEntries: updatedProducts };
+    });
+  };
+
+  const handleStockDropdownSelect = (name, value) => {
+    setStockFormData(prev => ({
       ...prev,
       [name]: value
     }));
@@ -954,41 +1098,49 @@ function App() {
     setActiveDropdown(null);
   };
 
-  const handleInventorySubmit = async (e) => {
+  const handleStockSubmit = async (e) => {
     e.preventDefault();
     setIsSubmitting(true);
     setSubmitStatus(null);
 
     try {
       let isSuccess = false;
+      // Flatten all product and brand combinations into a single array of items to save
+      const itemsToSave = [];
+      stockFormData.productEntries.forEach(product => {
+        product.brandEntries.forEach(brand => {
+          itemsToSave.push({
+            date: stockFormData.date,
+            lcNo: stockFormData.lcNo,
+            indianCnF: stockFormData.indianCnF,
+            indCnFCost: stockFormData.indCnFCost,
+            bdCnF: stockFormData.bdCnF,
+            bdCnFCost: stockFormData.bdCnFCost,
+            port: stockFormData.port,
+            importer: stockFormData.importer,
+            status: stockFormData.status,
+            productName: product.productName,
+            truckNo: product.truckNo,
+            isMultiBrand: product.isMultiBrand,
+            brand: brand.brand || product.productName,
+            packet: brand.packet,
+            packetSize: brand.packetSize,
+            quantity: brand.quantity,
+            unit: brand.unit
+          });
+        });
+      });
+
       if (editingId) {
-        // For editing, first entry updates the existing record, subsequent ones are created as new
-        const results = await Promise.all(inventoryFormData.brandEntries.map(async (entry, index) => {
+        // For editing, we update the main record and create others as new
+        // Note: This logic assumes only one product was being edited before. 
+        // With multi-product support, we should ideally handle many-to-many updates, 
+        // but for now, we'll keep it simple: first item updates existing, rest are new.
+        const results = await Promise.all(itemsToSave.map(async (item, index) => {
           const isUpdate = index === 0;
-          const url = isUpdate ? `${API_BASE_URL}/api/inventory/${editingId}` : `${API_BASE_URL}/api/inventory`;
+          const url = isUpdate ? `${API_BASE_URL}/api/stock/${editingId}` : `${API_BASE_URL}/api/stock`;
           const method = isUpdate ? 'PUT' : 'POST';
-
-          const flattenedData = {
-            date: inventoryFormData.date,
-            lcNo: inventoryFormData.lcNo,
-            indianCnF: inventoryFormData.indianCnF,
-            indCnFCost: inventoryFormData.indCnFCost,
-            bdCnF: inventoryFormData.bdCnF,
-            bdCnFCost: inventoryFormData.bdCnFCost,
-            productName: inventoryFormData.productName,
-            truckNo: inventoryFormData.truckNo,
-            port: inventoryFormData.port,
-            importer: inventoryFormData.importer,
-            status: inventoryFormData.status,
-            isMultiBrand: inventoryFormData.isMultiBrand,
-            brand: entry.brand || inventoryFormData.productName,
-            packet: entry.packet,
-            packetSize: entry.packetSize,
-            quantity: entry.quantity,
-            unit: entry.unit
-          };
-
-          const encryptedPayload = { data: encryptData(flattenedData) };
+          const encryptedPayload = { data: encryptData(item) };
           return fetch(url, {
             method,
             headers: { 'Content-Type': 'application/json' },
@@ -999,34 +1151,15 @@ function App() {
         if (results.every(res => res.ok)) {
           isSuccess = true;
           setSubmitStatus('success');
-          fetchInventoryRecords();
+          fetchStockRecords();
         } else {
           setSubmitStatus('error');
         }
       } else {
-        // For new records, send separate POST requests for each brand entry
-        const results = await Promise.all(inventoryFormData.brandEntries.map(async (entry) => {
-          const url = `${API_BASE_URL}/api/inventory`;
-          const flattenedData = {
-            date: inventoryFormData.date,
-            lcNo: inventoryFormData.lcNo,
-            indianCnF: inventoryFormData.indianCnF,
-            indCnFCost: inventoryFormData.indCnFCost,
-            bdCnF: inventoryFormData.bdCnF,
-            bdCnFCost: inventoryFormData.bdCnFCost,
-            productName: inventoryFormData.productName,
-            truckNo: inventoryFormData.truckNo,
-            port: inventoryFormData.port,
-            importer: inventoryFormData.importer,
-            status: inventoryFormData.status,
-            isMultiBrand: inventoryFormData.isMultiBrand,
-            brand: entry.brand || inventoryFormData.productName,
-            packet: entry.packet,
-            packetSize: entry.packetSize,
-            quantity: entry.quantity,
-            unit: entry.unit
-          };
-          const encryptedPayload = { data: encryptData(flattenedData) };
+        // For new records, send separate POST requests for each item
+        const results = await Promise.all(itemsToSave.map(async (item) => {
+          const url = `${API_BASE_URL}/api/stock`;
+          const encryptedPayload = { data: encryptData(item) };
           return fetch(url, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -1037,7 +1170,7 @@ function App() {
         if (results.every(res => res.ok)) {
           isSuccess = true;
           setSubmitStatus('success');
-          fetchInventoryRecords();
+          fetchStockRecords();
         } else {
           setSubmitStatus('error');
         }
@@ -1045,12 +1178,12 @@ function App() {
 
       if (isSuccess) {
         setTimeout(() => {
-          setShowInventoryForm(false);
-          resetInventoryForm();
+          setShowStockForm(false);
+          resetStockForm();
         }, 2000);
       }
     } catch (error) {
-      console.error('Error saving inventory:', error);
+      console.error('Error saving stock:', error);
       setSubmitStatus('error');
     } finally {
       setIsSubmitting(false);
@@ -1608,7 +1741,13 @@ function App() {
                             onMouseLeave={endLongPress}
                             onTouchStart={() => startLongPress(record._id)}
                             onTouchEnd={endLongPress}
-                            onClick={() => isSelectionMode && toggleSelection(record._id)}
+                            onClick={() => {
+                              if (isLongPressTriggered.current) {
+                                isLongPressTriggered.current = false;
+                                return;
+                              }
+                              if (isSelectionMode) toggleSelection(record._id);
+                            }}
                           >
                             {isSelectionMode && (
                               <td className="px-6 py-4">
@@ -1843,7 +1982,13 @@ function App() {
                             onMouseLeave={endLongPress}
                             onTouchStart={() => startLongPress(importer._id)}
                             onTouchEnd={endLongPress}
-                            onClick={() => isSelectionMode && toggleSelection(importer._id)}
+                            onClick={() => {
+                              if (isLongPressTriggered.current) {
+                                isLongPressTriggered.current = false;
+                                return;
+                              }
+                              if (isSelectionMode) toggleSelection(importer._id);
+                            }}
                           >
                             {isSelectionMode && (
                               <td className="px-6 py-4">
@@ -2062,7 +2207,13 @@ function App() {
                             onMouseLeave={endLongPress}
                             onTouchStart={() => startLongPress(port._id)}
                             onTouchEnd={endLongPress}
-                            onClick={() => isSelectionMode && toggleSelection(port._id)}
+                            onClick={() => {
+                              if (isLongPressTriggered.current) {
+                                isLongPressTriggered.current = false;
+                                return;
+                              }
+                              if (isSelectionMode) toggleSelection(port._id);
+                            }}
                           >
                             {isSelectionMode && (
                               <td className="px-6 py-4">
@@ -2111,45 +2262,55 @@ function App() {
             )}
           </div>
         );
-      case 'inventory-section':
-        const groupedInventory = inventoryRecords.reduce((acc, item) => {
+      case 'stock-section':
+        const groupedStock = stockRecords.reduce((acc, item) => {
           const name = (item.productName || '').trim().toLowerCase();
+          const itemBrand = (item.brand || item.productName || '').trim();
+          const itemQty = parseFloat(item.quantity) || 0;
+          const itemPacket = parseFloat(item.packet) || 0;
+
           if (!acc[name]) {
             acc[name] = {
               ...item,
-              productName: item.productName.trim(),
-              quantity: parseFloat(item.quantity) || 0,
+              productName: (item.productName || '').trim(),
+              quantity: itemQty,
               originalId: item._id,
               entries: [
                 {
-                  brand: item.brand || item.productName,
-                  packet: item.packet,
-                  quantity: item.quantity,
+                  brand: itemBrand,
+                  packet: itemPacket,
+                  quantity: itemQty,
                   unit: item.unit
                 }
               ]
             };
           } else {
-            acc[name].quantity += parseFloat(item.quantity) || 0;
-            acc[name].entries.push({
-              brand: item.brand || item.productName,
-              packet: item.packet,
-              quantity: item.quantity,
-              unit: item.unit
-            });
+            acc[name].quantity += itemQty;
+            const existingEntry = acc[name].entries.find(e => e.brand === itemBrand);
+            if (existingEntry) {
+              existingEntry.packet += itemPacket;
+              existingEntry.quantity += itemQty;
+            } else {
+              acc[name].entries.push({
+                brand: itemBrand,
+                packet: itemPacket,
+                quantity: itemQty,
+                unit: item.unit
+              });
+            }
           }
           return acc;
         }, {});
-        const displayRecords = Object.values(groupedInventory);
+        const displayRecords = Object.values(groupedStock);
 
         return (
 
           <div className="space-y-6">
             <div className="flex items-center justify-between">
-              <h2 className="text-2xl font-bold text-gray-800">Inventory Management</h2>
+              <h2 className="text-2xl font-bold text-gray-800">Stock Management</h2>
               <div className="flex items-center space-x-3">
                 <button
-                  onClick={() => setShowInventoryForm(!showInventoryForm)}
+                  onClick={() => setShowStockForm(!showStockForm)}
                   className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg shadow-lg shadow-blue-500/30 transition-all transform hover:scale-105 flex items-center"
                 >
                   <span className="mr-2 text-xl">+</span> Add New
@@ -2157,31 +2318,31 @@ function App() {
               </div>
             </div>
 
-            {showInventoryForm && (
+            {showStockForm && (
               <div className="relative overflow-hidden rounded-2xl bg-white/60 backdrop-blur-xl border border-white/50 shadow-2xl p-8 transition-all duration-300">
                 <div className="absolute -top-24 -right-24 w-64 h-64 bg-blue-400/10 rounded-full blur-3xl pointer-events-none"></div>
                 <div className="absolute -bottom-24 -left-24 w-64 h-64 bg-indigo-400/10 rounded-full blur-3xl pointer-events-none"></div>
 
                 <div className="flex items-center justify-between mb-6 border-b border-gray-200/50 pb-4 relative z-10">
-                  <h3 className="text-xl font-semibold text-gray-800">{editingId ? 'Edit Inventory' : 'New Inventory Entry'}</h3>
-                  <button onClick={() => { setShowInventoryForm(false); resetInventoryForm(); }} className="text-gray-400 hover:text-red-500 transition-colors">
+                  <h3 className="text-xl font-semibold text-gray-800">{editingId ? 'Edit Stock' : 'New Stock Entry'}</h3>
+                  <button onClick={() => { setShowStockForm(false); resetStockForm(); }} className="text-gray-400 hover:text-red-500 transition-colors">
                     <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
                   </button>
                 </div>
 
-                <form onSubmit={handleInventorySubmit} autoComplete="off" className="grid grid-cols-1 md:grid-cols-2 gap-6 relative z-10">
+                <form onSubmit={handleStockSubmit} autoComplete="off" className="grid grid-cols-1 md:grid-cols-2 gap-6 relative z-10">
                   <div className="col-span-1 md:col-span-2 grid grid-cols-1 md:grid-cols-4 gap-6">
                     <CustomDatePicker
                       label="Date"
                       name="date"
-                      value={inventoryFormData.date}
-                      onChange={handleInventoryInputChange}
+                      value={stockFormData.date}
+                      onChange={handleStockInputChange}
                       required
                     />
                     <div className="space-y-2">
                       <label className="text-sm font-medium text-gray-700">LC No</label>
                       <input
-                        type="text" name="lcNo" value={inventoryFormData.lcNo} onChange={handleInventoryInputChange} required
+                        type="text" name="lcNo" value={stockFormData.lcNo} onChange={handleStockInputChange} required
                         placeholder="LC Number" autoComplete="off" className="w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm"
                       />
                     </div>
@@ -2191,10 +2352,10 @@ function App() {
                         <input
                           type="text"
                           name="port"
-                          value={inventoryFormData.port}
-                          onChange={handleInventoryInputChange}
+                          value={stockFormData.port}
+                          onChange={handleStockInputChange}
                           onFocus={() => setActiveDropdown('port')}
-                          onKeyDown={(e) => handleDropdownKeyDown(e, 'port', handleInventoryDropdownSelect, 'port')}
+                          onKeyDown={(e) => handleDropdownKeyDown(e, 'port', handleStockDropdownSelect, 'port')}
                           required
                           placeholder="Select or type port name"
                           autoComplete="off"
@@ -2214,12 +2375,12 @@ function App() {
                             <button
                               key={port._id}
                               type="button"
-                              onClick={() => handleInventoryDropdownSelect('port', port.name)}
+                              onClick={() => handleStockDropdownSelect('port', port.name)}
                               onMouseEnter={() => setHighlightedIndex(index)}
                               className={`w-full text-left px-4 py-2 text-sm transition-colors flex items-center justify-between ${highlightedIndex === index ? 'bg-blue-50 text-blue-700' : 'hover:bg-blue-50'}`}
                             >
                               <span>{port.name}</span>
-                              {inventoryFormData.port === port.name && <span className="w-2 h-2 bg-blue-500 rounded-full"></span>}
+                              {stockFormData.port === port.name && <span className="w-2 h-2 bg-blue-500 rounded-full"></span>}
                             </button>
                           ))}
                           {getFilteredOptions('port').length === 0 && (
@@ -2235,10 +2396,10 @@ function App() {
                         <input
                           type="text"
                           name="importer"
-                          value={inventoryFormData.importer}
-                          onChange={handleInventoryInputChange}
+                          value={stockFormData.importer}
+                          onChange={handleStockInputChange}
                           onFocus={() => setActiveDropdown('importer')}
-                          onKeyDown={(e) => handleDropdownKeyDown(e, 'importer', handleInventoryDropdownSelect, 'importer')}
+                          onKeyDown={(e) => handleDropdownKeyDown(e, 'importer', handleStockDropdownSelect, 'importer')}
                           required
                           placeholder="Select or type importer"
                           autoComplete="off"
@@ -2258,12 +2419,12 @@ function App() {
                             <button
                               key={imp._id}
                               type="button"
-                              onClick={() => handleInventoryDropdownSelect('importer', imp.name)}
+                              onClick={() => handleStockDropdownSelect('importer', imp.name)}
                               onMouseEnter={() => setHighlightedIndex(index)}
                               className={`w-full text-left px-4 py-2 text-sm transition-colors flex items-center justify-between ${highlightedIndex === index ? 'bg-blue-50 text-blue-700' : 'hover:bg-blue-50'}`}
                             >
                               <span>{imp.name}</span>
-                              {inventoryFormData.importer === imp.name && <span className="w-2 h-2 bg-blue-500 rounded-full"></span>}
+                              {stockFormData.importer === imp.name && <span className="w-2 h-2 bg-blue-500 rounded-full"></span>}
                             </button>
                           ))}
                           {getFilteredOptions('importer').length === 0 && (
@@ -2272,317 +2433,353 @@ function App() {
                         </div>
                       )}
                     </div>
-
                   </div>
-
 
                   <div className="col-span-1 md:col-span-2 grid grid-cols-1 md:grid-cols-4 gap-6">
                     <div className="space-y-2">
-                      <label className="text-sm font-medium text-gray-700">IND C&F</label>
+                      <label className="text-sm font-medium text-gray-700">IND CNF</label>
                       <input
-                        type="text" name="indianCnF" value={inventoryFormData.indianCnF} onChange={handleInventoryInputChange}
-                        placeholder="IND C&F" autoComplete="off" className="w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm"
+                        type="text" name="indianCnF" value={stockFormData.indianCnF} onChange={handleStockInputChange}
+                        placeholder="IND CNF" autoComplete="off" className="w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm"
                       />
                     </div>
-
                     <div className="space-y-2">
-                      <label className="text-sm font-medium text-gray-700">IN C&F comm</label>
+                      <label className="text-sm font-medium text-gray-700">IND CNF Cost</label>
                       <input
-                        type="number" name="indCnFCost" value={inventoryFormData.indCnFCost} onChange={handleInventoryInputChange}
+                        type="number" name="indCnFCost" value={stockFormData.indCnFCost} onChange={handleStockInputChange}
                         placeholder="0.00" autoComplete="off" className="w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                       />
                     </div>
-
                     <div className="space-y-2">
-                      <label className="text-sm font-medium text-gray-700">BD C&F</label>
+                      <label className="text-sm font-medium text-gray-700">BD CNF</label>
                       <input
-                        type="text" name="bdCnF" value={inventoryFormData.bdCnF} onChange={handleInventoryInputChange}
-                        placeholder="BD C&F" autoComplete="off" className="w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm"
+                        type="text" name="bdCnF" value={stockFormData.bdCnF} onChange={handleStockInputChange}
+                        placeholder="BD CNF" autoComplete="off" className="w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm"
                       />
                     </div>
-
                     <div className="space-y-2">
-                      <label className="text-sm font-medium text-gray-700">BD C&F Cost</label>
+                      <label className="text-sm font-medium text-gray-700">BD CNF Cost</label>
                       <input
-                        type="number" name="bdCnFCost" value={inventoryFormData.bdCnFCost} onChange={handleInventoryInputChange}
+                        type="number" name="bdCnFCost" value={stockFormData.bdCnFCost} onChange={handleStockInputChange}
                         placeholder="0.00" autoComplete="off" className="w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                       />
                     </div>
                   </div>
 
+                  {/* Product Entries Section */}
+                  <div className="col-span-1 md:col-span-2 space-y-8 animate-in fade-in duration-500">
+                    <div className="flex items-center justify-between border-b border-gray-100 pb-2">
+                      <h4 className="text-lg font-bold text-gray-800 flex items-center gap-2">
+                        <div className="w-1.5 h-6 bg-blue-500 rounded-full"></div>
+                        Product Details
+                      </h4>
+                      <button
+                        type="button"
+                        onClick={addProductEntry}
+                        className="flex items-center gap-2 px-4 py-2 bg-blue-50 text-blue-600 rounded-xl hover:bg-blue-600 hover:text-white transition-all duration-300 font-semibold text-sm shadow-sm active:scale-95 group"
+                      >
+                        <PlusIcon className="w-4 h-4 group-hover:rotate-90 transition-transform duration-300" />
+                        Add Product
+                      </button>
+                    </div>
 
-                  {/* Product Name and Truck No */}
-
-                  {/* Product Info, Brand Entries, and Status */}
-                  <div className="md:col-span-2 space-y-6">
-                    {/* Product Name, Truck No, Total Quantity, and Entry Mode (Conditional Layout) */}
-                    {inventoryFormData.isMultiBrand ? (
-                      /* Multi-Brand Top Row: Standard 4 Columns */
-                      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 animate-in fade-in duration-300">
-                        <div className="space-y-2">
-                          <label className="text-sm font-medium text-gray-700">Product Name</label>
-                          <input
-                            type="text" name="productName" value={inventoryFormData.productName} onChange={handleInventoryInputChange} required
-                            placeholder="Product Name" autoComplete="off" className="w-full h-[42px] px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm"
-                          />
-                        </div>
-
-                        <div className="space-y-2">
-                          <label className="text-sm font-medium text-gray-700">Truck No.</label>
-                          <input
-                            type="text" name="truckNo" value={inventoryFormData.truckNo} onChange={handleInventoryInputChange}
-                            placeholder="Truck No." autoComplete="off" className="w-full h-[42px] px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm"
-                          />
-                        </div>
-
-                        <div className="space-y-2">
-                          <label className="text-sm font-medium text-gray-700">Total Quantity</label>
-                          <div className="relative h-[42px]">
-                            <input
-                              type="text"
-                              value={inventoryFormData.brandEntries.reduce((sum, entry) => sum + (parseFloat(entry.quantity) || 0), 0).toFixed(2)}
-                              readOnly
-                              className="w-full h-full px-4 py-2 bg-gray-50/80 border border-gray-200/60 rounded-lg text-gray-600 font-semibold outline-none cursor-default"
-                            />
-                            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-medium text-gray-400">
-                              {inventoryFormData.brandEntries[0]?.unit || 'kg'}
-                            </span>
-                          </div>
-                        </div>
-
-                        <div className="space-y-2">
-                          <label className="text-sm font-medium text-gray-700">Entry Mode</label>
-                          <div className="h-[42px] flex items-center gap-1 p-1 bg-gray-100/50 rounded-lg w-full">
+                    <div className="space-y-12">
+                      {stockFormData.productEntries.map((product, pIndex) => (
+                        <div key={pIndex} className="relative p-6 rounded-2xl bg-gray-50/30 border border-gray-100 group/product hover:border-blue-200 hover:bg-white/80 transition-all duration-500">
+                          {/* Remove Product Button */}
+                          {stockFormData.productEntries.length > 1 && (
                             <button
                               type="button"
-                              onClick={() => setInventoryFormData(prev => ({ ...prev, isMultiBrand: false }))}
-                              className={`flex-1 h-full text-xs font-semibold rounded-md transition-all ${!inventoryFormData.isMultiBrand ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+                              onClick={() => removeProductEntry(pIndex)}
+                              className="absolute -top-3 -right-3 p-2 bg-white text-gray-400 hover:text-red-500 rounded-xl shadow-lg border border-gray-100 opacity-0 group-hover/product:opacity-100 transition-all duration-300 hover:scale-110 active:scale-90 z-20"
                             >
-                              Single
+                              <TrashIcon className="w-4 h-4" />
                             </button>
-                            <button
-                              type="button"
-                              onClick={() => setInventoryFormData(prev => ({ ...prev, isMultiBrand: true }))}
-                              className={`flex-1 h-full text-xs font-semibold rounded-md transition-all ${inventoryFormData.isMultiBrand ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
-                            >
-                              Multi-Brand
-                            </button>
-                          </div>
-                        </div>
-                      </div>
-                    ) : (
-                      /* Single Mode: All in one line (Brand hidden) */
-                      <div className="w-full grid grid-cols-1 md:grid-cols-12 gap-4 items-end animate-in fade-in duration-300">
-                        <div className="md:col-span-4 space-y-1.5">
-                          <label className="text-sm font-medium text-gray-700">Product Name</label>
-                          <input
-                            type="text" name="productName" value={inventoryFormData.productName} onChange={handleInventoryInputChange} required
-                            placeholder="Product Name" autoComplete="off" className="w-full h-[42px] px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm text-sm"
-                          />
-                        </div>
+                          )}
 
-                        <div className="md:col-span-2 space-y-1.5">
-                          <label className="text-sm font-medium text-gray-700">Truck No.</label>
-                          <input
-                            type="text" name="truckNo" value={inventoryFormData.truckNo} onChange={handleInventoryInputChange}
-                            placeholder="Truck #" autoComplete="off" className="w-full h-[42px] px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm text-sm"
-                          />
-                        </div>
-
-                        <div className="md:col-span-1 space-y-1.5">
-                          <label className="text-sm font-medium text-gray-700 text-center block w-full">Packet</label>
-                          <input
-                            type="text"
-                            value={inventoryFormData.brandEntries[0].packet}
-                            onChange={(e) => handleBrandEntryChange(0, 'packet', e.target.value)}
-                            placeholder="Qty" autoComplete="off" className="w-full h-[42px] px-2 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm text-sm text-center"
-                          />
-                        </div>
-
-                        <div className="md:col-span-1 space-y-1.5">
-                          <label className="text-sm font-medium text-gray-700 text-center block w-full">Size</label>
-                          <input
-                            type="text"
-                            value={inventoryFormData.brandEntries[0].packetSize}
-                            onChange={(e) => handleBrandEntryChange(0, 'packetSize', e.target.value)}
-                            placeholder="Size" autoComplete="off" className="w-full h-[42px] px-2 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm text-sm text-center"
-                          />
-                        </div>
-
-                        <div className="md:col-span-1 space-y-1.5">
-                          <label className="text-sm font-medium text-gray-700 text-center block w-full">Unit</label>
-                          <select
-                            value={inventoryFormData.brandEntries[0].unit}
-                            onChange={(e) => handleBrandEntryChange(0, 'unit', e.target.value)}
-                            className="w-full h-[42px] px-1 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-all backdrop-blur-sm text-sm"
-                          >
-                            <option>kg</option>
-                            <option>pcs</option>
-                            <option>boxes</option>
-                            <option>liters</option>
-                          </select>
-                        </div>
-
-                        <div className="md:col-span-1 space-y-1.5">
-                          <label className="text-sm font-medium text-gray-700 text-center block w-full">Total</label>
-                          <div className="relative h-[42px]">
-                            <input
-                              type="text"
-                              value={inventoryFormData.brandEntries.reduce((sum, entry) => sum + (parseFloat(entry.quantity) || 0), 0).toFixed(2)}
-                              readOnly
-                              className="w-full h-full px-1 py-2 bg-gray-50/80 border border-gray-200/60 rounded-lg text-gray-600 font-bold outline-none cursor-default text-xs text-center"
-                            />
-                          </div>
-                        </div>
-
-                        <div className="md:col-span-2 space-y-1.5">
-                          <label className="text-sm font-medium text-gray-700 text-center block w-full">Mode</label>
-                          <div className="h-[42px] flex items-center gap-1 p-1 bg-gray-100/50 rounded-lg w-full">
-                            <button
-                              type="button"
-                              onClick={() => setInventoryFormData(prev => ({ ...prev, isMultiBrand: false }))}
-                              className={`flex-1 h-full text-[10px] font-bold rounded flex items-center justify-center transition-all ${!inventoryFormData.isMultiBrand ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
-                            >
-                              SINGLE
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => setInventoryFormData(prev => ({ ...prev, isMultiBrand: true }))}
-                              className={`flex-1 h-full text-[10px] font-bold rounded flex items-center justify-center transition-all ${inventoryFormData.isMultiBrand ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
-                            >
-                              MULTI
-                            </button>
-                          </div>
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Brand Entries - Tabular Row Layout (Multi-Brand Only) */}
-                    {inventoryFormData.isMultiBrand && (
-                      <div className="space-y-2 animate-in fade-in slide-in-from-top-2 duration-300">
-                        <div className="flex items-center justify-between mb-2">
-                          <label className="text-sm font-medium text-gray-700">Brand Entries</label>
-                        </div>
-
-                        {/* Table Header Labels */}
-                        <div className="hidden md:grid grid-cols-5 gap-3 px-1 mb-1 pr-12">
-                          <div className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Brand</div>
-                          <div className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Packet</div>
-                          <div className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Packet Size</div>
-                          <div className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Quantity</div>
-                          <div className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Unit</div>
-                        </div>
-
-                        <div className="space-y-2">
-                          {inventoryFormData.brandEntries.map((entry, index) => (
-                            <div key={index} className="flex items-center gap-3">
-                              <div className="flex-1 grid grid-cols-2 md:grid-cols-5 gap-3">
-                                <div className="space-y-1">
-                                  <label className="md:hidden text-xs font-medium text-gray-600">Brand</label>
-                                  <input
-                                    type="text"
-                                    value={entry.brand}
-                                    onChange={(e) => handleBrandEntryChange(index, 'brand', e.target.value)}
-                                    placeholder="Brand"
-                                    autoComplete="off"
-                                    className="w-full h-[40px] px-3 py-2 text-sm bg-white border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all"
-                                  />
-                                </div>
-
-                                <div className="space-y-1">
-                                  <label className="md:hidden text-xs font-medium text-gray-600">Packet</label>
-                                  <input
-                                    type="text"
-                                    value={entry.packet}
-                                    onChange={(e) => handleBrandEntryChange(index, 'packet', e.target.value)}
-                                    placeholder="Packet"
-                                    autoComplete="off"
-                                    className="w-full h-[40px] px-3 py-2 text-sm bg-white border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all"
-                                  />
-                                </div>
-
-                                <div className="space-y-1">
-                                  <label className="md:hidden text-xs font-medium text-gray-600">Packet Size</label>
-                                  <input
-                                    type="text"
-                                    value={entry.packetSize}
-                                    onChange={(e) => handleBrandEntryChange(index, 'packetSize', e.target.value)}
-                                    placeholder="Packet Size"
-                                    autoComplete="off"
-                                    className="w-full h-[40px] px-3 py-2 text-sm bg-white border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all"
-                                  />
-                                </div>
-
-                                <div className="space-y-1">
-                                  <label className="md:hidden text-xs font-medium text-gray-600">Quantity</label>
-                                  <input
-                                    type="number"
-                                    value={entry.quantity}
-                                    onChange={(e) => handleBrandEntryChange(index, 'quantity', e.target.value)}
-                                    placeholder="0.00"
-                                    className="w-full h-[40px] px-3 py-2 text-sm bg-gray-50/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                                    readOnly
-                                  />
-                                </div>
-
-                                <div className="space-y-1">
-                                  <label className="md:hidden text-xs font-medium text-gray-600">Unit</label>
-                                  <div className="flex items-center gap-2">
-                                    <select
-                                      value={entry.unit}
-                                      onChange={(e) => handleBrandEntryChange(index, 'unit', e.target.value)}
-                                      className="w-full h-[40px] px-3 py-2 text-sm bg-white border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all"
+                          <div className="space-y-6">
+                            {/* Product Info Row */}
+                            {product.isMultiBrand ? (
+                              <div className="grid grid-cols-1 md:grid-cols-4 gap-4 animate-in fade-in duration-300">
+                                <div className="space-y-2">
+                                  <label className="text-sm font-medium text-gray-700">Entry Mode</label>
+                                  <div className="h-[42px] flex items-center gap-1 p-1 bg-gray-100/50 rounded-lg w-full">
+                                    <button
+                                      type="button"
+                                      onClick={() => handleProductModeToggle(pIndex, false)}
+                                      className={`flex-1 h-full text-xs font-semibold rounded-md transition-all ${!product.isMultiBrand ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
                                     >
-                                      <option>kg</option>
-                                      <option>pcs</option>
-                                      <option>boxes</option>
-                                      <option>liters</option>
-                                    </select>
+                                      Single
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleProductModeToggle(pIndex, true)}
+                                      className={`flex-1 h-full text-xs font-semibold rounded-md transition-all ${product.isMultiBrand ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+                                    >
+                                      Multi
+                                    </button>
+                                  </div>
+                                </div>
+                                <div className="space-y-2">
+                                  <label className="text-sm font-medium text-gray-700">Product Name</label>
+                                  <input
+                                    type="text" name="productName" value={product.productName} onChange={(e) => handleStockInputChange(e, pIndex)} required
+                                    placeholder="Product Name" autoComplete="off" className="w-full h-[42px] px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm"
+                                  />
+                                </div>
+                                <div className="space-y-2">
+                                  <label className="text-sm font-medium text-gray-700">Truck No.</label>
+                                  <input
+                                    type="text" name="truckNo" value={product.truckNo} onChange={(e) => handleStockInputChange(e, pIndex)}
+                                    placeholder="Truck No." autoComplete="off" className="w-full h-[42px] px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm"
+                                  />
+                                </div>
+                                <div className="space-y-2">
+                                  <label className="text-sm font-medium text-gray-700">Total Quantity</label>
+                                  <div className="relative h-[42px]">
+                                    <input
+                                      type="text"
+                                      value={product.brandEntries.reduce((sum, entry) => sum + (parseFloat(entry.quantity) || 0), 0).toFixed(2)}
+                                      readOnly
+                                      className="w-full h-full px-4 py-2 bg-gray-50/80 border border-gray-200/60 rounded-lg text-gray-600 font-semibold outline-none cursor-default"
+                                    />
+                                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-medium text-gray-400">
+                                      {product.brandEntries[0]?.unit || 'kg'}
+                                    </span>
                                   </div>
                                 </div>
                               </div>
-
-                              <div className="flex items-center gap-1 min-w-[80px]">
-                                <button
-                                  type="button"
-                                  onClick={addBrandEntry}
-                                  className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-all group"
-                                  title="Add Brand"
-                                >
-                                  <PlusIcon className="w-5 h-5 group-hover:scale-125 transition-transform" />
-                                </button>
-
-                                {inventoryFormData.brandEntries.length > 1 && (
-                                  <button
-                                    type="button"
-                                    onClick={() => removeBrandEntry(index)}
-                                    className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all group"
-                                    title="Remove"
+                            ) : (
+                              <div className="w-full grid grid-cols-1 md:grid-cols-12 gap-4 items-end animate-in fade-in duration-300">
+                                <div className="md:col-span-2 space-y-1.5">
+                                  <label className="text-sm font-medium text-gray-700 text-center block w-full">Mode</label>
+                                  <div className="h-[42px] flex items-center gap-1 p-1 bg-gray-100/50 rounded-lg w-full">
+                                    <button
+                                      type="button"
+                                      onClick={() => handleProductModeToggle(pIndex, false)}
+                                      className={`flex-1 h-full text-[10px] font-bold rounded flex items-center justify-center transition-all ${!product.isMultiBrand ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+                                    >
+                                      SINGLE
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleProductModeToggle(pIndex, true)}
+                                      className={`flex-1 h-full text-[10px] font-bold rounded flex items-center justify-center transition-all ${product.isMultiBrand ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+                                    >
+                                      MULTI
+                                    </button>
+                                  </div>
+                                </div>
+                                <div className="md:col-span-3 space-y-1.5">
+                                  <label className="text-sm font-medium text-gray-700">Product Name</label>
+                                  <input
+                                    type="text" name="productName" value={product.productName} onChange={(e) => handleStockInputChange(e, pIndex)} required
+                                    placeholder="Product Name" autoComplete="off" className="w-full h-[42px] px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm text-sm"
+                                  />
+                                </div>
+                                <div className="md:col-span-2 space-y-1.5">
+                                  <label className="text-sm font-medium text-gray-700">Truck No.</label>
+                                  <input
+                                    type="text" name="truckNo" value={product.truckNo} onChange={(e) => handleStockInputChange(e, pIndex)}
+                                    placeholder="Truck #" autoComplete="off" className="w-full h-[42px] px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm text-sm"
+                                  />
+                                </div>
+                                <div className="md:col-span-1 space-y-1.5">
+                                  <label className="text-sm font-medium text-gray-700">Swp. Pkt</label>
+                                  <input
+                                    type="text"
+                                    value={product.brandEntries[0].sweepedPacket}
+                                    onChange={(e) => handleBrandEntryChange(pIndex, 0, 'sweepedPacket', e.target.value)}
+                                    placeholder="Qty" autoComplete="off" className="w-full h-[42px] px-2 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm text-sm"
+                                  />
+                                </div>
+                                <div className="md:col-span-1 space-y-1.5">
+                                  <label className="text-sm font-medium text-gray-700">SwpQty</label>
+                                  <input
+                                    type="text"
+                                    value={product.brandEntries[0].sweepedQuantity}
+                                    onChange={(e) => handleBrandEntryChange(pIndex, 0, 'sweepedQuantity', e.target.value)}
+                                    placeholder="Qty" className="w-full h-[42px] px-2 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm text-sm"
+                                  />
+                                </div>
+                                <div className="md:col-span-1 space-y-1.5">
+                                  <label className="text-sm font-medium text-gray-700">InHouse Pkt</label>
+                                  <input
+                                    type="text"
+                                    value={product.brandEntries[0].inHousePacket}
+                                    readOnly
+                                    placeholder="Qty" autoComplete="off" className="w-full h-[42px] px-4 py-2 bg-gray-50/80 border border-gray-200/60 rounded-lg text-gray-600 font-medium outline-none cursor-default backdrop-blur-sm text-sm"
+                                  />
+                                </div>
+                                <div className="md:col-span-1 space-y-1.5">
+                                  <label className="text-sm font-medium text-gray-700">InHouse Qty</label>
+                                  <input
+                                    type="text"
+                                    value={product.brandEntries[0].inHouseQuantity}
+                                    readOnly
+                                    placeholder="Qty" className="w-full h-[42px] px-4 py-2 bg-gray-50/80 border border-gray-200/60 rounded-lg text-gray-600 font-medium outline-none cursor-default backdrop-blur-sm text-sm"
+                                  />
+                                </div>
+                                <div className="md:col-span-1 space-y-1.5">
+                                  <label className="text-sm font-medium text-gray-700 text-center block w-full">Packet</label>
+                                  <input
+                                    type="text"
+                                    value={product.brandEntries[0].packet}
+                                    onChange={(e) => handleBrandEntryChange(pIndex, 0, 'packet', e.target.value)}
+                                    placeholder="Qty" autoComplete="off" className="w-full h-[42px] px-2 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm text-sm text-center"
+                                  />
+                                </div>
+                                <div className="md:col-span-1 space-y-1.5">
+                                  <label className="text-sm font-medium text-gray-700 text-center block w-full">Size</label>
+                                  <input
+                                    type="text"
+                                    value={product.brandEntries[0].packetSize}
+                                    onChange={(e) => handleBrandEntryChange(pIndex, 0, 'packetSize', e.target.value)}
+                                    placeholder="Size" autoComplete="off" className="w-full h-[42px] px-2 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm text-sm text-center"
+                                  />
+                                </div>
+                                <div className="md:col-span-2 space-y-1.5">
+                                  <label className="text-sm font-medium text-gray-700 text-center block w-full">Total</label>
+                                  <div className="relative h-[42px]">
+                                    <input
+                                      type="text"
+                                      value={product.brandEntries.reduce((sum, entry) => sum + (parseFloat(entry.quantity) || 0), 0).toFixed(2)}
+                                      readOnly
+                                      className="w-full h-full px-1 py-2 bg-gray-50/80 border border-gray-200/60 rounded-lg text-gray-600 font-bold outline-none cursor-default text-xs text-center"
+                                    />
+                                  </div>
+                                </div>
+                                <div className="md:col-span-1 space-y-1.5">
+                                  <label className="text-sm font-medium text-gray-700 text-center block w-full">Unit</label>
+                                  <select
+                                    value={product.brandEntries[0].unit}
+                                    onChange={(e) => handleBrandEntryChange(pIndex, 0, 'unit', e.target.value)}
+                                    className="w-full h-[42px] px-1 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-all backdrop-blur-sm text-sm"
                                   >
-                                    <TrashIcon className="w-4 h-4 group-hover:scale-110" />
-                                  </button>
-                                )}
+                                    <option>kg</option>
+                                    <option>pcs</option>
+                                    <option>boxes</option>
+                                    <option>liters</option>
+                                  </select>
+                                </div>
                               </div>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
+                            )}
 
-                    {/* Status - Moved under brand entries */}
-                    <div className="pt-4 border-t border-gray-100">
-                      <div className="flex flex-col sm:flex-row sm:items-center gap-4">
-                        <div className="w-full sm:w-64 space-y-2">
-                          <label className="text-sm font-medium text-gray-700">Status</label>
-                          <select
-                            name="status" value={inventoryFormData.status} onChange={handleInventoryInputChange}
-                            className="w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm"
-                          >
-                            <option>In Stock</option>
-                            <option>Out of Stock</option>
-                            <option>Reserved</option>
-                          </select>
+                            {/* Brand Entries Section (Multi-Brand Only) */}
+                            {product.isMultiBrand && (
+                              <div className="mt-4 space-y-3 animate-in fade-in slide-in-from-top-2 duration-300 bg-gray-50/50 p-4 rounded-xl border border-gray-100">
+                                <div className="flex items-center justify-between mb-1 px-1">
+                                  <label className="text-xs font-bold text-gray-500 uppercase tracking-wider">Brand Breakdown</label>
+                                </div>
+                                <div className="hidden md:grid grid-cols-5 gap-2 px-1 mb-1 pr-12">
+                                  <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Brand</div>
+                                  <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Packet</div>
+                                  <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Size</div>
+                                  <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Qty</div>
+                                  <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Unit</div>
+                                </div>
+                                <div className="space-y-4">
+                                  {product.brandEntries.map((entry, bIndex) => (
+                                    <div key={bIndex} className="p-3 bg-white/40 border border-gray-200/50 rounded-lg space-y-3 group/brand">
+                                      <div className="flex items-center gap-2">
+                                        <div className="flex-1 grid grid-cols-2 md:grid-cols-5 gap-2">
+                                          <input
+                                            type="text" value={entry.brand} placeholder="Brand" onChange={(e) => handleBrandEntryChange(pIndex, bIndex, 'brand', e.target.value)}
+                                            className="w-full h-9 px-2 text-sm bg-white border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-all"
+                                          />
+                                          <input
+                                            type="text" value={entry.packet} placeholder="Packet" onChange={(e) => handleBrandEntryChange(pIndex, bIndex, 'packet', e.target.value)}
+                                            className="w-full h-9 px-2 text-sm bg-white border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-all"
+                                          />
+                                          <input
+                                            type="text" value={entry.packetSize} placeholder="Size" onChange={(e) => handleBrandEntryChange(pIndex, bIndex, 'packetSize', e.target.value)}
+                                            className="w-full h-9 px-2 text-sm bg-white border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-all"
+                                          />
+                                          <input
+                                            type="number" value={entry.quantity} readOnly className="w-full h-9 px-2 text-sm bg-gray-50 border border-gray-200 rounded-lg text-gray-500 font-medium"
+                                          />
+                                          <select
+                                            value={entry.unit} onChange={(e) => handleBrandEntryChange(pIndex, bIndex, 'unit', e.target.value)}
+                                            className="w-full h-9 px-2 text-sm bg-white border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-all"
+                                          >
+                                            <option>kg</option><option>pcs</option><option>boxes</option><option>liters</option>
+                                          </select>
+                                        </div>
+                                        <div className="flex items-center">
+                                          <button
+                                            type="button" onClick={() => addBrandEntry(pIndex)}
+                                            className="p-1.5 text-blue-500 hover:bg-blue-100 rounded-lg transition-all"
+                                          >
+                                            <PlusIcon className="w-4 h-4" />
+                                          </button>
+                                          {product.brandEntries.length > 1 && (
+                                            <button
+                                              type="button" onClick={() => removeBrandEntry(pIndex, bIndex)}
+                                              className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all"
+                                            >
+                                              <TrashIcon className="w-3.5 h-3.5" />
+                                            </button>
+                                          )}
+                                        </div>
+                                      </div>
+
+                                      {/* Combined line for Sweeped and InHouse fields */}
+                                      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 pl-0 md:pl-0">
+                                        <div className="flex items-center gap-2">
+                                          <label className="text-[10px] font-bold text-gray-400 uppercase min-w-[60px]">Swp. Pkt</label>
+                                          <input
+                                            type="text" value={entry.sweepedPacket} placeholder="Packet" onChange={(e) => handleBrandEntryChange(pIndex, bIndex, 'sweepedPacket', e.target.value)}
+                                            className="flex-1 h-8 px-2 text-xs bg-white/70 border border-gray-200 rounded-md focus:ring-2 focus:ring-blue-500 outline-none transition-all"
+                                          />
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                          <label className="text-[10px] font-bold text-gray-400 uppercase min-w-[60px]">SwpQty</label>
+                                          <input
+                                            type="text" value={entry.sweepedQuantity}
+                                            onChange={(e) => handleBrandEntryChange(pIndex, bIndex, 'sweepedQuantity', e.target.value)}
+                                            placeholder="Qty"
+                                            className="flex-1 h-8 px-2 text-xs bg-white border border-gray-200 rounded-md focus:ring-2 focus:ring-blue-500 outline-none transition-all"
+                                          />
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                          <label className="text-[10px] font-bold text-gray-400 uppercase min-w-[60px]">InHouse Pkt</label>
+                                          <input
+                                            type="text" value={entry.inHousePacket} placeholder="Packet" readOnly
+                                            className="flex-1 h-8 px-2 text-xs bg-gray-50/70 border border-gray-200 rounded-md text-gray-500 outline-none cursor-default"
+                                          />
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                          <label className="text-[10px] font-bold text-gray-400 uppercase min-w-[60px]">InHouse Qty</label>
+                                          <input
+                                            type="text" value={entry.inHouseQuantity} placeholder="Qty" readOnly
+                                            className="flex-1 h-8 px-2 text-xs bg-gray-50/70 border border-gray-200 rounded-md text-gray-500 outline-none cursor-default"
+                                          />
+                                        </div>
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+                          </div>
                         </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Status */}
+                  <div className="col-span-1 md:col-span-2 pt-4 border-t border-gray-100">
+                    <div className="flex flex-col sm:flex-row sm:items-center gap-4">
+                      <div className="w-full sm:w-64 space-y-2">
+                        <label className="text-sm font-medium text-gray-700">Status</label>
+                        <select
+                          name="status" value={stockFormData.status} onChange={handleStockInputChange}
+                          className="w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm"
+                        >
+                          <option>In Stock</option>
+                          <option>Out of Stock</option>
+                          <option>Reserved</option>
+                        </select>
                       </div>
                     </div>
                   </div>
@@ -2591,13 +2788,13 @@ function App() {
                     {submitStatus === 'success' && (
                       <p className="text-green-600 font-medium flex items-center animate-bounce">
                         <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"></path></svg>
-                        Inventory saved successfully!
+                        Stock saved successfully!
                       </p>
                     )}
                     {submitStatus === 'error' && (
                       <p className="text-red-600 font-medium flex items-center">
                         <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path></svg>
-                        Failed to save inventory.
+                        Failed to save stock.
                       </p>
                     )}
                     <div className="flex-1"></div>
@@ -2605,18 +2802,18 @@ function App() {
                       type="submit" disabled={isSubmitting}
                       className="px-6 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-medium rounded-lg shadow-lg shadow-blue-500/30 transition-all transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed"
                     >
-                      {isSubmitting ? 'Saving...' : editingId ? 'Update Inventory' : 'Add to Inventory'}
+                      {isSubmitting ? 'Saving...' : editingId ? 'Update Stock' : 'Add to Stock'}
                     </button>
                   </div>
                 </form>
               </div>
             )}
 
-            {!showInventoryForm && (
+            {!showStockForm && (
               <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
                 {selectedItems.size > 0 && (
                   <div className="bg-blue-50 px-6 py-3 border-b border-blue-100 flex items-center justify-between animate-in fade-in slide-in-from-top-2">
-                    <span className="text-sm font-medium text-blue-700">{displayRecords.filter(item => isInventoryGroupSelected(item.productName)).length} products selected</span>
+                    <span className="text-sm font-medium text-blue-700">{displayRecords.filter(item => isStockGroupSelected(item.productName)).length} products selected</span>
                     <div className="flex items-center space-x-3">
                       <button
                         onClick={() => { setSelectedItems(new Set()); setIsSelectionMode(false); }}
@@ -2625,7 +2822,7 @@ function App() {
                         Cancel
                       </button>
                       <button
-                        onClick={() => setDeleteConfirm({ show: true, type: 'inventory', id: null, isBulk: true })}
+                        onClick={() => setDeleteConfirm({ show: true, type: 'stock', id: null, isBulk: true })}
                         className="px-3 py-1 bg-red-600 hover:bg-red-700 text-white text-xs font-medium rounded-md transition-colors flex items-center"
                       >
                         <TrashIcon className="w-3.5 h-3.5 mr-1" /> Delete Bulk
@@ -2637,7 +2834,7 @@ function App() {
                   <div className="flex items-center justify-center p-20">
                     <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
                   </div>
-                ) : inventoryRecords.length > 0 ? (
+                ) : stockRecords.length > 0 ? (
                   <div className="overflow-x-auto">
                     <table className="w-full text-left">
                       <thead>
@@ -2653,13 +2850,13 @@ function App() {
                             <th className="px-6 py-4 w-10">
                               <input
                                 type="checkbox"
-                                checked={displayRecords.length > 0 && displayRecords.every(item => isInventoryGroupSelected(item.productName))}
+                                checked={displayRecords.length > 0 && displayRecords.every(item => isStockGroupSelected(item.productName))}
                                 onChange={() => {
-                                  if (displayRecords.every(item => isInventoryGroupSelected(item.productName))) {
+                                  if (displayRecords.every(item => isStockGroupSelected(item.productName))) {
                                     setSelectedItems(new Set());
                                     setIsSelectionMode(false);
                                   } else {
-                                    const allIds = inventoryRecords.map(r => r._id);
+                                    const allIds = stockRecords.map(r => r._id);
                                     setSelectedItems(new Set(allIds));
                                     setIsSelectionMode(true);
                                   }
@@ -2687,28 +2884,38 @@ function App() {
                         {displayRecords.map((item) => (
                           <tr
                             key={item.originalId}
-                            className={`${isInventoryGroupSelected(item.productName) ? 'bg-blue-50/30' : 'hover:bg-gray-50'} transition-colors cursor-pointer select-none`}
+                            className={`${isStockGroupSelected(item.productName) ? 'bg-blue-50/30' : 'hover:bg-gray-50'} transition-colors cursor-pointer select-none`}
                             onMouseDown={() => {
+                              isLongPressTriggered.current = false;
                               longPressTimer.current = setTimeout(() => {
-                                toggleInventoryGroupSelection(item.productName);
+                                isLongPressTriggered.current = true;
+                                toggleStockGroupSelection(item.productName);
                               }, 700);
                             }}
                             onMouseUp={endLongPress}
                             onMouseLeave={endLongPress}
                             onTouchStart={() => {
+                              isLongPressTriggered.current = false;
                               longPressTimer.current = setTimeout(() => {
-                                toggleInventoryGroupSelection(item.productName);
+                                isLongPressTriggered.current = true;
+                                toggleStockGroupSelection(item.productName);
                               }, 700);
                             }}
                             onTouchEnd={endLongPress}
-                            onClick={() => isSelectionMode && toggleInventoryGroupSelection(item.productName)}
+                            onClick={() => {
+                              if (isLongPressTriggered.current) {
+                                isLongPressTriggered.current = false;
+                                return;
+                              }
+                              if (isSelectionMode) toggleStockGroupSelection(item.productName);
+                            }}
                           >
                             {isSelectionMode && (
                               <td className="px-6 py-4">
                                 <input
                                   type="checkbox"
-                                  checked={isInventoryGroupSelected(item.productName)}
-                                  onChange={(e) => { e.stopPropagation(); toggleInventoryGroupSelection(item.productName); }}
+                                  checked={isStockGroupSelected(item.productName)}
+                                  onChange={(e) => { e.stopPropagation(); toggleStockGroupSelection(item.productName); }}
                                   className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
                                 />
                               </td>
@@ -2752,13 +2959,13 @@ function App() {
                             </td>
                             <td className="px-6 py-4 text-center">
                               <div className="flex items-center justify-center space-x-3">
-                                <button onClick={(e) => { e.stopPropagation(); handleView('inventory', item); }} className="text-gray-400 hover:text-indigo-600 transition-colors">
+                                <button onClick={(e) => { e.stopPropagation(); handleView('stock', item); }} className="text-gray-400 hover:text-indigo-600 transition-colors">
                                   <EyeIcon className="w-5 h-5" />
                                 </button>
-                                <button onClick={(e) => { e.stopPropagation(); handleEdit('inventory', item); }} className="text-gray-400 hover:text-blue-600 transition-colors">
+                                <button onClick={(e) => { e.stopPropagation(); handleEdit('stock', item); }} className="text-gray-400 hover:text-blue-600 transition-colors">
                                   <EditIcon className="w-5 h-5" />
                                 </button>
-                                <button onClick={(e) => { e.stopPropagation(); handleDelete('inventory', item._id); }} className="text-gray-400 hover:text-red-600 transition-colors">
+                                <button onClick={(e) => { e.stopPropagation(); handleDelete('stock', item._id); }} className="text-gray-400 hover:text-red-600 transition-colors">
                                   <TrashIcon className="w-5 h-5" />
                                 </button>
                               </div>
@@ -2774,7 +2981,7 @@ function App() {
                     <div className="p-4 bg-gray-50 rounded-full mb-4">
                       <ShoppingCartIcon className="w-8 h-8 text-gray-400" />
                     </div>
-                    <p className="text-gray-500 font-medium">No inventory items found</p>
+                    <p className="text-gray-500 font-medium">No stock items found</p>
                   </div>
                 )}
               </div>
@@ -2817,9 +3024,9 @@ function App() {
             <BoxIcon className="w-5 h-5 mr-3" />
             <span className="font-medium">IP</span>
           </button>
-          <button onClick={() => { setCurrentView('inventory-section'); setSidebarOpen(false); }} className={`w-full flex items-center px-4 py-3 rounded-lg transition-all ${currentView === 'inventory-section' ? 'bg-blue-50 text-blue-600 shadow-sm' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'}`}>
+          <button onClick={() => { setCurrentView('stock-section'); setSidebarOpen(false); }} className={`w-full flex items-center px-4 py-3 rounded-lg transition-all ${currentView === 'stock-section' ? 'bg-blue-50 text-blue-600 shadow-sm' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'}`}>
             <ShoppingCartIcon className="w-5 h-5 mr-3" />
-            <span className="font-medium">Inventory</span>
+            <span className="font-medium">Stock</span>
           </button>
         </nav>
         <div className="p-4 border-t border-gray-200">
@@ -2911,7 +3118,7 @@ function App() {
             {/* Modal Content */}
             <div className="p-8">
               {(() => {
-                const filteredRaw = inventoryRecords.filter(item =>
+                const filteredRaw = stockRecords.filter(item =>
                   (item.productName || '').trim().toLowerCase() === (viewRecord.data.productName || '').trim().toLowerCase()
                 );
 
@@ -2972,16 +3179,16 @@ function App() {
                             <div className="flex items-center">Importer <SortIcon config={sortConfig.history} columnKey="importer" /></div>
                           </th>
                           <th onClick={() => requestSort('history', 'indianCnF')} className="px-6 py-4 text-xs font-semibold text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-50 transition-colors whitespace-nowrap">
-                            <div className="flex items-center">IND C&F <SortIcon config={sortConfig.history} columnKey="indianCnF" /></div>
+                            <div className="flex items-center">IND CNF <SortIcon config={sortConfig.history} columnKey="indianCnF" /></div>
                           </th>
                           <th onClick={() => requestSort('history', 'indCnFCost')} className="px-6 py-4 text-xs font-semibold text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-50 transition-colors whitespace-nowrap">
-                            <div className="flex items-center">IN C&F comm <SortIcon config={sortConfig.history} columnKey="indCnFCost" /></div>
+                            <div className="flex items-center">IND CNF Cost <SortIcon config={sortConfig.history} columnKey="indCnFCost" /></div>
                           </th>
                           <th onClick={() => requestSort('history', 'bdCnF')} className="px-6 py-4 text-xs font-semibold text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-50 transition-colors whitespace-nowrap">
-                            <div className="flex items-center">BD (C&F) <SortIcon config={sortConfig.history} columnKey="bdCnF" /></div>
+                            <div className="flex items-center">BD (CNF) <SortIcon config={sortConfig.history} columnKey="bdCnF" /></div>
                           </th>
                           <th onClick={() => requestSort('history', 'bdCnFCost')} className="px-6 py-4 text-xs font-semibold text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-50 transition-colors whitespace-nowrap">
-                            <div className="flex items-center">BD C&F Cost <SortIcon config={sortConfig.history} columnKey="bdCnFCost" /></div>
+                            <div className="flex items-center">BD CNF Cost <SortIcon config={sortConfig.history} columnKey="bdCnFCost" /></div>
                           </th>
                           <th onClick={() => requestSort('history', 'truckNo')} className="px-6 py-4 text-xs font-semibold text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-50 transition-colors">
                             <div className="flex items-center">Truck No. <SortIcon config={sortConfig.history} columnKey="truckNo" /></div>
@@ -3048,14 +3255,14 @@ function App() {
                             <td className="px-6 py-4 text-sm">
                               <div className="flex items-center justify-center space-x-2">
                                 <button
-                                  onClick={() => { setViewRecord(null); handleEdit('inventory', historyItem); }}
+                                  onClick={() => { setViewRecord(null); handleEdit('stock', historyItem); }}
                                   className="p-1.5 hover:bg-blue-50 rounded-lg transition-colors group"
                                   title="Edit"
                                 >
                                   <EditIcon className="w-4 h-4 text-gray-400 group-hover:text-blue-600" />
                                 </button>
                                 <button
-                                  onClick={() => { setViewRecord(null); deleteInventoryGroup(historyItem.allIds || [historyItem._id]); }}
+                                  onClick={() => { setViewRecord(null); deleteStockGroup(historyItem.allIds || [historyItem._id]); }}
                                   className="p-1.5 hover:bg-red-50 rounded-lg transition-colors group"
                                   title="Delete"
                                 >

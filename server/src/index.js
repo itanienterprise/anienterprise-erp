@@ -20,7 +20,7 @@ mongoose.connect(process.env.MONGODB_URI || 'mongodb://mongo:27017/erp_db')
 const IpRecord = require('./models/IpRecord');
 const Importer = require('./models/Importer');
 const Port = require('./models/Port');
-const Inventory = require('./models/Inventory');
+const Stock = require('./models/Stock');
 
 
 // Routes
@@ -152,41 +152,41 @@ app.get('/api/ports', async (req, res) => {
   }
 });
 
-// Inventory APIs
-app.post('/api/inventory', async (req, res) => {
+// Stock APIs
+app.post('/api/stock', async (req, res) => {
   try {
-    const newInventory = new Inventory(req.body);
-    const savedInventory = await newInventory.save();
-    res.status(201).json(savedInventory);
+    const newStock = new Stock(req.body);
+    const savedStock = await newStock.save();
+    res.status(201).json(savedStock);
   } catch (err) {
     res.status(400).json({ message: err.message });
   }
 });
 
-app.delete('/api/inventory/:id', async (req, res) => {
+app.delete('/api/stock/:id', async (req, res) => {
   try {
-    const deletedInventory = await Inventory.findByIdAndDelete(req.params.id);
-    if (!deletedInventory) return res.status(404).json({ message: 'Item not found' });
+    const deletedStock = await Stock.findByIdAndDelete(req.params.id);
+    if (!deletedStock) return res.status(404).json({ message: 'Item not found' });
     res.json({ message: 'Item deleted' });
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
 });
 
-app.put('/api/inventory/:id', async (req, res) => {
+app.put('/api/stock/:id', async (req, res) => {
   try {
-    const updatedInventory = await Inventory.findByIdAndUpdate(req.params.id, req.body, { new: true });
-    if (!updatedInventory) return res.status(404).json({ message: 'Item not found' });
-    res.json(updatedInventory);
+    const updatedStock = await Stock.findByIdAndUpdate(req.params.id, req.body, { new: true });
+    if (!updatedStock) return res.status(404).json({ message: 'Item not found' });
+    res.json(updatedStock);
   } catch (err) {
     res.status(400).json({ message: err.message });
   }
 });
 
-app.get('/api/inventory', async (req, res) => {
+app.get('/api/stock', async (req, res) => {
   try {
-    const inventory = await Inventory.find().sort({ createdAt: -1 });
-    res.json(inventory);
+    const stock = await Stock.find().sort({ createdAt: -1 });
+    res.json(stock);
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
