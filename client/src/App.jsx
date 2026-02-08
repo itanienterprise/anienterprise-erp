@@ -204,6 +204,14 @@ function App() {
   });
   const [viewRecord, setViewRecord] = useState(null);
   const [activeDropdown, setActiveDropdown] = useState(null);
+  const [historySearchQuery, setHistorySearchQuery] = useState('');
+  const [showHistoryFilterPanel, setShowHistoryFilterPanel] = useState(false);
+  const [historyFilters, setHistoryFilters] = useState({
+    startDate: '',
+    endDate: '',
+    port: '',
+    brand: ''
+  });
   const [highlightedIndex, setHighlightedIndex] = useState(-1);
   const portRef = useRef(null);
   const importerRef = useRef(null);
@@ -245,9 +253,12 @@ function App() {
     indCnFCost: '',
     bdCnF: '',
     bdCnFCost: '',
+    billOfEntry: '',
     port: '',
     importer: '',
     status: 'In Stock',
+    totalLcTruck: '',
+    totalLcQuantity: '',
     productEntries: [
       {
         productName: '',
@@ -256,6 +267,7 @@ function App() {
         brandEntries: [
           {
             brand: '',
+            purchasedPrice: '',
             packet: '',
             packetSize: '',
             quantity: '',
@@ -371,9 +383,12 @@ function App() {
       indCnFCost: '',
       bdCnF: '',
       bdCnFCost: '',
+      billOfEntry: '',
       port: '',
       importer: '',
       status: 'In Stock',
+      totalLcTruck: '',
+      totalLcQuantity: '',
       productEntries: [
         {
           productName: '',
@@ -382,6 +397,7 @@ function App() {
           brandEntries: [
             {
               brand: '',
+              purchasedPrice: '',
               packet: '',
               packetSize: '',
               sweepedPacket: '',
@@ -400,10 +416,6 @@ function App() {
     setEditingId(null);
     setSubmitStatus(null);
   };
-
-
-
-
 
 
   const requestSort = (type, key) => {
@@ -515,7 +527,7 @@ function App() {
       fetchImporters();
     } else if (currentView === 'port-section') {
       fetchPorts();
-    } else if (currentView === 'stock-section') {
+    } else if (currentView === 'stock-section' || currentView === 'lc-entry-section') {
       fetchStockRecords();
       fetchPorts(); // Fetch ports to populate the dropdown
       fetchImporters(); // Fetch importers to populate the dropdown
@@ -600,6 +612,31 @@ function App() {
       setIsSelectionMode(true);
     }
   };
+
+  // Auto-synchronize Total LC Truck and Quantity in the form
+  useEffect(() => {
+    if (!stockFormData.productEntries) return;
+
+    // Sum truckNo per product entry
+    const totalTruck = stockFormData.productEntries.reduce((sum, p) => sum + (parseFloat(p.truckNo) || 0), 0);
+
+    // Sum quantity across all brand entries in all products
+    const totalQty = stockFormData.productEntries.reduce((pSum, p) =>
+      pSum + p.brandEntries.reduce((bSum, b) => bSum + (parseFloat(b.quantity) || 0), 0)
+      , 0);
+
+    const truckStr = totalTruck.toString();
+    const qtyStr = totalQty.toFixed(2);
+
+    // Update state if calculation differs
+    if (stockFormData.totalLcTruck !== truckStr || stockFormData.totalLcQuantity !== qtyStr) {
+      setStockFormData(prev => ({
+        ...prev,
+        totalLcTruck: truckStr,
+        totalLcQuantity: qtyStr
+      }));
+    }
+  }, [stockFormData.productEntries]);
 
   const toggleSelectAll = (items) => {
     if (selectedItems.size === items.length) {
@@ -710,23 +747,29 @@ function App() {
         indCnFCost: item.indCnFCost,
         bdCnF: item.bdCnF,
         bdCnFCost: item.bdCnFCost,
+        billOfEntry: item.billOfEntry,
         port: item.port,
         importer: item.importer,
         status: item.status,
+        totalLcTruck: item.totalLcTruck || '',
+        totalLcQuantity: item.totalLcQuantity || '',
         productEntries: [
           {
-            productName: item.productName,
+            productName: item.productName || item.brand,
             truckNo: item.truckNo,
-            isMultiBrand: item.isMultiBrand,
-            brandEntries: [
-              {
-                brand: item.brand,
-                packet: item.packet,
-                packetSize: item.packetSize,
-                quantity: item.quantity,
-                unit: item.unit
-              }
-            ]
+            isMultiBrand: item.entries.length > 1,
+            brandEntries: item.entries.map(ent => ({
+              brand: ent.brand,
+              purchasedPrice: ent.purchasedPrice,
+              packet: ent.packet,
+              packetSize: ent.packetSize,
+              quantity: ent.quantity,
+              inHousePacket: ent.inHousePacket,
+              inHouseQuantity: ent.inHouseQuantity,
+              sweepedPacket: ent.sweepedPacket,
+              sweepedQuantity: ent.sweepedQuantity,
+              unit: ent.unit
+            }))
           }
         ]
       };
@@ -967,24 +1010,21 @@ function App() {
 
         if (field === 'sweepedPacket') {
           // If packet changed, update quantity
-          const newSwpQty = swpPkt * size;
-          newEntry.sweepedQuantity = newSwpQty.toFixed(2);
-          const ihQty = totalQty - newSwpQty;
-          newEntry.inHouseQuantity = ihQty.toFixed(2);
-          newEntry.inHousePacket = size > 0 ? (ihQty / size).toFixed(2) : 0;
+          const newSwpQty = Math.round(swpPkt * size);
+          newEntry.sweepedQuantity = newSwpQty;
+          newEntry.inHouseQuantity = (totalQty - newSwpQty).toFixed(2);
+          newEntry.inHousePacket = (pkt - swpPkt).toFixed(2);
         } else if (field === 'sweepedQuantity') {
           // If quantity changed, update packet
-          const ihQty = totalQty - swpQty;
-          newEntry.inHouseQuantity = ihQty.toFixed(2);
-          newEntry.inHousePacket = size > 0 ? (ihQty / size).toFixed(2) : 0;
+          newEntry.inHouseQuantity = (totalQty - swpQty).toFixed(2);
+          newEntry.inHousePacket = size > 0 ? ((totalQty - swpQty) / size).toFixed(2) : 0;
           newEntry.sweepedPacket = size > 0 ? (swpQty / size).toFixed(2) : 0;
         } else {
           // If total packet or size changed, update everything based on current sweeped packet
-          const currentSwpQty = swpPkt * size;
-          newEntry.sweepedQuantity = currentSwpQty.toFixed(2);
-          const ihQty = totalQty - currentSwpQty;
-          newEntry.inHouseQuantity = ihQty.toFixed(2);
-          newEntry.inHousePacket = size > 0 ? (ihQty / size).toFixed(2) : 0;
+          const currentSwpQty = Math.round(swpPkt * size);
+          newEntry.sweepedQuantity = currentSwpQty;
+          newEntry.inHouseQuantity = (totalQty - currentSwpQty).toFixed(2);
+          newEntry.inHousePacket = (pkt - swpPkt).toFixed(2);
         }
       }
 
@@ -1107,6 +1147,11 @@ function App() {
       let isSuccess = false;
       // Flatten all product and brand combinations into a single array of items to save
       const itemsToSave = [];
+      const calcTotalLcTruck = stockFormData.productEntries.reduce((sum, p) => sum + (parseFloat(p.truckNo) || 0), 0).toString();
+      const calcTotalLcQuantity = stockFormData.productEntries.reduce((pSum, p) =>
+        pSum + p.brandEntries.reduce((bSum, b) => bSum + (parseFloat(b.quantity) || 0), 0)
+        , 0).toFixed(2);
+
       stockFormData.productEntries.forEach(product => {
         product.brandEntries.forEach(brand => {
           itemsToSave.push({
@@ -1116,16 +1161,24 @@ function App() {
             indCnFCost: stockFormData.indCnFCost,
             bdCnF: stockFormData.bdCnF,
             bdCnFCost: stockFormData.bdCnFCost,
+            billOfEntry: stockFormData.billOfEntry,
             port: stockFormData.port,
             importer: stockFormData.importer,
             status: stockFormData.status,
+            totalLcTruck: calcTotalLcTruck,
+            totalLcQuantity: calcTotalLcQuantity,
             productName: product.productName,
             truckNo: product.truckNo,
             isMultiBrand: product.isMultiBrand,
             brand: brand.brand || product.productName,
+            purchasedPrice: brand.purchasedPrice,
             packet: brand.packet,
             packetSize: brand.packetSize,
             quantity: brand.quantity,
+            inHousePacket: brand.inHousePacket,
+            inHouseQuantity: brand.inHouseQuantity,
+            sweepedPacket: brand.sweepedPacket,
+            sweepedQuantity: brand.sweepedQuantity,
             unit: brand.unit
           });
         });
@@ -1247,6 +1300,709 @@ function App() {
           <div className="flex flex-col items-center justify-center h-[80vh] text-center">
             <h2 className="text-3xl font-bold text-gray-800 mb-2">Welcome to ANI Enterprise ERP</h2>
             <p className="text-gray-500">Select an option from the sidebar to get started.</p>
+          </div>
+        );
+      case 'lc-entry-section':
+        return (
+          <div className="space-y-6">
+            <div className="flex items-center justify-between">
+              <h2 className="text-2xl font-bold text-gray-800">LC Entry Management</h2>
+              <div className="flex items-center space-x-3">
+                <button
+                  onClick={() => setShowFilters(!showFilters)}
+                  className={`px-4 py-2 ${showFilters ? 'bg-indigo-100 text-indigo-600 border-indigo-200' : 'bg-white text-gray-600 border border-gray-200'} font-medium rounded-lg shadow-sm transition-all flex items-center hover:bg-gray-50 border`}
+                >
+                  <FunnelIcon className="w-4 h-4 mr-2" /> {showFilters ? 'Hide Filters' : 'Filter'}
+                </button>
+                <button
+                  onClick={() => setShowStockForm(!showStockForm)}
+                  className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg shadow-lg shadow-blue-500/30 transition-all transform hover:scale-105 flex items-center"
+                >
+                  <span className="mr-2 text-xl">+</span> Add New
+                </button>
+              </div>
+            </div>
+
+            {/* Placeholder message - Stock form will appear here when Add New is clicked */}
+            {showStockForm && (
+              <div className="relative overflow-hidden rounded-2xl bg-white/60 backdrop-blur-xl border border-white/50 shadow-2xl p-8 transition-all duration-300">
+                <div className="absolute -top-24 -right-24 w-64 h-64 bg-blue-400/10 rounded-full blur-3xl pointer-events-none"></div>
+                <div className="absolute -bottom-24 -left-24 w-64 h-64 bg-indigo-400/10 rounded-full blur-3xl pointer-events-none"></div>
+
+                <div className="flex items-center justify-between mb-6 border-b border-gray-200/50 pb-4 relative z-10">
+                  <h3 className="text-xl font-semibold text-gray-800">{editingId ? 'Edit Stock' : 'New LC Entry'}</h3>
+                  <button onClick={() => { setShowStockForm(false); resetStockForm(); }} className="text-gray-400 hover:text-red-500 transition-colors">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                  </button>
+                </div>
+
+                <form onSubmit={handleStockSubmit} autoComplete="off" className="grid grid-cols-1 md:grid-cols-2 gap-6 relative z-10">
+                  <div className="col-span-1 md:col-span-2 grid grid-cols-1 md:grid-cols-4 gap-6">
+                    <CustomDatePicker
+                      label="Date"
+                      name="date"
+                      value={stockFormData.date}
+                      onChange={handleStockInputChange}
+                      required
+                    />
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium text-gray-700">LC No</label>
+                      <input
+                        type="text" name="lcNo" value={stockFormData.lcNo} onChange={handleStockInputChange} required
+                        placeholder="LC Number" autoComplete="off" className="w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm"
+                      />
+                    </div>
+                    <div className="space-y-2 relative" ref={portRef}>
+                      <label className="text-sm font-medium text-gray-700">Port</label>
+                      <div className="relative">
+                        <input
+                          type="text"
+                          name="port"
+                          value={stockFormData.port}
+                          onChange={handleStockInputChange}
+                          onFocus={() => setActiveDropdown('port')}
+                          onKeyDown={(e) => handleDropdownKeyDown(e, 'port', handleStockDropdownSelect, 'port')}
+                          required
+                          placeholder="Select or type port name"
+                          autoComplete="off"
+                          className="w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm pr-10"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setActiveDropdown(activeDropdown === 'port' ? null : 'port')}
+                          className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                        >
+                          <ChevronDownIcon className={`w-4 h-4 transition-transform ${activeDropdown === 'port' ? 'rotate-180' : ''}`} />
+                        </button>
+                      </div>
+                      {activeDropdown === 'port' && (
+                        <div className="absolute z-[60] w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-xl max-h-48 overflow-y-auto animate-in fade-in zoom-in duration-200">
+                          {getFilteredOptions('port').map((port, index) => (
+                            <button
+                              key={port._id}
+                              type="button"
+                              onClick={() => handleStockDropdownSelect('port', port.name)}
+                              onMouseEnter={() => setHighlightedIndex(index)}
+                              className={`w-full text-left px-4 py-2 text-sm transition-colors flex items-center justify-between ${highlightedIndex === index ? 'bg-blue-50 text-blue-700' : 'hover:bg-blue-50'}`}
+                            >
+                              <span>{port.name}</span>
+                              {stockFormData.port === port.name && <span className="w-2 h-2 bg-blue-500 rounded-full"></span>}
+                            </button>
+                          ))}
+                          {getFilteredOptions('port').length === 0 && (
+                            <div className="px-4 py-3 text-sm text-gray-500 italic">No ports found</div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="space-y-2 relative" ref={importerRef}>
+                      <label className="text-sm font-medium text-gray-700">Importer</label>
+                      <div className="relative">
+                        <input
+                          type="text"
+                          name="importer"
+                          value={stockFormData.importer}
+                          onChange={handleStockInputChange}
+                          onFocus={() => setActiveDropdown('importer')}
+                          onKeyDown={(e) => handleDropdownKeyDown(e, 'importer', handleStockDropdownSelect, 'importer')}
+                          required
+                          placeholder="Select or type importer"
+                          autoComplete="off"
+                          className="w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm pr-10"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setActiveDropdown(activeDropdown === 'importer' ? null : 'importer')}
+                          className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                        >
+                          <ChevronDownIcon className={`w-4 h-4 transition-transform ${activeDropdown === 'importer' ? 'rotate-180' : ''}`} />
+                        </button>
+                      </div>
+                      {activeDropdown === 'importer' && (
+                        <div className="absolute z-[60] w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-xl max-h-48 overflow-y-auto animate-in fade-in zoom-in duration-200">
+                          {getFilteredOptions('importer').map((imp, index) => (
+                            <button
+                              key={imp._id}
+                              type="button"
+                              onClick={() => handleStockDropdownSelect('importer', imp.name)}
+                              onMouseEnter={() => setHighlightedIndex(index)}
+                              className={`w-full text-left px-4 py-2 text-sm transition-colors flex items-center justify-between ${highlightedIndex === index ? 'bg-blue-50 text-blue-700' : 'hover:bg-blue-50'}`}
+                            >
+                              <span>{imp.name}</span>
+                              {stockFormData.importer === imp.name && <span className="w-2 h-2 bg-blue-500 rounded-full"></span>}
+                            </button>
+                          ))}
+                          {getFilteredOptions('importer').length === 0 && (
+                            <div className="px-4 py-3 text-sm text-gray-500 italic">No importers found</div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="col-span-1 md:col-span-2 grid grid-cols-1 md:grid-cols-5 gap-6">
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium text-gray-700">IND CNF</label>
+                      <input
+                        type="text" name="indianCnF" value={stockFormData.indianCnF} onChange={handleStockInputChange}
+                        placeholder="IND CNF" autoComplete="off" className="w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium text-gray-700">IND CNF Cost</label>
+                      <input
+                        type="number" name="indCnFCost" value={stockFormData.indCnFCost} onChange={handleStockInputChange}
+                        placeholder="0.00" autoComplete="off" className="w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium text-gray-700">BD CNF</label>
+                      <input
+                        type="text" name="bdCnF" value={stockFormData.bdCnF} onChange={handleStockInputChange}
+                        placeholder="BD CNF" autoComplete="off" className="w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium text-gray-700">BD CNF Cost</label>
+                      <input
+                        type="number" name="bdCnFCost" value={stockFormData.bdCnFCost} onChange={handleStockInputChange}
+                        placeholder="0.00" autoComplete="off" className="w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium text-gray-700">Bill Of Entry</label>
+                      <input
+                        type="text" name="billOfEntry" value={stockFormData.billOfEntry} onChange={handleStockInputChange}
+                        placeholder="Bill Of Entry" autoComplete="off" className="w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Total LC Truck/Quantity Row */}
+                  <div className="col-span-1 md:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-6 pb-4">
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium text-gray-700">Total LC Truck</label>
+                      <input
+                        type="text"
+                        name="totalLcTruck"
+                        value={stockFormData.totalLcTruck || '0'}
+                        readOnly
+                        placeholder="Total LC Truck"
+                        autoComplete="off"
+                        className="w-full px-4 py-2 bg-gray-50/80 border border-gray-200/60 rounded-lg text-gray-600 font-semibold outline-none cursor-default backdrop-blur-sm"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium text-gray-700">Total LC Quantity</label>
+                      <input
+                        type="text"
+                        name="totalLcQuantity"
+                        value={stockFormData.totalLcQuantity || '0.00'}
+                        readOnly
+                        placeholder="Total LC Quantity"
+                        autoComplete="off"
+                        className="w-full px-4 py-2 bg-gray-50/80 border border-gray-200/60 rounded-lg text-gray-600 font-semibold outline-none cursor-default backdrop-blur-sm"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Product Entries Section */}
+                  <div className="col-span-1 md:col-span-2 space-y-8 animate-in fade-in duration-500">
+                    <div className="flex items-center justify-between border-b border-gray-100 pb-2">
+                      <h4 className="text-lg font-bold text-gray-800 flex items-center gap-2">
+                        <div className="w-1.5 h-6 bg-blue-500 rounded-full"></div>
+                        Product Details
+                      </h4>
+                      <button
+                        type="button"
+                        onClick={addProductEntry}
+                        className="flex items-center gap-2 px-4 py-2 bg-blue-50 text-blue-600 rounded-xl hover:bg-blue-600 hover:text-white transition-all duration-300 font-semibold text-sm shadow-sm active:scale-95 group"
+                      >
+                        <PlusIcon className="w-4 h-4 group-hover:rotate-90 transition-transform duration-300" />
+                        Add Product
+                      </button>
+                    </div>
+
+                    <div className="space-y-12">
+                      {stockFormData.productEntries.map((product, pIndex) => (
+                        <div key={pIndex} className="relative p-6 rounded-2xl bg-gray-50/30 border border-gray-100 group/product hover:border-blue-200 hover:bg-white/80 transition-all duration-500">
+                          {/* Remove Product Button */}
+                          {stockFormData.productEntries.length > 1 && (
+                            <button
+                              type="button"
+                              onClick={() => removeProductEntry(pIndex)}
+                              className="absolute -top-3 -right-3 p-2 bg-white text-gray-400 hover:text-red-500 rounded-xl shadow-lg border border-gray-100 opacity-0 group-hover/product:opacity-100 transition-all duration-300 hover:scale-110 active:scale-90 z-20"
+                            >
+                              <TrashIcon className="w-4 h-4" />
+                            </button>
+                          )}
+
+                          <div className="space-y-6">
+                            {/* Product Info Row */}
+                            {product.isMultiBrand ? (
+                              <div className="grid grid-cols-1 md:grid-cols-4 gap-4 animate-in fade-in duration-300">
+                                <div className="space-y-2">
+                                  <label className="text-sm font-medium text-gray-700">Entry Mode</label>
+                                  <div className="h-[42px] flex items-center gap-1 p-1 bg-gray-100/50 rounded-lg w-full">
+                                    <button
+                                      type="button"
+                                      onClick={() => handleProductModeToggle(pIndex, false)}
+                                      className={`flex-1 h-full text-xs font-semibold rounded-md transition-all ${!product.isMultiBrand ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+                                    >
+                                      Single
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleProductModeToggle(pIndex, true)}
+                                      className={`flex-1 h-full text-xs font-semibold rounded-md transition-all ${product.isMultiBrand ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+                                    >
+                                      Multi
+                                    </button>
+                                  </div>
+                                </div>
+                                <div className="space-y-2">
+                                  <label className="text-sm font-medium text-gray-700">Product Name</label>
+                                  <input
+                                    type="text" name="productName" value={product.productName} onChange={(e) => handleStockInputChange(e, pIndex)} required
+                                    placeholder="Product Name" autoComplete="off" className="w-full h-[42px] px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm"
+                                  />
+                                </div>
+                                <div className="space-y-2">
+                                  <label className="text-sm font-medium text-gray-700">Truck No.</label>
+                                  <input
+                                    type="text" name="truckNo" value={product.truckNo} onChange={(e) => handleStockInputChange(e, pIndex)}
+                                    placeholder="Truck No." autoComplete="off" className="w-full h-[42px] px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm"
+                                  />
+                                </div>
+                                <div className="space-y-2">
+                                  <label className="text-sm font-medium text-gray-700">Total Quantity</label>
+                                  <div className="relative h-[42px]">
+                                    <input
+                                      type="text"
+                                      value={product.brandEntries.reduce((sum, entry) => sum + (parseFloat(entry.inHouseQuantity) || 0), 0).toFixed(2)}
+                                      readOnly
+                                      className="w-full h-full px-4 py-2 bg-gray-50/80 border border-gray-200/60 rounded-lg text-gray-600 font-semibold outline-none cursor-default"
+                                    />
+                                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-medium text-gray-400">
+                                      {product.brandEntries[0]?.unit || 'kg'}
+                                    </span>
+                                  </div>
+                                </div>
+                              </div>
+                            ) : (
+                              <div className="w-full grid grid-cols-1 md:grid-cols-12 gap-4 items-end animate-in fade-in duration-300">
+                                <div className="md:col-span-2 space-y-1.5">
+                                  <label className="text-sm font-medium text-gray-700 text-center block w-full">Mode</label>
+                                  <div className="h-[42px] flex items-center gap-1 p-1 bg-gray-100/50 rounded-lg w-full">
+                                    <button
+                                      type="button"
+                                      onClick={() => handleProductModeToggle(pIndex, false)}
+                                      className={`flex-1 h-full text-[10px] font-bold rounded flex items-center justify-center transition-all ${!product.isMultiBrand ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+                                    >
+                                      SINGLE
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleProductModeToggle(pIndex, true)}
+                                      className={`flex-1 h-full text-[10px] font-bold rounded flex items-center justify-center transition-all ${product.isMultiBrand ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+                                    >
+                                      MULTI
+                                    </button>
+                                  </div>
+                                </div>
+                                <div className="md:col-span-3 space-y-1.5">
+                                  <label className="text-sm font-medium text-gray-700">Product Name</label>
+                                  <input
+                                    type="text" name="productName" value={product.productName} onChange={(e) => handleStockInputChange(e, pIndex)} required
+                                    placeholder="Product Name" autoComplete="off" className="w-full h-[42px] px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm text-sm"
+                                  />
+                                </div>
+                                <div className="md:col-span-2 space-y-1.5">
+                                  <label className="text-sm font-medium text-gray-700">Truck No.</label>
+                                  <input
+                                    type="text" name="truckNo" value={product.truckNo} onChange={(e) => handleStockInputChange(e, pIndex)}
+                                    placeholder="Truck #" autoComplete="off" className="w-full h-[42px] px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm text-sm"
+                                  />
+                                </div>
+                                <div className="md:col-span-1 space-y-1.5">
+                                  <label className="text-sm font-medium text-gray-700">Swp. Pkt</label>
+                                  <input
+                                    type="text"
+                                    value={product.brandEntries[0].sweepedPacket}
+                                    onChange={(e) => handleBrandEntryChange(pIndex, 0, 'sweepedPacket', e.target.value)}
+                                    placeholder="Qty" autoComplete="off" className="w-full h-[42px] px-2 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm text-sm"
+                                  />
+                                </div>
+                                <div className="md:col-span-1 space-y-1.5">
+                                  <label className="text-sm font-medium text-gray-700">SwpQty</label>
+                                  <input
+                                    type="text"
+                                    value={product.brandEntries[0].sweepedQuantity}
+                                    onChange={(e) => handleBrandEntryChange(pIndex, 0, 'sweepedQuantity', e.target.value)}
+                                    placeholder="Qty" className="w-full h-[42px] px-2 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm text-sm"
+                                  />
+                                </div>
+                                <div className="md:col-span-1 space-y-1.5">
+                                  <label className="text-sm font-medium text-gray-700">InHouse Pkt</label>
+                                  <input
+                                    type="text"
+                                    value={product.brandEntries[0].inHousePacket}
+                                    readOnly
+                                    placeholder="Qty" autoComplete="off" className="w-full h-[42px] px-4 py-2 bg-gray-50/80 border border-gray-200/60 rounded-lg text-gray-600 font-medium outline-none cursor-default backdrop-blur-sm text-sm"
+                                  />
+                                </div>
+                                <div className="md:col-span-1 space-y-1.5">
+                                  <label className="text-sm font-medium text-gray-700">InHouse Qty</label>
+                                  <input
+                                    type="text"
+                                    value={product.brandEntries[0].inHouseQuantity}
+                                    readOnly
+                                    placeholder="Qty" className="w-full h-[42px] px-4 py-2 bg-gray-50/80 border border-gray-200/60 rounded-lg text-gray-600 font-medium outline-none cursor-default backdrop-blur-sm text-sm"
+                                  />
+                                </div>
+                                <div className="md:col-span-1 space-y-1.5">
+                                  <label className="text-sm font-medium text-gray-700 text-center block w-full">Packet</label>
+                                  <input
+                                    type="text"
+                                    value={product.brandEntries[0].packet}
+                                    onChange={(e) => handleBrandEntryChange(pIndex, 0, 'packet', e.target.value)}
+                                    placeholder="Qty" autoComplete="off" className="w-full h-[42px] px-2 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm text-sm text-center"
+                                  />
+                                </div>
+                                <div className="md:col-span-1 space-y-1.5">
+                                  <label className="text-sm font-medium text-gray-700 text-center block w-full">Size</label>
+                                  <input
+                                    type="text"
+                                    value={product.brandEntries[0].packetSize}
+                                    onChange={(e) => handleBrandEntryChange(pIndex, 0, 'packetSize', e.target.value)}
+                                    placeholder="Size" autoComplete="off" className="w-full h-[42px] px-2 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm text-sm text-center"
+                                  />
+                                </div>
+                                <div className="md:col-span-2 space-y-1.5">
+                                  <label className="text-sm font-medium text-gray-700 text-center block w-full">Total</label>
+                                  <div className="relative h-[42px]">
+                                    <input
+                                      type="text"
+                                      value={product.brandEntries.reduce((sum, entry) => sum + (parseFloat(entry.inHouseQuantity) || 0), 0).toFixed(2)}
+                                      readOnly
+                                      className="w-full h-full px-1 py-2 bg-gray-50/80 border border-gray-200/60 rounded-lg text-gray-600 font-bold outline-none cursor-default text-xs text-center"
+                                    />
+                                  </div>
+                                </div>
+                                <div className="md:col-span-1 space-y-1.5">
+                                  <label className="text-sm font-medium text-gray-700 text-center block w-full">Unit</label>
+                                  <select
+                                    value={product.brandEntries[0].unit}
+                                    onChange={(e) => handleBrandEntryChange(pIndex, 0, 'unit', e.target.value)}
+                                    className="w-full h-[42px] px-1 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-all backdrop-blur-sm text-sm"
+                                  >
+                                    <option>kg</option>
+                                    <option>pcs</option>
+                                    <option>boxes</option>
+                                    <option>liters</option>
+                                  </select>
+                                </div>
+                              </div>
+                            )}
+
+                            {/* Brand Entries Section (Multi-Brand Only) */}
+                            {product.isMultiBrand && (
+                              <div className="mt-4 space-y-3 animate-in fade-in slide-in-from-top-2 duration-300 bg-gray-50/50 p-4 rounded-xl border border-gray-100">
+                                <div className="flex items-center justify-between mb-1 px-1">
+                                  <label className="text-xs font-bold text-gray-500 uppercase tracking-wider">Brand Breakdown</label>
+                                </div>
+                                <div className="hidden md:grid grid-cols-6 gap-2 px-1 mb-1 pr-12">
+                                  <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">BRAND</div>
+                                  <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">PURCHASED PRICE</div>
+                                  <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">PACKET</div>
+                                  <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">SIZE</div>
+                                  <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">QTY</div>
+                                  <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">UNIT</div>
+                                </div>
+                                <div className="space-y-4">
+                                  {product.brandEntries.map((entry, bIndex) => (
+                                    <div key={bIndex} className="p-3 bg-white/40 border border-gray-200/50 rounded-lg space-y-3 group/brand">
+                                      <div className="flex items-center gap-2">
+                                        <div className="flex-1 grid grid-cols-2 md:grid-cols-6 gap-2">
+                                          <input
+                                            type="text" value={entry.brand} placeholder="Brand" onChange={(e) => handleBrandEntryChange(pIndex, bIndex, 'brand', e.target.value)}
+                                            className="w-full h-9 px-2 text-sm bg-white border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-all"
+                                          />
+                                          <input
+                                            type="number" value={entry.purchasedPrice} placeholder="Price" onChange={(e) => handleBrandEntryChange(pIndex, bIndex, 'purchasedPrice', e.target.value)}
+                                            className="w-full h-9 px-2 text-sm bg-white border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-all [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                                          />
+                                          <input
+                                            type="number" value={entry.packet} placeholder="Packet" onChange={(e) => handleBrandEntryChange(pIndex, bIndex, 'packet', e.target.value)}
+                                            className="w-full h-9 px-2 text-sm bg-white border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-all [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                                          />
+                                          <input
+                                            type="number" value={entry.packetSize} placeholder="Size" onChange={(e) => handleBrandEntryChange(pIndex, bIndex, 'packetSize', e.target.value)}
+                                            className="w-full h-9 px-2 text-sm bg-white border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-all [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                                          />
+                                          <input
+                                            type="number" value={entry.quantity} readOnly className="w-full h-9 px-2 text-sm bg-gray-50 border border-gray-200 rounded-lg text-gray-500 font-medium [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                                          />
+                                          <select
+                                            value={entry.unit} onChange={(e) => handleBrandEntryChange(pIndex, bIndex, 'unit', e.target.value)}
+                                            className="w-full h-9 px-2 text-sm bg-white border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-all"
+                                          >
+                                            <option>kg</option><option>pcs</option><option>boxes</option><option>liters</option>
+                                          </select>
+                                        </div>
+                                        <div className="flex items-center">
+                                          <button
+                                            type="button" onClick={() => addBrandEntry(pIndex)}
+                                            className="p-1.5 text-blue-500 hover:bg-blue-100 rounded-lg transition-all"
+                                          >
+                                            <PlusIcon className="w-4 h-4" />
+                                          </button>
+                                          {product.brandEntries.length > 1 && (
+                                            <button
+                                              type="button" onClick={() => removeBrandEntry(pIndex, bIndex)}
+                                              className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all"
+                                            >
+                                              <TrashIcon className="w-3.5 h-3.5" />
+                                            </button>
+                                          )}
+                                        </div>
+                                      </div>
+
+                                      {/* Combined line for Sweeped and InHouse fields */}
+                                      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 pl-0 md:pl-0">
+                                        <div className="flex items-center gap-2">
+                                          <label className="text-[10px] font-bold text-gray-400 uppercase min-w-[60px]">SWP. PKT</label>
+                                          <input
+                                            type="number" value={entry.sweepedPacket} placeholder="Packet" onChange={(e) => handleBrandEntryChange(pIndex, bIndex, 'sweepedPacket', e.target.value)}
+                                            className="flex-1 h-8 px-2 text-xs bg-white/70 border border-gray-200 rounded-md focus:ring-2 focus:ring-blue-500 outline-none transition-all [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                                          />
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                          <label className="text-[10px] font-bold text-gray-400 uppercase min-w-[60px]">SWPQTY</label>
+                                          <input
+                                            type="number" value={entry.sweepedQuantity}
+                                            onChange={(e) => handleBrandEntryChange(pIndex, bIndex, 'sweepedQuantity', e.target.value)}
+                                            placeholder="Qty"
+                                            className="flex-1 h-8 px-2 text-xs bg-white border border-gray-200 rounded-md focus:ring-2 focus:ring-blue-500 outline-none transition-all [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                                          />
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                          <label className="text-[10px] font-bold text-gray-400 uppercase min-w-[60px]">INHOUSE PKT</label>
+                                          <input
+                                            type="number" value={entry.inHousePacket} placeholder="Packet" readOnly
+                                            className="flex-1 h-8 px-2 text-xs bg-gray-50/70 border border-gray-200 rounded-md text-gray-500 outline-none cursor-default [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                                          />
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                          <label className="text-[10px] font-bold text-gray-400 uppercase min-w-[60px]">INHOUSE QTY</label>
+                                          <input
+                                            type="number" value={entry.inHouseQuantity} placeholder="Qty" readOnly
+                                            className="flex-1 h-8 px-2 text-xs bg-gray-50/70 border border-gray-200 rounded-md text-gray-500 outline-none cursor-default [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                                          />
+                                        </div>
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Status */}
+                  <div className="col-span-1 md:col-span-2 pt-4 border-t border-gray-100">
+                    <div className="flex flex-col sm:flex-row sm:items-center gap-4">
+                      <div className="w-full sm:w-64 space-y-2">
+                        <label className="text-sm font-medium text-gray-700">Status</label>
+                        <select
+                          name="status" value={stockFormData.status} onChange={handleStockInputChange}
+                          className="w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm"
+                        >
+                          <option>In Stock</option>
+                          <option>Sale From Panama</option>
+                        </select>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="col-span-1 md:col-span-2 pt-4 flex items-center justify-between">
+                    {submitStatus === 'success' && (
+                      <p className="text-green-600 font-medium flex items-center animate-bounce">
+                        <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"></path></svg>
+                        Stock saved successfully!
+                      </p>
+                    )}
+                    {submitStatus === 'error' && (
+                      <p className="text-red-600 font-medium flex items-center">
+                        <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                        Failed to save stock.
+                      </p>
+                    )}
+                    <div className="flex-1"></div>
+                    <button
+                      type="submit" disabled={isSubmitting}
+                      className="px-6 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-medium rounded-lg shadow-lg shadow-blue-500/30 transition-all transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {isSubmitting ? 'Saving...' : editingId ? 'Update Stock' : 'Add to Stock'}
+                    </button>
+                  </div>
+                </form>
+              </div>
+            )}
+            {/* LC Entry Table */}
+            {!showStockForm && (
+              <div className="bg-white rounded-xl shadow-lg border border-gray-100 overflow-hidden">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left">
+                    <thead className="bg-gray-50">
+                      <tr className="border-b border-gray-100 select-none">
+                        {isSelectionMode && <th className="px-6 py-4 w-12"></th>}
+                        {[
+                          { key: 'date', label: 'Date' },
+                          { key: 'lcNo', label: 'LC No' },
+                          { key: 'importer', label: 'Importer' },
+                          { key: 'port', label: 'Port' },
+                          { key: 'indianCnF', label: 'IND CNF' },
+                          { key: 'indianCnFCost', label: 'IND CNF Cost' },
+                          { key: 'bdCnF', label: 'BD CNF' },
+                          { key: 'bdCnFCost', label: 'BD CNF Cost' },
+                          { key: 'billOfEntry', label: 'Bill Of Entry' },
+                          { key: 'products', label: 'Products' },
+                          { key: 'truck', label: 'Truck' },
+                          { key: 'quantity', label: 'Quantity' },
+                          { key: 'actions', label: 'Actions' },
+                        ].map((col) => (
+                          <th key={col.key} className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                            {col.label}
+                          </th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100">
+                      {Object.values(stockRecords.reduce((acc, item) => {
+                        const key = item.lcNo || 'unknown';
+                        if (!acc[key]) {
+                          acc[key] = {
+                            ...item,
+                            totalQuantity: 0,
+                            totalLcTruck: 0,
+                            products: new Set(),
+                            truckEntries: new Set(), // Track unique product-truck combos
+                            ids: [], // Collect all IDs for bulk action
+                            originalId: item._id,
+                            groupedKey: key
+                          };
+                        }
+                        const itemQty = parseFloat(item.quantity) || 0;
+                        acc[key].totalQuantity += itemQty;
+
+                        // Sum truck load only once per product-truck entry
+                        const truckEntryKey = `${item.productName}-${item.truckNo}`;
+                        if (!acc[key].truckEntries.has(truckEntryKey)) {
+                          acc[key].totalLcTruck += (parseFloat(item.truckNo) || 0);
+                          acc[key].truckEntries.add(truckEntryKey);
+                        }
+
+                        if (item.productName) acc[key].products.add(item.productName);
+                        acc[key].ids.push(item._id); // Add ID
+                        return acc;
+                      }, {})).map((entry, index) => (
+                        <tr
+                          key={entry.groupedKey}
+                          className={`${selectedItems.has(entry.groupedKey) ? 'bg-blue-50/30' : 'hover:bg-gray-50'} transition-colors duration-200 cursor-pointer select-none`}
+                          onMouseDown={() => startLongPress(entry.groupedKey)}
+                          onMouseUp={endLongPress}
+                          onMouseLeave={endLongPress}
+                          onTouchStart={() => startLongPress(entry.groupedKey)}
+                          onTouchEnd={endLongPress}
+                          onClick={() => {
+                            if (isLongPressTriggered.current) {
+                              isLongPressTriggered.current = false;
+                              return;
+                            }
+                            if (isSelectionMode) toggleSelection(entry.groupedKey);
+                          }}
+                        >
+                          {isSelectionMode && (
+                            <td className="px-6 py-4">
+                              <input
+                                type="checkbox"
+                                checked={selectedItems.has(entry.groupedKey)}
+                                onChange={(e) => { e.stopPropagation(); toggleSelection(entry.groupedKey); }}
+                                className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                              />
+                            </td>
+                          )}
+                          <td className="px-6 py-4 text-sm font-medium text-gray-900">{formatDate(entry.date)}</td>
+                          <td className="px-6 py-4 text-sm text-gray-600">{entry.lcNo || '-'}</td>
+                          <td className="px-6 py-4 text-sm text-gray-600">{entry.importer || '-'}</td>
+                          <td className="px-6 py-4 text-sm text-gray-600">{entry.port || '-'}</td>
+                          <td className="px-6 py-4 text-sm text-gray-600">{entry.indianCnF || '-'}</td>
+                          <td className="px-6 py-4 text-sm text-gray-600 font-medium">
+                            {!isNaN(parseFloat(entry.indCnFCost)) && entry.indCnFCost !== '' ? `৳${parseFloat(entry.indCnFCost).toLocaleString()}` : '-'}
+                          </td>
+                          <td className="px-6 py-4 text-sm text-gray-600">{entry.bdCnF || '-'}</td>
+                          <td className="px-6 py-4 text-sm text-gray-600 font-medium">
+                            {!isNaN(parseFloat(entry.bdCnFCost)) && entry.bdCnFCost !== '' ? `৳${parseFloat(entry.bdCnFCost).toLocaleString()}` : '-'}
+                          </td>
+                          <td className="px-6 py-4 text-sm text-gray-600">{entry.billOfEntry || '-'}</td>
+                          <td className="px-6 py-4 text-sm text-gray-600 max-w-xs truncate" title={Array.from(entry.products).join(', ')}>
+                            {Array.from(entry.products).join(', ') || '-'}
+                          </td>
+                          <td className="px-6 py-4 text-sm text-gray-600">
+                            {Math.round(entry.totalLcTruck) || '0'}
+                          </td>
+                          <td className="px-6 py-4 text-sm font-medium text-gray-900">{Math.round(entry.totalQuantity)}</td>
+                          <td className="px-6 py-4 text-sm text-gray-600">
+                            <div className="flex items-center space-x-3">
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  // Edit logic here (placeholder or future implementation)
+                                  alert('Edit function for grouped LC entries is coming soon. Please edit individual items in Stock History.');
+                                }}
+                                className="text-gray-400 hover:text-blue-600 transition-colors"
+                                title="Edit"
+                              >
+                                <EditIcon className="w-5 h-5" />
+                              </button>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  // Delete logic: Select all IDs and trigger bulk delete
+                                  const ids = entry.ids;
+                                  setSelectedItems(new Set(ids));
+                                  handleDelete('stock', null, true);
+                                }}
+                                className="text-gray-400 hover:text-red-600 transition-colors"
+                                title="Delete"
+                              >
+                                <TrashIcon className="w-5 h-5" />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                      {Object.keys(stockRecords).length === 0 && (
+                        <tr>
+                          <td colSpan="12" className="px-6 py-12 text-center text-gray-500">
+                            <div className="flex flex-col items-center justify-center">
+                              <DollarSignIcon className="w-12 h-12 text-gray-300 mb-3" />
+                              <p className="text-lg font-medium text-gray-600">No LC Entries Found</p>
+                              <p className="text-sm text-gray-400 mt-1">Add a new entry to see it here</p>
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
           </div>
         );
       case 'ip-section':
@@ -2268,33 +3024,46 @@ function App() {
           const itemBrand = (item.brand || item.productName || '').trim();
           const itemQty = parseFloat(item.quantity) || 0;
           const itemPacket = parseFloat(item.packet) || 0;
+          const itemIHPacket = parseFloat(item.inHousePacket || item.packet) || 0;
+          const itemIHQty = parseFloat(item.inHouseQuantity || item.quantity) || 0;
+          const itemSize = parseFloat(item.packetSize) || 0;
 
           if (!acc[name]) {
             acc[name] = {
               ...item,
               productName: (item.productName || '').trim(),
-              quantity: itemQty,
+              quantity: itemIHQty,
+              packet: itemIHPacket,
               originalId: item._id,
               entries: [
                 {
                   brand: itemBrand,
                   packet: itemPacket,
+                  packetSize: itemSize,
                   quantity: itemQty,
+                  inHousePacket: itemIHPacket,
+                  inHouseQuantity: itemIHQty,
                   unit: item.unit
                 }
               ]
             };
           } else {
-            acc[name].quantity += itemQty;
+            acc[name].quantity += itemIHQty;
+            acc[name].packet += itemIHPacket;
             const existingEntry = acc[name].entries.find(e => e.brand === itemBrand);
             if (existingEntry) {
               existingEntry.packet += itemPacket;
               existingEntry.quantity += itemQty;
+              existingEntry.inHousePacket += itemIHPacket;
+              existingEntry.inHouseQuantity += itemIHQty;
             } else {
               acc[name].entries.push({
                 brand: itemBrand,
                 packet: itemPacket,
+                packetSize: itemSize,
                 quantity: itemQty,
+                inHousePacket: itemIHPacket,
+                inHouseQuantity: itemIHQty,
                 unit: item.unit
               });
             }
@@ -2435,7 +3204,7 @@ function App() {
                     </div>
                   </div>
 
-                  <div className="col-span-1 md:col-span-2 grid grid-cols-1 md:grid-cols-4 gap-6">
+                  <div className="col-span-1 md:col-span-2 grid grid-cols-1 md:grid-cols-5 gap-6">
                     <div className="space-y-2">
                       <label className="text-sm font-medium text-gray-700">IND CNF</label>
                       <input
@@ -2462,6 +3231,41 @@ function App() {
                       <input
                         type="number" name="bdCnFCost" value={stockFormData.bdCnFCost} onChange={handleStockInputChange}
                         placeholder="0.00" autoComplete="off" className="w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium text-gray-700">Bill Of Entry</label>
+                      <input
+                        type="text" name="billOfEntry" value={stockFormData.billOfEntry} onChange={handleStockInputChange}
+                        placeholder="Bill Of Entry" autoComplete="off" className="w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Total LC Truck/Quantity Row */}
+                  <div className="col-span-1 md:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-6 pb-4">
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium text-gray-700">Total LC Truck</label>
+                      <input
+                        type="text"
+                        name="totalLcTruck"
+                        value={stockFormData.totalLcTruck || '0'}
+                        readOnly
+                        placeholder="Total LC Truck"
+                        autoComplete="off"
+                        className="w-full px-4 py-2 bg-gray-50/80 border border-gray-200/60 rounded-lg text-gray-600 font-semibold outline-none cursor-default backdrop-blur-sm"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium text-gray-700">Total LC Quantity</label>
+                      <input
+                        type="text"
+                        name="totalLcQuantity"
+                        value={stockFormData.totalLcQuantity || '0.00'}
+                        readOnly
+                        placeholder="Total LC Quantity"
+                        autoComplete="off"
+                        className="w-full px-4 py-2 bg-gray-50/80 border border-gray-200/60 rounded-lg text-gray-600 font-semibold outline-none cursor-default backdrop-blur-sm"
                       />
                     </div>
                   </div>
@@ -2539,7 +3343,7 @@ function App() {
                                   <div className="relative h-[42px]">
                                     <input
                                       type="text"
-                                      value={product.brandEntries.reduce((sum, entry) => sum + (parseFloat(entry.quantity) || 0), 0).toFixed(2)}
+                                      value={product.brandEntries.reduce((sum, entry) => sum + (parseFloat(entry.inHouseQuantity) || 0), 0).toFixed(2)}
                                       readOnly
                                       className="w-full h-full px-4 py-2 bg-gray-50/80 border border-gray-200/60 rounded-lg text-gray-600 font-semibold outline-none cursor-default"
                                     />
@@ -2643,7 +3447,7 @@ function App() {
                                   <div className="relative h-[42px]">
                                     <input
                                       type="text"
-                                      value={product.brandEntries.reduce((sum, entry) => sum + (parseFloat(entry.quantity) || 0), 0).toFixed(2)}
+                                      value={product.brandEntries.reduce((sum, entry) => sum + (parseFloat(entry.inHouseQuantity) || 0), 0).toFixed(2)}
                                       readOnly
                                       className="w-full h-full px-1 py-2 bg-gray-50/80 border border-gray-200/60 rounded-lg text-gray-600 font-bold outline-none cursor-default text-xs text-center"
                                     />
@@ -2671,32 +3475,37 @@ function App() {
                                 <div className="flex items-center justify-between mb-1 px-1">
                                   <label className="text-xs font-bold text-gray-500 uppercase tracking-wider">Brand Breakdown</label>
                                 </div>
-                                <div className="hidden md:grid grid-cols-5 gap-2 px-1 mb-1 pr-12">
-                                  <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Brand</div>
-                                  <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Packet</div>
-                                  <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Size</div>
-                                  <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Qty</div>
-                                  <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Unit</div>
+                                <div className="hidden md:grid grid-cols-6 gap-2 px-1 mb-1 pr-12">
+                                  <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">BRAND</div>
+                                  <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">PURCHASED PRICE</div>
+                                  <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">PACKET</div>
+                                  <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">SIZE</div>
+                                  <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">QTY</div>
+                                  <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">UNIT</div>
                                 </div>
                                 <div className="space-y-4">
                                   {product.brandEntries.map((entry, bIndex) => (
                                     <div key={bIndex} className="p-3 bg-white/40 border border-gray-200/50 rounded-lg space-y-3 group/brand">
                                       <div className="flex items-center gap-2">
-                                        <div className="flex-1 grid grid-cols-2 md:grid-cols-5 gap-2">
+                                        <div className="flex-1 grid grid-cols-2 md:grid-cols-6 gap-2">
                                           <input
                                             type="text" value={entry.brand} placeholder="Brand" onChange={(e) => handleBrandEntryChange(pIndex, bIndex, 'brand', e.target.value)}
                                             className="w-full h-9 px-2 text-sm bg-white border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-all"
                                           />
                                           <input
-                                            type="text" value={entry.packet} placeholder="Packet" onChange={(e) => handleBrandEntryChange(pIndex, bIndex, 'packet', e.target.value)}
-                                            className="w-full h-9 px-2 text-sm bg-white border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-all"
+                                            type="number" value={entry.purchasedPrice} placeholder="Price" onChange={(e) => handleBrandEntryChange(pIndex, bIndex, 'purchasedPrice', e.target.value)}
+                                            className="w-full h-9 px-2 text-sm bg-white border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-all [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                                           />
                                           <input
-                                            type="text" value={entry.packetSize} placeholder="Size" onChange={(e) => handleBrandEntryChange(pIndex, bIndex, 'packetSize', e.target.value)}
-                                            className="w-full h-9 px-2 text-sm bg-white border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-all"
+                                            type="number" value={entry.packet} placeholder="Packet" onChange={(e) => handleBrandEntryChange(pIndex, bIndex, 'packet', e.target.value)}
+                                            className="w-full h-9 px-2 text-sm bg-white border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-all [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                                           />
                                           <input
-                                            type="number" value={entry.quantity} readOnly className="w-full h-9 px-2 text-sm bg-gray-50 border border-gray-200 rounded-lg text-gray-500 font-medium"
+                                            type="number" value={entry.packetSize} placeholder="Size" onChange={(e) => handleBrandEntryChange(pIndex, bIndex, 'packetSize', e.target.value)}
+                                            className="w-full h-9 px-2 text-sm bg-white border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-all [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                                          />
+                                          <input
+                                            type="number" value={entry.quantity} readOnly className="w-full h-9 px-2 text-sm bg-gray-50 border border-gray-200 rounded-lg text-gray-500 font-medium [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                                           />
                                           <select
                                             value={entry.unit} onChange={(e) => handleBrandEntryChange(pIndex, bIndex, 'unit', e.target.value)}
@@ -2726,33 +3535,33 @@ function App() {
                                       {/* Combined line for Sweeped and InHouse fields */}
                                       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 pl-0 md:pl-0">
                                         <div className="flex items-center gap-2">
-                                          <label className="text-[10px] font-bold text-gray-400 uppercase min-w-[60px]">Swp. Pkt</label>
+                                          <label className="text-[10px] font-bold text-gray-400 uppercase min-w-[60px]">SWP. PKT</label>
                                           <input
-                                            type="text" value={entry.sweepedPacket} placeholder="Packet" onChange={(e) => handleBrandEntryChange(pIndex, bIndex, 'sweepedPacket', e.target.value)}
-                                            className="flex-1 h-8 px-2 text-xs bg-white/70 border border-gray-200 rounded-md focus:ring-2 focus:ring-blue-500 outline-none transition-all"
+                                            type="number" value={entry.sweepedPacket} placeholder="Packet" onChange={(e) => handleBrandEntryChange(pIndex, bIndex, 'sweepedPacket', e.target.value)}
+                                            className="flex-1 h-8 px-2 text-xs bg-white/70 border border-gray-200 rounded-md focus:ring-2 focus:ring-blue-500 outline-none transition-all [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                                           />
                                         </div>
                                         <div className="flex items-center gap-2">
-                                          <label className="text-[10px] font-bold text-gray-400 uppercase min-w-[60px]">SwpQty</label>
+                                          <label className="text-[10px] font-bold text-gray-400 uppercase min-w-[60px]">SWPQTY</label>
                                           <input
-                                            type="text" value={entry.sweepedQuantity}
+                                            type="number" value={entry.sweepedQuantity}
                                             onChange={(e) => handleBrandEntryChange(pIndex, bIndex, 'sweepedQuantity', e.target.value)}
                                             placeholder="Qty"
-                                            className="flex-1 h-8 px-2 text-xs bg-white border border-gray-200 rounded-md focus:ring-2 focus:ring-blue-500 outline-none transition-all"
+                                            className="flex-1 h-8 px-2 text-xs bg-white border border-gray-200 rounded-md focus:ring-2 focus:ring-blue-500 outline-none transition-all [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                                           />
                                         </div>
                                         <div className="flex items-center gap-2">
-                                          <label className="text-[10px] font-bold text-gray-400 uppercase min-w-[60px]">InHouse Pkt</label>
+                                          <label className="text-[10px] font-bold text-gray-400 uppercase min-w-[60px]">INHOUSE PKT</label>
                                           <input
-                                            type="text" value={entry.inHousePacket} placeholder="Packet" readOnly
-                                            className="flex-1 h-8 px-2 text-xs bg-gray-50/70 border border-gray-200 rounded-md text-gray-500 outline-none cursor-default"
+                                            type="number" value={entry.inHousePacket} placeholder="Packet" readOnly
+                                            className="flex-1 h-8 px-2 text-xs bg-gray-50/70 border border-gray-200 rounded-md text-gray-500 outline-none cursor-default [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                                           />
                                         </div>
                                         <div className="flex items-center gap-2">
-                                          <label className="text-[10px] font-bold text-gray-400 uppercase min-w-[60px]">InHouse Qty</label>
+                                          <label className="text-[10px] font-bold text-gray-400 uppercase min-w-[60px]">INHOUSE QTY</label>
                                           <input
-                                            type="text" value={entry.inHouseQuantity} placeholder="Qty" readOnly
-                                            className="flex-1 h-8 px-2 text-xs bg-gray-50/70 border border-gray-200 rounded-md text-gray-500 outline-none cursor-default"
+                                            type="number" value={entry.inHouseQuantity} placeholder="Qty" readOnly
+                                            className="flex-1 h-8 px-2 text-xs bg-gray-50/70 border border-gray-200 rounded-md text-gray-500 outline-none cursor-default [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                                           />
                                         </div>
                                       </div>
@@ -2777,8 +3586,7 @@ function App() {
                           className="w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm"
                         >
                           <option>In Stock</option>
-                          <option>Out of Stock</option>
-                          <option>Reserved</option>
+                          <option>Sale From Panama</option>
                         </select>
                       </div>
                     </div>
@@ -2867,8 +3675,8 @@ function App() {
                           )}
                           <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Product Name</th>
                           <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Brand</th>
-                          <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Packet</th>
-                          <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Quantity</th>
+                          <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Inhouse Packet</th>
+                          <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Inhouse Quantity</th>
                           <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider text-center">Status</th>
                           <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider text-center">Actions</th>
                         </tr>
@@ -2930,21 +3738,34 @@ function App() {
                               )}
                             </td>
                             <td className="px-6 py-4 text-sm text-gray-600 leading-relaxed align-top">
-                              {item.entries.map((ent, i) => (
-                                <div key={i}>{ent.packet || '-'}</div>
-                              ))}
+                              {item.entries.map((ent, i) => {
+                                const pkt = parseFloat(ent.inHousePacket) || 0;
+                                const qty = parseFloat(ent.inHouseQuantity) || 0;
+                                const size = parseFloat(ent.packetSize) || 0;
+                                const whole = Math.floor(pkt);
+                                const rem = Math.round(qty - (whole * size));
+                                return (
+                                  <div key={i}>
+                                    {whole}{rem > 0 ? ` - ${rem} kg` : ''}
+                                  </div>
+                                );
+                              })}
                               {item.entries.length > 1 && (
                                 <div className="flex items-center justify-between gap-2 mt-1 pt-1 border-t border-gray-100">
                                   <div className="text-gray-900 font-bold">
-                                    {item.entries.reduce((sum, ent) => sum + (parseFloat(ent.packet) || 0), 0)}
+                                    {(() => {
+                                      const totalWhole = item.entries.reduce((sum, ent) => sum + Math.floor(parseFloat(ent.inHousePacket) || 0), 0);
+                                      const totalRem = Math.round(item.entries.reduce((sum, ent) => sum + (parseFloat(ent.inHouseQuantity) || 0) - (Math.floor(parseFloat(ent.inHousePacket) || 0) * (parseFloat(ent.packetSize) || 0)), 0));
+                                      return `${totalWhole}${totalRem > 0 ? ` - ${totalRem} kg` : ''}`;
+                                    })()}
                                   </div>
-                                  <div className="text-[11px] text-gray-500 font-medium italic whitespace-nowrap">Total Qty</div>
+                                  <div className="text-[11px] text-gray-500 font-medium italic whitespace-nowrap">Total QTY</div>
                                 </div>
                               )}
                             </td>
                             <td className="px-6 py-4 text-sm font-medium text-gray-900 leading-relaxed align-top">
                               {item.entries.map((ent, i) => (
-                                <div key={i}>{ent.quantity} {ent.unit}</div>
+                                <div key={i}>{Math.round(parseFloat(ent.inHouseQuantity) || 0) || '-'} {ent.unit}</div>
                               ))}
                               {item.entries.length > 1 && (
                                 <div className="text-gray-900 mt-1 font-bold pt-1 border-t border-gray-100">
@@ -3023,6 +3844,10 @@ function App() {
           <button onClick={() => { setCurrentView('ip-section'); setSidebarOpen(false); }} className={`w-full flex items-center px-4 py-3 rounded-lg transition-all ${currentView === 'ip-section' ? 'bg-blue-50 text-blue-600 shadow-sm' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'}`}>
             <BoxIcon className="w-5 h-5 mr-3" />
             <span className="font-medium">IP</span>
+          </button>
+          <button onClick={() => { setCurrentView('lc-entry-section'); setSidebarOpen(false); }} className={`w-full flex items-center px-4 py-3 rounded-lg transition-all ${currentView === 'lc-entry-section' ? 'bg-blue-50 text-blue-600 shadow-sm' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'}`}>
+            <DollarSignIcon className="w-5 h-5 mr-3" />
+            <span className="font-medium">LC Entry</span>
           </button>
           <button onClick={() => { setCurrentView('stock-section'); setSidebarOpen(false); }} className={`w-full flex items-center px-4 py-3 rounded-lg transition-all ${currentView === 'stock-section' ? 'bg-blue-50 text-blue-600 shadow-sm' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'}`}>
             <ShoppingCartIcon className="w-5 h-5 mr-3" />
@@ -3104,190 +3929,411 @@ function App() {
       {viewRecord && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-gray-900/60 backdrop-blur-sm" onClick={() => setViewRecord(null)}></div>
-          <div className="relative bg-white/95 backdrop-blur-2xl border border-white/50 rounded-3xl shadow-2xl overflow-hidden max-w-[95vw] w-full animate-in zoom-in duration-300">
+          <div className="relative bg-white/95 backdrop-blur-2xl border border-white/50 rounded-3xl shadow-2xl max-w-[95vw] w-full animate-in zoom-in duration-300 flex flex-col max-h-[90vh]">
             {/* Modal Header */}
-            <div className="px-8 py-6 border-b border-gray-100 flex items-center justify-between bg-white">
-              <div>
+            <div className="px-8 py-6 border-b border-gray-100 flex items-center justify-between bg-white sticky top-0 z-10">
+              <div className="w-1/4">
                 <h3 className="text-2xl font-bold text-gray-900">Stock History - {viewRecord.data.productName}</h3>
               </div>
-              <button onClick={() => setViewRecord(null)} className="p-2 hover:bg-gray-100 rounded-full transition-colors">
-                <XIcon className="w-6 h-6 text-gray-400" />
-              </button>
+
+              {/* Center Aligned Search Bar */}
+              <div className="flex-1 max-w-md mx-auto relative group">
+                <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
+                  <SearchIcon className="h-4 w-4 text-gray-400 group-focus-within:text-blue-500 transition-colors" />
+                </div>
+                <input
+                  type="text"
+                  placeholder="Search by LC, Port, Importer, Truck or Brand..."
+                  value={historySearchQuery}
+                  onChange={(e) => setHistorySearchQuery(e.target.value)}
+                  className="block w-full pl-10 pr-4 py-2 bg-gray-50/50 border border-gray-200 rounded-xl text-[13px] placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 focus:bg-white transition-all outline-none"
+                />
+              </div>
+
+              <div className="w-1/4 flex justify-end items-center gap-2">
+                <div className="relative">
+                  <button
+                    onClick={() => setShowHistoryFilterPanel(!showHistoryFilterPanel)}
+                    className={`flex items-center gap-2 px-4 py-2 rounded-xl transition-all border ${showHistoryFilterPanel || Object.values(historyFilters).some(v => v !== '')
+                      ? 'bg-blue-600 border-blue-600 text-white shadow-lg shadow-blue-500/30'
+                      : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'
+                      }`}
+                  >
+                    <FunnelIcon className={`w-4 h-4 ${showHistoryFilterPanel || Object.values(historyFilters).some(v => v !== '') ? 'text-white' : 'text-gray-400'}`} />
+                    <span className="text-sm font-medium">Filter</span>
+                  </button>
+
+                  {/* Floating Filter Panel */}
+                  {showHistoryFilterPanel && (
+                    <div className="absolute right-0 mt-3 w-80 bg-white/95 backdrop-blur-2xl border border-gray-100 rounded-2xl shadow-2xl z-[60] p-5 animate-in fade-in zoom-in duration-200">
+                      <div className="flex items-center justify-between mb-4 pb-2 border-b border-gray-50">
+                        <h4 className="font-bold text-gray-900">Advanced Filters</h4>
+                        <button
+                          onClick={() => {
+                            setHistoryFilters({ startDate: '', endDate: '', port: '', brand: '' });
+                            setShowHistoryFilterPanel(false);
+                          }}
+                          className="text-[11px] font-bold text-blue-600 hover:text-blue-700 uppercase tracking-wider"
+                        >
+                          Reset All
+                        </button>
+                      </div>
+
+                      <div className="space-y-4">
+                        {/* Date Range */}
+                        <div className="grid grid-cols-2 gap-3">
+                          <div className="space-y-1.5">
+                            <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">From Date</label>
+                            <input
+                              type="date"
+                              value={historyFilters.startDate}
+                              onChange={(e) => setHistoryFilters({ ...historyFilters, startDate: e.target.value })}
+                              className="w-full px-3 py-1.5 bg-gray-50 border border-gray-100 rounded-lg text-xs focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
+                            />
+                          </div>
+                          <div className="space-y-1.5">
+                            <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">To Date</label>
+                            <input
+                              type="date"
+                              value={historyFilters.endDate}
+                              onChange={(e) => setHistoryFilters({ ...historyFilters, endDate: e.target.value })}
+                              className="w-full px-3 py-1.5 bg-gray-50 border border-gray-100 rounded-lg text-xs focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
+                            />
+                          </div>
+                        </div>
+
+                        {/* Port Selection */}
+                        <div className="space-y-1.5">
+                          <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Port</label>
+                          <select
+                            value={historyFilters.port}
+                            onChange={(e) => setHistoryFilters({ ...historyFilters, port: e.target.value })}
+                            className="w-full px-3 py-2 bg-gray-50 border border-gray-100 rounded-lg text-xs focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
+                          >
+                            <option value="">All Ports</option>
+                            {[...new Set(stockRecords
+                              .filter(item => (item.productName || '').trim().toLowerCase() === (viewRecord.data.productName || '').trim().toLowerCase())
+                              .map(item => item.port)
+                              .filter(Boolean)
+                            )].sort().map(port => (
+                              <option key={port} value={port}>{port}</option>
+                            ))}
+                          </select>
+                        </div>
+
+                        {/* Brand Selection */}
+                        <div className="space-y-1.5">
+                          <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Brand</label>
+                          <select
+                            value={historyFilters.brand}
+                            onChange={(e) => setHistoryFilters({ ...historyFilters, brand: e.target.value })}
+                            className="w-full px-3 py-2 bg-gray-50 border border-gray-100 rounded-lg text-xs focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
+                          >
+                            <option value="">All Brands</option>
+                            {[...new Set(stockRecords
+                              .filter(item => (item.productName || '').trim().toLowerCase() === (viewRecord.data.productName || '').trim().toLowerCase())
+                              .flatMap(item => (item.brand ? [item.brand] : (item.entries || []).map(e => e.brand)))
+                              .filter(Boolean)
+                            )].sort().map(brand => (
+                              <option key={brand} value={brand}>{brand}</option>
+                            ))}
+                          </select>
+                        </div>
+
+                        <button
+                          onClick={() => setShowHistoryFilterPanel(false)}
+                          className="w-full py-2 bg-gray-900 text-white rounded-xl text-sm font-medium hover:bg-gray-800 transition-all mt-2"
+                        >
+                          Apply Filters
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                <button onClick={() => { setViewRecord(null); setHistorySearchQuery(''); setHistoryFilters({ startDate: '', endDate: '', port: '', brand: '' }); setShowHistoryFilterPanel(false); }} className="p-2 hover:bg-gray-100 rounded-full transition-colors">
+                  <XIcon className="w-6 h-6 text-gray-400" />
+                </button>
+              </div>
             </div>
 
             {/* Modal Content */}
-            <div className="p-8">
+            <div className="p-8 flex-1 overflow-y-auto">
               {(() => {
-                const filteredRaw = stockRecords.filter(item =>
-                  (item.productName || '').trim().toLowerCase() === (viewRecord.data.productName || '').trim().toLowerCase()
-                );
+                const searchLower = historySearchQuery.toLowerCase().trim();
+                const filteredRaw = stockRecords.filter(item => {
+                  const matchesProduct = (item.productName || '').trim().toLowerCase() === (viewRecord.data.productName || '').trim().toLowerCase();
+                  if (!matchesProduct) return false;
+
+                  // Apply Advanced Filters
+                  if (historyFilters.startDate && item.date < historyFilters.startDate) return false;
+                  if (historyFilters.endDate && item.date > historyFilters.endDate) return false;
+                  if (historyFilters.port && item.port !== historyFilters.port) return false;
+                  if (historyFilters.brand) {
+                    const itemBrand = (item.brand || item.productName || '').toLowerCase();
+                    const filterBrand = historyFilters.brand.toLowerCase();
+                    if (itemBrand !== filterBrand) return false;
+                  }
+
+                  // Apply Search Query
+                  if (!searchLower) return true;
+
+                  const matchesLC = (item.lcNo || '').toLowerCase().includes(searchLower);
+                  const matchesPort = (item.port || '').toLowerCase().includes(searchLower);
+                  const matchesImporter = (item.importer || '').toLowerCase().includes(searchLower);
+                  const matchesTruck = (item.truckNo || '').toLowerCase().includes(searchLower);
+                  const brandList = item.brand ? [item.brand] : (item.entries || []).map(e => e.brand);
+                  const matchesBrand = brandList.some(b => (b || '').toLowerCase().includes(searchLower));
+
+                  return matchesLC || matchesPort || matchesImporter || matchesTruck || matchesBrand;
+                });
 
                 // Group by date, lcNo, and truckNo
                 const groupedHistoryMap = filteredRaw.reduce((acc, item) => {
                   const key = `${item.date}_${item.lcNo}_${item.truckNo}`;
+                  const quantity = parseFloat(item.quantity) || 0;
+                  const packet = parseFloat(item.packet) || 0;
+                  const inHousePacket = parseFloat(item.inHousePacket || item.packet) || 0;
+                  const inHouseQuantity = parseFloat(item.inHouseQuantity || item.quantity) || 0;
+                  const sweepedQuantity = parseFloat(item.sweepedQuantity) || 0;
+
                   if (!acc[key]) {
                     acc[key] = {
                       ...item,
                       allIds: [item._id],
-                      totalQuantity: parseFloat(item.quantity) || 0,
+                      totalQuantity: quantity,
+                      totalPacket: packet,
+                      totalInHousePacket: inHousePacket,
+                      totalInHouseQuantity: inHouseQuantity,
+                      totalShortage: sweepedQuantity,
                       isGrouped: false,
                       entries: [
                         {
                           brand: item.brand || item.productName,
+                          purchasedPrice: item.purchasedPrice,
                           packet: item.packet,
+                          packetSize: item.packetSize,
                           quantity: item.quantity,
-                          unit: item.unit
+                          inHousePacket: item.inHousePacket || item.packet,
+                          inHouseQuantity: item.inHouseQuantity || item.quantity,
+                          sweepedPacket: item.sweepedPacket,
+                          sweepedQuantity: item.sweepedQuantity,
+                          unit: item.unit,
+                          totalLcTruck: item.totalLcTruck,
+                          totalLcQuantity: item.totalLcQuantity
                         }
                       ]
                     };
                   } else {
                     acc[key].allIds.push(item._id);
-                    acc[key].totalQuantity += parseFloat(item.quantity) || 0;
+                    acc[key].totalQuantity += quantity;
+                    acc[key].totalPacket += packet;
+                    acc[key].totalInHousePacket += inHousePacket;
+                    acc[key].totalInHouseQuantity += inHouseQuantity;
+                    acc[key].totalShortage += sweepedQuantity;
                     acc[key].isGrouped = true;
                     acc[key].entries.push({
                       brand: item.brand || item.productName,
+                      purchasedPrice: item.purchasedPrice,
                       packet: item.packet,
+                      packetSize: item.packetSize,
                       quantity: item.quantity,
-                      unit: item.unit
+                      inHousePacket: item.inHousePacket || item.packet,
+                      inHouseQuantity: item.inHouseQuantity || item.quantity,
+                      sweepedPacket: item.sweepedPacket,
+                      sweepedQuantity: item.sweepedQuantity,
+                      unit: item.unit,
+                      totalLcTruck: item.totalLcTruck,
+                      totalLcQuantity: item.totalLcQuantity
                     });
                   }
                   return acc;
                 }, {});
 
                 const history = sortData(Object.values(groupedHistoryMap), 'history');
-                const totalQuantity = history.reduce((sum, item) => sum + item.totalQuantity, 0);
-                const totalPackets = history.reduce((sum, item) => {
-                  return sum + item.entries.reduce((pSum, ent) => pSum + (parseFloat(ent.packet) || 0), 0);
-                }, 0);
                 const unit = history[0]?.unit || '';
 
+                // Calculate Totals for Summary Cards
+                const totalPackets = history.reduce((sum, item) => sum + item.entries.reduce((pSum, ent) => pSum + (parseFloat(ent.packet) || 0), 0), 0);
+                const totalQuantity = history.reduce((sum, item) => sum + item.entries.reduce((qSum, ent) => qSum + (parseFloat(ent.quantity) || 0), 0), 0);
+                const totalInHousePkt = history.reduce((sum, item) => sum + item.entries.reduce((pSum, ent) => pSum + (parseFloat(ent.inHousePacket) || 0), 0), 0);
+                const totalInHouseQty = history.reduce((sum, item) => sum + item.entries.reduce((pSum, ent) => pSum + (parseFloat(ent.inHouseQuantity) || 0), 0), 0);
+                const totalShortage = history.reduce((sum, item) => sum + item.entries.reduce((pSum, ent) => pSum + (parseFloat(ent.sweepedQuantity) || 0), 0), 0);
+
                 return (
-                  <div className="bg-gray-50 rounded-2xl border border-gray-100 overflow-x-auto">
-                    <table className="w-full text-left min-w-[600px]">
-                      <thead>
-                        <tr className="bg-white border-b border-gray-100">
-                          <th onClick={() => requestSort('history', 'date')} className="px-6 py-4 text-xs font-semibold text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-50 transition-colors">
-                            <div className="flex items-center">Date <SortIcon config={sortConfig.history} columnKey="date" /></div>
-                          </th>
-                          <th onClick={() => requestSort('history', 'lcNo')} className="px-6 py-4 text-xs font-semibold text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-50 transition-colors">
-                            <div className="flex items-center">LC No <SortIcon config={sortConfig.history} columnKey="lcNo" /></div>
-                          </th>
-                          <th onClick={() => requestSort('history', 'port')} className="px-6 py-4 text-xs font-semibold text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-50 transition-colors">
-                            <div className="flex items-center">Port <SortIcon config={sortConfig.history} columnKey="port" /></div>
-                          </th>
-                          <th onClick={() => requestSort('history', 'importer')} className="px-6 py-4 text-xs font-semibold text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-50 transition-colors">
-                            <div className="flex items-center">Importer <SortIcon config={sortConfig.history} columnKey="importer" /></div>
-                          </th>
-                          <th onClick={() => requestSort('history', 'indianCnF')} className="px-6 py-4 text-xs font-semibold text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-50 transition-colors whitespace-nowrap">
-                            <div className="flex items-center">IND CNF <SortIcon config={sortConfig.history} columnKey="indianCnF" /></div>
-                          </th>
-                          <th onClick={() => requestSort('history', 'indCnFCost')} className="px-6 py-4 text-xs font-semibold text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-50 transition-colors whitespace-nowrap">
-                            <div className="flex items-center">IND CNF Cost <SortIcon config={sortConfig.history} columnKey="indCnFCost" /></div>
-                          </th>
-                          <th onClick={() => requestSort('history', 'bdCnF')} className="px-6 py-4 text-xs font-semibold text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-50 transition-colors whitespace-nowrap">
-                            <div className="flex items-center">BD (CNF) <SortIcon config={sortConfig.history} columnKey="bdCnF" /></div>
-                          </th>
-                          <th onClick={() => requestSort('history', 'bdCnFCost')} className="px-6 py-4 text-xs font-semibold text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-50 transition-colors whitespace-nowrap">
-                            <div className="flex items-center">BD CNF Cost <SortIcon config={sortConfig.history} columnKey="bdCnFCost" /></div>
-                          </th>
-                          <th onClick={() => requestSort('history', 'truckNo')} className="px-6 py-4 text-xs font-semibold text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-50 transition-colors">
-                            <div className="flex items-center">Truck No. <SortIcon config={sortConfig.history} columnKey="truckNo" /></div>
-                          </th>
-                          <th onClick={() => requestSort('history', 'brand')} className="px-6 py-4 text-xs font-semibold text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-50 transition-colors">
-                            <div className="flex items-center">Brand <SortIcon config={sortConfig.history} columnKey="brand" /></div>
-                          </th>
-                          <th onClick={() => requestSort('history', 'packet')} className="px-6 py-4 text-xs font-semibold text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-50 transition-colors">
-                            <div className="flex items-center">Packet <SortIcon config={sortConfig.history} columnKey="packet" /></div>
-                          </th>
-                          <th onClick={() => requestSort('history', 'quantity')} className="px-6 py-4 text-xs font-semibold text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-50 transition-colors">
-                            <div className="flex items-center">Quantity <SortIcon config={sortConfig.history} columnKey="quantity" /></div>
-                          </th>
-                          <th className="px-6 py-4 text-xs font-semibold text-gray-400 uppercase tracking-wider text-center">Actions</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-gray-100 bg-white/50">
-                        {history.map((historyItem, idx) => (
-                          <tr key={idx} className={`${historyItem._id === viewRecord.data._id ? 'bg-blue-50/50' : ''} whitespace-nowrap`}>
-                            <td className="px-6 py-4 text-sm text-gray-600">
-                              {formatDate(historyItem.date)}
-                            </td>
-                            <td className="px-6 py-4 text-sm font-bold text-gray-900">{historyItem.lcNo || '-'}</td>
-                            <td className="px-6 py-4 text-sm text-gray-600">{historyItem.port || '-'}</td>
-                            <td className="px-6 py-4 text-sm text-gray-600">{historyItem.importer || '-'}</td>
-                            <td className="px-6 py-4 text-sm text-gray-600">{historyItem.indianCnF || '-'}</td>
-                            <td className="px-6 py-4 text-sm text-gray-600">{historyItem.indCnFCost || '-'}</td>
-                            <td className="px-6 py-4 text-sm text-gray-600">{historyItem.bdCnF || '-'}</td>
-                            <td className="px-6 py-4 text-sm text-gray-600">{historyItem.bdCnFCost || '-'}</td>
-                            <td className="px-6 py-4 text-sm text-gray-600">
-                              {historyItem.truckNo || '-'}
-                            </td>
-                            <td className="px-6 py-4 text-sm text-gray-600 leading-relaxed">
-                              {historyItem.entries.map((ent, i) => (
-                                <div key={i}>{ent.brand || '-'}</div>
-                              ))}
-                              {historyItem.isGrouped && (
-                                <div className="text-[11px] text-gray-500 mt-1 font-medium italic">Total Packet</div>
-                              )}
-                            </td>
-                            <td className="px-6 py-4 text-sm text-gray-600 leading-relaxed">
-                              {historyItem.entries.map((ent, i) => (
-                                <div key={i}>{ent.packet || '-'}</div>
-                              ))}
-                              {historyItem.isGrouped && (
-                                <div className="flex items-center justify-between gap-2 mt-1">
-                                  <div className="text-gray-900 font-bold">
-                                    {historyItem.entries.reduce((sum, ent) => sum + (parseFloat(ent.packet) || 0), 0)}
-                                  </div>
-                                  <div className="text-[11px] text-gray-500 font-medium italic whitespace-nowrap">Total Qty</div>
-                                </div>
-                              )}
-                            </td>
-                            <td className="px-6 py-4 text-sm font-medium text-gray-900 leading-relaxed">
-                              {historyItem.entries.map((ent, i) => (
-                                <div key={i}>{ent.quantity} {ent.unit}</div>
-                              ))}
-                              {historyItem.isGrouped && (
-                                <div className="text-gray-900 mt-1 font-bold">
-                                  {Math.round(historyItem.totalQuantity)} {historyItem.unit}
-                                </div>
-                              )}
-                            </td>
-                            <td className="px-6 py-4 text-sm">
-                              <div className="flex items-center justify-center space-x-2">
-                                <button
-                                  onClick={() => { setViewRecord(null); handleEdit('stock', historyItem); }}
-                                  className="p-1.5 hover:bg-blue-50 rounded-lg transition-colors group"
-                                  title="Edit"
-                                >
-                                  <EditIcon className="w-4 h-4 text-gray-400 group-hover:text-blue-600" />
-                                </button>
-                                <button
-                                  onClick={() => { setViewRecord(null); deleteStockGroup(historyItem.allIds || [historyItem._id]); }}
-                                  className="p-1.5 hover:bg-red-50 rounded-lg transition-colors group"
-                                  title="Delete"
-                                >
-                                  <TrashIcon className="w-4 h-4 text-gray-400 group-hover:text-red-600" />
-                                </button>
-                              </div>
-                            </td>
+                  <div className="space-y-6">
+                    {/* Summary Cards */}
+                    <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+                      <div className="bg-white border border-gray-200 p-4 rounded-xl shadow-sm">
+                        <div className="text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-1">Total Packet</div>
+                        <div className="text-xl font-bold text-gray-900">{totalPackets}</div>
+                      </div>
+                      <div className="bg-emerald-50/50 border border-emerald-100 p-4 rounded-xl shadow-sm">
+                        <div className="text-[11px] font-bold text-emerald-600 uppercase tracking-wider mb-1">Total Quantity</div>
+                        <div className="text-xl font-bold text-emerald-700">{Math.round(totalQuantity)} {unit}</div>
+                      </div>
+                      <div className="bg-amber-50/50 border border-amber-100 p-4 rounded-xl shadow-sm">
+                        <div className="text-[11px] font-bold text-amber-600 uppercase tracking-wider mb-1">InHouse PKT</div>
+                        <div className="text-xl font-bold text-amber-700">{Math.round(totalInHousePkt)}</div>
+                      </div>
+                      <div className="bg-blue-50/50 border border-blue-100 p-4 rounded-xl shadow-sm">
+                        <div className="text-[11px] font-bold text-blue-600 uppercase tracking-wider mb-1">InHouse QTY</div>
+                        <div className="text-xl font-bold text-blue-700">{Math.round(totalInHouseQty)} {unit}</div>
+                      </div>
+                      <div className="bg-rose-50/50 border border-rose-100 p-4 rounded-xl shadow-sm">
+                        <div className="text-[11px] font-bold text-rose-600 uppercase tracking-wider mb-1">Shortage</div>
+                        <div className="text-xl font-bold text-rose-700">{Math.round(totalShortage)} {unit}</div>
+                      </div>
+                    </div>
+
+                    <div className="bg-gray-50 rounded-2xl border border-gray-100 overflow-x-auto">
+                      <table className="w-full text-left min-w-[600px]">
+                        <thead>
+                          <tr className="bg-white border-b border-gray-100">
+                            <th onClick={() => requestSort('history', 'date')} className="px-3 py-3 text-[11px] font-semibold text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-50 transition-colors">
+                              <div className="flex items-center">Date <SortIcon config={sortConfig.history} columnKey="date" /></div>
+                            </th>
+                            <th onClick={() => requestSort('history', 'lcNo')} className="px-3 py-3 text-[11px] font-semibold text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-50 transition-colors">
+                              <div className="flex items-center">LC No <SortIcon config={sortConfig.history} columnKey="lcNo" /></div>
+                            </th>
+                            <th onClick={() => requestSort('history', 'port')} className="px-3 py-3 text-[11px] font-semibold text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-50 transition-colors">
+                              <div className="flex items-center">Port <SortIcon config={sortConfig.history} columnKey="port" /></div>
+                            </th>
+                            <th onClick={() => requestSort('history', 'importer')} className="px-3 py-3 text-[11px] font-semibold text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-50 transition-colors">
+                              <div className="flex items-center">Importer <SortIcon config={sortConfig.history} columnKey="importer" /></div>
+                            </th>
+                            <th onClick={() => requestSort('history', 'truckNo')} className="px-3 py-3 text-[11px] font-semibold text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-50 transition-colors">
+                              <div className="flex items-center">Truck No. <SortIcon config={sortConfig.history} columnKey="truckNo" /></div>
+                            </th>
+                            <th onClick={() => requestSort('history', 'brand')} className="px-3 py-3 text-[11px] font-semibold text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-50 transition-colors">
+                              <div className="flex items-center">Brand <SortIcon config={sortConfig.history} columnKey="brand" /></div>
+                            </th>
+                            <th className="px-3 py-3 text-[11px] font-semibold text-gray-400 uppercase tracking-wider">
+                              Purchase<br />Price
+                            </th>
+                            <th onClick={() => requestSort('history', 'totalPacket')} className="px-3 py-3 text-[11px] font-semibold text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-50 transition-colors">
+                              <div className="flex items-center">Packet <SortIcon config={sortConfig.history} columnKey="totalPacket" /></div>
+                            </th>
+                            <th onClick={() => requestSort('history', 'totalQuantity')} className="px-3 py-3 text-[11px] font-semibold text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-50 transition-colors">
+                              <div className="flex items-center">Quantity <SortIcon config={sortConfig.history} columnKey="totalQuantity" /></div>
+                            </th>
+                            <th onClick={() => requestSort('history', 'totalInHousePacket')} className="px-3 py-3 text-[11px] font-semibold text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-50 transition-colors">
+                              <div className="flex items-center">InHouse Pkt <SortIcon config={sortConfig.history} columnKey="totalInHousePacket" /></div>
+                            </th>
+                            <th onClick={() => requestSort('history', 'totalInHouseQuantity')} className="px-3 py-3 text-[11px] font-semibold text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-50 transition-colors">
+                              <div className="flex items-center">InHouse Qty <SortIcon config={sortConfig.history} columnKey="totalInHouseQuantity" /></div>
+                            </th>
+                            <th onClick={() => requestSort('history', 'totalShortage')} className="px-3 py-3 text-[11px] font-semibold text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-50 transition-colors">
+                              <div className="flex items-center">Shortage <SortIcon config={sortConfig.history} columnKey="totalShortage" /></div>
+                            </th>
+                            <th className="px-3 py-3 text-[11px] font-semibold text-gray-400 uppercase tracking-wider text-center">Actions</th>
                           </tr>
-                        ))}
-                      </tbody>
-                      <tfoot className="bg-gray-100/50 border-t-2 border-gray-200">
-                        <tr>
-                          <td colSpan="10" className="px-6 py-4 text-sm font-bold text-gray-900 text-right">Total:</td>
-                          <td className="px-6 py-4 text-sm font-bold text-blue-600">{totalPackets}</td>
-                          <td className="px-6 py-4 text-sm font-bold text-blue-600">{Math.round(totalQuantity)} {unit}</td>
-                          <td></td>
-                        </tr>
-                      </tfoot>
-                    </table>
+                        </thead>
+                        <tbody className="divide-y divide-gray-100 bg-white/50">
+                          {history.map((historyItem, idx) => (
+                            <tr key={idx} className={`${historyItem._id === (viewRecord?.data?._id) ? 'bg-blue-50/50' : ''} align-top`}>
+                              <td className="px-3 py-3 text-[13px] text-gray-600">
+                                {formatDate(historyItem.date)}
+                              </td>
+                              <td className="px-3 py-3 text-[13px] font-bold text-gray-900">{historyItem.lcNo || '-'}</td>
+                              <td className="px-3 py-3 text-[13px] text-gray-600">{historyItem.port || '-'}</td>
+                              <td className="px-3 py-3 text-[13px] text-gray-600">{historyItem.importer || '-'}</td>
+                              <td className="px-3 py-3 text-[13px] text-gray-600">
+                                {historyItem.truckNo || '-'}
+                              </td>
+                              <td className="px-3 py-3 text-[13px] text-gray-600 leading-relaxed">
+                                {historyItem.entries.map((ent, i) => (
+                                  <div key={i}>{ent.brand || '-'}</div>
+                                ))}
+                              </td>
+                              <td className="px-3 py-3 text-[13px] text-gray-600 leading-relaxed">
+                                {historyItem.entries.map((ent, i) => (
+                                  <div key={i}>{ent.purchasedPrice || '-'}</div>
+                                ))}
+                                {historyItem.isGrouped && (
+                                  <div className="text-[12px] text-gray-900 mt-2 font-bold text-left">Total:</div>
+                                )}
+                              </td>
+                              <td className="px-3 py-3 text-[13px] text-gray-600 leading-relaxed font-bold">
+                                {historyItem.entries.map((ent, i) => (
+                                  <div key={i}>{ent.packet || '-'}</div>
+                                ))}
+                                {historyItem.isGrouped && (
+                                  <div className="flex items-center gap-2 mt-2">
+                                    <div className="text-blue-700 font-bold">
+                                      {historyItem.entries.reduce((sum, ent) => sum + (parseFloat(ent.packet) || 0), 0)}
+                                    </div>
+                                  </div>
+                                )}
+                              </td>
+                              <td className="px-3 py-3 text-[13px] font-medium text-gray-900 leading-relaxed">
+                                {historyItem.entries.map((ent, i) => (
+                                  <div key={i}>{ent.quantity} {ent.unit}</div>
+                                ))}
+                                {historyItem.isGrouped && (
+                                  <div className="text-gray-900 mt-2 font-bold">
+                                    {Math.round(historyItem.entries.reduce((sum, ent) => sum + (parseFloat(ent.quantity) || 0), 0))} {historyItem.unit}
+                                  </div>
+                                )}
+                              </td>
+                              <td className="px-3 py-3 text-[13px] text-gray-600 leading-relaxed">
+                                {historyItem.entries.map((ent, i) => (
+                                  <div key={i}>{ent.inHousePacket || '-'}</div>
+                                ))}
+                                {historyItem.isGrouped && (
+                                  <div className="text-gray-900 mt-2 font-bold">
+                                    {Math.round(historyItem.entries.reduce((sum, ent) => sum + (parseFloat(ent.inHousePacket) || 0), 0))}
+                                  </div>
+                                )}
+                              </td>
+                              <td className="px-3 py-3 text-[13px] text-gray-600 leading-relaxed font-bold">
+                                {historyItem.entries.map((ent, i) => (
+                                  <div key={i}>{ent.inHouseQuantity ? Math.round(parseFloat(ent.inHouseQuantity)) : '-'} {ent.unit}</div>
+                                ))}
+                                {historyItem.isGrouped && (
+                                  <div className="text-gray-900 mt-2 font-bold">
+                                    {Math.round(historyItem.entries.reduce((sum, ent) => sum + (parseFloat(ent.inHouseQuantity) || 0), 0))} {historyItem.unit}
+                                  </div>
+                                )}
+                              </td>
+                              <td className="px-3 py-3 text-[13px] text-red-600 leading-relaxed font-bold">
+                                {historyItem.entries.map((ent, i) => (
+                                  <div key={i}>{ent.sweepedQuantity ? `${ent.sweepedQuantity} ${ent.unit}` : '-'}</div>
+                                ))}
+                                {historyItem.isGrouped && (
+                                  <div className="text-red-700 mt-2 font-bold">
+                                    {Math.round(historyItem.entries.reduce((sum, ent) => sum + (parseFloat(ent.sweepedQuantity) || 0), 0))} {historyItem.unit}
+                                  </div>
+                                )}
+                              </td>
+                              <td className="px-3 py-3 text-[13px]">
+                                <div className="flex items-center justify-center space-x-2">
+                                  <button
+                                    onClick={() => { setViewRecord(null); handleEdit('stock', historyItem); }}
+                                    className="p-1.5 hover:bg-blue-50 rounded-lg transition-colors group"
+                                    title="Edit"
+                                  >
+                                    <EditIcon className="w-4 h-4 text-gray-400 group-hover:text-blue-600" />
+                                  </button>
+                                  <button
+                                    onClick={() => { setViewRecord(null); deleteStockGroup(historyItem.allIds || [historyItem._id]); }}
+                                    className="p-1.5 hover:bg-red-50 rounded-lg transition-colors group"
+                                    title="Delete"
+                                  >
+                                    <TrashIcon className="w-4 h-4 text-gray-400 group-hover:text-red-600" />
+                                  </button>
+                                </div>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
                   </div>
                 );
               })()}
+
             </div>
-
-
           </div>
         </div>
       )}
@@ -3296,9 +4342,3 @@ function App() {
 }
 
 export default App;
-/*
- <div >
- clasename 
- inmovable
- </div> 
-*/
