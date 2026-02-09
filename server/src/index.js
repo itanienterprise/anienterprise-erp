@@ -21,6 +21,7 @@ const IpRecord = require('./models/IpRecord');
 const Importer = require('./models/Importer');
 const Port = require('./models/Port');
 const Stock = require('./models/Stock');
+const Product = require('./models/Product');
 
 
 // Routes
@@ -187,6 +188,46 @@ app.get('/api/stock', async (req, res) => {
   try {
     const stock = await Stock.find().sort({ createdAt: -1 });
     res.json(stock);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// Product APIs
+app.post('/api/products', async (req, res) => {
+  try {
+    const newProduct = new Product(req.body);
+    const savedProduct = await newProduct.save();
+    res.status(201).json(savedProduct);
+  } catch (err) {
+    res.status(400).json({ message: err.message });
+  }
+});
+
+app.delete('/api/products/:id', async (req, res) => {
+  try {
+    const deletedProduct = await Product.findByIdAndDelete(req.params.id);
+    if (!deletedProduct) return res.status(404).json({ message: 'Product not found' });
+    res.json({ message: 'Product deleted' });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+app.put('/api/products/:id', async (req, res) => {
+  try {
+    const updatedProduct = await Product.findByIdAndUpdate(req.params.id, req.body, { new: true });
+    if (!updatedProduct) return res.status(404).json({ message: 'Product not found' });
+    res.json(updatedProduct);
+  } catch (err) {
+    res.status(400).json({ message: err.message });
+  }
+});
+
+app.get('/api/products', async (req, res) => {
+  try {
+    const products = await Product.find().sort({ createdAt: -1 });
+    res.json(products);
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
