@@ -219,15 +219,24 @@ function App() {
     lcNoSearch: '',
     portSearch: '',
     brandSearch: '',
-    productSearch: ''
+    productSearch: '',
+    indCnfSearch: '',
+    bdCnfSearch: '',
+    billOfEntrySearch: ''
   });
-  const [filterDropdownOpen, setFilterDropdownOpen] = useState({
+  const initialFilterDropdownState = {
     lcNo: false,
     port: false,
     brand: false,
-    product: false
-  });
+    product: false,
+    indCnf: false,
+    bdCnf: false,
+    billOfEntry: false
+  };
+  const [filterDropdownOpen, setFilterDropdownOpen] = useState(initialFilterDropdownState);
   const [stockSearchQuery, setStockSearchQuery] = useState('');
+  const [lcSearchQuery, setLcSearchQuery] = useState('');
+  const [showLcFilterPanel, setShowLcFilterPanel] = useState(false);
   const [showStockFilterPanel, setShowStockFilterPanel] = useState(false);
   const [stockFilters, setStockFilters] = useState({
     startDate: '',
@@ -237,17 +246,31 @@ function App() {
     brand: '',
     productName: ''
   });
+
+  const initialLcFilterState = {
+    startDate: '',
+    endDate: '',
+    lcNo: '',
+    port: '',
+    indCnf: '',
+    bdCnf: '',
+    billOfEntry: '',
+    productName: '',
+    brand: ''
+  };
+
+  const [lcFilters, setLcFilters] = useState(initialLcFilterState);
   const [showStockReport, setShowStockReport] = useState(false);
   const [showStockReportFilterPanel, setShowStockReportFilterPanel] = useState(false);
+  const [showLcReport, setShowLcReport] = useState(false);
+  const [showLcReportFilterPanel, setShowLcReportFilterPanel] = useState(false);
   const [products, setProducts] = useState([]);
   const [showProductForm, setShowProductForm] = useState(false);
   const [productFormData, setProductFormData] = useState({
     name: '',
     hsCode: '',
-    brand: '',
-    purchasedPrice: '',
+    brands: [{ brand: '', packetSize: '', purchasedPrice: '' }],
     uom: 'kg',
-    packetSize: '',
     description: '',
     category: ''
   });
@@ -271,7 +294,75 @@ function App() {
   const stockProductFilterRef = useRef(null);
   const stockReportFilterRef = useRef(null);
   const stockReportFilterButtonRef = useRef(null);
+  const lcFilterRef = useRef(null);
+  const lcFilterButtonRef = useRef(null);
+  const lcLcNoFilterRef = useRef(null);
+  const lcPortFilterRef = useRef(null);
+  const lcIndCnfFilterRef = useRef(null);
+  const lcBdCnfFilterRef = useRef(null);
+  const lcBillOfEntryFilterRef = useRef(null);
+  const reportLcNoFilterRef = useRef(null);
+  const reportPortFilterRef = useRef(null);
+  const reportBrandFilterRef = useRef(null);
+  const reportProductFilterRef = useRef(null);
+  const lcReportFilterRef = useRef(null);
+  const lcReportFilterButtonRef = useRef(null);
+  const reportLcIndCnfFilterRef = useRef(null);
+  const reportLcBdCnfFilterRef = useRef(null);
+  const reportLcBillOfEntryFilterRef = useRef(null);
 
+
+  const lcReceiveRecords = useMemo(() => {
+    const searchLower = lcSearchQuery.toLowerCase().trim();
+    return stockRecords.filter(item => {
+      // Apply Advanced Filters
+      if (lcFilters.startDate && item.date < lcFilters.startDate) return false;
+      if (lcFilters.endDate && item.date > lcFilters.endDate) return false;
+      if (lcFilters.lcNo && (item.lcNo || '').trim().toLowerCase() !== lcFilters.lcNo.toLowerCase()) return false;
+      if (lcFilters.port && (item.port || '').trim().toLowerCase() !== lcFilters.port.toLowerCase()) return false;
+      if (lcFilters.indCnf && (item.indianCnF || '').trim().toLowerCase() !== lcFilters.indCnf.toLowerCase()) return false;
+      if (lcFilters.bdCnf && (item.bdCnF || '').trim().toLowerCase() !== lcFilters.bdCnf.toLowerCase()) return false;
+      if (lcFilters.billOfEntry && (item.billOfEntry || '').trim().toLowerCase() !== lcFilters.billOfEntry.toLowerCase()) return false;
+      if (lcFilters.productName && (item.productName || '').trim().toLowerCase() !== lcFilters.productName.toLowerCase()) return false;
+      if (lcFilters.brand) {
+        const brandList = item.brand ? [item.brand] : (item.brandEntries || []).map(e => e.brand);
+        if (!brandList.some(b => (b || '').trim().toLowerCase() === lcFilters.brand.toLowerCase())) return false;
+      }
+
+      // Apply Search Query
+      if (!searchLower) return true;
+
+      const matchesLC = (item.lcNo || '').toLowerCase().includes(searchLower);
+      const matchesImporter = (item.importer || '').toLowerCase().includes(searchLower);
+      const matchesBillOfEntry = (item.billOfEntry || '').toLowerCase().includes(searchLower);
+      const matchesPort = (item.port || '').toLowerCase().includes(searchLower);
+      const matchesTruck = (item.truckNo || '').toLowerCase().includes(searchLower);
+      const matchesProduct = (item.productName || '').toLowerCase().includes(searchLower);
+      const brandList = item.brand ? [item.brand] : (item.brandEntries || []).map(e => e.brand);
+      const matchesBrand = brandList.some(b => (b || '').trim().toLowerCase().includes(searchLower));
+
+      return matchesLC || matchesImporter || matchesBillOfEntry || matchesPort || matchesTruck || matchesProduct || matchesBrand;
+    });
+  }, [stockRecords, lcSearchQuery, lcFilters]);
+
+  const lcReceiveSummary = useMemo(() => {
+    const totalPackets = lcReceiveRecords.reduce((sum, item) => sum + (parseFloat(item.packet) || 0), 0);
+    const totalQuantity = lcReceiveRecords.reduce((sum, item) => sum + (parseFloat(item.quantity) || 0), 0);
+
+    // Count truckNo only once per unique product entry (date + lcNo + product + truck)
+    const uniqueTrucksMap = lcReceiveRecords.reduce((acc, item) => {
+      const key = `${item.date}-${item.lcNo}-${item.productName}-${item.truckNo}`;
+      if (!acc[key]) {
+        acc[key] = parseFloat(item.truckNo) || 0;
+      }
+      return acc;
+    }, {});
+    const totalTrucks = Object.values(uniqueTrucksMap).reduce((sum, val) => sum + val, 0);
+
+    const unit = lcReceiveRecords[0]?.unit || 'kg';
+
+    return { totalPackets, totalQuantity, totalTrucks, unit };
+  }, [lcReceiveRecords]);
 
   const stockData = useMemo(() => {
     const searchLower = stockSearchQuery.toLowerCase().trim();
@@ -427,13 +518,6 @@ function App() {
       }
     ]
   });
-
-
-
-
-
-
-
 
   const [formData, setFormData] = useState({
     openingDate: '',
@@ -697,9 +781,10 @@ function App() {
 
   useEffect(() => {
     const handleClickOutside = (event) => {
-      // Handle product dropdowns
-      if (activeDropdown && activeDropdown.startsWith('product-')) {
-        const index = parseInt(activeDropdown.split('-')[1]);
+      // Handle product dropdowns (Stock and LC)
+      if (activeDropdown && (activeDropdown.startsWith('product-') || activeDropdown.startsWith('lc-product-'))) {
+        const parts = activeDropdown.split('-');
+        const index = parseInt(parts[parts.length - 1]);
         if (productRefs.current[index] && !productRefs.current[index].contains(event.target)) {
           setActiveDropdown(null);
         }
@@ -717,7 +802,7 @@ function App() {
       }
 
       if (
-        (stockPortRef.current && !stockPortRef.current.contains(event.target)) &&
+        (portRef.current && !portRef.current.contains(event.target)) &&
         (importerRef.current && !importerRef.current.contains(event.target)) &&
         (ipPortRef.current && !ipPortRef.current.contains(event.target)) &&
         (ipImporterRef.current && !ipImporterRef.current.contains(event.target)) &&
@@ -749,6 +834,37 @@ function App() {
         return ports.filter(p => p.status === 'Active' && (!filters.port || ports.some(x => x.name === filters.port) || p.name.toLowerCase().includes(filters.port.toLowerCase())));
       case 'filterImporter':
         return importers.filter(imp => imp.status === 'Active' && (!filters.importer || importers.some(x => x.name === filters.importer) || imp.name.toLowerCase().includes(filters.importer.toLowerCase())));
+      case 'lcFilterLcNo': {
+        const lcOptions = [...new Set(stockRecords.map(item => (item.lcNo || '').trim()).filter(Boolean))].sort();
+        return lcOptions.filter(lc => !filterSearchInputs.lcNoSearch || lc.toLowerCase().includes(filterSearchInputs.lcNoSearch.toLowerCase())).map(lc => ({ name: lc }));
+      }
+      case 'lcFilterPort': {
+        const portOptions = [...new Set(stockRecords.map(item => (item.port || '').trim()).filter(Boolean))].sort();
+        return portOptions.filter(p => !filterSearchInputs.portSearch || p.toLowerCase().includes(filterSearchInputs.portSearch.toLowerCase())).map(p => ({ name: p }));
+      }
+      case 'lcFilterIndCnf': {
+        const options = [...new Set(stockRecords.map(item => (item.indianCnF || '').trim()).filter(Boolean))].sort();
+        return options.filter(opt => !filterSearchInputs.indCnfSearch || opt.toLowerCase().includes(filterSearchInputs.indCnfSearch.toLowerCase())).map(opt => ({ name: opt }));
+      }
+      case 'lcFilterBdCnf': {
+        const options = [...new Set(stockRecords.map(item => (item.bdCnF || '').trim()).filter(Boolean))].sort();
+        return options.filter(opt => !filterSearchInputs.bdCnfSearch || opt.toLowerCase().includes(filterSearchInputs.bdCnfSearch.toLowerCase())).map(opt => ({ name: opt }));
+      }
+      case 'lcFilterBillOfEntry': {
+        const options = [...new Set(stockRecords.map(item => (item.billOfEntry || '').trim()).filter(Boolean))].sort();
+        return options.filter(opt => !filterSearchInputs.billOfEntrySearch || opt.toLowerCase().includes(filterSearchInputs.billOfEntrySearch.toLowerCase())).map(opt => ({ name: opt }));
+      }
+      case 'lcFilterProduct': {
+        const options = [...new Set(stockRecords.map(item => (item.productName || '').trim()).filter(Boolean))].sort();
+        return options.filter(opt => !filterSearchInputs.productSearch || opt.toLowerCase().includes(filterSearchInputs.productSearch.toLowerCase())).map(opt => ({ name: opt }));
+      }
+      case 'lcFilterBrand': {
+        const options = [...new Set(stockRecords.flatMap(item => {
+          if (item.brand) return [(item.brand || '').trim()];
+          return (item.brandEntries || []).map(e => (e.brand || '').trim());
+        }).filter(Boolean))].sort();
+        return options.filter(opt => !filterSearchInputs.brandSearch || opt.toLowerCase().includes(filterSearchInputs.brandSearch.toLowerCase())).map(opt => ({ name: opt }));
+      }
       default:
         if (type.startsWith('product-')) {
           const pIndex = parseInt(type.split('-')[1]);
@@ -832,22 +948,38 @@ function App() {
   // Click-outside detection for filter dropdowns
   useEffect(() => {
     const handleClickOutside = (event) => {
-      if (
-        lcNoFilterRef.current && !lcNoFilterRef.current.contains(event.target) &&
-        portFilterRef.current && !portFilterRef.current.contains(event.target) &&
-        brandFilterRef.current && !brandFilterRef.current.contains(event.target) &&
-        stockLcNoFilterRef.current && !stockLcNoFilterRef.current.contains(event.target) &&
-        stockPortFilterRef.current && !stockPortFilterRef.current.contains(event.target) &&
-        stockBrandFilterRef.current && !stockBrandFilterRef.current.contains(event.target) &&
-        stockProductFilterRef.current && !stockProductFilterRef.current.contains(event.target)
-      ) {
-        setFilterDropdownOpen({ lcNo: false, port: false, brand: false, product: false });
+      // Find which filter is currently open
+      const openKey = Object.keys(filterDropdownOpen).find(key => filterDropdownOpen[key]);
+      if (!openKey) return;
+
+      // Map open keys to their corresponding DOM containers (refs)
+      let refsToCheck = [];
+      if (openKey === 'lcNo') {
+        refsToCheck = [lcNoFilterRef, stockLcNoFilterRef, lcLcNoFilterRef, reportLcNoFilterRef];
+      } else if (openKey === 'port') {
+        refsToCheck = [portFilterRef, stockPortFilterRef, lcPortFilterRef, reportPortFilterRef];
+      } else if (openKey === 'brand') {
+        refsToCheck = [brandFilterRef, stockBrandFilterRef, reportBrandFilterRef];
+      } else if (openKey === 'product') {
+        refsToCheck = [stockProductFilterRef, reportProductFilterRef];
+      } else if (openKey === 'indCnf') {
+        refsToCheck = [lcIndCnfFilterRef, reportLcIndCnfFilterRef];
+      } else if (openKey === 'bdCnf') {
+        refsToCheck = [lcBdCnfFilterRef, reportLcBdCnfFilterRef];
+      } else if (openKey === 'billOfEntry') {
+        refsToCheck = [lcBillOfEntryFilterRef, reportLcBillOfEntryFilterRef];
+      }
+
+      // If click is outside all associated refs for the open dropdown, close it
+      const isOutside = refsToCheck.every(ref => !ref.current || !ref.current.contains(event.target));
+      if (isOutside) {
+        setFilterDropdownOpen(initialFilterDropdownState);
       }
     };
 
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
+  }, [filterDropdownOpen]);
 
   // Click-outside detection for filter panel
   useEffect(() => {
@@ -877,7 +1009,11 @@ function App() {
         stockFilterButtonRef.current &&
         !stockFilterButtonRef.current.contains(event.target) &&
         (!stockReportFilterRef.current || !stockReportFilterRef.current.contains(event.target)) &&
-        (!stockReportFilterButtonRef.current || !stockReportFilterButtonRef.current.contains(event.target))
+        (!stockReportFilterButtonRef.current || !stockReportFilterButtonRef.current.contains(event.target)) &&
+        (!stockLcNoFilterRef.current || !stockLcNoFilterRef.current.contains(event.target)) &&
+        (!stockPortFilterRef.current || !stockPortFilterRef.current.contains(event.target)) &&
+        (!stockBrandFilterRef.current || !stockBrandFilterRef.current.contains(event.target)) &&
+        (!stockProductFilterRef.current || !stockProductFilterRef.current.contains(event.target))
       ) {
         setShowStockFilterPanel(false);
       }
@@ -886,6 +1022,24 @@ function App() {
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [showStockFilterPanel]);
+
+  // Click-outside detection for LC filter panel
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (
+        showLcFilterPanel &&
+        lcFilterRef.current &&
+        !lcFilterRef.current.contains(event.target) &&
+        lcFilterButtonRef.current &&
+        !lcFilterButtonRef.current.contains(event.target)
+      ) {
+        setShowLcFilterPanel(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [showLcFilterPanel]);
 
   // Click-outside detection for stock report filter panel
   useEffect(() => {
@@ -904,6 +1058,24 @@ function App() {
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [showStockReportFilterPanel]);
+
+  // Click-outside detection for LC report filter panel
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (
+        showLcReportFilterPanel &&
+        lcReportFilterRef.current &&
+        !lcReportFilterRef.current.contains(event.target) &&
+        lcReportFilterButtonRef.current &&
+        !lcReportFilterButtonRef.current.contains(event.target)
+      ) {
+        setShowLcReportFilterPanel(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [showLcReportFilterPanel]);
 
   const toggleSelectAll = (items) => {
     if (selectedItems.size === items.length) {
@@ -1290,10 +1462,8 @@ function App() {
     setProductFormData({
       name: '',
       hsCode: '',
-      brand: '',
-      purchasedPrice: '',
+      brands: [{ brand: '', packetSize: '', purchasedPrice: '' }],
       uom: 'kg',
-      packetSize: '',
       description: '',
       category: ''
     });
@@ -1337,18 +1507,44 @@ function App() {
   };
 
   const handleProductEdit = (product) => {
+    const brands = product.brands || (product.brand ? [{
+      brand: product.brand,
+      packetSize: product.packetSize || '',
+      purchasedPrice: product.purchasedPrice || ''
+    }] : [{ brand: '', packetSize: '', purchasedPrice: '' }]);
+
     setProductFormData({
       name: product.name,
       hsCode: product.hsCode || '',
-      brand: product.brand || '',
-      purchasedPrice: product.purchasedPrice || '',
+      brands: brands,
       uom: product.uom || product.unit || 'kg',
-      packetSize: product.packetSize || '',
       description: product.description || '',
       category: product.category || ''
     });
     setEditingId(product._id);
     setShowProductForm(true);
+  };
+
+  const handleAddProductBrand = () => {
+    setProductFormData(prev => ({
+      ...prev,
+      brands: [...prev.brands, { brand: '', packetSize: '', purchasedPrice: '' }]
+    }));
+  };
+
+  const handleRemoveProductBrand = (index) => {
+    setProductFormData(prev => ({
+      ...prev,
+      brands: prev.brands.filter((_, i) => i !== index)
+    }));
+  };
+
+  const handleProductBrandChange = (index, field, value) => {
+    setProductFormData(prev => {
+      const updatedBrands = [...prev.brands];
+      updatedBrands[index] = { ...updatedBrands[index], [field]: value };
+      return { ...prev, brands: updatedBrands };
+    });
   };
 
   const handleProductDelete = async (id) => {
@@ -1360,9 +1556,17 @@ function App() {
     setStockFormData(prev => {
       if (productIndex !== null) {
         const updatedProducts = [...prev.productEntries];
+        const currentProduct = updatedProducts[productIndex];
+
+        // Reset brand entries if product name is changed
+        const extraUpdates = name === 'productName' ? {
+          brandEntries: [{ brand: '', packet: '', packetSize: '', quantity: '', unit: '', purchasedPrice: '', sweepedPacket: '', sweepedQuantity: '', inHouseQuantity: '', inHousePacket: '' }]
+        } : {};
+
         updatedProducts[productIndex] = {
-          ...updatedProducts[productIndex],
-          [name]: value
+          ...currentProduct,
+          [name]: value,
+          ...extraUpdates
         };
         return { ...prev, productEntries: updatedProducts };
       }
@@ -1389,13 +1593,21 @@ function App() {
 
       const newEntry = { ...updatedEntries[brandIndex], [field]: value };
 
-      // Auto-fill size/unit if brand is selected and product exists
+      // Auto-fill size/unit/price if brand is selected and product exists
       if (field === 'brand' && value) {
         const productName = updatedProducts[productIndex].productName;
         const selectedProduct = products.find(p => p.name === productName);
         if (selectedProduct) {
-          if (selectedProduct.packetSize) newEntry.packetSize = selectedProduct.packetSize;
           if (selectedProduct.uom) newEntry.unit = selectedProduct.uom;
+
+          // Find brand-specific details
+          const brandDetails = selectedProduct.brands?.find(b => b.brand === value) ||
+            (selectedProduct.brand === value ? selectedProduct : null);
+
+          if (brandDetails) {
+            if (brandDetails.packetSize) newEntry.packetSize = brandDetails.packetSize;
+            if (brandDetails.purchasedPrice) newEntry.purchasedPrice = brandDetails.purchasedPrice;
+          }
         }
       }
 
@@ -1545,7 +1757,8 @@ function App() {
     const newProductEntries = [...stockFormData.productEntries];
     newProductEntries[pIndex] = {
       ...newProductEntries[pIndex],
-      productName: selectedProductName
+      productName: selectedProductName,
+      brandEntries: [{ brand: '', packet: '', packetSize: '', quantity: '', unit: '', purchasedPrice: '', sweepedPacket: '', sweepedQuantity: '', inHouseQuantity: '', inHousePacket: '' }]
     };
 
     // Auto-fill details if product found
@@ -1562,20 +1775,39 @@ function App() {
 
   const getFilteredProducts = (query) => {
     if (!query) return products;
+
+    // If query exactly matches a product name, show all products (allows user to see alternatives)
+    const exactMatch = products.some(p => p.name.toLowerCase() === query.toLowerCase());
+    if (exactMatch) return products;
+
     return products.filter(p =>
       p.name.toLowerCase().includes(query.toLowerCase()) ||
       (p.hsCode && p.hsCode.toLowerCase().includes(query.toLowerCase()))
     );
   };
 
-  const getFilteredBrands = (query, currentProductBrand) => {
-    const uniqueBrands = [...new Set([
-      ...(currentProductBrand ? [currentProductBrand] : []),
-      ...products.map(p => p.brand).filter(Boolean)
-    ])].filter(Boolean).sort();
+  const getFilteredBrands = (query, currentProductName) => {
+    if (!currentProductName) return [];
 
-    if (!query) return uniqueBrands;
-    return uniqueBrands.filter(b => b.toLowerCase().includes(query.toLowerCase()));
+    const selectedProduct = products.find(p => p.name === currentProductName);
+    if (!selectedProduct) return [];
+
+    // Determine base list (only from the selected product)
+    let baseBrands = [];
+    if (selectedProduct.brands && selectedProduct.brands.length > 0) {
+      baseBrands = selectedProduct.brands.map(b => b.brand).filter(Boolean);
+    } else if (selectedProduct.brand) {
+      // Handle products that might still have a single top-level brand field
+      baseBrands = [selectedProduct.brand];
+    }
+
+    if (!query) return baseBrands;
+
+    // If query exactly matches a brand in our list, show all brands in the base list
+    const exactMatch = baseBrands.some(b => b.toLowerCase() === query.toLowerCase());
+    if (exactMatch) return baseBrands;
+
+    return baseBrands.filter(b => b.toLowerCase().includes(query.toLowerCase()));
   };
 
   const handleStockSubmit = async (e) => {
@@ -1767,21 +1999,376 @@ function App() {
       case 'lc-entry-section':
         return (
           <div className="space-y-6">
-            <div className="flex items-center justify-between">
-              <h2 className="text-2xl font-bold text-gray-800">LC Receive Management</h2>
-              <div className="flex items-center space-x-3">
+            <div className="flex items-center justify-between gap-4">
+              <div className="w-1/4">
+                <h2 className="text-2xl font-bold text-gray-800">LC Receive Management</h2>
+              </div>
+
+              {/* Center Aligned Search Bar */}
+              <div className="flex-1 max-w-md mx-auto relative group">
+                <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
+                  <SearchIcon className="h-4 w-4 text-gray-400 group-focus-within:text-blue-500 transition-colors" />
+                </div>
+                <input
+                  type="text"
+                  placeholder="Search by LC, Port, Importer, Truck..."
+                  value={lcSearchQuery}
+                  onChange={(e) => setLcSearchQuery(e.target.value)}
+                  className="block w-full pl-10 pr-4 py-2 bg-white/50 border border-gray-200 rounded-xl text-[13px] placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 focus:bg-white transition-all outline-none"
+                />
+              </div>
+
+              <div className="w-1/4 flex justify-end items-center gap-2">
+                <div className="relative">
+                  <button
+                    ref={lcFilterButtonRef}
+                    onClick={() => setShowLcFilterPanel(!showLcFilterPanel)}
+                    className={`flex items-center gap-2 px-4 py-2 rounded-xl transition-all border ${showLcFilterPanel || Object.values(lcFilters).some(v => v !== '')
+                      ? 'bg-blue-600 border-blue-600 text-white shadow-lg shadow-blue-500/30'
+                      : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'
+                      }`}
+                  >
+                    <FunnelIcon className={`w-4 h-4 ${showLcFilterPanel || Object.values(lcFilters).some(v => v !== '') ? 'text-white' : 'text-gray-400'}`} />
+                    <span className="text-sm font-medium">Filter</span>
+                  </button>
+
+                  {/* Floating Filter Panel */}
+                  {showLcFilterPanel && (
+                    <div ref={lcFilterRef} className="absolute right-0 mt-3 w-80 bg-white/95 backdrop-blur-2xl border border-gray-100 rounded-2xl shadow-2xl z-[60] p-5 animate-in fade-in zoom-in duration-200">
+                      <div className="flex items-center justify-between mb-4 pb-2 border-b border-gray-50">
+                        <h4 className="font-bold text-gray-900">Advanced Filters</h4>
+                        <button
+                          onClick={() => {
+                            setLcFilters({ startDate: '', endDate: '', lcNo: '', port: '', indCnf: '', bdCnf: '', billOfEntry: '' });
+                            setFilterSearchInputs({ ...filterSearchInputs, lcNoSearch: '', portSearch: '', indCnfSearch: '', bdCnfSearch: '', billOfEntrySearch: '' });
+                            setLcSearchQuery('');
+                            setShowLcFilterPanel(false);
+                          }}
+                          className="text-[11px] font-bold text-blue-600 hover:text-blue-700 uppercase tracking-wider"
+                        >
+                          Reset All
+                        </button>
+                      </div>
+
+                      <div className="space-y-4">
+                        {/* Date Range */}
+                        <div className="grid grid-cols-2 gap-3">
+                          <CustomDatePicker
+                            label="FROM DATE"
+                            value={lcFilters.startDate}
+                            onChange={(e) => setLcFilters({ ...lcFilters, startDate: e.target.value })}
+                            placeholder="Select start date"
+                            name="startDate"
+                            labelClassName="text-[11px] font-bold text-gray-400 uppercase tracking-wider"
+                            compact={true}
+                          />
+                          <CustomDatePicker
+                            label="TO DATE"
+                            value={lcFilters.endDate}
+                            onChange={(e) => setLcFilters({ ...lcFilters, endDate: e.target.value })}
+                            placeholder="Select end date"
+                            name="endDate"
+                            labelClassName="text-[11px] font-bold text-gray-400 uppercase tracking-wider"
+                            compact={true}
+                            rightAlign={true}
+                          />
+                        </div>
+
+                        {/* LC No Selection */}
+                        <div className="space-y-1.5 relative" ref={lcLcNoFilterRef}>
+                          <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">LC NO</label>
+                          <div className="relative">
+                            <input
+                              type="text"
+                              value={filterSearchInputs.lcNoSearch}
+                              onChange={(e) => {
+                                setFilterSearchInputs({ ...filterSearchInputs, lcNoSearch: e.target.value });
+                                setFilterDropdownOpen({ ...initialFilterDropdownState, lcNo: true });
+                              }}
+                              onFocus={() => setFilterDropdownOpen({ ...initialFilterDropdownState, lcNo: true })}
+                              placeholder={lcFilters.lcNo || "Search LC No..."}
+                              className="w-full px-3 py-2 pr-8 bg-white border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all shadow-sm hover:border-gray-300"
+                            />
+                            <SearchIcon className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+                            {lcFilters.lcNo && (
+                              <button
+                                onClick={() => {
+                                  setLcFilters({ ...lcFilters, lcNo: '' });
+                                  setFilterSearchInputs({ ...filterSearchInputs, lcNoSearch: '' });
+                                }}
+                                className="absolute right-8 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                              >
+                                <XIcon className="w-4 h-4" />
+                              </button>
+                            )}
+                          </div>
+                          {filterDropdownOpen.lcNo && (() => {
+                            const filtered = getFilteredOptions('lcFilterLcNo');
+                            return filtered.length > 0 ? (
+                              <div className="absolute z-50 mt-1 w-full bg-white border border-gray-200 rounded-xl shadow-lg max-h-48 overflow-y-auto">
+                                {filtered.map(opt => (
+                                  <button
+                                    key={opt.name}
+                                    type="button"
+                                    onClick={() => {
+                                      setLcFilters({ ...lcFilters, lcNo: opt.name });
+                                      setFilterSearchInputs({ ...filterSearchInputs, lcNoSearch: '' });
+                                      setFilterDropdownOpen(initialFilterDropdownState);
+                                    }}
+                                    className="w-full px-3 py-2 text-left text-sm hover:bg-blue-50 transition-colors"
+                                  >
+                                    {opt.name}
+                                  </button>
+                                ))}
+                              </div>
+                            ) : null;
+                          })()}
+                        </div>
+
+                        {/* Port Selection */}
+                        <div className="space-y-1.5 relative" ref={lcPortFilterRef}>
+                          <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">PORT</label>
+                          <div className="relative">
+                            <input
+                              type="text"
+                              value={filterSearchInputs.portSearch}
+                              onChange={(e) => {
+                                setFilterSearchInputs({ ...filterSearchInputs, portSearch: e.target.value });
+                                setFilterDropdownOpen({ ...initialFilterDropdownState, port: true });
+                              }}
+                              onFocus={() => setFilterDropdownOpen({ ...initialFilterDropdownState, port: true })}
+                              placeholder={lcFilters.port || "Search Port..."}
+                              className="w-full px-3 py-2 pr-8 bg-white border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all shadow-sm hover:border-gray-300"
+                            />
+                            <SearchIcon className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+                            {lcFilters.port && (
+                              <button
+                                onClick={() => {
+                                  setLcFilters({ ...lcFilters, port: '' });
+                                  setFilterSearchInputs({ ...filterSearchInputs, portSearch: '' });
+                                }}
+                                className="absolute right-8 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                              >
+                                <XIcon className="w-4 h-4" />
+                              </button>
+                            )}
+                          </div>
+                          {filterDropdownOpen.port && (() => {
+                            const filtered = getFilteredOptions('lcFilterPort');
+                            return filtered.length > 0 ? (
+                              <div className="absolute z-50 mt-1 w-full bg-white border border-gray-200 rounded-xl shadow-lg max-h-48 overflow-y-auto">
+                                {filtered.map(opt => (
+                                  <button
+                                    key={opt.name}
+                                    type="button"
+                                    onClick={() => {
+                                      setLcFilters({ ...lcFilters, port: opt.name });
+                                      setFilterSearchInputs({ ...filterSearchInputs, portSearch: '' });
+                                      setFilterDropdownOpen(initialFilterDropdownState);
+                                    }}
+                                    className="w-full px-3 py-2 text-left text-sm hover:bg-blue-50 transition-colors"
+                                  >
+                                    {opt.name}
+                                  </button>
+                                ))}
+                              </div>
+                            ) : null;
+                          })()}
+                        </div>
+
+                        {/* IND CNF Selection */}
+                        <div className="space-y-1.5 relative" ref={lcIndCnfFilterRef}>
+                          <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">IND CNF</label>
+                          <div className="relative">
+                            <input
+                              type="text"
+                              value={filterSearchInputs.indCnfSearch}
+                              onChange={(e) => {
+                                setFilterSearchInputs({ ...filterSearchInputs, indCnfSearch: e.target.value });
+                                setFilterDropdownOpen({ ...initialFilterDropdownState, indCnf: true });
+                              }}
+                              onFocus={() => setFilterDropdownOpen({ ...initialFilterDropdownState, indCnf: true })}
+                              placeholder={lcFilters.indCnf || "Search IND CNF..."}
+                              className="w-full px-3 py-2 pr-8 bg-white border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all shadow-sm hover:border-gray-300"
+                            />
+                            <SearchIcon className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+                            {lcFilters.indCnf && (
+                              <button
+                                onClick={() => {
+                                  setLcFilters({ ...lcFilters, indCnf: '' });
+                                  setFilterSearchInputs({ ...filterSearchInputs, indCnfSearch: '' });
+                                }}
+                                className="absolute right-8 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                              >
+                                <XIcon className="w-4 h-4" />
+                              </button>
+                            )}
+                          </div>
+                          {filterDropdownOpen.indCnf && (() => {
+                            const filtered = getFilteredOptions('lcFilterIndCnf');
+                            return filtered.length > 0 ? (
+                              <div className="absolute z-50 mt-1 w-full bg-white border border-gray-200 rounded-xl shadow-lg max-h-48 overflow-y-auto">
+                                {filtered.map(opt => (
+                                  <button
+                                    key={opt.name}
+                                    type="button"
+                                    onClick={() => {
+                                      setLcFilters({ ...lcFilters, indCnf: opt.name });
+                                      setFilterSearchInputs({ ...filterSearchInputs, indCnfSearch: '' });
+                                      setFilterDropdownOpen(initialFilterDropdownState);
+                                    }}
+                                    className="w-full px-3 py-2 text-left text-sm hover:bg-blue-50 transition-colors"
+                                  >
+                                    {opt.name}
+                                  </button>
+                                ))}
+                              </div>
+                            ) : null;
+                          })()}
+                        </div>
+
+                        {/* BD CNF Selection */}
+                        <div className="space-y-1.5 relative" ref={lcBdCnfFilterRef}>
+                          <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">BD CNF</label>
+                          <div className="relative">
+                            <input
+                              type="text"
+                              value={filterSearchInputs.bdCnfSearch}
+                              onChange={(e) => {
+                                setFilterSearchInputs({ ...filterSearchInputs, bdCnfSearch: e.target.value });
+                                setFilterDropdownOpen({ ...initialFilterDropdownState, bdCnf: true });
+                              }}
+                              onFocus={() => setFilterDropdownOpen({ ...initialFilterDropdownState, bdCnf: true })}
+                              placeholder={lcFilters.bdCnf || "Search BD CNF..."}
+                              className="w-full px-3 py-2 pr-8 bg-white border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all shadow-sm hover:border-gray-300"
+                            />
+                            <SearchIcon className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+                            {lcFilters.bdCnf && (
+                              <button
+                                onClick={() => {
+                                  setLcFilters({ ...lcFilters, bdCnf: '' });
+                                  setFilterSearchInputs({ ...filterSearchInputs, bdCnfSearch: '' });
+                                }}
+                                className="absolute right-8 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                              >
+                                <XIcon className="w-4 h-4" />
+                              </button>
+                            )}
+                          </div>
+                          {filterDropdownOpen.bdCnf && (() => {
+                            const filtered = getFilteredOptions('lcFilterBdCnf');
+                            return filtered.length > 0 ? (
+                              <div className="absolute z-50 mt-1 w-full bg-white border border-gray-200 rounded-xl shadow-lg max-h-48 overflow-y-auto">
+                                {filtered.map(opt => (
+                                  <button
+                                    key={opt.name}
+                                    type="button"
+                                    onClick={() => {
+                                      setLcFilters({ ...lcFilters, bdCnf: opt.name });
+                                      setFilterSearchInputs({ ...filterSearchInputs, bdCnfSearch: '' });
+                                      setFilterDropdownOpen(initialFilterDropdownState);
+                                    }}
+                                    className="w-full px-3 py-2 text-left text-sm hover:bg-blue-50 transition-colors"
+                                  >
+                                    {opt.name}
+                                  </button>
+                                ))}
+                              </div>
+                            ) : null;
+                          })()}
+                        </div>
+
+                        {/* Bill of Entry Selection */}
+                        <div className="space-y-1.5 relative" ref={lcBillOfEntryFilterRef}>
+                          <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">BILL OF ENTRY</label>
+                          <div className="relative">
+                            <input
+                              type="text"
+                              value={filterSearchInputs.billOfEntrySearch}
+                              onChange={(e) => {
+                                setFilterSearchInputs({ ...filterSearchInputs, billOfEntrySearch: e.target.value });
+                                setFilterDropdownOpen({ ...initialFilterDropdownState, billOfEntry: true });
+                              }}
+                              onFocus={() => setFilterDropdownOpen({ ...initialFilterDropdownState, billOfEntry: true })}
+                              placeholder={lcFilters.billOfEntry || "Search Bill Of Entry..."}
+                              className="w-full px-3 py-2 pr-8 bg-white border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all shadow-sm hover:border-gray-300"
+                            />
+                            <SearchIcon className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+                            {lcFilters.billOfEntry && (
+                              <button
+                                onClick={() => {
+                                  setLcFilters({ ...lcFilters, billOfEntry: '' });
+                                  setFilterSearchInputs({ ...filterSearchInputs, billOfEntrySearch: '' });
+                                }}
+                                className="absolute right-8 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                              >
+                                <XIcon className="w-4 h-4" />
+                              </button>
+                            )}
+                          </div>
+                          {filterDropdownOpen.billOfEntry && (() => {
+                            const filtered = getFilteredOptions('lcFilterBillOfEntry');
+                            return filtered.length > 0 ? (
+                              <div className="absolute z-50 mt-1 w-full bg-white border border-gray-200 rounded-xl shadow-lg max-h-48 overflow-y-auto">
+                                {filtered.map(opt => (
+                                  <button
+                                    key={opt.name}
+                                    type="button"
+                                    onClick={() => {
+                                      setLcFilters({ ...lcFilters, billOfEntry: opt.name });
+                                      setFilterSearchInputs({ ...filterSearchInputs, billOfEntrySearch: '' });
+                                      setFilterDropdownOpen(initialFilterDropdownState);
+                                    }}
+                                    className="w-full px-3 py-2 text-left text-sm hover:bg-blue-50 transition-colors"
+                                  >
+                                    {opt.name}
+                                  </button>
+                                ))}
+                              </div>
+                            ) : null;
+                          })()}
+                        </div>
+
+                        <button
+                          onClick={() => setShowLcFilterPanel(false)}
+                          className="w-full py-2 bg-gray-900 text-white rounded-xl text-sm font-medium hover:bg-gray-800 transition-all mt-2"
+                        >
+                          Apply Filters
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
                 <button
-                  onClick={() => setShowFilters(!showFilters)}
-                  className={`px-4 py-2 ${showFilters ? 'bg-indigo-100 text-indigo-600 border-indigo-200' : 'bg-white text-gray-600 border border-gray-200'} font-medium rounded-lg shadow-sm transition-all flex items-center hover:bg-gray-50 border`}
+                  onClick={() => setShowLcReport(true)}
+                  className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 text-gray-600 rounded-xl hover:bg-gray-50 hover:border-gray-300 transition-all shadow-sm active:scale-95"
                 >
-                  <FunnelIcon className="w-4 h-4 mr-2" /> {showFilters ? 'Hide Filters' : 'Filter'}
+                  <BarChartIcon className="w-4 h-4 text-gray-400" />
+                  <span className="text-sm font-medium">Report</span>
                 </button>
                 <button
                   onClick={() => setShowStockForm(!showStockForm)}
-                  className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg shadow-lg shadow-blue-500/30 transition-all transform hover:scale-105 flex items-center"
+                  className="px-4 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-medium rounded-xl shadow-lg shadow-blue-500/30 transition-all transform hover:scale-105 flex items-center"
                 >
-                  <span className="mr-2 text-xl">+</span> Add New
+                  <span className="mr-2 text-xl font-light">+</span> Add New
                 </button>
+              </div>
+            </div>
+
+            {/* Summary Cards */}
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+              <div className="bg-white border border-gray-200 p-4 rounded-xl shadow-sm transition-all hover:shadow-md">
+                <div className="text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-1">Total Packet</div>
+                <div className="text-xl font-bold text-gray-900">{lcReceiveSummary.totalPackets}</div>
+              </div>
+              <div className="bg-emerald-50/50 border border-emerald-100 p-4 rounded-xl shadow-sm transition-all hover:shadow-md">
+                <div className="text-[11px] font-bold text-emerald-600 uppercase tracking-wider mb-1">Total Quantity</div>
+                <div className="text-xl font-bold text-emerald-700">{Math.round(lcReceiveSummary.totalQuantity)} {lcReceiveSummary.unit}</div>
+              </div>
+              <div className="bg-blue-50/50 border border-blue-100 p-4 rounded-xl shadow-sm transition-all hover:shadow-md">
+                <div className="text-[11px] font-bold text-blue-600 uppercase tracking-wider mb-1">Truck</div>
+                <div className="text-xl font-bold text-blue-700">{lcReceiveSummary.totalTrucks}</div>
               </div>
             </div>
 
@@ -2025,48 +2612,44 @@ function App() {
                                 </div>
                                 <div className="space-y-2">
                                   <label className="text-sm font-medium text-gray-700">Product Name</label>
-                                  <div className="relative" ref={el => productRefs.current[pIndex] = el}>
+                                  <div className="relative w-full" ref={el => productRefs.current[pIndex] = el}>
                                     <input
                                       type="text"
                                       name="productName"
                                       value={product.productName}
-                                      onChange={(e) => handleStockInputChange(e, pIndex)}
-                                      onFocus={() => {
-                                        setActiveDropdown(`product-${pIndex}`);
+                                      onChange={(e) => {
+                                        handleStockInputChange(e, pIndex);
+                                        setActiveDropdown(`lc-product-${pIndex}`);
                                         setHighlightedIndex(-1);
                                       }}
-                                      onKeyDown={(e) => handleDropdownKeyDown(e, `product-${pIndex}`, (field, name) => handleProductSelect(pIndex, name), 'productName')}
-                                      required
+                                      onFocus={() => {
+                                        setActiveDropdown(`lc-product-${pIndex}`);
+                                        setHighlightedIndex(-1);
+                                      }}
+                                      onKeyDown={(e) => handleDropdownKeyDown(e, `lc-product-${pIndex}`, (field, val) => handleProductSelect(pIndex, val), 'name')}
                                       placeholder="Select or type product"
                                       autoComplete="off"
-                                      className="w-full h-[42px] px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm pr-10"
+                                      className="w-full h-[42px] px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm"
                                     />
-                                    <button
-                                      type="button"
-                                      onClick={() => setActiveDropdown(activeDropdown === `product-${pIndex}` ? null : `product-${pIndex}`)}
-                                      className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 focus:outline-none"
-                                    >
-                                      <ChevronDownIcon className={`w-4 h-4 transition-transform ${activeDropdown === `product-${pIndex}` ? 'rotate-180' : ''}`} />
-                                    </button>
-
-                                    {activeDropdown === `product-${pIndex}` && (
-                                      <div className="absolute z-[60] w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-xl max-h-48 overflow-y-auto animate-in fade-in zoom-in duration-200">
-                                        {getFilteredProducts(product.productName).map((prod, idx) => (
+                                    {activeDropdown === `lc-product-${pIndex}` && (
+                                      <div className="absolute z-[60] w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-xl max-h-48 overflow-y-auto">
+                                        {getFilteredProducts(product.productName).map((p, idx) => (
                                           <button
-                                            key={prod._id}
+                                            key={p._id}
                                             type="button"
-                                            onClick={() => handleProductSelect(pIndex, prod.name)}
+                                            onClick={() => handleProductSelect(pIndex, p.name)}
                                             onMouseEnter={() => setHighlightedIndex(idx)}
                                             className={`w-full text-left px-4 py-2 text-sm transition-colors flex items-center justify-between ${highlightedIndex === idx ? 'bg-blue-50 text-blue-700' : 'hover:bg-blue-50'}`}
                                           >
-                                            <span className="font-medium text-gray-900">{prod.name}</span>
-                                            {product.productName === prod.name && <span className="w-2 h-2 bg-blue-500 rounded-full"></span>}
+                                            <div className="flex flex-col">
+                                              <span className="font-medium">{p.name}</span>
+                                              <span className="text-[10px] text-gray-400 font-mono">{p.hsCode || 'No HS Code'}</span>
+                                            </div>
+                                            {product.productName === p.name && <span className="w-2 h-2 bg-blue-500 rounded-full"></span>}
                                           </button>
                                         ))}
                                         {getFilteredProducts(product.productName).length === 0 && (
-                                          <div className="px-4 py-3 text-sm text-gray-500 italic">
-                                            No products found. Type to create new.
-                                          </div>
+                                          <div className="px-4 py-3 text-sm text-gray-500 italic">No products found</div>
                                         )}
                                       </div>
                                     )}
@@ -2117,33 +2700,48 @@ function App() {
                                 </div>
                                 <div className="md:col-span-3 space-y-1.5">
                                   <label className="text-sm font-medium text-gray-700">Product Name</label>
-                                  <input
-                                    type="text" name="productName" value={product.productName}
-                                    onChange={(e) => handleStockInputChange(e, pIndex)}
-                                    onFocus={() => {
-                                      setActiveDropdown(`product-${pIndex}`);
-                                      setHighlightedIndex(-1);
-                                    }}
-                                    onKeyDown={(e) => handleDropdownKeyDown(e, `product-${pIndex}`, (field, name) => handleProductSelect(pIndex, name), 'productName')}
-                                    required
-                                    placeholder="Product Name" autoComplete="off" className="w-full h-[42px] px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm text-sm"
-                                  />
-                                  {activeDropdown === `product-${pIndex}` && !product.isMultiBrand && (
-                                    <div className="absolute z-[60] w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-xl max-h-48 overflow-y-auto animate-in fade-in zoom-in duration-200">
-                                      {getFilteredProducts(product.productName).map((prod, idx) => (
-                                        <button
-                                          key={prod._id}
-                                          type="button"
-                                          onClick={() => handleProductSelect(pIndex, prod.name)}
-                                          onMouseEnter={() => setHighlightedIndex(idx)}
-                                          className={`w-full text-left px-4 py-2 text-sm transition-colors flex items-center justify-between ${highlightedIndex === idx ? 'bg-blue-50 text-blue-700' : 'hover:bg-blue-50'}`}
-                                        >
-                                          <span className="font-medium text-gray-900">{prod.name}</span>
-                                          {product.productName === prod.name && <span className="w-2 h-2 bg-blue-500 rounded-full"></span>}
-                                        </button>
-                                      ))}
-                                    </div>
-                                  )}
+                                  <div className="relative w-full" ref={el => productRefs.current[pIndex] = el}>
+                                    <input
+                                      type="text"
+                                      name="productName"
+                                      value={product.productName}
+                                      onChange={(e) => {
+                                        handleStockInputChange(e, pIndex);
+                                        setActiveDropdown(`lc-product-${pIndex}`);
+                                        setHighlightedIndex(-1);
+                                      }}
+                                      onFocus={() => {
+                                        setActiveDropdown(`lc-product-${pIndex}`);
+                                        setHighlightedIndex(-1);
+                                      }}
+                                      onKeyDown={(e) => handleDropdownKeyDown(e, `lc-product-${pIndex}`, (field, val) => handleProductSelect(pIndex, val), 'name')}
+                                      placeholder="Select or type product"
+                                      autoComplete="off"
+                                      className="w-full h-[42px] px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm text-sm"
+                                    />
+                                    {activeDropdown === `lc-product-${pIndex}` && (
+                                      <div className="absolute z-[60] w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-xl max-h-48 overflow-y-auto">
+                                        {getFilteredProducts(product.productName).map((p, idx) => (
+                                          <button
+                                            key={p._id}
+                                            type="button"
+                                            onClick={() => handleProductSelect(pIndex, p.name)}
+                                            onMouseEnter={() => setHighlightedIndex(idx)}
+                                            className={`w-full text-left px-4 py-2 text-sm transition-colors flex items-center justify-between ${highlightedIndex === idx ? 'bg-blue-50 text-blue-700' : 'hover:bg-blue-50'}`}
+                                          >
+                                            <div className="flex flex-col">
+                                              <span className="font-medium">{p.name}</span>
+                                              <span className="text-[10px] text-gray-400 font-mono">{p.hsCode || 'No HS Code'}</span>
+                                            </div>
+                                            {product.productName === p.name && <span className="w-2 h-2 bg-blue-500 rounded-full"></span>}
+                                          </button>
+                                        ))}
+                                        {getFilteredProducts(product.productName).length === 0 && (
+                                          <div className="px-4 py-3 text-sm text-gray-500 italic">No products found</div>
+                                        )}
+                                      </div>
+                                    )}
+                                  </div>
                                 </div>
                                 <div className="md:col-span-2 space-y-1.5">
                                   <label className="text-sm font-medium text-gray-700">Truck No.</label>
@@ -2267,7 +2865,7 @@ function App() {
                                             />
                                             {activeDropdown === `brand-${pIndex}-${bIndex}` && (
                                               <div className="absolute z-[60] w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-48 overflow-y-auto">
-                                                {getFilteredBrands(entry.brand, products.find(p => p.name === product.productName)?.brand).map((brand, idx) => (
+                                                {getFilteredBrands(entry.brand, product.productName).map((brand, idx) => (
                                                   <button
                                                     key={idx}
                                                     type="button"
@@ -2279,13 +2877,12 @@ function App() {
                                                     className={`w-full text-left px-3 py-2 text-sm transition-colors flex items-center justify-between ${highlightedIndex === idx ? 'bg-blue-50 text-blue-700' : 'hover:bg-blue-50'}`}
                                                   >
                                                     <span>{brand}</span>
-                                                    {products.find(p => p.name === product.productName)?.brand === brand && (
-                                                      <span className="text-[10px] bg-blue-100 text-blue-600 px-1.5 py-0.5 rounded-full font-medium">Product Brand</span>
-                                                    )}
                                                   </button>
                                                 ))}
-                                                {getFilteredBrands(entry.brand, products.find(p => p.name === product.productName)?.brand).length === 0 && (
-                                                  <div className="px-3 py-2 text-sm text-gray-500 italic">Type to add new brand</div>
+                                                {getFilteredBrands(entry.brand, product.productName).length === 0 && (
+                                                  <div className="px-3 py-2 text-sm text-gray-500 italic">
+                                                    {!product.productName ? 'Please select a product first' : 'Type to add new brand'}
+                                                  </div>
                                                 )}
                                               </div>
                                             )}
@@ -2444,7 +3041,7 @@ function App() {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100">
-                      {Object.values(stockRecords.reduce((acc, item) => {
+                      {Object.values(lcReceiveRecords.reduce((acc, item) => {
                         const key = item.lcNo || 'unknown';
                         if (!acc[key]) {
                           acc[key] = {
@@ -2452,8 +3049,8 @@ function App() {
                             totalQuantity: 0,
                             totalLcTruck: 0,
                             products: new Set(),
-                            truckEntries: new Set(), // Track unique product-truck combos
-                            ids: [], // Collect all IDs for bulk action
+                            truckEntries: new Set(),
+                            ids: [],
                             allIds: [],
                             originalId: item._id,
                             groupedKey: key,
@@ -2463,97 +3060,127 @@ function App() {
                         const itemQty = parseFloat(item.quantity) || 0;
                         acc[key].totalQuantity += itemQty;
 
-                        // Sum truck load only once per product-truck entry
-                        const truckEntryKey = `${item.productName}-${item.truckNo}`;
+                        // Count truck load only once per unique product-truck combo in this LC group
+                        const truckEntryKey = `${item.date}-${item.productName}-${item.truckNo}`;
                         if (!acc[key].truckEntries.has(truckEntryKey)) {
-                          acc[key].totalLcTruck += (parseFloat(item.truckNo) || 0);
                           acc[key].truckEntries.add(truckEntryKey);
+                          acc[key].totalLcTruck += (parseFloat(item.truckNo) || 0);
                         }
 
                         if (item.productName) acc[key].products.add(item.productName);
-                        acc[key].ids.push(item._id); // Add ID
+                        acc[key].ids.push(item._id);
                         acc[key].allIds.push(item._id);
                         acc[key].entries.push(item);
                         return acc;
-                      }, {})).map((entry, index) => (
-                        <tr
-                          key={entry.groupedKey}
-                          className={`${selectedItems.has(entry.groupedKey) ? 'bg-blue-50/30' : 'hover:bg-gray-50'} transition-colors duration-200 cursor-pointer select-none`}
-                          onMouseDown={() => startLongPress(entry.groupedKey)}
-                          onMouseUp={endLongPress}
-                          onMouseLeave={endLongPress}
-                          onTouchStart={() => startLongPress(entry.groupedKey)}
-                          onTouchEnd={endLongPress}
-                          onClick={() => {
-                            if (isLongPressTriggered.current) {
-                              isLongPressTriggered.current = false;
-                              return;
-                            }
-                            if (isSelectionMode) toggleSelection(entry.groupedKey);
-                          }}
-                        >
-                          {isSelectionMode && (
-                            <td className="px-6 py-4">
-                              <input
-                                type="checkbox"
-                                checked={selectedItems.has(entry.groupedKey)}
-                                onChange={(e) => { e.stopPropagation(); toggleSelection(entry.groupedKey); }}
-                                className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                              />
+                      }, {})).map((entry, index) => {
+                        // Aggregate entries by Product + Truck + Unit to prevent duplicates
+                        const uniqueEntriesMap = entry.entries.reduce((acc, item) => {
+                          const key = `${item.productName}-${item.truckNo}-${item.unit}`;
+                          if (!acc[key]) {
+                            acc[key] = {
+                              ...item,
+                              quantity: 0
+                            };
+                          }
+                          acc[key].quantity += (parseFloat(item.quantity) || 0);
+                          return acc;
+                        }, {});
+                        const uniqueEntries = Object.values(uniqueEntriesMap);
+
+                        return (
+                          <tr
+                            key={entry.groupedKey}
+                            className={`${selectedItems.has(entry.groupedKey) ? 'bg-blue-50/30' : 'hover:bg-gray-50'} transition-colors duration-200 cursor-pointer select-none`}
+                            onMouseDown={() => startLongPress(entry.groupedKey)}
+                            onMouseUp={endLongPress}
+                            onMouseLeave={endLongPress}
+                            onTouchStart={() => startLongPress(entry.groupedKey)}
+                            onTouchEnd={endLongPress}
+                            onClick={() => {
+                              if (isLongPressTriggered.current) {
+                                isLongPressTriggered.current = false;
+                                return;
+                              }
+                              if (isSelectionMode) toggleSelection(entry.groupedKey);
+                            }}
+                          >
+                            {isSelectionMode && (
+                              <td className="px-6 py-4">
+                                <input
+                                  type="checkbox"
+                                  checked={selectedItems.has(entry.groupedKey)}
+                                  onChange={(e) => { e.stopPropagation(); toggleSelection(entry.groupedKey); }}
+                                  className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                                />
+                              </td>
+                            )}
+                            <td className="px-6 py-4 text-sm font-medium text-gray-900">{formatDate(entry.date)}</td>
+                            <td className="px-6 py-4 text-sm text-gray-600">{entry.lcNo || '-'}</td>
+                            <td className="px-6 py-4 text-sm text-gray-600">{entry.importer || '-'}</td>
+                            <td className="px-6 py-4 text-sm text-gray-600">{entry.port || '-'}</td>
+                            <td className="px-6 py-4 text-sm text-gray-600">{entry.indianCnF || '-'}</td>
+                            <td className="px-6 py-4 text-sm text-gray-600 font-medium">
+                              {!isNaN(parseFloat(entry.indCnFCost)) && entry.indCnFCost !== '' ? `৳${parseFloat(entry.indCnFCost).toLocaleString()}` : '-'}
                             </td>
-                          )}
-                          <td className="px-6 py-4 text-sm font-medium text-gray-900">{formatDate(entry.date)}</td>
-                          <td className="px-6 py-4 text-sm text-gray-600">{entry.lcNo || '-'}</td>
-                          <td className="px-6 py-4 text-sm text-gray-600">{entry.importer || '-'}</td>
-                          <td className="px-6 py-4 text-sm text-gray-600">{entry.port || '-'}</td>
-                          <td className="px-6 py-4 text-sm text-gray-600">{entry.indianCnF || '-'}</td>
-                          <td className="px-6 py-4 text-sm text-gray-600 font-medium">
-                            {!isNaN(parseFloat(entry.indCnFCost)) && entry.indCnFCost !== '' ? `৳${parseFloat(entry.indCnFCost).toLocaleString()}` : '-'}
-                          </td>
-                          <td className="px-6 py-4 text-sm text-gray-600">{entry.bdCnF || '-'}</td>
-                          <td className="px-6 py-4 text-sm text-gray-600 font-medium">
-                            {!isNaN(parseFloat(entry.bdCnFCost)) && entry.bdCnFCost !== '' ? `৳${parseFloat(entry.bdCnFCost).toLocaleString()}` : '-'}
-                          </td>
-                          <td className="px-6 py-4 text-sm text-gray-600">{entry.billOfEntry || '-'}</td>
-                          <td className="px-6 py-4 text-sm text-gray-600 max-w-xs truncate" title={Array.from(entry.products).join(', ')}>
-                            {Array.from(entry.products).join(', ') || '-'}
-                          </td>
-                          <td className="px-6 py-4 text-sm text-gray-600">
-                            {Math.round(entry.totalLcTruck) || '0'}
-                          </td>
-                          <td className="px-6 py-4 text-sm font-medium text-gray-900">{Math.round(entry.totalQuantity)}</td>
-                          <td className="px-6 py-4 text-sm text-gray-600">
-                            <div className="flex items-center space-x-3">
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleEdit('stock', entry);
-                                }}
-                                className="text-gray-400 hover:text-blue-600 transition-colors"
-                                title="Edit"
-                              >
-                                <EditIcon className="w-5 h-5" />
-                              </button>
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  // Delete logic: Select all IDs and trigger bulk delete
-                                  const ids = entry.ids;
-                                  setSelectedItems(new Set(ids));
-                                  handleDelete('stock', null, true);
-                                }}
-                                className="text-gray-400 hover:text-red-600 transition-colors"
-                                title="Delete"
-                              >
-                                <TrashIcon className="w-5 h-5" />
-                              </button>
-                            </div>
-                          </td>
-                        </tr>
-                      ))}
-                      {Object.keys(stockRecords).length === 0 && (
+                            <td className="px-6 py-4 text-sm text-gray-600">{entry.bdCnF || '-'}</td>
+                            <td className="px-6 py-4 text-sm text-gray-600 font-medium">
+                              {!isNaN(parseFloat(entry.bdCnFCost)) && entry.bdCnFCost !== '' ? `৳${parseFloat(entry.bdCnFCost).toLocaleString()}` : '-'}
+                            </td>
+                            <td className="px-6 py-4 text-sm text-gray-600">{entry.billOfEntry || '-'}</td>
+                            <td className="px-6 py-4 text-sm text-gray-600 align-top">
+                              {uniqueEntries.map((item, idx) => (
+                                <div key={idx} className="leading-6 py-1 border-b border-gray-100 last:border-0 truncate max-w-xs" title={item.productName}>
+                                  {item.productName || '-'}
+                                </div>
+                              ))}
+                            </td>
+                            <td className="px-6 py-4 text-sm text-gray-600 align-top">
+                              {uniqueEntries.map((item, idx) => (
+                                <div key={idx} className="leading-6 py-1 border-b border-gray-100 last:border-0">
+                                  {item.truckNo || '0'}
+                                </div>
+                              ))}
+                            </td>
+                            <td className="px-6 py-4 text-sm font-medium text-gray-900 align-top">
+                              {uniqueEntries.map((item, idx) => (
+                                <div key={idx} className="leading-6 py-1 border-b border-gray-100 last:border-0">
+                                  {Math.round(item.quantity)}
+                                </div>
+                              ))}
+                            </td>
+                            <td className="px-6 py-4 text-sm text-gray-600">
+                              <div className="flex items-center space-x-3">
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleEdit('stock', entry);
+                                  }}
+                                  className="text-gray-400 hover:text-blue-600 transition-colors"
+                                  title="Edit"
+                                >
+                                  <EditIcon className="w-5 h-5" />
+                                </button>
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    // Delete logic: Select all IDs and trigger bulk delete
+                                    const ids = entry.ids;
+                                    setSelectedItems(new Set(ids));
+                                    handleDelete('stock', null, true);
+                                  }}
+                                  className="text-gray-400 hover:text-red-600 transition-colors"
+                                  title="Delete"
+                                >
+                                  <TrashIcon className="w-5 h-5" />
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                      {lcReceiveRecords.length === 0 && (
                         <tr>
-                          <td colSpan="12" className="px-6 py-12 text-center text-gray-500">
+                          <td colSpan="13" className="px-6 py-12 text-center text-gray-500">
                             <div className="flex flex-col items-center justify-center">
                               <DollarSignIcon className="w-12 h-12 text-gray-300 mb-3" />
                               <p className="text-lg font-medium text-gray-600">No LC Entries Found</p>
@@ -3670,9 +4297,9 @@ function App() {
                               value={filterSearchInputs.lcNoSearch}
                               onChange={(e) => {
                                 setFilterSearchInputs({ ...filterSearchInputs, lcNoSearch: e.target.value });
-                                setFilterDropdownOpen({ lcNo: true, port: false, brand: false });
+                                setFilterDropdownOpen({ ...initialFilterDropdownState, lcNo: true });
                               }}
-                              onFocus={() => setFilterDropdownOpen({ lcNo: true, port: false, brand: false })}
+                              onFocus={() => setFilterDropdownOpen({ ...initialFilterDropdownState, lcNo: true })}
                               placeholder={stockFilters.lcNo || "Search LC No..."}
                               className="w-full px-3 py-2 pr-8 bg-white border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all shadow-sm hover:border-gray-300"
                             />
@@ -3706,7 +4333,7 @@ function App() {
                                     onClick={() => {
                                       setStockFilters({ ...stockFilters, lcNo: lc });
                                       setFilterSearchInputs({ ...filterSearchInputs, lcNoSearch: '' });
-                                      setFilterDropdownOpen({ lcNo: false, port: false, brand: false, product: false });
+                                      setFilterDropdownOpen(initialFilterDropdownState);
                                     }}
                                     className="w-full px-3 py-2 text-left text-sm hover:bg-blue-50 transition-colors"
                                   >
@@ -3727,9 +4354,9 @@ function App() {
                               value={filterSearchInputs.portSearch}
                               onChange={(e) => {
                                 setFilterSearchInputs({ ...filterSearchInputs, portSearch: e.target.value });
-                                setFilterDropdownOpen({ lcNo: false, port: true, brand: false, product: false });
+                                setFilterDropdownOpen({ ...initialFilterDropdownState, port: true });
                               }}
-                              onFocus={() => setFilterDropdownOpen({ lcNo: false, port: true, brand: false, product: false })}
+                              onFocus={() => setFilterDropdownOpen({ ...initialFilterDropdownState, port: true })}
                               placeholder={stockFilters.port || "Search Port..."}
                               className="w-full px-3 py-2 pr-8 bg-white border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all shadow-sm hover:border-gray-300"
                             />
@@ -3763,7 +4390,7 @@ function App() {
                                     onClick={() => {
                                       setStockFilters({ ...stockFilters, port: p });
                                       setFilterSearchInputs({ ...filterSearchInputs, portSearch: '' });
-                                      setFilterDropdownOpen({ lcNo: false, port: false, brand: false, product: false });
+                                      setFilterDropdownOpen(initialFilterDropdownState);
                                     }}
                                     className="w-full px-3 py-2 text-left text-sm hover:bg-blue-50 transition-colors"
                                   >
@@ -3784,9 +4411,9 @@ function App() {
                               value={filterSearchInputs.productSearch}
                               onChange={(e) => {
                                 setFilterSearchInputs({ ...filterSearchInputs, productSearch: e.target.value });
-                                setFilterDropdownOpen({ lcNo: false, port: false, brand: false, product: true });
+                                setFilterDropdownOpen({ ...initialFilterDropdownState, product: true });
                               }}
-                              onFocus={() => setFilterDropdownOpen({ lcNo: false, port: false, brand: false, product: true })}
+                              onFocus={() => setFilterDropdownOpen({ ...initialFilterDropdownState, product: true })}
                               placeholder={stockFilters.productName || "Search Product..."}
                               className="w-full px-3 py-2 pr-8 bg-white border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all shadow-sm hover:border-gray-300"
                             />
@@ -3820,7 +4447,7 @@ function App() {
                                     onClick={() => {
                                       setStockFilters({ ...stockFilters, productName: p });
                                       setFilterSearchInputs({ ...filterSearchInputs, productSearch: '' });
-                                      setFilterDropdownOpen({ lcNo: false, port: false, brand: false, product: false });
+                                      setFilterDropdownOpen(initialFilterDropdownState);
                                     }}
                                     className="w-full px-3 py-2 text-left text-sm hover:bg-blue-50 transition-colors"
                                   >
@@ -3841,9 +4468,9 @@ function App() {
                               value={filterSearchInputs.brandSearch}
                               onChange={(e) => {
                                 setFilterSearchInputs({ ...filterSearchInputs, brandSearch: e.target.value });
-                                setFilterDropdownOpen({ lcNo: false, port: false, brand: true });
+                                setFilterDropdownOpen({ ...initialFilterDropdownState, brand: true });
                               }}
-                              onFocus={() => setFilterDropdownOpen({ lcNo: false, port: false, brand: true })}
+                              onFocus={() => setFilterDropdownOpen({ ...initialFilterDropdownState, brand: true })}
                               placeholder={stockFilters.brand || "Search Brand..."}
                               className="w-full px-3 py-2 pr-8 bg-white border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all shadow-sm hover:border-gray-300"
                             />
@@ -3877,7 +4504,7 @@ function App() {
                                     onClick={() => {
                                       setStockFilters({ ...stockFilters, brand: b });
                                       setFilterSearchInputs({ ...filterSearchInputs, brandSearch: '' });
-                                      setFilterDropdownOpen({ lcNo: false, port: false, brand: false, product: false });
+                                      setFilterDropdownOpen(initialFilterDropdownState);
                                     }}
                                     className="w-full px-3 py-2 text-left text-sm hover:bg-blue-50 transition-colors"
                                   >
@@ -4172,10 +4799,48 @@ function App() {
                                 </div>
                                 <div className="space-y-2">
                                   <label className="text-sm font-medium text-gray-700">Product Name</label>
-                                  <input
-                                    type="text" name="productName" value={product.productName} onChange={(e) => handleStockInputChange(e, pIndex)} required
-                                    placeholder="Product Name" autoComplete="off" className="w-full h-[42px] px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm"
-                                  />
+                                  <div className="relative w-full" ref={el => productRefs.current[pIndex] = el}>
+                                    <input
+                                      type="text"
+                                      name="productName"
+                                      value={product.productName}
+                                      onChange={(e) => {
+                                        handleStockInputChange(e, pIndex);
+                                        setActiveDropdown(`product-${pIndex}`);
+                                        setHighlightedIndex(-1);
+                                      }}
+                                      onFocus={() => {
+                                        setActiveDropdown(`product-${pIndex}`);
+                                        setHighlightedIndex(-1);
+                                      }}
+                                      onKeyDown={(e) => handleDropdownKeyDown(e, `product-${pIndex}`, (field, val) => handleProductSelect(pIndex, val), 'name')}
+                                      placeholder="Select or type product"
+                                      autoComplete="off"
+                                      className="w-full h-[42px] px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm"
+                                    />
+                                    {activeDropdown === `product-${pIndex}` && (
+                                      <div className="absolute z-[60] w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-xl max-h-48 overflow-y-auto">
+                                        {getFilteredProducts(product.productName).map((p, idx) => (
+                                          <button
+                                            key={p._id}
+                                            type="button"
+                                            onClick={() => handleProductSelect(pIndex, p.name)}
+                                            onMouseEnter={() => setHighlightedIndex(idx)}
+                                            className={`w-full text-left px-4 py-2 text-sm transition-colors flex items-center justify-between ${highlightedIndex === idx ? 'bg-blue-50 text-blue-700' : 'hover:bg-blue-50'}`}
+                                          >
+                                            <div className="flex flex-col">
+                                              <span className="font-medium">{p.name}</span>
+                                              <span className="text-[10px] text-gray-400 font-mono">{p.hsCode || 'No HS Code'}</span>
+                                            </div>
+                                            {product.productName === p.name && <span className="w-2 h-2 bg-blue-500 rounded-full"></span>}
+                                          </button>
+                                        ))}
+                                        {getFilteredProducts(product.productName).length === 0 && (
+                                          <div className="px-4 py-3 text-sm text-gray-500 italic">No products found</div>
+                                        )}
+                                      </div>
+                                    )}
+                                  </div>
                                 </div>
                                 <div className="space-y-2">
                                   <label className="text-sm font-medium text-gray-700">Truck No.</label>
@@ -4222,10 +4887,48 @@ function App() {
                                 </div>
                                 <div className="md:col-span-3 space-y-1.5">
                                   <label className="text-sm font-medium text-gray-700">Product Name</label>
-                                  <input
-                                    type="text" name="productName" value={product.productName} onChange={(e) => handleStockInputChange(e, pIndex)} required
-                                    placeholder="Product Name" autoComplete="off" className="w-full h-[42px] px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm text-sm"
-                                  />
+                                  <div className="relative w-full" ref={el => productRefs.current[pIndex] = el}>
+                                    <input
+                                      type="text"
+                                      name="productName"
+                                      value={product.productName}
+                                      onChange={(e) => {
+                                        handleStockInputChange(e, pIndex);
+                                        setActiveDropdown(`product-${pIndex}`);
+                                        setHighlightedIndex(-1);
+                                      }}
+                                      onFocus={() => {
+                                        setActiveDropdown(`product-${pIndex}`);
+                                        setHighlightedIndex(-1);
+                                      }}
+                                      onKeyDown={(e) => handleDropdownKeyDown(e, `product-${pIndex}`, (field, val) => handleProductSelect(pIndex, val), 'name')}
+                                      placeholder="Select or type product"
+                                      autoComplete="off"
+                                      className="w-full h-[42px] px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm text-sm"
+                                    />
+                                    {activeDropdown === `product-${pIndex}` && (
+                                      <div className="absolute z-[60] w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-xl max-h-48 overflow-y-auto">
+                                        {getFilteredProducts(product.productName).map((p, idx) => (
+                                          <button
+                                            key={p._id}
+                                            type="button"
+                                            onClick={() => handleProductSelect(pIndex, p.name)}
+                                            onMouseEnter={() => setHighlightedIndex(idx)}
+                                            className={`w-full text-left px-4 py-2 text-sm transition-colors flex items-center justify-between ${highlightedIndex === idx ? 'bg-blue-50 text-blue-700' : 'hover:bg-blue-50'}`}
+                                          >
+                                            <div className="flex flex-col">
+                                              <span className="font-medium">{p.name}</span>
+                                              <span className="text-[10px] text-gray-400 font-mono">{p.hsCode || 'No HS Code'}</span>
+                                            </div>
+                                            {product.productName === p.name && <span className="w-2 h-2 bg-blue-500 rounded-full"></span>}
+                                          </button>
+                                        ))}
+                                        {getFilteredProducts(product.productName).length === 0 && (
+                                          <div className="px-4 py-3 text-sm text-gray-500 italic">No products found</div>
+                                        )}
+                                      </div>
+                                    )}
+                                  </div>
                                 </div>
                                 <div className="md:col-span-2 space-y-1.5">
                                   <label className="text-sm font-medium text-gray-700">Truck No.</label>
@@ -4349,7 +5052,7 @@ function App() {
                                             />
                                             {activeDropdown === `brand-${pIndex}-${bIndex}` && (
                                               <div className="absolute z-[60] w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-48 overflow-y-auto">
-                                                {getFilteredBrands(entry.brand, products.find(p => p.name === product.productName)?.brand).map((brand, idx) => (
+                                                {getFilteredBrands(entry.brand, product.productName).map((brand, idx) => (
                                                   <button
                                                     key={idx}
                                                     type="button"
@@ -4361,13 +5064,12 @@ function App() {
                                                     className={`w-full text-left px-3 py-2 text-sm transition-colors flex items-center justify-between ${highlightedIndex === idx ? 'bg-blue-50 text-blue-700' : 'hover:bg-blue-50'}`}
                                                   >
                                                     <span>{brand}</span>
-                                                    {products.find(p => p.name === product.productName)?.brand === brand && (
-                                                      <span className="text-[10px] bg-blue-100 text-blue-600 px-1.5 py-0.5 rounded-full font-medium">Product Brand</span>
-                                                    )}
                                                   </button>
                                                 ))}
-                                                {getFilteredBrands(entry.brand, products.find(p => p.name === product.productName)?.brand).length === 0 && (
-                                                  <div className="px-3 py-2 text-sm text-gray-500 italic">Type to add new brand</div>
+                                                {getFilteredBrands(entry.brand, product.productName).length === 0 && (
+                                                  <div className="px-3 py-2 text-sm text-gray-500 italic">
+                                                    {!product.productName ? 'Please select a product first' : 'Type to add new brand'}
+                                                  </div>
                                                 )}
                                               </div>
                                             )}
@@ -4658,38 +5360,23 @@ function App() {
                                 )}
                               </td>
                               <td className="px-6 py-4 text-sm text-gray-600 leading-relaxed align-top">
-                                {item.entries.map((ent, i) => {
-                                  const pkt = parseFloat(ent.salePacket) || 0;
-                                  const qty = parseFloat(ent.saleQuantity) || 0;
-                                  const size = parseFloat(ent.packetSize) || 0;
-                                  const whole = Math.floor(pkt);
-                                  const rem = Math.round(qty - (whole * size));
-                                  return (
-                                    <div key={i}>
-                                      {whole > 0 || rem > 0 ? `${whole}${rem > 0 ? ` - ${rem} kg` : ''}` : '-'}
-                                    </div>
-                                  );
-                                })}
+                                {item.entries.map((ent, i) => (
+                                  <div key={i}>-</div>
+                                ))}
                                 {item.entries.length > 1 && (
                                   <div className="flex items-center justify-between gap-2 mt-1 pt-1 border-t border-gray-100">
-                                    <div className="text-gray-900 font-bold">
-                                      {(() => {
-                                        const totalWhole = item.entries.reduce((sum, ent) => sum + Math.floor(parseFloat(ent.salePacket) || 0), 0);
-                                        const totalRem = Math.round(item.entries.reduce((sum, ent) => sum + (parseFloat(ent.saleQuantity) || 0) - (Math.floor(parseFloat(ent.salePacket) || 0) * (parseFloat(ent.packetSize) || 0)), 0));
-                                        return totalWhole > 0 || totalRem > 0 ? `${totalWhole}${totalRem > 0 ? ` - ${totalRem} kg` : ''}` : '0';
-                                      })()}
-                                    </div>
+                                    <div className="text-gray-900 font-bold">-</div>
                                     <div className="text-[11px] text-gray-500 font-medium italic whitespace-nowrap">Total QTY</div>
                                   </div>
                                 )}
                               </td>
                               <td className="px-6 py-4 text-sm font-medium text-gray-900 leading-relaxed align-top">
                                 {item.entries.map((ent, i) => (
-                                  <div key={i}>{Math.round(parseFloat(ent.saleQuantity) || 0) || '-'} {ent.unit}</div>
+                                  <div key={i}>-</div>
                                 ))}
                                 {item.entries.length > 1 && (
                                   <div className="text-gray-900 mt-1 font-bold pt-1 border-t border-gray-100">
-                                    {Math.round(item.saleQuantity)} {item.unit}
+                                    -
                                   </div>
                                 )}
                               </td>
@@ -4762,7 +5449,7 @@ function App() {
                       </svg>
                     </button>
                   </div>
-                  <form onSubmit={handleProductSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <form onSubmit={handleProductSubmit} className="grid grid-cols-1 md:grid-cols-4 gap-6">
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-2">HS Code</label>
                       <input
@@ -4785,25 +5472,13 @@ function App() {
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">Brand</label>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Category</label>
                       <input
                         type="text"
-                        value={productFormData.brand}
-                        onChange={(e) => setProductFormData(prev => ({ ...prev, brand: e.target.value }))}
+                        value={productFormData.category}
+                        onChange={(e) => setProductFormData(prev => ({ ...prev, category: e.target.value }))}
                         className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
-                        placeholder="Enter brand"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">Purchased Price</label>
-                      <input
-                        type="number"
-                        min="0"
-                        step="0.01"
-                        value={productFormData.purchasedPrice}
-                        onChange={(e) => setProductFormData(prev => ({ ...prev, purchasedPrice: e.target.value }))}
-                        className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
-                        placeholder="0.00"
+                        placeholder="Enter category"
                       />
                     </div>
                     <div>
@@ -4821,27 +5496,66 @@ function App() {
                         <option value="m">m</option>
                       </select>
                     </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">Packet Size</label>
-                      <input
-                        type="text"
-                        value={productFormData.packetSize}
-                        onChange={(e) => setProductFormData(prev => ({ ...prev, packetSize: e.target.value }))}
-                        className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
-                        placeholder="Enter packet size"
-                      />
+
+                    <div className="md:col-span-4 space-y-4">
+                      <div className="flex items-center justify-between">
+                        <label className="block text-sm font-bold text-gray-700">Brands & Packaging</label>
+                        <button
+                          type="button"
+                          onClick={handleAddProductBrand}
+                          className="text-xs font-semibold text-blue-600 hover:text-blue-700 flex items-center gap-1"
+                        >
+                          <PlusIcon className="w-3 h-3" /> Add New Brand
+                        </button>
+                      </div>
+                      <div className="space-y-3 max-h-[320px] overflow-y-auto pr-2 scrollbar-thin scrollbar-thumb-gray-200">
+                        {productFormData.brands.map((brandEntry, bIndex) => (
+                          <div key={bIndex} className="grid grid-cols-1 md:grid-cols-12 gap-3 items-end p-3 bg-gray-50 rounded-xl relative group">
+                            {productFormData.brands.length > 1 && (
+                              <button
+                                type="button"
+                                onClick={() => handleRemoveProductBrand(bIndex)}
+                                className="absolute -top-2 -right-2 p-1 bg-white text-gray-400 hover:text-red-500 rounded-lg shadow-sm border border-gray-100 opacity-0 group-hover:opacity-100 transition-all"
+                              >
+                                <XIcon className="w-3.5 h-3.5" />
+                              </button>
+                            )}
+                            <div className="md:col-span-5">
+                              <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1">Brand</label>
+                              <input
+                                type="text"
+                                value={brandEntry.brand}
+                                onChange={(e) => handleProductBrandChange(bIndex, 'brand', e.target.value)}
+                                className="w-full px-3 py-1.5 border border-gray-200 rounded-lg text-sm outline-none focus:border-blue-500 transition-all"
+                                placeholder="Enter brand"
+                              />
+                            </div>
+                            <div className="md:col-span-3">
+                              <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1">Packet Size</label>
+                              <input
+                                type="text"
+                                value={brandEntry.packetSize}
+                                onChange={(e) => handleProductBrandChange(bIndex, 'packetSize', e.target.value)}
+                                className="w-full px-3 py-1.5 border border-gray-200 rounded-lg text-sm outline-none focus:border-blue-500 transition-all"
+                                placeholder="Size"
+                              />
+                            </div>
+                            <div className="md:col-span-4">
+                              <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1">Purchased Price</label>
+                              <input
+                                type="number"
+                                step="0.01"
+                                value={brandEntry.purchasedPrice}
+                                onChange={(e) => handleProductBrandChange(bIndex, 'purchasedPrice', e.target.value)}
+                                className="w-full px-3 py-1.5 border border-gray-200 rounded-lg text-sm outline-none focus:border-blue-500 transition-all"
+                                placeholder="0.00"
+                              />
+                            </div>
+                          </div>
+                        ))}
+                      </div>
                     </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">Category</label>
-                      <input
-                        type="text"
-                        value={productFormData.category}
-                        onChange={(e) => setProductFormData(prev => ({ ...prev, category: e.target.value }))}
-                        className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
-                        placeholder="Enter category"
-                      />
-                    </div>
-                    <div className="md:col-span-2">
+                    <div className="md:col-span-4">
                       <label className="block text-sm font-medium text-gray-700 mb-2">Description</label>
                       <textarea
                         value={productFormData.description}
@@ -4851,7 +5565,7 @@ function App() {
                         placeholder="Enter product description"
                       />
                     </div>
-                    <div className="md:col-span-2 flex justify-end space-x-3 pt-4 border-t border-gray-100">
+                    <div className="md:col-span-4 flex justify-end space-x-3 pt-4 border-t border-gray-100">
                       <button
                         type="button"
                         onClick={() => { setShowProductForm(false); setEditingId(null); }}
@@ -4901,14 +5615,28 @@ function App() {
                     <tbody className="divide-y divide-gray-100">
                       {products.map((product) => (
                         <tr key={product._id} className="hover:bg-gray-50 transition-colors">
-                          <td className="px-6 py-4 text-sm text-gray-600 font-mono">{product.hsCode || '-'}</td>
-                          <td className="px-6 py-4 text-sm font-medium text-gray-900">{product.name}</td>
-                          <td className="px-6 py-4 text-sm text-gray-600">{product.brand || '-'}</td>
-                          <td className="px-6 py-4 text-sm text-gray-600">{product.packetSize || '-'}</td>
-                          <td className="px-6 py-4 text-sm text-gray-600">{product.uom || product.unit}</td>
-                          <td className="px-6 py-4 text-sm text-gray-600">{product.purchasedPrice ? `TK ${product.purchasedPrice}` : '-'}</td>
-                          <td className="px-6 py-4 text-sm text-gray-600">{product.category || '-'}</td>
-                          <td className="px-6 py-4 text-center">
+                          <td className="px-6 py-4 text-sm text-gray-600 font-mono align-top">{product.hsCode || '-'}</td>
+                          <td className="px-6 py-4 text-sm font-medium text-gray-900 align-top">{product.name}</td>
+                          <td className="px-6 py-4 text-sm text-gray-600 leading-relaxed align-top">
+                            {product.brands?.map((b, i) => (
+                              <div key={i}>{b.brand || '-'}</div>
+                            )) || product.brand || '-'}
+                          </td>
+                          <td className="px-6 py-4 text-sm text-gray-600 leading-relaxed align-top">
+                            {product.brands?.map((b, i) => (
+                              <div key={i}>{b.packetSize || '-'}</div>
+                            )) || product.packetSize || '-'}
+                          </td>
+                          <td className="px-6 py-4 text-sm text-gray-600 align-top">
+                            {product.uom || product.unit || 'kg'}
+                          </td>
+                          <td className="px-6 py-4 text-sm text-gray-600 leading-relaxed align-top">
+                            {product.brands?.map((b, i) => (
+                              <div key={i}>{b.purchasedPrice ? `TK ${b.purchasedPrice}` : '-'}</div>
+                            )) || (product.purchasedPrice ? `TK ${product.purchasedPrice}` : '-')}
+                          </td>
+                          <td className="px-6 py-4 text-sm text-gray-600 align-top">{product.category || '-'}</td>
+                          <td className="px-6 py-4 text-center align-top">
                             <div className="flex items-center justify-center space-x-3">
                               <button onClick={() => handleProductEdit(product)} className="text-gray-400 hover:text-blue-600 transition-colors">
                                 <EditIcon className="w-5 h-5" />
@@ -5159,9 +5887,9 @@ function App() {
                               value={filterSearchInputs.lcNoSearch}
                               onChange={(e) => {
                                 setFilterSearchInputs({ ...filterSearchInputs, lcNoSearch: e.target.value });
-                                setFilterDropdownOpen({ lcNo: true, port: false, brand: false });
+                                setFilterDropdownOpen({ ...initialFilterDropdownState, lcNo: true });
                               }}
-                              onFocus={() => setFilterDropdownOpen({ lcNo: true, port: false, brand: false })}
+                              onFocus={() => setFilterDropdownOpen({ ...initialFilterDropdownState, lcNo: true })}
                               placeholder={historyFilters.lcNo || "Search LC No..."}
                               className="w-full px-3 py-2 pr-8 bg-white border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all shadow-sm hover:border-gray-300"
                             />
@@ -5196,7 +5924,7 @@ function App() {
                                     onClick={() => {
                                       setHistoryFilters({ ...historyFilters, lcNo: lc });
                                       setFilterSearchInputs({ ...filterSearchInputs, lcNoSearch: '' });
-                                      setFilterDropdownOpen({ lcNo: false, port: false, brand: false });
+                                      setFilterDropdownOpen(initialFilterDropdownState);
                                     }}
                                     className="w-full px-3 py-2 text-left text-sm hover:bg-blue-50 transition-colors"
                                   >
@@ -5217,9 +5945,9 @@ function App() {
                               value={filterSearchInputs.portSearch}
                               onChange={(e) => {
                                 setFilterSearchInputs({ ...filterSearchInputs, portSearch: e.target.value });
-                                setFilterDropdownOpen({ lcNo: false, port: true, brand: false });
+                                setFilterDropdownOpen({ ...initialFilterDropdownState, port: true });
                               }}
-                              onFocus={() => setFilterDropdownOpen({ lcNo: false, port: true, brand: false })}
+                              onFocus={() => setFilterDropdownOpen({ ...initialFilterDropdownState, port: true })}
                               placeholder={historyFilters.port || "Search Port..."}
                               className="w-full px-3 py-2 pr-8 bg-white border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all shadow-sm hover:border-gray-300"
                             />
@@ -5254,7 +5982,7 @@ function App() {
                                     onClick={() => {
                                       setHistoryFilters({ ...historyFilters, port });
                                       setFilterSearchInputs({ ...filterSearchInputs, portSearch: '' });
-                                      setFilterDropdownOpen({ lcNo: false, port: false, brand: false });
+                                      setFilterDropdownOpen(initialFilterDropdownState);
                                     }}
                                     className="w-full px-3 py-2 text-left text-sm hover:bg-blue-50 transition-colors"
                                   >
@@ -5275,9 +6003,9 @@ function App() {
                               value={filterSearchInputs.brandSearch}
                               onChange={(e) => {
                                 setFilterSearchInputs({ ...filterSearchInputs, brandSearch: e.target.value });
-                                setFilterDropdownOpen({ lcNo: false, port: false, brand: true });
+                                setFilterDropdownOpen({ ...initialFilterDropdownState, brand: true });
                               }}
-                              onFocus={() => setFilterDropdownOpen({ lcNo: false, port: false, brand: true })}
+                              onFocus={() => setFilterDropdownOpen({ ...initialFilterDropdownState, brand: true })}
                               placeholder={historyFilters.brand || "Search Brand..."}
                               className="w-full px-3 py-2 pr-8 bg-white border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all shadow-sm hover:border-gray-300"
                             />
@@ -5313,7 +6041,7 @@ function App() {
                                     onClick={() => {
                                       setHistoryFilters({ ...historyFilters, brand });
                                       setFilterSearchInputs({ ...filterSearchInputs, brandSearch: '' });
-                                      setFilterDropdownOpen({ lcNo: false, port: false, brand: false });
+                                      setFilterDropdownOpen(initialFilterDropdownState);
                                     }}
                                     className="w-full px-3 py-2 text-left text-sm hover:bg-blue-50 transition-colors"
                                   >
@@ -5525,11 +6253,17 @@ function App() {
                               <td className="px-3 py-3 text-[13px] text-gray-600">{historyItem.port || '-'}</td>
                               <td className="px-3 py-3 text-[13px] text-gray-600">{historyItem.importer || '-'}</td>
                               <td className="px-3 py-3 text-[13px] text-gray-600">
-                                {historyItem.truckNo || '-'}
+                                {historyItem.truckNo ? historyItem.truckNo.toString().split(',').map((t, i) => (
+                                  <div key={i} className="leading-tight">{t.trim()}</div>
+                                )) : '-'}
                               </td>
                               <td className="px-3 py-3 text-[13px] text-gray-600 leading-relaxed">
                                 {historyItem.entries.map((ent, i) => (
-                                  <div key={i}>{ent.brand || '-'}</div>
+                                  <div key={i}>
+                                    {ent.brand ? ent.brand.toString().split(',').map((b, j) => (
+                                      <div key={j}>{b.trim()}</div>
+                                    )) : '-'}
+                                  </div>
                                 ))}
                               </td>
                               <td className="px-3 py-3 text-[13px] text-gray-600 leading-relaxed">
@@ -5542,7 +6276,11 @@ function App() {
                               </td>
                               <td className="px-3 py-3 text-[13px] text-gray-600 leading-relaxed font-bold">
                                 {historyItem.entries.map((ent, i) => (
-                                  <div key={i}>{ent.packet || '-'}</div>
+                                  <div key={i}>
+                                    {ent.packet ? ent.packet.toString().split(',').map((p, j) => (
+                                      <div key={j}>{p.trim()}</div>
+                                    )) : '-'}
+                                  </div>
                                 ))}
                                 {historyItem.isGrouped && (
                                   <div className="flex items-center gap-2 mt-2">
@@ -5554,7 +6292,11 @@ function App() {
                               </td>
                               <td className="px-3 py-3 text-[13px] font-medium text-gray-900 leading-relaxed">
                                 {historyItem.entries.map((ent, i) => (
-                                  <div key={i}>{ent.quantity} {ent.unit}</div>
+                                  <div key={i}>
+                                    {ent.quantity ? ent.quantity.toString().split(',').map((q, j) => (
+                                      <div key={j}>{q.trim()} {ent.unit}</div>
+                                    )) : '-'}
+                                  </div>
                                 ))}
                                 {historyItem.isGrouped && (
                                   <div className="text-gray-900 mt-2 font-bold">
@@ -5564,7 +6306,11 @@ function App() {
                               </td>
                               <td className="px-3 py-3 text-[13px] text-gray-600 leading-relaxed">
                                 {historyItem.entries.map((ent, i) => (
-                                  <div key={i}>{ent.inHousePacket || '-'}</div>
+                                  <div key={i}>
+                                    {ent.inHousePacket ? ent.inHousePacket.toString().split(',').map((p, j) => (
+                                      <div key={j}>{p.trim()}</div>
+                                    )) : '-'}
+                                  </div>
                                 ))}
                                 {historyItem.isGrouped && (
                                   <div className="text-gray-900 mt-2 font-bold">
@@ -5574,7 +6320,9 @@ function App() {
                               </td>
                               <td className="px-3 py-3 text-[13px] text-gray-600 leading-relaxed font-bold">
                                 {historyItem.entries.map((ent, i) => (
-                                  <div key={i}>{ent.inHouseQuantity ? Math.round(parseFloat(ent.inHouseQuantity)) : '-'} {ent.unit}</div>
+                                  <div key={i}>{ent.inHouseQuantity ? ent.inHouseQuantity.toString().split(',').map((q, j) => (
+                                    <div key={j}>{Math.round(parseFloat(q))} {ent.unit}</div>
+                                  )) : '-'}</div>
                                 ))}
                                 {historyItem.isGrouped && (
                                   <div className="text-gray-900 mt-2 font-bold">
@@ -5584,7 +6332,9 @@ function App() {
                               </td>
                               <td className="px-3 py-3 text-[13px] text-red-600 leading-relaxed font-bold">
                                 {historyItem.entries.map((ent, i) => (
-                                  <div key={i}>{ent.sweepedQuantity ? `${ent.sweepedQuantity} ${ent.unit}` : '-'}</div>
+                                  <div key={i}>{ent.sweepedQuantity ? ent.sweepedQuantity.toString().split(',').map((q, j) => (
+                                    <div key={j}>{q.trim()} {ent.unit}</div>
+                                  )) : '-'}</div>
                                 ))}
                                 {historyItem.isGrouped && (
                                   <div className="text-red-700 mt-2 font-bold">
@@ -5692,7 +6442,7 @@ function App() {
                         </div>
 
                         {/* LC No Selection */}
-                        <div className="space-y-1.5 relative" ref={stockLcNoFilterRef}>
+                        <div className="space-y-1.5 relative" ref={reportLcNoFilterRef}>
                           <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">LC No</label>
                           <div className="relative">
                             <input
@@ -5700,9 +6450,9 @@ function App() {
                               value={filterSearchInputs.lcNoSearch}
                               onChange={(e) => {
                                 setFilterSearchInputs({ ...filterSearchInputs, lcNoSearch: e.target.value });
-                                setFilterDropdownOpen({ lcNo: true, port: false, brand: false, product: false });
+                                setFilterDropdownOpen({ ...initialFilterDropdownState, lcNo: true });
                               }}
-                              onFocus={() => setFilterDropdownOpen({ lcNo: true, port: false, brand: false, product: false })}
+                              onFocus={() => setFilterDropdownOpen({ ...initialFilterDropdownState, lcNo: true })}
                               placeholder={stockFilters.lcNo || "Search LC No..."}
                               className="w-full px-3 py-2 pr-8 bg-white border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all shadow-sm hover:border-gray-300"
                             />
@@ -5736,7 +6486,7 @@ function App() {
                                     onClick={() => {
                                       setStockFilters({ ...stockFilters, lcNo: lc });
                                       setFilterSearchInputs({ ...filterSearchInputs, lcNoSearch: '' });
-                                      setFilterDropdownOpen({ lcNo: false, port: false, brand: false, product: false });
+                                      setFilterDropdownOpen(initialFilterDropdownState);
                                     }}
                                     className="w-full px-3 py-2 text-left text-sm hover:bg-blue-50 transition-colors"
                                   >
@@ -5749,7 +6499,7 @@ function App() {
                         </div>
 
                         {/* Port Selection */}
-                        <div className="space-y-1.5 relative" ref={stockPortFilterRef}>
+                        <div className="space-y-1.5 relative" ref={reportPortFilterRef}>
                           <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Port</label>
                           <div className="relative">
                             <input
@@ -5757,9 +6507,9 @@ function App() {
                               value={filterSearchInputs.portSearch}
                               onChange={(e) => {
                                 setFilterSearchInputs({ ...filterSearchInputs, portSearch: e.target.value });
-                                setFilterDropdownOpen({ lcNo: false, port: true, brand: false, product: false });
+                                setFilterDropdownOpen({ ...initialFilterDropdownState, port: true });
                               }}
-                              onFocus={() => setFilterDropdownOpen({ lcNo: false, port: true, brand: false, product: false })}
+                              onFocus={() => setFilterDropdownOpen({ ...initialFilterDropdownState, port: true })}
                               placeholder={stockFilters.port || "Search Port..."}
                               className="w-full px-3 py-2 pr-8 bg-white border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all shadow-sm hover:border-gray-300"
                             />
@@ -5793,7 +6543,7 @@ function App() {
                                     onClick={() => {
                                       setStockFilters({ ...stockFilters, port: p });
                                       setFilterSearchInputs({ ...filterSearchInputs, portSearch: '' });
-                                      setFilterDropdownOpen({ lcNo: false, port: false, brand: false, product: false });
+                                      setFilterDropdownOpen(initialFilterDropdownState);
                                     }}
                                     className="w-full px-3 py-2 text-left text-sm hover:bg-blue-50 transition-colors"
                                   >
@@ -5806,7 +6556,7 @@ function App() {
                         </div>
 
                         {/* Product Name Selection */}
-                        <div className="space-y-1.5 relative" ref={stockProductFilterRef}>
+                        <div className="space-y-1.5 relative" ref={reportProductFilterRef}>
                           <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Product Name</label>
                           <div className="relative">
                             <input
@@ -5814,9 +6564,9 @@ function App() {
                               value={filterSearchInputs.productSearch}
                               onChange={(e) => {
                                 setFilterSearchInputs({ ...filterSearchInputs, productSearch: e.target.value });
-                                setFilterDropdownOpen({ lcNo: false, port: false, brand: false, product: true });
+                                setFilterDropdownOpen({ ...initialFilterDropdownState, product: true });
                               }}
-                              onFocus={() => setFilterDropdownOpen({ lcNo: false, port: false, brand: false, product: true })}
+                              onFocus={() => setFilterDropdownOpen({ ...initialFilterDropdownState, product: true })}
                               placeholder={stockFilters.productName || "Search Product..."}
                               className="w-full px-3 py-2 pr-8 bg-white border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all shadow-sm hover:border-gray-300"
                             />
@@ -5850,7 +6600,7 @@ function App() {
                                     onClick={() => {
                                       setStockFilters({ ...stockFilters, productName: p });
                                       setFilterSearchInputs({ ...filterSearchInputs, productSearch: '' });
-                                      setFilterDropdownOpen({ lcNo: false, port: false, brand: false, product: false });
+                                      setFilterDropdownOpen(initialFilterDropdownState);
                                     }}
                                     className="w-full px-3 py-2 text-left text-sm hover:bg-blue-50 transition-colors"
                                   >
@@ -5863,7 +6613,7 @@ function App() {
                         </div>
 
                         {/* Brand Selection */}
-                        <div className="space-y-1.5 relative" ref={stockBrandFilterRef}>
+                        <div className="space-y-1.5 relative" ref={reportBrandFilterRef}>
                           <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Brand</label>
                           <div className="relative">
                             <input
@@ -5871,9 +6621,9 @@ function App() {
                               value={filterSearchInputs.brandSearch}
                               onChange={(e) => {
                                 setFilterSearchInputs({ ...filterSearchInputs, brandSearch: e.target.value });
-                                setFilterDropdownOpen({ lcNo: false, port: false, brand: true, product: false });
+                                setFilterDropdownOpen({ ...initialFilterDropdownState, brand: true });
                               }}
-                              onFocus={() => setFilterDropdownOpen({ lcNo: false, port: false, brand: true, product: false })}
+                              onFocus={() => setFilterDropdownOpen({ ...initialFilterDropdownState, brand: true })}
                               placeholder={stockFilters.brand || "Search Brand..."}
                               className="w-full px-3 py-2 pr-8 bg-white border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all shadow-sm hover:border-gray-300"
                             />
@@ -5907,7 +6657,7 @@ function App() {
                                     onClick={() => {
                                       setStockFilters({ ...stockFilters, brand: b });
                                       setFilterSearchInputs({ ...filterSearchInputs, brandSearch: '' });
-                                      setFilterDropdownOpen({ lcNo: false, port: false, brand: false, product: false });
+                                      setFilterDropdownOpen(initialFilterDropdownState);
                                     }}
                                     className="w-full px-3 py-2 text-left text-sm hover:bg-blue-50 transition-colors"
                                   >
@@ -5990,7 +6740,7 @@ function App() {
                         <th className="border-r border-gray-900 px-4 py-3 text-left text-xs font-bold text-gray-900 uppercase tracking-wider w-12 text-center">SL</th>
                         <th className="border-r border-gray-900 px-4 py-3 text-left text-xs font-bold text-gray-900 uppercase tracking-wider">Product Name</th>
                         <th className="border-r border-gray-900 px-4 py-3 text-left text-xs font-bold text-gray-900 uppercase tracking-wider">Brand</th>
-                        <th className="border-r border-gray-900 px-4 py-3 text-right text-xs font-bold text-gray-900 uppercase tracking-wider">InHouse PKT</th>
+                        <th className="border-r border-gray-900 px-4 py-3 text-left text-xs font-bold text-gray-900 uppercase tracking-wider">InHouse PKT</th>
                         <th className="border-r border-gray-900 px-4 py-3 text-right text-xs font-bold text-gray-900 uppercase tracking-wider">InHouse QTY</th>
                         <th className="border-r border-gray-900 px-4 py-3 text-right text-xs font-bold text-gray-900 uppercase tracking-wider">Sale PKT</th>
                         <th className="px-4 py-3 text-right text-xs font-bold text-gray-900 uppercase tracking-wider">Sale QTY</th>
@@ -6007,7 +6757,7 @@ function App() {
                                 <div key={i} className="leading-tight mb-0.5 last:mb-0">{ent.brand}</div>
                               ))}
                             </td>
-                            <td className="border-r border-gray-900 px-4 py-3 text-sm text-right text-gray-900 font-medium whitespace-pre-line align-top">
+                            <td className="border-r border-gray-900 px-4 py-3 text-sm text-left text-gray-900 font-medium whitespace-pre-line align-top">
                               {item.entries.map((ent, i) => {
                                 const pkt = parseFloat(ent.inHousePacket) || 0;
                                 const qty = parseFloat(ent.inHouseQuantity) || 0;
@@ -6041,35 +6791,22 @@ function App() {
                               )}
                             </td>
                             <td className="border-r border-gray-900 px-4 py-3 text-sm text-right text-gray-900 font-medium whitespace-pre-line align-top">
-                              {item.entries.map((ent, i) => {
-                                const pkt = parseFloat(ent.salePacket) || 0;
-                                const qty = parseFloat(ent.saleQuantity) || 0;
-                                const size = parseFloat(ent.packetSize) || 0;
-                                const whole = Math.floor(pkt);
-                                const rem = Math.round(qty - (whole * size));
-                                return (
-                                  <div key={i} className="leading-tight mb-0.5 last:mb-0">
-                                    {whole > 0 || rem > 0 ? `${whole}${rem > 0 ? ` - ${rem} kg` : ''}` : '-'}
-                                  </div>
-                                );
-                              })}
+                              {item.entries.map((ent, i) => (
+                                <div key={i} className="leading-tight mb-0.5 last:mb-0">-</div>
+                              ))}
                               {item.entries.length > 1 && (
                                 <div className="border-t border-gray-300 mt-1 pt-1 font-bold">
-                                  {(() => {
-                                    const totalWhole = item.entries.reduce((sum, ent) => sum + Math.floor(parseFloat(ent.salePacket) || 0), 0);
-                                    const totalRem = Math.round(item.entries.reduce((sum, ent) => sum + (parseFloat(ent.saleQuantity) || 0) - (Math.floor(parseFloat(ent.salePacket) || 0) * (parseFloat(ent.packetSize) || 0)), 0));
-                                    return totalWhole > 0 || totalRem > 0 ? `${totalWhole}${totalRem > 0 ? ` - ${totalRem} kg` : ''}` : '0';
-                                  })()}
+                                  -
                                 </div>
                               )}
                             </td>
                             <td className="px-4 py-3 text-sm text-right text-gray-900 font-bold whitespace-pre-line align-top">
                               {item.entries.map((ent, i) => (
-                                <div key={i} className="leading-tight mb-0.5 last:mb-0">{Math.round(ent.saleQuantity)} {ent.unit}</div>
+                                <div key={i} className="leading-tight mb-0.5 last:mb-0">-</div>
                               ))}
                               {item.entries.length > 1 && (
                                 <div className="border-t border-gray-300 mt-1 pt-1">
-                                  {Math.round(item.saleQuantity)} {item.unit}
+                                  -
                                 </div>
                               )}
                             </td>
@@ -6085,7 +6822,7 @@ function App() {
                       <tfoot>
                         <tr className="bg-gray-100 border-t-2 border-gray-900">
                           <td colSpan="3" className="px-4 py-3 text-sm font-black text-gray-900 text-right uppercase tracking-wider border-r border-gray-900">Grand Total</td>
-                          <td className="px-4 py-3 text-sm text-right font-black text-gray-900 border-r border-gray-900">
+                          <td className="px-4 py-3 text-sm text-left font-black text-gray-900 border-r border-gray-900">
                             {(() => {
                               const totalWhole = stockData.displayRecords.reduce((accWhole, item) =>
                                 accWhole + item.entries.reduce((sum, ent) => sum + Math.floor(parseFloat(ent.inHousePacket) || 0), 0), 0);
@@ -6098,16 +6835,10 @@ function App() {
                             {Math.round(stockData.totalInHouseQty)} {stockData.unit}
                           </td>
                           <td className="px-4 py-3 text-sm text-right font-black text-gray-900 border-r border-gray-900">
-                            {(() => {
-                              const totalWhole = stockData.displayRecords.reduce((accWhole, item) =>
-                                accWhole + item.entries.reduce((sum, ent) => sum + Math.floor(parseFloat(ent.salePacket) || 0), 0), 0);
-                              const totalRem = Math.round(stockData.displayRecords.reduce((accRem, item) =>
-                                accRem + item.entries.reduce((sum, ent) => sum + (parseFloat(ent.saleQuantity) || 0) - (Math.floor(parseFloat(ent.salePacket) || 0) * (parseFloat(ent.packetSize) || 0)), 0), 0));
-                              return totalWhole > 0 || totalRem > 0 ? `${totalWhole}${totalRem > 0 ? ` - ${totalRem} kg` : ''}` : '0';
-                            })()}
+                            -
                           </td>
                           <td className="px-4 py-3 text-sm text-right font-black text-gray-900">
-                            {Math.round(stockData.totalSaleQty)} {stockData.unit}
+                            -
                           </td>
                         </tr>
                       </tfoot>
@@ -6125,6 +6856,645 @@ function App() {
                   </div>
                   <div className="text-center">
                     <div className="border-t border-dotted border-gray-900 pt-2 text-xs font-bold text-gray-900 uppercase">Authorized Signature</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* LC Receive Report Modal */}
+      {showLcReport && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-gray-900/40 backdrop-blur-sm print:contents">
+          <div className="w-[95%] h-[90%] bg-white rounded-3xl shadow-2xl flex flex-col overflow-hidden animate-in fade-in zoom-in duration-300 print:w-full print:h-auto print:shadow-none print:bg-white print:rounded-none">
+            {/* Modal Header - Hidden in Print */}
+            <div className="px-8 py-5 border-b border-gray-100 bg-gray-50/50 flex items-center justify-between print:hidden">
+              <div className="flex items-center gap-4">
+                <div className="w-10 h-10 bg-blue-100 rounded-xl flex items-center justify-center">
+                  <BarChartIcon className="w-6 h-6 text-blue-600" />
+                </div>
+                <div>
+                  <h2 className="text-xl font-bold text-gray-900">LC Receive Report</h2>
+                  <p className="text-sm text-gray-500 font-medium">Generate and print LC receiving reports</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-4">
+                {/* Advanced Filter for Report */}
+                <div className="relative" ref={lcReportFilterRef}>
+                  <button
+                    ref={lcReportFilterButtonRef}
+                    onClick={() => setShowLcReportFilterPanel(!showLcReportFilterPanel)}
+                    className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 text-gray-600 rounded-xl hover:bg-gray-50 hover:border-gray-300 transition-all shadow-sm active:scale-95"
+                  >
+                    <FunnelIcon className="w-4 h-4 text-gray-400" />
+                    <span className="text-sm font-medium">Filter</span>
+                  </button>
+
+                  {/* Filter Panel */}
+                  {showLcReportFilterPanel && (
+                    <div className="absolute right-0 mt-2 w-[450px] bg-white rounded-2xl shadow-2xl border border-gray-100 p-6 z-[110] animate-in fade-in slide-in-from-top-2 duration-200">
+                      <div className="flex items-center justify-between mb-6">
+                        <h3 className="text-base font-bold text-gray-900">Filter Report</h3>
+                        <button
+                          onClick={() => {
+                            setLcFilters(initialLcFilterState);
+                            setFilterSearchInputs({
+                              ...filterSearchInputs,
+                              lcNoSearch: '',
+                              portSearch: '',
+                              indCnfSearch: '',
+                              bdCnfSearch: '',
+                              billOfEntrySearch: '',
+                              productSearch: '',
+                              brandSearch: ''
+                            });
+                          }}
+                          className="text-xs font-bold text-blue-600 hover:text-blue-700 uppercase tracking-wider"
+                        >
+                          Reset All
+                        </button>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-4">
+                        <CustomDatePicker
+                          label="From Date"
+                          value={lcFilters.startDate}
+                          onChange={(e) => setLcFilters({ ...lcFilters, startDate: e.target.value })}
+                          compact={true}
+                        />
+                        <CustomDatePicker
+                          label="To Date"
+                          value={lcFilters.endDate}
+                          onChange={(e) => setLcFilters({ ...lcFilters, endDate: e.target.value })}
+                          compact={true}
+                          rightAlign={true}
+                        />
+
+                        {/* LC No Filter */}
+                        <div className="space-y-1.5 relative" ref={reportLcNoFilterRef}>
+                          <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">LC No</label>
+                          <div className="relative">
+                            <input
+                              type="text"
+                              value={filterSearchInputs.lcNoSearch}
+                              onChange={(e) => {
+                                setFilterSearchInputs({ ...filterSearchInputs, lcNoSearch: e.target.value });
+                                setFilterDropdownOpen({ ...initialFilterDropdownState, lcNo: true });
+                              }}
+                              onFocus={() => setFilterDropdownOpen({ ...initialFilterDropdownState, lcNo: true })}
+                              placeholder={lcFilters.lcNo || "Search LC..."}
+                              className="w-full px-3 py-2 pr-8 bg-white border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all shadow-sm hover:border-gray-300"
+                            />
+                            <SearchIcon className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+                            {lcFilters.lcNo && (
+                              <button
+                                onClick={() => {
+                                  setLcFilters({ ...lcFilters, lcNo: '' });
+                                  setFilterSearchInputs({ ...filterSearchInputs, lcNoSearch: '' });
+                                }}
+                                className="absolute right-8 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                              >
+                                <XIcon className="w-4 h-4" />
+                              </button>
+                            )}
+                          </div>
+                          {filterDropdownOpen.lcNo && (() => {
+                            const lcOptions = [...new Set(stockRecords.map(item => (item.lcNo || '').trim()).filter(Boolean))].sort();
+                            const filtered = lcOptions.filter(lc => lc.toLowerCase().includes(filterSearchInputs.lcNoSearch.toLowerCase()));
+                            return filtered.length > 0 ? (
+                              <div className="absolute z-[120] mt-1 w-full bg-white border border-gray-200 rounded-xl shadow-lg max-h-48 overflow-y-auto">
+                                {filtered.map(lc => (
+                                  <button
+                                    key={lc}
+                                    type="button"
+                                    onClick={() => {
+                                      setLcFilters({ ...lcFilters, lcNo: lc });
+                                      setFilterSearchInputs({ ...filterSearchInputs, lcNoSearch: '' });
+                                      setFilterDropdownOpen(initialFilterDropdownState);
+                                    }}
+                                    className="w-full px-3 py-2 text-left text-sm hover:bg-blue-50 transition-colors"
+                                  >
+                                    {lc}
+                                  </button>
+                                ))}
+                              </div>
+                            ) : null;
+                          })()}
+                        </div>
+
+                        {/* Port Filter */}
+                        <div className="space-y-1.5 relative" ref={reportPortFilterRef}>
+                          <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Port</label>
+                          <div className="relative">
+                            <input
+                              type="text"
+                              value={filterSearchInputs.portSearch}
+                              onChange={(e) => {
+                                setFilterSearchInputs({ ...filterSearchInputs, portSearch: e.target.value });
+                                setFilterDropdownOpen({ ...initialFilterDropdownState, port: true });
+                              }}
+                              onFocus={() => setFilterDropdownOpen({ ...initialFilterDropdownState, port: true })}
+                              placeholder={lcFilters.port || "Search Port..."}
+                              className="w-full px-3 py-2 pr-8 bg-white border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all shadow-sm hover:border-gray-300"
+                            />
+                            <SearchIcon className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+                            {lcFilters.port && (
+                              <button
+                                onClick={() => {
+                                  setLcFilters({ ...lcFilters, port: '' });
+                                  setFilterSearchInputs({ ...filterSearchInputs, portSearch: '' });
+                                }}
+                                className="absolute right-8 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                              >
+                                <XIcon className="w-4 h-4" />
+                              </button>
+                            )}
+                          </div>
+                          {filterDropdownOpen.port && (() => {
+                            const portOptions = [...new Set(stockRecords.map(item => (item.port || '').trim()).filter(Boolean))].sort();
+                            const filtered = portOptions.filter(p => p.toLowerCase().includes(filterSearchInputs.portSearch.toLowerCase()));
+                            return filtered.length > 0 ? (
+                              <div className="absolute z-[120] mt-1 w-full bg-white border border-gray-200 rounded-xl shadow-lg max-h-48 overflow-y-auto">
+                                {filtered.map(p => (
+                                  <button
+                                    key={p}
+                                    type="button"
+                                    onClick={() => {
+                                      setLcFilters({ ...lcFilters, port: p });
+                                      setFilterSearchInputs({ ...filterSearchInputs, portSearch: '' });
+                                      setFilterDropdownOpen(initialFilterDropdownState);
+                                    }}
+                                    className="w-full px-3 py-2 text-left text-sm hover:bg-blue-50 transition-colors"
+                                  >
+                                    {p}
+                                  </button>
+                                ))}
+                              </div>
+                            ) : null;
+                          })()}
+                        </div>
+
+                        {/* Product Filter */}
+                        <div className="space-y-1.5 relative" ref={reportProductFilterRef}>
+                          <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Product</label>
+                          <div className="relative">
+                            <input
+                              type="text"
+                              value={filterSearchInputs.productSearch}
+                              onChange={(e) => {
+                                setFilterSearchInputs({ ...filterSearchInputs, productSearch: e.target.value });
+                                setFilterDropdownOpen({ ...initialFilterDropdownState, product: true });
+                              }}
+                              onFocus={() => setFilterDropdownOpen({ ...initialFilterDropdownState, product: true })}
+                              placeholder={lcFilters.productName || "Search Product..."}
+                              className="w-full px-3 py-2 pr-8 bg-white border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all shadow-sm hover:border-gray-300"
+                            />
+                            <SearchIcon className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+                            {lcFilters.productName && (
+                              <button
+                                onClick={() => {
+                                  setLcFilters({ ...lcFilters, productName: '' });
+                                  setFilterSearchInputs({ ...filterSearchInputs, productSearch: '' });
+                                }}
+                                className="absolute right-8 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                              >
+                                <XIcon className="w-4 h-4" />
+                              </button>
+                            )}
+                          </div>
+                          {filterDropdownOpen.product && (() => {
+                            const options = [...new Set(stockRecords.map(item => (item.productName || '').trim()).filter(Boolean))].sort();
+                            const filtered = options.filter(o => o.toLowerCase().includes(filterSearchInputs.productSearch.toLowerCase()));
+                            return filtered.length > 0 ? (
+                              <div className="absolute z-[120] mt-1 w-full bg-white border border-gray-200 rounded-xl shadow-lg max-h-48 overflow-y-auto">
+                                {filtered.map(o => (
+                                  <button
+                                    key={o}
+                                    type="button"
+                                    onClick={() => {
+                                      setLcFilters({ ...lcFilters, productName: o });
+                                      setFilterSearchInputs({ ...filterSearchInputs, productSearch: '' });
+                                      setFilterDropdownOpen(initialFilterDropdownState);
+                                    }}
+                                    className="w-full px-3 py-2 text-left text-sm hover:bg-blue-50 transition-colors"
+                                  >
+                                    {o}
+                                  </button>
+                                ))}
+                              </div>
+                            ) : null;
+                          })()}
+                        </div>
+
+                        {/* Brand Filter */}
+                        <div className="space-y-1.5 relative" ref={reportBrandFilterRef}>
+                          <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Brand</label>
+                          <div className="relative">
+                            <input
+                              type="text"
+                              value={filterSearchInputs.brandSearch}
+                              onChange={(e) => {
+                                setFilterSearchInputs({ ...filterSearchInputs, brandSearch: e.target.value });
+                                setFilterDropdownOpen({ ...initialFilterDropdownState, brand: true });
+                              }}
+                              onFocus={() => setFilterDropdownOpen({ ...initialFilterDropdownState, brand: true })}
+                              placeholder={lcFilters.brand || "Search Brand..."}
+                              className="w-full px-3 py-2 pr-8 bg-white border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all shadow-sm hover:border-gray-300"
+                            />
+                            <SearchIcon className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+                            {lcFilters.brand && (
+                              <button
+                                onClick={() => {
+                                  setLcFilters({ ...lcFilters, brand: '' });
+                                  setFilterSearchInputs({ ...filterSearchInputs, brandSearch: '' });
+                                }}
+                                className="absolute right-8 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                              >
+                                <XIcon className="w-4 h-4" />
+                              </button>
+                            )}
+                          </div>
+                          {filterDropdownOpen.brand && (() => {
+                            const options = [...new Set(stockRecords.flatMap(item => {
+                              if (item.brand) return [(item.brand || '').trim()];
+                              return (item.brandEntries || []).map(e => (e.brand || '').trim());
+                            }).filter(Boolean))].sort();
+                            const filtered = options.filter(o => o.toLowerCase().includes(filterSearchInputs.brandSearch.toLowerCase()));
+                            return filtered.length > 0 ? (
+                              <div className="absolute z-[120] mt-1 w-full bg-white border border-gray-200 rounded-xl shadow-lg max-h-48 overflow-y-auto">
+                                {filtered.map(o => (
+                                  <button
+                                    key={o}
+                                    type="button"
+                                    onClick={() => {
+                                      setLcFilters({ ...lcFilters, brand: o });
+                                      setFilterSearchInputs({ ...filterSearchInputs, brandSearch: '' });
+                                      setFilterDropdownOpen(initialFilterDropdownState);
+                                    }}
+                                    className="w-full px-3 py-2 text-left text-sm hover:bg-blue-50 transition-colors"
+                                  >
+                                    {o}
+                                  </button>
+                                ))}
+                              </div>
+                            ) : null;
+                          })()}
+                        </div>
+
+                        {/* IND CNF Filter */}
+                        <div className="space-y-1.5 relative" ref={reportLcIndCnfFilterRef}>
+                          <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">IND CNF</label>
+                          <div className="relative">
+                            <input
+                              type="text"
+                              value={filterSearchInputs.indCnfSearch}
+                              onChange={(e) => {
+                                setFilterSearchInputs({ ...filterSearchInputs, indCnfSearch: e.target.value });
+                                setFilterDropdownOpen({ ...initialFilterDropdownState, indCnf: true });
+                              }}
+                              onFocus={() => setFilterDropdownOpen({ ...initialFilterDropdownState, indCnf: true })}
+                              placeholder={lcFilters.indCnf || "Search..."}
+                              className="w-full px-3 py-2 bg-white border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500/20 outline-none"
+                            />
+                          </div>
+                          {filterDropdownOpen.indCnf && (() => {
+                            const options = [...new Set(stockRecords.map(item => (item.indianCnF || '').trim()).filter(Boolean))].sort();
+                            const filtered = options.filter(o => o.toLowerCase().includes(filterSearchInputs.indCnfSearch.toLowerCase()));
+                            return filtered.length > 0 ? (
+                              <div className="absolute z-[120] mt-1 w-full bg-white border border-gray-200 rounded-xl shadow-lg max-h-48 overflow-y-auto">
+                                {filtered.map(o => (
+                                  <button
+                                    key={o}
+                                    onClick={() => {
+                                      setLcFilters({ ...lcFilters, indCnf: o });
+                                      setFilterSearchInputs({ ...filterSearchInputs, indCnfSearch: '' });
+                                      setFilterDropdownOpen(initialFilterDropdownState);
+                                    }}
+                                    className="w-full px-3 py-2 text-left text-sm hover:bg-blue-50 transition-colors"
+                                  >
+                                    {o}
+                                  </button>
+                                ))}
+                              </div>
+                            ) : null;
+                          })()}
+                        </div>
+
+                        {/* BD CNF Filter */}
+                        <div className="space-y-1.5 relative" ref={reportLcBdCnfFilterRef}>
+                          <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">BD CNF</label>
+                          <div className="relative">
+                            <input
+                              type="text"
+                              value={filterSearchInputs.bdCnfSearch}
+                              onChange={(e) => {
+                                setFilterSearchInputs({ ...filterSearchInputs, bdCnfSearch: e.target.value });
+                                setFilterDropdownOpen({ ...initialFilterDropdownState, bdCnf: true });
+                              }}
+                              onFocus={() => setFilterDropdownOpen({ ...initialFilterDropdownState, bdCnf: true })}
+                              placeholder={lcFilters.bdCnf || "Search..."}
+                              className="w-full px-3 py-2 bg-white border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500/20 outline-none"
+                            />
+                          </div>
+                          {filterDropdownOpen.bdCnf && (() => {
+                            const options = [...new Set(stockRecords.map(item => (item.bdCnF || '').trim()).filter(Boolean))].sort();
+                            const filtered = options.filter(o => o.toLowerCase().includes(filterSearchInputs.bdCnfSearch.toLowerCase()));
+                            return filtered.length > 0 ? (
+                              <div className="absolute z-[120] mt-1 w-full bg-white border border-gray-200 rounded-xl shadow-lg max-h-48 overflow-y-auto">
+                                {filtered.map(o => (
+                                  <button
+                                    key={o}
+                                    onClick={() => {
+                                      setLcFilters({ ...lcFilters, bdCnf: o });
+                                      setFilterSearchInputs({ ...filterSearchInputs, bdCnfSearch: '' });
+                                      setFilterDropdownOpen(initialFilterDropdownState);
+                                    }}
+                                    className="w-full px-3 py-2 text-left text-sm hover:bg-blue-50 transition-colors"
+                                  >
+                                    {o}
+                                  </button>
+                                ))}
+                              </div>
+                            ) : null;
+                          })()}
+                        </div>
+
+                        {/* Bill Of Entry Filter */}
+                        <div className="col-span-2 space-y-1.5 relative" ref={reportLcBillOfEntryFilterRef}>
+                          <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Bill Of Entry</label>
+                          <div className="relative">
+                            <input
+                              type="text"
+                              value={filterSearchInputs.billOfEntrySearch}
+                              onChange={(e) => {
+                                setFilterSearchInputs({ ...filterSearchInputs, billOfEntrySearch: e.target.value });
+                                setFilterDropdownOpen({ ...initialFilterDropdownState, billOfEntry: true });
+                              }}
+                              onFocus={() => setFilterDropdownOpen({ ...initialFilterDropdownState, billOfEntry: true })}
+                              placeholder={lcFilters.billOfEntry || "Search Bill Of Entry..."}
+                              className="w-full px-3 py-2 bg-white border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500/20 outline-none"
+                            />
+                          </div>
+                          {filterDropdownOpen.billOfEntry && (() => {
+                            const options = [...new Set(stockRecords.map(item => (item.billOfEntry || '').trim()).filter(Boolean))].sort();
+                            const filtered = options.filter(o => o.toLowerCase().includes(filterSearchInputs.billOfEntrySearch.toLowerCase()));
+                            return filtered.length > 0 ? (
+                              <div className="absolute z-[120] mt-1 w-full bg-white border border-gray-200 rounded-xl shadow-lg max-h-48 overflow-y-auto">
+                                {filtered.map(o => (
+                                  <button
+                                    key={o}
+                                    onClick={() => {
+                                      setLcFilters({ ...lcFilters, billOfEntry: o });
+                                      setFilterSearchInputs({ ...filterSearchInputs, billOfEntrySearch: '' });
+                                      setFilterDropdownOpen(initialFilterDropdownState);
+                                    }}
+                                    className="w-full px-3 py-2 text-left text-sm hover:bg-blue-50 transition-colors"
+                                  >
+                                    {o}
+                                  </button>
+                                ))}
+                              </div>
+                            ) : null;
+                          })()}
+                        </div>
+
+                        <button
+                          onClick={() => setShowLcReportFilterPanel(false)}
+                          className="col-span-2 py-2 bg-gray-900 text-white rounded-xl text-sm font-medium hover:bg-gray-800 transition-all mt-2"
+                        >
+                          Apply Filters
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+                <button
+                  onClick={() => window.print()}
+                  className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-xl shadow-lg shadow-blue-500/30 transition-all flex items-center gap-2"
+                >
+                  <BarChartIcon className="w-4 h-4" />
+                  Print Report
+                </button>
+                <button
+                  onClick={() => setShowLcReport(false)}
+                  className="p-2.5 hover:bg-gray-100 rounded-xl transition-colors"
+                >
+                  <XIcon className="w-6 h-6 text-gray-500" />
+                </button>
+              </div>
+            </div>
+
+            {/* Printable Content */}
+            <div className="flex-1 overflow-y-auto p-12 print:p-4 print:overflow-visible bg-white">
+              <div className="max-w-[1000px] mx-auto space-y-8">
+                {/* Company Header */}
+                <div className="text-center space-y-1">
+                  <h1 className="text-4xl font-bold text-gray-900 tracking-tight">M/S ANI ENTERPRISE</h1>
+                  <p className="text-[14px] text-gray-600">766, H.M Tower, Level-06, Borogola, Bogura-5800, Bangladesh</p>
+                  <p className="text-[14px] text-gray-600">+8802588813057, +8801711-406898, anienterprise051@gmail.com, www.anienterprises.com.bd</p>
+                </div>
+
+                {/* Sharp Separator */}
+                <div className="border-t-2 border-gray-900 w-full mt-4"></div>
+
+                {/* Report Title Box */}
+                <div className="flex justify-center -mt-6">
+                  <div className="bg-white border-2 border-gray-900 px-12 py-1.5 inline-block">
+                    <h2 className="text-xl font-bold text-gray-900 tracking-wide uppercase">LC Receive Report</h2>
+                  </div>
+                </div>
+
+                {/* Date/Info Row */}
+                <div className="flex justify-between items-end text-sm text-gray-600 pt-4 px-2">
+                  <div className="flex flex-col gap-1">
+                    <div>
+                      <span className="font-semibold">Date Range:</span> {lcFilters.startDate || 'Start'} to {lcFilters.endDate || 'Present'}
+                    </div>
+                    {lcFilters.lcNo && (
+                      <div>
+                        <span className="font-semibold">LC No:</span> {lcFilters.lcNo}
+                      </div>
+                    )}
+                  </div>
+                  <div>
+                    <span className="font-semibold">Printed on:</span> {new Date().toLocaleDateString()}
+                  </div>
+                </div>
+
+                {/* Report Table */}
+                <div className="overflow-x-auto border border-gray-900">
+                  <table className="w-full border-collapse">
+                    <thead>
+                      <tr className="bg-gray-50 border-b border-gray-900">
+                        <th className="border-r border-gray-900 px-2 py-2 text-left text-[10px] font-bold text-gray-900 uppercase tracking-wider w-8 text-center">SL</th>
+                        <th className="border-r border-gray-900 px-2 py-2 text-left text-[10px] font-bold text-gray-900 uppercase tracking-wider">Date</th>
+                        <th className="border-r border-gray-900 px-2 py-2 text-left text-[10px] font-bold text-gray-900 uppercase tracking-wider font-extrabold text-blue-800">LC No</th>
+                        <th className="border-r border-gray-900 px-2 py-2 text-left text-[10px] font-bold text-gray-900 uppercase tracking-wider">Importer</th>
+                        <th className="border-r border-gray-900 px-2 py-2 text-left text-[10px] font-bold text-gray-900 uppercase tracking-wider">Port</th>
+                        <th className="border-r border-gray-900 px-2 py-2 text-left text-[10px] font-bold text-gray-900 uppercase tracking-wider">IND CNF</th>
+                        <th className="border-r border-gray-900 px-2 py-2 text-left text-[10px] font-bold text-gray-900 uppercase tracking-wider">BD CNF</th>
+                        <th className="border-r border-gray-900 px-2 py-2 text-left text-[10px] font-bold text-gray-900 uppercase tracking-wider">BOE No</th>
+                        <th className="border-r border-gray-900 px-2 py-2 text-left text-[10px] font-bold text-gray-900 uppercase tracking-wider">Product</th>
+                        <th className="border-r border-gray-900 px-2 py-2 text-left text-[10px] font-bold text-gray-900 uppercase tracking-wider">Brand</th>
+                        <th className="border-r border-gray-900 px-2 py-2 text-right text-[10px] font-bold text-gray-900 uppercase tracking-wider">Packet</th>
+                        <th className="border-r border-gray-900 px-2 py-2 text-right text-[10px] font-bold text-gray-900 uppercase tracking-wider">Truck</th>
+                        <th className="px-2 py-2 text-right text-[10px] font-bold text-gray-900 uppercase tracking-wider">QTY</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-400">
+                      {lcReceiveRecords.length > 0 ? (
+                        Object.values(lcReceiveRecords.reduce((acc, item) => {
+                          const key = item.lcNo || 'unknown';
+                          if (!acc[key]) {
+                            acc[key] = {
+                              ...item,
+                              entries: []
+                            };
+                          }
+                          acc[key].entries.push(item);
+                          return acc;
+                        }, {})).map((entry, index) => {
+                          // Sub-group entries by Product + Truck within each LC group
+                          const productGroups = entry.entries.reduce((acc, item) => {
+                            const key = `${item.date}-${item.productName}-${item.truckNo}`;
+                            if (!acc[key]) {
+                              acc[key] = {
+                                ...item,
+                                brandList: [],
+                                packetList: [],
+                                qtyList: []
+                              };
+                            }
+                            acc[key].brandList.push(item.brand || '-');
+                            acc[key].packetList.push(item.packet || '0');
+                            acc[key].qtyList.push({ quantity: item.quantity, unit: item.unit });
+                            return acc;
+                          }, {});
+
+                          const finalEntries = Object.values(productGroups);
+
+                          return (
+                            <tr key={index} className="border-b border-gray-400 last:border-0 hover:bg-gray-50 transition-colors">
+                              <td className="border-r border-gray-900 px-2 py-1.5 text-[10px] text-gray-900 text-center align-top">{index + 1}</td>
+                              <td className="border-r border-gray-900 px-2 py-1.5 text-[10px] text-gray-900 align-top">{formatDate(entry.date)}</td>
+                              <td className="border-r border-gray-900 px-2 py-1.5 text-[10px] font-extrabold text-blue-900 align-top">{entry.lcNo}</td>
+                              <td className="border-r border-gray-900 px-2 py-1.5 text-[10px] text-gray-700 align-top">{entry.importer || '-'}</td>
+                              <td className="border-r border-gray-900 px-2 py-1.5 text-[10px] text-gray-700 align-top">{entry.port || '-'}</td>
+                              <td className="border-r border-gray-900 px-2 py-1.5 text-[10px] text-gray-700 align-top">{entry.indianCnF || '-'}</td>
+                              <td className="border-r border-gray-900 px-2 py-1.5 text-[10px] text-gray-700 align-top">{entry.bdCnF || '-'}</td>
+                              <td className="border-r border-gray-900 px-2 py-1.5 text-[10px] text-gray-700 align-top">{entry.billOfEntry || '-'}</td>
+                              <td className="border-r border-gray-900 px-2 py-1.5 text-[10px] font-medium text-gray-900 align-top">
+                                {finalEntries.map((subItem, idx) => {
+                                  const lineCount = subItem.brandList.length + (subItem.brandList.length > 1 ? 1 : 0);
+                                  return (
+                                    <div key={idx} className="border-b border-gray-100 last:border-0 py-0.5 flex flex-col justify-start" style={{ minHeight: `${lineCount * 14}px` }}>
+                                      {subItem.productName}
+                                    </div>
+                                  );
+                                })}
+                              </td>
+                              <td className="border-r border-gray-900 px-2 py-1.5 text-[10px] text-gray-700 align-top">
+                                {finalEntries.map((subItem, idx) => {
+                                  const lineCount = subItem.brandList.length + (subItem.brandList.length > 1 ? 1 : 0);
+                                  return (
+                                    <div key={idx} className="border-b border-gray-100 last:border-0 py-0.5" style={{ minHeight: `${lineCount * 14}px` }}>
+                                      {subItem.brandList.map((b, i) => (
+                                        <div key={i} className="leading-tight">{b}</div>
+                                      ))}
+                                    </div>
+                                  );
+                                })}
+                              </td>
+                              <td className="border-r border-gray-900 px-2 py-1.5 text-[10px] text-right text-gray-700 align-top">
+                                {finalEntries.map((subItem, idx) => {
+                                  const lineCount = subItem.brandList.length + (subItem.brandList.length > 1 ? 1 : 0);
+                                  return (
+                                    <div key={idx} className="border-b border-gray-100 last:border-0 py-0.5" style={{ minHeight: `${lineCount * 14}px` }}>
+                                      {subItem.packetList.map((p, i) => (
+                                        <div key={i} className="leading-tight">{p}</div>
+                                      ))}
+                                    </div>
+                                  );
+                                })}
+                              </td>
+                              <td className="border-r border-gray-900 px-2 py-1.5 text-[10px] text-right font-medium text-gray-900 align-top">
+                                {finalEntries.map((subItem, idx) => {
+                                  const lineCount = subItem.brandList.length + (subItem.brandList.length > 1 ? 1 : 0);
+                                  return (
+                                    <div key={idx} className="border-b border-gray-100 last:border-0 py-0.5 flex flex-col justify-start" style={{ minHeight: `${lineCount * 14}px` }}>
+                                      {subItem.truckNo}
+                                    </div>
+                                  );
+                                })}
+                              </td>
+                              <td className="px-2 py-1.5 text-[10px] text-right font-bold text-gray-900 align-top">
+                                {finalEntries.map((subItem, idx) => {
+                                  const lineCount = subItem.brandList.length + (subItem.brandList.length > 1 ? 1 : 0);
+                                  return (
+                                    <div key={idx} className="border-b border-gray-100 last:border-0 py-0.5" style={{ minHeight: `${lineCount * 14}px` }}>
+                                      {subItem.qtyList.map((q, i) => (
+                                        <div key={i} className="leading-tight">{Math.round(q.quantity)} {q.unit}</div>
+                                      ))}
+                                      {subItem.qtyList.length > 1 && (
+                                        <div className="mt-0.5 pt-0.5 border-t border-gray-200 font-black">
+                                          {Math.round(subItem.qtyList.reduce((sum, q) => sum + (parseFloat(q.quantity) || 0), 0))} {subItem.qtyList[0].unit}
+                                        </div>
+                                      )}
+                                    </div>
+                                  );
+                                })}
+                              </td>
+                            </tr>
+                          );
+                        })
+                      ) : (
+                        <tr>
+                          <td colSpan="13" className="px-4 py-8 text-center text-gray-500 italic">No receive records found for the selected criteria.</td>
+                        </tr>
+                      )}
+                    </tbody>
+                    {lcReceiveRecords.length > 0 && (
+                      <tfoot>
+                        <tr className="bg-gray-100 border-t-2 border-gray-900">
+                          <td colSpan="11" className="px-2 py-2 text-[11px] font-black text-gray-900 text-right uppercase tracking-wider border-r border-gray-900">Grand Total</td>
+                          <td className="px-2 py-2 text-[11px] text-right font-black text-gray-900 border-r border-gray-900">
+                            {lcReceiveSummary.totalTrucks}
+                          </td>
+                          <td className="px-2 py-2 text-[11px] text-right font-black text-gray-900">
+                            {Math.round(lcReceiveSummary.totalQuantity)} {lcReceiveSummary.unit}
+                          </td>
+                        </tr>
+                      </tfoot>
+                    )}
+                  </table>
+                </div>
+
+                {/* Summary Info Cards for Print */}
+                <div className="grid grid-cols-3 gap-4 pt-4 px-2 print:grid">
+                  <div className="border border-gray-300 p-2 rounded-lg">
+                    <div className="text-[10px] font-bold text-gray-500 uppercase">Total Packets</div>
+                    <div className="text-lg font-black text-gray-900">{lcReceiveSummary.totalPackets}</div>
+                  </div>
+                  <div className="border border-gray-300 p-2 rounded-lg">
+                    <div className="text-[10px] font-bold text-gray-500 uppercase">Total Quantity</div>
+                    <div className="text-lg font-black text-gray-900">{Math.round(lcReceiveSummary.totalQuantity)} {lcReceiveSummary.unit}</div>
+                  </div>
+                  <div className="border border-gray-300 p-2 rounded-lg">
+                    <div className="text-[10px] font-bold text-gray-500 uppercase">Total Truck</div>
+                    <div className="text-lg font-black text-blue-700">{lcReceiveSummary.totalTrucks}</div>
+                  </div>
+                </div>
+
+                {/* Footer Signatures */}
+                <div className="grid grid-cols-3 gap-8 pt-24 px-4 pb-12">
+                  <div className="text-center">
+                    <div className="border-t border-dotted border-gray-900 pt-2 text-[10px] font-bold text-gray-900 uppercase">Prepared By</div>
+                  </div>
+                  <div className="text-center">
+                    <div className="border-t border-dotted border-gray-900 pt-2 text-[10px] font-bold text-gray-900 uppercase">Verified By</div>
+                  </div>
+                  <div className="text-center">
+                    <div className="border-t border-dotted border-gray-900 pt-2 text-[10px] font-bold text-gray-900 uppercase">Authorized Signature</div>
                   </div>
                 </div>
               </div>
