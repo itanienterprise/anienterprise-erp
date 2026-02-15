@@ -1,9 +1,8 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import {
-  MenuIcon, SearchIcon, BellIcon, HomeIcon, BoxIcon, UsersIcon, AnchorIcon,
-  BarChartIcon, SettingsIcon, TrendingUpIcon, DollarSignIcon,
-  ShoppingCartIcon, EditIcon, TrashIcon, FunnelIcon, XIcon, PlusIcon,
-  ChevronUpIcon, ChevronDownIcon, ChevronLeftIcon, ChevronRightIcon, EyeIcon, CalendarIcon
+  MenuIcon, SearchIcon, HomeIcon, UsersIcon, AnchorIcon,
+  BarChartIcon, FunnelIcon, XIcon, DollarSignIcon, ShoppingCartIcon,
+  ChevronDownIcon, BoxIcon, BellIcon, TrashIcon
 } from './components/Icons';
 
 import { encryptData, decryptData } from './utils/encryption';
@@ -14,6 +13,7 @@ import Importer from './components/modules/Importer/Importer';
 import Port from './components/modules/Port/Port';
 import IPManagement from './components/modules/IPManagement/IPManagement';
 import ProductManagement from './components/modules/Product/ProductManagement';
+import Customer from './components/modules/Customer/Customer';
 import LCReceive from './components/modules/LCReceive/LCReceive';
 import WarehouseManagement from './components/modules/Warehouse/WarehouseManagement';
 import StockManagement from "./components/modules/StockManagement/StockManagement";
@@ -28,10 +28,8 @@ function App() {
   const [currentView, setCurrentView] = useState(() => {
     return localStorage.getItem('currentView') || 'dashboard';
   });
-  const [showIpForm, setShowIpForm] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitStatus, setSubmitStatus] = useState(null);
-  const [ipRecords, setIpRecords] = useState([]);
   const [importers, setImporters] = useState([]);
   const [ports, setPorts] = useState([]);
   const [showStockForm, setShowStockForm] = useState(false);
@@ -58,8 +56,6 @@ function App() {
   });
 
   const [isLoading, setIsLoading] = useState(false);
-  const [showImporterForm, setShowImporterForm] = useState(false);
-  const [showPortForm, setShowPortForm] = useState(false);
 
   const [stockRecords, setStockRecords] = useState([]);
   const [stockFilters, setStockFilters] = useState({ startDate: '', endDate: '', lcNo: '', port: '', brand: '', importer: '', productName: '' });
@@ -70,25 +66,16 @@ function App() {
   const isLongPressTriggered = useRef(false);
   const [editingId, setEditingId] = useState(null);
   const [deleteConfirm, setDeleteConfirm] = useState({ show: false, type: '', id: null, isBulk: false });
-  const [showFilters, setShowFilters] = useState(false);
-  const [filters, setFilters] = useState({
-    startDate: '',
-    endDate: '',
-    quickRange: 'all',
-    port: '',
-    importer: ''
-  });
-  const [viewRecord, setViewRecord] = useState(null);
-  const [activeDropdown, setActiveDropdown] = useState(null);
-  const [historySearchQuery, setHistorySearchQuery] = useState('');
-  const [showHistoryFilterPanel, setShowHistoryFilterPanel] = useState(false);
-  const [historyFilters, setHistoryFilters] = useState({
-    startDate: '',
-    endDate: '',
-    lcNo: '',
-    port: '',
-    brand: ''
-  });
+  const initialFilterDropdownState = {
+    lcNo: false,
+    port: false,
+    brand: false,
+    product: false,
+    indCnf: false,
+    bdCnf: false,
+    billOfEntry: false
+  };
+  const [filterDropdownOpen, setFilterDropdownOpen] = useState(initialFilterDropdownState);
   const [filterSearchInputs, setFilterSearchInputs] = useState({
     lcNoSearch: '',
     portSearch: '',
@@ -104,125 +91,20 @@ function App() {
     history: { key: 'date', direction: 'desc' },
     importer: { key: 'name', direction: 'asc' },
     port: { key: 'name', direction: 'asc' },
-    ip: { key: 'openingDate', direction: 'desc' }
+    ip: { key: 'openingDate', direction: 'desc' },
+    customer: { key: 'name', direction: 'asc' }
   });
-
-  const initialFilterDropdownState = {
-    lcNo: false,
-    port: false,
-    brand: false,
-    product: false,
-    indCnf: false,
-    bdCnf: false,
-    billOfEntry: false
-  };
-  const [filterDropdownOpen, setFilterDropdownOpen] = useState(initialFilterDropdownState);
-
-
 
   const [showLcReport, setShowLcReport] = useState(false);
   const [showLcReportFilterPanel, setShowLcReportFilterPanel] = useState(false);
   const [products, setProducts] = useState([]);
-  const [highlightedIndex, setHighlightedIndex] = useState(-1);
-  const portRef = useRef(null);
-  const importerRef = useRef(null);
-  const ipPortRef = useRef(null);
-  const ipImporterRef = useRef(null);
-  const filterPortRef = useRef(null);
-  const filterImporterRef = useRef(null);
-  const lcNoFilterRef = useRef(null);
-  const portFilterRef = useRef(null);
-  const brandFilterRef = useRef(null);
-  const historyFilterRef = useRef(null);
-  const filterButtonRef = useRef(null);
-
-  const reportLcNoFilterRef = useRef(null);
-  const reportPortFilterRef = useRef(null);
-  const reportBrandFilterRef = useRef(null);
-  const reportProductFilterRef = useRef(null);
   const lcReportFilterRef = useRef(null);
   const lcReportFilterButtonRef = useRef(null);
-  const reportLcIndCnfFilterRef = useRef(null);
-  const reportLcBdCnfFilterRef = useRef(null);
-  const reportLcBillOfEntryFilterRef = useRef(null);
-  const productRefs = useRef({});
-  const brandRefs = useRef({});
 
 
 
-  const [portFormData, setPortFormData] = useState({
-    name: '',
-    location: '',
-    code: '',
-    type: 'Seaport',
-    status: 'Active'
-  });
 
 
-  const [formData, setFormData] = useState({
-    openingDate: '',
-    closeDate: '',
-    ipNumber: '',
-    referenceNo: '',
-    ipParty: '',
-    productName: '',
-    quantity: '',
-    port: '',
-    status: 'Active'
-  });
-
-  const handleInputChange = (e) => {
-    const { name, value } = e.target;
-
-    setFormData(prev => {
-      const newData = { ...prev, [name]: value };
-
-      if (name === 'openingDate') {
-        const openingDate = parseDate(value);
-        if (!isNaN(openingDate.getTime())) {
-          const closeDate = new Date(openingDate);
-          closeDate.setMonth(closeDate.getMonth() + 4);
-
-          const year = closeDate.getFullYear();
-          const month = String(closeDate.getMonth() + 1).padStart(2, '0');
-          const day = String(closeDate.getDate()).padStart(2, '0');
-          newData.closeDate = `${year}-${month}-${day}`;
-        }
-      }
-
-      return newData;
-    });
-
-    if (name === 'port' || name === 'ipParty') {
-      setActiveDropdown(name === 'port' ? 'ipPort' : 'ipImporter');
-    }
-  };
-
-  const resetFilters = () => {
-    setFilters({
-      startDate: '',
-      endDate: '',
-      quickRange: 'all',
-      port: '',
-      importer: ''
-    });
-  };
-
-  const resetIpForm = () => {
-    setFormData({
-      openingDate: '',
-      closeDate: '',
-      ipNumber: '',
-      referenceNo: '',
-      ipParty: '',
-      productName: '',
-      quantity: '',
-      port: '',
-      status: 'Active'
-    });
-    setEditingId(null);
-    setSubmitStatus(null);
-  };
 
   const initialLcFilterState = {
     startDate: '',
@@ -292,31 +174,6 @@ function App() {
     return { totalPackets, totalQuantity, totalTrucks, unit };
   }, [lcReceiveRecords]);
 
-  const resetImporterForm = () => {
-    setImporterFormData({
-      name: '',
-      address: '',
-      contactPerson: '',
-      email: '',
-      phone: '',
-      licenseNo: '',
-      status: 'Active'
-    });
-    setEditingId(null);
-    setSubmitStatus(null);
-  };
-
-  const resetPortForm = () => {
-    setPortFormData({
-      name: '',
-      location: '',
-      code: '',
-      type: 'Seaport',
-      status: 'Active'
-    });
-    setEditingId(null);
-    setSubmitStatus(null);
-  };
 
 
 
@@ -356,57 +213,8 @@ function App() {
     });
   };
 
-  const filteredIpRecords = ipRecords.filter(record => {
-    const recordDate = parseDate(record.openingDate);
-    const now = new Date();
-
-    // Quick Range Filter
-    if (filters.quickRange === 'weekly') {
-      const oneWeekAgo = new Date();
-      oneWeekAgo.setDate(now.getDate() - 7);
-      if (recordDate < oneWeekAgo) return false;
-    } else if (filters.quickRange === 'monthly') {
-      const oneMonthAgo = new Date();
-      oneMonthAgo.setMonth(now.getMonth() - 1);
-      if (recordDate < oneMonthAgo) return false;
-    } else if (filters.quickRange === 'yearly') {
-      const oneYearAgo = new Date();
-      oneYearAgo.setFullYear(now.getFullYear() - 1);
-      if (recordDate < oneYearAgo) return false;
-    }
-
-    // Custom Date Range
-    if (filters.startDate && parseDate(record.openingDate) < parseDate(filters.startDate)) return false;
-    if (filters.endDate && parseDate(record.openingDate) > parseDate(filters.endDate)) return false;
-
-    // Port Filter
-    if (filters.port && record.port !== filters.port) return false;
-
-    // Importer Filter
-    if (filters.importer && record.ipParty !== filters.importer) return false;
-
-    return true;
-  });
 
 
-  const fetchIpRecords = async () => {
-    setIsLoading(true);
-    try {
-      const response = await fetch(`${API_BASE_URL}/api/ip-records`);
-      if (response.ok) {
-        const rawData = await response.json();
-        const decryptedRecords = rawData.map(record => {
-          const decrypted = decryptData(record.data);
-          return { ...decrypted, _id: record._id, createdAt: record.createdAt };
-        });
-        setIpRecords(decryptedRecords);
-      }
-    } catch (error) {
-      console.error('Error fetching IP records:', error);
-    } finally {
-      setIsLoading(false);
-    }
-  };
 
   useEffect(() => {
     setSelectedItems(new Set());
@@ -414,15 +222,7 @@ function App() {
     localStorage.setItem('currentView', currentView);
 
     // Close all forms when changing sections
-    setShowIpForm(false);
-    setShowImporterForm(false);
-    setShowPortForm(false);
-    setShowStockForm(false);
-    setActiveDropdown(null);
-    setViewRecord(null);
-
-    if (currentView === 'ip-section') {
-      fetchIpRecords();
+    if (currentView === 'ip-section' || currentView === 'customer-section') {
       fetchImporters(); // Fetch importers to populate the dropdown
       fetchPorts(); // Fetch ports to populate the dropdown
     } else if (currentView === 'importer-section') {
@@ -442,121 +242,9 @@ function App() {
 
   }, [currentView]);
 
-  useEffect(() => {
-    const handleClickOutside = (event) => {
-      // Ignore LCReceive-specific dropdowns (managed by LCReceive itself)
-      if (activeDropdown && activeDropdown.startsWith('lcr-')) return;
 
-      // Handle product dropdowns (Stock and LC)
-      if (activeDropdown && (activeDropdown.startsWith('product-') || activeDropdown.startsWith('lc-product-'))) {
-        const parts = activeDropdown.split('-');
-        const index = parseInt(parts[parts.length - 1]);
-        if (productRefs.current[index] && !productRefs.current[index].contains(event.target)) {
-          setActiveDropdown(null);
-        }
-        return;
-      }
 
-      // Handle brand dropdowns
-      if (activeDropdown && activeDropdown.startsWith('brand-')) {
-        const parts = activeDropdown.split('-');
-        const key = `${parts[1]}-${parts[2]}`;
-        if (brandRefs.current[key] && !brandRefs.current[key].contains(event.target)) {
-          setActiveDropdown(null);
-        }
-        return;
-      }
 
-      if (
-        (portRef.current && !portRef.current.contains(event.target)) &&
-        (importerRef.current && !importerRef.current.contains(event.target)) &&
-        (ipPortRef.current && !ipPortRef.current.contains(event.target)) &&
-        (ipImporterRef.current && !ipImporterRef.current.contains(event.target)) &&
-        (filterPortRef.current && !filterPortRef.current.contains(event.target)) &&
-        (filterImporterRef.current && !filterImporterRef.current.contains(event.target))
-      ) {
-        setActiveDropdown(null);
-      }
-    };
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, [activeDropdown]);
-
-  useEffect(() => {
-    setHighlightedIndex(-1);
-  }, [activeDropdown]);
-
-  const getFilteredOptions = (type) => {
-    switch (type) {
-
-      case 'ipPort':
-        return ports.filter(p => p.status === 'Active' && (!formData.port || ports.some(x => x.name === formData.port) || p.name.toLowerCase().includes(formData.port.toLowerCase())));
-      case 'ipImporter':
-        return importers.filter(imp => imp.status === 'Active' && (!formData.ipParty || importers.some(x => x.name === formData.ipParty) || imp.name.toLowerCase().includes(formData.ipParty.toLowerCase())));
-      case 'filterPort':
-        return ports.filter(p => p.status === 'Active' && (!filters.port || ports.some(x => x.name === filters.port) || p.name.toLowerCase().includes(filters.port.toLowerCase())));
-      case 'filterImporter':
-        return importers.filter(imp => imp.status === 'Active' && (!filters.importer || importers.some(x => x.name === filters.importer) || imp.name.toLowerCase().includes(filters.importer.toLowerCase())));
-      case 'lcFilterLcNo': {
-        const lcOptions = [...new Set(stockRecords.map(item => (item.lcNo || '').trim()).filter(Boolean))].sort();
-        return lcOptions.filter(lc => !filterSearchInputs.lcNoSearch || lc.toLowerCase().includes(filterSearchInputs.lcNoSearch.toLowerCase())).map(lc => ({ name: lc }));
-      }
-      case 'lcFilterPort': {
-        const portOptions = [...new Set(stockRecords.map(item => (item.port || '').trim()).filter(Boolean))].sort();
-        return portOptions.filter(p => !filterSearchInputs.portSearch || p.toLowerCase().includes(filterSearchInputs.portSearch.toLowerCase())).map(p => ({ name: p }));
-      }
-      case 'lcFilterIndCnf': {
-        const options = [...new Set(stockRecords.map(item => (item.indianCnF || '').trim()).filter(Boolean))].sort();
-        return options.filter(opt => !filterSearchInputs.indCnfSearch || opt.toLowerCase().includes(filterSearchInputs.indCnfSearch.toLowerCase())).map(opt => ({ name: opt }));
-      }
-      case 'lcFilterBdCnf': {
-        const options = [...new Set(stockRecords.map(item => (item.bdCnF || '').trim()).filter(Boolean))].sort();
-        return options.filter(opt => !filterSearchInputs.bdCnfSearch || opt.toLowerCase().includes(filterSearchInputs.bdCnfSearch.toLowerCase())).map(opt => ({ name: opt }));
-      }
-      case 'lcFilterBillOfEntry': {
-        const options = [...new Set(stockRecords.map(item => (item.billOfEntry || '').trim()).filter(Boolean))].sort();
-        return options.filter(opt => !filterSearchInputs.billOfEntrySearch || opt.toLowerCase().includes(filterSearchInputs.billOfEntrySearch.toLowerCase())).map(opt => ({ name: opt }));
-      }
-      case 'lcFilterProduct': {
-        const options = [...new Set(stockRecords.map(item => (item.productName || '').trim()).filter(Boolean))].sort();
-        return options.filter(opt => !filterSearchInputs.productSearch || opt.toLowerCase().includes(filterSearchInputs.productSearch.toLowerCase())).map(opt => ({ name: opt }));
-      }
-      case 'lcFilterBrand': {
-        const productFilteredRecords = lcFilters.productName
-          ? stockRecords.filter(item => (item.productName || '').trim().toLowerCase() === lcFilters.productName.toLowerCase())
-          : stockRecords;
-        const options = [...new Set(productFilteredRecords.flatMap(item => {
-          if (item.brand) return [(item.brand || '').trim()];
-          return (item.brandEntries || []).map(e => (e.brand || '').trim());
-        }).filter(Boolean))].sort();
-        return options.filter(opt => !filterSearchInputs.brandSearch || opt.toLowerCase().includes(filterSearchInputs.brandSearch.toLowerCase())).map(opt => ({ name: opt }));
-      }
-      default:
-
-        return [];
-    }
-  };
-
-  const handleDropdownKeyDown = (e, type, selectHandler, fieldName) => {
-    const options = getFilteredOptions(type);
-
-    if (e.key === 'ArrowDown') {
-      e.preventDefault();
-      if (activeDropdown !== type) setActiveDropdown(type);
-      setHighlightedIndex(prev => (prev < options.length - 1 ? prev + 1 : 0));
-    } else if (e.key === 'ArrowUp') {
-      e.preventDefault();
-      if (activeDropdown !== type) setActiveDropdown(type);
-      setHighlightedIndex(prev => (prev > 0 ? prev - 1 : options.length - 1));
-    } else if (e.key === 'Enter') {
-      if (highlightedIndex >= 0 && highlightedIndex < options.length) {
-        e.preventDefault();
-        selectHandler(fieldName, options[highlightedIndex].name);
-      }
-    } else if (e.key === 'Escape') {
-      setActiveDropdown(null);
-    }
-  };
 
   const toggleSelection = (id) => {
     const newSelection = new Set(selectedItems);
@@ -611,23 +299,6 @@ function App() {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [filterDropdownOpen]);
 
-  // Click-outside detection for filter panel
-  useEffect(() => {
-    const handleClickOutside = (event) => {
-      if (
-        showHistoryFilterPanel &&
-        historyFilterRef.current &&
-        !historyFilterRef.current.contains(event.target) &&
-        filterButtonRef.current &&
-        !filterButtonRef.current.contains(event.target)
-      ) {
-        setShowHistoryFilterPanel(false);
-      }
-    };
-
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, [showHistoryFilterPanel]);
 
   // Click-outside detection for stock filter panel
 
@@ -745,16 +416,7 @@ function App() {
 
   const handleEdit = (type, item) => {
     setEditingId(item._id);
-    if (type === 'ip') {
-      setFormData(item);
-      setShowIpForm(true);
-    } else if (type === 'importer') {
-      setImporterFormData(item);
-      setShowImporterForm(true);
-    } else if (type === 'port') {
-      setPortFormData(item);
-      setShowPortForm(true);
-    } else if (type === 'stock') {
+    if (type === 'stock') {
       // Convert single record to productEntries format for editing
       const formattedData = {
         date: item.date,
@@ -844,63 +506,7 @@ function App() {
     }
   };
 
-  const handleView = (type, record) => {
-    setViewRecord({ type, data: record });
-  };
 
-  const handleImporterInputChange = (e) => {
-    const { name, value } = e.target;
-    setImporterFormData(prev => ({
-      ...prev,
-      [name]: value
-    }));
-  };
-
-  const handleImporterSubmit = async (e) => {
-    e.preventDefault();
-    setIsSubmitting(true);
-    setSubmitStatus(null);
-
-    try {
-      const url = editingId
-        ? `${API_BASE_URL}/api/importers/${editingId}`
-        : `${API_BASE_URL}/api/importers`;
-      const encryptedPayload = { data: encryptData(importerFormData) };
-      const response = await fetch(url, {
-        method: editingId ? 'PUT' : 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(encryptedPayload),
-      });
-
-      if (response.ok) {
-        setSubmitStatus('success');
-        fetchImporters();
-        setTimeout(() => {
-          setShowImporterForm(false);
-          setEditingId(null);
-          setImporterFormData({
-            name: '',
-            address: '',
-            contactPerson: '',
-            email: '',
-            phone: '',
-            licenseNo: '',
-            status: 'Active'
-          });
-          setSubmitStatus(null);
-        }, 2000);
-      } else {
-        setSubmitStatus('error');
-      }
-    } catch (error) {
-      console.error('Error saving importer:', error);
-      setSubmitStatus('error');
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
 
   const fetchPorts = async () => {
     setIsLoading(true);
@@ -921,75 +527,7 @@ function App() {
     }
   };
 
-  const handlePortInputChange = (e) => {
-    const { name, value } = e.target;
-    setPortFormData(prev => ({
-      ...prev,
-      [name]: value
-    }));
-  };
 
-  const handlePortSubmit = async (e) => {
-    e.preventDefault();
-    setIsSubmitting(true);
-    setSubmitStatus(null);
-
-    try {
-      const url = editingId
-        ? `${API_BASE_URL}/api/ports/${editingId}`
-        : `${API_BASE_URL}/api/ports`;
-      const encryptedPayload = { data: encryptData(portFormData) };
-      const response = await fetch(url, {
-        method: editingId ? 'PUT' : 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(encryptedPayload),
-      });
-
-      if (response.ok) {
-        setSubmitStatus('success');
-        fetchPorts();
-        setTimeout(() => {
-          setShowPortForm(false);
-          setEditingId(null);
-          setPortFormData({
-            name: '',
-            location: '',
-            code: '',
-            type: 'Seaport',
-            status: 'Active'
-          });
-          setSubmitStatus(null);
-        }, 2000);
-      } else {
-        setSubmitStatus('error');
-      }
-    } catch (error) {
-      console.error('Error saving port:', error);
-      setSubmitStatus('error');
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
-  const deleteStockGroup = async (ids) => {
-    if (!window.confirm(`Are you sure you want to delete this shipment (${ids.length} records)?`)) return;
-    try {
-      const results = await Promise.all(ids.map(async (id) => {
-        const response = await fetch(`${API_BASE_URL}/api/stock/${id}`, { method: 'DELETE' });
-        return response.ok;
-      }));
-
-      if (results.every(res => res)) {
-        fetchStockRecords();
-      } else {
-        alert('Some records could not be deleted');
-      }
-    } catch (err) {
-      console.error('Delete error:', err);
-    }
-  };
 
   const fetchStockRecords = async () => {
     setIsLoading(true);
@@ -1034,21 +572,6 @@ function App() {
 
 
 
-  const handleIpDropdownSelect = (name, value) => {
-    setFormData(prev => ({
-      ...prev,
-      [name]: value
-    }));
-    setActiveDropdown(null);
-  };
-
-  const handleFilterDropdownSelect = (name, value) => {
-    setFilters(prev => ({
-      ...prev,
-      [name]: value
-    }));
-    setActiveDropdown(null);
-  };
 
 
 
@@ -1090,54 +613,6 @@ function App() {
   };
 
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setIsSubmitting(true);
-    setSubmitStatus(null);
-
-    try {
-      const url = editingId
-        ? `${API_BASE_URL}/api/ip-records/${editingId}`
-        : `${API_BASE_URL}/api/ip-records`;
-      const encryptedPayload = { data: encryptData(formData) };
-      const response = await fetch(url, {
-        method: editingId ? 'PUT' : 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(encryptedPayload),
-      });
-
-      if (response.ok) {
-        setSubmitStatus('success');
-        fetchIpRecords(); // Refresh list
-        // Reset form after 2 seconds and close
-        setTimeout(() => {
-          setShowIpForm(false);
-          setEditingId(null);
-          setFormData({
-            openingDate: '',
-            closeDate: '',
-            ipNumber: '',
-            referenceNo: '',
-            ipParty: '',
-            productName: '',
-            quantity: '',
-            port: '',
-            status: 'Active'
-          });
-          setSubmitStatus(null);
-        }, 2000);
-      } else {
-        setSubmitStatus('error');
-      }
-    } catch (error) {
-      console.error('Error saving IP record:', error);
-      setSubmitStatus('error');
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
 
   const renderContent = () => {
     switch (currentView) {
@@ -1162,10 +637,6 @@ function App() {
             setLcFilters={setLcFilters}
             lcReceiveRecords={lcReceiveRecords}
             lcReceiveSummary={lcReceiveSummary}
-            activeDropdown={activeDropdown}
-            setActiveDropdown={setActiveDropdown}
-            highlightedIndex={highlightedIndex}
-            setHighlightedIndex={setHighlightedIndex}
             isSelectionMode={isSelectionMode}
             setIsSelectionMode={setIsSelectionMode}
             selectedItems={selectedItems}
@@ -1277,6 +748,23 @@ function App() {
             fetchProducts={fetchProducts}
           />
         );
+      case 'customer-section':
+        return (
+          <Customer
+            isSelectionMode={isSelectionMode}
+            setIsSelectionMode={setIsSelectionMode}
+            selectedItems={selectedItems}
+            setSelectedItems={setSelectedItems}
+            editingId={editingId}
+            setEditingId={setEditingId}
+            sortConfig={sortConfig}
+            setSortConfig={setSortConfig}
+            onDeleteConfirm={setDeleteConfirm}
+            startLongPress={startLongPress}
+            endLongPress={endLongPress}
+            isLongPressTriggered={isLongPressTriggered}
+          />
+        );
       case 'warehouse-section':
         return (
           <WarehouseManagement />
@@ -1315,6 +803,10 @@ function App() {
           <button onClick={() => { setCurrentView('dashboard'); setSidebarOpen(false); }} className={`w-full flex items-center px-4 py-3 rounded-lg transition-all ${currentView === 'dashboard' ? 'bg-blue-50 text-blue-600 shadow-sm' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'}`}>
             <HomeIcon className="w-5 h-5 mr-3" />
             <span className="font-medium">Dashboard</span>
+          </button>
+          <button onClick={() => { setCurrentView('customer-section'); setSidebarOpen(false); }} className={`w-full flex items-center px-4 py-3 rounded-lg transition-all ${currentView === 'customer-section' ? 'bg-blue-50 text-blue-600 shadow-sm' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'}`}>
+            <UsersIcon className="w-5 h-5 mr-3" />
+            <span className="font-medium">Customer</span>
           </button>
           <button onClick={() => { setCurrentView('importer-section'); setSidebarOpen(false); }} className={`w-full flex items-center px-4 py-3 rounded-lg transition-all ${currentView === 'importer-section' ? 'bg-blue-50 text-blue-600 shadow-sm' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'}`}>
             <UsersIcon className="w-5 h-5 mr-3" />
@@ -1427,580 +919,6 @@ function App() {
             </div>
           </div>
         </div>
-      )}
-      {/* View Detail Modal */}
-      {viewRecord && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-gray-900/60 backdrop-blur-sm" onClick={() => setViewRecord(null)}></div>
-          <div className="relative bg-white/95 backdrop-blur-2xl border border-white/50 rounded-3xl shadow-2xl max-w-[95vw] w-full animate-in zoom-in duration-300 flex flex-col max-h-[90vh]">
-            {/* Modal Header */}
-            <div className="px-8 py-6 border-b border-gray-100 flex items-center justify-between bg-white sticky top-0 z-10 rounded-t-3xl">
-              <div className="w-1/4">
-                <h3 className="text-2xl font-bold text-gray-900">Stock History - {viewRecord.data.productName}</h3>
-              </div>
-
-              {/* Center Aligned Search Bar */}
-              <div className="flex-1 max-w-md mx-auto relative group">
-                <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
-                  <SearchIcon className="h-4 w-4 text-gray-400 group-focus-within:text-blue-500 transition-colors" />
-                </div>
-                <input
-                  type="text"
-                  placeholder="Search by LC, Port, Importer, Truck or Brand..."
-                  value={historySearchQuery}
-                  onChange={(e) => setHistorySearchQuery(e.target.value)}
-                  className="block w-full pl-10 pr-4 py-2 bg-gray-50/50 border border-gray-200 rounded-xl text-[13px] placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 focus:bg-white transition-all outline-none"
-                />
-              </div>
-
-              <div className="w-1/4 flex justify-end items-center gap-2">
-                <div className="relative">
-                  <button
-                    ref={filterButtonRef}
-                    onClick={() => setShowHistoryFilterPanel(!showHistoryFilterPanel)}
-                    className={`flex items-center gap-2 px-4 py-2 rounded-xl transition-all border ${showHistoryFilterPanel || Object.values(historyFilters).some(v => v !== '')
-                      ? 'bg-blue-600 border-blue-600 text-white shadow-lg shadow-blue-500/30'
-                      : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'
-                      }`}
-                  >
-                    <FunnelIcon className={`w-4 h-4 ${showHistoryFilterPanel || Object.values(historyFilters).some(v => v !== '') ? 'text-white' : 'text-gray-400'}`} />
-                    <span className="text-sm font-medium">Filter</span>
-                  </button>
-
-                  {/* Floating Filter Panel */}
-                  {showHistoryFilterPanel && (
-                    <div ref={historyFilterRef} className="absolute right-0 mt-3 w-80 bg-white/95 backdrop-blur-2xl border border-gray-100 rounded-2xl shadow-2xl z-[60] p-5 animate-in fade-in zoom-in duration-200">
-                      <div className="flex items-center justify-between mb-4 pb-2 border-b border-gray-50">
-                        <h4 className="font-bold text-gray-900">Advanced Filters</h4>
-                        <button
-                          onClick={() => {
-                            setHistoryFilters({ startDate: '', endDate: '', lcNo: '', port: '', brand: '' });
-                            setShowHistoryFilterPanel(false);
-                          }}
-                          className="text-[11px] font-bold text-blue-600 hover:text-blue-700 uppercase tracking-wider"
-                        >
-                          Reset All
-                        </button>
-                      </div>
-
-                      <div className="space-y-4">
-                        {/* Date Range */}
-                        <div className="grid grid-cols-2 gap-3">
-                          <CustomDatePicker
-                            label="FROM DATE"
-                            value={historyFilters.startDate}
-                            onChange={(e) => setHistoryFilters({ ...historyFilters, startDate: e.target.value })}
-                            placeholder="Select start date"
-                            name="startDate"
-                            labelClassName="text-[11px] font-bold text-gray-400 uppercase tracking-wider"
-                            compact={true}
-                          />
-                          <CustomDatePicker
-                            label="TO DATE"
-                            value={historyFilters.endDate}
-                            onChange={(e) => setHistoryFilters({ ...historyFilters, endDate: e.target.value })}
-                            placeholder="Select end date"
-                            name="endDate"
-                            labelClassName="text-[11px] font-bold text-gray-400 uppercase tracking-wider"
-                            compact={true}
-                            rightAlign={true}
-                          />
-                        </div>
-
-                        {/* LC No Selection */}
-                        <div className="space-y-1.5 relative" ref={lcNoFilterRef}>
-                          <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">LC No</label>
-                          <div className="relative">
-                            <input
-                              type="text"
-                              value={filterSearchInputs.lcNoSearch}
-                              onChange={(e) => {
-                                setFilterSearchInputs({ ...filterSearchInputs, lcNoSearch: e.target.value });
-                                setFilterDropdownOpen({ ...initialFilterDropdownState, lcNo: true });
-                              }}
-                              onFocus={() => setFilterDropdownOpen({ ...initialFilterDropdownState, lcNo: true })}
-                              placeholder={historyFilters.lcNo || "Search LC No..."}
-                              className="w-full px-3 py-2 pr-8 bg-white border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all shadow-sm hover:border-gray-300"
-                            />
-                            <SearchIcon className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
-                            {historyFilters.lcNo && (
-                              <button
-                                onClick={() => {
-                                  setHistoryFilters({ ...historyFilters, lcNo: '' });
-                                  setFilterSearchInputs({ ...filterSearchInputs, lcNoSearch: '' });
-                                }}
-                                className="absolute right-8 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
-                              >
-                                <XIcon className="w-4 h-4" />
-                              </button>
-                            )}
-                          </div>
-                          {filterDropdownOpen.lcNo && (() => {
-                            const lcOptions = [...new Set(stockRecords
-                              .filter(item => (item.productName || '').trim().toLowerCase() === (viewRecord.data.productName || '').trim().toLowerCase())
-                              .map(item => (item.lcNo || '').trim())
-                              .filter(Boolean)
-                            )].sort();
-                            const filtered = lcOptions.filter(lc =>
-                              lc.toLowerCase().includes(filterSearchInputs.lcNoSearch.toLowerCase())
-                            );
-                            return filtered.length > 0 ? (
-                              <div className="absolute z-50 mt-1 w-full bg-white border border-gray-200 rounded-xl shadow-lg max-h-48 overflow-y-auto">
-                                {filtered.map(lc => (
-                                  <button
-                                    key={lc}
-                                    type="button"
-                                    onClick={() => {
-                                      setHistoryFilters({ ...historyFilters, lcNo: lc });
-                                      setFilterSearchInputs({ ...filterSearchInputs, lcNoSearch: '' });
-                                      setFilterDropdownOpen(initialFilterDropdownState);
-                                    }}
-                                    className="w-full px-3 py-2 text-left text-sm hover:bg-blue-50 transition-colors"
-                                  >
-                                    {lc}
-                                  </button>
-                                ))}
-                              </div>
-                            ) : null;
-                          })()}
-                        </div>
-
-                        {/* Port Selection */}
-                        <div className="space-y-1.5 relative" ref={portFilterRef}>
-                          <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Port</label>
-                          <div className="relative">
-                            <input
-                              type="text"
-                              value={filterSearchInputs.portSearch}
-                              onChange={(e) => {
-                                setFilterSearchInputs({ ...filterSearchInputs, portSearch: e.target.value });
-                                setFilterDropdownOpen({ ...initialFilterDropdownState, port: true });
-                              }}
-                              onFocus={() => setFilterDropdownOpen({ ...initialFilterDropdownState, port: true })}
-                              placeholder={historyFilters.port || "Search Port..."}
-                              className="w-full px-3 py-2 pr-8 bg-white border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all shadow-sm hover:border-gray-300"
-                            />
-                            <SearchIcon className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
-                            {historyFilters.port && (
-                              <button
-                                onClick={() => {
-                                  setHistoryFilters({ ...historyFilters, port: '' });
-                                  setFilterSearchInputs({ ...filterSearchInputs, portSearch: '' });
-                                }}
-                                className="absolute right-8 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
-                              >
-                                <XIcon className="w-4 h-4" />
-                              </button>
-                            )}
-                          </div>
-                          {filterDropdownOpen.port && (() => {
-                            const portOptions = [...new Set(stockRecords
-                              .filter(item => (item.productName || '').trim().toLowerCase() === (viewRecord.data.productName || '').trim().toLowerCase())
-                              .map(item => (item.port || '').trim())
-                              .filter(Boolean)
-                            )].sort();
-                            const filtered = portOptions.filter(port =>
-                              port.toLowerCase().includes(filterSearchInputs.portSearch.toLowerCase())
-                            );
-                            return filtered.length > 0 ? (
-                              <div className="absolute z-50 mt-1 w-full bg-white border border-gray-200 rounded-xl shadow-lg max-h-48 overflow-y-auto">
-                                {filtered.map(port => (
-                                  <button
-                                    key={port}
-                                    type="button"
-                                    onClick={() => {
-                                      setHistoryFilters({ ...historyFilters, port });
-                                      setFilterSearchInputs({ ...filterSearchInputs, portSearch: '' });
-                                      setFilterDropdownOpen(initialFilterDropdownState);
-                                    }}
-                                    className="w-full px-3 py-2 text-left text-sm hover:bg-blue-50 transition-colors"
-                                  >
-                                    {port}
-                                  </button>
-                                ))}
-                              </div>
-                            ) : null;
-                          })()}
-                        </div>
-
-                        {/* Brand Selection */}
-                        <div className="space-y-1.5 relative" ref={brandFilterRef}>
-                          <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Brand</label>
-                          <div className="relative">
-                            <input
-                              type="text"
-                              value={filterSearchInputs.brandSearch}
-                              onChange={(e) => {
-                                setFilterSearchInputs({ ...filterSearchInputs, brandSearch: e.target.value });
-                                setFilterDropdownOpen({ ...initialFilterDropdownState, brand: true });
-                              }}
-                              onFocus={() => setFilterDropdownOpen({ ...initialFilterDropdownState, brand: true })}
-                              placeholder={historyFilters.brand || "Search Brand..."}
-                              className="w-full px-3 py-2 pr-8 bg-white border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all shadow-sm hover:border-gray-300"
-                            />
-                            <SearchIcon className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
-                            {historyFilters.brand && (
-                              <button
-                                onClick={() => {
-                                  setHistoryFilters({ ...historyFilters, brand: '' });
-                                  setFilterSearchInputs({ ...filterSearchInputs, brandSearch: '' });
-                                }}
-                                className="absolute right-8 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
-                              >
-                                <XIcon className="w-4 h-4" />
-                              </button>
-                            )}
-                          </div>
-                          {filterDropdownOpen.brand && (() => {
-                            const brandOptions = [...new Set(stockRecords
-                              .filter(item => (item.productName || '').trim().toLowerCase() === (viewRecord.data.productName || '').trim().toLowerCase())
-                              .flatMap(item => (item.brand ? [item.brand] : (item.entries || []).map(e => e.brand)))
-                              .map(brand => (brand || '').trim())
-                              .filter(Boolean)
-                            )].sort();
-                            const filtered = brandOptions.filter(brand =>
-                              brand.toLowerCase().includes(filterSearchInputs.brandSearch.toLowerCase())
-                            );
-                            return filtered.length > 0 ? (
-                              <div className="absolute z-50 mt-1 w-full bg-white border border-gray-200 rounded-xl shadow-lg max-h-48 overflow-y-auto">
-                                {filtered.map(brand => (
-                                  <button
-                                    key={brand}
-                                    type="button"
-                                    onClick={() => {
-                                      setHistoryFilters({ ...historyFilters, brand });
-                                      setFilterSearchInputs({ ...filterSearchInputs, brandSearch: '' });
-                                      setFilterDropdownOpen(initialFilterDropdownState);
-                                    }}
-                                    className="w-full px-3 py-2 text-left text-sm hover:bg-blue-50 transition-colors"
-                                  >
-                                    {brand}
-                                  </button>
-                                ))}
-                              </div>
-                            ) : null;
-                          })()}
-                        </div>
-
-                        <button
-                          onClick={() => setShowHistoryFilterPanel(false)}
-                          className="w-full py-2 bg-gray-900 text-white rounded-xl text-sm font-medium hover:bg-gray-800 transition-all mt-2"
-                        >
-                          Apply Filters
-                        </button>
-                      </div>
-                    </div>
-                  )}
-                </div>
-
-                <button onClick={() => { setViewRecord(null); setHistorySearchQuery(''); setHistoryFilters({ startDate: '', endDate: '', lcNo: '', port: '', brand: '' }); setShowHistoryFilterPanel(false); }} className="p-2 hover:bg-gray-100 rounded-full transition-colors">
-                  <XIcon className="w-6 h-6 text-gray-400" />
-                </button>
-              </div>
-            </div>
-
-            {/* Modal Content */}
-            <div className="p-8 flex-1 overflow-y-auto">
-              {(() => {
-                const searchLower = historySearchQuery.toLowerCase().trim();
-                const filteredRaw = stockRecords.filter(item => {
-                  const matchesProduct = (item.productName || '').trim().toLowerCase() === (viewRecord.data.productName || '').trim().toLowerCase();
-                  if (!matchesProduct) return false;
-
-                  // Apply Advanced Filters
-                  if (historyFilters.startDate && item.date < historyFilters.startDate) return false;
-                  if (historyFilters.endDate && item.date > historyFilters.endDate) return false;
-                  if (historyFilters.lcNo && (item.lcNo || '').trim() !== historyFilters.lcNo) return false;
-                  if (historyFilters.port && (item.port || '').trim() !== historyFilters.port) return false;
-                  if (historyFilters.brand) {
-                    const itemBrand = (item.brand || item.productName || '').trim().toLowerCase();
-                    const filterBrand = historyFilters.brand.toLowerCase();
-                    if (itemBrand !== filterBrand) return false;
-                  }
-
-                  // Apply Search Query
-                  if (!searchLower) return true;
-
-                  const matchesLC = (item.lcNo || '').trim().toLowerCase().includes(searchLower);
-                  const matchesPort = (item.port || '').trim().toLowerCase().includes(searchLower);
-                  const matchesImporter = (item.importer || '').trim().toLowerCase().includes(searchLower);
-                  const matchesTruck = (item.truckNo || '').trim().toLowerCase().includes(searchLower);
-                  const brandList = item.brand ? [item.brand] : (item.entries || []).map(e => e.brand);
-                  const matchesBrand = brandList.some(b => (b || '').trim().toLowerCase().includes(searchLower));
-
-                  return matchesLC || matchesPort || matchesImporter || matchesTruck || matchesBrand;
-                });
-
-                // Group by date, lcNo, and truckNo
-                const groupedHistoryMap = filteredRaw.reduce((acc, item) => {
-                  const key = `${item.date}_${item.lcNo}_${item.truckNo}`;
-                  const quantity = parseFloat(item.quantity) || 0;
-                  const packet = parseFloat(item.packet) || 0;
-                  const inHousePacket = parseFloat(item.inHousePacket || item.packet) || 0;
-                  const inHouseQuantity = parseFloat(item.inHouseQuantity || item.quantity) || 0;
-                  const sweepedQuantity = parseFloat(item.sweepedQuantity) || 0;
-
-                  if (!acc[key]) {
-                    acc[key] = {
-                      ...item,
-                      allIds: [item._id],
-                      totalQuantity: quantity,
-                      totalPacket: packet,
-                      totalInHousePacket: inHousePacket,
-                      totalInHouseQuantity: inHouseQuantity,
-                      totalShortage: sweepedQuantity,
-                      isGrouped: false,
-                      entries: [
-                        {
-                          brand: item.brand || item.productName,
-                          purchasedPrice: item.purchasedPrice,
-                          packet: item.packet,
-                          packetSize: item.packetSize,
-                          quantity: item.quantity,
-                          inHousePacket: item.inHousePacket || item.packet,
-                          inHouseQuantity: item.inHouseQuantity || item.quantity,
-                          sweepedPacket: item.sweepedPacket,
-                          sweepedQuantity: item.sweepedQuantity,
-                          unit: item.unit,
-                          totalLcTruck: item.totalLcTruck,
-                          totalLcQuantity: item.totalLcQuantity
-                        }
-                      ]
-                    };
-                  } else {
-                    acc[key].allIds.push(item._id);
-                    acc[key].totalQuantity += quantity;
-                    acc[key].totalPacket += packet;
-                    acc[key].totalInHousePacket += inHousePacket;
-                    acc[key].totalInHouseQuantity += inHouseQuantity;
-                    acc[key].totalShortage += sweepedQuantity;
-                    acc[key].isGrouped = true;
-                    acc[key].entries.push({
-                      brand: item.brand || item.productName,
-                      purchasedPrice: item.purchasedPrice,
-                      packet: item.packet,
-                      packetSize: item.packetSize,
-                      quantity: item.quantity,
-                      inHousePacket: item.inHousePacket || item.packet,
-                      inHouseQuantity: item.inHouseQuantity || item.quantity,
-                      sweepedPacket: item.sweepedPacket,
-                      sweepedQuantity: item.sweepedQuantity,
-                      unit: item.unit,
-                      totalLcTruck: item.totalLcTruck,
-                      totalLcQuantity: item.totalLcQuantity
-                    });
-                  }
-                  return acc;
-                }, {});
-
-                const history = sortData(Object.values(groupedHistoryMap), 'history');
-                const unit = history[0]?.unit || '';
-
-                // Calculate Totals for Summary Cards
-                const totalPackets = history.reduce((sum, item) => sum + item.entries.reduce((pSum, ent) => pSum + (parseFloat(ent.packet) || 0), 0), 0);
-                const totalQuantity = history.reduce((sum, item) => sum + item.entries.reduce((qSum, ent) => qSum + (parseFloat(ent.quantity) || 0), 0), 0);
-                const totalInHousePkt = history.reduce((sum, item) => sum + item.entries.reduce((pSum, ent) => pSum + (parseFloat(ent.inHousePacket) || 0), 0), 0);
-                const totalInHouseQty = history.reduce((sum, item) => sum + item.entries.reduce((pSum, ent) => pSum + (parseFloat(ent.inHouseQuantity) || 0), 0), 0);
-                const totalShortage = history.reduce((sum, item) => sum + item.entries.reduce((pSum, ent) => pSum + (parseFloat(ent.sweepedQuantity) || 0), 0), 0);
-
-                return (
-                  <div className="space-y-6">
-                    {/* Summary Cards */}
-                    <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-                      <div className="bg-white border border-gray-200 p-4 rounded-xl shadow-sm">
-                        <div className="text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-1">Total Packet</div>
-                        <div className="text-xl font-bold text-gray-900">{totalPackets}</div>
-                      </div>
-                      <div className="bg-emerald-50/50 border border-emerald-100 p-4 rounded-xl shadow-sm">
-                        <div className="text-[11px] font-bold text-emerald-600 uppercase tracking-wider mb-1">Total Quantity</div>
-                        <div className="text-xl font-bold text-emerald-700">{Math.round(totalQuantity)} {unit}</div>
-                      </div>
-                      <div className="bg-amber-50/50 border border-amber-100 p-4 rounded-xl shadow-sm">
-                        <div className="text-[11px] font-bold text-amber-600 uppercase tracking-wider mb-1">InHouse PKT</div>
-                        <div className="text-xl font-bold text-amber-700">{Math.round(totalInHousePkt)}</div>
-                      </div>
-                      <div className="bg-blue-50/50 border border-blue-100 p-4 rounded-xl shadow-sm">
-                        <div className="text-[11px] font-bold text-blue-600 uppercase tracking-wider mb-1">InHouse QTY</div>
-                        <div className="text-xl font-bold text-blue-700">{Math.round(totalInHouseQty)} {unit}</div>
-                      </div>
-                      <div className="bg-rose-50/50 border border-rose-100 p-4 rounded-xl shadow-sm">
-                        <div className="text-[11px] font-bold text-rose-600 uppercase tracking-wider mb-1">Shortage</div>
-                        <div className="text-xl font-bold text-rose-700">{Math.round(totalShortage)} {unit}</div>
-                      </div>
-                    </div>
-
-                    <div className="bg-gray-50 rounded-2xl border border-gray-100 overflow-x-auto">
-                      <table className="w-full text-left min-w-[600px]">
-                        <thead>
-                          <tr className="bg-white border-b border-gray-100">
-                            <th onClick={() => requestSort('history', 'date')} className="px-3 py-3 text-[11px] font-semibold text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-50 transition-colors">
-                              <div className="flex items-center">Date <SortIcon config={sortConfig.history} columnKey="date" /></div>
-                            </th>
-                            <th onClick={() => requestSort('history', 'lcNo')} className="px-3 py-3 text-[11px] font-semibold text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-50 transition-colors">
-                              <div className="flex items-center">LC No <SortIcon config={sortConfig.history} columnKey="lcNo" /></div>
-                            </th>
-                            <th onClick={() => requestSort('history', 'port')} className="px-3 py-3 text-[11px] font-semibold text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-50 transition-colors">
-                              <div className="flex items-center">Port <SortIcon config={sortConfig.history} columnKey="port" /></div>
-                            </th>
-                            <th onClick={() => requestSort('history', 'importer')} className="px-3 py-3 text-[11px] font-semibold text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-50 transition-colors">
-                              <div className="flex items-center">Importer <SortIcon config={sortConfig.history} columnKey="importer" /></div>
-                            </th>
-                            <th onClick={() => requestSort('history', 'truckNo')} className="px-3 py-3 text-[11px] font-semibold text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-50 transition-colors">
-                              <div className="flex items-center">Truck No. <SortIcon config={sortConfig.history} columnKey="truckNo" /></div>
-                            </th>
-                            <th onClick={() => requestSort('history', 'brand')} className="px-3 py-3 text-[11px] font-semibold text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-50 transition-colors">
-                              <div className="flex items-center">Brand <SortIcon config={sortConfig.history} columnKey="brand" /></div>
-                            </th>
-                            <th className="px-3 py-3 text-[11px] font-semibold text-gray-400 uppercase tracking-wider">
-                              Purchase<br />Price
-                            </th>
-                            <th onClick={() => requestSort('history', 'totalPacket')} className="px-3 py-3 text-[11px] font-semibold text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-50 transition-colors">
-                              <div className="flex items-center">Packet <SortIcon config={sortConfig.history} columnKey="totalPacket" /></div>
-                            </th>
-                            <th onClick={() => requestSort('history', 'totalQuantity')} className="px-3 py-3 text-[11px] font-semibold text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-50 transition-colors">
-                              <div className="flex items-center">Quantity <SortIcon config={sortConfig.history} columnKey="totalQuantity" /></div>
-                            </th>
-                            <th onClick={() => requestSort('history', 'totalInHousePacket')} className="px-3 py-3 text-[11px] font-semibold text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-50 transition-colors">
-                              <div className="flex items-center">InHouse Pkt <SortIcon config={sortConfig.history} columnKey="totalInHousePacket" /></div>
-                            </th>
-                            <th onClick={() => requestSort('history', 'totalInHouseQuantity')} className="px-3 py-3 text-[11px] font-semibold text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-50 transition-colors">
-                              <div className="flex items-center">InHouse Qty <SortIcon config={sortConfig.history} columnKey="totalInHouseQuantity" /></div>
-                            </th>
-                            <th onClick={() => requestSort('history', 'totalShortage')} className="px-3 py-3 text-[11px] font-semibold text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-50 transition-colors">
-                              <div className="flex items-center">Shortage <SortIcon config={sortConfig.history} columnKey="totalShortage" /></div>
-                            </th>
-                            <th className="px-3 py-3 text-[11px] font-semibold text-gray-400 uppercase tracking-wider text-center">Actions</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-gray-100 bg-white/50">
-                          {history.map((historyItem, idx) => (
-                            <tr key={idx} className={`${historyItem._id === (viewRecord?.data?._id) ? 'bg-blue-50/50' : ''} align-top`}>
-                              <td className="px-3 py-3 text-[13px] text-gray-600">
-                                {formatDate(historyItem.date)}
-                              </td>
-                              <td className="px-3 py-3 text-[13px] font-bold text-gray-900">{historyItem.lcNo || '-'}</td>
-                              <td className="px-3 py-3 text-[13px] text-gray-600">{historyItem.port || '-'}</td>
-                              <td className="px-3 py-3 text-[13px] text-gray-600">{historyItem.importer || '-'}</td>
-                              <td className="px-3 py-3 text-[13px] text-gray-600">
-                                {historyItem.truckNo ? historyItem.truckNo.toString().split(',').map((t, i) => (
-                                  <div key={i} className="leading-tight">{t.trim()}</div>
-                                )) : '-'}
-                              </td>
-                              <td className="px-3 py-3 text-[13px] text-gray-600 leading-relaxed">
-                                {historyItem.entries.map((ent, i) => (
-                                  <div key={i}>
-                                    {ent.brand ? ent.brand.toString().split(',').map((b, j) => (
-                                      <div key={j}>{b.trim()}</div>
-                                    )) : '-'}
-                                  </div>
-                                ))}
-                              </td>
-                              <td className="px-3 py-3 text-[13px] text-gray-600 leading-relaxed">
-                                {historyItem.entries.map((ent, i) => (
-                                  <div key={i}>{ent.purchasedPrice || '-'}</div>
-                                ))}
-                                {historyItem.isGrouped && (
-                                  <div className="text-[12px] text-gray-900 mt-2 font-bold text-left">Total:</div>
-                                )}
-                              </td>
-                              <td className="px-3 py-3 text-[13px] text-gray-600 leading-relaxed font-bold">
-                                {historyItem.entries.map((ent, i) => (
-                                  <div key={i}>
-                                    {ent.packet ? ent.packet.toString().split(',').map((p, j) => (
-                                      <div key={j}>{p.trim()}</div>
-                                    )) : '-'}
-                                  </div>
-                                ))}
-                                {historyItem.isGrouped && (
-                                  <div className="flex items-center gap-2 mt-2">
-                                    <div className="text-blue-700 font-bold">
-                                      {historyItem.entries.reduce((sum, ent) => sum + (parseFloat(ent.packet) || 0), 0)}
-                                    </div>
-                                  </div>
-                                )}
-                              </td>
-                              <td className="px-3 py-3 text-[13px] font-medium text-gray-900 leading-relaxed">
-                                {historyItem.entries.map((ent, i) => (
-                                  <div key={i}>
-                                    {ent.quantity ? ent.quantity.toString().split(',').map((q, j) => (
-                                      <div key={j}>{q.trim()} {ent.unit}</div>
-                                    )) : '-'}
-                                  </div>
-                                ))}
-                                {historyItem.isGrouped && (
-                                  <div className="text-gray-900 mt-2 font-bold">
-                                    {Math.round(historyItem.entries.reduce((sum, ent) => sum + (parseFloat(ent.quantity) || 0), 0))} {historyItem.unit}
-                                  </div>
-                                )}
-                              </td>
-                              <td className="px-3 py-3 text-[13px] text-gray-600 leading-relaxed">
-                                {historyItem.entries.map((ent, i) => (
-                                  <div key={i}>
-                                    {ent.inHousePacket ? ent.inHousePacket.toString().split(',').map((p, j) => (
-                                      <div key={j}>{p.trim()}</div>
-                                    )) : '-'}
-                                  </div>
-                                ))}
-                                {historyItem.isGrouped && (
-                                  <div className="text-gray-900 mt-2 font-bold">
-                                    {Math.round(historyItem.entries.reduce((sum, ent) => sum + (parseFloat(ent.inHousePacket) || 0), 0))}
-                                  </div>
-                                )}
-                              </td>
-                              <td className="px-3 py-3 text-[13px] text-gray-600 leading-relaxed font-bold">
-                                {historyItem.entries.map((ent, i) => (
-                                  <div key={i}>{ent.inHouseQuantity ? ent.inHouseQuantity.toString().split(',').map((q, j) => (
-                                    <div key={j}>{Math.round(parseFloat(q))} {ent.unit}</div>
-                                  )) : '-'}</div>
-                                ))}
-                                {historyItem.isGrouped && (
-                                  <div className="text-gray-900 mt-2 font-bold">
-                                    {Math.round(historyItem.entries.reduce((sum, ent) => sum + (parseFloat(ent.inHouseQuantity) || 0), 0))} {historyItem.unit}
-                                  </div>
-                                )}
-                              </td>
-                              <td className="px-3 py-3 text-[13px] text-red-600 leading-relaxed font-bold">
-                                {historyItem.entries.map((ent, i) => (
-                                  <div key={i}>{ent.sweepedQuantity ? ent.sweepedQuantity.toString().split(',').map((q, j) => (
-                                    <div key={j}>{q.trim()} {ent.unit}</div>
-                                  )) : '-'}</div>
-                                ))}
-                                {historyItem.isGrouped && (
-                                  <div className="text-red-700 mt-2 font-bold">
-                                    {Math.round(historyItem.entries.reduce((sum, ent) => sum + (parseFloat(ent.sweepedQuantity) || 0), 0))} {historyItem.unit}
-                                  </div>
-                                )}
-                              </td>
-                              <td className="px-3 py-3 text-[13px]">
-                                <div className="flex items-center justify-center space-x-2">
-                                  <button
-                                    onClick={() => { setViewRecord(null); handleEdit('stock', historyItem); }}
-                                    className="p-1.5 hover:bg-blue-50 rounded-lg transition-colors group"
-                                    title="Edit"
-                                  >
-                                    <EditIcon className="w-4 h-4 text-gray-400 group-hover:text-blue-600" />
-                                  </button>
-                                  <button
-                                    onClick={() => { setViewRecord(null); deleteStockGroup(historyItem.allIds || [historyItem._id]); }}
-                                    className="p-1.5 hover:bg-red-50 rounded-lg transition-colors group"
-                                    title="Delete"
-                                  >
-                                    <TrashIcon className="w-4 h-4 text-gray-400 group-hover:text-red-600" />
-                                  </button>
-                                </div>
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
-                );
-              })()}
-
-            </div>
-          </div>
-        </div >
       )}
 
       {/* Stock Report Modal */}

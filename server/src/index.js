@@ -22,6 +22,7 @@ const Importer = require('./models/Importer');
 const Port = require('./models/Port');
 const Stock = require('./models/Stock');
 const Product = require('./models/Product');
+const Customer = require('./models/Customer');
 
 
 // Routes
@@ -228,6 +229,46 @@ app.get('/api/products', async (req, res) => {
   try {
     const products = await Product.find().sort({ createdAt: -1 });
     res.json(products);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// Customer APIs
+app.post('/api/customers', async (req, res) => {
+  try {
+    const newCustomer = new Customer(req.body);
+    const savedCustomer = await newCustomer.save();
+    res.status(201).json(savedCustomer);
+  } catch (err) {
+    res.status(400).json({ message: err.message });
+  }
+});
+
+app.delete('/api/customers/:id', async (req, res) => {
+  try {
+    const deletedCustomer = await Customer.findByIdAndDelete(req.params.id);
+    if (!deletedCustomer) return res.status(404).json({ message: 'Customer not found' });
+    res.json({ message: 'Customer deleted' });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+app.put('/api/customers/:id', async (req, res) => {
+  try {
+    const updatedCustomer = await Customer.findByIdAndUpdate(req.params.id, req.body, { new: true });
+    if (!updatedCustomer) return res.status(404).json({ message: 'Customer not found' });
+    res.json(updatedCustomer);
+  } catch (err) {
+    res.status(400).json({ message: err.message });
+  }
+});
+
+app.get('/api/customers', async (req, res) => {
+  try {
+    const customers = await Customer.find().sort({ createdAt: -1 });
+    res.json(customers);
   } catch (err) {
     res.status(500).json({ message: err.message });
   }

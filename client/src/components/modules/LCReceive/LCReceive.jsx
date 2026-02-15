@@ -14,10 +14,6 @@ function LCReceive({
     ports,
     products,
     brands,
-    activeDropdown,
-    setActiveDropdown,
-    highlightedIndex,
-    setHighlightedIndex,
     isSelectionMode,
     setIsSelectionMode,
     selectedItems,
@@ -44,6 +40,8 @@ function LCReceive({
     lcReceiveRecords,
     lcReceiveSummary
 }) {
+    const [activeDropdown, setActiveDropdown] = useState(null);
+    const [highlightedIndex, setHighlightedIndex] = useState(-1);
 
     const productRefs = useRef([]);
     const brandRefs = useRef({});

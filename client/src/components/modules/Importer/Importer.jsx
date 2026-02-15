@@ -31,7 +31,7 @@ const Importer = ({
         address: '',
         contactPerson: '',
         email: '',
-        phone: '',
+        phone: '+88',
         licenseNo: '',
         status: 'Active'
     });
@@ -62,6 +62,17 @@ const Importer = ({
 
     const handleInputChange = (e) => {
         const { name, value } = e.target;
+
+        if (name === 'phone') {
+            // Enforce +88 prefix and 14 characters limit
+            if (!value.startsWith('+88')) {
+                return; // Prevent removing +88
+            }
+            if (value.length > 14) {
+                return; // Limit to 14 characters
+            }
+        }
+
         setFormData(prev => ({
             ...prev,
             [name]: value
@@ -70,6 +81,13 @@ const Importer = ({
 
     const handleSubmit = async (e) => {
         e.preventDefault();
+
+        // Validate phone number
+        if (formData.phone.length !== 14) {
+            alert('Phone number must be exactly 14 characters long (e.g., +8801700000000)');
+            return;
+        }
+
         setIsSubmitting(true);
         setSubmitStatus(null);
 
@@ -112,7 +130,7 @@ const Importer = ({
             address: '',
             contactPerson: '',
             email: '',
-            phone: '',
+            phone: '+88',
             licenseNo: '',
             status: 'Active'
         });
@@ -126,7 +144,7 @@ const Importer = ({
             address: importer.address || '',
             contactPerson: importer.contactPerson || '',
             email: importer.email || '',
-            phone: importer.phone || '',
+            phone: importer.phone || '+88',
             licenseNo: importer.licenseNo || '',
             status: importer.status || 'Active'
         });
