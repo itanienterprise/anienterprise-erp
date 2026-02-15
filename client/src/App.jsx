@@ -7,169 +7,19 @@ import {
 } from './components/Icons';
 
 import { encryptData, decryptData } from './utils/encryption';
+import { generateLCReceiveReportPDF } from './utils/pdfGenerator';
+import { API_BASE_URL, formatDate, parseDate, SortIcon } from './utils/helpers';
+import CustomDatePicker from './components/shared/CustomDatePicker';
+import Importer from './components/modules/Importer/Importer';
+import Port from './components/modules/Port/Port';
+import IPManagement from './components/modules/IPManagement/IPManagement';
+import ProductManagement from './components/modules/Product/ProductManagement';
+import LCReceive from './components/modules/LCReceive/LCReceive';
+import WarehouseManagement from './components/modules/Warehouse/WarehouseManagement';
+import StockManagement from "./components/modules/StockManagement/StockManagement";
+import StockReport from './components/modules/StockManagement/StockReport';
+import { calculateStockData } from './utils/stockHelpers';
 
-const API_BASE_URL = `http://${window.location.hostname}:5000`;
-
-const SortIcon = ({ config, columnKey }) => {
-  if (config.key !== columnKey) return <div className="w-4 h-4 ml-1 opacity-20"><ChevronDownIcon className="w-4 h-4" /></div>;
-  return config.direction === 'asc'
-    ? <ChevronUpIcon className="w-4 h-4 ml-1 text-blue-600" />
-    : <ChevronDownIcon className="w-4 h-4 ml-1 text-blue-600" />;
-};
-
-const formatDate = (dateString) => {
-  if (!dateString) return '-';
-  // Parse YYYY-MM-DD manually to avoid timezone shifts
-  const parts = dateString.split('-');
-  if (parts.length === 3) {
-    const day = parts[2].padStart(2, '0');
-    const month = parts[1].padStart(2, '0');
-    const year = parts[0];
-    return `${day}/${month}/${year}`;
-  }
-  const date = new Date(dateString);
-  if (isNaN(date.getTime())) return '-';
-  const day = String(date.getDate()).padStart(2, '0');
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const year = date.getFullYear();
-  return `${day}/${month}/${year}`;
-};
-
-const parseDate = (dateString) => {
-  if (!dateString) return new Date();
-  if (typeof dateString === 'string' && dateString.includes('-')) {
-    const [y, m, d] = dateString.split('-').map(Number);
-    return new Date(y, m - 1, d);
-  }
-  return new Date(dateString);
-};
-
-const CustomDatePicker = ({ value, onChange, placeholder, label, required = false, name, labelClassName = "text-sm font-medium text-gray-700", compact = false, rightAlign = false }) => {
-  const [isOpen, setIsOpen] = useState(false);
-  const [viewDate, setViewDate] = useState(() => {
-    if (value && value.includes('-')) {
-      const [y, m] = value.split('-').map(Number);
-      return new Date(y, m - 1, 1);
-    }
-    return new Date();
-  });
-  const containerRef = useRef(null);
-
-  useEffect(() => {
-    const handleClickOutside = (event) => {
-      if (containerRef.current && !containerRef.current.contains(event.target)) {
-        setIsOpen(false);
-      }
-    };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
-
-  const months = [
-    'January', 'February', 'March', 'April', 'May', 'June',
-    'July', 'August', 'September', 'October', 'November', 'December'
-  ];
-
-  const getDaysInMonth = (month, year) => new Date(year, month + 1, 0).getDate();
-  const getFirstDayOfMonth = (month, year) => new Date(year, month, 1).getDay();
-
-  const handlePrevMonth = () => {
-    setViewDate(new Date(viewDate.getFullYear(), viewDate.getMonth() - 1, 1));
-  };
-
-  const handleNextMonth = () => {
-    setViewDate(new Date(viewDate.getFullYear(), viewDate.getMonth() + 1, 1));
-  };
-
-  const handleDateSelect = (day) => {
-    const year = viewDate.getFullYear();
-    const month = String(viewDate.getMonth() + 1).padStart(2, '0');
-    const d = String(day).padStart(2, '0');
-    const formatted = `${year}-${month}-${d}`;
-
-    onChange({ target: { name, value: formatted } });
-    setIsOpen(false);
-  };
-
-  const daysInMonth = getDaysInMonth(viewDate.getMonth(), viewDate.getFullYear());
-  const firstDay = getFirstDayOfMonth(viewDate.getMonth(), viewDate.getFullYear());
-  const days = Array.from({ length: daysInMonth }, (_, i) => i + 1);
-  const blanks = Array.from({ length: firstDay }, (_, i) => i);
-
-  return (
-    <div className="space-y-2 relative" ref={containerRef}>
-      {label && <label className={labelClassName}>{label}</label>}
-      <div className="relative">
-        <input
-          type="text"
-          readOnly
-          value={value ? formatDate(value) : ''}
-          onClick={() => setIsOpen(!isOpen)}
-          placeholder={placeholder || 'Select Date'}
-          required={required}
-          autoComplete="off"
-          className="w-full px-3 py-2 bg-white border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all shadow-sm hover:border-gray-300 cursor-pointer pr-10"
-        />
-        <CalendarIcon className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
-      </div>
-
-      {isOpen && (
-        <div className={`absolute z-[100] mt-2 bg-white border border-gray-200 rounded-2xl shadow-xl ${compact ? 'p-3 w-[260px]' : 'p-5 w-[320px]'} ${rightAlign ? 'right-0' : 'left-0'}`}>
-          <div className={`flex items-center justify-between ${compact ? 'mb-2' : 'mb-4'}`}>
-            <button type="button" onClick={handlePrevMonth} className="p-2 hover:bg-gray-50 rounded-lg text-gray-700 transition-colors">
-              <ChevronLeftIcon className="w-5 h-5" />
-            </button>
-            <div className={`font-bold text-gray-900 ${compact ? 'text-sm' : 'text-base'}`}>
-              {months[viewDate.getMonth()]} {viewDate.getFullYear()}
-            </div>
-            <button type="button" onClick={handleNextMonth} className="p-2 hover:bg-gray-50 rounded-lg text-gray-700 transition-colors">
-              <ChevronRightIcon className="w-5 h-5" />
-            </button>
-          </div>
-
-          <div className={`grid grid-cols-7 ${compact ? 'gap-0.5 mb-2' : 'gap-1 mb-3'}`}>
-            {['SU', 'MO', 'TU', 'WE', 'TH', 'FR', 'SA'].map(d => (
-              <div key={d} className={`text-[11px] font-semibold text-gray-400 text-center uppercase ${compact ? 'py-1' : 'py-2'}`}>{d}</div>
-            ))}
-          </div>
-
-          <div className={`grid grid-cols-7 ${compact ? 'gap-0.5' : 'gap-1'}`}>
-            {blanks.map(b => <div key={`b-${b}`} className={compact ? 'h-8' : 'h-10'}></div>)}
-            {days.map(d => {
-              const today = new Date();
-              const isToday = today.getFullYear() === viewDate.getFullYear() &&
-                today.getMonth() === viewDate.getMonth() &&
-                today.getDate() === d;
-
-              let isSelected = false;
-              if (value && value.includes('-')) {
-                const [vY, vM, vD] = value.split('-').map(Number);
-                isSelected = vY === viewDate.getFullYear() &&
-                  vM === (viewDate.getMonth() + 1) &&
-                  vD === d;
-              }
-
-              return (
-                <button
-                  key={d}
-                  type="button"
-                  onClick={() => handleDateSelect(d)}
-                  className={`${compact ? 'h-8 w-8 text-xs' : 'h-10 w-10 text-sm'} rounded-xl font-medium flex items-center justify-center transition-all
-                    ${isSelected ? 'bg-blue-600 text-white shadow-md scale-105' :
-                      isToday ? 'bg-blue-50 text-blue-600 font-semibold' :
-                        'hover:bg-gray-100 text-gray-700'}`}
-                >
-                  {d}
-                </button>
-              );
-            })}
-          </div>
-        </div>
-      )}
-
-    </div>
-  );
-};
 
 
 function App() {
@@ -184,11 +34,35 @@ function App() {
   const [ipRecords, setIpRecords] = useState([]);
   const [importers, setImporters] = useState([]);
   const [ports, setPorts] = useState([]);
+  const [showStockForm, setShowStockForm] = useState(false);
+  const [showStockReport, setShowStockReport] = useState(false);
+  const [stockFormData, setStockFormData] = useState({
+    date: new Date().toISOString().split('T')[0],
+    lcNo: '',
+    port: '',
+    importer: '',
+    indianCnF: '',
+    indCnFCost: '',
+    bdCnF: '',
+    bdCnFCost: '',
+    billOfEntry: '',
+    totalLcTruck: '',
+    totalLcQuantity: '',
+    status: 'In Stock',
+    productEntries: [{
+      isMultiBrand: true,
+      productName: '',
+      truckNo: '',
+      brandEntries: [{ brand: '', purchasedPrice: '', packet: '', packetSize: '', quantity: '', unit: 'kg', sweepedPacket: '', sweepedQuantity: '', inHousePacket: '', inHouseQuantity: '' }]
+    }]
+  });
+
   const [isLoading, setIsLoading] = useState(false);
   const [showImporterForm, setShowImporterForm] = useState(false);
   const [showPortForm, setShowPortForm] = useState(false);
-  const [showStockForm, setShowStockForm] = useState(false);
+
   const [stockRecords, setStockRecords] = useState([]);
+  const [stockFilters, setStockFilters] = useState({ startDate: '', endDate: '', lcNo: '', port: '', brand: '', importer: '', productName: '' });
 
   const [selectedItems, setSelectedItems] = useState(new Set());
   const [isSelectionMode, setIsSelectionMode] = useState(false);
@@ -224,6 +98,15 @@ function App() {
     bdCnfSearch: '',
     billOfEntrySearch: ''
   });
+
+  const [sortConfig, setSortConfig] = useState({
+    stock: { key: 'date', direction: 'desc' },
+    history: { key: 'date', direction: 'desc' },
+    importer: { key: 'name', direction: 'asc' },
+    port: { key: 'name', direction: 'asc' },
+    ip: { key: 'openingDate', direction: 'desc' }
+  });
+
   const initialFilterDropdownState = {
     lcNo: false,
     port: false,
@@ -234,46 +117,12 @@ function App() {
     billOfEntry: false
   };
   const [filterDropdownOpen, setFilterDropdownOpen] = useState(initialFilterDropdownState);
-  const [stockSearchQuery, setStockSearchQuery] = useState('');
-  const [lcSearchQuery, setLcSearchQuery] = useState('');
-  const [showLcFilterPanel, setShowLcFilterPanel] = useState(false);
-  const [showStockFilterPanel, setShowStockFilterPanel] = useState(false);
-  const [stockFilters, setStockFilters] = useState({
-    startDate: '',
-    endDate: '',
-    lcNo: '',
-    port: '',
-    brand: '',
-    productName: ''
-  });
 
-  const initialLcFilterState = {
-    startDate: '',
-    endDate: '',
-    lcNo: '',
-    port: '',
-    indCnf: '',
-    bdCnf: '',
-    billOfEntry: '',
-    productName: '',
-    brand: ''
-  };
 
-  const [lcFilters, setLcFilters] = useState(initialLcFilterState);
-  const [showStockReport, setShowStockReport] = useState(false);
-  const [showStockReportFilterPanel, setShowStockReportFilterPanel] = useState(false);
+
   const [showLcReport, setShowLcReport] = useState(false);
   const [showLcReportFilterPanel, setShowLcReportFilterPanel] = useState(false);
   const [products, setProducts] = useState([]);
-  const [showProductForm, setShowProductForm] = useState(false);
-  const [productFormData, setProductFormData] = useState({
-    name: '',
-    hsCode: '',
-    brands: [{ brand: '', packetSize: '', purchasedPrice: '' }],
-    uom: 'kg',
-    description: '',
-    category: ''
-  });
   const [highlightedIndex, setHighlightedIndex] = useState(-1);
   const portRef = useRef(null);
   const importerRef = useRef(null);
@@ -286,21 +135,7 @@ function App() {
   const brandFilterRef = useRef(null);
   const historyFilterRef = useRef(null);
   const filterButtonRef = useRef(null);
-  const stockFilterRef = useRef(null);
-  const stockFilterButtonRef = useRef(null);
-  const stockLcNoFilterRef = useRef(null);
-  const stockPortFilterRef = useRef(null);
-  const stockBrandFilterRef = useRef(null);
-  const stockProductFilterRef = useRef(null);
-  const stockReportFilterRef = useRef(null);
-  const stockReportFilterButtonRef = useRef(null);
-  const lcFilterRef = useRef(null);
-  const lcFilterButtonRef = useRef(null);
-  const lcLcNoFilterRef = useRef(null);
-  const lcPortFilterRef = useRef(null);
-  const lcIndCnfFilterRef = useRef(null);
-  const lcBdCnfFilterRef = useRef(null);
-  const lcBillOfEntryFilterRef = useRef(null);
+
   const reportLcNoFilterRef = useRef(null);
   const reportPortFilterRef = useRef(null);
   const reportBrandFilterRef = useRef(null);
@@ -310,173 +145,10 @@ function App() {
   const reportLcIndCnfFilterRef = useRef(null);
   const reportLcBdCnfFilterRef = useRef(null);
   const reportLcBillOfEntryFilterRef = useRef(null);
+  const productRefs = useRef({});
+  const brandRefs = useRef({});
 
 
-  const lcReceiveRecords = useMemo(() => {
-    const searchLower = lcSearchQuery.toLowerCase().trim();
-    return stockRecords.filter(item => {
-      // Apply Advanced Filters
-      if (lcFilters.startDate && item.date < lcFilters.startDate) return false;
-      if (lcFilters.endDate && item.date > lcFilters.endDate) return false;
-      if (lcFilters.lcNo && (item.lcNo || '').trim().toLowerCase() !== lcFilters.lcNo.toLowerCase()) return false;
-      if (lcFilters.port && (item.port || '').trim().toLowerCase() !== lcFilters.port.toLowerCase()) return false;
-      if (lcFilters.indCnf && (item.indianCnF || '').trim().toLowerCase() !== lcFilters.indCnf.toLowerCase()) return false;
-      if (lcFilters.bdCnf && (item.bdCnF || '').trim().toLowerCase() !== lcFilters.bdCnf.toLowerCase()) return false;
-      if (lcFilters.billOfEntry && (item.billOfEntry || '').trim().toLowerCase() !== lcFilters.billOfEntry.toLowerCase()) return false;
-      if (lcFilters.productName && (item.productName || '').trim().toLowerCase() !== lcFilters.productName.toLowerCase()) return false;
-      if (lcFilters.brand) {
-        const brandList = item.brand ? [item.brand] : (item.brandEntries || []).map(e => e.brand);
-        if (!brandList.some(b => (b || '').trim().toLowerCase() === lcFilters.brand.toLowerCase())) return false;
-      }
-
-      // Apply Search Query
-      if (!searchLower) return true;
-
-      const matchesLC = (item.lcNo || '').toLowerCase().includes(searchLower);
-      const matchesImporter = (item.importer || '').toLowerCase().includes(searchLower);
-      const matchesBillOfEntry = (item.billOfEntry || '').toLowerCase().includes(searchLower);
-      const matchesPort = (item.port || '').toLowerCase().includes(searchLower);
-      const matchesTruck = (item.truckNo || '').toLowerCase().includes(searchLower);
-      const matchesProduct = (item.productName || '').toLowerCase().includes(searchLower);
-      const brandList = item.brand ? [item.brand] : (item.brandEntries || []).map(e => e.brand);
-      const matchesBrand = brandList.some(b => (b || '').trim().toLowerCase().includes(searchLower));
-
-      return matchesLC || matchesImporter || matchesBillOfEntry || matchesPort || matchesTruck || matchesProduct || matchesBrand;
-    });
-  }, [stockRecords, lcSearchQuery, lcFilters]);
-
-  const lcReceiveSummary = useMemo(() => {
-    const totalPackets = lcReceiveRecords.reduce((sum, item) => sum + (parseFloat(item.packet) || 0), 0);
-    const totalQuantity = lcReceiveRecords.reduce((sum, item) => sum + (parseFloat(item.quantity) || 0), 0);
-
-    // Count truckNo only once per unique product entry (date + lcNo + product + truck)
-    const uniqueTrucksMap = lcReceiveRecords.reduce((acc, item) => {
-      const key = `${item.date}-${item.lcNo}-${item.productName}-${item.truckNo}`;
-      if (!acc[key]) {
-        acc[key] = parseFloat(item.truckNo) || 0;
-      }
-      return acc;
-    }, {});
-    const totalTrucks = Object.values(uniqueTrucksMap).reduce((sum, val) => sum + val, 0);
-
-    const unit = lcReceiveRecords[0]?.unit || 'kg';
-
-    return { totalPackets, totalQuantity, totalTrucks, unit };
-  }, [lcReceiveRecords]);
-
-  const stockData = useMemo(() => {
-    const searchLower = stockSearchQuery.toLowerCase().trim();
-    const filteredRecords = stockRecords.filter(item => {
-      // Apply Advanced Filters
-      if (stockFilters.startDate && item.date < stockFilters.startDate) return false;
-      if (stockFilters.endDate && item.date > stockFilters.endDate) return false;
-      if (stockFilters.lcNo && (item.lcNo || '').trim() !== stockFilters.lcNo) return false;
-      if (stockFilters.port && (item.port || '').trim() !== stockFilters.port) return false;
-      if (stockFilters.productName && (item.productName || '').trim().toLowerCase() !== stockFilters.productName.toLowerCase()) return false;
-      if (stockFilters.brand) {
-        const brandList = item.brand ? [item.brand] : (item.entries || []).map(e => e.brand);
-        if (!brandList.some(b => (b || '').trim().toLowerCase() === stockFilters.brand.toLowerCase())) return false;
-      }
-
-      // Apply Search Query
-      if (!searchLower) return true;
-
-      const matchesProduct = (item.productName || '').toLowerCase().includes(searchLower);
-      const matchesLC = (item.lcNo || '').toLowerCase().includes(searchLower);
-      const matchesPort = (item.port || '').toLowerCase().includes(searchLower);
-      const matchesImporter = (item.importer || '').toLowerCase().includes(searchLower);
-      const matchesTruck = (item.truckNo || '').toLowerCase().includes(searchLower);
-      const brandList = item.brand ? [item.brand] : (item.entries || []).map(e => e.brand);
-      const matchesBrand = brandList.some(b => (b || '').trim().toLowerCase().includes(searchLower));
-
-      return matchesProduct || matchesLC || matchesPort || matchesImporter || matchesTruck || matchesBrand;
-    });
-
-    const groupedStock = filteredRecords.reduce((acc, item) => {
-      const name = (item.productName || '').trim().toLowerCase();
-      const itemBrand = (item.brand || item.productName || '').trim();
-      const itemQty = parseFloat(item.quantity) || 0;
-      const itemPacket = parseFloat(item.packet) || 0;
-      const itemIHPacket = parseFloat(item.inHousePacket || item.packet) || 0;
-      const itemIHQty = parseFloat(item.inHouseQuantity || item.quantity) || 0;
-      const itemSize = parseFloat(item.packetSize) || 0;
-
-      const brandEntry = {
-        brand: itemBrand,
-        purchasedPrice: item.purchasedPrice || '',
-        packet: itemPacket,
-        packetSize: itemSize,
-        quantity: itemQty,
-        inHousePacket: itemIHPacket,
-        inHouseQuantity: itemIHQty,
-        salePacket: itemPacket - itemIHPacket,
-        saleQuantity: itemQty - itemIHQty,
-        sweepedPacket: item.sweepedPacket || '',
-        sweepedQuantity: item.sweepedQuantity || '',
-        unit: item.unit
-      };
-
-      if (!acc[name]) {
-        acc[name] = {
-          ...item,
-          productName: (item.productName || '').trim(),
-          quantity: itemIHQty,
-          packet: itemIHPacket,
-          salePacket: itemPacket - itemIHPacket,
-          saleQuantity: itemQty - itemIHQty,
-          originalId: item._id,
-          allIds: [item._id],
-          entries: [brandEntry]
-        };
-      } else {
-        acc[name].allIds.push(item._id);
-        acc[name].quantity += itemIHQty;
-        acc[name].packet += itemIHPacket;
-        acc[name].salePacket += (itemPacket - itemIHPacket);
-        acc[name].saleQuantity += (itemQty - itemIHQty);
-        const existingEntry = acc[name].entries.find(e => e.brand === itemBrand);
-        if (existingEntry) {
-          existingEntry.packet += itemPacket;
-          existingEntry.quantity += itemQty;
-          existingEntry.inHousePacket += itemIHPacket;
-          existingEntry.inHouseQuantity += itemIHQty;
-        } else {
-          acc[name].entries.push(brandEntry);
-        }
-      }
-      return acc;
-    }, {});
-
-    const displayRecords = Object.values(groupedStock);
-    const totalPackets = filteredRecords.reduce((sum, item) => sum + (parseFloat(item.packet) || 0), 0);
-    const totalQuantity = filteredRecords.reduce((sum, item) => sum + (parseFloat(item.quantity) || 0), 0);
-    const totalInHousePkt = filteredRecords.reduce((sum, item) => sum + (parseFloat(item.inHousePacket || item.packet) || 0), 0);
-    const totalInHouseQty = filteredRecords.reduce((sum, item) => sum + (parseFloat(item.inHouseQuantity || item.quantity) || 0), 0);
-    const totalSalePkt = totalPackets - totalInHousePkt;
-    const totalSaleQty = totalQuantity - totalInHouseQty;
-    const totalShortage = filteredRecords.reduce((sum, item) => sum + (parseFloat(item.sweepedQuantity) || 0), 0);
-
-    const unit = filteredRecords[0]?.unit || 'kg';
-
-    return { displayRecords, totalPackets, totalQuantity, totalInHousePkt, totalInHouseQty, totalSalePkt, totalSaleQty, totalShortage, unit };
-  }, [stockRecords, stockSearchQuery, stockFilters]);
-
-  const [sortConfig, setSortConfig] = useState({
-    ip: { key: null, direction: 'asc' },
-    importer: { key: null, direction: 'asc' },
-    port: { key: null, direction: 'asc' },
-    history: { key: 'date', direction: 'desc' }
-  });
-
-  const [importerFormData, setImporterFormData] = useState({
-    name: '',
-    address: '',
-    contactPerson: '',
-    email: '',
-    phone: '',
-    licenseNo: '',
-    status: 'Active'
-  });
 
   const [portFormData, setPortFormData] = useState({
     name: '',
@@ -486,38 +158,6 @@ function App() {
     status: 'Active'
   });
 
-  const [stockFormData, setStockFormData] = useState({
-    date: new Date().toISOString().split('T')[0],
-    lcNo: '',
-    indianCnF: '',
-    indCnFCost: '',
-    bdCnF: '',
-    bdCnFCost: '',
-    billOfEntry: '',
-    port: '',
-    importer: '',
-    status: 'In Stock',
-    totalLcTruck: '',
-    totalLcQuantity: '',
-    allIds: [], // Track all record IDs in a group for editing
-    productEntries: [
-      {
-        productName: '',
-        truckNo: '',
-        isMultiBrand: true,
-        brandEntries: [
-          {
-            brand: '',
-            purchasedPrice: '',
-            packet: '',
-            packetSize: '',
-            quantity: '',
-            unit: 'kg'
-          }
-        ]
-      }
-    ]
-  });
 
   const [formData, setFormData] = useState({
     openingDate: '',
@@ -584,6 +224,74 @@ function App() {
     setSubmitStatus(null);
   };
 
+  const initialLcFilterState = {
+    startDate: '',
+    endDate: '',
+    lcNo: '',
+    port: '',
+    indCnf: '',
+    bdCnf: '',
+    billOfEntry: '',
+    productName: '',
+    brand: ''
+  };
+
+  const [lcFilters, setLcFilters] = useState(initialLcFilterState);
+  const [lcSearchQuery, setLcSearchQuery] = useState('');
+
+
+  const lcReceiveRecords = useMemo(() => {
+    const searchLower = lcSearchQuery.toLowerCase().trim();
+    return stockRecords.filter(item => {
+      // Apply Advanced Filters
+      if (lcFilters.startDate && item.date < lcFilters.startDate) return false;
+      if (lcFilters.endDate && item.date > lcFilters.endDate) return false;
+      if (lcFilters.lcNo && (item.lcNo || '').trim().toLowerCase() !== lcFilters.lcNo.toLowerCase()) return false;
+      if (lcFilters.port && (item.port || '').trim().toLowerCase() !== lcFilters.port.toLowerCase()) return false;
+      if (lcFilters.indCnf && (item.indianCnF || '').trim().toLowerCase() !== lcFilters.indCnf.toLowerCase()) return false;
+      if (lcFilters.bdCnf && (item.bdCnF || '').trim().toLowerCase() !== lcFilters.bdCnf.toLowerCase()) return false;
+      if (lcFilters.billOfEntry && (item.billOfEntry || '').trim().toLowerCase() !== lcFilters.billOfEntry.toLowerCase()) return false;
+      if (lcFilters.productName && (item.productName || '').trim().toLowerCase() !== lcFilters.productName.toLowerCase()) return false;
+      if (lcFilters.brand) {
+        const brandList = item.brand ? [item.brand] : (item.brandEntries || []).map(e => e.brand);
+        if (!brandList.some(b => (b || '').trim().toLowerCase() === lcFilters.brand.toLowerCase())) return false;
+      }
+
+      // Apply Search Query
+      if (!searchLower) return true;
+
+      const matchesLC = (item.lcNo || '').toLowerCase().includes(searchLower);
+      const matchesImporter = (item.importer || '').toLowerCase().includes(searchLower);
+      const matchesBillOfEntry = (item.billOfEntry || '').toLowerCase().includes(searchLower);
+      const matchesPort = (item.port || '').toLowerCase().includes(searchLower);
+      const matchesTruck = (item.truckNo || '').toLowerCase().includes(searchLower);
+      const matchesProduct = (item.productName || '').toLowerCase().includes(searchLower);
+      const brandList = item.brand ? [item.brand] : (item.brandEntries || []).map(e => e.brand);
+      const matchesBrand = brandList.some(b => (b || '').trim().toLowerCase().includes(searchLower));
+
+      return matchesLC || matchesImporter || matchesBillOfEntry || matchesPort || matchesTruck || matchesProduct || matchesBrand;
+    });
+  }, [stockRecords, lcSearchQuery, lcFilters]);
+
+  const lcReceiveSummary = useMemo(() => {
+    const totalPackets = lcReceiveRecords.reduce((sum, item) => sum + (parseFloat(item.packet) || 0), 0);
+    const totalQuantity = lcReceiveRecords.reduce((sum, item) => sum + (parseFloat(item.quantity) || 0), 0);
+
+    // Count truckNo only once per unique product entry (date + lcNo + product + truck)
+    const uniqueTrucksMap = lcReceiveRecords.reduce((acc, item) => {
+      const key = `${item.date}-${item.lcNo}-${item.productName}-${item.truckNo}`;
+      if (!acc[key]) {
+        acc[key] = parseFloat(item.truckNo) || 0;
+      }
+      return acc;
+    }, {});
+    const totalTrucks = Object.values(uniqueTrucksMap).reduce((sum, val) => sum + val, 0);
+
+    const unit = lcReceiveRecords[0]?.unit || 'kg';
+
+    return { totalPackets, totalQuantity, totalTrucks, unit };
+  }, [lcReceiveRecords]);
+
   const resetImporterForm = () => {
     setImporterFormData({
       name: '',
@@ -610,47 +318,6 @@ function App() {
     setSubmitStatus(null);
   };
 
-  const resetStockForm = () => {
-    setStockFormData({
-      date: new Date().toISOString().split('T')[0],
-      lcNo: '',
-      indianCnF: '',
-      indCnFCost: '',
-      bdCnF: '',
-      bdCnFCost: '',
-      billOfEntry: '',
-      port: '',
-      importer: '',
-      status: 'In Stock',
-      totalLcTruck: '',
-      totalLcQuantity: '',
-      productEntries: [
-        {
-          productName: '',
-          truckNo: '',
-          isMultiBrand: true,
-          brandEntries: [
-            {
-              brand: '',
-              purchasedPrice: '',
-              packet: '',
-              packetSize: '',
-              sweepedPacket: '',
-              sweepedSize: '',
-              sweepedQuantity: '',
-              inHousePacket: '',
-              inHouseQuantity: '',
-              quantity: '',
-              unit: 'kg'
-            }
-          ]
-        }
-      ]
-    });
-
-    setEditingId(null);
-    setSubmitStatus(null);
-  };
 
 
   const requestSort = (type, key) => {
@@ -751,7 +418,6 @@ function App() {
     setShowImporterForm(false);
     setShowPortForm(false);
     setShowStockForm(false);
-    setShowProductForm(false);
     setActiveDropdown(null);
     setViewRecord(null);
 
@@ -776,11 +442,11 @@ function App() {
 
   }, [currentView]);
 
-  const productRefs = useRef({});
-  const brandRefs = useRef({});
-
   useEffect(() => {
     const handleClickOutside = (event) => {
+      // Ignore LCReceive-specific dropdowns (managed by LCReceive itself)
+      if (activeDropdown && activeDropdown.startsWith('lcr-')) return;
+
       // Handle product dropdowns (Stock and LC)
       if (activeDropdown && (activeDropdown.startsWith('product-') || activeDropdown.startsWith('lc-product-'))) {
         const parts = activeDropdown.split('-');
@@ -822,10 +488,7 @@ function App() {
 
   const getFilteredOptions = (type) => {
     switch (type) {
-      case 'port':
-        return ports.filter(p => p.status === 'Active' && (!stockFormData.port || ports.some(x => x.name === stockFormData.port) || p.name.toLowerCase().includes(stockFormData.port.toLowerCase())));
-      case 'importer':
-        return importers.filter(imp => imp.status === 'Active' && (!stockFormData.importer || importers.some(x => x.name === stockFormData.importer) || imp.name.toLowerCase().includes(stockFormData.importer.toLowerCase())));
+
       case 'ipPort':
         return ports.filter(p => p.status === 'Active' && (!formData.port || ports.some(x => x.name === formData.port) || p.name.toLowerCase().includes(formData.port.toLowerCase())));
       case 'ipImporter':
@@ -859,27 +522,17 @@ function App() {
         return options.filter(opt => !filterSearchInputs.productSearch || opt.toLowerCase().includes(filterSearchInputs.productSearch.toLowerCase())).map(opt => ({ name: opt }));
       }
       case 'lcFilterBrand': {
-        const options = [...new Set(stockRecords.flatMap(item => {
+        const productFilteredRecords = lcFilters.productName
+          ? stockRecords.filter(item => (item.productName || '').trim().toLowerCase() === lcFilters.productName.toLowerCase())
+          : stockRecords;
+        const options = [...new Set(productFilteredRecords.flatMap(item => {
           if (item.brand) return [(item.brand || '').trim()];
           return (item.brandEntries || []).map(e => (e.brand || '').trim());
         }).filter(Boolean))].sort();
         return options.filter(opt => !filterSearchInputs.brandSearch || opt.toLowerCase().includes(filterSearchInputs.brandSearch.toLowerCase())).map(opt => ({ name: opt }));
       }
       default:
-        if (type.startsWith('product-')) {
-          const pIndex = parseInt(type.split('-')[1]);
-          const query = stockFormData.productEntries[pIndex].productName;
-          return getFilteredProducts(query).map(p => ({ ...p, name: p.name }));
-        }
-        if (type.startsWith('brand-')) {
-          const parts = type.split('-');
-          const pIndex = parseInt(parts[1]);
-          const bIndex = parseInt(parts[2]);
-          const product = stockFormData.productEntries[pIndex];
-          const currentProductBrand = products.find(p => p.name === product.productName)?.brand;
-          const query = product.brandEntries[bIndex].brand;
-          return getFilteredBrands(query, currentProductBrand).map(b => ({ name: b }));
-        }
+
         return [];
     }
   };
@@ -921,29 +574,6 @@ function App() {
   };
 
   // Auto-synchronize Total LC Truck and Quantity in the form
-  useEffect(() => {
-    if (!stockFormData.productEntries) return;
-
-    // Sum truckNo per product entry
-    const totalTruck = stockFormData.productEntries.reduce((sum, p) => sum + (parseFloat(p.truckNo) || 0), 0);
-
-    // Sum quantity across all brand entries in all products
-    const totalQty = stockFormData.productEntries.reduce((pSum, p) =>
-      pSum + p.brandEntries.reduce((bSum, b) => bSum + (parseFloat(b.quantity) || 0), 0)
-      , 0);
-
-    const truckStr = totalTruck.toString();
-    const qtyStr = totalQty.toFixed(2);
-
-    // Update state if calculation differs
-    if (stockFormData.totalLcTruck !== truckStr || stockFormData.totalLcQuantity !== qtyStr) {
-      setStockFormData(prev => ({
-        ...prev,
-        totalLcTruck: truckStr,
-        totalLcQuantity: qtyStr
-      }));
-    }
-  }, [stockFormData.productEntries]);
 
   // Click-outside detection for filter dropdowns
   useEffect(() => {
@@ -955,23 +585,23 @@ function App() {
       // Map open keys to their corresponding DOM containers (refs)
       let refsToCheck = [];
       if (openKey === 'lcNo') {
-        refsToCheck = [lcNoFilterRef, stockLcNoFilterRef, lcLcNoFilterRef, reportLcNoFilterRef];
+        refsToCheck = [lcNoFilterRef, reportLcNoFilterRef];
       } else if (openKey === 'port') {
-        refsToCheck = [portFilterRef, stockPortFilterRef, lcPortFilterRef, reportPortFilterRef];
+        refsToCheck = [portFilterRef, reportPortFilterRef];
       } else if (openKey === 'brand') {
-        refsToCheck = [brandFilterRef, stockBrandFilterRef, reportBrandFilterRef];
+        refsToCheck = [brandFilterRef, reportBrandFilterRef];
       } else if (openKey === 'product') {
-        refsToCheck = [stockProductFilterRef, reportProductFilterRef];
+        refsToCheck = [reportProductFilterRef];
       } else if (openKey === 'indCnf') {
-        refsToCheck = [lcIndCnfFilterRef, reportLcIndCnfFilterRef];
+        refsToCheck = [reportLcIndCnfFilterRef];
       } else if (openKey === 'bdCnf') {
-        refsToCheck = [lcBdCnfFilterRef, reportLcBdCnfFilterRef];
+        refsToCheck = [reportLcBdCnfFilterRef];
       } else if (openKey === 'billOfEntry') {
-        refsToCheck = [lcBillOfEntryFilterRef, reportLcBillOfEntryFilterRef];
+        refsToCheck = [reportLcBillOfEntryFilterRef];
       }
 
       // If click is outside all associated refs for the open dropdown, close it
-      const isOutside = refsToCheck.every(ref => !ref.current || !ref.current.contains(event.target));
+      const isOutside = refsToCheck.filter(ref => ref && ref.current).every(ref => !ref.current.contains(event.target));
       if (isOutside) {
         setFilterDropdownOpen(initialFilterDropdownState);
       }
@@ -1000,64 +630,10 @@ function App() {
   }, [showHistoryFilterPanel]);
 
   // Click-outside detection for stock filter panel
-  useEffect(() => {
-    const handleClickOutside = (event) => {
-      if (
-        showStockFilterPanel &&
-        stockFilterRef.current &&
-        !stockFilterRef.current.contains(event.target) &&
-        stockFilterButtonRef.current &&
-        !stockFilterButtonRef.current.contains(event.target) &&
-        (!stockReportFilterRef.current || !stockReportFilterRef.current.contains(event.target)) &&
-        (!stockReportFilterButtonRef.current || !stockReportFilterButtonRef.current.contains(event.target)) &&
-        (!stockLcNoFilterRef.current || !stockLcNoFilterRef.current.contains(event.target)) &&
-        (!stockPortFilterRef.current || !stockPortFilterRef.current.contains(event.target)) &&
-        (!stockBrandFilterRef.current || !stockBrandFilterRef.current.contains(event.target)) &&
-        (!stockProductFilterRef.current || !stockProductFilterRef.current.contains(event.target))
-      ) {
-        setShowStockFilterPanel(false);
-      }
-    };
 
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, [showStockFilterPanel]);
 
-  // Click-outside detection for LC filter panel
-  useEffect(() => {
-    const handleClickOutside = (event) => {
-      if (
-        showLcFilterPanel &&
-        lcFilterRef.current &&
-        !lcFilterRef.current.contains(event.target) &&
-        lcFilterButtonRef.current &&
-        !lcFilterButtonRef.current.contains(event.target)
-      ) {
-        setShowLcFilterPanel(false);
-      }
-    };
-
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, [showLcFilterPanel]);
 
   // Click-outside detection for stock report filter panel
-  useEffect(() => {
-    const handleClickOutside = (event) => {
-      if (
-        showStockReportFilterPanel &&
-        stockReportFilterRef.current &&
-        !stockReportFilterRef.current.contains(event.target) &&
-        stockReportFilterButtonRef.current &&
-        !stockReportFilterButtonRef.current.contains(event.target)
-      ) {
-        setShowStockReportFilterPanel(false);
-      }
-    };
-
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, [showStockReportFilterPanel]);
 
   // Click-outside detection for LC report filter panel
   useEffect(() => {
@@ -1221,7 +797,7 @@ function App() {
               acc[pKey] = {
                 productName: ent.productName || ent.brand || '',
                 truckNo: ent.truckNo || '',
-                isMultiBrand: true, // Safe default for grouped edits
+                isMultiBrand: ent.isMultiBrand,
                 brandEntries: []
               };
             }
@@ -1240,10 +816,6 @@ function App() {
             return acc;
           }, {});
           const result = Object.values(productMap);
-          // Update isMultiBrand for each product
-          result.forEach(p => {
-            p.isMultiBrand = p.brandEntries.length > 1;
-          });
           return result;
         })()
       };
@@ -1458,282 +1030,9 @@ function App() {
     }
   };
 
-  const resetProductForm = () => {
-    setProductFormData({
-      name: '',
-      hsCode: '',
-      brands: [{ brand: '', packetSize: '', purchasedPrice: '' }],
-      uom: 'kg',
-      description: '',
-      category: ''
-    });
-  };
 
-  const handleProductSubmit = async (e) => {
-    e.preventDefault();
-    setIsSubmitting(true);
-    setSubmitStatus(null);
 
-    try {
-      const url = editingId
-        ? `${API_BASE_URL}/api/products/${editingId}`
-        : `${API_BASE_URL}/api/products`;
-      const method = editingId ? 'PUT' : 'POST';
-      const encryptedPayload = { data: encryptData(productFormData) };
 
-      const response = await fetch(url, {
-        method,
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(encryptedPayload),
-      });
-
-      if (response.ok) {
-        setSubmitStatus('success');
-        fetchProducts();
-        setTimeout(() => {
-          setShowProductForm(false);
-          resetProductForm();
-          setEditingId(null);
-        }, 2000);
-      } else {
-        setSubmitStatus('error');
-      }
-    } catch (error) {
-      console.error('Error saving product:', error);
-      setSubmitStatus('error');
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
-  const handleProductEdit = (product) => {
-    const brands = product.brands || (product.brand ? [{
-      brand: product.brand,
-      packetSize: product.packetSize || '',
-      purchasedPrice: product.purchasedPrice || ''
-    }] : [{ brand: '', packetSize: '', purchasedPrice: '' }]);
-
-    setProductFormData({
-      name: product.name,
-      hsCode: product.hsCode || '',
-      brands: brands,
-      uom: product.uom || product.unit || 'kg',
-      description: product.description || '',
-      category: product.category || ''
-    });
-    setEditingId(product._id);
-    setShowProductForm(true);
-  };
-
-  const handleAddProductBrand = () => {
-    setProductFormData(prev => ({
-      ...prev,
-      brands: [...prev.brands, { brand: '', packetSize: '', purchasedPrice: '' }]
-    }));
-  };
-
-  const handleRemoveProductBrand = (index) => {
-    setProductFormData(prev => ({
-      ...prev,
-      brands: prev.brands.filter((_, i) => i !== index)
-    }));
-  };
-
-  const handleProductBrandChange = (index, field, value) => {
-    setProductFormData(prev => {
-      const updatedBrands = [...prev.brands];
-      updatedBrands[index] = { ...updatedBrands[index], [field]: value };
-      return { ...prev, brands: updatedBrands };
-    });
-  };
-
-  const handleProductDelete = async (id) => {
-    setDeleteConfirm({ show: true, type: 'product', id, isBulk: false });
-  };
-
-  const handleStockInputChange = (e, productIndex = null) => {
-    const { name, value } = e.target;
-    setStockFormData(prev => {
-      if (productIndex !== null) {
-        const updatedProducts = [...prev.productEntries];
-        const currentProduct = updatedProducts[productIndex];
-
-        // Reset brand entries if product name is changed
-        const extraUpdates = name === 'productName' ? {
-          brandEntries: [{ brand: '', packet: '', packetSize: '', quantity: '', unit: '', purchasedPrice: '', sweepedPacket: '', sweepedQuantity: '', inHouseQuantity: '', inHousePacket: '' }]
-        } : {};
-
-        updatedProducts[productIndex] = {
-          ...currentProduct,
-          [name]: value,
-          ...extraUpdates
-        };
-        return { ...prev, productEntries: updatedProducts };
-      }
-      return { ...prev, [name]: value };
-    });
-  };
-
-  const handleProductModeToggle = (index, isMulti) => {
-    setStockFormData(prev => {
-      const updatedProducts = [...prev.productEntries];
-      updatedProducts[index] = {
-        ...updatedProducts[index],
-        isMultiBrand: isMulti
-      };
-      return { ...prev, productEntries: updatedProducts };
-    });
-  };
-
-  // Handle brand entry field changes
-  const handleBrandEntryChange = (productIndex, brandIndex, field, value) => {
-    setStockFormData(prev => {
-      const updatedProducts = [...prev.productEntries];
-      const updatedEntries = [...updatedProducts[productIndex].brandEntries];
-
-      const newEntry = { ...updatedEntries[brandIndex], [field]: value };
-
-      // Auto-fill size/unit/price if brand is selected and product exists
-      if (field === 'brand' && value) {
-        const productName = updatedProducts[productIndex].productName;
-        const selectedProduct = products.find(p => p.name === productName);
-        if (selectedProduct) {
-          if (selectedProduct.uom) newEntry.unit = selectedProduct.uom;
-
-          // Find brand-specific details
-          const brandDetails = selectedProduct.brands?.find(b => b.brand === value) ||
-            (selectedProduct.brand === value ? selectedProduct : null);
-
-          if (brandDetails) {
-            if (brandDetails.packetSize) newEntry.packetSize = brandDetails.packetSize;
-            if (brandDetails.purchasedPrice) newEntry.purchasedPrice = brandDetails.purchasedPrice;
-          }
-        }
-      }
-
-      if (['packet', 'packetSize', 'sweepedPacket', 'sweepedQuantity', 'brand'].includes(field)) {
-        const pkt = parseFloat(field === 'packet' ? value : newEntry.packet) || 0;
-        const size = parseFloat(field === 'packetSize' ? value : newEntry.packetSize) || 0;
-        const swpPkt = parseFloat(field === 'sweepedPacket' ? value : newEntry.sweepedPacket) || 0;
-        const swpQty = parseFloat(field === 'sweepedQuantity' ? value : newEntry.sweepedQuantity) || 0;
-
-        // Calculate total quantity
-        const totalQty = pkt * size;
-        newEntry.quantity = Math.round(totalQty);
-
-        if (field === 'sweepedPacket') {
-          // If packet changed, update quantity
-          const newSwpQty = Math.round(swpPkt * size);
-          newEntry.sweepedQuantity = newSwpQty;
-          newEntry.inHouseQuantity = (totalQty - newSwpQty).toFixed(2);
-          newEntry.inHousePacket = (pkt - swpPkt).toFixed(2);
-        } else if (field === 'sweepedQuantity') {
-          // If quantity changed, update packet
-          newEntry.inHouseQuantity = (totalQty - swpQty).toFixed(2);
-          newEntry.inHousePacket = size > 0 ? ((totalQty - swpQty) / size).toFixed(2) : 0;
-          newEntry.sweepedPacket = size > 0 ? (swpQty / size).toFixed(2) : 0;
-        } else {
-          // If total packet or size changed, update everything based on current sweeped packet
-          const currentSwpQty = Math.round(swpPkt * size);
-          newEntry.sweepedQuantity = currentSwpQty;
-          newEntry.inHouseQuantity = (totalQty - currentSwpQty).toFixed(2);
-          newEntry.inHousePacket = (pkt - swpPkt).toFixed(2);
-        }
-      }
-
-      updatedEntries[brandIndex] = newEntry;
-      updatedProducts[productIndex] = {
-        ...updatedProducts[productIndex],
-        brandEntries: updatedEntries
-      };
-
-      return { ...prev, productEntries: updatedProducts };
-    });
-  };
-
-  // Add new product entry
-  const addProductEntry = () => {
-    setStockFormData(prev => ({
-      ...prev,
-      productEntries: [
-        ...prev.productEntries,
-        {
-          productName: '',
-          truckNo: '',
-          isMultiBrand: true,
-          brandEntries: [
-            {
-              brand: '',
-              packet: '',
-              packetSize: '',
-              sweepedPacket: '',
-              sweepedSize: '',
-              sweepedQuantity: '',
-              inHousePacket: '',
-              inHouseQuantity: '',
-              quantity: '',
-              unit: 'kg'
-            }
-          ]
-        }
-      ]
-    }));
-  };
-
-  // Remove product entry
-  const removeProductEntry = (index) => {
-    if (stockFormData.productEntries.length === 1) return;
-    setStockFormData(prev => ({
-      ...prev,
-      productEntries: prev.productEntries.filter((_, i) => i !== index)
-    }));
-  };
-
-  // Add new brand entry
-  const addBrandEntry = (productIndex) => {
-    setStockFormData(prev => {
-      const updatedProducts = [...prev.productEntries];
-      updatedProducts[productIndex] = {
-        ...updatedProducts[productIndex],
-        brandEntries: [
-          ...updatedProducts[productIndex].brandEntries,
-          {
-            brand: '',
-            packet: '',
-            packetSize: '',
-            sweepedPacket: '',
-            sweepedSize: '',
-            sweepedQuantity: '',
-            inHousePacket: '',
-            inHouseQuantity: '',
-            quantity: '',
-            unit: 'kg'
-          }
-        ]
-      };
-      return { ...prev, productEntries: updatedProducts };
-    });
-  };
-
-  // Remove brand entry
-  const removeBrandEntry = (productIndex, brandIndex) => {
-    setStockFormData(prev => {
-      const updatedProducts = [...prev.productEntries];
-      updatedProducts[productIndex] = {
-        ...updatedProducts[productIndex],
-        brandEntries: updatedProducts[productIndex].brandEntries.filter((_, i) => i !== brandIndex)
-      };
-      return { ...prev, productEntries: updatedProducts };
-    });
-  };
-
-  const handleStockDropdownSelect = (name, value) => {
-    setStockFormData(prev => ({
-      ...prev,
-      [name]: value
-    }));
-    setActiveDropdown(null);
-  };
 
   const handleIpDropdownSelect = (name, value) => {
     setFormData(prev => ({
@@ -1751,27 +1050,7 @@ function App() {
     setActiveDropdown(null);
   };
 
-  const handleProductSelect = (pIndex, selectedProductName) => {
-    const selectedProduct = products.find(p => p.name === selectedProductName);
 
-    const newProductEntries = [...stockFormData.productEntries];
-    newProductEntries[pIndex] = {
-      ...newProductEntries[pIndex],
-      productName: selectedProductName,
-      brandEntries: [{ brand: '', packet: '', packetSize: '', quantity: '', unit: '', purchasedPrice: '', sweepedPacket: '', sweepedQuantity: '', inHouseQuantity: '', inHousePacket: '' }]
-    };
-
-    // Auto-fill details if product found
-    if (selectedProduct) {
-      // Note: Auto-fill for size/unit moved to handleBrandEntryChange to trigger after brand selection
-    }
-
-    setStockFormData(prev => ({
-      ...prev,
-      productEntries: newProductEntries
-    }));
-    setActiveDropdown(null);
-  };
 
   const getFilteredProducts = (query) => {
     if (!query) return products;
@@ -1808,133 +1087,6 @@ function App() {
     if (exactMatch) return baseBrands;
 
     return baseBrands.filter(b => b.toLowerCase().includes(query.toLowerCase()));
-  };
-
-  const handleStockSubmit = async (e) => {
-    e.preventDefault();
-    setIsSubmitting(true);
-    setSubmitStatus(null);
-
-    try {
-      let isSuccess = false;
-      // Flatten all product and brand combinations into a single array of items to save
-      const itemsToSave = [];
-      const calcTotalLcTruck = stockFormData.productEntries.reduce((sum, p) => sum + (parseFloat(p.truckNo) || 0), 0).toString();
-      const calcTotalLcQuantity = stockFormData.productEntries.reduce((pSum, p) =>
-        pSum + p.brandEntries.reduce((bSum, b) => bSum + (parseFloat(b.quantity) || 0), 0)
-        , 0).toFixed(2);
-
-      stockFormData.productEntries.forEach(product => {
-        product.brandEntries.forEach(brand => {
-          itemsToSave.push({
-            date: stockFormData.date,
-            lcNo: stockFormData.lcNo,
-            indianCnF: stockFormData.indianCnF,
-            indCnFCost: stockFormData.indCnFCost,
-            bdCnF: stockFormData.bdCnF,
-            bdCnFCost: stockFormData.bdCnFCost,
-            billOfEntry: stockFormData.billOfEntry,
-            port: stockFormData.port,
-            importer: stockFormData.importer,
-            status: stockFormData.status,
-            totalLcTruck: calcTotalLcTruck,
-            totalLcQuantity: calcTotalLcQuantity,
-            productName: product.productName,
-            truckNo: product.truckNo,
-            isMultiBrand: product.isMultiBrand,
-            brand: brand.brand || product.productName,
-            purchasedPrice: brand.purchasedPrice,
-            packet: brand.packet,
-            packetSize: brand.packetSize,
-            quantity: brand.quantity,
-            inHousePacket: brand.inHousePacket,
-            inHouseQuantity: brand.inHouseQuantity,
-            sweepedPacket: brand.sweepedPacket,
-            sweepedQuantity: brand.sweepedQuantity,
-            unit: brand.unit
-          });
-        });
-      });
-
-      if (editingId) {
-        // Handle grouped updates to prevent ghost/replicate records
-        const originalIds = stockFormData.allIds || [editingId];
-        const itemsCount = itemsToSave.length;
-        const idsCount = originalIds.length;
-
-        // Perform updates for matching indices
-        const updatePromises = itemsToSave.slice(0, Math.min(itemsCount, idsCount)).map((item, index) => {
-          const url = `${API_BASE_URL}/api/stock/${originalIds[index]}`;
-          const encryptedPayload = { data: encryptData(item) };
-          return fetch(url, {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(encryptedPayload),
-          });
-        });
-
-        // Perform deletions for orphans
-        const deletePromises = idsCount > itemsCount
-          ? originalIds.slice(itemsCount).map(id =>
-            fetch(`${API_BASE_URL}/api/stock/${id}`, { method: 'DELETE' })
-          )
-          : [];
-
-        // Perform creations for extras
-        const createPromises = itemsCount > idsCount
-          ? itemsToSave.slice(idsCount).map(item => {
-            const url = `${API_BASE_URL}/api/stock`;
-            const encryptedPayload = { data: encryptData(item) };
-            return fetch(url, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify(encryptedPayload),
-            });
-          })
-          : [];
-
-        const allResults = await Promise.all([...updatePromises, ...deletePromises, ...createPromises]);
-
-        if (allResults.every(res => res.ok)) {
-          isSuccess = true;
-          setSubmitStatus('success');
-          fetchStockRecords();
-        } else {
-          setSubmitStatus('error');
-        }
-      } else {
-        // For new records, send separate POST requests for each item
-        const results = await Promise.all(itemsToSave.map(async (item) => {
-          const url = `${API_BASE_URL}/api/stock`;
-          const encryptedPayload = { data: encryptData(item) };
-          return fetch(url, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(encryptedPayload),
-          });
-        }));
-
-        if (results.every(res => res.ok)) {
-          isSuccess = true;
-          setSubmitStatus('success');
-          fetchStockRecords();
-        } else {
-          setSubmitStatus('error');
-        }
-      }
-
-      if (isSuccess) {
-        setTimeout(() => {
-          setShowStockForm(false);
-          resetStockForm();
-        }, 2000);
-      }
-    } catch (error) {
-      console.error('Error saving stock:', error);
-      setSubmitStatus('error');
-    } finally {
-      setIsSubmitting(false);
-    }
   };
 
 
@@ -1998,3687 +1150,158 @@ function App() {
         );
       case 'lc-entry-section':
         return (
-          <div className="space-y-6">
-            <div className="flex items-center justify-between gap-4">
-              <div className="w-1/4">
-                <h2 className="text-2xl font-bold text-gray-800">LC Receive Management</h2>
-              </div>
-
-              {/* Center Aligned Search Bar */}
-              <div className="flex-1 max-w-md mx-auto relative group">
-                <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
-                  <SearchIcon className="h-4 w-4 text-gray-400 group-focus-within:text-blue-500 transition-colors" />
-                </div>
-                <input
-                  type="text"
-                  placeholder="Search by LC, Port, Importer, Truck..."
-                  value={lcSearchQuery}
-                  onChange={(e) => setLcSearchQuery(e.target.value)}
-                  className="block w-full pl-10 pr-4 py-2 bg-white/50 border border-gray-200 rounded-xl text-[13px] placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 focus:bg-white transition-all outline-none"
-                />
-              </div>
-
-              <div className="w-1/4 flex justify-end items-center gap-2">
-                <div className="relative">
-                  <button
-                    ref={lcFilterButtonRef}
-                    onClick={() => setShowLcFilterPanel(!showLcFilterPanel)}
-                    className={`flex items-center gap-2 px-4 py-2 rounded-xl transition-all border ${showLcFilterPanel || Object.values(lcFilters).some(v => v !== '')
-                      ? 'bg-blue-600 border-blue-600 text-white shadow-lg shadow-blue-500/30'
-                      : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'
-                      }`}
-                  >
-                    <FunnelIcon className={`w-4 h-4 ${showLcFilterPanel || Object.values(lcFilters).some(v => v !== '') ? 'text-white' : 'text-gray-400'}`} />
-                    <span className="text-sm font-medium">Filter</span>
-                  </button>
-
-                  {/* Floating Filter Panel */}
-                  {showLcFilterPanel && (
-                    <div ref={lcFilterRef} className="absolute right-0 mt-3 w-80 bg-white/95 backdrop-blur-2xl border border-gray-100 rounded-2xl shadow-2xl z-[60] p-5 animate-in fade-in zoom-in duration-200">
-                      <div className="flex items-center justify-between mb-4 pb-2 border-b border-gray-50">
-                        <h4 className="font-bold text-gray-900">Advanced Filters</h4>
-                        <button
-                          onClick={() => {
-                            setLcFilters({ startDate: '', endDate: '', lcNo: '', port: '', indCnf: '', bdCnf: '', billOfEntry: '' });
-                            setFilterSearchInputs({ ...filterSearchInputs, lcNoSearch: '', portSearch: '', indCnfSearch: '', bdCnfSearch: '', billOfEntrySearch: '' });
-                            setLcSearchQuery('');
-                            setShowLcFilterPanel(false);
-                          }}
-                          className="text-[11px] font-bold text-blue-600 hover:text-blue-700 uppercase tracking-wider"
-                        >
-                          Reset All
-                        </button>
-                      </div>
-
-                      <div className="space-y-4">
-                        {/* Date Range */}
-                        <div className="grid grid-cols-2 gap-3">
-                          <CustomDatePicker
-                            label="FROM DATE"
-                            value={lcFilters.startDate}
-                            onChange={(e) => setLcFilters({ ...lcFilters, startDate: e.target.value })}
-                            placeholder="Select start date"
-                            name="startDate"
-                            labelClassName="text-[11px] font-bold text-gray-400 uppercase tracking-wider"
-                            compact={true}
-                          />
-                          <CustomDatePicker
-                            label="TO DATE"
-                            value={lcFilters.endDate}
-                            onChange={(e) => setLcFilters({ ...lcFilters, endDate: e.target.value })}
-                            placeholder="Select end date"
-                            name="endDate"
-                            labelClassName="text-[11px] font-bold text-gray-400 uppercase tracking-wider"
-                            compact={true}
-                            rightAlign={true}
-                          />
-                        </div>
-
-                        {/* LC No Selection */}
-                        <div className="space-y-1.5 relative" ref={lcLcNoFilterRef}>
-                          <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">LC NO</label>
-                          <div className="relative">
-                            <input
-                              type="text"
-                              value={filterSearchInputs.lcNoSearch}
-                              onChange={(e) => {
-                                setFilterSearchInputs({ ...filterSearchInputs, lcNoSearch: e.target.value });
-                                setFilterDropdownOpen({ ...initialFilterDropdownState, lcNo: true });
-                              }}
-                              onFocus={() => setFilterDropdownOpen({ ...initialFilterDropdownState, lcNo: true })}
-                              placeholder={lcFilters.lcNo || "Search LC No..."}
-                              className="w-full px-3 py-2 pr-8 bg-white border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all shadow-sm hover:border-gray-300"
-                            />
-                            <SearchIcon className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
-                            {lcFilters.lcNo && (
-                              <button
-                                onClick={() => {
-                                  setLcFilters({ ...lcFilters, lcNo: '' });
-                                  setFilterSearchInputs({ ...filterSearchInputs, lcNoSearch: '' });
-                                }}
-                                className="absolute right-8 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
-                              >
-                                <XIcon className="w-4 h-4" />
-                              </button>
-                            )}
-                          </div>
-                          {filterDropdownOpen.lcNo && (() => {
-                            const filtered = getFilteredOptions('lcFilterLcNo');
-                            return filtered.length > 0 ? (
-                              <div className="absolute z-50 mt-1 w-full bg-white border border-gray-200 rounded-xl shadow-lg max-h-48 overflow-y-auto">
-                                {filtered.map(opt => (
-                                  <button
-                                    key={opt.name}
-                                    type="button"
-                                    onClick={() => {
-                                      setLcFilters({ ...lcFilters, lcNo: opt.name });
-                                      setFilterSearchInputs({ ...filterSearchInputs, lcNoSearch: '' });
-                                      setFilterDropdownOpen(initialFilterDropdownState);
-                                    }}
-                                    className="w-full px-3 py-2 text-left text-sm hover:bg-blue-50 transition-colors"
-                                  >
-                                    {opt.name}
-                                  </button>
-                                ))}
-                              </div>
-                            ) : null;
-                          })()}
-                        </div>
-
-                        {/* Port Selection */}
-                        <div className="space-y-1.5 relative" ref={lcPortFilterRef}>
-                          <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">PORT</label>
-                          <div className="relative">
-                            <input
-                              type="text"
-                              value={filterSearchInputs.portSearch}
-                              onChange={(e) => {
-                                setFilterSearchInputs({ ...filterSearchInputs, portSearch: e.target.value });
-                                setFilterDropdownOpen({ ...initialFilterDropdownState, port: true });
-                              }}
-                              onFocus={() => setFilterDropdownOpen({ ...initialFilterDropdownState, port: true })}
-                              placeholder={lcFilters.port || "Search Port..."}
-                              className="w-full px-3 py-2 pr-8 bg-white border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all shadow-sm hover:border-gray-300"
-                            />
-                            <SearchIcon className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
-                            {lcFilters.port && (
-                              <button
-                                onClick={() => {
-                                  setLcFilters({ ...lcFilters, port: '' });
-                                  setFilterSearchInputs({ ...filterSearchInputs, portSearch: '' });
-                                }}
-                                className="absolute right-8 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
-                              >
-                                <XIcon className="w-4 h-4" />
-                              </button>
-                            )}
-                          </div>
-                          {filterDropdownOpen.port && (() => {
-                            const filtered = getFilteredOptions('lcFilterPort');
-                            return filtered.length > 0 ? (
-                              <div className="absolute z-50 mt-1 w-full bg-white border border-gray-200 rounded-xl shadow-lg max-h-48 overflow-y-auto">
-                                {filtered.map(opt => (
-                                  <button
-                                    key={opt.name}
-                                    type="button"
-                                    onClick={() => {
-                                      setLcFilters({ ...lcFilters, port: opt.name });
-                                      setFilterSearchInputs({ ...filterSearchInputs, portSearch: '' });
-                                      setFilterDropdownOpen(initialFilterDropdownState);
-                                    }}
-                                    className="w-full px-3 py-2 text-left text-sm hover:bg-blue-50 transition-colors"
-                                  >
-                                    {opt.name}
-                                  </button>
-                                ))}
-                              </div>
-                            ) : null;
-                          })()}
-                        </div>
-
-                        {/* IND CNF Selection */}
-                        <div className="space-y-1.5 relative" ref={lcIndCnfFilterRef}>
-                          <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">IND CNF</label>
-                          <div className="relative">
-                            <input
-                              type="text"
-                              value={filterSearchInputs.indCnfSearch}
-                              onChange={(e) => {
-                                setFilterSearchInputs({ ...filterSearchInputs, indCnfSearch: e.target.value });
-                                setFilterDropdownOpen({ ...initialFilterDropdownState, indCnf: true });
-                              }}
-                              onFocus={() => setFilterDropdownOpen({ ...initialFilterDropdownState, indCnf: true })}
-                              placeholder={lcFilters.indCnf || "Search IND CNF..."}
-                              className="w-full px-3 py-2 pr-8 bg-white border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all shadow-sm hover:border-gray-300"
-                            />
-                            <SearchIcon className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
-                            {lcFilters.indCnf && (
-                              <button
-                                onClick={() => {
-                                  setLcFilters({ ...lcFilters, indCnf: '' });
-                                  setFilterSearchInputs({ ...filterSearchInputs, indCnfSearch: '' });
-                                }}
-                                className="absolute right-8 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
-                              >
-                                <XIcon className="w-4 h-4" />
-                              </button>
-                            )}
-                          </div>
-                          {filterDropdownOpen.indCnf && (() => {
-                            const filtered = getFilteredOptions('lcFilterIndCnf');
-                            return filtered.length > 0 ? (
-                              <div className="absolute z-50 mt-1 w-full bg-white border border-gray-200 rounded-xl shadow-lg max-h-48 overflow-y-auto">
-                                {filtered.map(opt => (
-                                  <button
-                                    key={opt.name}
-                                    type="button"
-                                    onClick={() => {
-                                      setLcFilters({ ...lcFilters, indCnf: opt.name });
-                                      setFilterSearchInputs({ ...filterSearchInputs, indCnfSearch: '' });
-                                      setFilterDropdownOpen(initialFilterDropdownState);
-                                    }}
-                                    className="w-full px-3 py-2 text-left text-sm hover:bg-blue-50 transition-colors"
-                                  >
-                                    {opt.name}
-                                  </button>
-                                ))}
-                              </div>
-                            ) : null;
-                          })()}
-                        </div>
-
-                        {/* BD CNF Selection */}
-                        <div className="space-y-1.5 relative" ref={lcBdCnfFilterRef}>
-                          <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">BD CNF</label>
-                          <div className="relative">
-                            <input
-                              type="text"
-                              value={filterSearchInputs.bdCnfSearch}
-                              onChange={(e) => {
-                                setFilterSearchInputs({ ...filterSearchInputs, bdCnfSearch: e.target.value });
-                                setFilterDropdownOpen({ ...initialFilterDropdownState, bdCnf: true });
-                              }}
-                              onFocus={() => setFilterDropdownOpen({ ...initialFilterDropdownState, bdCnf: true })}
-                              placeholder={lcFilters.bdCnf || "Search BD CNF..."}
-                              className="w-full px-3 py-2 pr-8 bg-white border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all shadow-sm hover:border-gray-300"
-                            />
-                            <SearchIcon className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
-                            {lcFilters.bdCnf && (
-                              <button
-                                onClick={() => {
-                                  setLcFilters({ ...lcFilters, bdCnf: '' });
-                                  setFilterSearchInputs({ ...filterSearchInputs, bdCnfSearch: '' });
-                                }}
-                                className="absolute right-8 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
-                              >
-                                <XIcon className="w-4 h-4" />
-                              </button>
-                            )}
-                          </div>
-                          {filterDropdownOpen.bdCnf && (() => {
-                            const filtered = getFilteredOptions('lcFilterBdCnf');
-                            return filtered.length > 0 ? (
-                              <div className="absolute z-50 mt-1 w-full bg-white border border-gray-200 rounded-xl shadow-lg max-h-48 overflow-y-auto">
-                                {filtered.map(opt => (
-                                  <button
-                                    key={opt.name}
-                                    type="button"
-                                    onClick={() => {
-                                      setLcFilters({ ...lcFilters, bdCnf: opt.name });
-                                      setFilterSearchInputs({ ...filterSearchInputs, bdCnfSearch: '' });
-                                      setFilterDropdownOpen(initialFilterDropdownState);
-                                    }}
-                                    className="w-full px-3 py-2 text-left text-sm hover:bg-blue-50 transition-colors"
-                                  >
-                                    {opt.name}
-                                  </button>
-                                ))}
-                              </div>
-                            ) : null;
-                          })()}
-                        </div>
-
-                        {/* Bill of Entry Selection */}
-                        <div className="space-y-1.5 relative" ref={lcBillOfEntryFilterRef}>
-                          <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">BILL OF ENTRY</label>
-                          <div className="relative">
-                            <input
-                              type="text"
-                              value={filterSearchInputs.billOfEntrySearch}
-                              onChange={(e) => {
-                                setFilterSearchInputs({ ...filterSearchInputs, billOfEntrySearch: e.target.value });
-                                setFilterDropdownOpen({ ...initialFilterDropdownState, billOfEntry: true });
-                              }}
-                              onFocus={() => setFilterDropdownOpen({ ...initialFilterDropdownState, billOfEntry: true })}
-                              placeholder={lcFilters.billOfEntry || "Search Bill Of Entry..."}
-                              className="w-full px-3 py-2 pr-8 bg-white border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all shadow-sm hover:border-gray-300"
-                            />
-                            <SearchIcon className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
-                            {lcFilters.billOfEntry && (
-                              <button
-                                onClick={() => {
-                                  setLcFilters({ ...lcFilters, billOfEntry: '' });
-                                  setFilterSearchInputs({ ...filterSearchInputs, billOfEntrySearch: '' });
-                                }}
-                                className="absolute right-8 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
-                              >
-                                <XIcon className="w-4 h-4" />
-                              </button>
-                            )}
-                          </div>
-                          {filterDropdownOpen.billOfEntry && (() => {
-                            const filtered = getFilteredOptions('lcFilterBillOfEntry');
-                            return filtered.length > 0 ? (
-                              <div className="absolute z-50 mt-1 w-full bg-white border border-gray-200 rounded-xl shadow-lg max-h-48 overflow-y-auto">
-                                {filtered.map(opt => (
-                                  <button
-                                    key={opt.name}
-                                    type="button"
-                                    onClick={() => {
-                                      setLcFilters({ ...lcFilters, billOfEntry: opt.name });
-                                      setFilterSearchInputs({ ...filterSearchInputs, billOfEntrySearch: '' });
-                                      setFilterDropdownOpen(initialFilterDropdownState);
-                                    }}
-                                    className="w-full px-3 py-2 text-left text-sm hover:bg-blue-50 transition-colors"
-                                  >
-                                    {opt.name}
-                                  </button>
-                                ))}
-                              </div>
-                            ) : null;
-                          })()}
-                        </div>
-
-                        <button
-                          onClick={() => setShowLcFilterPanel(false)}
-                          className="w-full py-2 bg-gray-900 text-white rounded-xl text-sm font-medium hover:bg-gray-800 transition-all mt-2"
-                        >
-                          Apply Filters
-                        </button>
-                      </div>
-                    </div>
-                  )}
-                </div>
-
-                <button
-                  onClick={() => setShowLcReport(true)}
-                  className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 text-gray-600 rounded-xl hover:bg-gray-50 hover:border-gray-300 transition-all shadow-sm active:scale-95"
-                >
-                  <BarChartIcon className="w-4 h-4 text-gray-400" />
-                  <span className="text-sm font-medium">Report</span>
-                </button>
-                <button
-                  onClick={() => setShowStockForm(!showStockForm)}
-                  className="px-4 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-medium rounded-xl shadow-lg shadow-blue-500/30 transition-all transform hover:scale-105 flex items-center"
-                >
-                  <span className="mr-2 text-xl font-light">+</span> Add New
-                </button>
-              </div>
-            </div>
-
-            {/* Summary Cards */}
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-              <div className="bg-white border border-gray-200 p-4 rounded-xl shadow-sm transition-all hover:shadow-md">
-                <div className="text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-1">Total Packet</div>
-                <div className="text-xl font-bold text-gray-900">{lcReceiveSummary.totalPackets}</div>
-              </div>
-              <div className="bg-emerald-50/50 border border-emerald-100 p-4 rounded-xl shadow-sm transition-all hover:shadow-md">
-                <div className="text-[11px] font-bold text-emerald-600 uppercase tracking-wider mb-1">Total Quantity</div>
-                <div className="text-xl font-bold text-emerald-700">{Math.round(lcReceiveSummary.totalQuantity)} {lcReceiveSummary.unit}</div>
-              </div>
-              <div className="bg-blue-50/50 border border-blue-100 p-4 rounded-xl shadow-sm transition-all hover:shadow-md">
-                <div className="text-[11px] font-bold text-blue-600 uppercase tracking-wider mb-1">Truck</div>
-                <div className="text-xl font-bold text-blue-700">{lcReceiveSummary.totalTrucks}</div>
-              </div>
-            </div>
-
-            {/* Placeholder message - Stock form will appear here when Add New is clicked */}
-            {showStockForm && (
-              <div className="relative overflow-hidden rounded-2xl bg-white/60 backdrop-blur-xl border border-white/50 shadow-2xl p-8 transition-all duration-300">
-                <div className="absolute -top-24 -right-24 w-64 h-64 bg-blue-400/10 rounded-full blur-3xl pointer-events-none"></div>
-                <div className="absolute -bottom-24 -left-24 w-64 h-64 bg-indigo-400/10 rounded-full blur-3xl pointer-events-none"></div>
-
-                <div className="flex items-center justify-between mb-6 border-b border-gray-200/50 pb-4 relative z-10">
-                  <h3 className="text-xl font-semibold text-gray-800">{editingId ? 'Edit Stock' : 'New LC Receive'}</h3>
-                  <button onClick={() => { setShowStockForm(false); resetStockForm(); }} className="text-gray-400 hover:text-red-500 transition-colors">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
-                  </button>
-                </div>
-
-                <form onSubmit={handleStockSubmit} autoComplete="off" className="grid grid-cols-1 md:grid-cols-2 gap-6 relative z-10">
-                  <div className="col-span-1 md:col-span-2 grid grid-cols-1 md:grid-cols-4 gap-6">
-                    <CustomDatePicker
-                      label="Date"
-                      name="date"
-                      value={stockFormData.date}
-                      onChange={handleStockInputChange}
-                      required
-                    />
-                    <div className="space-y-2">
-                      <label className="text-sm font-medium text-gray-700">LC No</label>
-                      <input
-                        type="text" name="lcNo" value={stockFormData.lcNo} onChange={handleStockInputChange} required
-                        placeholder="LC Number" autoComplete="off" className="w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm"
-                      />
-                    </div>
-                    <div className="space-y-2 relative" ref={portRef}>
-                      <label className="text-sm font-medium text-gray-700">Port</label>
-                      <div className="relative">
-                        <input
-                          type="text"
-                          name="port"
-                          value={stockFormData.port}
-                          onChange={handleStockInputChange}
-                          onFocus={() => setActiveDropdown('port')}
-                          onKeyDown={(e) => handleDropdownKeyDown(e, 'port', handleStockDropdownSelect, 'port')}
-                          required
-                          placeholder="Select or type port name"
-                          autoComplete="off"
-                          className="w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm pr-10"
-                        />
-                        <button
-                          type="button"
-                          onClick={() => setActiveDropdown(activeDropdown === 'port' ? null : 'port')}
-                          className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
-                        >
-                          <ChevronDownIcon className={`w-4 h-4 transition-transform ${activeDropdown === 'port' ? 'rotate-180' : ''}`} />
-                        </button>
-                      </div>
-                      {activeDropdown === 'port' && (
-                        <div className="absolute z-[60] w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-xl max-h-48 overflow-y-auto animate-in fade-in zoom-in duration-200">
-                          {getFilteredOptions('port').map((port, index) => (
-                            <button
-                              key={port._id}
-                              type="button"
-                              onClick={() => handleStockDropdownSelect('port', port.name)}
-                              onMouseEnter={() => setHighlightedIndex(index)}
-                              className={`w-full text-left px-4 py-2 text-sm transition-colors flex items-center justify-between ${highlightedIndex === index ? 'bg-blue-50 text-blue-700' : 'hover:bg-blue-50'}`}
-                            >
-                              <span>{port.name}</span>
-                              {stockFormData.port === port.name && <span className="w-2 h-2 bg-blue-500 rounded-full"></span>}
-                            </button>
-                          ))}
-                          {getFilteredOptions('port').length === 0 && (
-                            <div className="px-4 py-3 text-sm text-gray-500 italic">No ports found</div>
-                          )}
-                        </div>
-                      )}
-                    </div>
-
-                    <div className="space-y-2 relative" ref={importerRef}>
-                      <label className="text-sm font-medium text-gray-700">Importer</label>
-                      <div className="relative">
-                        <input
-                          type="text"
-                          name="importer"
-                          value={stockFormData.importer}
-                          onChange={handleStockInputChange}
-                          onFocus={() => setActiveDropdown('importer')}
-                          onKeyDown={(e) => handleDropdownKeyDown(e, 'importer', handleStockDropdownSelect, 'importer')}
-                          required
-                          placeholder="Select or type importer"
-                          autoComplete="off"
-                          className="w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm pr-10"
-                        />
-                        <button
-                          type="button"
-                          onClick={() => setActiveDropdown(activeDropdown === 'importer' ? null : 'importer')}
-                          className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
-                        >
-                          <ChevronDownIcon className={`w-4 h-4 transition-transform ${activeDropdown === 'importer' ? 'rotate-180' : ''}`} />
-                        </button>
-                      </div>
-                      {activeDropdown === 'importer' && (
-                        <div className="absolute z-[60] w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-xl max-h-48 overflow-y-auto animate-in fade-in zoom-in duration-200">
-                          {getFilteredOptions('importer').map((imp, index) => (
-                            <button
-                              key={imp._id}
-                              type="button"
-                              onClick={() => handleStockDropdownSelect('importer', imp.name)}
-                              onMouseEnter={() => setHighlightedIndex(index)}
-                              className={`w-full text-left px-4 py-2 text-sm transition-colors flex items-center justify-between ${highlightedIndex === index ? 'bg-blue-50 text-blue-700' : 'hover:bg-blue-50'}`}
-                            >
-                              <span>{imp.name}</span>
-                              {stockFormData.importer === imp.name && <span className="w-2 h-2 bg-blue-500 rounded-full"></span>}
-                            </button>
-                          ))}
-                          {getFilteredOptions('importer').length === 0 && (
-                            <div className="px-4 py-3 text-sm text-gray-500 italic">No importers found</div>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-
-                  <div className="col-span-1 md:col-span-2 grid grid-cols-1 md:grid-cols-5 gap-6">
-                    <div className="space-y-2">
-                      <label className="text-sm font-medium text-gray-700">IND CNF</label>
-                      <input
-                        type="text" name="indianCnF" value={stockFormData.indianCnF} onChange={handleStockInputChange}
-                        placeholder="IND CNF" autoComplete="off" className="w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm"
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <label className="text-sm font-medium text-gray-700">IND CNF Cost</label>
-                      <input
-                        type="number" name="indCnFCost" value={stockFormData.indCnFCost} onChange={handleStockInputChange}
-                        placeholder="0.00" autoComplete="off" className="w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <label className="text-sm font-medium text-gray-700">BD CNF</label>
-                      <input
-                        type="text" name="bdCnF" value={stockFormData.bdCnF} onChange={handleStockInputChange}
-                        placeholder="BD CNF" autoComplete="off" className="w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm"
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <label className="text-sm font-medium text-gray-700">BD CNF Cost</label>
-                      <input
-                        type="number" name="bdCnFCost" value={stockFormData.bdCnFCost} onChange={handleStockInputChange}
-                        placeholder="0.00" autoComplete="off" className="w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <label className="text-sm font-medium text-gray-700">Bill Of Entry</label>
-                      <input
-                        type="text" name="billOfEntry" value={stockFormData.billOfEntry} onChange={handleStockInputChange}
-                        placeholder="Bill Of Entry" autoComplete="off" className="w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm"
-                      />
-                    </div>
-                  </div>
-
-                  {/* Total LC Truck/Quantity Row */}
-                  <div className="col-span-1 md:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-6 pb-4">
-                    <div className="space-y-2">
-                      <label className="text-sm font-medium text-gray-700">Total LC Truck</label>
-                      <input
-                        type="text"
-                        name="totalLcTruck"
-                        value={stockFormData.totalLcTruck || '0'}
-                        readOnly
-                        placeholder="Total LC Truck"
-                        autoComplete="off"
-                        className="w-full px-4 py-2 bg-gray-50/80 border border-gray-200/60 rounded-lg text-gray-600 font-semibold outline-none cursor-default backdrop-blur-sm"
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <label className="text-sm font-medium text-gray-700">Total LC Quantity</label>
-                      <input
-                        type="text"
-                        name="totalLcQuantity"
-                        value={stockFormData.totalLcQuantity || '0.00'}
-                        readOnly
-                        placeholder="Total LC Quantity"
-                        autoComplete="off"
-                        className="w-full px-4 py-2 bg-gray-50/80 border border-gray-200/60 rounded-lg text-gray-600 font-semibold outline-none cursor-default backdrop-blur-sm"
-                      />
-                    </div>
-                  </div>
-
-                  {/* Product Entries Section */}
-                  <div className="col-span-1 md:col-span-2 space-y-8 animate-in fade-in duration-500">
-                    <div className="flex items-center justify-between border-b border-gray-100 pb-2">
-                      <h4 className="text-lg font-bold text-gray-800 flex items-center gap-2">
-                        <div className="w-1.5 h-6 bg-blue-500 rounded-full"></div>
-                        Product Details
-                      </h4>
-                      <button
-                        type="button"
-                        onClick={addProductEntry}
-                        className="flex items-center gap-2 px-4 py-2 bg-blue-50 text-blue-600 rounded-xl hover:bg-blue-600 hover:text-white transition-all duration-300 font-semibold text-sm shadow-sm active:scale-95 group"
-                      >
-                        <PlusIcon className="w-4 h-4 group-hover:rotate-90 transition-transform duration-300" />
-                        Add Product
-                      </button>
-                    </div>
-
-                    <div className="space-y-12">
-                      {stockFormData.productEntries.map((product, pIndex) => (
-                        <div key={pIndex} className="relative p-6 rounded-2xl bg-gray-50/30 border border-gray-100 group/product hover:border-blue-200 hover:bg-white/80 transition-all duration-500">
-                          {/* Remove Product Button */}
-                          {stockFormData.productEntries.length > 1 && (
-                            <button
-                              type="button"
-                              onClick={() => removeProductEntry(pIndex)}
-                              className="absolute -top-3 -right-3 p-2 bg-white text-gray-400 hover:text-red-500 rounded-xl shadow-lg border border-gray-100 opacity-0 group-hover/product:opacity-100 transition-all duration-300 hover:scale-110 active:scale-90 z-20"
-                            >
-                              <TrashIcon className="w-4 h-4" />
-                            </button>
-                          )}
-
-                          <div className="space-y-6">
-                            {/* Product Info Row */}
-                            {product.isMultiBrand ? (
-                              <div className="grid grid-cols-1 md:grid-cols-4 gap-4 animate-in fade-in duration-300">
-                                <div className="space-y-2">
-                                  <label className="text-sm font-medium text-gray-700">Entry Mode</label>
-                                  <div className="h-[42px] flex items-center gap-1 p-1 bg-gray-100/50 rounded-lg w-full">
-                                    <button
-                                      type="button"
-                                      onClick={() => handleProductModeToggle(pIndex, false)}
-                                      className={`flex-1 h-full text-xs font-semibold rounded-md transition-all ${!product.isMultiBrand ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
-                                    >
-                                      Single
-                                    </button>
-                                    <button
-                                      type="button"
-                                      onClick={() => handleProductModeToggle(pIndex, true)}
-                                      className={`flex-1 h-full text-xs font-semibold rounded-md transition-all ${product.isMultiBrand ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
-                                    >
-                                      Multi
-                                    </button>
-                                  </div>
-                                </div>
-                                <div className="space-y-2">
-                                  <label className="text-sm font-medium text-gray-700">Product Name</label>
-                                  <div className="relative w-full" ref={el => productRefs.current[pIndex] = el}>
-                                    <input
-                                      type="text"
-                                      name="productName"
-                                      value={product.productName}
-                                      onChange={(e) => {
-                                        handleStockInputChange(e, pIndex);
-                                        setActiveDropdown(`lc-product-${pIndex}`);
-                                        setHighlightedIndex(-1);
-                                      }}
-                                      onFocus={() => {
-                                        setActiveDropdown(`lc-product-${pIndex}`);
-                                        setHighlightedIndex(-1);
-                                      }}
-                                      onKeyDown={(e) => handleDropdownKeyDown(e, `lc-product-${pIndex}`, (field, val) => handleProductSelect(pIndex, val), 'name')}
-                                      placeholder="Select or type product"
-                                      autoComplete="off"
-                                      className="w-full h-[42px] px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm"
-                                    />
-                                    {activeDropdown === `lc-product-${pIndex}` && (
-                                      <div className="absolute z-[60] w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-xl max-h-48 overflow-y-auto">
-                                        {getFilteredProducts(product.productName).map((p, idx) => (
-                                          <button
-                                            key={p._id}
-                                            type="button"
-                                            onClick={() => handleProductSelect(pIndex, p.name)}
-                                            onMouseEnter={() => setHighlightedIndex(idx)}
-                                            className={`w-full text-left px-4 py-2 text-sm transition-colors flex items-center justify-between ${highlightedIndex === idx ? 'bg-blue-50 text-blue-700' : 'hover:bg-blue-50'}`}
-                                          >
-                                            <div className="flex flex-col">
-                                              <span className="font-medium">{p.name}</span>
-                                              <span className="text-[10px] text-gray-400 font-mono">{p.hsCode || 'No HS Code'}</span>
-                                            </div>
-                                            {product.productName === p.name && <span className="w-2 h-2 bg-blue-500 rounded-full"></span>}
-                                          </button>
-                                        ))}
-                                        {getFilteredProducts(product.productName).length === 0 && (
-                                          <div className="px-4 py-3 text-sm text-gray-500 italic">No products found</div>
-                                        )}
-                                      </div>
-                                    )}
-                                  </div>
-                                </div>
-                                <div className="space-y-2">
-                                  <label className="text-sm font-medium text-gray-700">Truck No.</label>
-                                  <input
-                                    type="text" name="truckNo" value={product.truckNo} onChange={(e) => handleStockInputChange(e, pIndex)}
-                                    placeholder="Truck No." autoComplete="off" className="w-full h-[42px] px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm"
-                                  />
-                                </div>
-                                <div className="space-y-2">
-                                  <label className="text-sm font-medium text-gray-700">Total Quantity</label>
-                                  <div className="relative h-[42px]">
-                                    <input
-                                      type="text"
-                                      value={product.brandEntries.reduce((sum, entry) => sum + (parseFloat(entry.inHouseQuantity) || 0), 0).toFixed(2)}
-                                      readOnly
-                                      className="w-full h-full px-4 py-2 bg-gray-50/80 border border-gray-200/60 rounded-lg text-gray-600 font-semibold outline-none cursor-default"
-                                    />
-                                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-medium text-gray-400">
-                                      {product.brandEntries[0]?.unit || 'kg'}
-                                    </span>
-                                  </div>
-                                </div>
-                              </div>
-                            ) : (
-                              <div className="w-full grid grid-cols-1 md:grid-cols-12 gap-4 items-end animate-in fade-in duration-300">
-                                <div className="md:col-span-2 space-y-1.5">
-                                  <label className="text-sm font-medium text-gray-700 text-center block w-full">Mode</label>
-                                  <div className="h-[42px] flex items-center gap-1 p-1 bg-gray-100/50 rounded-lg w-full">
-                                    <button
-                                      type="button"
-                                      onClick={() => handleProductModeToggle(pIndex, false)}
-                                      className={`flex-1 h-full text-[10px] font-bold rounded flex items-center justify-center transition-all ${!product.isMultiBrand ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
-                                    >
-                                      SINGLE
-                                    </button>
-                                    <button
-                                      type="button"
-                                      onClick={() => handleProductModeToggle(pIndex, true)}
-                                      className={`flex-1 h-full text-[10px] font-bold rounded flex items-center justify-center transition-all ${product.isMultiBrand ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
-                                    >
-                                      MULTI
-                                    </button>
-                                  </div>
-                                </div>
-                                <div className="md:col-span-3 space-y-1.5">
-                                  <label className="text-sm font-medium text-gray-700">Product Name</label>
-                                  <div className="relative w-full" ref={el => productRefs.current[pIndex] = el}>
-                                    <input
-                                      type="text"
-                                      name="productName"
-                                      value={product.productName}
-                                      onChange={(e) => {
-                                        handleStockInputChange(e, pIndex);
-                                        setActiveDropdown(`lc-product-${pIndex}`);
-                                        setHighlightedIndex(-1);
-                                      }}
-                                      onFocus={() => {
-                                        setActiveDropdown(`lc-product-${pIndex}`);
-                                        setHighlightedIndex(-1);
-                                      }}
-                                      onKeyDown={(e) => handleDropdownKeyDown(e, `lc-product-${pIndex}`, (field, val) => handleProductSelect(pIndex, val), 'name')}
-                                      placeholder="Select or type product"
-                                      autoComplete="off"
-                                      className="w-full h-[42px] px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm text-sm"
-                                    />
-                                    {activeDropdown === `lc-product-${pIndex}` && (
-                                      <div className="absolute z-[60] w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-xl max-h-48 overflow-y-auto">
-                                        {getFilteredProducts(product.productName).map((p, idx) => (
-                                          <button
-                                            key={p._id}
-                                            type="button"
-                                            onClick={() => handleProductSelect(pIndex, p.name)}
-                                            onMouseEnter={() => setHighlightedIndex(idx)}
-                                            className={`w-full text-left px-4 py-2 text-sm transition-colors flex items-center justify-between ${highlightedIndex === idx ? 'bg-blue-50 text-blue-700' : 'hover:bg-blue-50'}`}
-                                          >
-                                            <div className="flex flex-col">
-                                              <span className="font-medium">{p.name}</span>
-                                              <span className="text-[10px] text-gray-400 font-mono">{p.hsCode || 'No HS Code'}</span>
-                                            </div>
-                                            {product.productName === p.name && <span className="w-2 h-2 bg-blue-500 rounded-full"></span>}
-                                          </button>
-                                        ))}
-                                        {getFilteredProducts(product.productName).length === 0 && (
-                                          <div className="px-4 py-3 text-sm text-gray-500 italic">No products found</div>
-                                        )}
-                                      </div>
-                                    )}
-                                  </div>
-                                </div>
-                                <div className="md:col-span-2 space-y-1.5">
-                                  <label className="text-sm font-medium text-gray-700">Truck No.</label>
-                                  <input
-                                    type="text" name="truckNo" value={product.truckNo} onChange={(e) => handleStockInputChange(e, pIndex)}
-                                    placeholder="Truck #" autoComplete="off" className="w-full h-[42px] px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm text-sm"
-                                  />
-                                </div>
-                                <div className="md:col-span-1 space-y-1.5">
-                                  <label className="text-sm font-medium text-gray-700">Swp. Pkt</label>
-                                  <input
-                                    type="text"
-                                    value={product.brandEntries[0].sweepedPacket}
-                                    onChange={(e) => handleBrandEntryChange(pIndex, 0, 'sweepedPacket', e.target.value)}
-                                    placeholder="Qty" autoComplete="off" className="w-full h-[42px] px-2 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm text-sm"
-                                  />
-                                </div>
-                                <div className="md:col-span-1 space-y-1.5">
-                                  <label className="text-sm font-medium text-gray-700">SwpQty</label>
-                                  <input
-                                    type="text"
-                                    value={product.brandEntries[0].sweepedQuantity}
-                                    onChange={(e) => handleBrandEntryChange(pIndex, 0, 'sweepedQuantity', e.target.value)}
-                                    placeholder="Qty" className="w-full h-[42px] px-2 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm text-sm"
-                                  />
-                                </div>
-                                <div className="md:col-span-1 space-y-1.5">
-                                  <label className="text-sm font-medium text-gray-700">InHouse Pkt</label>
-                                  <input
-                                    type="text"
-                                    value={product.brandEntries[0].inHousePacket}
-                                    readOnly
-                                    placeholder="Qty" autoComplete="off" className="w-full h-[42px] px-4 py-2 bg-gray-50/80 border border-gray-200/60 rounded-lg text-gray-600 font-medium outline-none cursor-default backdrop-blur-sm text-sm"
-                                  />
-                                </div>
-                                <div className="md:col-span-1 space-y-1.5">
-                                  <label className="text-sm font-medium text-gray-700">InHouse Qty</label>
-                                  <input
-                                    type="text"
-                                    value={product.brandEntries[0].inHouseQuantity}
-                                    readOnly
-                                    placeholder="Qty" className="w-full h-[42px] px-4 py-2 bg-gray-50/80 border border-gray-200/60 rounded-lg text-gray-600 font-medium outline-none cursor-default backdrop-blur-sm text-sm"
-                                  />
-                                </div>
-                                <div className="md:col-span-1 space-y-1.5">
-                                  <label className="text-sm font-medium text-gray-700 text-center block w-full">Packet</label>
-                                  <input
-                                    type="text"
-                                    value={product.brandEntries[0].packet}
-                                    onChange={(e) => handleBrandEntryChange(pIndex, 0, 'packet', e.target.value)}
-                                    placeholder="Qty" autoComplete="off" className="w-full h-[42px] px-2 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm text-sm text-center"
-                                  />
-                                </div>
-                                <div className="md:col-span-1 space-y-1.5">
-                                  <label className="text-sm font-medium text-gray-700 text-center block w-full">Size</label>
-                                  <input
-                                    type="text"
-                                    value={product.brandEntries[0].packetSize}
-                                    onChange={(e) => handleBrandEntryChange(pIndex, 0, 'packetSize', e.target.value)}
-                                    placeholder="Size" autoComplete="off" className="w-full h-[42px] px-2 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm text-sm text-center"
-                                  />
-                                </div>
-                                <div className="md:col-span-2 space-y-1.5">
-                                  <label className="text-sm font-medium text-gray-700 text-center block w-full">Total</label>
-                                  <div className="relative h-[42px]">
-                                    <input
-                                      type="text"
-                                      value={product.brandEntries.reduce((sum, entry) => sum + (parseFloat(entry.inHouseQuantity) || 0), 0).toFixed(2)}
-                                      readOnly
-                                      className="w-full h-full px-1 py-2 bg-gray-50/80 border border-gray-200/60 rounded-lg text-gray-600 font-bold outline-none cursor-default text-xs text-center"
-                                    />
-                                  </div>
-                                </div>
-                                <div className="md:col-span-1 space-y-1.5">
-                                  <label className="text-sm font-medium text-gray-700 text-center block w-full">Unit</label>
-                                  <select
-                                    value={product.brandEntries[0].unit}
-                                    onChange={(e) => handleBrandEntryChange(pIndex, 0, 'unit', e.target.value)}
-                                    className="w-full h-[42px] px-1 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-all backdrop-blur-sm text-sm"
-                                  >
-                                    <option>kg</option>
-                                    <option>pcs</option>
-                                    <option>boxes</option>
-                                    <option>liters</option>
-                                  </select>
-                                </div>
-                              </div>
-                            )}
-
-                            {/* Brand Entries Section (Multi-Brand Only) */}
-                            {product.isMultiBrand && (
-                              <div className="mt-4 space-y-3 animate-in fade-in slide-in-from-top-2 duration-300 bg-gray-50/50 p-4 rounded-xl border border-gray-100">
-                                <div className="flex items-center justify-between mb-1 px-1">
-                                  <label className="text-xs font-bold text-gray-500 uppercase tracking-wider">Brand Breakdown</label>
-                                </div>
-                                <div className="hidden md:grid grid-cols-6 gap-2 px-1 mb-1 pr-12">
-                                  <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">BRAND</div>
-                                  <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">PURCHASED PRICE</div>
-                                  <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">PACKET</div>
-                                  <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">SIZE</div>
-                                  <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">QTY</div>
-                                  <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">UNIT</div>
-                                </div>
-                                <div className="space-y-4">
-                                  {product.brandEntries.map((entry, bIndex) => (
-                                    <div key={bIndex} className="p-3 bg-white/40 border border-gray-200/50 rounded-lg space-y-3 group/brand">
-                                      <div className="flex items-center gap-2">
-                                        <div className="flex-1 grid grid-cols-2 md:grid-cols-6 gap-2">
-                                          <div className="relative w-full" ref={el => brandRefs.current[`${pIndex}-${bIndex}`] = el}>
-                                            <input
-                                              type="text"
-                                              value={entry.brand}
-                                              placeholder="Select Brand"
-                                              onChange={(e) => handleBrandEntryChange(pIndex, bIndex, 'brand', e.target.value)}
-                                              onFocus={() => {
-                                                setActiveDropdown(`brand-${pIndex}-${bIndex}`);
-                                                setHighlightedIndex(-1);
-                                              }}
-                                              onKeyDown={(e) => handleDropdownKeyDown(e, `brand-${pIndex}-${bIndex}`, (field, val) => handleBrandEntryChange(pIndex, bIndex, 'brand', val), 'brand')}
-                                              className="w-full h-9 px-2 text-sm bg-white border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-all"
-                                            />
-                                            {activeDropdown === `brand-${pIndex}-${bIndex}` && (
-                                              <div className="absolute z-[60] w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-48 overflow-y-auto">
-                                                {getFilteredBrands(entry.brand, product.productName).map((brand, idx) => (
-                                                  <button
-                                                    key={idx}
-                                                    type="button"
-                                                    onClick={() => {
-                                                      handleBrandEntryChange(pIndex, bIndex, 'brand', brand);
-                                                      setActiveDropdown(null);
-                                                    }}
-                                                    onMouseEnter={() => setHighlightedIndex(idx)}
-                                                    className={`w-full text-left px-3 py-2 text-sm transition-colors flex items-center justify-between ${highlightedIndex === idx ? 'bg-blue-50 text-blue-700' : 'hover:bg-blue-50'}`}
-                                                  >
-                                                    <span>{brand}</span>
-                                                  </button>
-                                                ))}
-                                                {getFilteredBrands(entry.brand, product.productName).length === 0 && (
-                                                  <div className="px-3 py-2 text-sm text-gray-500 italic">
-                                                    {!product.productName ? 'Please select a product first' : 'Type to add new brand'}
-                                                  </div>
-                                                )}
-                                              </div>
-                                            )}
-                                          </div>
-                                          <input
-                                            type="number" value={entry.purchasedPrice} placeholder="Price" onChange={(e) => handleBrandEntryChange(pIndex, bIndex, 'purchasedPrice', e.target.value)}
-                                            className="w-full h-9 px-2 text-sm bg-white border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-all [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                                          />
-                                          <input
-                                            type="number" value={entry.packet} placeholder="Packet" onChange={(e) => handleBrandEntryChange(pIndex, bIndex, 'packet', e.target.value)}
-                                            className="w-full h-9 px-2 text-sm bg-white border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-all [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                                          />
-                                          <input
-                                            type="number" value={entry.packetSize} placeholder="Size" onChange={(e) => handleBrandEntryChange(pIndex, bIndex, 'packetSize', e.target.value)}
-                                            className="w-full h-9 px-2 text-sm bg-white border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-all [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                                          />
-                                          <input
-                                            type="number" value={entry.quantity} readOnly className="w-full h-9 px-2 text-sm bg-gray-50 border border-gray-200 rounded-lg text-gray-500 font-medium [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                                          />
-                                          <select
-                                            value={entry.unit} onChange={(e) => handleBrandEntryChange(pIndex, bIndex, 'unit', e.target.value)}
-                                            className="w-full h-9 px-2 text-sm bg-white border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-all"
-                                          >
-                                            <option>kg</option><option>pcs</option><option>boxes</option><option>liters</option>
-                                          </select>
-                                        </div>
-                                        <div className="flex items-center">
-                                          <button
-                                            type="button" onClick={() => addBrandEntry(pIndex)}
-                                            className="p-1.5 text-blue-500 hover:bg-blue-100 rounded-lg transition-all"
-                                          >
-                                            <PlusIcon className="w-4 h-4" />
-                                          </button>
-                                          {product.brandEntries.length > 1 && (
-                                            <button
-                                              type="button" onClick={() => removeBrandEntry(pIndex, bIndex)}
-                                              className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all"
-                                            >
-                                              <TrashIcon className="w-3.5 h-3.5" />
-                                            </button>
-                                          )}
-                                        </div>
-                                      </div>
-
-                                      {/* Combined line for Sweeped and InHouse fields */}
-                                      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 pl-0 md:pl-0">
-                                        <div className="flex items-center gap-2">
-                                          <label className="text-[10px] font-bold text-gray-400 uppercase min-w-[60px]">SWP. PKT</label>
-                                          <input
-                                            type="number" value={entry.sweepedPacket} placeholder="Packet" onChange={(e) => handleBrandEntryChange(pIndex, bIndex, 'sweepedPacket', e.target.value)}
-                                            className="flex-1 h-8 px-2 text-xs bg-white/70 border border-gray-200 rounded-md focus:ring-2 focus:ring-blue-500 outline-none transition-all [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                                          />
-                                        </div>
-                                        <div className="flex items-center gap-2">
-                                          <label className="text-[10px] font-bold text-gray-400 uppercase min-w-[60px]">SWPQTY</label>
-                                          <input
-                                            type="number" value={entry.sweepedQuantity}
-                                            onChange={(e) => handleBrandEntryChange(pIndex, bIndex, 'sweepedQuantity', e.target.value)}
-                                            placeholder="Qty"
-                                            className="flex-1 h-8 px-2 text-xs bg-white border border-gray-200 rounded-md focus:ring-2 focus:ring-blue-500 outline-none transition-all [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                                          />
-                                        </div>
-                                        <div className="flex items-center gap-2">
-                                          <label className="text-[10px] font-bold text-gray-400 uppercase min-w-[60px]">INHOUSE PKT</label>
-                                          <input
-                                            type="number" value={entry.inHousePacket} placeholder="Packet" readOnly
-                                            className="flex-1 h-8 px-2 text-xs bg-gray-50/70 border border-gray-200 rounded-md text-gray-500 outline-none cursor-default [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                                          />
-                                        </div>
-                                        <div className="flex items-center gap-2">
-                                          <label className="text-[10px] font-bold text-gray-400 uppercase min-w-[60px]">INHOUSE QTY</label>
-                                          <input
-                                            type="number" value={entry.inHouseQuantity} placeholder="Qty" readOnly
-                                            className="flex-1 h-8 px-2 text-xs bg-gray-50/70 border border-gray-200 rounded-md text-gray-500 outline-none cursor-default [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                                          />
-                                        </div>
-                                      </div>
-                                    </div>
-                                  ))}
-                                </div>
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* Status */}
-                  <div className="col-span-1 md:col-span-2 pt-4 border-t border-gray-100">
-                    <div className="flex flex-col sm:flex-row sm:items-center gap-4">
-                      <div className="w-full sm:w-64 space-y-2">
-                        <label className="text-sm font-medium text-gray-700">Status</label>
-                        <select
-                          name="status" value={stockFormData.status} onChange={handleStockInputChange}
-                          className="w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm"
-                        >
-                          <option>In Stock</option>
-                          <option>Sale From Panama</option>
-                        </select>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="col-span-1 md:col-span-2 pt-4 flex items-center justify-between">
-                    {submitStatus === 'success' && (
-                      <p className="text-green-600 font-medium flex items-center animate-bounce">
-                        <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"></path></svg>
-                        Stock saved successfully!
-                      </p>
-                    )}
-                    {submitStatus === 'error' && (
-                      <p className="text-red-600 font-medium flex items-center">
-                        <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path></svg>
-                        Failed to save stock.
-                      </p>
-                    )}
-                    <div className="flex-1"></div>
-                    <button
-                      type="submit" disabled={isSubmitting}
-                      className="px-6 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-medium rounded-lg shadow-lg shadow-blue-500/30 transition-all transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      {isSubmitting ? 'Saving...' : editingId ? 'Update Stock' : 'Add to Stock'}
-                    </button>
-                  </div>
-                </form>
-              </div>
-            )}
-            {/* LC Receive Table */}
-            {!showStockForm && (
-              <div className="bg-white rounded-xl shadow-lg border border-gray-100 overflow-hidden">
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left">
-                    <thead className="bg-gray-50">
-                      <tr className="border-b border-gray-100 select-none">
-                        {isSelectionMode && <th className="px-6 py-4 w-12"></th>}
-                        {[
-                          { key: 'date', label: 'Date' },
-                          { key: 'lcNo', label: 'LC No' },
-                          { key: 'importer', label: 'Importer' },
-                          { key: 'port', label: 'Port' },
-                          { key: 'indianCnF', label: 'IND CNF' },
-                          { key: 'indianCnFCost', label: 'IND CNF Cost' },
-                          { key: 'bdCnF', label: 'BD CNF' },
-                          { key: 'bdCnFCost', label: 'BD CNF Cost' },
-                          { key: 'billOfEntry', label: 'Bill Of Entry' },
-                          { key: 'products', label: 'Products' },
-                          { key: 'truck', label: 'Truck' },
-                          { key: 'quantity', label: 'Quantity' },
-                          { key: 'actions', label: 'Actions' },
-                        ].map((col) => (
-                          <th key={col.key} className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">
-                            {col.label}
-                          </th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-100">
-                      {Object.values(lcReceiveRecords.reduce((acc, item) => {
-                        const key = item.lcNo || 'unknown';
-                        if (!acc[key]) {
-                          acc[key] = {
-                            ...item,
-                            totalQuantity: 0,
-                            totalLcTruck: 0,
-                            products: new Set(),
-                            truckEntries: new Set(),
-                            ids: [],
-                            allIds: [],
-                            originalId: item._id,
-                            groupedKey: key,
-                            entries: []
-                          };
-                        }
-                        const itemQty = parseFloat(item.quantity) || 0;
-                        acc[key].totalQuantity += itemQty;
-
-                        // Count truck load only once per unique product-truck combo in this LC group
-                        const truckEntryKey = `${item.date}-${item.productName}-${item.truckNo}`;
-                        if (!acc[key].truckEntries.has(truckEntryKey)) {
-                          acc[key].truckEntries.add(truckEntryKey);
-                          acc[key].totalLcTruck += (parseFloat(item.truckNo) || 0);
-                        }
-
-                        if (item.productName) acc[key].products.add(item.productName);
-                        acc[key].ids.push(item._id);
-                        acc[key].allIds.push(item._id);
-                        acc[key].entries.push(item);
-                        return acc;
-                      }, {})).map((entry, index) => {
-                        // Aggregate entries by Product + Truck + Unit to prevent duplicates
-                        const uniqueEntriesMap = entry.entries.reduce((acc, item) => {
-                          const key = `${item.productName}-${item.truckNo}-${item.unit}`;
-                          if (!acc[key]) {
-                            acc[key] = {
-                              ...item,
-                              quantity: 0
-                            };
-                          }
-                          acc[key].quantity += (parseFloat(item.quantity) || 0);
-                          return acc;
-                        }, {});
-                        const uniqueEntries = Object.values(uniqueEntriesMap);
-
-                        return (
-                          <tr
-                            key={entry.groupedKey}
-                            className={`${selectedItems.has(entry.groupedKey) ? 'bg-blue-50/30' : 'hover:bg-gray-50'} transition-colors duration-200 cursor-pointer select-none`}
-                            onMouseDown={() => startLongPress(entry.groupedKey)}
-                            onMouseUp={endLongPress}
-                            onMouseLeave={endLongPress}
-                            onTouchStart={() => startLongPress(entry.groupedKey)}
-                            onTouchEnd={endLongPress}
-                            onClick={() => {
-                              if (isLongPressTriggered.current) {
-                                isLongPressTriggered.current = false;
-                                return;
-                              }
-                              if (isSelectionMode) toggleSelection(entry.groupedKey);
-                            }}
-                          >
-                            {isSelectionMode && (
-                              <td className="px-6 py-4">
-                                <input
-                                  type="checkbox"
-                                  checked={selectedItems.has(entry.groupedKey)}
-                                  onChange={(e) => { e.stopPropagation(); toggleSelection(entry.groupedKey); }}
-                                  className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                                />
-                              </td>
-                            )}
-                            <td className="px-6 py-4 text-sm font-medium text-gray-900">{formatDate(entry.date)}</td>
-                            <td className="px-6 py-4 text-sm text-gray-600">{entry.lcNo || '-'}</td>
-                            <td className="px-6 py-4 text-sm text-gray-600">{entry.importer || '-'}</td>
-                            <td className="px-6 py-4 text-sm text-gray-600">{entry.port || '-'}</td>
-                            <td className="px-6 py-4 text-sm text-gray-600">{entry.indianCnF || '-'}</td>
-                            <td className="px-6 py-4 text-sm text-gray-600 font-medium">
-                              {!isNaN(parseFloat(entry.indCnFCost)) && entry.indCnFCost !== '' ? `৳${parseFloat(entry.indCnFCost).toLocaleString()}` : '-'}
-                            </td>
-                            <td className="px-6 py-4 text-sm text-gray-600">{entry.bdCnF || '-'}</td>
-                            <td className="px-6 py-4 text-sm text-gray-600 font-medium">
-                              {!isNaN(parseFloat(entry.bdCnFCost)) && entry.bdCnFCost !== '' ? `৳${parseFloat(entry.bdCnFCost).toLocaleString()}` : '-'}
-                            </td>
-                            <td className="px-6 py-4 text-sm text-gray-600">{entry.billOfEntry || '-'}</td>
-                            <td className="px-6 py-4 text-sm text-gray-600 align-top">
-                              {uniqueEntries.map((item, idx) => (
-                                <div key={idx} className="leading-6 py-1 border-b border-gray-100 last:border-0 truncate max-w-xs" title={item.productName}>
-                                  {item.productName || '-'}
-                                </div>
-                              ))}
-                            </td>
-                            <td className="px-6 py-4 text-sm text-gray-600 align-top">
-                              {uniqueEntries.map((item, idx) => (
-                                <div key={idx} className="leading-6 py-1 border-b border-gray-100 last:border-0">
-                                  {item.truckNo || '0'}
-                                </div>
-                              ))}
-                            </td>
-                            <td className="px-6 py-4 text-sm font-medium text-gray-900 align-top">
-                              {uniqueEntries.map((item, idx) => (
-                                <div key={idx} className="leading-6 py-1 border-b border-gray-100 last:border-0">
-                                  {Math.round(item.quantity)}
-                                </div>
-                              ))}
-                            </td>
-                            <td className="px-6 py-4 text-sm text-gray-600">
-                              <div className="flex items-center space-x-3">
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    handleEdit('stock', entry);
-                                  }}
-                                  className="text-gray-400 hover:text-blue-600 transition-colors"
-                                  title="Edit"
-                                >
-                                  <EditIcon className="w-5 h-5" />
-                                </button>
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    // Delete logic: Select all IDs and trigger bulk delete
-                                    const ids = entry.ids;
-                                    setSelectedItems(new Set(ids));
-                                    handleDelete('stock', null, true);
-                                  }}
-                                  className="text-gray-400 hover:text-red-600 transition-colors"
-                                  title="Delete"
-                                >
-                                  <TrashIcon className="w-5 h-5" />
-                                </button>
-                              </div>
-                            </td>
-                          </tr>
-                        );
-                      })}
-                      {lcReceiveRecords.length === 0 && (
-                        <tr>
-                          <td colSpan="13" className="px-6 py-12 text-center text-gray-500">
-                            <div className="flex flex-col items-center justify-center">
-                              <DollarSignIcon className="w-12 h-12 text-gray-300 mb-3" />
-                              <p className="text-lg font-medium text-gray-600">No LC Entries Found</p>
-                              <p className="text-sm text-gray-400 mt-1">Add a new entry to see it here</p>
-                            </div>
-                          </td>
-                        </tr>
-                      )}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            )}
-          </div>
+          <LCReceive
+            stockRecords={stockRecords}
+            fetchStockRecords={fetchStockRecords}
+            importers={importers}
+            ports={ports}
+            products={products}
+            lcSearchQuery={lcSearchQuery}
+            setLcSearchQuery={setLcSearchQuery}
+            lcFilters={lcFilters}
+            setLcFilters={setLcFilters}
+            lcReceiveRecords={lcReceiveRecords}
+            lcReceiveSummary={lcReceiveSummary}
+            activeDropdown={activeDropdown}
+            setActiveDropdown={setActiveDropdown}
+            highlightedIndex={highlightedIndex}
+            setHighlightedIndex={setHighlightedIndex}
+            isSelectionMode={isSelectionMode}
+            setIsSelectionMode={setIsSelectionMode}
+            selectedItems={selectedItems}
+            setSelectedItems={setSelectedItems}
+            startLongPress={startLongPress}
+            endLongPress={endLongPress}
+            isLongPressTriggered={isLongPressTriggered}
+            onDelete={handleDelete}
+            setShowLcReport={setShowLcReport}
+            stockFormData={stockFormData}
+            setStockFormData={setStockFormData}
+            showStockForm={showStockForm}
+            setShowStockForm={setShowStockForm}
+            editingId={editingId}
+            setEditingId={setEditingId}
+            isSubmitting={isSubmitting}
+            setIsSubmitting={setIsSubmitting}
+            submitStatus={submitStatus}
+            setSubmitStatus={setSubmitStatus}
+          />
         );
+
+
       case 'ip-section':
         return (
-          <div className="space-y-6">
-            <div className="flex items-center justify-between">
-              <h2 className="text-2xl font-bold text-gray-800">IP Management</h2>
-              <div className="flex items-center space-x-3">
-                <button
-                  onClick={() => setShowFilters(!showFilters)}
-                  className={`px-4 py-2 ${showFilters ? 'bg-indigo-100 text-indigo-600 border-indigo-200' : 'bg-white text-gray-600 border border-gray-200'} font-medium rounded-lg shadow-sm transition-all flex items-center hover:bg-gray-50 border`}
-                >
-                  <FunnelIcon className="w-4 h-4 mr-2" /> {showFilters ? 'Hide Filters' : 'Filter'}
-                </button>
-                <button
-                  onClick={() => setShowIpForm(!showIpForm)}
-                  className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg shadow-lg shadow-blue-500/30 transition-all transform hover:scale-105 flex items-center"
-                >
-                  <span className="mr-2 text-xl">+</span> Add New
-                </button>
-              </div>
-            </div>
-
-            {showFilters && (
-              <div className="relative overflow-hidden rounded-2xl bg-white/70 backdrop-blur-xl border border-white/50 shadow-xl p-6 transition-all duration-300 animate-in slide-in-from-top-4">
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-6 relative z-10">
-                  {/* Quick Range */}
-                  <div className="space-y-3">
-                    <label className="text-xs font-bold text-gray-500 uppercase tracking-wider block">Quick Range</label>
-                    <div className="flex flex-wrap gap-2">
-                      {['all', 'weekly', 'monthly', 'yearly'].map(range => (
-                        <button
-                          key={range}
-                          onClick={() => setFilters(prev => ({ ...prev, quickRange: range, startDate: '', endDate: '' }))}
-                          className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-all ${filters.quickRange === range ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/30' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
-                        >
-                          {range.charAt(0).toUpperCase() + range.slice(1)}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* Date Range */}
-                  <div className="space-y-3">
-                    <label className="text-xs font-bold text-gray-500 uppercase tracking-wider block">Date Range</label>
-                    <div className="flex items-center space-x-2">
-                      <div className="flex-1 min-w-0 pointer-cursor">
-                        <CustomDatePicker
-                          value={filters.startDate}
-                          onChange={(e) => setFilters(prev => ({ ...prev, startDate: e.target.value, quickRange: 'custom' }))}
-                          name="startDate"
-                          placeholder="From"
-                        />
-                      </div>
-                      <span className="text-gray-400">to</span>
-                      <div className="flex-1 min-w-0">
-                        <CustomDatePicker
-                          value={filters.endDate}
-                          onChange={(e) => setFilters(prev => ({ ...prev, endDate: e.target.value, quickRange: 'custom' }))}
-                          name="endDate"
-                          placeholder="To"
-                        />
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Port */}
-                  <div className="space-y-3 relative" ref={filterPortRef}>
-                    <label className="text-xs font-bold text-gray-500 uppercase tracking-wider block">Port</label>
-                    <div className="relative">
-                      <input
-                        type="text"
-                        value={filters.port}
-                        onChange={(e) => {
-                          const val = e.target.value;
-                          setFilters(prev => ({ ...prev, port: val }));
-                          setActiveDropdown('filterPort');
-                        }}
-                        onFocus={() => setActiveDropdown('filterPort')}
-                        onKeyDown={(e) => handleDropdownKeyDown(e, 'filterPort', handleFilterDropdownSelect, 'port')}
-                        placeholder="All Ports"
-                        className="w-full px-3 py-2 text-xs bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-all pr-8"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setActiveDropdown(activeDropdown === 'filterPort' ? null : 'filterPort')}
-                        className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
-                      >
-                        <ChevronDownIcon className={`w-3 h-3 transition-transform ${activeDropdown === 'filterPort' ? 'rotate-180' : ''}`} />
-                      </button>
-                    </div>
-                    {activeDropdown === 'filterPort' && (
-                      <div className="absolute z-[60] w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-xl max-h-48 overflow-y-auto animate-in fade-in zoom-in duration-200">
-                        <button
-                          type="button"
-                          onClick={() => handleFilterDropdownSelect('port', '')}
-                          onMouseEnter={() => setHighlightedIndex(0)}
-                          className={`w-full text-left px-3 py-2 text-[10px] transition-colors flex items-center justify-between ${highlightedIndex === 0 ? 'bg-blue-50 text-blue-700' : 'hover:bg-blue-50'}`}
-                        >
-                          <span className="italic text-gray-400">All Ports</span>
-                          {filters.port === '' && <span className="w-1.5 h-1.5 bg-blue-500 rounded-full"></span>}
-                        </button>
-                        {getFilteredOptions('filterPort').map((port, index) => (
-                          <button
-                            key={port._id}
-                            type="button"
-                            onClick={() => handleFilterDropdownSelect('port', port.name)}
-                            onMouseEnter={() => setHighlightedIndex(index + 1)}
-                            className={`w-full text-left px-3 py-2 text-[10px] transition-colors flex items-center justify-between ${highlightedIndex === index + 1 ? 'bg-blue-50 text-blue-700' : 'hover:bg-blue-50'}`}
-                          >
-                            <span>{port.name}</span>
-                            {filters.port === port.name && <span className="w-1.5 h-1.5 bg-blue-500 rounded-full"></span>}
-                          </button>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-
-
-                  {/* Importer */}
-                  <div className="space-y-3 relative" ref={filterImporterRef}>
-                    <label className="text-xs font-bold text-gray-500 uppercase tracking-wider block">Importer</label>
-                    <div className="relative">
-                      <input
-                        type="text"
-                        value={filters.importer}
-                        onChange={(e) => {
-                          const val = e.target.value;
-                          setFilters(prev => ({ ...prev, importer: val }));
-                          setActiveDropdown('filterImporter');
-                        }}
-                        onFocus={() => setActiveDropdown('filterImporter')}
-                        onKeyDown={(e) => handleDropdownKeyDown(e, 'filterImporter', handleFilterDropdownSelect, 'importer')}
-                        placeholder="All Importers"
-                        className="w-full px-3 py-2 text-xs bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-all pr-8"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setActiveDropdown(activeDropdown === 'filterImporter' ? null : 'filterImporter')}
-                        className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
-                      >
-                        <ChevronDownIcon className={`w-3 h-3 transition-transform ${activeDropdown === 'filterImporter' ? 'rotate-180' : ''}`} />
-                      </button>
-                    </div>
-                    {activeDropdown === 'filterImporter' && (
-                      <div className="absolute z-[60] w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-xl max-h-48 overflow-y-auto animate-in fade-in zoom-in duration-200">
-                        <button
-                          type="button"
-                          onClick={() => handleFilterDropdownSelect('importer', '')}
-                          onMouseEnter={() => setHighlightedIndex(0)}
-                          className={`w-full text-left px-3 py-2 text-[10px] transition-colors flex items-center justify-between ${highlightedIndex === 0 ? 'bg-blue-50 text-blue-700' : 'hover:bg-blue-50'}`}
-                        >
-                          <span className="italic text-gray-400">All Importers</span>
-                          {filters.importer === '' && <span className="w-1.5 h-1.5 bg-blue-500 rounded-full"></span>}
-                        </button>
-                        {getFilteredOptions('filterImporter').map((imp, index) => (
-                          <button
-                            key={imp._id}
-                            type="button"
-                            onClick={() => handleFilterDropdownSelect('importer', imp.name)}
-                            onMouseEnter={() => setHighlightedIndex(index + 1)}
-                            className={`w-full text-left px-3 py-2 text-[10px] transition-colors flex items-center justify-between ${highlightedIndex === index + 1 ? 'bg-blue-50 text-blue-700' : 'hover:bg-blue-50'}`}
-                          >
-                            <span>{imp.name}</span>
-                            {filters.importer === imp.name && <span className="w-1.5 h-1.5 bg-blue-500 rounded-full"></span>}
-                          </button>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-
-                </div>
-
-                <div className="flex justify-end mt-6 pt-4 border-t border-gray-100">
-                  <button
-                    onClick={resetFilters}
-                    className="flex items-center text-xs font-bold text-gray-400 hover:text-red-500 transition-colors uppercase tracking-widest"
-                  >
-                    <XIcon className="w-3 h-3 mr-1" /> Clear Filters
-                  </button>
-                </div>
-              </div>
-            )}
-
-            {showIpForm && (
-              <div className="relative overflow-hidden rounded-2xl bg-white/60 backdrop-blur-xl border border-white/50 shadow-2xl p-8 transition-all duration-300">
-                {/* Decorative gradient orb for glass effect enhancement */}
-                <div className="absolute -top-20 -right-20 w-64 h-64 bg-blue-400/20 rounded-full blur-3xl pointer-events-none"></div>
-                <div className="absolute -bottom-20 -left-20 w-64 h-64 bg-purple-400/20 rounded-full blur-3xl pointer-events-none"></div>
-
-                <div className="flex items-center justify-between mb-6 border-b border-gray-200/50 pb-4 relative z-10">
-                  <h3 className="text-xl font-semibold text-gray-800">{editingId ? 'Edit IP Record' : 'New IP Insertion'}</h3>
-                  <button onClick={() => { setShowIpForm(false); resetIpForm(); }} className="text-gray-400 hover:text-red-500 transition-colors">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
-                  </button>
-                </div>
-
-                <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-6 relative z-10">
-                  {/* Opening Date */}
-                  <CustomDatePicker
-                    label="Opening Date"
-                    name="openingDate"
-                    value={formData.openingDate}
-                    onChange={handleInputChange}
-                    required
-                  />
-
-                  {/* Close Date */}
-                  <CustomDatePicker
-                    label="Close Date"
-                    name="closeDate"
-                    value={formData.closeDate}
-                    onChange={handleInputChange}
-                  />
-
-                  {/* IP Number */}
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium text-gray-700">IP Number</label>
-                    <input
-                      type="text"
-                      name="ipNumber"
-                      value={formData.ipNumber}
-                      onChange={handleInputChange}
-                      required
-                      placeholder="Enter IP Number"
-                      className="w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm"
-                    />
-                  </div>
-
-                  {/* Reference No */}
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium text-gray-700">Reference No</label>
-                    <input
-                      type="text"
-                      name="referenceNo"
-                      value={formData.referenceNo}
-                      onChange={handleInputChange}
-                      required
-                      placeholder="REF-12345"
-                      className="w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm"
-                    />
-                  </div>
-
-                  {/* Importer Select Dropdown */}
-                  <div className="col-span-1 md:col-span-2 space-y-2 relative" ref={ipImporterRef}>
-                    <label className="text-sm font-medium text-gray-700">Importer</label>
-                    <div className="relative">
-                      <input
-                        type="text"
-                        name="ipParty"
-                        value={formData.ipParty}
-                        onChange={handleInputChange}
-                        onFocus={() => setActiveDropdown('ipImporter')}
-                        onKeyDown={(e) => handleDropdownKeyDown(e, 'ipImporter', handleIpDropdownSelect, 'ipParty')}
-                        required
-                        placeholder="Select or type importer name"
-                        className="w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm pr-10"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setActiveDropdown(activeDropdown === 'ipImporter' ? null : 'ipImporter')}
-                        className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
-                      >
-                        <ChevronDownIcon className={`w-4 h-4 transition-transform ${activeDropdown === 'ipImporter' ? 'rotate-180' : ''}`} />
-                      </button>
-                    </div>
-                    {activeDropdown === 'ipImporter' && (
-                      <div className="absolute z-[60] w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-xl max-h-48 overflow-y-auto animate-in fade-in zoom-in duration-200">
-                        {getFilteredOptions('ipImporter').map((importer, index) => (
-                          <button
-                            key={importer._id}
-                            type="button"
-                            onClick={() => handleIpDropdownSelect('ipParty', importer.name)}
-                            onMouseEnter={() => setHighlightedIndex(index)}
-                            className={`w-full text-left px-4 py-2 text-sm transition-colors flex items-center justify-between ${highlightedIndex === index ? 'bg-blue-50 text-blue-700' : 'hover:bg-blue-50'}`}
-                          >
-                            <span>{importer.name}</span>
-                            {formData.ipParty === importer.name && <span className="w-2 h-2 bg-blue-500 rounded-full"></span>}
-                          </button>
-                        ))}
-                        {getFilteredOptions('ipImporter').length === 0 && (
-                          <div className="px-4 py-3 text-sm text-gray-500 italic">No importers found</div>
-                        )}
-                      </div>
-                    )}
-                  </div>
-
-
-                  {/* Product Name */}
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium text-gray-700">Product Name</label>
-                    <input
-                      type="text"
-                      name="productName"
-                      value={formData.productName}
-                      onChange={handleInputChange}
-                      required
-                      placeholder="Product Name"
-                      className="w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm"
-                    />
-                  </div>
-
-                  {/* Quantity */}
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium text-gray-700">Quantity (kg)</label>
-                    <div className="relative">
-                      <input
-                        type="number"
-                        name="quantity"
-                        value={formData.quantity}
-                        onChange={handleInputChange}
-                        required
-                        placeholder="0.00"
-                        className="w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                      />
-                      <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
-                        <span className="text-gray-400 text-sm">kg</span>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Port */}
-                  <div className="space-y-2 relative" ref={ipPortRef}>
-                    <label className="text-sm font-medium text-gray-700">Port</label>
-                    <div className="relative">
-                      <input
-                        type="text"
-                        name="port"
-                        value={formData.port}
-                        onChange={handleInputChange}
-                        onFocus={() => setActiveDropdown('ipPort')}
-                        onKeyDown={(e) => handleDropdownKeyDown(e, 'ipPort', handleIpDropdownSelect, 'port')}
-                        required
-                        placeholder="Select or type port name"
-                        className="w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm pr-10"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setActiveDropdown(activeDropdown === 'ipPort' ? null : 'ipPort')}
-                        className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
-                      >
-                        <ChevronDownIcon className={`w-4 h-4 transition-transform ${activeDropdown === 'ipPort' ? 'rotate-180' : ''}`} />
-                      </button>
-                    </div>
-                    {activeDropdown === 'ipPort' && (
-                      <div className="absolute z-[60] w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-xl max-h-48 overflow-y-auto animate-in fade-in zoom-in duration-200">
-                        {getFilteredOptions('ipPort').map((port, index) => (
-                          <button
-                            key={port._id}
-                            type="button"
-                            onClick={() => handleIpDropdownSelect('port', port.name)}
-                            onMouseEnter={() => setHighlightedIndex(index)}
-                            className={`w-full text-left px-4 py-2 text-sm transition-colors flex items-center justify-between ${highlightedIndex === index ? 'bg-blue-50 text-blue-700' : 'hover:bg-blue-50'}`}
-                          >
-                            <span>{port.name}</span>
-                            {formData.port === port.name && <span className="w-2 h-2 bg-blue-500 rounded-full"></span>}
-                          </button>
-                        ))}
-                        {getFilteredOptions('ipPort').length === 0 && (
-                          <div className="px-4 py-3 text-sm text-gray-500 italic">No ports found</div>
-                        )}
-                      </div>
-                    )}
-                  </div>
-
-
-                  {/* Status */}
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium text-gray-700">Status</label>
-                    <select
-                      name="status"
-                      value={formData.status}
-                      onChange={handleInputChange}
-                      className="w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm"
-                    >
-                      <option>Active</option>
-                      <option>Closed</option>
-                      <option>Pending</option>
-                    </select>
-                  </div>
-
-                  {/* Submit Button */}
-                  <div className="col-span-1 md:col-span-2 pt-4 flex items-center justify-between">
-                    {submitStatus === 'success' && (
-                      <p className="text-green-600 font-medium flex items-center animate-bounce">
-                        <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"></path></svg>
-                        Record saved successfully!
-                      </p>
-                    )}
-                    {submitStatus === 'error' && (
-                      <p className="text-red-600 font-medium flex items-center">
-                        <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path></svg>
-                        Failed to save record.
-                      </p>
-                    )}
-                    <div className="flex-1"></div>
-                    <button
-                      type="submit"
-                      disabled={isSubmitting}
-                      className={`px-6 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-medium rounded-lg shadow-lg shadow-blue-500/30 transition-all transform hover:scale-105 flex items-center ${isSubmitting ? 'opacity-70 cursor-not-allowed scale-100' : ''}`}
-                    >
-                      {isSubmitting ? (
-                        <>
-                          <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                          </svg>
-                          Saving...
-                        </>
-                      ) : 'Save IP Record'}
-                    </button>
-                  </div>
-                </form>
-              </div>
-            )}
-
-            {!showIpForm && (
-              <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-                {selectedItems.size > 0 && (
-                  <div className="bg-blue-50 px-6 py-3 border-b border-blue-100 flex items-center justify-between animate-in fade-in slide-in-from-top-2">
-                    <span className="text-sm font-medium text-blue-700">{selectedItems.size} items selected</span>
-                    <div className="flex items-center space-x-3">
-                      <button
-                        onClick={() => { setSelectedItems(new Set()); setIsSelectionMode(false); }}
-                        className="px-3 py-1 text-gray-600 hover:text-gray-800 text-xs font-medium transition-colors"
-                      >
-                        Cancel
-                      </button>
-                      <button
-                        onClick={() => setDeleteConfirm({ show: true, type: 'ip', id: null, isBulk: true })}
-                        className="px-3 py-1 bg-red-600 hover:bg-red-700 text-white text-xs font-medium rounded-md transition-colors flex items-center"
-                      >
-                        <TrashIcon className="w-3.5 h-3.5 mr-1" /> Delete Bulk
-                      </button>
-                    </div>
-                  </div>
-                )}
-                {isLoading ? (
-                  <div className="flex items-center justify-center p-20">
-                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
-                  </div>
-                ) : filteredIpRecords.length > 0 ? (
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-left">
-                      <thead>
-                        <tr
-                          className="bg-gray-50 border-b border-gray-100 select-none cursor-pointer"
-                          onMouseDown={() => startLongPress(null)}
-                          onMouseUp={endLongPress}
-                          onMouseLeave={endLongPress}
-                          onTouchStart={() => startLongPress(null)}
-                          onTouchEnd={endLongPress}
-                        >
-                          {isSelectionMode && (
-                            <th className="px-6 py-4 w-10">
-                              <input
-                                type="checkbox"
-                                checked={selectedItems.size === filteredIpRecords.length && filteredIpRecords.length > 0}
-                                onChange={() => toggleSelectAll(filteredIpRecords)}
-                                className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                              />
-                            </th>
-                          )}
-                          <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors" onClick={() => requestSort('ip', 'openingDate')}>
-                            <div className="flex items-center">Opening Date <SortIcon config={sortConfig.ip} columnKey="openingDate" /></div>
-                          </th>
-                          <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors" onClick={() => requestSort('ip', 'ipNumber')}>
-                            <div className="flex items-center">IP Number <SortIcon config={sortConfig.ip} columnKey="ipNumber" /></div>
-                          </th>
-                          <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors" onClick={() => requestSort('ip', 'ipParty')}>
-                            <div className="flex items-center">Importer <SortIcon config={sortConfig.ip} columnKey="ipParty" /></div>
-                          </th>
-                          <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors" onClick={() => requestSort('ip', 'productName')}>
-                            <div className="flex items-center">Product <SortIcon config={sortConfig.ip} columnKey="productName" /></div>
-                          </th>
-                          <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors" onClick={() => requestSort('ip', 'quantity')}>
-                            <div className="flex items-center">Quantity (kg) <SortIcon config={sortConfig.ip} columnKey="quantity" /></div>
-                          </th>
-                          <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors" onClick={() => requestSort('ip', 'status')}>
-                            <div className="flex items-center">Status <SortIcon config={sortConfig.ip} columnKey="status" /></div>
-                          </th>
-                          <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Actions</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-gray-100">
-                        {sortData(filteredIpRecords, 'ip').map((record) => (
-                          <tr
-                            key={record._id}
-                            className={`${selectedItems.has(record._id) ? 'bg-blue-50/30' : 'hover:bg-gray-50'} transition-colors cursor-pointer select-none`}
-                            onMouseDown={() => startLongPress(record._id)}
-                            onMouseUp={endLongPress}
-                            onMouseLeave={endLongPress}
-                            onTouchStart={() => startLongPress(record._id)}
-                            onTouchEnd={endLongPress}
-                            onClick={() => {
-                              if (isLongPressTriggered.current) {
-                                isLongPressTriggered.current = false;
-                                return;
-                              }
-                              if (isSelectionMode) toggleSelection(record._id);
-                            }}
-                          >
-                            {isSelectionMode && (
-                              <td className="px-6 py-4">
-                                <input
-                                  type="checkbox"
-                                  checked={selectedItems.has(record._id)}
-                                  onChange={(e) => { e.stopPropagation(); toggleSelection(record._id); }}
-                                  className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                                />
-                              </td>
-                            )}
-                            <td className="px-6 py-4 text-sm text-gray-600">
-                              {formatDate(record.openingDate)}
-                            </td>
-
-                            <td className="px-6 py-4 text-sm font-medium text-blue-600">{record.ipNumber}</td>
-                            <td className="px-6 py-4 text-sm text-gray-900">{record.ipParty}</td>
-                            <td className="px-6 py-4 text-sm text-gray-500">{record.productName}</td>
-                            <td className="px-6 py-4 text-sm font-medium text-gray-900">{record.quantity} kg</td>
-                            <td className="px-6 py-4">
-                              <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${record.status === 'Active' ? 'bg-green-50 text-green-700 border border-green-100' :
-                                record.status === 'Closed' ? 'bg-gray-50 text-gray-700 border border-gray-100' :
-                                  'bg-yellow-50 text-yellow-700 border border-yellow-100'
-                                }`}>
-                                {record.status}
-                              </span>
-                            </td>
-                            <td className="px-6 py-4">
-                              <div className="flex items-center space-x-3">
-                                <button onClick={(e) => { e.stopPropagation(); handleEdit('ip', record); }} className="text-gray-400 hover:text-blue-600 transition-colors">
-                                  <EditIcon className="w-5 h-5" />
-                                </button>
-                                <button onClick={(e) => { e.stopPropagation(); handleDelete('ip', record._id); }} className="text-gray-400 hover:text-red-600 transition-colors">
-                                  <TrashIcon className="w-5 h-5" />
-                                </button>
-                              </div>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                ) : (
-                  <div className="flex flex-col items-center justify-center p-12">
-                    <div className="p-4 bg-gray-50 rounded-full mb-4">
-                      <BoxIcon className="w-8 h-8 text-gray-400" />
-                    </div>
-                    <p className="text-gray-500 font-medium">No IP records found</p>
-                    <p className="text-sm text-gray-400 mt-1">Click "Add New" to create a new entry</p>
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
+          <IPManagement
+            isSelectionMode={isSelectionMode}
+            setIsSelectionMode={setIsSelectionMode}
+            selectedItems={selectedItems}
+            setSelectedItems={setSelectedItems}
+            editingId={editingId}
+            setEditingId={setEditingId}
+            sortConfig={sortConfig}
+            setSortConfig={setSortConfig}
+            onDeleteConfirm={setDeleteConfirm}
+            startLongPress={startLongPress}
+            endLongPress={endLongPress}
+            isLongPressTriggered={isLongPressTriggered}
+            importers={importers}
+            ports={ports}
+          />
         );
       case 'importer-section':
         return (
-          <div className="space-y-6">
-            <div className="flex items-center justify-between">
-              <h2 className="text-2xl font-bold text-gray-800">Importer Management</h2>
-              <button
-                onClick={() => setShowImporterForm(!showImporterForm)}
-                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg shadow-lg shadow-blue-500/30 transition-all transform hover:scale-105 flex items-center"
-              >
-                <span className="mr-2 text-xl">+</span> Add New
-              </button>
-            </div>
-
-            {showImporterForm && (
-              <div className="relative overflow-hidden rounded-2xl bg-white/60 backdrop-blur-xl border border-white/50 shadow-2xl p-8 transition-all duration-300">
-                <div className="absolute -top-24 -right-24 w-64 h-64 bg-blue-400/10 rounded-full blur-3xl pointer-events-none"></div>
-                <div className="absolute -bottom-24 -left-24 w-64 h-64 bg-indigo-400/10 rounded-full blur-3xl pointer-events-none"></div>
-
-                <div className="flex items-center justify-between mb-6 border-b border-gray-200/50 pb-4 relative z-10">
-                  <h3 className="text-xl font-semibold text-gray-800">{editingId ? 'Edit Importer' : 'New Importer Registration'}</h3>
-                  <button onClick={() => { setShowImporterForm(false); resetImporterForm(); }} className="text-gray-400 hover:text-red-500 transition-colors">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
-                  </button>
-                </div>
-
-                <form onSubmit={handleImporterSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-6 relative z-10">
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium text-gray-700">Importer Name</label>
-                    <input
-                      type="text" name="name" value={importerFormData.name} onChange={handleImporterInputChange} required
-                      placeholder="Full Name" className="w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium text-gray-700">License No</label>
-                    <input
-                      type="text" name="licenseNo" value={importerFormData.licenseNo} onChange={handleImporterInputChange} required
-                      placeholder="LIC-00000" className="w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm"
-                    />
-                  </div>
-                  <div className="col-span-1 md:col-span-2 space-y-2">
-                    <label className="text-sm font-medium text-gray-700">Address</label>
-                    <textarea
-                      name="address" value={importerFormData.address} onChange={handleImporterInputChange} required
-                      placeholder="Full Address" rows="2" className="w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium text-gray-700">Contact Person</label>
-                    <input
-                      type="text" name="contactPerson" value={importerFormData.contactPerson} onChange={handleImporterInputChange} required
-                      placeholder="Contact Name" className="w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium text-gray-700">Email</label>
-                    <input
-                      type="email" name="email" value={importerFormData.email} onChange={handleImporterInputChange} required
-                      placeholder="email@example.com" className="w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium text-gray-700">Phone</label>
-                    <input
-                      type="tel" name="phone" value={importerFormData.phone} onChange={handleImporterInputChange} required
-                      placeholder="+880..." className="w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium text-gray-700">Status</label>
-                    <select
-                      name="status" value={importerFormData.status} onChange={handleImporterInputChange}
-                      className="w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm"
-                    >
-                      <option>Active</option>
-                      <option>Inactive</option>
-                    </select>
-                  </div>
-
-                  <div className="col-span-1 md:col-span-2 pt-4 flex items-center justify-between">
-                    {submitStatus === 'success' && (
-                      <p className="text-green-600 font-medium flex items-center animate-bounce">
-                        <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"></path></svg>
-                        Importer saved successfully!
-                      </p>
-                    )}
-                    {submitStatus === 'error' && (
-                      <p className="text-red-600 font-medium flex items-center">
-                        <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path></svg>
-                        Failed to save importer.
-                      </p>
-                    )}
-                    <div className="flex-1"></div>
-                    <button
-                      type="submit" disabled={isSubmitting}
-                      className={`px-6 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-medium rounded-lg shadow-lg transition-all transform hover:scale-105 flex items-center ${isSubmitting ? 'opacity-70 cursor-not-allowed scale-100' : ''}`}
-                    >
-                      {isSubmitting ? 'Saving...' : editingId ? 'Update Record' : 'Save Record'}
-                    </button>
-                  </div>
-                </form>
-              </div>
-            )}
-
-            {!showImporterForm && (
-              <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-                {selectedItems.size > 0 && (
-                  <div className="bg-blue-50 px-6 py-3 border-b border-blue-100 flex items-center justify-between animate-in fade-in slide-in-from-top-2">
-                    <span className="text-sm font-medium text-blue-700">{selectedItems.size} items selected</span>
-                    <div className="flex items-center space-x-3">
-                      <button
-                        onClick={() => { setSelectedItems(new Set()); setIsSelectionMode(false); }}
-                        className="px-3 py-1 text-gray-600 hover:text-gray-800 text-xs font-medium transition-colors"
-                      >
-                        Cancel
-                      </button>
-                      <button
-                        onClick={() => setDeleteConfirm({ show: true, type: 'importer', id: null, isBulk: true })}
-                        className="px-3 py-1 bg-red-600 hover:bg-red-700 text-white text-xs font-medium rounded-md transition-colors flex items-center"
-                      >
-                        <TrashIcon className="w-3.5 h-3.5 mr-1" /> Delete Bulk
-                      </button>
-                    </div>
-                  </div>
-                )}
-                {isLoading ? (
-                  <div className="flex items-center justify-center p-20">
-                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
-                  </div>
-                ) : importers.length > 0 ? (
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-left">
-                      <thead>
-                        <tr
-                          className="bg-gray-50 border-b border-gray-100 select-none cursor-pointer"
-                          onMouseDown={() => startLongPress(null)}
-                          onMouseUp={endLongPress}
-                          onMouseLeave={endLongPress}
-                          onTouchStart={() => startLongPress(null)}
-                          onTouchEnd={endLongPress}
-                        >
-                          {isSelectionMode && (
-                            <th className="px-6 py-4 w-10">
-                              <input
-                                type="checkbox"
-                                checked={selectedItems.size === importers.length}
-                                onChange={() => toggleSelectAll(importers)}
-                                className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                              />
-                            </th>
-                          )}
-                          <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors" onClick={() => requestSort('importer', 'name')}>
-                            <div className="flex items-center">Importer Name <SortIcon config={sortConfig.importer} columnKey="name" /></div>
-                          </th>
-                          <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors" onClick={() => requestSort('importer', 'licenseNo')}>
-                            <div className="flex items-center">License No <SortIcon config={sortConfig.importer} columnKey="licenseNo" /></div>
-                          </th>
-                          <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors" onClick={() => requestSort('importer', 'contactPerson')}>
-                            <div className="flex items-center">Contact Person <SortIcon config={sortConfig.importer} columnKey="contactPerson" /></div>
-                          </th>
-                          <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors" onClick={() => requestSort('importer', 'phone')}>
-                            <div className="flex items-center">Phone <SortIcon config={sortConfig.importer} columnKey="phone" /></div>
-                          </th>
-                          <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors" onClick={() => requestSort('importer', 'status')}>
-                            <div className="flex items-center">Status <SortIcon config={sortConfig.importer} columnKey="status" /></div>
-                          </th>
-                          <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Actions</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-gray-100">
-                        {sortData(importers, 'importer').map((importer) => (
-                          <tr
-                            key={importer._id}
-                            className={`${selectedItems.has(importer._id) ? 'bg-blue-50/30' : 'hover:bg-gray-50'} transition-colors cursor-pointer select-none`}
-                            onMouseDown={() => startLongPress(importer._id)}
-                            onMouseUp={endLongPress}
-                            onMouseLeave={endLongPress}
-                            onTouchStart={() => startLongPress(importer._id)}
-                            onTouchEnd={endLongPress}
-                            onClick={() => {
-                              if (isLongPressTriggered.current) {
-                                isLongPressTriggered.current = false;
-                                return;
-                              }
-                              if (isSelectionMode) toggleSelection(importer._id);
-                            }}
-                          >
-                            {isSelectionMode && (
-                              <td className="px-6 py-4">
-                                <input
-                                  type="checkbox"
-                                  checked={selectedItems.has(importer._id)}
-                                  onChange={(e) => { e.stopPropagation(); toggleSelection(importer._id); }}
-                                  className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                                />
-                              </td>
-                            )}
-                            <td className="px-6 py-4 text-sm font-medium text-gray-900">{importer.name}</td>
-                            <td className="px-6 py-4 text-sm text-blue-600">{importer.licenseNo}</td>
-                            <td className="px-6 py-4 text-sm text-gray-600">{importer.contactPerson}</td>
-                            <td className="px-6 py-4 text-sm text-gray-500">{importer.phone}</td>
-                            <td className="px-6 py-4">
-                              <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${importer.status === 'Active' ? 'bg-green-50 text-green-700 border border-green-100' : 'bg-gray-50 text-gray-700 border border-gray-100'
-                                }`}>
-                                {importer.status}
-                              </span>
-                            </td>
-                            <td className="px-6 py-4">
-                              <div className="flex items-center space-x-3">
-                                <button onClick={(e) => { e.stopPropagation(); handleEdit('importer', importer); }} className="text-gray-400 hover:text-blue-600 transition-colors">
-                                  <EditIcon className="w-5 h-5" />
-                                </button>
-                                <button onClick={(e) => { e.stopPropagation(); handleDelete('importer', importer._id); }} className="text-gray-400 hover:text-red-600 transition-colors">
-                                  <TrashIcon className="w-5 h-5" />
-                                </button>
-                              </div>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                ) : (
-                  <div className="flex flex-col items-center justify-center p-12">
-                    <div className="p-4 bg-gray-50 rounded-full mb-4">
-                      <UsersIcon className="w-8 h-8 text-gray-400" />
-                    </div>
-                    <p className="text-gray-500 font-medium">No importers found</p>
-                    <p className="text-sm text-gray-400 mt-1">Click "Add New" to register a new importer</p>
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
+          <Importer
+            isSelectionMode={isSelectionMode}
+            setIsSelectionMode={setIsSelectionMode}
+            selectedItems={selectedItems}
+            setSelectedItems={setSelectedItems}
+            editingId={editingId}
+            setEditingId={setEditingId}
+            sortConfig={sortConfig}
+            setSortConfig={setSortConfig}
+            onDeleteConfirm={setDeleteConfirm}
+            startLongPress={startLongPress}
+            endLongPress={endLongPress}
+            isLongPressTriggered={isLongPressTriggered}
+          />
         );
       case 'port-section':
         return (
-          <div className="space-y-6">
-            <div className="flex items-center justify-between">
-              <h2 className="text-2xl font-bold text-gray-800">Port Management</h2>
-              <button
-                onClick={() => setShowPortForm(!showPortForm)}
-                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg shadow-lg shadow-blue-500/30 transition-all transform hover:scale-105 flex items-center"
-              >
-                <span className="mr-2 text-xl">+</span> Add New
-              </button>
-            </div>
-
-            {showPortForm && (
-              <div className="relative overflow-hidden rounded-2xl bg-white/60 backdrop-blur-xl border border-white/50 shadow-2xl p-8 transition-all duration-300">
-                <div className="absolute -top-24 -right-24 w-64 h-64 bg-blue-400/10 rounded-full blur-3xl pointer-events-none"></div>
-                <div className="absolute -bottom-24 -left-24 w-64 h-64 bg-indigo-400/10 rounded-full blur-3xl pointer-events-none"></div>
-
-                <div className="flex items-center justify-between mb-6 border-b border-gray-200/50 pb-4 relative z-10">
-                  <h3 className="text-xl font-semibold text-gray-800">{editingId ? 'Edit Port' : 'New Port Registration'}</h3>
-                  <button onClick={() => { setShowPortForm(false); resetPortForm(); }} className="text-gray-400 hover:text-red-500 transition-colors">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
-                  </button>
-                </div>
-
-                <form onSubmit={handlePortSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-6 relative z-10">
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium text-gray-700">Port Name</label>
-                    <input
-                      type="text" name="name" value={portFormData.name} onChange={handlePortInputChange} required
-                      placeholder="e.g., Chittagong Port" className="w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium text-gray-700">Port Code</label>
-                    <input
-                      type="text" name="code" value={portFormData.code} onChange={handlePortInputChange} required
-                      placeholder="e.g., BDCGP" className="w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium text-gray-700">Location</label>
-                    <input
-                      type="text" name="location" value={portFormData.location} onChange={handlePortInputChange} required
-                      placeholder="City, Country" className="w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium text-gray-700">Port Type</label>
-                    <select
-                      name="type" value={portFormData.type} onChange={handlePortInputChange}
-                      className="w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm"
-                    >
-                      <option>Seaport</option>
-                      <option>Airport</option>
-                      <option>Land Port</option>
-                    </select>
-                  </div>
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium text-gray-700">Status</label>
-                    <select
-                      name="status" value={portFormData.status} onChange={handlePortInputChange}
-                      className="w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm"
-                    >
-                      <option>Active</option>
-                      <option>Inactive</option>
-                    </select>
-                  </div>
-
-                  <div className="col-span-1 md:col-span-2 pt-4 flex items-center justify-between">
-                    {submitStatus === 'success' && (
-                      <p className="text-green-600 font-medium flex items-center animate-bounce">
-                        <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"></path></svg>
-                        Port saved successfully!
-                      </p>
-                    )}
-                    {submitStatus === 'error' && (
-                      <p className="text-red-600 font-medium flex items-center">
-                        <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path></svg>
-                        Failed to save port.
-                      </p>
-                    )}
-                    <div className="flex-1"></div>
-                    <button
-                      type="submit" disabled={isSubmitting}
-                      className="px-6 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-medium rounded-lg shadow-lg shadow-blue-500/30 transition-all transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      {isSubmitting ? 'Saving...' : editingId ? 'Update Port' : 'Register Port'}
-                    </button>
-                  </div>
-                </form>
-              </div>
-            )}
-
-            {!showPortForm && (
-              <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-                {selectedItems.size > 0 && (
-                  <div className="bg-blue-50 px-6 py-3 border-b border-blue-100 flex items-center justify-between animate-in fade-in slide-in-from-top-2">
-                    <span className="text-sm font-medium text-blue-700">{selectedItems.size} items selected</span>
-                    <div className="flex items-center space-x-3">
-                      <button
-                        onClick={() => { setSelectedItems(new Set()); setIsSelectionMode(false); }}
-                        className="px-3 py-1 text-gray-600 hover:text-gray-800 text-xs font-medium transition-colors"
-                      >
-                        Cancel
-                      </button>
-                      <button
-                        onClick={() => setDeleteConfirm({ show: true, type: 'port', id: null, isBulk: true })}
-                        className="px-3 py-1 bg-red-600 hover:bg-red-700 text-white text-xs font-medium rounded-md transition-colors flex items-center"
-                      >
-                        <TrashIcon className="w-3.5 h-3.5 mr-1" /> Delete Bulk
-                      </button>
-                    </div>
-                  </div>
-                )}
-                {isLoading ? (
-                  <div className="flex items-center justify-center p-20">
-                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
-                  </div>
-                ) : ports.length > 0 ? (
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-left">
-                      <thead>
-                        <tr
-                          className="bg-gray-50 border-b border-gray-100 select-none cursor-pointer"
-                          onMouseDown={() => startLongPress(null)}
-                          onMouseUp={endLongPress}
-                          onMouseLeave={endLongPress}
-                          onTouchStart={() => startLongPress(null)}
-                          onTouchEnd={endLongPress}
-                        >
-                          {isSelectionMode && (
-                            <th className="px-6 py-4 w-10">
-                              <input
-                                type="checkbox"
-                                checked={selectedItems.size === ports.length}
-                                onChange={() => toggleSelectAll(ports)}
-                                className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                              />
-                            </th>
-                          )}
-                          <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors" onClick={() => requestSort('port', 'name')}>
-                            <div className="flex items-center">Port Name <SortIcon config={sortConfig.port} columnKey="name" /></div>
-                          </th>
-                          <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors" onClick={() => requestSort('port', 'code')}>
-                            <div className="flex items-center">Code <SortIcon config={sortConfig.port} columnKey="code" /></div>
-                          </th>
-                          <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors" onClick={() => requestSort('port', 'location')}>
-                            <div className="flex items-center">Location <SortIcon config={sortConfig.port} columnKey="location" /></div>
-                          </th>
-                          <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors" onClick={() => requestSort('port', 'type')}>
-                            <div className="flex items-center">Type <SortIcon config={sortConfig.port} columnKey="type" /></div>
-                          </th>
-                          <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors" onClick={() => requestSort('port', 'status')}>
-                            <div className="flex items-center">Status <SortIcon config={sortConfig.port} columnKey="status" /></div>
-                          </th>
-                          <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Actions</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-gray-100">
-                        {sortData(ports, 'port').map((port) => (
-                          <tr
-                            key={port._id}
-                            className={`${selectedItems.has(port._id) ? 'bg-blue-50/30' : 'hover:bg-gray-50'} transition-colors cursor-pointer select-none`}
-                            onMouseDown={() => startLongPress(port._id)}
-                            onMouseUp={endLongPress}
-                            onMouseLeave={endLongPress}
-                            onTouchStart={() => startLongPress(port._id)}
-                            onTouchEnd={endLongPress}
-                            onClick={() => {
-                              if (isLongPressTriggered.current) {
-                                isLongPressTriggered.current = false;
-                                return;
-                              }
-                              if (isSelectionMode) toggleSelection(port._id);
-                            }}
-                          >
-                            {isSelectionMode && (
-                              <td className="px-6 py-4">
-                                <input
-                                  type="checkbox"
-                                  checked={selectedItems.has(port._id)}
-                                  onChange={(e) => { e.stopPropagation(); toggleSelection(port._id); }}
-                                  className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                                />
-                              </td>
-                            )}
-                            <td className="px-6 py-4 text-sm font-medium text-gray-900">{port.name}</td>
-                            <td className="px-6 py-4 text-sm text-blue-600">{port.code}</td>
-                            <td className="px-6 py-4 text-sm text-gray-600">{port.location}</td>
-                            <td className="px-6 py-4 text-sm text-gray-500">{port.type}</td>
-                            <td className="px-6 py-4">
-                              <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${port.status === 'Active' ? 'bg-green-50 text-green-700 border border-green-100' : 'bg-gray-50 text-gray-700 border border-gray-100'}`}>
-                                {port.status}
-                              </span>
-                            </td>
-                            <td className="px-6 py-4">
-                              <div className="flex items-center space-x-3">
-                                <button onClick={(e) => { e.stopPropagation(); handleEdit('port', port); }} className="text-gray-400 hover:text-blue-600 transition-colors">
-                                  <EditIcon className="w-5 h-5" />
-                                </button>
-                                <button onClick={(e) => { e.stopPropagation(); handleDelete('port', port._id); }} className="text-gray-400 hover:text-red-600 transition-colors">
-                                  <TrashIcon className="w-5 h-5" />
-                                </button>
-                              </div>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                ) : (
-                  <div className="flex flex-col items-center justify-center p-12">
-                    <div className="p-4 bg-gray-50 rounded-full mb-4">
-                      <AnchorIcon className="w-8 h-8 text-gray-400" />
-                    </div>
-                    <p className="text-gray-500 font-medium">No ports found</p>
-                    <p className="text-sm text-gray-400 mt-1">Click "Add New" to register a new port</p>
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
+          <Port
+            isSelectionMode={isSelectionMode}
+            setIsSelectionMode={setIsSelectionMode}
+            selectedItems={selectedItems}
+            setSelectedItems={setSelectedItems}
+            editingId={editingId}
+            setEditingId={setEditingId}
+            sortConfig={sortConfig}
+            setSortConfig={setSortConfig}
+            onDeleteConfirm={setDeleteConfirm}
+            startLongPress={startLongPress}
+            endLongPress={endLongPress}
+            isLongPressTriggered={isLongPressTriggered}
+          />
         );
-      case 'stock-section':
-        const { displayRecords, totalPackets, totalQuantity, totalInHousePkt, totalInHouseQty, totalShortage, unit } = stockData;
-
+      case "stock-section":
         return (
-          <div className="space-y-6">
-            <div className="flex items-center justify-between gap-4">
-              <div className="w-1/4">
-                <h2 className="text-2xl font-bold text-gray-800">Stock Management</h2>
-              </div>
-
-              {/* Center Aligned Search Bar */}
-              <div className="flex-1 max-w-md mx-auto relative group">
-                <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
-                  <SearchIcon className="h-4 w-4 text-gray-400 group-focus-within:text-blue-500 transition-colors" />
-                </div>
-                <input
-                  type="text"
-                  placeholder="Search by LC, Port, Importer, Truck or Brand..."
-                  value={stockSearchQuery}
-                  onChange={(e) => setStockSearchQuery(e.target.value)}
-                  className="block w-full pl-10 pr-4 py-2 bg-white/50 border border-gray-200 rounded-xl text-[13px] placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 focus:bg-white transition-all outline-none"
-                />
-              </div>
-
-              <div className="w-1/4 flex justify-end items-center gap-2">
-                <div className="relative">
-                  <button
-                    ref={stockFilterButtonRef}
-                    onClick={() => setShowStockFilterPanel(!showStockFilterPanel)}
-                    className={`flex items-center gap-2 px-4 py-2 rounded-xl transition-all border ${showStockFilterPanel || Object.values(stockFilters).some(v => v !== '')
-                      ? 'bg-blue-600 border-blue-600 text-white shadow-lg shadow-blue-500/30'
-                      : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'
-                      }`}
-                  >
-                    <FunnelIcon className={`w-4 h-4 ${showStockFilterPanel || Object.values(stockFilters).some(v => v !== '') ? 'text-white' : 'text-gray-400'}`} />
-                    <span className="text-sm font-medium">Filter</span>
-                  </button>
-
-                  {/* Floating Filter Panel */}
-                  {showStockFilterPanel && (
-                    <div ref={stockFilterRef} className="absolute right-0 mt-3 w-80 bg-white/95 backdrop-blur-2xl border border-gray-100 rounded-2xl shadow-2xl z-[60] p-5 animate-in fade-in zoom-in duration-200">
-                      <div className="flex items-center justify-between mb-4 pb-2 border-b border-gray-50">
-                        <h4 className="font-bold text-gray-900">Advanced Filters</h4>
-                        <button
-                          onClick={() => {
-                            setStockFilters({ startDate: '', endDate: '', lcNo: '', port: '', brand: '', productName: '' });
-                            setFilterSearchInputs({ ...filterSearchInputs, lcNoSearch: '', portSearch: '', brandSearch: '', productSearch: '' });
-                            setShowStockFilterPanel(false);
-                          }}
-                          className="text-[11px] font-bold text-blue-600 hover:text-blue-700 uppercase tracking-wider"
-                        >
-                          Reset All
-                        </button>
-                      </div>
-
-                      <div className="space-y-4">
-                        {/* Date Range */}
-                        <div className="grid grid-cols-2 gap-3">
-                          <CustomDatePicker
-                            label="FROM DATE"
-                            value={stockFilters.startDate}
-                            onChange={(e) => setStockFilters({ ...stockFilters, startDate: e.target.value })}
-                            placeholder="Select start date"
-                            name="startDate"
-                            labelClassName="text-[11px] font-bold text-gray-400 uppercase tracking-wider"
-                            compact={true}
-                          />
-                          <CustomDatePicker
-                            label="TO DATE"
-                            value={stockFilters.endDate}
-                            onChange={(e) => setStockFilters({ ...stockFilters, endDate: e.target.value })}
-                            placeholder="Select end date"
-                            name="endDate"
-                            labelClassName="text-[11px] font-bold text-gray-400 uppercase tracking-wider"
-                            compact={true}
-                            rightAlign={true}
-                          />
-                        </div>
-
-                        {/* LC No Selection */}
-                        <div className="space-y-1.5 relative" ref={stockLcNoFilterRef}>
-                          <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">LC No</label>
-                          <div className="relative">
-                            <input
-                              type="text"
-                              value={filterSearchInputs.lcNoSearch}
-                              onChange={(e) => {
-                                setFilterSearchInputs({ ...filterSearchInputs, lcNoSearch: e.target.value });
-                                setFilterDropdownOpen({ ...initialFilterDropdownState, lcNo: true });
-                              }}
-                              onFocus={() => setFilterDropdownOpen({ ...initialFilterDropdownState, lcNo: true })}
-                              placeholder={stockFilters.lcNo || "Search LC No..."}
-                              className="w-full px-3 py-2 pr-8 bg-white border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all shadow-sm hover:border-gray-300"
-                            />
-                            <SearchIcon className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
-                            {stockFilters.lcNo && (
-                              <button
-                                onClick={() => {
-                                  setStockFilters({ ...stockFilters, lcNo: '' });
-                                  setFilterSearchInputs({ ...filterSearchInputs, lcNoSearch: '' });
-                                }}
-                                className="absolute right-8 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
-                              >
-                                <XIcon className="w-4 h-4" />
-                              </button>
-                            )}
-                          </div>
-                          {filterDropdownOpen.lcNo && (() => {
-                            const lcOptions = [...new Set(stockRecords
-                              .map(item => (item.lcNo || '').trim())
-                              .filter(Boolean)
-                            )].sort();
-                            const filtered = lcOptions.filter(lc =>
-                              lc.toLowerCase().includes(filterSearchInputs.lcNoSearch.toLowerCase())
-                            );
-                            return filtered.length > 0 ? (
-                              <div className="absolute z-50 mt-1 w-full bg-white border border-gray-200 rounded-xl shadow-lg max-h-48 overflow-y-auto">
-                                {filtered.map(lc => (
-                                  <button
-                                    key={lc}
-                                    type="button"
-                                    onClick={() => {
-                                      setStockFilters({ ...stockFilters, lcNo: lc });
-                                      setFilterSearchInputs({ ...filterSearchInputs, lcNoSearch: '' });
-                                      setFilterDropdownOpen(initialFilterDropdownState);
-                                    }}
-                                    className="w-full px-3 py-2 text-left text-sm hover:bg-blue-50 transition-colors"
-                                  >
-                                    {lc}
-                                  </button>
-                                ))}
-                              </div>
-                            ) : null;
-                          })()}
-                        </div>
-
-                        {/* Port Selection */}
-                        <div className="space-y-1.5 relative" ref={stockPortFilterRef}>
-                          <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Port</label>
-                          <div className="relative">
-                            <input
-                              type="text"
-                              value={filterSearchInputs.portSearch}
-                              onChange={(e) => {
-                                setFilterSearchInputs({ ...filterSearchInputs, portSearch: e.target.value });
-                                setFilterDropdownOpen({ ...initialFilterDropdownState, port: true });
-                              }}
-                              onFocus={() => setFilterDropdownOpen({ ...initialFilterDropdownState, port: true })}
-                              placeholder={stockFilters.port || "Search Port..."}
-                              className="w-full px-3 py-2 pr-8 bg-white border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all shadow-sm hover:border-gray-300"
-                            />
-                            <SearchIcon className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
-                            {stockFilters.port && (
-                              <button
-                                onClick={() => {
-                                  setStockFilters({ ...stockFilters, port: '' });
-                                  setFilterSearchInputs({ ...filterSearchInputs, portSearch: '' });
-                                }}
-                                className="absolute right-8 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
-                              >
-                                <XIcon className="w-4 h-4" />
-                              </button>
-                            )}
-                          </div>
-                          {filterDropdownOpen.port && (() => {
-                            const portOptions = [...new Set(stockRecords
-                              .map(item => (item.port || '').trim())
-                              .filter(Boolean)
-                            )].sort();
-                            const filtered = portOptions.filter(p =>
-                              p.toLowerCase().includes(filterSearchInputs.portSearch.toLowerCase())
-                            );
-                            return filtered.length > 0 ? (
-                              <div className="absolute z-50 mt-1 w-full bg-white border border-gray-200 rounded-xl shadow-lg max-h-48 overflow-y-auto">
-                                {filtered.map(p => (
-                                  <button
-                                    key={p}
-                                    type="button"
-                                    onClick={() => {
-                                      setStockFilters({ ...stockFilters, port: p });
-                                      setFilterSearchInputs({ ...filterSearchInputs, portSearch: '' });
-                                      setFilterDropdownOpen(initialFilterDropdownState);
-                                    }}
-                                    className="w-full px-3 py-2 text-left text-sm hover:bg-blue-50 transition-colors"
-                                  >
-                                    {p}
-                                  </button>
-                                ))}
-                              </div>
-                            ) : null;
-                          })()}
-                        </div>
-
-                        {/* Product Name Selection */}
-                        <div className="space-y-1.5 relative" ref={stockProductFilterRef}>
-                          <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Product Name</label>
-                          <div className="relative">
-                            <input
-                              type="text"
-                              value={filterSearchInputs.productSearch}
-                              onChange={(e) => {
-                                setFilterSearchInputs({ ...filterSearchInputs, productSearch: e.target.value });
-                                setFilterDropdownOpen({ ...initialFilterDropdownState, product: true });
-                              }}
-                              onFocus={() => setFilterDropdownOpen({ ...initialFilterDropdownState, product: true })}
-                              placeholder={stockFilters.productName || "Search Product..."}
-                              className="w-full px-3 py-2 pr-8 bg-white border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all shadow-sm hover:border-gray-300"
-                            />
-                            <SearchIcon className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
-                            {stockFilters.productName && (
-                              <button
-                                onClick={() => {
-                                  setStockFilters({ ...stockFilters, productName: '' });
-                                  setFilterSearchInputs({ ...filterSearchInputs, productSearch: '' });
-                                }}
-                                className="absolute right-8 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
-                              >
-                                <XIcon className="w-4 h-4" />
-                              </button>
-                            )}
-                          </div>
-                          {filterDropdownOpen.product && (() => {
-                            const productOptions = [...new Set(stockRecords
-                              .map(item => (item.productName || '').trim())
-                              .filter(Boolean)
-                            )].sort();
-                            const filtered = productOptions.filter(p =>
-                              p.toLowerCase().includes(filterSearchInputs.productSearch.toLowerCase())
-                            );
-                            return filtered.length > 0 ? (
-                              <div className="absolute z-50 mt-1 w-full bg-white border border-gray-200 rounded-xl shadow-lg max-h-48 overflow-y-auto">
-                                {filtered.map(p => (
-                                  <button
-                                    key={p}
-                                    type="button"
-                                    onClick={() => {
-                                      setStockFilters({ ...stockFilters, productName: p });
-                                      setFilterSearchInputs({ ...filterSearchInputs, productSearch: '' });
-                                      setFilterDropdownOpen(initialFilterDropdownState);
-                                    }}
-                                    className="w-full px-3 py-2 text-left text-sm hover:bg-blue-50 transition-colors"
-                                  >
-                                    {p}
-                                  </button>
-                                ))}
-                              </div>
-                            ) : null;
-                          })()}
-                        </div>
-
-                        {/* Brand Selection */}
-                        <div className="space-y-1.5 relative" ref={stockBrandFilterRef}>
-                          <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Brand</label>
-                          <div className="relative">
-                            <input
-                              type="text"
-                              value={filterSearchInputs.brandSearch}
-                              onChange={(e) => {
-                                setFilterSearchInputs({ ...filterSearchInputs, brandSearch: e.target.value });
-                                setFilterDropdownOpen({ ...initialFilterDropdownState, brand: true });
-                              }}
-                              onFocus={() => setFilterDropdownOpen({ ...initialFilterDropdownState, brand: true })}
-                              placeholder={stockFilters.brand || "Search Brand..."}
-                              className="w-full px-3 py-2 pr-8 bg-white border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all shadow-sm hover:border-gray-300"
-                            />
-                            <SearchIcon className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
-                            {stockFilters.brand && (
-                              <button
-                                onClick={() => {
-                                  setStockFilters({ ...stockFilters, brand: '' });
-                                  setFilterSearchInputs({ ...filterSearchInputs, brandSearch: '' });
-                                }}
-                                className="absolute right-8 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
-                              >
-                                <XIcon className="w-4 h-4" />
-                              </button>
-                            )}
-                          </div>
-                          {filterDropdownOpen.brand && (() => {
-                            const brandOptions = [...new Set(stockRecords
-                              .map(item => (item.brand || item.productName || '').trim())
-                              .filter(Boolean)
-                            )].sort();
-                            const filtered = brandOptions.filter(b =>
-                              b.toLowerCase().includes(filterSearchInputs.brandSearch.toLowerCase())
-                            );
-                            return filtered.length > 0 ? (
-                              <div className="absolute z-50 mt-1 w-full bg-white border border-gray-200 rounded-xl shadow-lg max-h-48 overflow-y-auto">
-                                {filtered.map(b => (
-                                  <button
-                                    key={b}
-                                    type="button"
-                                    onClick={() => {
-                                      setStockFilters({ ...stockFilters, brand: b });
-                                      setFilterSearchInputs({ ...filterSearchInputs, brandSearch: '' });
-                                      setFilterDropdownOpen(initialFilterDropdownState);
-                                    }}
-                                    className="w-full px-3 py-2 text-left text-sm hover:bg-blue-50 transition-colors"
-                                  >
-                                    {b}
-                                  </button>
-                                ))}
-                              </div>
-                            ) : null;
-                          })()}
-                        </div>
-
-                        <button
-                          onClick={() => setShowStockFilterPanel(false)}
-                          className="w-full py-2 bg-gray-900 text-white rounded-xl text-sm font-medium hover:bg-gray-800 transition-all mt-2"
-                        >
-                          Apply Filters
-                        </button>
-                      </div>
-                    </div>
-                  )}
-                </div>
-                <button
-                  onClick={() => setShowStockReport(true)}
-                  className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 text-gray-600 rounded-xl hover:bg-gray-50 hover:border-gray-300 transition-all shadow-sm active:scale-95"
-                >
-                  <BarChartIcon className="w-4 h-4 text-gray-400" />
-                  <span className="text-sm font-medium">Report</span>
-                </button>
-              </div>
-            </div>
-
-            {/* Summary Cards */}
-            <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-              <div className="bg-white border border-gray-200 p-4 rounded-xl shadow-sm transition-all hover:shadow-md">
-                <div className="text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-1">Total Packet</div>
-                <div className="text-xl font-bold text-gray-900">{totalPackets}</div>
-              </div>
-              <div className="bg-emerald-50/50 border border-emerald-100 p-4 rounded-xl shadow-sm transition-all hover:shadow-md">
-                <div className="text-[11px] font-bold text-emerald-600 uppercase tracking-wider mb-1">Total Quantity</div>
-                <div className="text-xl font-bold text-emerald-700">{Math.round(totalQuantity)} {unit}</div>
-              </div>
-              <div className="bg-amber-50/50 border border-amber-100 p-4 rounded-xl shadow-sm transition-all hover:shadow-md">
-                <div className="text-[11px] font-bold text-amber-600 uppercase tracking-wider mb-1">InHouse PKT</div>
-                <div className="text-xl font-bold text-amber-700">{Math.round(totalInHousePkt)}</div>
-              </div>
-              <div className="bg-blue-50/50 border border-blue-100 p-4 rounded-xl shadow-sm transition-all hover:shadow-md">
-                <div className="text-[11px] font-bold text-blue-600 uppercase tracking-wider mb-1">InHouse QTY</div>
-                <div className="text-xl font-bold text-blue-700">{Math.round(totalInHouseQty)} {unit}</div>
-              </div>
-              <div className="bg-rose-50/50 border border-rose-100 p-4 rounded-xl shadow-sm transition-all hover:shadow-md">
-                <div className="text-[11px] font-bold text-rose-600 uppercase tracking-wider mb-1">Shortage</div>
-                <div className="text-xl font-bold text-rose-700">{Math.round(totalShortage)} {unit}</div>
-              </div>
-            </div>
-
-            {showStockForm && (
-              <div className="relative overflow-hidden rounded-2xl bg-white/60 backdrop-blur-xl border border-white/50 shadow-2xl p-8 transition-all duration-300">
-                <div className="absolute -top-24 -right-24 w-64 h-64 bg-blue-400/10 rounded-full blur-3xl pointer-events-none"></div>
-                <div className="absolute -bottom-24 -left-24 w-64 h-64 bg-indigo-400/10 rounded-full blur-3xl pointer-events-none"></div>
-
-                <div className="flex items-center justify-between mb-6 border-b border-gray-200/50 pb-4 relative z-10">
-                  <h3 className="text-xl font-semibold text-gray-800">{editingId ? 'Edit Stock' : 'New Stock Entry'}</h3>
-                  <button onClick={() => { setShowStockForm(false); resetStockForm(); }} className="text-gray-400 hover:text-red-500 transition-colors">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
-                  </button>
-                </div>
-
-                <form onSubmit={handleStockSubmit} autoComplete="off" className="grid grid-cols-1 md:grid-cols-2 gap-6 relative z-10">
-                  <div className="col-span-1 md:col-span-2 grid grid-cols-1 md:grid-cols-4 gap-6">
-                    <CustomDatePicker
-                      label="Date"
-                      name="date"
-                      value={stockFormData.date}
-                      onChange={handleStockInputChange}
-                      required
-                    />
-                    <div className="space-y-2">
-                      <label className="text-sm font-medium text-gray-700">LC No</label>
-                      <input
-                        type="text" name="lcNo" value={stockFormData.lcNo} onChange={handleStockInputChange} required
-                        placeholder="LC Number" autoComplete="off" className="w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm"
-                      />
-                    </div>
-                    <div className="space-y-2 relative" ref={portRef}>
-                      <label className="text-sm font-medium text-gray-700">Port</label>
-                      <div className="relative">
-                        <input
-                          type="text"
-                          name="port"
-                          value={stockFormData.port}
-                          onChange={handleStockInputChange}
-                          onFocus={() => setActiveDropdown('port')}
-                          onKeyDown={(e) => handleDropdownKeyDown(e, 'port', handleStockDropdownSelect, 'port')}
-                          required
-                          placeholder="Select or type port name"
-                          autoComplete="off"
-                          className="w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm pr-10"
-                        />
-                        <button
-                          type="button"
-                          onClick={() => setActiveDropdown(activeDropdown === 'port' ? null : 'port')}
-                          className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
-                        >
-                          <ChevronDownIcon className={`w-4 h-4 transition-transform ${activeDropdown === 'port' ? 'rotate-180' : ''}`} />
-                        </button>
-                      </div>
-                      {activeDropdown === 'port' && (
-                        <div className="absolute z-[60] w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-xl max-h-48 overflow-y-auto animate-in fade-in zoom-in duration-200">
-                          {getFilteredOptions('port').map((port, index) => (
-                            <button
-                              key={port._id}
-                              type="button"
-                              onClick={() => handleStockDropdownSelect('port', port.name)}
-                              onMouseEnter={() => setHighlightedIndex(index)}
-                              className={`w-full text-left px-4 py-2 text-sm transition-colors flex items-center justify-between ${highlightedIndex === index ? 'bg-blue-50 text-blue-700' : 'hover:bg-blue-50'}`}
-                            >
-                              <span>{port.name}</span>
-                              {stockFormData.port === port.name && <span className="w-2 h-2 bg-blue-500 rounded-full"></span>}
-                            </button>
-                          ))}
-                          {getFilteredOptions('port').length === 0 && (
-                            <div className="px-4 py-3 text-sm text-gray-500 italic">No ports found</div>
-                          )}
-                        </div>
-                      )}
-                    </div>
-
-                    <div className="space-y-2 relative" ref={importerRef}>
-                      <label className="text-sm font-medium text-gray-700">Importer</label>
-                      <div className="relative">
-                        <input
-                          type="text"
-                          name="importer"
-                          value={stockFormData.importer}
-                          onChange={handleStockInputChange}
-                          onFocus={() => setActiveDropdown('importer')}
-                          onKeyDown={(e) => handleDropdownKeyDown(e, 'importer', handleStockDropdownSelect, 'importer')}
-                          required
-                          placeholder="Select or type importer"
-                          autoComplete="off"
-                          className="w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm pr-10"
-                        />
-                        <button
-                          type="button"
-                          onClick={() => setActiveDropdown(activeDropdown === 'importer' ? null : 'importer')}
-                          className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
-                        >
-                          <ChevronDownIcon className={`w-4 h-4 transition-transform ${activeDropdown === 'importer' ? 'rotate-180' : ''}`} />
-                        </button>
-                      </div>
-                      {activeDropdown === 'importer' && (
-                        <div className="absolute z-[60] w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-xl max-h-48 overflow-y-auto animate-in fade-in zoom-in duration-200">
-                          {getFilteredOptions('importer').map((imp, index) => (
-                            <button
-                              key={imp._id}
-                              type="button"
-                              onClick={() => handleStockDropdownSelect('importer', imp.name)}
-                              onMouseEnter={() => setHighlightedIndex(index)}
-                              className={`w-full text-left px-4 py-2 text-sm transition-colors flex items-center justify-between ${highlightedIndex === index ? 'bg-blue-50 text-blue-700' : 'hover:bg-blue-50'}`}
-                            >
-                              <span>{imp.name}</span>
-                              {stockFormData.importer === imp.name && <span className="w-2 h-2 bg-blue-500 rounded-full"></span>}
-                            </button>
-                          ))}
-                          {getFilteredOptions('importer').length === 0 && (
-                            <div className="px-4 py-3 text-sm text-gray-500 italic">No importers found</div>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-
-                  <div className="col-span-1 md:col-span-2 grid grid-cols-1 md:grid-cols-5 gap-6">
-                    <div className="space-y-2">
-                      <label className="text-sm font-medium text-gray-700">IND CNF</label>
-                      <input
-                        type="text" name="indianCnF" value={stockFormData.indianCnF} onChange={handleStockInputChange}
-                        placeholder="IND CNF" autoComplete="off" className="w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm"
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <label className="text-sm font-medium text-gray-700">IND CNF Cost</label>
-                      <input
-                        type="number" name="indCnFCost" value={stockFormData.indCnFCost} onChange={handleStockInputChange}
-                        placeholder="0.00" autoComplete="off" className="w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <label className="text-sm font-medium text-gray-700">BD CNF</label>
-                      <input
-                        type="text" name="bdCnF" value={stockFormData.bdCnF} onChange={handleStockInputChange}
-                        placeholder="BD CNF" autoComplete="off" className="w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm"
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <label className="text-sm font-medium text-gray-700">BD CNF Cost</label>
-                      <input
-                        type="number" name="bdCnFCost" value={stockFormData.bdCnFCost} onChange={handleStockInputChange}
-                        placeholder="0.00" autoComplete="off" className="w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <label className="text-sm font-medium text-gray-700">Bill Of Entry</label>
-                      <input
-                        type="text" name="billOfEntry" value={stockFormData.billOfEntry} onChange={handleStockInputChange}
-                        placeholder="Bill Of Entry" autoComplete="off" className="w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm"
-                      />
-                    </div>
-                  </div>
-
-                  {/* Total LC Truck/Quantity Row */}
-                  <div className="col-span-1 md:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-6 pb-4">
-                    <div className="space-y-2">
-                      <label className="text-sm font-medium text-gray-700">Total LC Truck</label>
-                      <input
-                        type="text"
-                        name="totalLcTruck"
-                        value={stockFormData.totalLcTruck || '0'}
-                        readOnly
-                        placeholder="Total LC Truck"
-                        autoComplete="off"
-                        className="w-full px-4 py-2 bg-gray-50/80 border border-gray-200/60 rounded-lg text-gray-600 font-semibold outline-none cursor-default backdrop-blur-sm"
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <label className="text-sm font-medium text-gray-700">Total LC Quantity</label>
-                      <input
-                        type="text"
-                        name="totalLcQuantity"
-                        value={stockFormData.totalLcQuantity || '0.00'}
-                        readOnly
-                        placeholder="Total LC Quantity"
-                        autoComplete="off"
-                        className="w-full px-4 py-2 bg-gray-50/80 border border-gray-200/60 rounded-lg text-gray-600 font-semibold outline-none cursor-default backdrop-blur-sm"
-                      />
-                    </div>
-                  </div>
-
-                  {/* Product Entries Section */}
-                  <div className="col-span-1 md:col-span-2 space-y-8 animate-in fade-in duration-500">
-                    <div className="flex items-center justify-between border-b border-gray-100 pb-2">
-                      <h4 className="text-lg font-bold text-gray-800 flex items-center gap-2">
-                        <div className="w-1.5 h-6 bg-blue-500 rounded-full"></div>
-                        Product Details
-                      </h4>
-                      <button
-                        type="button"
-                        onClick={addProductEntry}
-                        className="flex items-center gap-2 px-4 py-2 bg-blue-50 text-blue-600 rounded-xl hover:bg-blue-600 hover:text-white transition-all duration-300 font-semibold text-sm shadow-sm active:scale-95 group"
-                      >
-                        <PlusIcon className="w-4 h-4 group-hover:rotate-90 transition-transform duration-300" />
-                        Add Product
-                      </button>
-                    </div>
-
-                    <div className="space-y-12">
-                      {stockFormData.productEntries.map((product, pIndex) => (
-                        <div key={pIndex} className="relative p-6 rounded-2xl bg-gray-50/30 border border-gray-100 group/product hover:border-blue-200 hover:bg-white/80 transition-all duration-500">
-                          {/* Remove Product Button */}
-                          {stockFormData.productEntries.length > 1 && (
-                            <button
-                              type="button"
-                              onClick={() => removeProductEntry(pIndex)}
-                              className="absolute -top-3 -right-3 p-2 bg-white text-gray-400 hover:text-red-500 rounded-xl shadow-lg border border-gray-100 opacity-0 group-hover/product:opacity-100 transition-all duration-300 hover:scale-110 active:scale-90 z-20"
-                            >
-                              <TrashIcon className="w-4 h-4" />
-                            </button>
-                          )}
-
-                          <div className="space-y-6">
-                            {/* Product Info Row */}
-                            {product.isMultiBrand ? (
-                              <div className="grid grid-cols-1 md:grid-cols-4 gap-4 animate-in fade-in duration-300">
-                                <div className="space-y-2">
-                                  <label className="text-sm font-medium text-gray-700">Entry Mode</label>
-                                  <div className="h-[42px] flex items-center gap-1 p-1 bg-gray-100/50 rounded-lg w-full">
-                                    <button
-                                      type="button"
-                                      onClick={() => handleProductModeToggle(pIndex, false)}
-                                      className={`flex-1 h-full text-xs font-semibold rounded-md transition-all ${!product.isMultiBrand ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
-                                    >
-                                      Single
-                                    </button>
-                                    <button
-                                      type="button"
-                                      onClick={() => handleProductModeToggle(pIndex, true)}
-                                      className={`flex-1 h-full text-xs font-semibold rounded-md transition-all ${product.isMultiBrand ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
-                                    >
-                                      Multi
-                                    </button>
-                                  </div>
-                                </div>
-                                <div className="space-y-2">
-                                  <label className="text-sm font-medium text-gray-700">Product Name</label>
-                                  <div className="relative w-full" ref={el => productRefs.current[pIndex] = el}>
-                                    <input
-                                      type="text"
-                                      name="productName"
-                                      value={product.productName}
-                                      onChange={(e) => {
-                                        handleStockInputChange(e, pIndex);
-                                        setActiveDropdown(`product-${pIndex}`);
-                                        setHighlightedIndex(-1);
-                                      }}
-                                      onFocus={() => {
-                                        setActiveDropdown(`product-${pIndex}`);
-                                        setHighlightedIndex(-1);
-                                      }}
-                                      onKeyDown={(e) => handleDropdownKeyDown(e, `product-${pIndex}`, (field, val) => handleProductSelect(pIndex, val), 'name')}
-                                      placeholder="Select or type product"
-                                      autoComplete="off"
-                                      className="w-full h-[42px] px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm"
-                                    />
-                                    {activeDropdown === `product-${pIndex}` && (
-                                      <div className="absolute z-[60] w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-xl max-h-48 overflow-y-auto">
-                                        {getFilteredProducts(product.productName).map((p, idx) => (
-                                          <button
-                                            key={p._id}
-                                            type="button"
-                                            onClick={() => handleProductSelect(pIndex, p.name)}
-                                            onMouseEnter={() => setHighlightedIndex(idx)}
-                                            className={`w-full text-left px-4 py-2 text-sm transition-colors flex items-center justify-between ${highlightedIndex === idx ? 'bg-blue-50 text-blue-700' : 'hover:bg-blue-50'}`}
-                                          >
-                                            <div className="flex flex-col">
-                                              <span className="font-medium">{p.name}</span>
-                                              <span className="text-[10px] text-gray-400 font-mono">{p.hsCode || 'No HS Code'}</span>
-                                            </div>
-                                            {product.productName === p.name && <span className="w-2 h-2 bg-blue-500 rounded-full"></span>}
-                                          </button>
-                                        ))}
-                                        {getFilteredProducts(product.productName).length === 0 && (
-                                          <div className="px-4 py-3 text-sm text-gray-500 italic">No products found</div>
-                                        )}
-                                      </div>
-                                    )}
-                                  </div>
-                                </div>
-                                <div className="space-y-2">
-                                  <label className="text-sm font-medium text-gray-700">Truck No.</label>
-                                  <input
-                                    type="text" name="truckNo" value={product.truckNo} onChange={(e) => handleStockInputChange(e, pIndex)}
-                                    placeholder="Truck No." autoComplete="off" className="w-full h-[42px] px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm"
-                                  />
-                                </div>
-                                <div className="space-y-2">
-                                  <label className="text-sm font-medium text-gray-700">Total Quantity</label>
-                                  <div className="relative h-[42px]">
-                                    <input
-                                      type="text"
-                                      value={product.brandEntries.reduce((sum, entry) => sum + (parseFloat(entry.inHouseQuantity) || 0), 0).toFixed(2)}
-                                      readOnly
-                                      className="w-full h-full px-4 py-2 bg-gray-50/80 border border-gray-200/60 rounded-lg text-gray-600 font-semibold outline-none cursor-default"
-                                    />
-                                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-medium text-gray-400">
-                                      {product.brandEntries[0]?.unit || 'kg'}
-                                    </span>
-                                  </div>
-                                </div>
-                              </div>
-                            ) : (
-                              <div className="w-full grid grid-cols-1 md:grid-cols-12 gap-4 items-end animate-in fade-in duration-300">
-                                <div className="md:col-span-2 space-y-1.5">
-                                  <label className="text-sm font-medium text-gray-700 text-center block w-full">Mode</label>
-                                  <div className="h-[42px] flex items-center gap-1 p-1 bg-gray-100/50 rounded-lg w-full">
-                                    <button
-                                      type="button"
-                                      onClick={() => handleProductModeToggle(pIndex, false)}
-                                      className={`flex-1 h-full text-[10px] font-bold rounded flex items-center justify-center transition-all ${!product.isMultiBrand ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
-                                    >
-                                      SINGLE
-                                    </button>
-                                    <button
-                                      type="button"
-                                      onClick={() => handleProductModeToggle(pIndex, true)}
-                                      className={`flex-1 h-full text-[10px] font-bold rounded flex items-center justify-center transition-all ${product.isMultiBrand ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
-                                    >
-                                      MULTI
-                                    </button>
-                                  </div>
-                                </div>
-                                <div className="md:col-span-3 space-y-1.5">
-                                  <label className="text-sm font-medium text-gray-700">Product Name</label>
-                                  <div className="relative w-full" ref={el => productRefs.current[pIndex] = el}>
-                                    <input
-                                      type="text"
-                                      name="productName"
-                                      value={product.productName}
-                                      onChange={(e) => {
-                                        handleStockInputChange(e, pIndex);
-                                        setActiveDropdown(`product-${pIndex}`);
-                                        setHighlightedIndex(-1);
-                                      }}
-                                      onFocus={() => {
-                                        setActiveDropdown(`product-${pIndex}`);
-                                        setHighlightedIndex(-1);
-                                      }}
-                                      onKeyDown={(e) => handleDropdownKeyDown(e, `product-${pIndex}`, (field, val) => handleProductSelect(pIndex, val), 'name')}
-                                      placeholder="Select or type product"
-                                      autoComplete="off"
-                                      className="w-full h-[42px] px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm text-sm"
-                                    />
-                                    {activeDropdown === `product-${pIndex}` && (
-                                      <div className="absolute z-[60] w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-xl max-h-48 overflow-y-auto">
-                                        {getFilteredProducts(product.productName).map((p, idx) => (
-                                          <button
-                                            key={p._id}
-                                            type="button"
-                                            onClick={() => handleProductSelect(pIndex, p.name)}
-                                            onMouseEnter={() => setHighlightedIndex(idx)}
-                                            className={`w-full text-left px-4 py-2 text-sm transition-colors flex items-center justify-between ${highlightedIndex === idx ? 'bg-blue-50 text-blue-700' : 'hover:bg-blue-50'}`}
-                                          >
-                                            <div className="flex flex-col">
-                                              <span className="font-medium">{p.name}</span>
-                                              <span className="text-[10px] text-gray-400 font-mono">{p.hsCode || 'No HS Code'}</span>
-                                            </div>
-                                            {product.productName === p.name && <span className="w-2 h-2 bg-blue-500 rounded-full"></span>}
-                                          </button>
-                                        ))}
-                                        {getFilteredProducts(product.productName).length === 0 && (
-                                          <div className="px-4 py-3 text-sm text-gray-500 italic">No products found</div>
-                                        )}
-                                      </div>
-                                    )}
-                                  </div>
-                                </div>
-                                <div className="md:col-span-2 space-y-1.5">
-                                  <label className="text-sm font-medium text-gray-700">Truck No.</label>
-                                  <input
-                                    type="text" name="truckNo" value={product.truckNo} onChange={(e) => handleStockInputChange(e, pIndex)}
-                                    placeholder="Truck #" autoComplete="off" className="w-full h-[42px] px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm text-sm"
-                                  />
-                                </div>
-                                <div className="md:col-span-1 space-y-1.5">
-                                  <label className="text-sm font-medium text-gray-700">Swp. Pkt</label>
-                                  <input
-                                    type="text"
-                                    value={product.brandEntries[0].sweepedPacket}
-                                    onChange={(e) => handleBrandEntryChange(pIndex, 0, 'sweepedPacket', e.target.value)}
-                                    placeholder="Qty" autoComplete="off" className="w-full h-[42px] px-2 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm text-sm"
-                                  />
-                                </div>
-                                <div className="md:col-span-1 space-y-1.5">
-                                  <label className="text-sm font-medium text-gray-700">SwpQty</label>
-                                  <input
-                                    type="text"
-                                    value={product.brandEntries[0].sweepedQuantity}
-                                    onChange={(e) => handleBrandEntryChange(pIndex, 0, 'sweepedQuantity', e.target.value)}
-                                    placeholder="Qty" className="w-full h-[42px] px-2 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm text-sm"
-                                  />
-                                </div>
-                                <div className="md:col-span-1 space-y-1.5">
-                                  <label className="text-sm font-medium text-gray-700">InHouse Pkt</label>
-                                  <input
-                                    type="text"
-                                    value={product.brandEntries[0].inHousePacket}
-                                    readOnly
-                                    placeholder="Qty" autoComplete="off" className="w-full h-[42px] px-4 py-2 bg-gray-50/80 border border-gray-200/60 rounded-lg text-gray-600 font-medium outline-none cursor-default backdrop-blur-sm text-sm"
-                                  />
-                                </div>
-                                <div className="md:col-span-1 space-y-1.5">
-                                  <label className="text-sm font-medium text-gray-700">InHouse Qty</label>
-                                  <input
-                                    type="text"
-                                    value={product.brandEntries[0].inHouseQuantity}
-                                    readOnly
-                                    placeholder="Qty" className="w-full h-[42px] px-4 py-2 bg-gray-50/80 border border-gray-200/60 rounded-lg text-gray-600 font-medium outline-none cursor-default backdrop-blur-sm text-sm"
-                                  />
-                                </div>
-                                <div className="md:col-span-1 space-y-1.5">
-                                  <label className="text-sm font-medium text-gray-700 text-center block w-full">Packet</label>
-                                  <input
-                                    type="text"
-                                    value={product.brandEntries[0].packet}
-                                    onChange={(e) => handleBrandEntryChange(pIndex, 0, 'packet', e.target.value)}
-                                    placeholder="Qty" autoComplete="off" className="w-full h-[42px] px-2 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm text-sm text-center"
-                                  />
-                                </div>
-                                <div className="md:col-span-1 space-y-1.5">
-                                  <label className="text-sm font-medium text-gray-700 text-center block w-full">Size</label>
-                                  <input
-                                    type="text"
-                                    value={product.brandEntries[0].packetSize}
-                                    onChange={(e) => handleBrandEntryChange(pIndex, 0, 'packetSize', e.target.value)}
-                                    placeholder="Size" autoComplete="off" className="w-full h-[42px] px-2 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm text-sm text-center"
-                                  />
-                                </div>
-                                <div className="md:col-span-2 space-y-1.5">
-                                  <label className="text-sm font-medium text-gray-700 text-center block w-full">Total</label>
-                                  <div className="relative h-[42px]">
-                                    <input
-                                      type="text"
-                                      value={product.brandEntries.reduce((sum, entry) => sum + (parseFloat(entry.inHouseQuantity) || 0), 0).toFixed(2)}
-                                      readOnly
-                                      className="w-full h-full px-1 py-2 bg-gray-50/80 border border-gray-200/60 rounded-lg text-gray-600 font-bold outline-none cursor-default text-xs text-center"
-                                    />
-                                  </div>
-                                </div>
-                                <div className="md:col-span-1 space-y-1.5">
-                                  <label className="text-sm font-medium text-gray-700 text-center block w-full">Unit</label>
-                                  <select
-                                    value={product.brandEntries[0].unit}
-                                    onChange={(e) => handleBrandEntryChange(pIndex, 0, 'unit', e.target.value)}
-                                    className="w-full h-[42px] px-1 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-all backdrop-blur-sm text-sm"
-                                  >
-                                    <option>kg</option>
-                                    <option>pcs</option>
-                                    <option>boxes</option>
-                                    <option>liters</option>
-                                  </select>
-                                </div>
-                              </div>
-                            )}
-
-                            {/* Brand Entries Section (Multi-Brand Only) */}
-                            {product.isMultiBrand && (
-                              <div className="mt-4 space-y-3 animate-in fade-in slide-in-from-top-2 duration-300 bg-gray-50/50 p-4 rounded-xl border border-gray-100">
-                                <div className="flex items-center justify-between mb-1 px-1">
-                                  <label className="text-xs font-bold text-gray-500 uppercase tracking-wider">Brand Breakdown</label>
-                                </div>
-                                <div className="hidden md:grid grid-cols-6 gap-2 px-1 mb-1 pr-12">
-                                  <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">BRAND</div>
-                                  <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">PURCHASED PRICE</div>
-                                  <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">PACKET</div>
-                                  <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">SIZE</div>
-                                  <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">QTY</div>
-                                  <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">UNIT</div>
-                                </div>
-                                <div className="space-y-4">
-                                  {product.brandEntries.map((entry, bIndex) => (
-                                    <div key={bIndex} className="p-3 bg-white/40 border border-gray-200/50 rounded-lg space-y-3 group/brand">
-                                      <div className="flex items-center gap-2">
-                                        <div className="flex-1 grid grid-cols-2 md:grid-cols-6 gap-2">
-                                          <div className="relative w-full" ref={el => brandRefs.current[`${pIndex}-${bIndex}`] = el}>
-                                            <input
-                                              type="text"
-                                              value={entry.brand}
-                                              placeholder="Select Brand"
-                                              onChange={(e) => handleBrandEntryChange(pIndex, bIndex, 'brand', e.target.value)}
-                                              onFocus={() => {
-                                                setActiveDropdown(`brand-${pIndex}-${bIndex}`);
-                                                setHighlightedIndex(-1);
-                                              }}
-                                              onKeyDown={(e) => handleDropdownKeyDown(e, `brand-${pIndex}-${bIndex}`, (field, val) => handleBrandEntryChange(pIndex, bIndex, 'brand', val), 'brand')}
-                                              className="w-full h-9 px-2 text-sm bg-white border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-all"
-                                            />
-                                            {activeDropdown === `brand-${pIndex}-${bIndex}` && (
-                                              <div className="absolute z-[60] w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-48 overflow-y-auto">
-                                                {getFilteredBrands(entry.brand, product.productName).map((brand, idx) => (
-                                                  <button
-                                                    key={idx}
-                                                    type="button"
-                                                    onClick={() => {
-                                                      handleBrandEntryChange(pIndex, bIndex, 'brand', brand);
-                                                      setActiveDropdown(null);
-                                                    }}
-                                                    onMouseEnter={() => setHighlightedIndex(idx)}
-                                                    className={`w-full text-left px-3 py-2 text-sm transition-colors flex items-center justify-between ${highlightedIndex === idx ? 'bg-blue-50 text-blue-700' : 'hover:bg-blue-50'}`}
-                                                  >
-                                                    <span>{brand}</span>
-                                                  </button>
-                                                ))}
-                                                {getFilteredBrands(entry.brand, product.productName).length === 0 && (
-                                                  <div className="px-3 py-2 text-sm text-gray-500 italic">
-                                                    {!product.productName ? 'Please select a product first' : 'Type to add new brand'}
-                                                  </div>
-                                                )}
-                                              </div>
-                                            )}
-                                          </div>
-                                          <input
-                                            type="number" value={entry.purchasedPrice} placeholder="Price" onChange={(e) => handleBrandEntryChange(pIndex, bIndex, 'purchasedPrice', e.target.value)}
-                                            className="w-full h-9 px-2 text-sm bg-white border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-all [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                                          />
-                                          <input
-                                            type="number" value={entry.packet} placeholder="Packet" onChange={(e) => handleBrandEntryChange(pIndex, bIndex, 'packet', e.target.value)}
-                                            className="w-full h-9 px-2 text-sm bg-white border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-all [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                                          />
-                                          <input
-                                            type="number" value={entry.packetSize} placeholder="Size" onChange={(e) => handleBrandEntryChange(pIndex, bIndex, 'packetSize', e.target.value)}
-                                            className="w-full h-9 px-2 text-sm bg-white border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-all [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                                          />
-                                          <input
-                                            type="number" value={entry.quantity} readOnly className="w-full h-9 px-2 text-sm bg-gray-50 border border-gray-200 rounded-lg text-gray-500 font-medium [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                                          />
-                                          <select
-                                            value={entry.unit} onChange={(e) => handleBrandEntryChange(pIndex, bIndex, 'unit', e.target.value)}
-                                            className="w-full h-9 px-2 text-sm bg-white border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-all"
-                                          >
-                                            <option>kg</option><option>pcs</option><option>boxes</option><option>liters</option>
-                                          </select>
-                                        </div>
-                                        <div className="flex items-center">
-                                          <button
-                                            type="button" onClick={() => addBrandEntry(pIndex)}
-                                            className="p-1.5 text-blue-500 hover:bg-blue-100 rounded-lg transition-all"
-                                          >
-                                            <PlusIcon className="w-4 h-4" />
-                                          </button>
-                                          {product.brandEntries.length > 1 && (
-                                            <button
-                                              type="button" onClick={() => removeBrandEntry(pIndex, bIndex)}
-                                              className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all"
-                                            >
-                                              <TrashIcon className="w-3.5 h-3.5" />
-                                            </button>
-                                          )}
-                                        </div>
-                                      </div>
-
-                                      {/* Combined line for Sweeped and InHouse fields */}
-                                      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 pl-0 md:pl-0">
-                                        <div className="flex items-center gap-2">
-                                          <label className="text-[10px] font-bold text-gray-400 uppercase min-w-[60px]">SWP. PKT</label>
-                                          <input
-                                            type="number" value={entry.sweepedPacket} placeholder="Packet" onChange={(e) => handleBrandEntryChange(pIndex, bIndex, 'sweepedPacket', e.target.value)}
-                                            className="flex-1 h-8 px-2 text-xs bg-white/70 border border-gray-200 rounded-md focus:ring-2 focus:ring-blue-500 outline-none transition-all [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                                          />
-                                        </div>
-                                        <div className="flex items-center gap-2">
-                                          <label className="text-[10px] font-bold text-gray-400 uppercase min-w-[60px]">SWPQTY</label>
-                                          <input
-                                            type="number" value={entry.sweepedQuantity}
-                                            onChange={(e) => handleBrandEntryChange(pIndex, bIndex, 'sweepedQuantity', e.target.value)}
-                                            placeholder="Qty"
-                                            className="flex-1 h-8 px-2 text-xs bg-white border border-gray-200 rounded-md focus:ring-2 focus:ring-blue-500 outline-none transition-all [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                                          />
-                                        </div>
-                                        <div className="flex items-center gap-2">
-                                          <label className="text-[10px] font-bold text-gray-400 uppercase min-w-[60px]">INHOUSE PKT</label>
-                                          <input
-                                            type="number" value={entry.inHousePacket} placeholder="Packet" readOnly
-                                            className="flex-1 h-8 px-2 text-xs bg-gray-50/70 border border-gray-200 rounded-md text-gray-500 outline-none cursor-default [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                                          />
-                                        </div>
-                                        <div className="flex items-center gap-2">
-                                          <label className="text-[10px] font-bold text-gray-400 uppercase min-w-[60px]">INHOUSE QTY</label>
-                                          <input
-                                            type="number" value={entry.inHouseQuantity} placeholder="Qty" readOnly
-                                            className="flex-1 h-8 px-2 text-xs bg-gray-50/70 border border-gray-200 rounded-md text-gray-500 outline-none cursor-default [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                                          />
-                                        </div>
-                                      </div>
-                                    </div>
-                                  ))}
-                                </div>
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* Status */}
-                  <div className="col-span-1 md:col-span-2 pt-4 border-t border-gray-100">
-                    <div className="flex flex-col sm:flex-row sm:items-center gap-4">
-                      <div className="w-full sm:w-64 space-y-2">
-                        <label className="text-sm font-medium text-gray-700">Status</label>
-                        <select
-                          name="status" value={stockFormData.status} onChange={handleStockInputChange}
-                          className="w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm"
-                        >
-                          <option>In Stock</option>
-                          <option>Sale From Panama</option>
-                        </select>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="col-span-1 md:col-span-2 pt-4 flex items-center justify-between">
-                    {submitStatus === 'success' && (
-                      <p className="text-green-600 font-medium flex items-center animate-bounce">
-                        <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"></path></svg>
-                        Stock saved successfully!
-                      </p>
-                    )}
-                    {submitStatus === 'error' && (
-                      <p className="text-red-600 font-medium flex items-center">
-                        <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path></svg>
-                        Failed to save stock.
-                      </p>
-                    )}
-                    <div className="flex-1"></div>
-                    <button
-                      type="submit" disabled={isSubmitting}
-                      className="px-6 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-medium rounded-lg shadow-lg shadow-blue-500/30 transition-all transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      {isSubmitting ? 'Saving...' : editingId ? 'Update Stock' : 'Add to Stock'}
-                    </button>
-                  </div>
-                </form>
-              </div>
-            )
-            }
-
-            {
-              !showStockForm && (
-                <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-                  {selectedItems.size > 0 && (
-                    <div className="bg-blue-50 px-6 py-3 border-b border-blue-100 flex items-center justify-between animate-in fade-in slide-in-from-top-2">
-                      <span className="text-sm font-medium text-blue-700">{displayRecords.filter(item => isStockGroupSelected(item.productName)).length} products selected</span>
-                      <div className="flex items-center space-x-3">
-                        <button
-                          onClick={() => { setSelectedItems(new Set()); setIsSelectionMode(false); }}
-                          className="px-3 py-1 text-gray-600 hover:text-gray-800 text-xs font-medium transition-colors"
-                        >
-                          Cancel
-                        </button>
-                        <button
-                          onClick={() => setDeleteConfirm({ show: true, type: 'stock', id: null, isBulk: true })}
-                          className="px-3 py-1 bg-red-600 hover:bg-red-700 text-white text-xs font-medium rounded-md transition-colors flex items-center"
-                        >
-                          <TrashIcon className="w-3.5 h-3.5 mr-1" /> Delete Bulk
-                        </button>
-                      </div>
-                    </div>
-                  )}
-                  {isLoading ? (
-                    <div className="flex items-center justify-center p-20">
-                      <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
-                    </div>
-                  ) : stockRecords.length > 0 ? (
-                    <div className="overflow-x-auto">
-                      <table className="w-full text-left">
-                        <thead>
-                          <tr
-                            className="bg-gray-50 border-b border-gray-100 select-none cursor-pointer"
-                            onMouseDown={() => startLongPress(null)}
-                            onMouseUp={endLongPress}
-                            onMouseLeave={endLongPress}
-                            onTouchStart={() => startLongPress(null)}
-                            onTouchEnd={endLongPress}
-                          >
-                            {isSelectionMode && (
-                              <th className="px-6 py-4 w-10">
-                                <input
-                                  type="checkbox"
-                                  checked={displayRecords.length > 0 && displayRecords.every(item => isStockGroupSelected(item.productName))}
-                                  onChange={() => {
-                                    if (displayRecords.every(item => isStockGroupSelected(item.productName))) {
-                                      setSelectedItems(new Set());
-                                      setIsSelectionMode(false);
-                                    } else {
-                                      const allIds = stockRecords.map(r => r._id);
-                                      setSelectedItems(new Set(allIds));
-                                      setIsSelectionMode(true);
-                                    }
-                                  }}
-                                  className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                                />
-                              </th>
-                            )}
-                            <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Product Name</th>
-                            <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Brand</th>
-                            <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Inhouse Packet</th>
-                            <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Inhouse Quantity</th>
-                            <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Sale Packet</th>
-                            <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Sale Quantity</th>
-                            <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider text-center">Status</th>
-                            <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider text-center">Actions</th>
-                          </tr>
-
-
-
-
-
-
-                        </thead>
-
-                        <tbody className="divide-y divide-gray-100">
-                          {displayRecords.map((item) => (
-                            <tr
-                              key={item.originalId}
-                              className={`${isStockGroupSelected(item.productName) ? 'bg-blue-50/30' : 'hover:bg-gray-50'} transition-colors cursor-pointer select-none`}
-                              onMouseDown={() => {
-                                isLongPressTriggered.current = false;
-                                longPressTimer.current = setTimeout(() => {
-                                  isLongPressTriggered.current = true;
-                                  toggleStockGroupSelection(item.productName);
-                                }, 700);
-                              }}
-                              onMouseUp={endLongPress}
-                              onMouseLeave={endLongPress}
-                              onTouchStart={() => {
-                                isLongPressTriggered.current = false;
-                                longPressTimer.current = setTimeout(() => {
-                                  isLongPressTriggered.current = true;
-                                  toggleStockGroupSelection(item.productName);
-                                }, 700);
-                              }}
-                              onTouchEnd={endLongPress}
-                              onClick={() => {
-                                if (isLongPressTriggered.current) {
-                                  isLongPressTriggered.current = false;
-                                  return;
-                                }
-                                if (isSelectionMode) toggleStockGroupSelection(item.productName);
-                              }}
-                            >
-                              {isSelectionMode && (
-                                <td className="px-6 py-4">
-                                  <input
-                                    type="checkbox"
-                                    checked={isStockGroupSelected(item.productName)}
-                                    onChange={(e) => { e.stopPropagation(); toggleStockGroupSelection(item.productName); }}
-                                    className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                                  />
-                                </td>
-                              )}
-                              <td className="px-6 py-4 text-sm font-medium text-gray-900 align-top">{item.productName}</td>
-                              <td className="px-6 py-4 text-sm text-gray-600 leading-relaxed align-top">
-                                {item.entries.map((ent, i) => (
-                                  <div key={i}>{ent.brand || '-'}</div>
-                                ))}
-                                {item.entries.length > 1 && (
-                                  <div className="text-[11px] text-gray-500 mt-1 font-medium italic pt-1 border-t border-gray-100">Total Packet</div>
-                                )}
-                              </td>
-                              <td className="px-6 py-4 text-sm text-gray-600 leading-relaxed align-top">
-                                {item.entries.map((ent, i) => {
-                                  const pkt = parseFloat(ent.inHousePacket) || 0;
-                                  const qty = parseFloat(ent.inHouseQuantity) || 0;
-                                  const size = parseFloat(ent.packetSize) || 0;
-                                  const whole = Math.floor(pkt);
-                                  const rem = Math.round(qty - (whole * size));
-                                  return (
-                                    <div key={i}>
-                                      {whole}{rem > 0 ? ` - ${rem} kg` : ''}
-                                    </div>
-                                  );
-                                })}
-                                {item.entries.length > 1 && (
-                                  <div className="flex items-center justify-between gap-2 mt-1 pt-1 border-t border-gray-100">
-                                    <div className="text-gray-900 font-bold">
-                                      {(() => {
-                                        const totalWhole = item.entries.reduce((sum, ent) => sum + Math.floor(parseFloat(ent.inHousePacket) || 0), 0);
-                                        const totalRem = Math.round(item.entries.reduce((sum, ent) => sum + (parseFloat(ent.inHouseQuantity) || 0) - (Math.floor(parseFloat(ent.inHousePacket) || 0) * (parseFloat(ent.packetSize) || 0)), 0));
-                                        return `${totalWhole}${totalRem > 0 ? ` - ${totalRem} kg` : ''}`;
-                                      })()}
-                                    </div>
-                                    <div className="text-[11px] text-gray-500 font-medium italic whitespace-nowrap">Total QTY</div>
-                                  </div>
-                                )}
-                              </td>
-                              <td className="px-6 py-4 text-sm font-medium text-gray-900 leading-relaxed align-top">
-                                {item.entries.map((ent, i) => (
-                                  <div key={i}>{Math.round(parseFloat(ent.inHouseQuantity) || 0) || '-'} {ent.unit}</div>
-                                ))}
-                                {item.entries.length > 1 && (
-                                  <div className="text-gray-900 mt-1 font-bold pt-1 border-t border-gray-100">
-                                    {Math.round(item.quantity)} {item.unit}
-                                  </div>
-                                )}
-                              </td>
-                              <td className="px-6 py-4 text-sm text-gray-600 leading-relaxed align-top">
-                                {item.entries.map((ent, i) => (
-                                  <div key={i}>-</div>
-                                ))}
-                                {item.entries.length > 1 && (
-                                  <div className="flex items-center justify-between gap-2 mt-1 pt-1 border-t border-gray-100">
-                                    <div className="text-gray-900 font-bold">-</div>
-                                    <div className="text-[11px] text-gray-500 font-medium italic whitespace-nowrap">Total QTY</div>
-                                  </div>
-                                )}
-                              </td>
-                              <td className="px-6 py-4 text-sm font-medium text-gray-900 leading-relaxed align-top">
-                                {item.entries.map((ent, i) => (
-                                  <div key={i}>-</div>
-                                ))}
-                                {item.entries.length > 1 && (
-                                  <div className="text-gray-900 mt-1 font-bold pt-1 border-t border-gray-100">
-                                    -
-                                  </div>
-                                )}
-                              </td>
-                              <td className="px-6 py-4 text-center">
-                                <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${item.quantity > 0 ? 'bg-green-50 text-green-700 border border-green-100' : 'bg-red-50 text-red-700 border border-red-100'}`}>
-                                  {item.quantity > 0 ? 'In Stock' : 'Out of Stock'}
-                                </span>
-                              </td>
-                              <td className="px-6 py-4 text-center">
-                                <div className="flex items-center justify-center space-x-3">
-                                  <button onClick={(e) => { e.stopPropagation(); handleView('stock', item); }} className="text-gray-400 hover:text-indigo-600 transition-colors">
-                                    <EyeIcon className="w-5 h-5" />
-                                  </button>
-                                  <button onClick={(e) => { e.stopPropagation(); handleEdit('stock', item); }} className="text-gray-400 hover:text-blue-600 transition-colors">
-                                    <EditIcon className="w-5 h-5" />
-                                  </button>
-                                  <button onClick={(e) => { e.stopPropagation(); handleDelete('stock', item._id); }} className="text-gray-400 hover:text-red-600 transition-colors">
-                                    <TrashIcon className="w-5 h-5" />
-                                  </button>
-                                </div>
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-
-                      </table>
-                    </div>
-                  ) : (
-                    <div className="flex flex-col items-center justify-center p-12">
-                      <div className="p-4 bg-gray-50 rounded-full mb-4">
-                        <ShoppingCartIcon className="w-8 h-8 text-gray-400" />
-                      </div>
-                      <p className="text-gray-500 font-medium">No stock items found</p>
-                    </div>
-                  )}
-                </div>
-              )
-            }
-          </div >
+          <StockManagement
+            stockRecords={stockRecords}
+            setStockRecords={setStockRecords}
+            products={products}
+            deleteConfirm={deleteConfirm}
+            setDeleteConfirm={setDeleteConfirm}
+            onEdit={handleEdit}
+            onDelete={handleDelete}
+            isLoading={isLoading}
+            fetchStockRecords={fetchStockRecords}
+            stockFormData={stockFormData}
+            setStockFormData={setStockFormData}
+            showStockForm={showStockForm}
+            setShowStockForm={setShowStockForm}
+            editingId={editingId}
+            setEditingId={setEditingId}
+            isSubmitting={isSubmitting}
+            setIsSubmitting={setIsSubmitting}
+            submitStatus={submitStatus}
+            setSubmitStatus={setSubmitStatus}
+            showStockReport={showStockReport}
+            setShowStockReport={setShowStockReport}
+            stockFilters={stockFilters}
+            setStockFilters={setStockFilters}
+          />
         );
       case 'products-section':
         return (
-          <div className="space-y-6">
-            <div className="flex items-center justify-between">
-              <h2 className="text-2xl font-bold text-gray-800">Products Management</h2>
-              <button
-                onClick={() => setShowProductForm(!showProductForm)}
-                className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors shadow-md hover:shadow-lg"
-              >
-                <PlusIcon className="w-5 h-5 mr-2" />
-                Add New Product
-              </button>
-            </div>
-
-            {showProductForm && (
-              <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-                <div
-                  className="fixed inset-0 bg-black/50 backdrop-blur-sm transition-opacity"
-                  onClick={() => { setShowProductForm(false); setEditingId(null); }}
-                />
-                <div className="bg-white rounded-xl shadow-xl border border-gray-100 p-6 w-full max-w-2xl transform transition-all relative z-10">
-                  <div className="flex items-center justify-between mb-6">
-                    <h3 className="text-xl font-bold text-gray-800">{editingId ? 'Edit Product' : 'Add New Product'}</h3>
-                    <button
-                      onClick={() => { setShowProductForm(false); setEditingId(null); }}
-                      className="text-gray-400 hover:text-gray-600 transition-colors"
-                    >
-                      <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                      </svg>
-                    </button>
-                  </div>
-                  <form onSubmit={handleProductSubmit} className="grid grid-cols-1 md:grid-cols-4 gap-6">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">HS Code</label>
-                      <input
-                        type="text"
-                        value={productFormData.hsCode}
-                        onChange={(e) => setProductFormData(prev => ({ ...prev, hsCode: e.target.value }))}
-                        className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
-                        placeholder="Enter HS Code"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">Product Name *</label>
-                      <input
-                        type="text"
-                        value={productFormData.name}
-                        onChange={(e) => setProductFormData(prev => ({ ...prev, name: e.target.value }))}
-                        required
-                        className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
-                        placeholder="Enter product name"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">Category</label>
-                      <input
-                        type="text"
-                        value={productFormData.category}
-                        onChange={(e) => setProductFormData(prev => ({ ...prev, category: e.target.value }))}
-                        className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
-                        placeholder="Enter category"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">UOM (Unit)</label>
-                      <select
-                        value={productFormData.uom}
-                        onChange={(e) => setProductFormData(prev => ({ ...prev, uom: e.target.value }))}
-                        className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
-                      >
-                        <option value="kg">kg</option>
-                        <option value="lbs">lbs</option>
-                        <option value="pcs">pcs</option>
-                        <option value="box">box</option>
-                        <option value="set">set</option>
-                        <option value="m">m</option>
-                      </select>
-                    </div>
-
-                    <div className="md:col-span-4 space-y-4">
-                      <div className="flex items-center justify-between">
-                        <label className="block text-sm font-bold text-gray-700">Brands & Packaging</label>
-                        <button
-                          type="button"
-                          onClick={handleAddProductBrand}
-                          className="text-xs font-semibold text-blue-600 hover:text-blue-700 flex items-center gap-1"
-                        >
-                          <PlusIcon className="w-3 h-3" /> Add New Brand
-                        </button>
-                      </div>
-                      <div className="space-y-3 max-h-[320px] overflow-y-auto pr-2 scrollbar-thin scrollbar-thumb-gray-200">
-                        {productFormData.brands.map((brandEntry, bIndex) => (
-                          <div key={bIndex} className="grid grid-cols-1 md:grid-cols-12 gap-3 items-end p-3 bg-gray-50 rounded-xl relative group">
-                            {productFormData.brands.length > 1 && (
-                              <button
-                                type="button"
-                                onClick={() => handleRemoveProductBrand(bIndex)}
-                                className="absolute -top-2 -right-2 p-1 bg-white text-gray-400 hover:text-red-500 rounded-lg shadow-sm border border-gray-100 opacity-0 group-hover:opacity-100 transition-all"
-                              >
-                                <XIcon className="w-3.5 h-3.5" />
-                              </button>
-                            )}
-                            <div className="md:col-span-5">
-                              <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1">Brand</label>
-                              <input
-                                type="text"
-                                value={brandEntry.brand}
-                                onChange={(e) => handleProductBrandChange(bIndex, 'brand', e.target.value)}
-                                className="w-full px-3 py-1.5 border border-gray-200 rounded-lg text-sm outline-none focus:border-blue-500 transition-all"
-                                placeholder="Enter brand"
-                              />
-                            </div>
-                            <div className="md:col-span-3">
-                              <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1">Packet Size</label>
-                              <input
-                                type="text"
-                                value={brandEntry.packetSize}
-                                onChange={(e) => handleProductBrandChange(bIndex, 'packetSize', e.target.value)}
-                                className="w-full px-3 py-1.5 border border-gray-200 rounded-lg text-sm outline-none focus:border-blue-500 transition-all"
-                                placeholder="Size"
-                              />
-                            </div>
-                            <div className="md:col-span-4">
-                              <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1">Purchased Price</label>
-                              <input
-                                type="number"
-                                step="0.01"
-                                value={brandEntry.purchasedPrice}
-                                onChange={(e) => handleProductBrandChange(bIndex, 'purchasedPrice', e.target.value)}
-                                className="w-full px-3 py-1.5 border border-gray-200 rounded-lg text-sm outline-none focus:border-blue-500 transition-all"
-                                placeholder="0.00"
-                              />
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                    <div className="md:col-span-4">
-                      <label className="block text-sm font-medium text-gray-700 mb-2">Description</label>
-                      <textarea
-                        value={productFormData.description}
-                        onChange={(e) => setProductFormData(prev => ({ ...prev, description: e.target.value }))}
-                        rows="3"
-                        className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all resize-none"
-                        placeholder="Enter product description"
-                      />
-                    </div>
-                    <div className="md:col-span-4 flex justify-end space-x-3 pt-4 border-t border-gray-100">
-                      <button
-                        type="button"
-                        onClick={() => { setShowProductForm(false); setEditingId(null); }}
-                        className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
-                      >
-                        Cancel
-                      </button>
-                      <button
-                        type="submit"
-                        disabled={isSubmitting}
-                        className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors shadow-sm disabled:opacity-70 disabled:cursor-not-allowed flex items-center"
-                      >
-                        {isSubmitting ? (
-                          <>
-                            <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                            </svg>
-                            Saving...
-                          </>
-                        ) : (
-                          editingId ? 'Update Product' : 'Add Product'
-                        )}
-                      </button>
-                    </div>
-                  </form>
-                </div>
-              </div>
-            )}
-
-            <div className="bg-white rounded-xl shadow-md border border-gray-100 overflow-hidden">
-              {products.length > 0 ? (
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left">
-                    <thead>
-                      <tr className="bg-gray-50 border-b border-gray-100">
-                        <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">HS Code</th>
-                        <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Product Name</th>
-                        <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Brand</th>
-                        <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Packet Size</th>
-                        <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">UOM</th>
-                        <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Price</th>
-                        <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Category</th>
-                        <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider text-center">Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-100">
-                      {products.map((product) => (
-                        <tr key={product._id} className="hover:bg-gray-50 transition-colors">
-                          <td className="px-6 py-4 text-sm text-gray-600 font-mono align-top">{product.hsCode || '-'}</td>
-                          <td className="px-6 py-4 text-sm font-medium text-gray-900 align-top">{product.name}</td>
-                          <td className="px-6 py-4 text-sm text-gray-600 leading-relaxed align-top">
-                            {product.brands?.map((b, i) => (
-                              <div key={i}>{b.brand || '-'}</div>
-                            )) || product.brand || '-'}
-                          </td>
-                          <td className="px-6 py-4 text-sm text-gray-600 leading-relaxed align-top">
-                            {product.brands?.map((b, i) => (
-                              <div key={i}>{b.packetSize || '-'}</div>
-                            )) || product.packetSize || '-'}
-                          </td>
-                          <td className="px-6 py-4 text-sm text-gray-600 align-top">
-                            {product.uom || product.unit || 'kg'}
-                          </td>
-                          <td className="px-6 py-4 text-sm text-gray-600 leading-relaxed align-top">
-                            {product.brands?.map((b, i) => (
-                              <div key={i}>{b.purchasedPrice ? `TK ${b.purchasedPrice}` : '-'}</div>
-                            )) || (product.purchasedPrice ? `TK ${product.purchasedPrice}` : '-')}
-                          </td>
-                          <td className="px-6 py-4 text-sm text-gray-600 align-top">{product.category || '-'}</td>
-                          <td className="px-6 py-4 text-center align-top">
-                            <div className="flex items-center justify-center space-x-3">
-                              <button onClick={() => handleProductEdit(product)} className="text-gray-400 hover:text-blue-600 transition-colors">
-                                <EditIcon className="w-5 h-5" />
-                              </button>
-                              <button onClick={() => handleProductDelete(product._id)} className="text-gray-400 hover:text-red-600 transition-colors">
-                                <TrashIcon className="w-5 h-5" />
-                              </button>
-                            </div>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              ) : (
-                <div className="flex flex-col items-center justify-center p-12">
-                  <div className="p-4 bg-gray-50 rounded-full mb-4">
-                    <BoxIcon className="w-8 h-8 text-gray-400" />
-                  </div>
-                  <p className="text-gray-500 font-medium">No products found</p>
-                  <p className="text-sm text-gray-400 mt-1">Click "Add New Product" to create a product</p>
-                </div>
-              )}
-            </div>
-          </div>
+          <ProductManagement
+            products={products}
+            fetchProducts={fetchProducts}
+          />
+        );
+      case 'warehouse-section':
+        return (
+          <WarehouseManagement />
         );
       default:
         return null;
     }
   };
 
+  const stockData = useMemo(() => {
+    return calculateStockData(stockRecords, stockFilters, '');
+  }, [stockRecords, stockFilters]);
+
   return (
-    <div className="flex h-screen bg-gray-50 font-sans text-gray-900">
+    <div className={`flex h-screen bg-gray-50 font-sans text-gray-900 ${(showLcReport || showStockReport) ? 'is-printing-report' : ''}`}>
+
       {/* Sidebar Backdrop for mobile */}
       {sidebarOpen && (
         <div
-          className="fixed inset-0 bg-gray-900/50 z-40 md:hidden animate-in fade-in duration-300"
+          className="fixed inset-0 bg-gray-900/50 z-40 md:hidden animate-in fade-in duration-300 no-print"
           onClick={() => setSidebarOpen(false)}
         />
       )}
       {/* Sidebar */}
-      <aside className={`fixed inset-y-0 left-0 z-50 w-64 bg-white text-gray-900 border-r border-gray-200 transform transition-transform duration-300 ease-in-out ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'} md:relative md:translate-x-0 flex flex-col`}>
+      <aside className={`fixed inset-y-0 left-0 z-50 w-64 bg-white text-gray-900 border-r border-gray-200 transform transition-transform duration-300 ease-in-out ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'} md:relative md:translate-x-0 flex flex-col print:hidden`}>
         <div className="p-5 border-b border-gray-200 bg-gray-50/50">
           <div className="flex items-center">
             <img src="https://ui-avatars.com/api/?name=Admin+User&background=3b82f6&color=fff" alt="Admin" className="w-12 h-12 rounded-full border-2 border-white shadow-md transition-transform hover:scale-105" />
@@ -5729,6 +1352,12 @@ function App() {
                   Stock Management
                 </button>
                 <button
+                  onClick={() => { setCurrentView('warehouse-section'); setSidebarOpen(false); }}
+                  className={`w-full text-left py-2 px-3 rounded-md text-sm transition-colors ${currentView === 'warehouse-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'}`}
+                >
+                  Ware House
+                </button>
+                <button
                   onClick={() => { setCurrentView('products-section'); setSidebarOpen(false); }}
                   className={`w-full text-left py-2 px-3 rounded-md text-sm transition-colors ${currentView === 'products-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'}`}
                 >
@@ -5741,9 +1370,9 @@ function App() {
       </aside>
 
       {/* Main Content */}
-      <div className="flex-1 flex flex-col overflow-hidden">
+      <div className={`flex-1 flex flex-col overflow-hidden ${(showLcReport || showStockReport) ? 'print:hidden' : ''}`}>
         {/* Header */}
-        <header className="flex items-center justify-between px-6 py-4 bg-white border-b border-gray-200 shadow-sm">
+        <header className="flex items-center justify-between px-6 py-4 bg-white border-b border-gray-200 shadow-sm print:hidden">
           <div className="flex items-center">
             <button onClick={() => setSidebarOpen(!sidebarOpen)} className="md:hidden p-2 rounded-md text-gray-600 hover:bg-gray-100">
               <MenuIcon className="w-6 h-6" />
@@ -5763,7 +1392,7 @@ function App() {
         </header>
 
         {/* Dashboard Content */}
-        <main className="flex-1 overflow-x-hidden overflow-y-auto bg-gray-50 p-6">
+        <main className={`flex-1 overflow-x-hidden overflow-y-auto bg-gray-50 p-6 ${(showLcReport || showStockReport) ? 'no-print' : ''}`}>
           {renderContent()}
         </main>
       </div>
@@ -6375,497 +2004,9 @@ function App() {
       )}
 
       {/* Stock Report Modal */}
-      {showStockReport && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4 print:p-0 print:bg-white print:backdrop-none">
-          <div className="bg-white w-full max-w-5xl max-h-[90vh] overflow-hidden rounded-3xl shadow-2xl flex flex-col print:max-h-none print:shadow-none print:rounded-none">
-            {/* Modal Header/Toolbar (Hidden on Print) */}
-            <div className="flex items-center justify-between px-8 py-4 border-b border-gray-100 print:hidden">
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-blue-50 rounded-xl">
-                  <BarChartIcon className="w-5 h-5 text-blue-600" />
-                </div>
-                <h3 className="text-xl font-bold text-gray-800">Stock Report</h3>
-              </div>
-              <div className="flex items-center gap-3">
-                <div className="relative">
-                  <button
-                    ref={stockReportFilterButtonRef}
-                    onClick={() => setShowStockReportFilterPanel(!showStockReportFilterPanel)}
-                    className={`flex items-center gap-2 px-4 py-2 rounded-xl transition-all border ${showStockReportFilterPanel || Object.values(stockFilters).some(v => v !== '')
-                      ? 'bg-blue-600 border-blue-600 text-white shadow-lg shadow-blue-500/30'
-                      : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'
-                      }`}
-                  >
-                    <FunnelIcon className={`w-4 h-4 ${showStockReportFilterPanel || Object.values(stockFilters).some(v => v !== '') ? 'text-white' : 'text-gray-400'}`} />
-                    <span className="text-sm font-medium">Filter</span>
-                  </button>
-
-                  {/* Floating Filter Panel */}
-                  {showStockReportFilterPanel && (
-                    <div ref={stockReportFilterRef} className="absolute right-0 mt-3 w-80 bg-white/95 backdrop-blur-2xl border border-gray-100 rounded-2xl shadow-2xl z-[110] p-5 animate-in fade-in zoom-in duration-200">
-                      <div className="flex items-center justify-between mb-4 pb-2 border-b border-gray-50">
-                        <h4 className="font-bold text-gray-900">Advanced Filters</h4>
-                        <button
-                          onClick={() => {
-                            setStockFilters({ startDate: '', endDate: '', lcNo: '', port: '', brand: '', productName: '' });
-                            setFilterSearchInputs({ ...filterSearchInputs, lcNoSearch: '', portSearch: '', brandSearch: '', productSearch: '' });
-                            setShowStockReportFilterPanel(false);
-                          }}
-                          className="text-[11px] font-bold text-blue-600 hover:text-blue-700 uppercase tracking-wider"
-                        >
-                          Reset All
-                        </button>
-                      </div>
-
-                      <div className="space-y-4">
-                        {/* Date Range */}
-                        <div className="grid grid-cols-2 gap-3">
-                          <CustomDatePicker
-                            label="FROM DATE"
-                            value={stockFilters.startDate}
-                            onChange={(e) => setStockFilters({ ...stockFilters, startDate: e.target.value })}
-                            placeholder="Select start date"
-                            name="startDate"
-                            labelClassName="text-[11px] font-bold text-gray-400 uppercase tracking-wider"
-                            compact={true}
-                          />
-                          <CustomDatePicker
-                            label="TO DATE"
-                            value={stockFilters.endDate}
-                            onChange={(e) => setStockFilters({ ...stockFilters, endDate: e.target.value })}
-                            placeholder="Select end date"
-                            name="endDate"
-                            labelClassName="text-[11px] font-bold text-gray-400 uppercase tracking-wider"
-                            compact={true}
-                            rightAlign={true}
-                          />
-                        </div>
-
-                        {/* LC No Selection */}
-                        <div className="space-y-1.5 relative" ref={reportLcNoFilterRef}>
-                          <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">LC No</label>
-                          <div className="relative">
-                            <input
-                              type="text"
-                              value={filterSearchInputs.lcNoSearch}
-                              onChange={(e) => {
-                                setFilterSearchInputs({ ...filterSearchInputs, lcNoSearch: e.target.value });
-                                setFilterDropdownOpen({ ...initialFilterDropdownState, lcNo: true });
-                              }}
-                              onFocus={() => setFilterDropdownOpen({ ...initialFilterDropdownState, lcNo: true })}
-                              placeholder={stockFilters.lcNo || "Search LC No..."}
-                              className="w-full px-3 py-2 pr-8 bg-white border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all shadow-sm hover:border-gray-300"
-                            />
-                            <SearchIcon className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
-                            {stockFilters.lcNo && (
-                              <button
-                                onClick={() => {
-                                  setStockFilters({ ...stockFilters, lcNo: '' });
-                                  setFilterSearchInputs({ ...filterSearchInputs, lcNoSearch: '' });
-                                }}
-                                className="absolute right-8 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
-                              >
-                                <XIcon className="w-4 h-4" />
-                              </button>
-                            )}
-                          </div>
-                          {filterDropdownOpen.lcNo && (() => {
-                            const lcOptions = [...new Set(stockRecords
-                              .map(item => (item.lcNo || '').trim())
-                              .filter(Boolean)
-                            )].sort();
-                            const filtered = lcOptions.filter(lc =>
-                              lc.toLowerCase().includes(filterSearchInputs.lcNoSearch.toLowerCase())
-                            );
-                            return filtered.length > 0 ? (
-                              <div className="absolute z-[120] mt-1 w-full bg-white border border-gray-200 rounded-xl shadow-lg max-h-48 overflow-y-auto">
-                                {filtered.map(lc => (
-                                  <button
-                                    key={lc}
-                                    type="button"
-                                    onClick={() => {
-                                      setStockFilters({ ...stockFilters, lcNo: lc });
-                                      setFilterSearchInputs({ ...filterSearchInputs, lcNoSearch: '' });
-                                      setFilterDropdownOpen(initialFilterDropdownState);
-                                    }}
-                                    className="w-full px-3 py-2 text-left text-sm hover:bg-blue-50 transition-colors"
-                                  >
-                                    {lc}
-                                  </button>
-                                ))}
-                              </div>
-                            ) : null;
-                          })()}
-                        </div>
-
-                        {/* Port Selection */}
-                        <div className="space-y-1.5 relative" ref={reportPortFilterRef}>
-                          <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Port</label>
-                          <div className="relative">
-                            <input
-                              type="text"
-                              value={filterSearchInputs.portSearch}
-                              onChange={(e) => {
-                                setFilterSearchInputs({ ...filterSearchInputs, portSearch: e.target.value });
-                                setFilterDropdownOpen({ ...initialFilterDropdownState, port: true });
-                              }}
-                              onFocus={() => setFilterDropdownOpen({ ...initialFilterDropdownState, port: true })}
-                              placeholder={stockFilters.port || "Search Port..."}
-                              className="w-full px-3 py-2 pr-8 bg-white border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all shadow-sm hover:border-gray-300"
-                            />
-                            <SearchIcon className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
-                            {stockFilters.port && (
-                              <button
-                                onClick={() => {
-                                  setStockFilters({ ...stockFilters, port: '' });
-                                  setFilterSearchInputs({ ...filterSearchInputs, portSearch: '' });
-                                }}
-                                className="absolute right-8 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
-                              >
-                                <XIcon className="w-4 h-4" />
-                              </button>
-                            )}
-                          </div>
-                          {filterDropdownOpen.port && (() => {
-                            const portOptions = [...new Set(stockRecords
-                              .map(item => (item.port || '').trim())
-                              .filter(Boolean)
-                            )].sort();
-                            const filtered = portOptions.filter(p =>
-                              p.toLowerCase().includes(filterSearchInputs.portSearch.toLowerCase())
-                            );
-                            return filtered.length > 0 ? (
-                              <div className="absolute z-[120] mt-1 w-full bg-white border border-gray-200 rounded-xl shadow-lg max-h-48 overflow-y-auto">
-                                {filtered.map(p => (
-                                  <button
-                                    key={p}
-                                    type="button"
-                                    onClick={() => {
-                                      setStockFilters({ ...stockFilters, port: p });
-                                      setFilterSearchInputs({ ...filterSearchInputs, portSearch: '' });
-                                      setFilterDropdownOpen(initialFilterDropdownState);
-                                    }}
-                                    className="w-full px-3 py-2 text-left text-sm hover:bg-blue-50 transition-colors"
-                                  >
-                                    {p}
-                                  </button>
-                                ))}
-                              </div>
-                            ) : null;
-                          })()}
-                        </div>
-
-                        {/* Product Name Selection */}
-                        <div className="space-y-1.5 relative" ref={reportProductFilterRef}>
-                          <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Product Name</label>
-                          <div className="relative">
-                            <input
-                              type="text"
-                              value={filterSearchInputs.productSearch}
-                              onChange={(e) => {
-                                setFilterSearchInputs({ ...filterSearchInputs, productSearch: e.target.value });
-                                setFilterDropdownOpen({ ...initialFilterDropdownState, product: true });
-                              }}
-                              onFocus={() => setFilterDropdownOpen({ ...initialFilterDropdownState, product: true })}
-                              placeholder={stockFilters.productName || "Search Product..."}
-                              className="w-full px-3 py-2 pr-8 bg-white border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all shadow-sm hover:border-gray-300"
-                            />
-                            <SearchIcon className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
-                            {stockFilters.productName && (
-                              <button
-                                onClick={() => {
-                                  setStockFilters({ ...stockFilters, productName: '' });
-                                  setFilterSearchInputs({ ...filterSearchInputs, productSearch: '' });
-                                }}
-                                className="absolute right-8 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
-                              >
-                                <XIcon className="w-4 h-4" />
-                              </button>
-                            )}
-                          </div>
-                          {filterDropdownOpen.product && (() => {
-                            const productOptions = [...new Set(stockRecords
-                              .map(item => (item.productName || '').trim())
-                              .filter(Boolean)
-                            )].sort();
-                            const filtered = productOptions.filter(p =>
-                              p.toLowerCase().includes(filterSearchInputs.productSearch.toLowerCase())
-                            );
-                            return filtered.length > 0 ? (
-                              <div className="absolute z-[120] mt-1 w-full bg-white border border-gray-200 rounded-xl shadow-lg max-h-48 overflow-y-auto">
-                                {filtered.map(p => (
-                                  <button
-                                    key={p}
-                                    type="button"
-                                    onClick={() => {
-                                      setStockFilters({ ...stockFilters, productName: p });
-                                      setFilterSearchInputs({ ...filterSearchInputs, productSearch: '' });
-                                      setFilterDropdownOpen(initialFilterDropdownState);
-                                    }}
-                                    className="w-full px-3 py-2 text-left text-sm hover:bg-blue-50 transition-colors"
-                                  >
-                                    {p}
-                                  </button>
-                                ))}
-                              </div>
-                            ) : null;
-                          })()}
-                        </div>
-
-                        {/* Brand Selection */}
-                        <div className="space-y-1.5 relative" ref={reportBrandFilterRef}>
-                          <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Brand</label>
-                          <div className="relative">
-                            <input
-                              type="text"
-                              value={filterSearchInputs.brandSearch}
-                              onChange={(e) => {
-                                setFilterSearchInputs({ ...filterSearchInputs, brandSearch: e.target.value });
-                                setFilterDropdownOpen({ ...initialFilterDropdownState, brand: true });
-                              }}
-                              onFocus={() => setFilterDropdownOpen({ ...initialFilterDropdownState, brand: true })}
-                              placeholder={stockFilters.brand || "Search Brand..."}
-                              className="w-full px-3 py-2 pr-8 bg-white border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all shadow-sm hover:border-gray-300"
-                            />
-                            <SearchIcon className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
-                            {stockFilters.brand && (
-                              <button
-                                onClick={() => {
-                                  setStockFilters({ ...stockFilters, brand: '' });
-                                  setFilterSearchInputs({ ...filterSearchInputs, brandSearch: '' });
-                                }}
-                                className="absolute right-8 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
-                              >
-                                <XIcon className="w-4 h-4" />
-                              </button>
-                            )}
-                          </div>
-                          {filterDropdownOpen.brand && (() => {
-                            const brandOptions = [...new Set(stockRecords
-                              .map(item => (item.brand || item.productName || '').trim())
-                              .filter(Boolean)
-                            )].sort();
-                            const filtered = brandOptions.filter(b =>
-                              b.toLowerCase().includes(filterSearchInputs.brandSearch.toLowerCase())
-                            );
-                            return filtered.length > 0 ? (
-                              <div className="absolute z-[120] mt-1 w-full bg-white border border-gray-200 rounded-xl shadow-lg max-h-48 overflow-y-auto">
-                                {filtered.map(b => (
-                                  <button
-                                    key={b}
-                                    type="button"
-                                    onClick={() => {
-                                      setStockFilters({ ...stockFilters, brand: b });
-                                      setFilterSearchInputs({ ...filterSearchInputs, brandSearch: '' });
-                                      setFilterDropdownOpen(initialFilterDropdownState);
-                                    }}
-                                    className="w-full px-3 py-2 text-left text-sm hover:bg-blue-50 transition-colors"
-                                  >
-                                    {b}
-                                  </button>
-                                ))}
-                              </div>
-                            ) : null;
-                          })()}
-                        </div>
-
-                        <button
-                          onClick={() => setShowStockReportFilterPanel(false)}
-                          className="w-full py-2 bg-gray-900 text-white rounded-xl text-sm font-medium hover:bg-gray-800 transition-all mt-2"
-                        >
-                          Apply Filters
-                        </button>
-                      </div>
-                    </div>
-                  )}
-                </div>
-                <button
-                  onClick={() => window.print()}
-                  className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-xl shadow-lg shadow-blue-500/30 transition-all flex items-center gap-2"
-                >
-                  <BarChartIcon className="w-4 h-4" />
-                  Print Report
-                </button>
-                <button
-                  onClick={() => setShowStockReport(false)}
-                  className="p-2.5 hover:bg-gray-100 rounded-xl transition-colors"
-                >
-                  <XIcon className="w-6 h-6 text-gray-500" />
-                </button>
-              </div>
-            </div>
-
-            {/* Printable Content */}
-            <div className="flex-1 overflow-y-auto p-12 print:p-4 print:overflow-visible bg-white">
-              <div className="max-w-[1000px] mx-auto space-y-8">
-                {/* Company Header */}
-                <div className="text-center space-y-1">
-                  <h1 className="text-4xl font-bold text-gray-900 tracking-tight">M/S ANI ENTERPRISE</h1>
-                  <p className="text-[14px] text-gray-600">766, H.M Tower, Level-06, Borogola, Bogura-5800, Bangladesh</p>
-                  <p className="text-[14px] text-gray-600">+8802588813057, +8801711-406898, anienterprise051@gmail.com, www.anienterprises.com.bd</p>
-                </div>
-
-                {/* Sharp Separator */}
-                <div className="border-t-2 border-gray-900 w-full mt-4"></div>
-
-                {/* Report Title Box */}
-                <div className="flex justify-center -mt-6">
-                  <div className="bg-white border-2 border-gray-900 px-12 py-1.5 inline-block">
-                    <h2 className="text-xl font-bold text-gray-900 tracking-wide uppercase">Stock Report</h2>
-                  </div>
-                </div>
-
-                {/* Date/Info Row */}
-                <div className="flex justify-between items-end text-sm text-gray-600 pt-4 px-2">
-                  <div className="flex flex-col gap-1">
-                    <div>
-                      <span className="font-semibold">Date Range:</span> {stockFilters.startDate || 'Start'} to {stockFilters.endDate || 'Present'}
-                    </div>
-                    {stockFilters.productName && (
-                      <div>
-                        <span className="font-semibold">Product:</span> {stockFilters.productName}
-                      </div>
-                    )}
-                  </div>
-                  <div>
-                    <span className="font-semibold">Printed on:</span> {new Date().toLocaleDateString()}
-                  </div>
-                </div>
-
-                {/* Report Table */}
-                <div className="overflow-x-auto border border-gray-900">
-                  <table className="w-full border-collapse">
-                    <thead>
-                      <tr className="bg-gray-50 border-b border-gray-900">
-                        <th className="border-r border-gray-900 px-4 py-3 text-left text-xs font-bold text-gray-900 uppercase tracking-wider w-12 text-center">SL</th>
-                        <th className="border-r border-gray-900 px-4 py-3 text-left text-xs font-bold text-gray-900 uppercase tracking-wider">Product Name</th>
-                        <th className="border-r border-gray-900 px-4 py-3 text-left text-xs font-bold text-gray-900 uppercase tracking-wider">Brand</th>
-                        <th className="border-r border-gray-900 px-4 py-3 text-left text-xs font-bold text-gray-900 uppercase tracking-wider">InHouse PKT</th>
-                        <th className="border-r border-gray-900 px-4 py-3 text-right text-xs font-bold text-gray-900 uppercase tracking-wider">InHouse QTY</th>
-                        <th className="border-r border-gray-900 px-4 py-3 text-right text-xs font-bold text-gray-900 uppercase tracking-wider">Sale PKT</th>
-                        <th className="px-4 py-3 text-right text-xs font-bold text-gray-900 uppercase tracking-wider">Sale QTY</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-900">
-                      {stockData.displayRecords.length > 0 ? (
-                        stockData.displayRecords.map((item, index) => (
-                          <tr key={index} className="border-b border-gray-900 last:border-0">
-                            <td className="border-r border-gray-900 px-4 py-3 text-sm text-gray-900 text-center align-top">{index + 1}</td>
-                            <td className="border-r border-gray-900 px-4 py-3 text-sm font-semibold text-gray-900 align-top">{item.productName}</td>
-                            <td className="border-r border-gray-900 px-4 py-3 text-sm text-gray-600 align-top">
-                              {item.entries.map((ent, i) => (
-                                <div key={i} className="leading-tight mb-0.5 last:mb-0">{ent.brand}</div>
-                              ))}
-                            </td>
-                            <td className="border-r border-gray-900 px-4 py-3 text-sm text-left text-gray-900 font-medium whitespace-pre-line align-top">
-                              {item.entries.map((ent, i) => {
-                                const pkt = parseFloat(ent.inHousePacket) || 0;
-                                const qty = parseFloat(ent.inHouseQuantity) || 0;
-                                const size = parseFloat(ent.packetSize) || 0;
-                                const whole = Math.floor(pkt);
-                                const rem = Math.round(qty - (whole * size));
-                                return (
-                                  <div key={i} className="leading-tight mb-0.5 last:mb-0">
-                                    {whole}{rem > 0 ? ` - ${rem} kg` : ''}
-                                  </div>
-                                );
-                              })}
-                              {item.entries.length > 1 && (
-                                <div className="border-t border-gray-300 mt-1 pt-1 font-bold">
-                                  {(() => {
-                                    const totalWhole = item.entries.reduce((sum, ent) => sum + Math.floor(parseFloat(ent.inHousePacket) || 0), 0);
-                                    const totalRem = Math.round(item.entries.reduce((sum, ent) => sum + (parseFloat(ent.inHouseQuantity) || 0) - (Math.floor(parseFloat(ent.inHousePacket) || 0) * (parseFloat(ent.packetSize) || 0)), 0));
-                                    return `${totalWhole}${totalRem > 0 ? ` - ${totalRem} kg` : ''}`;
-                                  })()}
-                                </div>
-                              )}
-                            </td>
-                            <td className="px-4 py-3 text-sm text-right text-gray-900 font-bold whitespace-pre-line border-r border-gray-900 align-top">
-                              {item.entries.map((ent, i) => (
-                                <div key={i} className="leading-tight mb-0.5 last:mb-0">{Math.round(ent.inHouseQuantity)} {ent.unit}</div>
-                              ))}
-                              {item.entries.length > 1 && (
-                                <div className="border-t border-gray-300 mt-1 pt-1">
-                                  {Math.round(item.quantity)} {item.unit}
-                                </div>
-                              )}
-                            </td>
-                            <td className="border-r border-gray-900 px-4 py-3 text-sm text-right text-gray-900 font-medium whitespace-pre-line align-top">
-                              {item.entries.map((ent, i) => (
-                                <div key={i} className="leading-tight mb-0.5 last:mb-0">-</div>
-                              ))}
-                              {item.entries.length > 1 && (
-                                <div className="border-t border-gray-300 mt-1 pt-1 font-bold">
-                                  -
-                                </div>
-                              )}
-                            </td>
-                            <td className="px-4 py-3 text-sm text-right text-gray-900 font-bold whitespace-pre-line align-top">
-                              {item.entries.map((ent, i) => (
-                                <div key={i} className="leading-tight mb-0.5 last:mb-0">-</div>
-                              ))}
-                              {item.entries.length > 1 && (
-                                <div className="border-t border-gray-300 mt-1 pt-1">
-                                  -
-                                </div>
-                              )}
-                            </td>
-                          </tr>
-                        ))
-                      ) : (
-                        <tr>
-                          <td colSpan="7" className="px-4 py-8 text-center text-gray-500 italic">No records found for the selected criteria.</td>
-                        </tr>
-                      )}
-                    </tbody>
-                    {stockData.displayRecords.length > 0 && (
-                      <tfoot>
-                        <tr className="bg-gray-100 border-t-2 border-gray-900">
-                          <td colSpan="3" className="px-4 py-3 text-sm font-black text-gray-900 text-right uppercase tracking-wider border-r border-gray-900">Grand Total</td>
-                          <td className="px-4 py-3 text-sm text-left font-black text-gray-900 border-r border-gray-900">
-                            {(() => {
-                              const totalWhole = stockData.displayRecords.reduce((accWhole, item) =>
-                                accWhole + item.entries.reduce((sum, ent) => sum + Math.floor(parseFloat(ent.inHousePacket) || 0), 0), 0);
-                              const totalRem = Math.round(stockData.displayRecords.reduce((accRem, item) =>
-                                accRem + item.entries.reduce((sum, ent) => sum + (parseFloat(ent.inHouseQuantity) || 0) - (Math.floor(parseFloat(ent.inHousePacket) || 0) * (parseFloat(ent.packetSize) || 0)), 0), 0));
-                              return `${totalWhole}${totalRem > 0 ? ` - ${totalRem} kg` : ''}`;
-                            })()}
-                          </td>
-                          <td className="px-4 py-3 text-sm text-right font-black text-gray-900 border-r border-gray-900">
-                            {Math.round(stockData.totalInHouseQty)} {stockData.unit}
-                          </td>
-                          <td className="px-4 py-3 text-sm text-right font-black text-gray-900 border-r border-gray-900">
-                            -
-                          </td>
-                          <td className="px-4 py-3 text-sm text-right font-black text-gray-900">
-                            -
-                          </td>
-                        </tr>
-                      </tfoot>
-                    )}
-                  </table>
-                </div>
-
-                {/* Footer Signatures */}
-                <div className="grid grid-cols-3 gap-8 pt-24 px-4 pb-12">
-                  <div className="text-center">
-                    <div className="border-t border-dotted border-gray-900 pt-2 text-xs font-bold text-gray-900 uppercase">Prepared By</div>
-                  </div>
-                  <div className="text-center">
-                    <div className="border-t border-dotted border-gray-900 pt-2 text-xs font-bold text-gray-900 uppercase">Verified By</div>
-                  </div>
-                  <div className="text-center">
-                    <div className="border-t border-dotted border-gray-900 pt-2 text-xs font-bold text-gray-900 uppercase">Authorized Signature</div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
       {/* LC Receive Report Modal */}
       {showLcReport && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-gray-900/40 backdrop-blur-sm print:contents">
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-gray-900/40 backdrop-blur-sm">
           <div className="w-[95%] h-[90%] bg-white rounded-3xl shadow-2xl flex flex-col overflow-hidden animate-in fade-in zoom-in duration-300 print:w-full print:h-auto print:shadow-none print:bg-white print:rounded-none">
             {/* Modal Header - Hidden in Print */}
             <div className="px-8 py-5 border-b border-gray-100 bg-gray-50/50 flex items-center justify-between print:hidden">
@@ -6894,7 +2035,7 @@ function App() {
                   {showLcReportFilterPanel && (
                     <div className="absolute right-0 mt-2 w-[450px] bg-white rounded-2xl shadow-2xl border border-gray-100 p-6 z-[110] animate-in fade-in slide-in-from-top-2 duration-200">
                       <div className="flex items-center justify-between mb-6">
-                        <h3 className="text-base font-bold text-gray-900">Filter Report</h3>
+                        <h3 className="text-base font-bold text-gray-900">Advance Filter</h3>
                         <button
                           onClick={() => {
                             setLcFilters(initialLcFilterState);
@@ -6943,20 +2084,22 @@ function App() {
                               }}
                               onFocus={() => setFilterDropdownOpen({ ...initialFilterDropdownState, lcNo: true })}
                               placeholder={lcFilters.lcNo || "Search LC..."}
-                              className="w-full px-3 py-2 pr-8 bg-white border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all shadow-sm hover:border-gray-300"
+                              className={`w-full px-3 py-2 bg-white border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all shadow-sm hover:border-gray-300 pr-14 ${lcFilters.lcNo ? 'placeholder:text-gray-900 placeholder:font-semibold' : 'placeholder:text-gray-300'}`}
                             />
-                            <SearchIcon className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
-                            {lcFilters.lcNo && (
-                              <button
-                                onClick={() => {
-                                  setLcFilters({ ...lcFilters, lcNo: '' });
-                                  setFilterSearchInputs({ ...filterSearchInputs, lcNoSearch: '' });
-                                }}
-                                className="absolute right-8 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
-                              >
-                                <XIcon className="w-4 h-4" />
-                              </button>
-                            )}
+                            <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1.5">
+                              {lcFilters.lcNo && (
+                                <button
+                                  onClick={() => {
+                                    setLcFilters({ ...lcFilters, lcNo: '' });
+                                    setFilterSearchInputs({ ...filterSearchInputs, lcNoSearch: '' });
+                                  }}
+                                  className="text-gray-400 hover:text-gray-600"
+                                >
+                                  <XIcon className="w-4 h-4" />
+                                </button>
+                              )}
+                              <SearchIcon className="w-4 h-4 text-gray-400 pointer-events-none" />
+                            </div>
                           </div>
                           {filterDropdownOpen.lcNo && (() => {
                             const lcOptions = [...new Set(stockRecords.map(item => (item.lcNo || '').trim()).filter(Boolean))].sort();
@@ -6995,20 +2138,22 @@ function App() {
                               }}
                               onFocus={() => setFilterDropdownOpen({ ...initialFilterDropdownState, port: true })}
                               placeholder={lcFilters.port || "Search Port..."}
-                              className="w-full px-3 py-2 pr-8 bg-white border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all shadow-sm hover:border-gray-300"
+                              className={`w-full px-3 py-2 bg-white border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all shadow-sm hover:border-gray-300 pr-14 ${lcFilters.port ? 'placeholder:text-gray-900 placeholder:font-semibold' : 'placeholder:text-gray-300'}`}
                             />
-                            <SearchIcon className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
-                            {lcFilters.port && (
-                              <button
-                                onClick={() => {
-                                  setLcFilters({ ...lcFilters, port: '' });
-                                  setFilterSearchInputs({ ...filterSearchInputs, portSearch: '' });
-                                }}
-                                className="absolute right-8 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
-                              >
-                                <XIcon className="w-4 h-4" />
-                              </button>
-                            )}
+                            <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1.5">
+                              {lcFilters.port && (
+                                <button
+                                  onClick={() => {
+                                    setLcFilters({ ...lcFilters, port: '' });
+                                    setFilterSearchInputs({ ...filterSearchInputs, portSearch: '' });
+                                  }}
+                                  className="text-gray-400 hover:text-gray-600"
+                                >
+                                  <XIcon className="w-4 h-4" />
+                                </button>
+                              )}
+                              <SearchIcon className="w-4 h-4 text-gray-400 pointer-events-none" />
+                            </div>
                           </div>
                           {filterDropdownOpen.port && (() => {
                             const portOptions = [...new Set(stockRecords.map(item => (item.port || '').trim()).filter(Boolean))].sort();
@@ -7047,20 +2192,22 @@ function App() {
                               }}
                               onFocus={() => setFilterDropdownOpen({ ...initialFilterDropdownState, product: true })}
                               placeholder={lcFilters.productName || "Search Product..."}
-                              className="w-full px-3 py-2 pr-8 bg-white border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all shadow-sm hover:border-gray-300"
+                              className={`w-full px-3 py-2 bg-white border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all shadow-sm hover:border-gray-300 pr-14 ${lcFilters.productName ? 'placeholder:text-gray-900 placeholder:font-semibold' : 'placeholder:text-gray-300'}`}
                             />
-                            <SearchIcon className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
-                            {lcFilters.productName && (
-                              <button
-                                onClick={() => {
-                                  setLcFilters({ ...lcFilters, productName: '' });
-                                  setFilterSearchInputs({ ...filterSearchInputs, productSearch: '' });
-                                }}
-                                className="absolute right-8 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
-                              >
-                                <XIcon className="w-4 h-4" />
-                              </button>
-                            )}
+                            <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1.5">
+                              {lcFilters.productName && (
+                                <button
+                                  onClick={() => {
+                                    setLcFilters({ ...lcFilters, productName: '' });
+                                    setFilterSearchInputs({ ...filterSearchInputs, productSearch: '' });
+                                  }}
+                                  className="text-gray-400 hover:text-gray-600"
+                                >
+                                  <XIcon className="w-4 h-4" />
+                                </button>
+                              )}
+                              <SearchIcon className="w-4 h-4 text-gray-400 pointer-events-none" />
+                            </div>
                           </div>
                           {filterDropdownOpen.product && (() => {
                             const options = [...new Set(stockRecords.map(item => (item.productName || '').trim()).filter(Boolean))].sort();
@@ -7099,23 +2246,28 @@ function App() {
                               }}
                               onFocus={() => setFilterDropdownOpen({ ...initialFilterDropdownState, brand: true })}
                               placeholder={lcFilters.brand || "Search Brand..."}
-                              className="w-full px-3 py-2 pr-8 bg-white border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all shadow-sm hover:border-gray-300"
+                              className={`w-full px-3 py-2 bg-white border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all shadow-sm hover:border-gray-300 pr-14 ${lcFilters.brand ? 'placeholder:text-gray-900 placeholder:font-semibold' : 'placeholder:text-gray-300'}`}
                             />
-                            <SearchIcon className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
-                            {lcFilters.brand && (
-                              <button
-                                onClick={() => {
-                                  setLcFilters({ ...lcFilters, brand: '' });
-                                  setFilterSearchInputs({ ...filterSearchInputs, brandSearch: '' });
-                                }}
-                                className="absolute right-8 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
-                              >
-                                <XIcon className="w-4 h-4" />
-                              </button>
-                            )}
+                            <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1.5">
+                              {lcFilters.brand && (
+                                <button
+                                  onClick={() => {
+                                    setLcFilters({ ...lcFilters, brand: '' });
+                                    setFilterSearchInputs({ ...filterSearchInputs, brandSearch: '' });
+                                  }}
+                                  className="text-gray-400 hover:text-gray-600"
+                                >
+                                  <XIcon className="w-4 h-4" />
+                                </button>
+                              )}
+                              <SearchIcon className="w-4 h-4 text-gray-400 pointer-events-none" />
+                            </div>
                           </div>
                           {filterDropdownOpen.brand && (() => {
-                            const options = [...new Set(stockRecords.flatMap(item => {
+                            const productFilteredRecords = lcFilters.productName
+                              ? stockRecords.filter(item => (item.productName || '').trim().toLowerCase() === lcFilters.productName.toLowerCase())
+                              : stockRecords;
+                            const options = [...new Set(productFilteredRecords.flatMap(item => {
                               if (item.brand) return [(item.brand || '').trim()];
                               return (item.brandEntries || []).map(e => (e.brand || '').trim());
                             }).filter(Boolean))].sort();
@@ -7154,8 +2306,22 @@ function App() {
                               }}
                               onFocus={() => setFilterDropdownOpen({ ...initialFilterDropdownState, indCnf: true })}
                               placeholder={lcFilters.indCnf || "Search..."}
-                              className="w-full px-3 py-2 bg-white border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500/20 outline-none"
+                              className={`w-full px-3 py-2 bg-white border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all shadow-sm hover:border-gray-300 pr-14 ${lcFilters.indCnf ? 'placeholder:text-gray-900 placeholder:font-semibold' : 'placeholder:text-gray-300'}`}
                             />
+                            <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1.5">
+                              {lcFilters.indCnf && (
+                                <button
+                                  onClick={() => {
+                                    setLcFilters({ ...lcFilters, indCnf: '' });
+                                    setFilterSearchInputs({ ...filterSearchInputs, indCnfSearch: '' });
+                                  }}
+                                  className="text-gray-400 hover:text-gray-600"
+                                >
+                                  <XIcon className="w-4 h-4" />
+                                </button>
+                              )}
+                              <SearchIcon className="w-4 h-4 text-gray-400 pointer-events-none" />
+                            </div>
                           </div>
                           {filterDropdownOpen.indCnf && (() => {
                             const options = [...new Set(stockRecords.map(item => (item.indianCnF || '').trim()).filter(Boolean))].sort();
@@ -7193,8 +2359,22 @@ function App() {
                               }}
                               onFocus={() => setFilterDropdownOpen({ ...initialFilterDropdownState, bdCnf: true })}
                               placeholder={lcFilters.bdCnf || "Search..."}
-                              className="w-full px-3 py-2 bg-white border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500/20 outline-none"
+                              className={`w-full px-3 py-2 bg-white border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all shadow-sm hover:border-gray-300 pr-14 ${lcFilters.bdCnf ? 'placeholder:text-gray-900 placeholder:font-semibold' : 'placeholder:text-gray-300'}`}
                             />
+                            <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1.5">
+                              {lcFilters.bdCnf && (
+                                <button
+                                  onClick={() => {
+                                    setLcFilters({ ...lcFilters, bdCnf: '' });
+                                    setFilterSearchInputs({ ...filterSearchInputs, bdCnfSearch: '' });
+                                  }}
+                                  className="text-gray-400 hover:text-gray-600"
+                                >
+                                  <XIcon className="w-4 h-4" />
+                                </button>
+                              )}
+                              <SearchIcon className="w-4 h-4 text-gray-400 pointer-events-none" />
+                            </div>
                           </div>
                           {filterDropdownOpen.bdCnf && (() => {
                             const options = [...new Set(stockRecords.map(item => (item.bdCnF || '').trim()).filter(Boolean))].sort();
@@ -7232,8 +2412,22 @@ function App() {
                               }}
                               onFocus={() => setFilterDropdownOpen({ ...initialFilterDropdownState, billOfEntry: true })}
                               placeholder={lcFilters.billOfEntry || "Search Bill Of Entry..."}
-                              className="w-full px-3 py-2 bg-white border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500/20 outline-none"
+                              className={`w-full px-3 py-2 bg-white border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all shadow-sm hover:border-gray-300 pr-14 ${lcFilters.billOfEntry ? 'placeholder:text-gray-900 placeholder:font-semibold' : 'placeholder:text-gray-300'}`}
                             />
+                            <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1.5">
+                              {lcFilters.billOfEntry && (
+                                <button
+                                  onClick={() => {
+                                    setLcFilters({ ...lcFilters, billOfEntry: '' });
+                                    setFilterSearchInputs({ ...filterSearchInputs, billOfEntrySearch: '' });
+                                  }}
+                                  className="text-gray-400 hover:text-gray-600"
+                                >
+                                  <XIcon className="w-4 h-4" />
+                                </button>
+                              )}
+                              <SearchIcon className="w-4 h-4 text-gray-400 pointer-events-none" />
+                            </div>
                           </div>
                           {filterDropdownOpen.billOfEntry && (() => {
                             const options = [...new Set(stockRecords.map(item => (item.billOfEntry || '').trim()).filter(Boolean))].sort();
@@ -7269,15 +2463,15 @@ function App() {
                   )}
                 </div>
                 <button
-                  onClick={() => window.print()}
-                  className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-xl shadow-lg shadow-blue-500/30 transition-all flex items-center gap-2"
+                  onClick={() => generateLCReceiveReportPDF(lcReceiveRecords, lcFilters, lcReceiveSummary)}
+                  className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-xl shadow-lg shadow-blue-500/30 transition-all flex items-center gap-2 no-print"
                 >
                   <BarChartIcon className="w-4 h-4" />
                   Print Report
                 </button>
                 <button
                   onClick={() => setShowLcReport(false)}
-                  className="p-2.5 hover:bg-gray-100 rounded-xl transition-colors"
+                  className="p-2.5 hover:bg-gray-100 rounded-xl transition-colors no-print"
                 >
                   <XIcon className="w-6 h-6 text-gray-500" />
                 </button>
@@ -7305,19 +2499,19 @@ function App() {
                 </div>
 
                 {/* Date/Info Row */}
-                <div className="flex justify-between items-end text-sm text-gray-600 pt-4 px-2">
-                  <div className="flex flex-col gap-1">
+                <div className="flex justify-between items-end text-[11px] text-black pt-6 px-2">
+                  <div className="flex flex-col gap-1.5">
                     <div>
-                      <span className="font-semibold">Date Range:</span> {lcFilters.startDate || 'Start'} to {lcFilters.endDate || 'Present'}
+                      <span className="font-bold text-black font-semibold">Date Range:</span> {lcFilters.startDate || 'Start'} to {lcFilters.endDate || 'Present'}
                     </div>
                     {lcFilters.lcNo && (
                       <div>
-                        <span className="font-semibold">LC No:</span> {lcFilters.lcNo}
+                        <span className="font-bold text-black font-semibold">LC No:</span> <span className="text-blue-900 font-bold">{lcFilters.lcNo}</span>
                       </div>
                     )}
                   </div>
-                  <div>
-                    <span className="font-semibold">Printed on:</span> {new Date().toLocaleDateString()}
+                  <div className="font-bold">
+                    <span className="text-black font-semibold">Printed on:</span> <span className="text-black">{new Date().toLocaleDateString(undefined, { day: 'numeric', month: 'numeric', year: 'numeric' })}</span>
                   </div>
                 </div>
 
@@ -7326,19 +2520,17 @@ function App() {
                   <table className="w-full border-collapse">
                     <thead>
                       <tr className="bg-gray-50 border-b border-gray-900">
-                        <th className="border-r border-gray-900 px-2 py-2 text-left text-[10px] font-bold text-gray-900 uppercase tracking-wider w-8 text-center">SL</th>
-                        <th className="border-r border-gray-900 px-2 py-2 text-left text-[10px] font-bold text-gray-900 uppercase tracking-wider">Date</th>
-                        <th className="border-r border-gray-900 px-2 py-2 text-left text-[10px] font-bold text-gray-900 uppercase tracking-wider font-extrabold text-blue-800">LC No</th>
-                        <th className="border-r border-gray-900 px-2 py-2 text-left text-[10px] font-bold text-gray-900 uppercase tracking-wider">Importer</th>
-                        <th className="border-r border-gray-900 px-2 py-2 text-left text-[10px] font-bold text-gray-900 uppercase tracking-wider">Port</th>
-                        <th className="border-r border-gray-900 px-2 py-2 text-left text-[10px] font-bold text-gray-900 uppercase tracking-wider">IND CNF</th>
-                        <th className="border-r border-gray-900 px-2 py-2 text-left text-[10px] font-bold text-gray-900 uppercase tracking-wider">BD CNF</th>
-                        <th className="border-r border-gray-900 px-2 py-2 text-left text-[10px] font-bold text-gray-900 uppercase tracking-wider">BOE No</th>
-                        <th className="border-r border-gray-900 px-2 py-2 text-left text-[10px] font-bold text-gray-900 uppercase tracking-wider">Product</th>
-                        <th className="border-r border-gray-900 px-2 py-2 text-left text-[10px] font-bold text-gray-900 uppercase tracking-wider">Brand</th>
-                        <th className="border-r border-gray-900 px-2 py-2 text-right text-[10px] font-bold text-gray-900 uppercase tracking-wider">Packet</th>
-                        <th className="border-r border-gray-900 px-2 py-2 text-right text-[10px] font-bold text-gray-900 uppercase tracking-wider">Truck</th>
-                        <th className="px-2 py-2 text-right text-[10px] font-bold text-gray-900 uppercase tracking-wider">QTY</th>
+                        <th className="border-r border-gray-900 px-1 py-1 text-left text-[10.5px] font-bold text-black uppercase tracking-wider w-[3%] text-center">SL</th>
+                        <th className="border-r border-gray-900 px-1 py-1 text-left text-[10.5px] font-bold text-black uppercase tracking-wider w-[8%]">Date</th>
+                        <th className="border-r border-gray-900 px-1 py-1 text-left text-[10.5px] font-bold text-blue-900 uppercase tracking-wider font-extrabold w-[10%]">LC No</th>
+                        <th className="border-r border-gray-900 px-1 py-1 text-left text-[10.5px] font-bold text-black uppercase tracking-wider w-[15%]">Importer</th>
+                        <th className="border-r border-gray-900 px-1 py-1 text-left text-[10.5px] font-bold text-black uppercase tracking-wider w-[7%]">Port</th>
+                        <th className="border-r border-gray-900 px-1 py-1 text-left text-[10.5px] font-bold text-black uppercase tracking-wider w-[8%]">BOE No</th>
+                        <th className="border-r border-gray-900 px-1 py-1 text-left text-[10.5px] font-bold text-black uppercase tracking-wider w-[15%]">Product</th>
+                        <th className="border-r border-gray-900 px-1 py-1 text-left text-[10.5px] font-bold text-black uppercase tracking-wider w-[14%] text-center">Brand</th>
+                        <th className="border-r border-gray-900 px-1 py-1 text-right text-[10.5px] font-bold text-black uppercase tracking-wider w-[6%] text-center">Packet</th>
+                        <th className="border-r border-gray-900 px-1 py-1 text-right text-[10.5px] font-bold text-black uppercase tracking-wider w-[5%] text-center">Truck</th>
+                        <th className="border-r border-gray-900 px-1 py-1 text-right text-[10.5px] font-bold text-black uppercase tracking-wider w-[9%]">QTY</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-400">
@@ -7375,68 +2567,86 @@ function App() {
 
                           return (
                             <tr key={index} className="border-b border-gray-400 last:border-0 hover:bg-gray-50 transition-colors">
-                              <td className="border-r border-gray-900 px-2 py-1.5 text-[10px] text-gray-900 text-center align-top">{index + 1}</td>
-                              <td className="border-r border-gray-900 px-2 py-1.5 text-[10px] text-gray-900 align-top">{formatDate(entry.date)}</td>
-                              <td className="border-r border-gray-900 px-2 py-1.5 text-[10px] font-extrabold text-blue-900 align-top">{entry.lcNo}</td>
-                              <td className="border-r border-gray-900 px-2 py-1.5 text-[10px] text-gray-700 align-top">{entry.importer || '-'}</td>
-                              <td className="border-r border-gray-900 px-2 py-1.5 text-[10px] text-gray-700 align-top">{entry.port || '-'}</td>
-                              <td className="border-r border-gray-900 px-2 py-1.5 text-[10px] text-gray-700 align-top">{entry.indianCnF || '-'}</td>
-                              <td className="border-r border-gray-900 px-2 py-1.5 text-[10px] text-gray-700 align-top">{entry.bdCnF || '-'}</td>
-                              <td className="border-r border-gray-900 px-2 py-1.5 text-[10px] text-gray-700 align-top">{entry.billOfEntry || '-'}</td>
-                              <td className="border-r border-gray-900 px-2 py-1.5 text-[10px] font-medium text-gray-900 align-top">
+                              <td className="border-r border-gray-900 px-2 py-0.5 text-[10.5px] text-black text-center align-top">{index + 1}</td>
+                              <td className="border-r border-gray-900 px-2 py-0.5 text-[10.5px] text-black align-top font-medium">{formatDate(entry.date)}</td>
+                              <td className="border-r border-gray-900 px-2 py-0.5 text-[10.5px] font-extrabold text-blue-900 align-top">{entry.lcNo}</td>
+                              <td className="border-r border-gray-900 px-2 py-0.5 text-[10.5px] text-black align-top">{entry.importer || '-'}</td>
+                              <td className="border-r border-gray-900 px-2 py-0.5 text-[10.5px] text-black align-top">{entry.port || '-'}</td>
+                              <td className="border-r border-gray-900 px-2 py-0.5 text-[10.5px] text-black align-top">{entry.billOfEntry || '-'}</td>
+
+                              {/* Product Column */}
+                              <td className="border-r border-gray-900 px-2 py-0.5 text-[10.5px] font-bold text-black align-top">
                                 {finalEntries.map((subItem, idx) => {
-                                  const lineCount = subItem.brandList.length + (subItem.brandList.length > 1 ? 1 : 0);
+                                  const hasTotal = subItem.qtyList.length > 1;
                                   return (
-                                    <div key={idx} className="border-b border-gray-100 last:border-0 py-0.5 flex flex-col justify-start" style={{ minHeight: `${lineCount * 14}px` }}>
-                                      {subItem.productName}
+                                    <div key={idx} className={`${idx < finalEntries.length - 1 ? 'border-b border-gray-300 mb-2 pb-2' : ''}`}>
+                                      <div className="leading-tight">{subItem.productName}</div>
+                                      {Array.from({ length: subItem.brandList.length - 1 }).map((_, i) => (
+                                        <div key={i} className="leading-tight">&nbsp;</div>
+                                      ))}
+                                      {hasTotal && <div className="mt-0 pt-0.5 border-t border-transparent leading-tight">&nbsp;</div>}
                                     </div>
                                   );
                                 })}
                               </td>
-                              <td className="border-r border-gray-900 px-2 py-1.5 text-[10px] text-gray-700 align-top">
+
+                              {/* Brand Column */}
+                              <td className="border-r border-gray-900 px-2 py-0.5 text-[10.5px] text-black align-top">
                                 {finalEntries.map((subItem, idx) => {
-                                  const lineCount = subItem.brandList.length + (subItem.brandList.length > 1 ? 1 : 0);
+                                  const hasTotal = subItem.qtyList.length > 1;
                                   return (
-                                    <div key={idx} className="border-b border-gray-100 last:border-0 py-0.5" style={{ minHeight: `${lineCount * 14}px` }}>
+                                    <div key={idx} className={`${idx < finalEntries.length - 1 ? 'border-b border-gray-300 mb-2 pb-2' : ''}`}>
                                       {subItem.brandList.map((b, i) => (
                                         <div key={i} className="leading-tight">{b}</div>
                                       ))}
+                                      {hasTotal && <div className="mt-0 pt-0.5 border-t border-transparent leading-tight">&nbsp;</div>}
                                     </div>
                                   );
                                 })}
                               </td>
-                              <td className="border-r border-gray-900 px-2 py-1.5 text-[10px] text-right text-gray-700 align-top">
+
+                              {/* Packet Column */}
+                              <td className="border-r border-gray-900 px-2 py-0.5 text-[10.5px] text-center text-black align-top">
                                 {finalEntries.map((subItem, idx) => {
-                                  const lineCount = subItem.brandList.length + (subItem.brandList.length > 1 ? 1 : 0);
+                                  const hasTotal = subItem.qtyList.length > 1;
                                   return (
-                                    <div key={idx} className="border-b border-gray-100 last:border-0 py-0.5" style={{ minHeight: `${lineCount * 14}px` }}>
+                                    <div key={idx} className={`${idx < finalEntries.length - 1 ? 'border-b border-gray-300 mb-2 pb-2' : ''}`}>
                                       {subItem.packetList.map((p, i) => (
                                         <div key={i} className="leading-tight">{p}</div>
                                       ))}
+                                      {hasTotal && <div className="mt-0 pt-0.5 border-t border-transparent leading-tight">&nbsp;</div>}
                                     </div>
                                   );
                                 })}
                               </td>
-                              <td className="border-r border-gray-900 px-2 py-1.5 text-[10px] text-right font-medium text-gray-900 align-top">
+
+                              {/* Truck Column */}
+                              <td className="border-r border-gray-900 px-2 py-0.5 text-[10.5px] text-center font-bold text-black align-top">
                                 {finalEntries.map((subItem, idx) => {
-                                  const lineCount = subItem.brandList.length + (subItem.brandList.length > 1 ? 1 : 0);
+                                  const hasTotal = subItem.qtyList.length > 1;
                                   return (
-                                    <div key={idx} className="border-b border-gray-100 last:border-0 py-0.5 flex flex-col justify-start" style={{ minHeight: `${lineCount * 14}px` }}>
-                                      {subItem.truckNo}
-                                    </div>
-                                  );
-                                })}
-                              </td>
-                              <td className="px-2 py-1.5 text-[10px] text-right font-bold text-gray-900 align-top">
-                                {finalEntries.map((subItem, idx) => {
-                                  const lineCount = subItem.brandList.length + (subItem.brandList.length > 1 ? 1 : 0);
-                                  return (
-                                    <div key={idx} className="border-b border-gray-100 last:border-0 py-0.5" style={{ minHeight: `${lineCount * 14}px` }}>
-                                      {subItem.qtyList.map((q, i) => (
-                                        <div key={i} className="leading-tight">{Math.round(q.quantity)} {q.unit}</div>
+                                    <div key={idx} className={`${idx < finalEntries.length - 1 ? 'border-b border-gray-300 mb-2 pb-2' : ''}`}>
+                                      <div className="leading-tight">{subItem.truckNo}</div>
+                                      {Array.from({ length: subItem.brandList.length - 1 }).map((_, i) => (
+                                        <div key={i} className="leading-tight">&nbsp;</div>
                                       ))}
-                                      {subItem.qtyList.length > 1 && (
-                                        <div className="mt-0.5 pt-0.5 border-t border-gray-200 font-black">
+                                      {hasTotal && <div className="mt-0 pt-0.5 border-t border-transparent leading-tight">&nbsp;</div>}
+                                    </div>
+                                  );
+                                })}
+                              </td>
+
+                              {/* QTY Column */}
+                              <td className="px-2 py-0.5 text-[10.5px] text-right font-bold text-black align-top border-r border-gray-900 whitespace-nowrap">
+                                {finalEntries.map((subItem, idx) => {
+                                  const hasTotal = subItem.qtyList.length > 1;
+                                  return (
+                                    <div key={idx} className={`${idx < finalEntries.length - 1 ? 'border-b border-gray-300 mb-2 pb-2' : ''}`}>
+                                      {subItem.qtyList.map((q, i) => (
+                                        <div key={i} className="leading-tight font-black">{Math.round(q.quantity)} {q.unit}</div>
+                                      ))}
+                                      {hasTotal && (
+                                        <div className="mt-0 pt-0.5 border-t border-gray-900 font-extrabold leading-tight">
                                           {Math.round(subItem.qtyList.reduce((sum, q) => sum + (parseFloat(q.quantity) || 0), 0))} {subItem.qtyList[0].unit}
                                         </div>
                                       )}
@@ -7449,18 +2659,18 @@ function App() {
                         })
                       ) : (
                         <tr>
-                          <td colSpan="13" className="px-4 py-8 text-center text-gray-500 italic">No receive records found for the selected criteria.</td>
+                          <td colSpan="11" className="px-4 py-8 text-center text-black italic">No receive records found for the selected criteria.</td>
                         </tr>
                       )}
                     </tbody>
                     {lcReceiveRecords.length > 0 && (
                       <tfoot>
                         <tr className="bg-gray-100 border-t-2 border-gray-900">
-                          <td colSpan="11" className="px-2 py-2 text-[11px] font-black text-gray-900 text-right uppercase tracking-wider border-r border-gray-900">Grand Total</td>
-                          <td className="px-2 py-2 text-[11px] text-right font-black text-gray-900 border-r border-gray-900">
+                          <td colSpan="9" className="px-2 py-2 text-[10.5px] font-black text-black text-right uppercase tracking-wider border-r border-gray-900">Grand Total</td>
+                          <td className="px-2 py-2 text-[10.5px] text-center font-black text-black border-r border-gray-900">
                             {lcReceiveSummary.totalTrucks}
                           </td>
-                          <td className="px-2 py-2 text-[11px] text-right font-black text-gray-900">
+                          <td className="px-2 py-2 text-[10.5px] text-right font-black text-black border-r border-gray-900 whitespace-nowrap">
                             {Math.round(lcReceiveSummary.totalQuantity)} {lcReceiveSummary.unit}
                           </td>
                         </tr>
@@ -7470,31 +2680,31 @@ function App() {
                 </div>
 
                 {/* Summary Info Cards for Print */}
-                <div className="grid grid-cols-3 gap-4 pt-4 px-2 print:grid">
-                  <div className="border border-gray-300 p-2 rounded-lg">
-                    <div className="text-[10px] font-bold text-gray-500 uppercase">Total Packets</div>
-                    <div className="text-lg font-black text-gray-900">{lcReceiveSummary.totalPackets}</div>
+                <div className="grid grid-cols-3 gap-6 pt-6 px-2 print:grid">
+                  <div className="border-2 border-gray-100 p-6 rounded-3xl bg-white shadow-sm print:border-gray-200">
+                    <div className="text-[13px] font-bold text-black uppercase tracking-wider mb-2">Total Packets</div>
+                    <div className="text-2xl font-black text-black">{lcReceiveSummary.totalPackets}</div>
                   </div>
-                  <div className="border border-gray-300 p-2 rounded-lg">
-                    <div className="text-[10px] font-bold text-gray-500 uppercase">Total Quantity</div>
-                    <div className="text-lg font-black text-gray-900">{Math.round(lcReceiveSummary.totalQuantity)} {lcReceiveSummary.unit}</div>
+                  <div className="border-2 border-gray-100 p-6 rounded-3xl bg-white shadow-sm print:border-gray-200">
+                    <div className="text-[13px] font-bold text-black uppercase tracking-wider mb-2">Total Quantity</div>
+                    <div className="text-2xl font-black text-black">{Math.round(lcReceiveSummary.totalQuantity)} <span className="text-lg font-bold">{lcReceiveSummary.unit}</span></div>
                   </div>
-                  <div className="border border-gray-300 p-2 rounded-lg">
-                    <div className="text-[10px] font-bold text-gray-500 uppercase">Total Truck</div>
-                    <div className="text-lg font-black text-blue-700">{lcReceiveSummary.totalTrucks}</div>
+                  <div className="border-2 border-gray-100 p-6 rounded-3xl bg-white shadow-sm print:border-gray-200">
+                    <div className="text-[13px] font-bold text-black uppercase tracking-wider mb-2">Total Truck</div>
+                    <div className="text-3xl font-black text-black">{lcReceiveSummary.totalTrucks}</div>
                   </div>
                 </div>
 
                 {/* Footer Signatures */}
                 <div className="grid grid-cols-3 gap-8 pt-24 px-4 pb-12">
                   <div className="text-center">
-                    <div className="border-t border-dotted border-gray-900 pt-2 text-[10px] font-bold text-gray-900 uppercase">Prepared By</div>
+                    <div className="border-t border-dotted border-gray-900 pt-2 text-[13px] font-bold text-black uppercase">Prepared By</div>
                   </div>
                   <div className="text-center">
-                    <div className="border-t border-dotted border-gray-900 pt-2 text-[10px] font-bold text-gray-900 uppercase">Verified By</div>
+                    <div className="border-t border-dotted border-gray-900 pt-2 text-[13px] font-bold text-black uppercase">Verified By</div>
                   </div>
                   <div className="text-center">
-                    <div className="border-t border-dotted border-gray-900 pt-2 text-[10px] font-bold text-gray-900 uppercase">Authorized Signature</div>
+                    <div className="border-t border-dotted border-gray-900 pt-2 text-[13px] font-bold text-black uppercase">Authorized Signature</div>
                   </div>
                 </div>
               </div>
@@ -7502,6 +2712,16 @@ function App() {
           </div>
         </div>
       )}
+
+      {/* Stock Report Modal */}
+      <StockReport
+        isOpen={showStockReport}
+        onClose={() => setShowStockReport(false)}
+        stockRecords={stockRecords}
+        stockFilters={stockFilters}
+        setStockFilters={setStockFilters}
+        stockData={stockData}
+      />
 
     </div >
   );

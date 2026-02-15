@@ -1,0 +1,43 @@
+/* Product Management Styles */
+.product-management {
+    /* Container styles */
+}
+
+/* Animations */
+@keyframes scaleIn {
+    from {
+        opacity: 0;
+        transform: scale(0.95);
+    }
+
+    to {
+        opacity: 1;
+        transform: scale(1);
+    }
+}
+
+.animate-scale-in {
+    animation: scaleIn 0.2s ease-out forwards;
+}
+
+/* Table styles */
+.product-management table {
+    /* Standard table styles */
+}
+
+.product-management th {
+    white-space: nowrap;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+    .product-management .grid {
+        grid-template-columns: 1fr;
+    }
+
+    .product-management td,
+    .product-management th {
+        padding: 0.75rem 0.5rem;
+        font-size: 0.75rem;
+    }
+}

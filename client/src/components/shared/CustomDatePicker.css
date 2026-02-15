@@ -1,0 +1,220 @@
+/* CustomDatePicker Styles */
+.date-picker-container {
+    position: relative;
+}
+
+.date-picker-container>label {
+    display: block;
+    margin-bottom: 0.5rem;
+}
+
+.date-picker-input-wrapper {
+    position: relative;
+}
+
+.date-picker-input {
+    width: 100%;
+    padding: 0.5rem 3.5rem 0.5rem 0.75rem;
+    background-color: white;
+    border: 1px solid #e5e7eb;
+    border-radius: 0.75rem;
+    font-size: 0.875rem;
+    color: #111827;
+    /* Darker black */
+    outline: none;
+    transition: all 0.2s;
+    box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+    cursor: pointer;
+}
+
+.date-picker-input.has-value {
+    color: #000000;
+    font-weight: 600;
+}
+
+.date-picker-input::placeholder {
+    color: #9ca3af;
+    font-weight: 400;
+}
+
+.date-picker-input:hover {
+    border-color: #d1d5db;
+}
+
+.date-picker-input:focus {
+    box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
+    border-color: #3b82f6;
+}
+
+.date-picker-icons-right {
+    position: absolute;
+    right: 0.75rem;
+    top: 50%;
+    transform: translateY(-50%);
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.date-picker-clear-btn {
+    padding: 0;
+    background: none;
+    border: none;
+    color: #9ca3af;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: color 0.2s;
+}
+
+.date-picker-clear-btn:hover {
+    color: #4b5563;
+}
+
+.date-picker-icon {
+    width: 1rem;
+    height: 1rem;
+    color: #9ca3af;
+    pointer-events: none;
+}
+
+.date-picker-dropdown {
+    position: absolute;
+    z-index: 100;
+    margin-top: 0.5rem;
+    background-color: white;
+    border: 1px solid #e5e7eb;
+    border-radius: 1rem;
+    box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+    padding: 1.25rem;
+    width: 320px;
+    left: 0;
+}
+
+.date-picker-dropdown.compact {
+    padding: 0.75rem;
+    width: 260px;
+}
+
+.date-picker-dropdown.right-align {
+    left: auto;
+    right: 0;
+}
+
+.date-picker-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 1rem;
+}
+
+.date-picker-dropdown.compact .date-picker-header {
+    margin-bottom: 0.5rem;
+}
+
+.date-picker-nav-btn {
+    padding: 0.5rem;
+    border-radius: 0.5rem;
+    color: #374151;
+    transition: background-color 0.2s;
+    background: none;
+    border: none;
+    cursor: pointer;
+}
+
+.date-picker-nav-btn:hover {
+    background-color: #f9fafb;
+}
+
+.date-picker-month-year {
+    font-weight: 700;
+    color: #111827;
+    font-size: 1rem;
+}
+
+.date-picker-dropdown.compact .date-picker-month-year {
+    font-size: 0.875rem;
+}
+
+.date-picker-weekdays {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 0.25rem;
+    margin-bottom: 0.75rem;
+}
+
+.date-picker-dropdown.compact .date-picker-weekdays {
+    gap: 0.125rem;
+    margin-bottom: 0.5rem;
+}
+
+.date-picker-weekday {
+    font-size: 0.6875rem;
+    font-weight: 600;
+    color: #9ca3af;
+    text-align: center;
+    text-transform: uppercase;
+    padding: 0.5rem 0;
+}
+
+.date-picker-dropdown.compact .date-picker-weekday {
+    padding: 0.25rem 0;
+}
+
+.date-picker-days {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 0.25rem;
+}
+
+.date-picker-dropdown.compact .date-picker-days {
+    gap: 0.125rem;
+}
+
+.date-picker-blank {
+    height: 2.5rem;
+}
+
+.date-picker-dropdown.compact .date-picker-blank {
+    height: 2rem;
+}
+
+.date-picker-day {
+    height: 2.5rem;
+    width: 2.5rem;
+    border-radius: 0.75rem;
+    font-weight: 500;
+    font-size: 0.875rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: #374151;
+}
+
+.date-picker-dropdown.compact .date-picker-day {
+    height: 2rem;
+    width: 2rem;
+    font-size: 0.75rem;
+}
+
+.date-picker-day:hover {
+    background-color: #f3f4f6;
+}
+
+.date-picker-day.selected {
+    background-color: #2563eb;
+    color: white;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+    transform: scale(1.05);
+}
+
+.date-picker-day.today {
+    background-color: #eff6ff;
+    color: #2563eb;
+    font-weight: 600;
+}

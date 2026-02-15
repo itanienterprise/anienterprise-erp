@@ -1,0 +1,107 @@
+/* IP Management Module Styles */
+.ip-management {
+    /* Container styles inherited from parent */
+}
+
+.ip-filters {
+    animation: slideInFromTop 0.3s ease-out;
+}
+
+@keyframes slideInFromTop {
+    from {
+        opacity: 0;
+        transform: translateY(-10px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.ip-form {
+    /* Form specific styles */
+}
+
+.ip-form input[type="number"]::-webkit-outer-spin-button,
+.ip-form input[type="number"]::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+}
+
+.ip-form input[type="number"] {
+    -moz-appearance: textfield;
+}
+
+/* Table styles */
+.ip-management table {
+    border-collapse: separate;
+    border-spacing: 0;
+}
+
+.ip-management tbody tr {
+    transition: background-color 0.2s ease;
+}
+
+.ip-management tbody tr:hover {
+    background-color: rgba(249, 250, 251, 1);
+}
+
+/* Status badges */
+.ip-management .status-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.25rem 0.625rem;
+    border-radius: 9999px;
+    font-size: 0.75rem;
+    font-weight: 500;
+}
+
+/* Loading spinner */
+.ip-management .spinner {
+    border: 2px solid #f3f4f6;
+    border-top: 2px solid #3b82f6;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    0% {
+        transform: rotate(0deg);
+    }
+
+    100% {
+        transform: rotate(360deg);
+    }
+}
+
+/* Filter animations */
+.ip-filters .animate-in {
+    animation: fadeIn 0.3s ease-in;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+    }
+
+    to {
+        opacity: 1;
+    }
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+    .ip-management .grid {
+        grid-template-columns: 1fr;
+    }
+
+    .ip-management table {
+        font-size: 0.875rem;
+    }
+
+    .ip-management th,
+    .ip-management td {
+        padding: 0.75rem 1rem;
+    }
+}

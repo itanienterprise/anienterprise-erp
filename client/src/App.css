@@ -1,0 +1,175 @@
+@import "tailwindcss";
+
+@theme {
+    --color-brand-50: #eff6ff;
+    --color-brand-100: #dbeafe;
+    --color-brand-500: #3b82f6;
+    --color-brand-600: #2563eb;
+    --color-brand-900: #1e3a8a;
+    --color-sidebar-bg: #0f172a;
+}
+
+body {
+    font-family: 'Inter', sans-serif;
+    background-color: var(--color-gray-50);
+    color: var(--color-gray-900);
+}
+
+@media print {
+
+    /* From index.css */
+    aside,
+    header,
+    nav,
+    footer,
+    .no-print,
+    [role="button"],
+    button:not(.print-show),
+    .sidebar-backdrop {
+        display: none !important;
+    }
+
+    main {
+        padding: 0 !important;
+        margin: 0 !important;
+        background: white !important;
+        overflow: visible !important;
+        display: block !important;
+    }
+
+    .flex-1 {
+        flex: none !important;
+        display: block !important;
+    }
+
+    .overflow-hidden,
+    .overflow-y-auto {
+        overflow: visible !important;
+        height: auto !important;
+    }
+
+    body,
+    html {
+        background: white !important;
+        overflow: visible !important;
+        height: auto !important;
+    }
+
+    .fixed,
+    .absolute {
+        position: static !important;
+        width: auto !important;
+        height: auto !important;
+    }
+
+    /* Force background colors to print if needed */
+    * {
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
+    }
+
+    /* From App.jsx <style> tag */
+    /* 1. Global Hiding */
+    aside,
+    header,
+    nav,
+    footer,
+    button,
+    [role="button"],
+    .no-print,
+    .backdrop-blur-sm {
+        display: none !important;
+    }
+
+    /* 2. Reset layout constraints for root elements */
+    html,
+    body,
+    #root,
+    .flex.h-screen {
+        height: auto !important;
+        min-height: auto !important;
+        overflow: visible !important;
+        display: block !important;
+        background: white !important;
+        margin: 0 !important;
+        padding: 0 !important;
+    }
+
+    /* 3. Hide the main app layout when a report is open */
+    .is-printing-report>aside,
+    .is-printing-report>div.flex-1 {
+        display: none !important;
+    }
+
+    /* 4. Prepare the modal for printing */
+    .fixed.inset-0 {
+        position: static !important;
+        display: block !important;
+        width: 100% !important;
+        height: auto !important;
+        background: white !important;
+        padding: 0 !important;
+        z-index: auto !important;
+    }
+
+    /* 5. Clean up modal-specific styling */
+    .rounded-3xl,
+    .rounded-2xl,
+    .shadow-2xl,
+    .shadow-xl {
+        border-radius: 0 !important;
+        box-shadow: none !important;
+        border: none !important;
+    }
+
+    .w-\[95\%\],
+    .max-w-5xl,
+    .max-w-md {
+        width: 100% !important;
+        max-width: 100% !important;
+        height: auto !important;
+        max-height: none !important;
+    }
+
+    /* 6. Document flow and margins */
+    .flex-1.overflow-y-auto {
+        overflow: visible !important;
+        padding: 0 !important;
+        display: block !important;
+    }
+
+    .max-w-\[1000px\] {
+        max-width: 100% !important;
+        width: 100% !important;
+        margin: 0 !important;
+        padding: 20px !important;
+    }
+
+    /* Ensure table takes full width and has black borders for clarity */
+    table {
+        width: 100% !important;
+        border-collapse: collapse !important;
+        table-layout: fixed !important;
+        /* Force fixed layout to control widths */
+    }
+
+    th,
+    td {
+        border: 1px solid #000 !important;
+        font-size: 14px !important;
+        /* Matches user requested table font size */
+        padding: 4px 2px !important;
+    }
+
+    .whitespace-nowrap {
+        white-space: nowrap !important;
+    }
+
+    /* Ensure internal dividers are visible in print */
+    .border-gray-100,
+    .border-gray-200,
+    .border-gray-300,
+    .border-gray-400 {
+        border-color: #000 !important;
+    }
+}
