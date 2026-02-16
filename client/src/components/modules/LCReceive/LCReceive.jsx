@@ -705,20 +705,28 @@ function LCReceive({
                                 onClick={() => setShowLcFilterPanel(!showLcFilterPanel)}
                                 className={`flex items-center gap-2 px-4 py-2 rounded-xl transition-all border ${showLcFilterPanel || Object.values(lcFilters).some(v => v !== '') ? 'bg-blue-600 border-blue-600 text-white shadow-lg shadow-blue-500/30' : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'}`}
                             >
-                                <FunnelIcon className={`w-4 h-4 ${showLcFilterPanel || Object.values(lcFilters).some(v => v !== '') ? 'text-white' : 'text-gray-400'}`} />
+                                <FunnelIcon className={`w-4 h-4 ${(showLcFilterPanel || (lcFilters && Object.values(lcFilters).some(v => v !== ''))) ? 'text-white' : 'text-gray-400'}`} />
                                 <span className="text-sm font-medium">Filter</span>
                             </button>
 
                             {/* Floating Filter Panel */}
-                            {showLcFilterPanel && (
+                            {showLcFilterPanel && lcFilters && (
                                 <div ref={lcFilterPanelRef} className="absolute right-0 mt-3 w-[450px] bg-white/95 backdrop-blur-2xl border border-gray-100 rounded-2xl shadow-2xl z-[60] p-6 animate-in fade-in zoom-in duration-200">
                                     <div className="flex items-center justify-between mb-6 pb-2 border-b border-gray-50">
                                         <h4 className="font-extrabold text-gray-900 text-lg">Advance Filter</h4>
                                         <button
                                             onClick={() => {
-                                                setLcFilters(initialLcFilterState);
-                                                setFilterSearchInputs({ ...filterSearchInputs, lcNoSearch: '', portSearch: '', indCnfSearch: '', bdCnfSearch: '', billOfEntrySearch: '', productSearch: '', brandSearch: '' });
-                                                setLcSearchQuery('');
+                                                if (setLcFilters) setLcFilters(initialLcFilterState);
+                                                setFilterSearchInputs({
+                                                    lcNoSearch: '',
+                                                    portSearch: '',
+                                                    brandSearch: '',
+                                                    productSearch: '',
+                                                    indCnfSearch: '',
+                                                    bdCnfSearch: '',
+                                                    billOfEntrySearch: ''
+                                                });
+                                                if (setLcSearchQuery) setLcSearchQuery('');
                                                 setShowLcFilterPanel(false);
                                             }}
                                             className="text-[11px] font-bold text-blue-600 hover:text-blue-700 uppercase tracking-widest"
@@ -768,15 +776,15 @@ function LCReceive({
                                                                 <XIcon className="w-4 h-4" />
                                                             </button>
                                                         )}
-                                                        <SearchIcon className="w-4.5 h-4.5 text-gray-300 pointer-events-none" />
+                                                        <SearchIcon className="w-4 h-4 text-gray-300 pointer-events-none" />
                                                     </div>
                                                 </div>
                                                 {filterDropdownOpen.lcNo && (() => {
-                                                    const filtered = getFilteredOptions('lcFilterLcNo');
+                                                    const filtered = getFilteredOptions('lcFilterLcNo') || [];
                                                     return filtered.length > 0 ? (
                                                         <div className="absolute z-[120] mt-1 w-full bg-white border border-gray-100 rounded-xl shadow-xl max-h-48 overflow-y-auto py-1">
                                                             {filtered.map(opt => (
-                                                                <button key={opt} type="button" onClick={() => { setLcFilters({ ...lcFilters, lcNo: opt }); setFilterSearchInputs({ ...filterSearchInputs, lcNoSearch: '' }); setFilterDropdownOpen(initialFilterDropdownState); }} className="w-full px-4 py-2 text-left text-sm hover:bg-blue-50 transition-colors">{opt}</button>
+                                                                <button key={opt} type="button" onClick={() => { setLcFilters({ ...lcFilters, lcNo: opt }); setFilterSearchInputs({ ...filterSearchInputs, lcNoSearch: '' }); setFilterDropdownOpen(initialFilterDropdownState); }} className="w-full px-4 py-2 text-left text-sm hover:bg-blue-50 transition-colors uppercase font-medium">{opt}</button>
                                                             ))}
                                                         </div>
                                                     ) : null;
@@ -804,15 +812,15 @@ function LCReceive({
                                                                 <XIcon className="w-4 h-4" />
                                                             </button>
                                                         )}
-                                                        <SearchIcon className="w-4.5 h-4.5 text-gray-300 pointer-events-none" />
+                                                        <SearchIcon className="w-4 h-4 text-gray-300 pointer-events-none" />
                                                     </div>
                                                 </div>
                                                 {filterDropdownOpen.port && (() => {
-                                                    const filtered = getFilteredOptions('lcFilterPort');
+                                                    const filtered = getFilteredOptions('lcFilterPort') || [];
                                                     return filtered.length > 0 ? (
                                                         <div className="absolute z-[120] mt-1 w-full bg-white border border-gray-100 rounded-xl shadow-xl max-h-48 overflow-y-auto py-1">
                                                             {filtered.map(opt => (
-                                                                <button key={opt} type="button" onClick={() => { setLcFilters({ ...lcFilters, port: opt }); setFilterSearchInputs({ ...filterSearchInputs, portSearch: '' }); setFilterDropdownOpen(initialFilterDropdownState); }} className="w-full px-4 py-2 text-left text-sm hover:bg-blue-50 transition-colors">{opt}</button>
+                                                                <button key={opt} type="button" onClick={() => { setLcFilters({ ...lcFilters, port: opt }); setFilterSearchInputs({ ...filterSearchInputs, portSearch: '' }); setFilterDropdownOpen(initialFilterDropdownState); }} className="w-full px-4 py-2 text-left text-sm hover:bg-blue-50 transition-colors uppercase font-medium">{opt}</button>
                                                             ))}
                                                         </div>
                                                     ) : null;
@@ -843,16 +851,16 @@ function LCReceive({
                                                                 <XIcon className="w-4 h-4" />
                                                             </button>
                                                         )}
-                                                        <SearchIcon className="w-4.5 h-4.5 text-gray-300 pointer-events-none" />
+                                                        <SearchIcon className="w-4 h-4 text-gray-300 pointer-events-none" />
                                                     </div>
                                                 </div>
                                                 {filterDropdownOpen.product && (() => {
-                                                    const options = [...new Set(stockRecords.map(item => (item.productName || '').trim()).filter(Boolean))].sort();
-                                                    const filtered = options.filter(o => o.toLowerCase().includes(filterSearchInputs.productSearch.toLowerCase()));
+                                                    const options = stockRecords ? [...new Set(stockRecords.map(item => (item.productName || '').trim()).filter(Boolean))].sort() : [];
+                                                    const filtered = options.filter(o => o.toLowerCase().includes((filterSearchInputs.productSearch || '').toLowerCase()));
                                                     return filtered.length > 0 ? (
                                                         <div className="absolute z-[120] mt-1 w-full bg-white border border-gray-100 rounded-xl shadow-xl max-h-48 overflow-y-auto py-1">
                                                             {filtered.map(o => (
-                                                                <button key={o} type="button" onClick={() => { setLcFilters({ ...lcFilters, productName: o }); setFilterSearchInputs({ ...filterSearchInputs, productSearch: '' }); setFilterDropdownOpen(initialFilterDropdownState); }} className="w-full px-4 py-2 text-left text-sm hover:bg-blue-50 transition-colors">{o}</button>
+                                                                <button key={o} type="button" onClick={() => { setLcFilters({ ...lcFilters, productName: o }); setFilterSearchInputs({ ...filterSearchInputs, productSearch: '' }); setFilterDropdownOpen(initialFilterDropdownState); }} className="w-full px-4 py-2 text-left text-sm hover:bg-blue-50 transition-colors uppercase font-medium">{o}</button>
                                                             ))}
                                                         </div>
                                                     ) : null;
@@ -880,10 +888,11 @@ function LCReceive({
                                                                 <XIcon className="w-4 h-4" />
                                                             </button>
                                                         )}
-                                                        <SearchIcon className="w-4.5 h-4.5 text-gray-300 pointer-events-none" />
+                                                        <SearchIcon className="w-4 h-4 text-gray-300 pointer-events-none" />
                                                     </div>
                                                 </div>
                                                 {filterDropdownOpen.brand && (() => {
+                                                    if (!stockRecords) return null;
                                                     const productFilteredRecords = lcFilters.productName
                                                         ? stockRecords.filter(item => (item.productName || '').trim().toLowerCase() === lcFilters.productName.toLowerCase())
                                                         : stockRecords;
@@ -891,11 +900,11 @@ function LCReceive({
                                                         if (item.brand) return [(item.brand || '').trim()];
                                                         return (item.brandEntries || []).map(e => (e.brand || '').trim());
                                                     }).filter(Boolean))].sort();
-                                                    const filtered = options.filter(o => o.toLowerCase().includes(filterSearchInputs.brandSearch.toLowerCase()));
+                                                    const filtered = options.filter(o => o.toLowerCase().includes((filterSearchInputs.brandSearch || '').toLowerCase()));
                                                     return filtered.length > 0 ? (
                                                         <div className="absolute z-[120] mt-1 w-full bg-white border border-gray-100 rounded-xl shadow-xl max-h-48 overflow-y-auto py-1">
                                                             {filtered.map(o => (
-                                                                <button key={o} type="button" onClick={() => { setLcFilters({ ...lcFilters, brand: o }); setFilterSearchInputs({ ...filterSearchInputs, brandSearch: '' }); setFilterDropdownOpen(initialFilterDropdownState); }} className="w-full px-4 py-2 text-left text-sm hover:bg-blue-50 transition-colors">{o}</button>
+                                                                <button key={o} type="button" onClick={() => { setLcFilters({ ...lcFilters, brand: o }); setFilterSearchInputs({ ...filterSearchInputs, brandSearch: '' }); setFilterDropdownOpen(initialFilterDropdownState); }} className="w-full px-4 py-2 text-left text-sm hover:bg-blue-50 transition-colors uppercase font-medium">{o}</button>
                                                             ))}
                                                         </div>
                                                     ) : null;
@@ -1052,6 +1061,7 @@ function LCReceive({
                             <div className="text-xl font-bold text-gray-900">{lcReceiveSummary.totalPackets}</div>
                         </div>
                         <div className="bg-emerald-50/50 border border-emerald-100 p-4 rounded-xl shadow-sm transition-all hover:shadow-md">
+                            <div className="text-[11px] font-bold text-emerald-600 uppercase tracking-wider mb-1">Total Quantity</div>
                             <div className="text-xl font-bold text-emerald-700">{Math.round(lcReceiveSummary.totalQuantity)} {lcReceiveSummary.unit}</div>
                         </div>
                         <div className="bg-blue-50/50 border border-blue-100 p-4 rounded-xl shadow-sm transition-all hover:shadow-md">
@@ -1136,7 +1146,7 @@ function LCReceive({
                                         </div>
                                     )}
                                 </div>
-                                <div className="space-y-2 relative">
+                                <div className="space-y-2 relative" ref={importerRef}>
                                     <label className="text-sm font-medium text-gray-700">Importer</label>
                                     <div className="relative">
                                         <input

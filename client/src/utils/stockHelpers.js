@@ -22,12 +22,24 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
 
     const groupedStock = filteredRecords.reduce((acc, item) => {
         const key = item.productName || 'Unknown';
+
+        // Helper to parse numbers safely and handle potential strings with commas
+        const safeParse = (val) => {
+            if (val === undefined || val === null || val === '') return 0;
+            const parsed = typeof val === 'string' ? parseFloat(val.replace(/,/g, '')) : parseFloat(val);
+            return isNaN(parsed) ? 0 : parsed;
+        };
+
         if (!acc[key]) {
             acc[key] = {
                 productName: item.productName,
                 quantity: 0,
                 inHousePacket: 0,
                 inHouseQuantity: 0,
+                totalInHousePacket: 0,
+                totalInHouseQuantity: 0,
+                salePacket: 0,
+                saleQuantity: 0,
                 sweepedPacket: 0,
                 sweepedQuantity: 0,
                 unit: item.unit,
@@ -45,24 +57,52 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
                 quantity: 0,
                 inHousePacket: 0,
                 inHouseQuantity: 0,
+                totalInHousePacket: 0,
+                totalInHouseQuantity: 0,
+                salePacket: 0,
+                saleQuantity: 0,
                 sweepedPacket: 0,
                 sweepedQuantity: 0,
-                packetSize: item.packetSize || 0
+                packetSize: safeParse(item.packetSize)
             };
         }
 
         const brandObj = acc[key].brands[brandKey];
-        brandObj.quantity += (parseFloat(item.quantity) || 0);
-        brandObj.inHousePacket += (parseFloat(item.inHousePacket) || 0);
-        brandObj.inHouseQuantity += (parseFloat(item.inHouseQuantity) || 0);
-        brandObj.sweepedPacket += (parseFloat(item.sweepedPacket) || 0);
-        brandObj.sweepedQuantity += (parseFloat(item.sweepedQuantity) || 0);
 
-        acc[key].quantity += (parseFloat(item.quantity) || 0);
-        acc[key].inHousePacket += (parseFloat(item.inHousePacket) || 0);
-        acc[key].inHouseQuantity += (parseFloat(item.inHouseQuantity) || 0);
-        acc[key].sweepedPacket += (parseFloat(item.sweepedPacket) || 0);
-        acc[key].sweepedQuantity += (parseFloat(item.sweepedQuantity) || 0);
+        // Data points
+        const qty = safeParse(item.quantity);
+        const inPkt = safeParse(item.inHousePacket);
+        const inQty = safeParse(item.inHouseQuantity);
+        const salePkt = safeParse(item.salePacket);
+        const saleQty = safeParse(item.saleQuantity);
+        const shortagePkt = safeParse(item.sweepedPacket);
+        const shortageQty = safeParse(item.sweepedQuantity);
+        const pktSize = safeParse(item.packetSize);
+        const basePkt = safeParse(item.packet);
+
+        // Derive Total Inhouse if missing (for older records)
+        const totalInPkt = item.totalInHousePacket !== undefined ? safeParse(item.totalInHousePacket) : (basePkt - shortagePkt);
+        const totalInQty = item.totalInHouseQuantity !== undefined ? safeParse(item.totalInHouseQuantity) : (totalInPkt * pktSize);
+
+        brandObj.quantity += qty;
+        brandObj.inHousePacket += inPkt;
+        brandObj.inHouseQuantity += inQty;
+        brandObj.totalInHousePacket += totalInPkt;
+        brandObj.totalInHouseQuantity += totalInQty;
+        brandObj.salePacket += salePkt;
+        brandObj.saleQuantity += saleQty;
+        brandObj.sweepedPacket += shortagePkt;
+        brandObj.sweepedQuantity += shortageQty;
+
+        acc[key].quantity += qty;
+        acc[key].inHousePacket += inPkt;
+        acc[key].inHouseQuantity += inQty;
+        acc[key].totalInHousePacket += totalInPkt;
+        acc[key].totalInHouseQuantity += totalInQty;
+        acc[key].salePacket += salePkt;
+        acc[key].saleQuantity += saleQty;
+        acc[key].sweepedPacket += shortagePkt;
+        acc[key].sweepedQuantity += shortageQty;
 
         acc[key].allIds.push(item._id);
         return acc;
@@ -73,18 +113,53 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
         brandList: Object.values(group.brands)
     }));
 
-    const totalPackets = filteredRecords.reduce((sum, item) => sum + (parseFloat(item.packet) || 0), 0);
-    const totalQuantity = filteredRecords.reduce((sum, item) => sum + (parseFloat(item.quantity) || 0), 0);
-    const totalInHousePkt = filteredRecords.reduce((sum, item) => sum + (parseFloat(item.inHousePacket) || 0), 0);
-    const totalInHouseQty = filteredRecords.reduce((sum, item) => sum + (parseFloat(item.inHouseQuantity) || 0), 0);
-    const totalShortage = filteredRecords.reduce((sum, item) => sum + (parseFloat(item.sweepedQuantity) || 0), 0);
+    const safeParse = (val) => {
+        if (val === undefined || val === null || val === '') return 0;
+        const parsed = typeof val === 'string' ? parseFloat(val.replace(/,/g, '')) : parseFloat(val);
+        return isNaN(parsed) ? 0 : parsed;
+    };
+
+    const totalPackets = filteredRecords.reduce((sum, item) => sum + safeParse(item.packet), 0);
+    const totalQuantity = filteredRecords.reduce((sum, item) => sum + safeParse(item.quantity), 0);
+    const totalInHousePkt = filteredRecords.reduce((sum, item) => sum + safeParse(item.inHousePacket), 0);
+    const totalInHouseQty = filteredRecords.reduce((sum, item) => sum + safeParse(item.inHouseQuantity), 0);
+
+    // Summary card calculations
+    const totalTotalInHousePkt = filteredRecords.reduce((sum, item) => {
+        const val = item.totalInHousePacket !== undefined ? safeParse(item.totalInHousePacket) : (safeParse(item.packet) - safeParse(item.sweepedPacket));
+        return sum + val;
+    }, 0);
+
+    const totalTotalInHouseQty = filteredRecords.reduce((sum, item) => {
+        if (item.totalInHouseQuantity !== undefined) return sum + safeParse(item.totalInHouseQuantity);
+        const derivedPkt = safeParse(item.packet) - safeParse(item.sweepedPacket);
+        return sum + (derivedPkt * safeParse(item.packetSize));
+    }, 0);
+
+    const totalSalePkt = filteredRecords.reduce((sum, item) => sum + safeParse(item.salePacket), 0);
+    const totalSaleQty = filteredRecords.reduce((sum, item) => sum + safeParse(item.saleQuantity), 0);
+    const totalShortage = filteredRecords.reduce((sum, item) => sum + safeParse(item.sweepedQuantity), 0);
+
     const totalInHousePktDecimalKg = filteredRecords.reduce((sum, item) => {
-        const pkt = parseFloat(item.inHousePacket) || 0;
-        const size = parseFloat(item.packetSize) || 0;
+        const pkt = safeParse(item.inHousePacket);
+        const size = safeParse(item.packetSize);
         const decimalPortion = pkt - Math.floor(pkt);
         return sum + (decimalPortion * size);
     }, 0);
     const unit = displayRecords[0]?.unit || 'kg';
 
-    return { displayRecords, totalPackets, totalQuantity, totalInHousePkt, totalInHousePktDecimalKg, totalInHouseQty, totalShortage, unit };
+    return {
+        displayRecords,
+        totalPackets,
+        totalQuantity,
+        totalInHousePkt,
+        totalInHouseQty,
+        totalTotalInHousePkt,
+        totalTotalInHouseQty,
+        totalInHousePktDecimalKg,
+        totalSalePkt,
+        totalSaleQty,
+        totalShortage,
+        unit
+    };
 };

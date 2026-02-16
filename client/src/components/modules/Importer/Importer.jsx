@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { EditIcon, TrashIcon, UsersIcon } from '../../Icons';
+import { EditIcon, TrashIcon, UserIcon, EyeIcon, XIcon, BoxIcon, SearchIcon } from '../../Icons';
 import { API_BASE_URL, SortIcon } from '../../../utils/helpers';
 import { encryptData, decryptData } from '../../../utils/encryption';
 import './Importer.css';
@@ -26,6 +26,8 @@ const Importer = ({
     const [submitStatus, setSubmitStatus] = useState(null);
     const [importers, setImporters] = useState([]);
     const [isLoading, setIsLoading] = useState(false);
+    const [viewData, setViewData] = useState(null);
+    const [historySearchQuery, setHistorySearchQuery] = useState('');
     const [formData, setFormData] = useState({
         name: '',
         address: '',
@@ -403,6 +405,9 @@ const Importer = ({
                                             </td>
                                             <td className="importer-table-cell">
                                                 <div className="importer-table-actions">
+                                                    <button onClick={(e) => { e.stopPropagation(); setViewData(importer); }} className="importer-action-btn hover:bg-gray-100 text-gray-400 hover:text-gray-600">
+                                                        <EyeIcon className="w-5 h-5" />
+                                                    </button>
                                                     <button onClick={(e) => { e.stopPropagation(); handleEdit(importer); }} className="importer-action-btn importer-action-edit">
                                                         <EditIcon className="w-5 h-5" />
                                                     </button>
@@ -419,12 +424,73 @@ const Importer = ({
                     ) : (
                         <div className="importer-empty">
                             <div className="importer-empty-icon-wrapper">
-                                <UsersIcon className="importer-empty-icon" />
+                                <UserIcon className="importer-empty-icon" />
                             </div>
                             <p className="importer-empty-title">No importers found</p>
                             <p className="importer-empty-subtitle">Click "Add New" to register a new importer</p>
                         </div>
                     )}
+                </div>
+            )}
+            {viewData && (
+                <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+                    <div className="absolute inset-0 bg-gray-900/60 backdrop-blur-sm" onClick={() => setViewData(null)}></div>
+                    <div className="relative bg-white border border-gray-100 rounded-2xl shadow-2xl max-w-4xl w-full flex flex-col max-h-[90vh] animate-in zoom-in duration-200">
+                        {/* Modal Header */}
+                        <div className="px-8 py-6 border-b border-gray-100 flex items-center justify-between bg-white sticky top-0 z-10 rounded-t-2xl">
+                            <div className="flex-1">
+                                <h3 className="text-xl font-bold text-gray-900">Import History - {viewData.name}</h3>
+                                <p className="text-sm text-gray-500 mt-1">License No: {viewData.licenseNo} | {viewData.address}</p>
+                            </div>
+
+                            {/* Center Search bar */}
+                            <div className="flex-1 max-w-sm mx-auto relative group">
+                                <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
+                                    <SearchIcon className="h-4 w-4 text-gray-400 group-focus-within:text-blue-500 transition-colors" />
+                                </div>
+                                <input
+                                    type="text"
+                                    placeholder="Search import history..."
+                                    value={historySearchQuery}
+                                    onChange={(e) => setHistorySearchQuery(e.target.value)}
+                                    className="block w-full pl-10 pr-4 py-2 bg-gray-50/50 border border-gray-200 rounded-xl text-xs focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
+                                />
+                            </div>
+
+                            <div className="flex-1 flex justify-end">
+                                <button onClick={() => setViewData(null)} className="p-2 hover:bg-gray-50 text-gray-400 hover:text-gray-600 rounded-full transition-all">
+                                    <XIcon className="w-5 h-5" />
+                                </button>
+                            </div>
+                        </div>
+
+                        <div className="flex-1 overflow-auto p-8">
+                            <div className="bg-gray-50 rounded-xl border border-gray-200 overflow-hidden">
+                                <table className="w-full text-left text-sm">
+                                    <thead className="bg-white border-b border-gray-200">
+                                        <tr>
+                                            <th className="px-4 py-3 font-semibold text-gray-600">Date</th>
+                                            <th className="px-4 py-3 font-semibold text-gray-600">LC No</th>
+                                            <th className="px-4 py-3 font-semibold text-gray-600">Product</th>
+                                            <th className="px-4 py-3 font-semibold text-gray-600">Port</th>
+                                            <th className="px-4 py-3 font-semibold text-gray-600 text-right">Qty</th>
+                                            <th className="px-4 py-3 font-semibold text-gray-600 text-center">Status</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr>
+                                            <td colSpan="6" className="px-4 py-12 text-center text-gray-400">
+                                                <div className="flex flex-col items-center">
+                                                    <BoxIcon className="w-8 h-8 mb-2 opacity-20" />
+                                                    <p>No import history available</p>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             )}
         </div>
