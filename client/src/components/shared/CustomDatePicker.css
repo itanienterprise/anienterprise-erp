@@ -46,6 +46,12 @@
     border-color: #3b82f6;
 }
 
+.date-picker-input.compact {
+    padding-right: 2.75rem;
+    padding-left: 0.5rem;
+    font-size: 0.8125rem;
+}
+
 .date-picker-icons-right {
     position: absolute;
     right: 0.75rem;
@@ -54,6 +60,11 @@
     display: flex;
     align-items: center;
     gap: 0.5rem;
+}
+
+.date-picker-input.compact+.date-picker-icons-right {
+    right: 0.5rem;
+    gap: 0.25rem;
 }
 
 .date-picker-clear-btn {

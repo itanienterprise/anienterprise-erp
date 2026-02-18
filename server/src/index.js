@@ -23,6 +23,7 @@ const Port = require('./models/Port');
 const Stock = require('./models/Stock');
 const Product = require('./models/Product');
 const Customer = require('./models/Customer');
+const Warehouse = require('./models/Warehouse');
 
 
 // Routes
@@ -269,6 +270,46 @@ app.get('/api/customers', async (req, res) => {
   try {
     const customers = await Customer.find().sort({ createdAt: -1 });
     res.json(customers);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// Warehouse APIs
+app.post('/api/warehouses', async (req, res) => {
+  try {
+    const newWarehouse = new Warehouse(req.body);
+    const savedWarehouse = await newWarehouse.save();
+    res.status(201).json(savedWarehouse);
+  } catch (err) {
+    res.status(400).json({ message: err.message });
+  }
+});
+
+app.delete('/api/warehouses/:id', async (req, res) => {
+  try {
+    const deletedWarehouse = await Warehouse.findByIdAndDelete(req.params.id);
+    if (!deletedWarehouse) return res.status(404).json({ message: 'Warehouse not found' });
+    res.json({ message: 'Warehouse deleted' });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+app.put('/api/warehouses/:id', async (req, res) => {
+  try {
+    const updatedWarehouse = await Warehouse.findByIdAndUpdate(req.params.id, req.body, { new: true });
+    if (!updatedWarehouse) return res.status(404).json({ message: 'Warehouse not found' });
+    res.json(updatedWarehouse);
+  } catch (err) {
+    res.status(400).json({ message: err.message });
+  }
+});
+
+app.get('/api/warehouses', async (req, res) => {
+  try {
+    const warehouses = await Warehouse.find().sort({ createdAt: -1 });
+    res.json(warehouses);
   } catch (err) {
     res.status(500).json({ message: err.message });
   }

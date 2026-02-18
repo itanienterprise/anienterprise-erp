@@ -93,7 +93,7 @@ const CustomDatePicker = ({
                     placeholder={placeholder || 'Select Date'}
                     required={required}
                     autoComplete="off"
-                    className={`date-picker-input ${value ? 'has-value' : ''}`}
+                    className={`date-picker-input ${value ? 'has-value' : ''} ${compact ? 'compact' : ''}`}
                 />
                 <div className="date-picker-icons-right">
                     {value && (

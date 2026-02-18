@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
+import axios from 'axios';
 import {
     SearchIcon, FunnelIcon, XIcon, BarChartIcon, EditIcon, TrashIcon, BoxIcon, ChevronDownIcon, PlusIcon
 } from '../../Icons';
@@ -42,11 +43,122 @@ function LCReceive({
 }) {
     const [activeDropdown, setActiveDropdown] = useState(null);
     const [highlightedIndex, setHighlightedIndex] = useState(-1);
+    const [warehouses, setWarehouses] = useState([]);
+    const [allWhRecords, setAllWhRecords] = useState([]);
+    const [whSearchQuery, setWhSearchQuery] = useState('');
+    const [validationErrors, setValidationErrors] = useState([]);
+    const [showWhSelectDropdown, setShowWhSelectDropdown] = useState(false);
 
     const productRefs = useRef([]);
     const brandRefs = useRef({});
     const portRef = useRef(null);
     const importerRef = useRef(null);
+    const exporterRef = useRef(null);
+    const whSelectRef = useRef(null);
+
+    const fetchWarehouses = async () => {
+        try {
+            // Fetch from both sources
+            const [whRes, stockRes] = await Promise.all([
+                axios.get(`${API_BASE_URL}/api/warehouses`),
+                axios.get(`${API_BASE_URL}/api/stock`)
+            ]);
+
+            const whData = Array.isArray(whRes.data) ? whRes.data : [];
+            const stockData = Array.isArray(stockRes.data) ? stockRes.data : [];
+
+            // Decrypt all Warehouse records
+            const allDecryptedWh = whData.map(item => {
+                const decrypted = decryptData(item.data);
+                return {
+                    ...decrypted,
+                    productName: decrypted.product,
+                    packetSize: decrypted.packetSize || (decrypted.whQty && decrypted.whPkt ? (parseFloat(decrypted.whQty) / parseFloat(decrypted.whPkt)).toFixed(0) : 0),
+                    _id: item._id
+                };
+            }).filter(Boolean);
+
+            // Get unique warehouse names for the dropdown (from ALL warehouse records)
+            const seen = new Set();
+            const uniqueWarehouses = allDecryptedWh.filter(item => {
+                if (item.whName && !seen.has(item.whName)) {
+                    seen.add(item.whName);
+                    return true;
+                }
+                return false;
+            });
+
+            // Filter for stock display (exclude metadata entries)
+            const whStockOnly = allDecryptedWh.filter(d => d.product !== '-').map(d => ({
+                ...d,
+                productName: d.product,
+                whPkt: d.whPkt,
+                whQty: d.whQty
+            }));
+
+            // Decrypt and normalize Stock records
+            const decryptedStock = stockData.map(item => {
+                try {
+                    const d = decryptData(item.data);
+                    const rawWh = (d.warehouse || '').trim();
+                    if (!rawWh) return null;
+                    return {
+                        ...d,
+                        whName: rawWh,
+                        whPkt: d.inHousePacket || 0,
+                        whQty: d.inHouseQuantity || 0,
+                        productName: d.productName || d.product,
+                        packetSize: d.packetSize || d.size || 0,
+                        _id: item._id
+                    };
+                } catch {
+                    return null;
+                }
+            }).filter(Boolean);
+
+            // Combine for comprehensive view
+            const allRecords = [...whStockOnly, ...decryptedStock];
+
+            setWarehouses(uniqueWarehouses);
+            setAllWhRecords(allRecords);
+        } catch (err) {
+            console.error('Failed to fetch warehouse data:', err);
+        }
+    };
+
+    // Fetch warehouses
+    useEffect(() => {
+        fetchWarehouses();
+    }, []);
+
+    // Close warehouse dropdown on outside click
+    useEffect(() => {
+        const handleClickOutside = (e) => {
+            if (whSelectRef.current && !whSelectRef.current.contains(e.target)) {
+                setShowWhSelectDropdown(false);
+            }
+        };
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, []);
+
+    const selectedWhStock = useMemo(() => {
+        const selectedWh = (stockFormData.warehouse || '').trim();
+        if (!selectedWh || !allWhRecords.length) return null;
+        const filtered = allWhRecords.filter(r => (r.whName || '').trim() === selectedWh);
+        const groups = {};
+        filtered.forEach(item => {
+            const prodKey = item.productName || 'Unnamed Product';
+            if (!groups[prodKey]) {
+                groups[prodKey] = {
+                    productName: prodKey,
+                    brands: []
+                };
+            }
+            groups[prodKey].brands.push(item);
+        });
+        return Object.values(groups);
+    }, [stockFormData.warehouse, allWhRecords]);
 
     // --- Handlers ---
     const resetStockForm = () => {
@@ -55,6 +167,7 @@ function LCReceive({
             lcNo: '',
             port: '',
             importer: '',
+            exporter: '',
             indianCnF: '',
             indCnFCost: '',
             bdCnF: '',
@@ -63,6 +176,7 @@ function LCReceive({
             totalLcTruck: 0,
             totalLcQuantity: '',
             status: 'In Stock',
+            warehouse: '',
             productEntries: [{
                 isMultiBrand: true,
                 productName: '',
@@ -265,6 +379,34 @@ function LCReceive({
 
     const handleStockSubmit = async (e) => {
         e.preventDefault();
+        setValidationErrors([]);
+
+        // Detailed manual validation
+        const errors = [];
+        if (!stockFormData.lcNo) errors.push("LC Number is required");
+        if (!stockFormData.port) errors.push("Port is required");
+        if (!stockFormData.importer) errors.push("Importer is required");
+        if (!stockFormData.warehouse) errors.push("Warehouse is required");
+
+        stockFormData.productEntries.forEach((p, pIdx) => {
+            const prodLabel = p.productName || `Product #${pIdx + 1}`;
+            if (!p.productName) errors.push(`Product Name is required for entry #${pIdx + 1}`);
+
+            p.brandEntries.forEach((b, bIdx) => {
+                const brandLabel = b.brand || `Brand #${bIdx + 1}`;
+                if (!b.brand) errors.push(`${prodLabel}: Brand is required for entry #${bIdx + 1}`);
+                if (!b.packetSize) errors.push(`${prodLabel} (${brandLabel}): Size is required`);
+                if (b.packet === '' || isNaN(parseFloat(b.packet))) errors.push(`${prodLabel} (${brandLabel}): Packet count is required`);
+            });
+        });
+
+        if (errors.length > 0) {
+            setValidationErrors(errors);
+            setSubmitStatus('error');
+            setTimeout(() => setSubmitStatus(null), 5000);
+            return;
+        }
+
         setIsSubmitting(true);
         setSubmitStatus(null);
 
@@ -284,6 +426,7 @@ function LCReceive({
                             lcNo: stockFormData.lcNo,
                             port: stockFormData.port,
                             importer: stockFormData.importer,
+                            exporter: stockFormData.exporter,
                             indianCnF: stockFormData.indianCnF,
                             indCnFCost: stockFormData.indCnFCost,
                             bdCnF: stockFormData.bdCnF,
@@ -292,6 +435,7 @@ function LCReceive({
                             totalLcTruck: stockFormData.totalLcTruck,
                             totalLcQuantity: stockFormData.totalLcQuantity,
                             status: stockFormData.status,
+                            warehouse: stockFormData.warehouse,
                             productName: product.productName,
                             truckNo: product.truckNo,
                             brand: brandEntry.brand,
@@ -310,24 +454,16 @@ function LCReceive({
 
                         if (brandEntry._id) {
                             validIds.add(brandEntry._id);
-                            promises.push(fetch(`${API_BASE_URL}/api/stock/${brandEntry._id}`, {
-                                method: 'PUT',
-                                headers: { 'Content-Type': 'application/json' },
-                                body: JSON.stringify({ data: encryptedData }),
-                            }));
+                            promises.push(axios.put(`${API_BASE_URL}/api/stock/${brandEntry._id}`, { data: encryptedData }));
                         } else {
-                            promises.push(fetch(`${API_BASE_URL}/api/stock`, {
-                                method: 'POST',
-                                headers: { 'Content-Type': 'application/json' },
-                                body: JSON.stringify({ data: encryptedData }),
-                            }));
+                            promises.push(axios.post(`${API_BASE_URL}/api/stock`, { data: encryptedData }));
                         }
                     }
                 }
 
                 const idsToDelete = originalIds.filter(id => !validIds.has(id));
                 idsToDelete.forEach(id => {
-                    promises.push(fetch(`${API_BASE_URL}/api/stock/${id}`, { method: 'DELETE' }));
+                    promises.push(axios.delete(`${API_BASE_URL}/api/stock/${id}`));
                 });
 
                 await Promise.all(promises);
@@ -341,6 +477,7 @@ function LCReceive({
                             lcNo: stockFormData.lcNo,
                             port: stockFormData.port,
                             importer: stockFormData.importer,
+                            exporter: stockFormData.exporter,
                             indianCnF: stockFormData.indianCnF,
                             indCnFCost: stockFormData.indCnFCost,
                             bdCnF: stockFormData.bdCnF,
@@ -349,6 +486,7 @@ function LCReceive({
                             totalLcTruck: stockFormData.totalLcTruck,
                             totalLcQuantity: stockFormData.totalLcQuantity,
                             status: stockFormData.status,
+                            warehouse: stockFormData.warehouse,
                             productName: product.productName,
                             truckNo: product.truckNo,
                             brand: brandEntry.brand,
@@ -366,11 +504,7 @@ function LCReceive({
                 });
 
                 const createPromises = newRecords.map(record =>
-                    fetch(`${API_BASE_URL}/api/stock`, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ data: encryptData(record) })
-                    })
+                    axios.post(`${API_BASE_URL}/api/stock`, { data: encryptData(record) })
                 );
 
                 await Promise.all(createPromises);
@@ -382,6 +516,7 @@ function LCReceive({
                 setShowStockForm(false);
                 setSubmitStatus(null);
                 if (fetchStockRecords) fetchStockRecords();
+                fetchWarehouses(); // Refresh warehouse stock display immediately
             }, 1500);
 
         } catch (error) {
@@ -422,6 +557,7 @@ function LCReceive({
                 lcNo: record.lcNo,
                 port: record.port,
                 importer: record.importer,
+                exporter: record.exporter,
                 indianCnF: record.indianCnF,
                 indCnFCost: record.indCnFCost,
                 bdCnF: record.bdCnF,
@@ -440,6 +576,7 @@ function LCReceive({
                 lcNo: record.lcNo,
                 port: record.port,
                 importer: record.importer,
+                exporter: record.exporter,
                 indianCnF: record.indianCnF,
                 indCnFCost: record.indCnFCost,
                 bdCnF: record.bdCnF,
@@ -477,10 +614,13 @@ function LCReceive({
     };
 
     const getFilteredBrands = (input, productName) => {
+        // No product selected → no brands to show
+        if (!productName) return [];
+
         const allBrands = new Set();
 
-        // 1. Get brands defined in the product prop
-        if (productName && products) {
+        // 1. Get brands defined in the product definition
+        if (products) {
             const product = products.find(p => p.name === productName);
             if (product && product.brands) {
                 product.brands.forEach(b => {
@@ -491,11 +631,9 @@ function LCReceive({
             }
         }
 
-        // 2. Get brands from existing stock records
+        // 2. Get brands from existing stock records for this product only
         stockRecords.forEach(r => {
-            if (!productName || r.productName === productName) {
-                if (r.brand) allBrands.add(r.brand);
-            }
+            if (r.productName === productName && r.brand) allBrands.add(r.brand);
         });
 
         const brandsArr = Array.from(allBrands).sort();
@@ -1088,7 +1226,7 @@ function LCReceive({
 
                         <form onSubmit={handleStockSubmit} autoComplete="off" className="grid grid-cols-1 md:grid-cols-2 gap-6 relative z-10">
                             {/* Form Fields - Reusing logic by passing handlers */}
-                            <div className="col-span-1 md:col-span-2 grid grid-cols-1 md:grid-cols-4 gap-6">
+                            <div className="col-span-1 md:col-span-2 grid grid-cols-1 md:grid-cols-5 gap-6">
                                 <CustomDatePicker
                                     label="Date"
                                     name="date"
@@ -1111,36 +1249,33 @@ function LCReceive({
                                             type="text"
                                             name="port"
                                             value={stockFormData.port}
-                                            onChange={handleStockInputChange}
+                                            onChange={(e) => { handleStockInputChange(e); setActiveDropdown('lcr-port'); setHighlightedIndex(-1); }}
                                             onFocus={() => { setActiveDropdown('lcr-port'); setHighlightedIndex(-1); }}
                                             onKeyDown={(e) => handleDropdownKeyDown(e, 'lcr-port', handleStockDropdownSelect, 'port', ports.filter(p => p.status === 'Active' && (!stockFormData.port || ports.some(x => x.name === stockFormData.port) || p.name.toLowerCase().includes(stockFormData.port.toLowerCase()))))}
-                                            required
-                                            placeholder="Select or type port name"
+                                            placeholder="Search port..."
                                             autoComplete="off"
-                                            className="w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm pr-10"
+                                            className={`w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm pr-14 ${stockFormData.port ? 'placeholder:text-gray-900 placeholder:font-semibold' : 'placeholder:text-gray-400'}`}
                                         />
-                                        {(stockFormData.port || activeDropdown === 'lcr-port') && (
-                                            <button
-                                                type="button"
-                                                onClick={() => setActiveDropdown(activeDropdown === 'lcr-port' ? null : 'lcr-port')}
-                                                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 focus:outline-none"
-                                            >
-                                                <ChevronDownIcon className={`w-4 h-4 transition-transform duration-200 ${activeDropdown === 'lcr-port' ? 'rotate-180 text-blue-500' : ''}`} />
-                                            </button>
-                                        )}
+                                        <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-2">
+                                            {stockFormData.port && (
+                                                <button type="button" onClick={() => handleStockDropdownSelect('port', '')} className="text-gray-400 hover:text-gray-600">
+                                                    <XIcon className="w-4 h-4" />
+                                                </button>
+                                            )}
+                                            <SearchIcon className="w-4 h-4 text-gray-300 pointer-events-none" />
+                                        </div>
                                     </div>
                                     {activeDropdown === 'lcr-port' && (
-                                        <div className="absolute z-[60] w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-xl max-h-48 overflow-y-auto animate-in fade-in zoom-in duration-200">
+                                        <div className="absolute z-[60] w-full mt-1 bg-white border border-gray-100 rounded-xl shadow-xl max-h-48 overflow-y-auto py-1">
                                             {ports.filter(p => p.status === 'Active' && (!stockFormData.port || ports.some(x => x.name === stockFormData.port) || p.name.toLowerCase().includes(stockFormData.port.toLowerCase()))).map((port, idx) => (
                                                 <button
                                                     key={port._id}
                                                     type="button"
                                                     onClick={() => handleStockDropdownSelect('port', port.name)}
                                                     onMouseEnter={() => setHighlightedIndex(idx)}
-                                                    className={`w-full px-4 py-2 text-left text-sm transition-colors flex items-center justify-between group ${highlightedIndex === idx ? 'bg-blue-50 text-blue-700' : 'hover:bg-blue-50'}`}
+                                                    className={`w-full px-4 py-2 text-left text-sm transition-colors font-medium ${stockFormData.port === port.name ? 'bg-blue-50 text-blue-700' : highlightedIndex === idx ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-blue-50'}`}
                                                 >
-                                                    <span className={`font-medium ${highlightedIndex === idx ? 'text-blue-700' : 'text-gray-700'}`}>{port.name}</span>
-                                                    {stockFormData.port === port.name && <span className="w-2 h-2 bg-blue-500 rounded-full"></span>}
+                                                    {port.name}
                                                 </button>
                                             ))}
                                         </div>
@@ -1153,40 +1288,60 @@ function LCReceive({
                                             type="text"
                                             name="importer"
                                             value={stockFormData.importer}
-                                            onChange={handleStockInputChange}
+                                            onChange={(e) => { handleStockInputChange(e); setActiveDropdown('lcr-importer'); setHighlightedIndex(-1); }}
                                             onFocus={() => { setActiveDropdown('lcr-importer'); setHighlightedIndex(-1); }}
                                             onKeyDown={(e) => handleDropdownKeyDown(e, 'lcr-importer', handleStockDropdownSelect, 'importer', importers.filter(imp => imp.status === 'Active' && (!stockFormData.importer || importers.some(x => x.name === stockFormData.importer) || imp.name.toLowerCase().includes(stockFormData.importer.toLowerCase()))))}
-                                            required
-                                            placeholder="Select or type importer"
+                                            placeholder="Search importer..."
                                             autoComplete="off"
-                                            className="w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm pr-10"
+                                            className={`w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm pr-14 ${stockFormData.importer ? 'placeholder:text-gray-900 placeholder:font-semibold' : 'placeholder:text-gray-400'}`}
                                         />
-                                        {(stockFormData.importer || activeDropdown === 'lcr-importer') && (
-                                            <button
-                                                type="button"
-                                                onClick={() => setActiveDropdown(activeDropdown === 'lcr-importer' ? null : 'lcr-importer')}
-                                                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 focus:outline-none"
-                                            >
-                                                <ChevronDownIcon className={`w-4 h-4 transition-transform duration-200 ${activeDropdown === 'lcr-importer' ? 'rotate-180 text-blue-500' : ''}`} />
-                                            </button>
-                                        )}
+                                        <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-2">
+                                            {stockFormData.importer && (
+                                                <button type="button" onClick={() => handleStockDropdownSelect('importer', '')} className="text-gray-400 hover:text-gray-600">
+                                                    <XIcon className="w-4 h-4" />
+                                                </button>
+                                            )}
+                                            <SearchIcon className="w-4 h-4 text-gray-300 pointer-events-none" />
+                                        </div>
                                     </div>
                                     {activeDropdown === 'lcr-importer' && (
-                                        <div className="absolute z-[60] w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-xl max-h-48 overflow-y-auto animate-in fade-in zoom-in duration-200">
+                                        <div className="absolute z-[60] w-full mt-1 bg-white border border-gray-100 rounded-xl shadow-xl max-h-48 overflow-y-auto py-1">
                                             {importers.filter(imp => imp.status === 'Active' && (!stockFormData.importer || importers.some(x => x.name === stockFormData.importer) || imp.name.toLowerCase().includes(stockFormData.importer.toLowerCase()))).map((imp, idx) => (
                                                 <button
                                                     key={imp._id}
                                                     type="button"
                                                     onClick={() => handleStockDropdownSelect('importer', imp.name)}
                                                     onMouseEnter={() => setHighlightedIndex(idx)}
-                                                    className={`w-full px-4 py-2 text-left text-sm transition-colors flex items-center justify-between group ${highlightedIndex === idx ? 'bg-blue-50 text-blue-700' : 'hover:bg-blue-50'}`}
+                                                    className={`w-full px-4 py-2 text-left text-sm transition-colors font-medium ${stockFormData.importer === imp.name ? 'bg-blue-50 text-blue-700' : highlightedIndex === idx ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-blue-50'}`}
                                                 >
-                                                    <span className={`font-medium ${highlightedIndex === idx ? 'text-blue-700' : 'text-gray-700'}`}>{imp.name}</span>
-                                                    {stockFormData.importer === imp.name && <span className="w-2 h-2 bg-blue-500 rounded-full"></span>}
+                                                    {imp.name}
                                                 </button>
                                             ))}
                                         </div>
                                     )}
+                                </div>
+                                <div className="space-y-2 relative" ref={exporterRef}>
+                                    <label className="text-sm font-medium text-gray-700">Exporter</label>
+                                    <div className="relative">
+                                        <input
+                                            type="text"
+                                            name="exporter"
+                                            value={stockFormData.exporter}
+                                            onChange={(e) => { handleStockInputChange(e); setActiveDropdown('lcr-exporter'); setHighlightedIndex(-1); }}
+                                            onFocus={() => { setActiveDropdown('lcr-exporter'); setHighlightedIndex(-1); }}
+                                            placeholder="Search exporter..."
+                                            autoComplete="off"
+                                            className={`w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm pr-14 ${stockFormData.exporter ? 'placeholder:text-gray-900 placeholder:font-semibold' : 'placeholder:text-gray-400'}`}
+                                        />
+                                        <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-2">
+                                            {stockFormData.exporter && (
+                                                <button type="button" onClick={() => handleStockDropdownSelect('exporter', '')} className="text-gray-400 hover:text-gray-600">
+                                                    <XIcon className="w-4 h-4" />
+                                                </button>
+                                            )}
+                                            <SearchIcon className="w-4 h-4 text-gray-300 pointer-events-none" />
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
 
@@ -1327,34 +1482,29 @@ function LCReceive({
                                                                         setHighlightedIndex(-1);
                                                                     }}
                                                                     onKeyDown={(e) => handleDropdownKeyDown(e, `lcr-product-${pIndex}`, (field, val) => handleProductSelect(pIndex, val), 'name', getFilteredProducts(product.productName))}
-                                                                    placeholder="Select or type product"
+                                                                    placeholder="Search product..."
                                                                     autoComplete="off"
-                                                                    className="w-full h-[42px] px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm text-sm pr-10"
+                                                                    className={`w-full h-[42px] px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm text-sm pr-14 ${product.productName ? 'placeholder:text-gray-900 placeholder:font-semibold' : 'placeholder:text-gray-400'}`}
                                                                 />
-                                                                {(product.productName || activeDropdown === `lcr-product-${pIndex}`) && (
-                                                                    <button
-                                                                        type="button"
-                                                                        onClick={() => setActiveDropdown(activeDropdown === `lcr-product-${pIndex}` ? null : `lcr-product-${pIndex}`)}
-                                                                        className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
-                                                                    >
-                                                                        <ChevronDownIcon className={`w-4 h-4 transition-transform ${activeDropdown === `lcr-product-${pIndex}` ? 'rotate-180' : ''}`} />
-                                                                    </button>
-                                                                )}
+                                                                <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-2">
+                                                                    {product.productName && (
+                                                                        <button type="button" onClick={() => handleProductSelect(pIndex, '')} className="text-gray-400 hover:text-gray-600">
+                                                                            <XIcon className="w-4 h-4" />
+                                                                        </button>
+                                                                    )}
+                                                                    <SearchIcon className="w-4 h-4 text-gray-300 pointer-events-none" />
+                                                                </div>
                                                                 {activeDropdown === `lcr-product-${pIndex}` && (
-                                                                    <div className="absolute z-[60] w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-xl max-h-48 overflow-y-auto">
+                                                                    <div className="absolute z-[60] w-full mt-1 bg-white border border-gray-100 rounded-xl shadow-xl max-h-48 overflow-y-auto py-1">
                                                                         {getFilteredProducts(product.productName).map((p, idx) => (
                                                                             <button
                                                                                 key={p._id}
                                                                                 type="button"
                                                                                 onClick={() => handleProductSelect(pIndex, p.name)}
                                                                                 onMouseEnter={() => setHighlightedIndex(idx)}
-                                                                                className={`w-full text-left px-4 py-2 text-sm transition-colors flex items-center justify-between ${highlightedIndex === idx ? 'bg-blue-50 text-blue-700' : 'hover:bg-blue-50'}`}
+                                                                                className={`w-full text-left px-4 py-2 text-sm transition-colors font-medium ${product.productName === p.name ? 'bg-blue-50 text-blue-700' : highlightedIndex === idx ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-blue-50'}`}
                                                                             >
-                                                                                <div className="flex flex-col">
-                                                                                    <span className="font-medium">{p.name}</span>
-                                                                                    <span className="text-[10px] text-gray-400 font-mono">{p.hsCode || 'No HS Code'}</span>
-                                                                                </div>
-                                                                                {product.productName === p.name && <span className="w-2 h-2 bg-blue-500 rounded-full"></span>}
+                                                                                {p.name}
                                                                             </button>
                                                                         ))}
                                                                         {getFilteredProducts(product.productName).length === 0 && (
@@ -1370,17 +1520,25 @@ function LCReceive({
                                                                 <input
                                                                     type="text"
                                                                     value={product.brandEntries[0].brand}
-                                                                    placeholder="Select Brand"
-                                                                    onChange={(e) => handleBrandEntryChange(pIndex, 0, 'brand', e.target.value)}
+                                                                    placeholder="Search brand..."
+                                                                    onChange={(e) => { handleBrandEntryChange(pIndex, 0, 'brand', e.target.value); setActiveDropdown(`lcr-brand-${pIndex}-0`); setHighlightedIndex(-1); }}
                                                                     onFocus={() => {
                                                                         setActiveDropdown(`lcr-brand-${pIndex}-0`);
                                                                         setHighlightedIndex(-1);
                                                                     }}
                                                                     onKeyDown={(e) => handleDropdownKeyDown(e, `lcr-brand-${pIndex}-0`, (field, val) => { handleBrandEntryChange(pIndex, 0, 'brand', val); setActiveDropdown(null); }, 'brand', getFilteredBrands(product.brandEntries[0].brand, product.productName))}
-                                                                    className="w-full h-[42px] px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm text-sm"
+                                                                    className={`w-full h-[42px] px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm text-sm pr-14 ${product.brandEntries[0].brand ? 'placeholder:text-gray-900 placeholder:font-semibold' : 'placeholder:text-gray-400'}`}
                                                                 />
+                                                                <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-2">
+                                                                    {product.brandEntries[0].brand && (
+                                                                        <button type="button" onClick={() => { handleBrandEntryChange(pIndex, 0, 'brand', ''); setActiveDropdown(null); }} className="text-gray-400 hover:text-gray-600">
+                                                                            <XIcon className="w-4 h-4" />
+                                                                        </button>
+                                                                    )}
+                                                                    <SearchIcon className="w-4 h-4 text-gray-300 pointer-events-none" />
+                                                                </div>
                                                                 {activeDropdown === `lcr-brand-${pIndex}-0` && (
-                                                                    <div className="absolute z-[60] w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-48 overflow-y-auto">
+                                                                    <div className="absolute z-[60] w-full mt-1 bg-white border border-gray-100 rounded-xl shadow-lg max-h-48 overflow-y-auto py-1">
                                                                         {getFilteredBrands(product.brandEntries[0].brand, product.productName).map((brand, idx) => (
                                                                             <button
                                                                                 key={idx}
@@ -1390,9 +1548,9 @@ function LCReceive({
                                                                                     setActiveDropdown(null);
                                                                                 }}
                                                                                 onMouseEnter={() => setHighlightedIndex(idx)}
-                                                                                className={`w-full text-left px-3 py-2 text-sm transition-colors flex items-center justify-between ${highlightedIndex === idx ? 'bg-blue-50 text-blue-700' : 'hover:bg-blue-50'}`}
+                                                                                className={`w-full text-left px-4 py-2 text-sm transition-colors font-medium ${product.brandEntries[0].brand === brand ? 'bg-blue-50 text-blue-700' : highlightedIndex === idx ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-blue-50'}`}
                                                                             >
-                                                                                <span>{brand}</span>
+                                                                                {brand}
                                                                             </button>
                                                                         ))}
                                                                         {getFilteredBrands(product.brandEntries[0].brand, product.productName).length === 0 && (
@@ -1531,34 +1689,29 @@ function LCReceive({
                                                                         setHighlightedIndex(-1);
                                                                     }}
                                                                     onKeyDown={(e) => handleDropdownKeyDown(e, `lcr-product-${pIndex}`, (field, val) => handleProductSelect(pIndex, val), 'name', getFilteredProducts(product.productName))}
-                                                                    placeholder="Select or type product"
+                                                                    placeholder="Search product..."
                                                                     autoComplete="off"
-                                                                    className="w-full h-[42px] px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm pr-10"
+                                                                    className={`w-full h-[42px] px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm pr-14 ${product.productName ? 'placeholder:text-gray-900 placeholder:font-semibold' : 'placeholder:text-gray-400'}`}
                                                                 />
-                                                                {(product.productName || activeDropdown === `lcr-product-${pIndex}`) && (
-                                                                    <button
-                                                                        type="button"
-                                                                        onClick={() => setActiveDropdown(activeDropdown === `lcr-product-${pIndex}` ? null : `lcr-product-${pIndex}`)}
-                                                                        className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
-                                                                    >
-                                                                        <ChevronDownIcon className={`w-4 h-4 transition-transform ${activeDropdown === `lcr-product-${pIndex}` ? 'rotate-180' : ''}`} />
-                                                                    </button>
-                                                                )}
+                                                                <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-2">
+                                                                    {product.productName && (
+                                                                        <button type="button" onClick={() => handleProductSelect(pIndex, '')} className="text-gray-400 hover:text-gray-600">
+                                                                            <XIcon className="w-4 h-4" />
+                                                                        </button>
+                                                                    )}
+                                                                    <SearchIcon className="w-4 h-4 text-gray-300 pointer-events-none" />
+                                                                </div>
                                                                 {activeDropdown === `lcr-product-${pIndex}` && (
-                                                                    <div className="absolute z-[60] w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-xl max-h-48 overflow-y-auto">
+                                                                    <div className="absolute z-[60] w-full mt-1 bg-white border border-gray-100 rounded-xl shadow-xl max-h-48 overflow-y-auto py-1">
                                                                         {getFilteredProducts(product.productName).map((p, idx) => (
                                                                             <button
                                                                                 key={p._id}
                                                                                 type="button"
                                                                                 onClick={() => handleProductSelect(pIndex, p.name)}
                                                                                 onMouseEnter={() => setHighlightedIndex(idx)}
-                                                                                className={`w-full text-left px-4 py-2 text-sm transition-colors flex items-center justify-between ${highlightedIndex === idx ? 'bg-blue-50 text-blue-700' : 'hover:bg-blue-50'}`}
+                                                                                className={`w-full text-left px-4 py-2 text-sm transition-colors font-medium ${product.productName === p.name ? 'bg-blue-50 text-blue-700' : highlightedIndex === idx ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-blue-50'}`}
                                                                             >
-                                                                                <div className="flex flex-col">
-                                                                                    <span className="font-medium">{p.name}</span>
-                                                                                    <span className="text-[10px] text-gray-400 font-mono">{p.hsCode || 'No HS Code'}</span>
-                                                                                </div>
-                                                                                {product.productName === p.name && <span className="w-2 h-2 bg-blue-500 rounded-full"></span>}
+                                                                                {p.name}
                                                                             </button>
                                                                         ))}
                                                                         {getFilteredProducts(product.productName).length === 0 && (
@@ -1615,17 +1768,25 @@ function LCReceive({
                                                                                 <input
                                                                                     type="text"
                                                                                     value={entry.brand}
-                                                                                    placeholder="Select Brand"
-                                                                                    onChange={(e) => handleBrandEntryChange(pIndex, bIndex, 'brand', e.target.value)}
+                                                                                    placeholder="Search brand..."
+                                                                                    onChange={(e) => { handleBrandEntryChange(pIndex, bIndex, 'brand', e.target.value); setActiveDropdown(`lcr-brand-${pIndex}-${bIndex}`); setHighlightedIndex(-1); }}
                                                                                     onFocus={() => {
                                                                                         setActiveDropdown(`lcr-brand-${pIndex}-${bIndex}`);
                                                                                         setHighlightedIndex(-1);
                                                                                     }}
                                                                                     onKeyDown={(e) => handleDropdownKeyDown(e, `lcr-brand-${pIndex}-${bIndex}`, (field, val) => { handleBrandEntryChange(pIndex, bIndex, 'brand', val); setActiveDropdown(null); }, 'brand', getFilteredBrands(entry.brand, product.productName))}
-                                                                                    className="w-full h-9 px-2 text-sm bg-white border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-all"
+                                                                                    className={`w-full h-9 px-2 text-sm bg-white border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-all pr-12 ${entry.brand ? 'placeholder:text-gray-900 placeholder:font-semibold' : 'placeholder:text-gray-400'}`}
                                                                                 />
+                                                                                <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
+                                                                                    {entry.brand && (
+                                                                                        <button type="button" onClick={() => { handleBrandEntryChange(pIndex, bIndex, 'brand', ''); setActiveDropdown(null); }} className="text-gray-400 hover:text-gray-600">
+                                                                                            <XIcon className="w-3.5 h-3.5" />
+                                                                                        </button>
+                                                                                    )}
+                                                                                    <SearchIcon className="w-3.5 h-3.5 text-gray-300 pointer-events-none" />
+                                                                                </div>
                                                                                 {activeDropdown === `lcr-brand-${pIndex}-${bIndex}` && (
-                                                                                    <div className="absolute z-[60] w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-48 overflow-y-auto">
+                                                                                    <div className="absolute z-[60] w-full mt-1 bg-white border border-gray-100 rounded-xl shadow-lg max-h-48 overflow-y-auto py-1">
                                                                                         {getFilteredBrands(entry.brand, product.productName).map((brand, idx) => (
                                                                                             <button
                                                                                                 key={idx}
@@ -1635,9 +1796,9 @@ function LCReceive({
                                                                                                     setActiveDropdown(null);
                                                                                                 }}
                                                                                                 onMouseEnter={() => setHighlightedIndex(idx)}
-                                                                                                className={`w-full text-left px-3 py-2 text-sm transition-colors flex items-center justify-between ${highlightedIndex === idx ? 'bg-blue-50 text-blue-700' : 'hover:bg-blue-50'}`}
+                                                                                                className={`w-full text-left px-3 py-2 text-sm transition-colors font-medium ${entry.brand === brand ? 'bg-blue-50 text-blue-700' : highlightedIndex === idx ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-blue-50'}`}
                                                                                             >
-                                                                                                <span>{brand}</span>
+                                                                                                {brand}
                                                                                             </button>
                                                                                         ))}
                                                                                         {getFilteredBrands(entry.brand, product.productName).length === 0 && (
@@ -1745,20 +1906,156 @@ function LCReceive({
                                             <option>Sale From Panama</option>
                                         </select>
                                     </div>
+
+                                    {/* Warehouse Selection */}
+                                    <div className="w-full sm:w-64 space-y-2 relative" ref={whSelectRef}>
+                                        <label className="text-sm font-medium text-gray-700">Warehouse</label>
+                                        <div className="relative">
+                                            <input
+                                                type="text"
+                                                value={whSearchQuery}
+                                                onChange={(e) => {
+                                                    setWhSearchQuery(e.target.value);
+                                                    setShowWhSelectDropdown(true);
+                                                }}
+                                                onFocus={() => setShowWhSelectDropdown(true)}
+                                                placeholder={stockFormData.warehouse || "Search warehouse..."}
+                                                autoComplete="off"
+                                                className={`w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm pr-14 ${stockFormData.warehouse ? 'placeholder:text-gray-900 placeholder:font-semibold' : 'placeholder:text-gray-400'}`}
+                                            />
+                                            <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-2">
+                                                {stockFormData.warehouse && (
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => {
+                                                            setStockFormData(prev => ({ ...prev, warehouse: '' }));
+                                                            setWhSearchQuery('');
+                                                            setShowWhSelectDropdown(false);
+                                                        }}
+                                                        className="text-gray-400 hover:text-gray-600"
+                                                    >
+                                                        <XIcon className="w-4 h-4" />
+                                                    </button>
+                                                )}
+                                                <SearchIcon className="w-4 h-4 text-gray-300 pointer-events-none" />
+                                            </div>
+                                        </div>
+                                        {showWhSelectDropdown && (
+                                            <div className="absolute z-[200] mt-1 w-full bg-white border border-gray-100 rounded-xl shadow-xl max-h-48 overflow-y-auto py-1">
+                                                {warehouses
+                                                    .filter(wh => !whSearchQuery || wh.whName.toLowerCase().includes(whSearchQuery.toLowerCase()))
+                                                    .map((wh, idx) => (
+                                                        <button
+                                                            key={idx}
+                                                            type="button"
+                                                            onClick={() => {
+                                                                setStockFormData(prev => ({ ...prev, warehouse: wh.whName }));
+                                                                setWhSearchQuery('');
+                                                                setShowWhSelectDropdown(false);
+                                                            }}
+                                                            className={`w-full px-4 py-2 text-left text-sm hover:bg-blue-50 transition-colors font-medium ${stockFormData.warehouse === wh.whName ? 'bg-blue-50 text-blue-700' : 'text-gray-700'}`}
+                                                        >
+                                                            {wh.whName}
+                                                        </button>
+                                                    ))}
+                                                {warehouses.filter(wh => !whSearchQuery || wh.whName.toLowerCase().includes(whSearchQuery.toLowerCase())).length === 0 && (
+                                                    <div className="px-4 py-3 text-xs text-gray-400 italic">No warehouses found</div>
+                                                )}
+                                            </div>
+                                        )}
+                                    </div>
                                 </div>
+
+                                {selectedWhStock && (
+                                    <div className="col-span-1 md:col-span-2 mt-4 animate-in fade-in slide-in-from-top-4 duration-500">
+                                        <div className="bg-blue-50/50 backdrop-blur-sm border border-blue-100 rounded-2xl overflow-hidden shadow-sm">
+                                            <div className="px-6 py-4 border-b border-blue-100 flex items-center justify-between bg-blue-50/80">
+                                                <h4 className="text-sm font-bold text-blue-800 flex items-center gap-2">
+                                                    <BoxIcon className="w-4 h-4" />
+                                                    What's in {stockFormData.warehouse}
+                                                </h4>
+                                                <span className="text-[10px] font-bold text-blue-400 uppercase tracking-widest">Current Inventory</span>
+                                            </div>
+                                            <div className="max-h-64 overflow-y-auto">
+                                                <table className="w-full text-left border-collapse">
+                                                    <thead className="bg-white/50 sticky top-0 z-10">
+                                                        <tr>
+                                                            <th className="px-6 py-3 text-[10px] font-bold text-blue-400 uppercase tracking-wider">Product</th>
+                                                            <th className="px-6 py-3 text-[10px] font-bold text-blue-400 uppercase tracking-wider">Brand</th>
+                                                            <th className="px-6 py-3 text-[10px] font-bold text-blue-400 uppercase tracking-wider text-right">INHOUSE PACKET</th>
+                                                            <th className="px-6 py-3 text-[10px] font-bold text-blue-400 uppercase tracking-wider text-right">INHOUSE QUANTITY</th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody className="divide-y divide-blue-50">
+                                                        {selectedWhStock.length === 0 ? (
+                                                            <tr>
+                                                                <td colSpan="4" className="px-6 py-8 text-center text-blue-300 italic text-sm">
+                                                                    This warehouse is currently empty
+                                                                </td>
+                                                            </tr>
+                                                        ) : (
+                                                            selectedWhStock.map((prod, pIdx) => (
+                                                                <React.Fragment key={pIdx}>
+                                                                    {prod.brands.map((brand, bIdx) => (
+                                                                        <tr key={`${pIdx}-${bIdx}`} className="hover:bg-blue-50/80 transition-colors group">
+                                                                            <td className="px-6 py-3">
+                                                                                {bIdx === 0 && (
+                                                                                    <span className="text-sm font-bold text-gray-800">{prod.productName}</span>
+                                                                                )}
+                                                                            </td>
+                                                                            <td className="px-6 py-3">
+                                                                                <span className="text-sm text-gray-600 font-medium">{brand.brand}</span>
+                                                                            </td>
+                                                                            <td className="px-6 py-3 text-right font-bold text-gray-900 text-sm">
+                                                                                {(() => {
+                                                                                    const pkt = brand.whPkt || 0;
+                                                                                    const size = brand.packetSize || 0;
+                                                                                    const whole = Math.floor(pkt);
+                                                                                    const remainder = Math.round((pkt % 1) * size);
+                                                                                    return remainder > 0 ? `${whole.toLocaleString()} - ${remainder.toLocaleString()} kg` : whole.toLocaleString();
+                                                                                })()}
+                                                                            </td>
+                                                                            <td className="px-6 py-3 text-right font-bold text-gray-900 text-sm">
+                                                                                {parseFloat(brand.whQty || 0).toLocaleString()} kg
+                                                                            </td>
+                                                                        </tr>
+                                                                    ))}
+                                                                </React.Fragment>
+                                                            ))
+                                                        )}
+                                                    </tbody>
+                                                </table>
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
                             </div>
 
                             <div className="col-span-1 md:col-span-2 pt-4 flex items-center justify-between">
+                                {validationErrors.length > 0 && (
+                                    <div className="col-span-1 md:col-span-2 mb-4 bg-red-50 border border-red-100 rounded-xl p-4 animate-in fade-in slide-in-from-top-2">
+                                        <h5 className="text-xs font-bold text-red-600 uppercase tracking-wider mb-2 flex items-center gap-2">
+                                            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
+                                            Please correct the following:
+                                        </h5>
+                                        <ul className="list-disc list-inside space-y-1">
+                                            {validationErrors.map((err, i) => (
+                                                <li key={i} className="text-xs text-red-500 font-medium">{err}</li>
+                                            ))}
+                                        </ul>
+                                    </div>
+                                )}
+
                                 {submitStatus === 'success' && (
                                     <p className="text-green-600 font-medium flex items-center animate-bounce">
                                         <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"></path></svg>
                                         Stock saved successfully!
                                     </p>
                                 )}
-                                {submitStatus === 'error' && (
+                                {submitStatus === 'error' && validationErrors.length === 0 && (
                                     <p className="text-red-600 font-medium flex items-center">
                                         <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path></svg>
-                                        Failed to save stock.
+                                        Failed to save LC receive.
                                     </p>
                                 )}
                                 <div className="flex-1"></div>
@@ -1766,12 +2063,11 @@ function LCReceive({
                                     type="submit" disabled={isSubmitting}
                                     className="px-6 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-medium rounded-lg shadow-lg shadow-blue-500/30 transition-all transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed"
                                 >
-                                    {isSubmitting ? 'Saving...' : editingId ? 'Update Stock' : 'Add to Stock'}
+                                    {isSubmitting ? 'Saving...' : editingId ? 'Update LC Receive' : 'Add LC Receive'}
                                 </button>
                             </div>
-
                         </form>
-                    </div>
+                    </div >
                 )
             }
 
@@ -1799,6 +2095,7 @@ function LCReceive({
                                         <th className="px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Date</th>
                                         <th className="px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">LC No</th>
                                         <th className="px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Importer</th>
+                                        <th className="px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Exporter</th>
                                         <th className="px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Port</th>
                                         <th className="px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Ind CNF</th>
                                         <th className="px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Cost</th>
@@ -1828,7 +2125,7 @@ function LCReceive({
 
                                         Object.values(lcReceiveRecords.reduce((acc, item) => {
                                             // Lines 2753-2818 in App.jsx
-                                            const groupedKey = `${item.date}-${item.lcNo}-${item.port}-${item.indianCnF}-${item.bdCnF}-${item.importer}`;
+                                            const groupedKey = `${item.date}-${item.lcNo}-${item.port}-${item.indianCnF}-${item.bdCnF}-${item.importer}-${item.exporter}`;
 
                                             if (!acc[groupedKey]) {
                                                 acc[groupedKey] = {
@@ -1841,6 +2138,7 @@ function LCReceive({
                                                     bdCnF: item.bdCnF,
                                                     bdCnFCost: item.bdCnFCost,
                                                     importer: item.importer,
+                                                    exporter: item.exporter,
                                                     billOfEntry: item.billOfEntry,
                                                     totalLcTruck: 0,
                                                     totalQuantity: 0,
@@ -1902,6 +2200,7 @@ function LCReceive({
                                                     <td className="px-6 py-4 text-sm font-medium text-gray-900">{formatDate(entry.date)}</td>
                                                     <td className="px-6 py-4 text-sm text-gray-600">{entry.lcNo || '-'}</td>
                                                     <td className="px-6 py-4 text-sm text-gray-600">{entry.importer || '-'}</td>
+                                                    <td className="px-6 py-4 text-sm text-gray-600">{entry.exporter || '-'}</td>
                                                     <td className="px-6 py-4 text-sm text-gray-600">{entry.port || '-'}</td>
                                                     <td className="px-6 py-4 text-sm text-gray-600">{entry.indianCnF || '-'}</td>
                                                     <td className="px-6 py-4 text-sm text-gray-600">

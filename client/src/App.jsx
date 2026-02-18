@@ -38,6 +38,7 @@ function App() {
     lcNo: '',
     port: '',
     importer: '',
+    exporter: '',
     indianCnF: '',
     indCnFCost: '',
     bdCnF: '',
@@ -56,7 +57,7 @@ function App() {
 
   const [isLoading, setIsLoading] = useState(false);
   const [stockRecords, setStockRecords] = useState([]);
-  const [stockFilters, setStockFilters] = useState({ startDate: '', endDate: '', lcNo: '', port: '', brand: '', importer: '', productName: '' });
+  const [stockFilters, setStockFilters] = useState({ startDate: '', endDate: '', lcNo: '', port: '', brand: '', importer: '', exporter: '', productName: '' });
   const [selectedItems, setSelectedItems] = useState(new Set());
   const [isSelectionMode, setIsSelectionMode] = useState(false);
   const longPressTimer = useRef(null);
@@ -83,6 +84,7 @@ function App() {
     lcNo: '',
     port: '',
     indCnf: '',
+    exporter: '',
     bdCnf: '',
     billOfEntry: '',
     productName: '',
@@ -115,6 +117,7 @@ function App() {
 
       const matchesLC = (item.lcNo || '').toLowerCase().includes(searchLower);
       const matchesImporter = (item.importer || '').toLowerCase().includes(searchLower);
+      const matchesExporter = (item.exporter || '').toLowerCase().includes(searchLower);
       const matchesBillOfEntry = (item.billOfEntry || '').toLowerCase().includes(searchLower);
       const matchesPort = (item.port || '').toLowerCase().includes(searchLower);
       const matchesTruck = (item.truckNo || '').toLowerCase().includes(searchLower);
@@ -122,7 +125,7 @@ function App() {
       const brandList = item.brand ? [item.brand] : (item.brandEntries || []).map(e => e.brand);
       const matchesBrand = brandList.some(b => (b || '').trim().toLowerCase().includes(searchLower));
 
-      return matchesLC || matchesImporter || matchesBillOfEntry || matchesPort || matchesTruck || matchesProduct || matchesBrand;
+      return matchesLC || matchesImporter || matchesExporter || matchesBillOfEntry || matchesPort || matchesTruck || matchesProduct || matchesBrand;
     });
   }, [stockRecords, lcSearchQuery, lcFilters]);
 
@@ -330,6 +333,7 @@ function App() {
         billOfEntry: item.billOfEntry || '',
         port: item.port || '',
         importer: item.importer || '',
+        exporter: item.exporter || '',
         status: item.status || 'In Stock',
         totalLcTruck: item.totalLcTruck || '',
         totalLcQuantity: item.totalLcQuantity || '',

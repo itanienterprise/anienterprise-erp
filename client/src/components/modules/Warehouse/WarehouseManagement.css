@@ -16,4 +16,116 @@
     }
 }
 
+.warehouse-form-container {
+    position: relative;
+    background: rgba(255, 255, 255, 0.6);
+    backdrop-filter: blur(40px);
+    border: 1px solid rgba(255, 255, 255, 0.5);
+    border-radius: 1rem;
+    padding: 2.5rem;
+    margin-bottom: 2.5rem;
+    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+    animation: slideDown 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+    overflow: hidden;
+}
+
+.warehouse-form-bg-orb {
+    position: absolute;
+    width: 16rem;
+    height: 16rem;
+    border-radius: 50%;
+    filter: blur(80px);
+    pointer-events: none;
+}
+
+.warehouse-form-bg-orb-1 {
+    top: -6rem;
+    right: -6rem;
+    background: rgba(96, 165, 250, 0.1);
+}
+
+.warehouse-form-bg-orb-2 {
+    bottom: -6rem;
+    left: -6rem;
+    background: rgba(129, 140, 248, 0.1);
+}
+
+@keyframes slideDown {
+    from {
+        opacity: 0;
+        transform: translateY(-20px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.warehouse-form-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 2rem;
+    border-bottom: 1px solid rgba(229, 231, 235, 0.5);
+    padding-bottom: 1rem;
+    position: relative;
+    z-index: 10;
+}
+
+.warehouse-form-title {
+    font-size: 1.25rem;
+    font-weight: 600;
+    color: #1f2937;
+}
+
+.warehouse-form-close {
+    color: #9ca3af;
+    transition: color 0.2s;
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.warehouse-form-close:hover {
+    color: #f43f5e;
+}
+
+.warehouse-form-footer {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    margin-top: 1.5rem;
+    border-top: 1px solid #f3f4f6;
+    padding-top: 1.5rem;
+    gap: 1rem;
+    position: relative;
+    z-index: 10;
+}
+
+.warehouse-form-submit {
+    padding: 0.6rem 2rem;
+    background: linear-gradient(to right, #4f46e5, #4338ca);
+    color: white;
+    font-weight: 600;
+    border-radius: 0.75rem;
+    box-shadow: 0 10px 15px -3px rgba(79, 70, 229, 0.3);
+    transition: all 0.2s;
+    transform: scale(1);
+    display: flex;
+    align-items: center;
+    border: none;
+    cursor: pointer;
+}
+
+.warehouse-form-submit:hover {
+    background: linear-gradient(to right, #4338ca, #3730a3);
+    transform: scale(1.05);
+    box-shadow: 0 15px 20px -5px rgba(79, 70, 229, 0.4);
+}
+
 /* Add specific styles for Warehouse Management here */
