@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import {
   MenuIcon, SearchIcon, HomeIcon, UsersIcon, UserIcon, AnchorIcon,
   BarChartIcon, FunnelIcon, XIcon, DollarSignIcon, ShoppingCartIcon,
-  ChevronDownIcon, BoxIcon, BellIcon, TrashIcon
+  ChevronDownIcon, BoxIcon, BellIcon, TrashIcon, VegetableIcon, ReceiptIcon, TrendingUpIcon
 } from './components/Icons';
 
 import { encryptData, decryptData } from './utils/encryption';
@@ -18,14 +18,22 @@ import WarehouseManagement from './components/modules/Warehouse/WarehouseManagem
 import StockManagement from "./components/modules/StockManagement/StockManagement";
 import StockReport from './components/modules/StockManagement/StockReport';
 import LCReport from './components/modules/LCReceive/LCReport';
+import SaleManagement from './components/modules/Sale/SaleManagement';
 import { calculateStockData } from './utils/stockHelpers';
 
 
 function App() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [stockDropdownOpen, setStockDropdownOpen] = useState(false);
   const [currentView, setCurrentView] = useState(() => {
     return localStorage.getItem('currentView') || 'dashboard';
+  });
+  const [stockDropdownOpen, setStockDropdownOpen] = useState(() => {
+    const initialView = localStorage.getItem('currentView') || 'dashboard';
+    return initialView.includes('stock') || initialView === 'products-section' || initialView === 'warehouse-section';
+  });
+  const [saleDropdownOpen, setSaleDropdownOpen] = useState(() => {
+    const initialView = localStorage.getItem('currentView') || 'dashboard';
+    return initialView.includes('sale-section');
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitStatus, setSubmitStatus] = useState(null);
@@ -64,6 +72,7 @@ function App() {
   const isLongPressTriggered = useRef(false);
   const [editingId, setEditingId] = useState(null);
   const [deleteConfirm, setDeleteConfirm] = useState({ show: false, type: '', id: null, isBulk: false });
+  const [refreshKey, setRefreshKey] = useState(0);
 
   const [sortConfig, setSortConfig] = useState({
     stock: { key: 'date', direction: 'desc' },
@@ -286,34 +295,80 @@ function App() {
     }
   };
 
-  const handleDelete = (type, id, isBulk = false) => {
-    setDeleteConfirm({ show: true, type, id, isBulk });
+  const handleDelete = (type, id, isBulk = false, extraData = null) => {
+    setDeleteConfirm({ show: true, type, id, isBulk, extraData });
   };
 
   const confirmDelete = async () => {
-    const { type, id, isBulk } = deleteConfirm;
-    const endpoint = type === 'ip' ? 'ip-records' : type === 'importer' ? 'importers' : type === 'port' ? 'ports' : type === 'product' ? 'products' : 'stock';
+    const { type, id, isBulk, extraData } = deleteConfirm;
+    const endpoint = type === 'sales' ? 'sales' : type === 'ip' ? 'ip-records' : type === 'importer' ? 'importers' : type === 'port' ? 'ports' : type === 'product' ? 'products' : 'stock';
 
 
     try {
-      if (isBulk) {
-        // Bulk delete logic
-        await Promise.all(Array.from(selectedItems).map(itemId =>
-          fetch(`${API_BASE_URL}/api/${endpoint}/${itemId}`, { method: 'DELETE' })
+      if (type === 'stock') {
+        const idsToDelete = isBulk ? Array.from(selectedItems) : [id];
+
+        // Find deleted LCs from current stock list or extraData before deleting
+        let deletedLcNos = [];
+        if (extraData && extraData.lcNo) {
+          deletedLcNos = [extraData.lcNo];
+        } else {
+          // Fallback manually finding via stockRecords
+          const deletedRecords = stockRecords.filter(r => idsToDelete.includes(r._id) || (extraData && extraData.allIds && extraData.allIds.includes(r._id)));
+          deletedLcNos = [...new Set(deletedRecords.map(r => r.lcNo).filter(Boolean))];
+        }
+
+        const idsToRemove = extraData && extraData.allIds ? extraData.allIds : idsToDelete;
+
+        // 1. Delete Stock Records
+        await Promise.all(idsToRemove.map(itemId =>
+          fetch(`${API_BASE_URL}/api/stock/${itemId}`, { method: 'DELETE' })
         ));
-        setSelectedItems(new Set());
+
+        // 2. Cascading Delete for Warehouse Transferred Stock
+        if (deletedLcNos.length > 0) {
+          const whResponse = await fetch(`${API_BASE_URL}/api/warehouses`);
+          if (whResponse.ok) {
+            const rawWhData = await whResponse.json();
+            const whRecordsToDelete = rawWhData.filter(record => {
+              try {
+                const decrypted = decryptData(record.data);
+                return deletedLcNos.includes(decrypted.lcNo);
+              } catch (e) {
+                return false;
+              }
+            });
+
+            if (whRecordsToDelete.length > 0) {
+              await Promise.all(whRecordsToDelete.map(whRecord =>
+                fetch(`${API_BASE_URL}/api/warehouses/${whRecord._id}`, { method: 'DELETE' })
+              ));
+            }
+          }
+        }
+
+        if (isBulk) setSelectedItems(new Set());
+        fetchStockRecords();
       } else {
-        // Single delete
-        await fetch(`${API_BASE_URL}/api/${endpoint}/${id}`, { method: 'DELETE' });
+        if (isBulk) {
+          // Bulk delete logic
+          await Promise.all(Array.from(selectedItems).map(itemId =>
+            fetch(`${API_BASE_URL}/api/${endpoint}/${itemId}`, { method: 'DELETE' })
+          ));
+          setSelectedItems(new Set());
+        } else {
+          // Single delete
+          await fetch(`${API_BASE_URL}/api/${endpoint}/${id}`, { method: 'DELETE' });
+        }
+
+        if (type === 'ip') fetchIpRecords();
+        else if (type === 'importer') fetchImporters();
+        else if (type === 'port') fetchPorts();
+        else if (type === 'product') fetchProducts();
+        else if (type === 'sales' || type === 'customer') setRefreshKey(prev => prev + 1);
       }
 
-      if (type === 'ip') fetchIpRecords();
-      else if (type === 'importer') fetchImporters();
-      else if (type === 'port') fetchPorts();
-      else if (type === 'stock') fetchStockRecords();
-      else if (type === 'product') fetchProducts();
-
-      setDeleteConfirm({ show: false, type: '', id: null, isBulk: false });
+      setDeleteConfirm({ show: false, type: '', id: null, isBulk: false, extraData: null });
     } catch (error) {
       console.error('Error deleting:', error);
     }
@@ -648,6 +703,7 @@ function App() {
       case 'customer-section':
         return (
           <Customer
+            key={refreshKey}
             isSelectionMode={isSelectionMode}
             setIsSelectionMode={setIsSelectionMode}
             selectedItems={selectedItems}
@@ -656,7 +712,7 @@ function App() {
             setEditingId={setEditingId}
             sortConfig={sortConfig}
             setSortConfig={setSortConfig}
-            onDeleteConfirm={setDeleteConfirm}
+            onDeleteConfirm={(data) => handleDelete(data.type, data.id, data.isBulk, data.extraData)}
             startLongPress={startLongPress}
             endLongPress={endLongPress}
             isLongPressTriggered={isLongPressTriggered}
@@ -665,6 +721,34 @@ function App() {
       case 'warehouse-section':
         return (
           <WarehouseManagement />
+        );
+      case 'general-sale-section':
+        return (
+          <SaleManagement
+            key={refreshKey}
+            saleType="General"
+            isSelectionMode={isSelectionMode}
+            setIsSelectionMode={setIsSelectionMode}
+            selectedItems={selectedItems}
+            setSelectedItems={setSelectedItems}
+            onDeleteConfirm={(data) => handleDelete(data.type, data.id, data.isBulk, data.extraData)}
+            startLongPress={startLongPress}
+            endLongPress={endLongPress}
+          />
+        );
+      case 'boarder-sale-section':
+        return (
+          <SaleManagement
+            key={refreshKey}
+            saleType="Boarder"
+            isSelectionMode={isSelectionMode}
+            setIsSelectionMode={setIsSelectionMode}
+            selectedItems={selectedItems}
+            setSelectedItems={setSelectedItems}
+            onDeleteConfirm={(data) => handleDelete(data.type, data.id, data.isBulk, data.extraData)}
+            startLongPress={startLongPress}
+            endLongPress={endLongPress}
+          />
         );
       default:
         return null;
@@ -723,6 +807,36 @@ function App() {
           </button>
           <div>
             <button
+              onClick={() => setSaleDropdownOpen(!saleDropdownOpen)}
+              className={`w-full flex items-center justify-between px-4 py-3 rounded-lg transition-all ${currentView.includes('sale-section') ? 'bg-blue-50 text-blue-600 shadow-sm' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'}`}
+            >
+              <div className="flex items-center">
+                <ReceiptIcon className="w-5 h-5 mr-3" />
+                <span className="font-medium">Sale</span>
+              </div>
+              <ChevronDownIcon className={`w-4 h-4 transition-transform duration-200 ${saleDropdownOpen ? 'transform rotate-180' : ''}`} />
+            </button>
+            <div className={`overflow-hidden transition-all duration-300 ease-in-out ${saleDropdownOpen ? 'max-h-48 opacity-100 mt-1' : 'max-h-0 opacity-0'}`}>
+              <div className="pl-9 pr-2 space-y-1">
+                <button
+                  onClick={() => { setCurrentView('general-sale-section'); setSidebarOpen(false); }}
+                  className={`w-full flex flex-row items-center py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'general-sale-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'}`}
+                >
+                  <DollarSignIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
+                  <span>General Sale</span>
+                </button>
+                <button
+                  onClick={() => { setCurrentView('boarder-sale-section'); setSidebarOpen(false); }}
+                  className={`w-full flex flex-row items-center py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'boarder-sale-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'}`}
+                >
+                  <TrendingUpIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
+                  <span>Boarder Sale</span>
+                </button>
+              </div>
+            </div>
+          </div>
+          <div>
+            <button
               onClick={() => setStockDropdownOpen(!stockDropdownOpen)}
               className={`w-full flex items-center justify-between px-4 py-3 rounded-lg transition-all ${currentView.includes('stock') || currentView === 'products-section' ? 'bg-blue-50 text-blue-600 shadow-sm' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'}`}
             >
@@ -732,25 +846,28 @@ function App() {
               </div>
               <ChevronDownIcon className={`w-4 h-4 transition-transform duration-200 ${stockDropdownOpen ? 'transform rotate-180' : ''}`} />
             </button>
-            <div className={`overflow-hidden transition-all duration-300 ease-in-out ${stockDropdownOpen ? 'max-h-40 opacity-100 mt-1' : 'max-h-0 opacity-0'}`}>
-              <div className="pl-12 pr-4 space-y-1">
+            <div className={`overflow-hidden transition-all duration-300 ease-in-out ${stockDropdownOpen ? 'max-h-48 opacity-100 mt-1' : 'max-h-0 opacity-0'}`}>
+              <div className="pl-9 pr-2 space-y-1">
+                <button
+                  onClick={() => { setCurrentView('products-section'); setSidebarOpen(false); }}
+                  className={`w-full flex flex-row items-center py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'products-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'}`}
+                >
+                  <VegetableIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
+                  <span>Product</span>
+                </button>
                 <button
                   onClick={() => { setCurrentView('stock-section'); setSidebarOpen(false); }}
-                  className={`w-full text-left py-2 px-3 rounded-md text-sm transition-colors ${currentView === 'stock-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'}`}
+                  className={`w-full flex flex-row items-center py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'stock-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'}`}
                 >
-                  Stock Management
+                  <BarChartIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
+                  <span>Stock Management</span>
                 </button>
                 <button
                   onClick={() => { setCurrentView('warehouse-section'); setSidebarOpen(false); }}
-                  className={`w-full text-left py-2 px-3 rounded-md text-sm transition-colors ${currentView === 'warehouse-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'}`}
+                  className={`w-full flex flex-row items-center py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'warehouse-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'}`}
                 >
-                  Ware House
-                </button>
-                <button
-                  onClick={() => { setCurrentView('products-section'); setSidebarOpen(false); }}
-                  className={`w-full text-left py-2 px-3 rounded-md text-sm transition-colors ${currentView === 'products-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'}`}
-                >
-                  Products
+                  <HomeIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
+                  <span>WareHouse</span>
                 </button>
               </div>
             </div>

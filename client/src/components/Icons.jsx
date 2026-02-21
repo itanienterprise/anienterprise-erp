@@ -101,3 +101,10 @@ export const MapPinIcon = ({ className }) => (
     <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z" /><circle cx="12" cy="10" r="3" /></svg>
 );
 
+export const VegetableIcon = ({ className }) => (
+    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M11.5 22 10 20.5l1.5-1.5L10 17.5l1.5-1.5L10 14.5l1.85-1.85a7 7 0 0 1 9.9 9.9L20 20.5l-1.5 1.5L17 20.5l-1.5 1.5L14 20.5 12.5 22Z" /><path d="M11.5 13.5l1.5-1.5M14.5 16.5l1.5-1.5M16.5 18.5l1.5-1.5" /><path d="M18 10l-.5-2.5L15 7l.5-2.5L13 4l.5-2.5" /><path d="M21 13l2.5-.5L22 10l2.5-.5L23 7l2.5-.5" /></svg>
+);
+
+export const ReceiptIcon = ({ className }) => (
+    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M4 2v20l2-1 2 1 2-1 2 1 2-1 2 1 2-1 2 1V2l-2 1-2-1-2 1-2-1-2 1-2-1-2 1-2-1Z" /><path d="M16 8h-6a2 2 0 1 0 0 4h4a2 2 0 1 1 0 4H8" /><path d="M12 17.5V18.5" /><path d="M12 5.5V6.5" /></svg>
+);

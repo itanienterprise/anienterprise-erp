@@ -588,3 +588,370 @@ export const generateStockReportPDF = (stockData, filters) => {
         alert(`Failed to generate Stock PDF: ${error.message}`);
     }
 };
+
+export const generateWarehouseReportPDF = (reportData, filters, fullData = null) => {
+    try {
+        const doc = new jsPDF();
+
+        // --- Configuration ---
+        const pageWidth = doc.internal.pageSize.width;
+        const pageHeight = doc.internal.pageSize.height;
+        const margin = 5;
+
+        // --- Header ---
+        doc.setFontSize(22);
+        doc.setFont('helvetica', 'bold');
+        doc.text("M/S ANI ENTERPRISE", pageWidth / 2, 20, { align: 'center' });
+
+        doc.setFontSize(10);
+        doc.setFont('helvetica', 'normal');
+        doc.setTextColor(100);
+        doc.text("766, H.M Tower, Level-06, Borogola, Bogura-5800, Bangladesh", pageWidth / 2, 26, { align: 'center' });
+        doc.text("+8802588813057, +8801711-406898, anienterprise051@gmail.com, www.anienterprises.com.bd", pageWidth / 2, 31, { align: 'center' });
+
+        // Separator
+        doc.setDrawColor(0);
+        doc.setLineWidth(0.5);
+        doc.line(margin, 40, pageWidth - margin, 40);
+
+        // Report Title
+        doc.setFillColor(255, 255, 255);
+        doc.setDrawColor(0);
+        doc.rect(pageWidth / 2 - 40, 37, 80, 8, 'FD');
+        doc.setFontSize(12);
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(0);
+        doc.text("WAREHOUSE STOCK REPORT", pageWidth / 2, 42, { align: 'center' });
+
+        // --- Info Row ---
+        let yPos = 55;
+        doc.setFontSize(10);
+
+        // Left Side: Date Range, Warehouse, Product
+        doc.setFont('helvetica', 'bold');
+        doc.text("Date Range:", margin, yPos);
+        doc.setFont('helvetica', 'normal');
+        doc.text(`${filters.startDate || 'Start'} to ${filters.endDate || 'Present'}`, margin + 22, yPos);
+
+        if (filters.warehouse) {
+            yPos += 5;
+            doc.setFont('helvetica', 'bold');
+            doc.text("Warehouse:", margin, yPos);
+            doc.setFont('helvetica', 'normal');
+            doc.text(filters.warehouse, margin + 22, yPos);
+        }
+
+        if (filters.productName) {
+            yPos += 5;
+            doc.setFont('helvetica', 'bold');
+            doc.text("Product:", margin, yPos);
+            doc.setFont('helvetica', 'normal');
+            doc.text(filters.productName, margin + 22, yPos);
+        }
+
+        // Right Side: Printed On
+        const dateStr = new Date().toLocaleDateString(undefined, { day: 'numeric', month: 'numeric', year: 'numeric' });
+        doc.setFont('helvetica', 'normal');
+        doc.text(`Printed on: ${dateStr}`, pageWidth - margin, 55, { align: 'right' });
+
+        // --- Grouping Logic (Matching UI) ---
+        // Use fullData (all warehouseData) for InHouse totals so warehouse filter doesn't zero them out
+        const inHouseSource = fullData || reportData;
+
+        // 1. Calculate Global InHouse Totals from ALL stock records (ignoring warehouse filter)
+        const globalInHouseMap = inHouseSource.reduce((acc, item) => {
+            if (item.recordType !== 'stock') return acc;
+            const brandKey = `${(item.productName || '').trim()}|${(item.brand || '-').trim()}`;
+            if (!acc[brandKey]) acc[brandKey] = { inhouseQty: 0, inhousePkt: 0 };
+            acc[brandKey].inhouseQty += parseFloat(item.inhouseQty) || 0;
+            acc[brandKey].inhousePkt += parseFloat(item.inhousePkt) || 0;
+            return acc;
+        }, {});
+
+        // 2. Calculate Warehouse Totals from filtered report data only
+        const globalBrandTotalsMap = reportData.reduce((acc, item) => {
+            const brandKey = `${(item.productName || '').trim()}|${(item.brand || '-').trim()}`;
+            if (!acc[brandKey]) {
+                acc[brandKey] = {
+                    inhouseQty: globalInHouseMap[brandKey]?.inhouseQty || 0,
+                    inhousePkt: globalInHouseMap[brandKey]?.inhousePkt || 0,
+                    whQty: 0,
+                    whPkt: 0
+                };
+            }
+
+            // Sum Warehouse stock from warehouse records OR stock records with a real warehouse assigned
+            const isRealWarehouse = item.recordType === 'warehouse' ||
+                (item.recordType === 'stock' && item.whName && item.whName !== 'General / In Stock');
+            if (isRealWarehouse) {
+                acc[brandKey].whQty += parseFloat(item.whQty) || 0;
+                acc[brandKey].whPkt += parseFloat(item.whPkt) || 0;
+            }
+
+            return acc;
+        }, {});
+
+        // Ensure all brands from globalInHouseMap have an entry (needed for grand totals)
+        Object.keys(globalInHouseMap).forEach(brandKey => {
+            if (!globalBrandTotalsMap[brandKey]) {
+                globalBrandTotalsMap[brandKey] = {
+                    inhouseQty: globalInHouseMap[brandKey].inhouseQty,
+                    inhousePkt: globalInHouseMap[brandKey].inhousePkt,
+                    whQty: 0,
+                    whPkt: 0
+                };
+            }
+        });
+
+        // 3. Group for Display: Warehouse -> Product -> Brands (Using Global Inhouse values)
+        const consolidatedData = reportData.reduce((acc, item) => {
+            const rawWhName = (item.whName || '').trim();
+            // Skip General / In Stock records from display rows when warehouse filter is active
+            if (item.recordType === 'stock' && (!rawWhName || rawWhName === 'General / In Stock')) {
+                if (filters.warehouse) return acc;
+            }
+
+            const whName = (rawWhName || 'General / In Stock');
+            const prodName = (item.productName || 'Unknown').trim();
+            const brand = (item.brand || '-').trim();
+            const brandKey = `${prodName}|${brand}`;
+
+            if (!acc[whName]) acc[whName] = { whName, products: {} };
+            if (!acc[whName].products[prodName]) {
+                acc[whName].products[prodName] = { productName: prodName, brands: {} };
+            }
+
+            if (!acc[whName].products[prodName].brands[brand]) {
+                acc[whName].products[prodName].brands[brand] = {
+                    brand,
+                    // Use Global InHouse totals (always correct regardless of warehouse filter)
+                    inhouseQty: globalBrandTotalsMap[brandKey]?.inhouseQty || 0,
+                    inhousePkt: globalBrandTotalsMap[brandKey]?.inhousePkt || 0,
+                    whQty: 0,
+                    whPkt: 0
+                };
+            }
+
+            // Sum Warehouse stock from warehouse records OR stock records with a real warehouse assigned
+            const isRealWarehouse = item.recordType === 'warehouse' ||
+                (item.recordType === 'stock' && rawWhName && rawWhName !== 'General / In Stock');
+            if (isRealWarehouse) {
+                acc[whName].products[prodName].brands[brand].whQty += parseFloat(item.whQty) || 0;
+                acc[whName].products[prodName].brands[brand].whPkt += parseFloat(item.whPkt) || 0;
+            }
+
+            return acc;
+        }, {});
+
+        const tableRows = [];
+        const displayGroups = Object.values(consolidatedData).map(wh => ({
+            ...wh,
+            products: Object.values(wh.products).map(p => ({
+                ...p,
+                brands: Object.values(p.brands).sort((a, b) => a.brand.localeCompare(b.brand))
+            })).sort((a, b) => a.productName.localeCompare(b.productName))
+        })).sort((a, b) => a.whName.localeCompare(b.whName));
+
+        displayGroups.forEach((whGroup, whIdx) => {
+            const totalRowsForWarehouse = whGroup.products.reduce((sum, p) => sum + p.brands.length + (p.brands.length > 1 ? 1 : 0), 0);
+
+            whGroup.products.forEach((pGroup, pIdx) => {
+                const hasTotal = pGroup.brands.length > 1;
+                const totalRowsForProduct = pGroup.brands.length + (hasTotal ? 1 : 0);
+
+                pGroup.brands.forEach((brandItem, bIdx) => {
+                    const row = [];
+
+                    // SL, Warehouse and Product Name with rowSpan (only in the first row of the group)
+                    if (pIdx === 0 && bIdx === 0) {
+                        row.push({ content: (whIdx + 1).toString(), rowSpan: totalRowsForWarehouse, styles: { valign: 'top', halign: 'center' } });
+                        row.push({ content: whGroup.whName.toUpperCase(), rowSpan: totalRowsForWarehouse, styles: { valign: 'top', fontStyle: 'bold' } });
+                    }
+                    if (bIdx === 0) {
+                        row.push({ content: pGroup.productName, rowSpan: totalRowsForProduct, styles: { fontStyle: 'bold', valign: 'top', textTransform: 'uppercase' } });
+                    }
+
+                    // Brand details (Individual row per brand)
+                    row.push({ content: (brandItem.brand || '-').toUpperCase(), styles: { valign: 'top' } });
+                    row.push({ content: Math.round(parseFloat(brandItem.inhouseQty) || 0).toLocaleString(), styles: { halign: 'right', valign: 'top' } });
+                    row.push({ content: Math.round(parseFloat(brandItem.inhousePkt) || 0).toLocaleString(), styles: { halign: 'right', valign: 'top' } });
+                    row.push({ content: Math.round(parseFloat(brandItem.whQty) || 0).toLocaleString(), styles: { halign: 'right', valign: 'top', fontStyle: 'bold' } });
+                    row.push({ content: Math.round(parseFloat(brandItem.whPkt) || 0).toLocaleString(), styles: { halign: 'right', valign: 'top', fontStyle: 'bold' } });
+
+                    tableRows.push(row);
+                });
+
+                // Add Sub-total row if product has multiple brands
+                if (hasTotal) {
+                    tableRows.push([
+                        { content: 'SUB TOTAL', styles: { fontStyle: 'bold', halign: 'right', fillColor: [250, 250, 250] }, colSpan: 1 }, // Spanning Brand col
+                        { content: Math.round(pGroup.brands.reduce((sum, b) => sum + (parseFloat(b.inhouseQty) || 0), 0)).toLocaleString(), styles: { halign: 'right', fontStyle: 'bold', fillColor: [250, 250, 250] } },
+                        { content: Math.round(pGroup.brands.reduce((sum, b) => sum + (parseFloat(b.inhousePkt) || 0), 0)).toLocaleString(), styles: { halign: 'right', fontStyle: 'bold', fillColor: [250, 250, 250], textColor: [0, 100, 0] } },
+                        { content: Math.round(pGroup.brands.reduce((sum, b) => sum + (parseFloat(b.whQty) || 0), 0)).toLocaleString(), styles: { halign: 'right', fontStyle: 'bold', fillColor: [250, 250, 250] } },
+                        { content: Math.round(pGroup.brands.reduce((sum, b) => sum + (parseFloat(b.whPkt) || 0), 0)).toLocaleString(), styles: { halign: 'right', fontStyle: 'bold', fillColor: [250, 250, 250], textColor: [0, 0, 150] } }
+                    ]);
+                }
+            });
+        });
+
+        const pdfTotals = Object.values(globalBrandTotalsMap).reduce((acc, b) => {
+            acc.inhouseQty += b.inhouseQty;
+            acc.inhousePkt += b.inhousePkt;
+            acc.whQty += b.whQty;
+            acc.whPkt += b.whPkt;
+            return acc;
+        }, { inhouseQty: 0, inhousePkt: 0, whQty: 0, whPkt: 0 });
+
+        // Add Grand Total Row
+        tableRows.push([
+            { content: 'GRAND TOTAL', styles: { fontStyle: 'bold', halign: 'right', fillColor: [240, 240, 240] }, colSpan: 4 },
+            { content: Math.round(pdfTotals.inhouseQty).toLocaleString(), styles: { halign: 'right', fontStyle: 'bold', fillColor: [240, 240, 240] } },
+            { content: Math.round(pdfTotals.inhousePkt).toLocaleString(), styles: { halign: 'right', fontStyle: 'bold', fillColor: [240, 240, 240] } },
+            { content: Math.round(pdfTotals.whQty).toLocaleString(), styles: { halign: 'right', fontStyle: 'bold', fillColor: [240, 240, 240] } },
+            { content: Math.round(pdfTotals.whPkt).toLocaleString(), styles: { halign: 'right', fontStyle: 'bold', fillColor: [240, 240, 240] } }
+        ]);
+
+        // --- Table ---
+        autoTable(doc, {
+            startY: yPos + 10,
+            head: [['SL', 'WAREHOUSE', 'PRODUCT NAME', 'BRAND', 'INHOUSE QTY', 'INHOUSE PKT', 'WAREHOUSE QTY', 'WAREHOUSE PKT']],
+            body: tableRows,
+            theme: 'plain',
+            styles: {
+                fontSize: 8,
+                cellPadding: 1.2,
+                lineColor: [0, 0, 0],
+                lineWidth: 0.1,
+                textColor: [0, 0, 0],
+                valign: 'middle'
+            },
+            headStyles: {
+                fillColor: [245, 245, 245],
+                textColor: [0, 0, 0],
+                fontStyle: 'bold',
+                halign: 'center',
+                lineWidth: 0.1
+            },
+            columnStyles: {
+                0: { cellWidth: 8, halign: 'center' },
+                1: { cellWidth: 22 },
+                2: { cellWidth: 30 },
+                3: { cellWidth: 70 },
+                4: { cellWidth: 17, halign: 'right' },
+                5: { cellWidth: 17, halign: 'right' },
+                6: { cellWidth: 17, halign: 'right' },
+                7: { cellWidth: 17, halign: 'right' }
+            },
+            margin: { left: margin, right: margin }
+        });
+
+        // --- Footer / Summary ---
+        let finalY = doc.lastAutoTable.finalY + 12;
+
+        // Avoid page break issues for summary
+        if (finalY + 60 > pageHeight) {
+            doc.addPage();
+            finalY = 20;
+        }
+
+        // --- Card-Style Summary ---
+        const cardWidth = 64;
+        const cardHeight = 25;
+        const cardGap = 4;
+        const totalCardsWidth = (cardWidth * 2) + cardGap;
+        let cardX = (pageWidth - totalCardsWidth) / 2; // Center horizontally
+
+        const drawSummaryCard = (x, y, title, pktVal, qtyVal, isBlue = false) => {
+            // Main card border and background
+            doc.setDrawColor(200);
+            doc.setLineWidth(0.2);
+            doc.setFillColor(255, 255, 255);
+            doc.rect(x, y, cardWidth, cardHeight, 'FD');
+
+            // Header strip
+            doc.setFillColor(isBlue ? 239 : 249, isBlue ? 246 : 250, isBlue ? 255 : 251);
+            doc.rect(x, y, cardWidth, 8, 'F');
+            doc.setDrawColor(isBlue ? 219 : 229, isBlue ? 234 : 231, isBlue ? 254 : 235);
+            doc.line(x, y + 8, x + cardWidth, y + 8);
+
+            // Header text (centered)
+            doc.setFontSize(9);
+            doc.setFont('helvetica', 'bold');
+            doc.setTextColor(isBlue ? 59 : 107, isBlue ? 130 : 114, isBlue ? 246 : 128);
+            const titleWidth = doc.getTextWidth(title);
+            doc.text(title, x + (cardWidth - titleWidth) / 2, y + 5.5);
+
+            // Row 1: PKT (centered)
+            doc.setFontSize(10);
+            doc.setFont('helvetica', 'normal');
+            doc.setTextColor(107, 114, 128); // gray label color
+            const pktLabelWidth = doc.getTextWidth("PKT: ");
+            doc.setFont('helvetica', 'bold');
+            doc.setTextColor(isBlue ? 29 : 17, isBlue ? 78 : 24, isBlue ? 216 : 39); // blue/black value color
+            const pktValWidth = doc.getTextWidth(Math.round(pktVal).toLocaleString());
+
+            let pktTotalWidth = pktLabelWidth + pktValWidth;
+            let pktLineX = x + (cardWidth - pktTotalWidth) / 2;
+
+            doc.setFont('helvetica', 'normal');
+            doc.setTextColor(107, 114, 128);
+            doc.text("PKT: ", pktLineX, y + 15);
+
+            doc.setFont('helvetica', 'bold');
+            doc.setTextColor(isBlue ? 29 : 17, isBlue ? 78 : 24, isBlue ? 216 : 39);
+            doc.text(`${Math.round(pktVal).toLocaleString()}`, pktLineX + pktLabelWidth, y + 15);
+
+            // Row 2: QTY (centered)
+            const qtyStrVal = `${Math.round(qtyVal).toLocaleString()} kg`;
+            doc.setFont('helvetica', 'normal');
+            doc.setTextColor(107, 114, 128);
+            const qtyLabelWidth = doc.getTextWidth("QTY: ");
+            doc.setFont('helvetica', 'bold');
+            doc.setTextColor(isBlue ? 29 : 17, isBlue ? 78 : 24, isBlue ? 216 : 39);
+            const qtyValWidth = doc.getTextWidth(qtyStrVal);
+
+            let qtyTotalWidth = qtyLabelWidth + qtyValWidth;
+            let qtyLineX = x + (cardWidth - qtyTotalWidth) / 2;
+
+            doc.setFont('helvetica', 'normal');
+            doc.setTextColor(107, 114, 128);
+            doc.text("QTY: ", qtyLineX, y + 21);
+
+            doc.setFont('helvetica', 'bold');
+            doc.setTextColor(isBlue ? 29 : 17, isBlue ? 78 : 24, isBlue ? 216 : 39);
+            doc.text(qtyStrVal, qtyLineX + qtyLabelWidth, y + 21);
+        };
+
+        // Card 1: TOTAL INHOUSE STOCK
+        drawSummaryCard(cardX, finalY, "TOTAL INHOUSE STOCK", pdfTotals.inhousePkt, pdfTotals.inhouseQty, false);
+        cardX += cardWidth + cardGap;
+
+        // Card 2: WAREHOUSE STOCK
+        drawSummaryCard(cardX, finalY, "WAREHOUSE STOCK", pdfTotals.whPkt, pdfTotals.whQty, true);
+
+        // --- Signatures ---
+        const sigY = finalY + 45;
+        const sigWidth = 45;
+        const sigGap = (pageWidth - (margin * 2) - (sigWidth * 3)) / 2;
+        doc.setFontSize(8); doc.setFont('helvetica', 'bold'); doc.setTextColor(0); doc.setDrawColor(0); doc.setLineWidth(0.2);
+        doc.setLineDashPattern([1, 1], 0);
+
+        doc.line(margin, sigY, margin + sigWidth, sigY);
+        doc.text("PREPARED BY", margin + sigWidth / 2, sigY + 5, { align: 'center' });
+
+        doc.line(margin + sigWidth + sigGap, sigY, margin + sigWidth + sigGap + sigWidth, sigY);
+        doc.text("VERIFIED BY", margin + sigWidth + sigGap + sigWidth / 2, sigY + 5, { align: 'center' });
+
+        doc.line(pageWidth - margin - sigWidth, sigY, pageWidth - margin, sigY);
+        doc.text("AUTHORIZED SIGNATURE", pageWidth - margin - sigWidth / 2, sigY + 5, { align: 'center' });
+
+        // Finalize
+        const pdfOutput = doc.output('blob');
+        const blobURL = URL.createObjectURL(pdfOutput);
+        window.open(blobURL, '_blank');
+
+    } catch (error) {
+        console.error("Warehouse PDF Generation Error:", error);
+        alert(`Failed to generate Warehouse PDF: ${error.message}`);
+    }
+};

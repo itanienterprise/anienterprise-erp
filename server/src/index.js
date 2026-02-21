@@ -24,6 +24,7 @@ const Stock = require('./models/Stock');
 const Product = require('./models/Product');
 const Customer = require('./models/Customer');
 const Warehouse = require('./models/Warehouse');
+const Sale = require('./models/Sale');
 
 
 // Routes
@@ -310,6 +311,46 @@ app.get('/api/warehouses', async (req, res) => {
   try {
     const warehouses = await Warehouse.find().sort({ createdAt: -1 });
     res.json(warehouses);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// Sale APIs
+app.post('/api/sales', async (req, res) => {
+  try {
+    const newSale = new Sale(req.body);
+    const savedSale = await newSale.save();
+    res.status(201).json(savedSale);
+  } catch (err) {
+    res.status(400).json({ message: err.message });
+  }
+});
+
+app.delete('/api/sales/:id', async (req, res) => {
+  try {
+    const deletedSale = await Sale.findByIdAndDelete(req.params.id);
+    if (!deletedSale) return res.status(404).json({ message: 'Sale not found' });
+    res.json({ message: 'Sale deleted' });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+app.put('/api/sales/:id', async (req, res) => {
+  try {
+    const updatedSale = await Sale.findByIdAndUpdate(req.params.id, req.body, { new: true });
+    if (!updatedSale) return res.status(404).json({ message: 'Sale not found' });
+    res.json(updatedSale);
+  } catch (err) {
+    res.status(400).json({ message: err.message });
+  }
+});
+
+app.get('/api/sales', async (req, res) => {
+  try {
+    const sales = await Sale.find().sort({ createdAt: -1 });
+    res.json(sales);
   } catch (err) {
     res.status(500).json({ message: err.message });
   }

@@ -22,6 +22,7 @@ import StockReport from './StockReport';
 import { encryptData, decryptData } from '../../../utils/encryption';
 import { API_BASE_URL } from '../../../utils/helpers';
 import { calculateStockData } from '../../../utils/stockHelpers';
+import axios from 'axios';
 
 const SortIcon = ({ config, columnKey }) => {
     if (!config || config.key !== columnKey) return <ChevronDownIcon className="w-3 h-3 ml-1 text-gray-300 opacity-0 group-hover:opacity-100" />;
@@ -107,7 +108,467 @@ const StockManagement = ({
     const portRef = useRef(null);
     const importerRef = useRef(null);
 
+    // --- Add Stock to Warehouse State ---
+    const [warehouseData, setWarehouseData] = useState([]);
+    const [showAddWarehouseStockForm, setShowAddWarehouseStockForm] = useState(false);
+    const [addWarehouseStockFormData, setAddWarehouseStockFormData] = useState({
+        whName: '', manager: '', location: '', capacity: '',
+        to: '', toManager: '', toLocation: '', toCapacity: '',
+        productEntries: [{
+            productName: '',
+            brandEntries: [{ brand: '', inhousePkt: '', inhouseQty: '', whPkt: '', whQty: '', transferPkt: '', transferQty: '' }]
+        }]
+    });
+    const [isAddingWarehouseStock, setIsAddingWarehouseStock] = useState(false);
+    const [addWarehouseStockSubmitStatus, setAddWarehouseStockSubmitStatus] = useState(null);
+
+    const [activeWhProductIndex, setActiveWhProductIndex] = useState(0);
+    const [activeWhBrandIndex, setActiveWhBrandIndex] = useState(0);
+
+    const [showWhDropdown, setShowWhDropdown] = useState(false);
+    const whDropdownRef = useRef(null);
+    const [showToDropdown, setShowToDropdown] = useState(false);
+    const toDropdownRef = useRef(null);
+    const [showWhProductDropdown, setShowWhProductDropdown] = useState(false);
+    const whProductDropdownRef = useRef(null);
+    const [showWhBrandDropdown, setShowWhBrandDropdown] = useState(false);
+    const whBrandDropdownRef = useRef(null);
+
+    const uniqueWarehouses = useMemo(() => {
+        if (!warehouseData || !Array.isArray(warehouseData)) return [];
+        return warehouseData.reduce((acc, current) => {
+            if (current?.whName && !acc.find(item => item.whName === current.whName)) {
+                acc.push({
+                    _id: current._id,
+                    whName: current.whName,
+                    manager: current.manager || '',
+                    location: current.location || '',
+                    capacity: current.capacity || 0
+                });
+            }
+            return acc;
+        }, []);
+    }, [warehouseData]);
+
+    const availableBrands = useMemo(() => {
+        const activeProduct = addWarehouseStockFormData.productEntries[activeWhProductIndex];
+        if (!activeProduct || !activeProduct.productName || !products) return [];
+        const selectedProduct = products.find(p => p.name === activeProduct.productName);
+        return selectedProduct ? (selectedProduct.brands || []) : [];
+    }, [addWarehouseStockFormData.productEntries, activeWhProductIndex, products]);
+
+    const ports = useMemo(() => {
+        return [...new Set(stockRecords.map(r => r.port).filter(Boolean))].map(name => ({ name })).sort((a, b) => a.name.localeCompare(b.name));
+    }, [stockRecords]);
+
+    const importers = useMemo(() => {
+        return [...new Set(stockRecords.map(r => r.importer).filter(Boolean))].map(name => ({ name })).sort((a, b) => a.name.localeCompare(b.name));
+    }, [stockRecords]);
+
     // --- Effects ---
+
+    const fetchWarehouses = async () => {
+        try {
+            const [whRes, stockRes] = await Promise.all([
+                axios.get(`${API_BASE_URL}/api/warehouses`),
+                axios.get(`${API_BASE_URL}/api/stock`)
+            ]);
+
+            const whData = Array.isArray(whRes.data) ? whRes.data : [];
+            const stockDataRes = Array.isArray(stockRes.data) ? stockRes.data : [];
+
+            // 1. Calculate Global InHouse Totals from ALL Stock Data
+            const globalInHouseMap = {};
+            const stockDataDecrypted = stockDataRes.map(item => {
+                try {
+                    return { ...decryptData(item.data), _id: item._id, createdAt: item.createdAt };
+                } catch { return null; }
+            }).filter(Boolean);
+
+            stockDataDecrypted.forEach(d => {
+                const key = `${(d.productName || d.product || '').trim()}_${(d.brand || '').trim()}`;
+                if (!globalInHouseMap[key]) {
+                    globalInHouseMap[key] = { pkt: 0, qty: 0 };
+                }
+                globalInHouseMap[key].pkt += parseFloat(d.inHousePacket || d.inhousePkt || 0);
+                globalInHouseMap[key].qty += parseFloat(d.inHouseQuantity || d.inhouseQty || 0);
+            });
+
+            // 2. Decrypt and normalize Warehouse records
+            const allDecryptedWh = whData.map(item => {
+                try {
+                    const decrypted = decryptData(item.data);
+                    const key = `${(decrypted.product || decrypted.productName || '').trim()}_${(decrypted.brand || '').trim()}`;
+                    const globalStats = globalInHouseMap[key] || { pkt: 0, qty: 0 };
+
+                    const inhousePkt = globalStats.pkt;
+                    const inhouseQty = globalStats.qty;
+
+                    const whPkt = decrypted.whPkt !== undefined && decrypted.whPkt !== null ? decrypted.whPkt : 0;
+                    const whQty = decrypted.whQty !== undefined && decrypted.whQty !== null ? decrypted.whQty : 0;
+
+                    return {
+                        ...decrypted,
+                        productName: decrypted.product,
+                        inhousePkt,
+                        inhouseQty,
+                        whPkt,
+                        whQty,
+                        packetSize: decrypted.packetSize || (whQty && whPkt ? (parseFloat(whQty) / parseFloat(whPkt)).toFixed(0) : 0),
+                        _id: item._id,
+                        recordType: 'warehouse',
+                        createdAt: item.createdAt,
+                        updatedAt: item.updatedAt
+                    };
+                } catch {
+                    return null;
+                }
+            }).filter(Boolean);
+
+            // 3. Normalize Stock records (treated as Warehouse rows)
+            const decryptedStock = stockDataDecrypted.map(d => {
+                const rawWh = (d.warehouse || d.whName || '').trim();
+                if (!rawWh) return null;
+
+                const key = `${(d.productName || d.product || '').trim()}_${(d.brand || '').trim()}`;
+                const globalStats = globalInHouseMap[key] || { pkt: 0, qty: 0 };
+
+                const inhousePkt = globalStats.pkt;
+                const inhouseQty = globalStats.qty;
+
+                const originalInHousePkt = parseFloat(d.inHousePacket || d.inhousePkt || 0);
+                const originalInHouseQty = parseFloat(d.inHouseQuantity || d.inhouseQty || 0);
+
+                const whPkt = d.whPkt !== undefined && d.whPkt !== null ? d.whPkt : originalInHousePkt;
+                const whQty = d.whQty !== undefined && d.whQty !== null ? d.whQty : originalInHouseQty;
+
+                return {
+                    ...d,
+                    whName: rawWh,
+                    inhousePkt,
+                    inhouseQty,
+                    whPkt,
+                    whQty,
+                    productName: d.productName || d.product,
+                    packetSize: d.packetSize || d.size || 0,
+                    recordType: 'stock',
+                };
+            }).filter(Boolean);
+
+            // Combine for comprehensive view
+            const combinedData = [...allDecryptedWh, ...decryptedStock];
+            setWarehouseData(combinedData);
+        } catch (error) {
+            console.error('Error fetching warehouse data:', error);
+        }
+    };
+
+    useEffect(() => {
+        fetchWarehouses();
+    }, []);
+
+    const handleAddWarehouseStockInputChange = (e, pIndex = null, bIndex = null) => {
+        const { name, value } = e.target;
+        if (pIndex !== null) {
+            const updatedProducts = [...addWarehouseStockFormData.productEntries];
+            if (bIndex !== null) {
+                // Update brand-specific field
+                const updatedBrands = [...updatedProducts[pIndex].brandEntries];
+                if (name === 'brand') {
+                    const currentProductName = updatedProducts[pIndex].productName;
+                    const matchingStockEntries = warehouseData.filter(item =>
+                        item.whName === addWarehouseStockFormData.whName &&
+                        (item.productName === currentProductName || item.product === currentProductName) &&
+                        item.brand === value
+                    );
+
+                    const totalInPkt = matchingStockEntries.reduce((sum, entry) => sum + (parseFloat(entry.inhousePkt) || 0), 0);
+                    const totalInQty = matchingStockEntries.reduce((sum, entry) => sum + (parseFloat(entry.inhouseQty) || 0), 0);
+                    const totalWhPkt = matchingStockEntries.reduce((sum, entry) => sum + (parseFloat(entry.whPkt) || 0), 0);
+                    const totalWhQty = matchingStockEntries.reduce((sum, entry) => sum + (parseFloat(entry.whQty) || 0), 0);
+
+                    updatedBrands[bIndex] = {
+                        ...updatedBrands[bIndex],
+                        [name]: value,
+                        inhousePkt: totalInPkt || 0,
+                        inhouseQty: totalInQty || 0,
+                        whPkt: totalWhPkt || 0,
+                        whQty: totalWhQty || 0
+                    };
+                    setActiveWhProductIndex(pIndex);
+                    setActiveWhBrandIndex(bIndex);
+                    setShowWhBrandDropdown(true);
+                } else if (name === 'transferQty') {
+                    const currentProductName = updatedProducts[pIndex].productName;
+                    const currentBrandName = updatedBrands[bIndex].brand;
+
+                    const productData = products.find(p => p.name === currentProductName);
+                    const brandData = productData?.brands?.find(b => b.brand === currentBrandName);
+                    const packetSize = brandData?.packetSize ? parseFloat(brandData.packetSize) : 0;
+
+                    let calculatedPkt = updatedBrands[bIndex].transferPkt;
+
+                    if (packetSize > 0) {
+                        const qty = parseFloat(value) || 0;
+                        if (qty > 0) {
+                            calculatedPkt = (qty / packetSize).toFixed(2);
+                            if (calculatedPkt.endsWith('.00')) calculatedPkt = calculatedPkt.slice(0, -3);
+                        } else {
+                            calculatedPkt = '';
+                        }
+                    }
+
+                    updatedBrands[bIndex] = { ...updatedBrands[bIndex], [name]: value, transferPkt: calculatedPkt };
+                } else if (name === 'transferPkt') {
+                    const currentProductName = updatedProducts[pIndex].productName;
+                    const currentBrandName = updatedBrands[bIndex].brand;
+
+                    const productData = products.find(p => p.name === currentProductName);
+                    const brandData = productData?.brands?.find(b => b.brand === currentBrandName);
+                    const packetSize = brandData?.packetSize ? parseFloat(brandData.packetSize) : 0;
+
+                    let calculatedQty = updatedBrands[bIndex].transferQty;
+
+                    if (packetSize > 0) {
+                        const pkt = parseFloat(value) || 0;
+                        if (pkt > 0) {
+                            calculatedQty = (pkt * packetSize).toFixed(2);
+                            if (calculatedQty.endsWith('.00')) calculatedQty = calculatedQty.slice(0, -3);
+                        } else {
+                            calculatedQty = '';
+                        }
+                    }
+
+                    updatedBrands[bIndex] = { ...updatedBrands[bIndex], [name]: value, transferQty: calculatedQty };
+                } else {
+                    updatedBrands[bIndex] = { ...updatedBrands[bIndex], [name]: value };
+                }
+                updatedProducts[pIndex] = { ...updatedProducts[pIndex], brandEntries: updatedBrands };
+            } else {
+                // Update product-specific field
+                if (name === 'productName') {
+                    updatedProducts[pIndex] = {
+                        ...updatedProducts[pIndex],
+                        [name]: value,
+                        brandEntries: updatedProducts[pIndex].brandEntries.map(b => ({ ...b, brand: '' }))
+                    };
+                    setActiveWhProductIndex(pIndex);
+                    setShowWhProductDropdown(true);
+                } else {
+                    updatedProducts[pIndex] = { ...updatedProducts[pIndex], [name]: value };
+                }
+            }
+            setAddWarehouseStockFormData(prev => ({ ...prev, productEntries: updatedProducts }));
+        } else {
+            if (name === 'whName' && value === '') {
+                setAddWarehouseStockFormData(prev => ({
+                    ...prev,
+                    whName: '',
+                    manager: '',
+                    location: '',
+                    capacity: ''
+                }));
+            } else if (name === 'to' && value === '') {
+                setAddWarehouseStockFormData(prev => ({
+                    ...prev,
+                    to: '',
+                    toManager: '',
+                    toLocation: '',
+                    toCapacity: ''
+                }));
+            } else {
+                setAddWarehouseStockFormData(prev => ({ ...prev, [name]: value }));
+            }
+            if (name === 'whName') setShowWhDropdown(true);
+            if (name === 'to') setShowToDropdown(true);
+        }
+    };
+
+    const addWarehouseProductEntry = () => {
+        setAddWarehouseStockFormData(prev => ({
+            ...prev,
+            productEntries: [...prev.productEntries, {
+                productName: '',
+                brandEntries: [{
+                    brand: '',
+                    inhousePkt: '',
+                    inhouseQty: '',
+                    whPkt: '',
+                    whQty: '',
+                    transferPkt: '',
+                    transferQty: ''
+                }]
+            }]
+        }));
+    };
+
+    const removeWarehouseProductEntry = (index) => {
+        if (addWarehouseStockFormData.productEntries.length > 1) {
+            setAddWarehouseStockFormData(prev => ({
+                ...prev,
+                productEntries: prev.productEntries.filter((_, i) => i !== index)
+            }));
+        }
+    };
+
+    const addWarehouseBrandEntry = (pIndex) => {
+        const updatedProducts = [...addWarehouseStockFormData.productEntries];
+        updatedProducts[pIndex].brandEntries.push({
+            brand: '',
+            inhousePkt: '',
+            inhouseQty: '',
+            whPkt: '',
+            whQty: '',
+            transferPkt: '',
+            transferQty: ''
+        });
+        setAddWarehouseStockFormData(prev => ({ ...prev, productEntries: updatedProducts }));
+    };
+
+    const removeWarehouseBrandEntry = (pIndex, bIndex) => {
+        const updatedProducts = [...addWarehouseStockFormData.productEntries];
+        if (updatedProducts[pIndex].brandEntries.length > 1) {
+            updatedProducts[pIndex].brandEntries = updatedProducts[pIndex].brandEntries.filter((_, i) => i !== bIndex);
+            setAddWarehouseStockFormData(prev => ({ ...prev, productEntries: updatedProducts }));
+        }
+    };
+
+    const handleAddWarehouseStockSubmit = async (e) => {
+        e.preventDefault();
+        setIsAddingWarehouseStock(true);
+        setAddWarehouseStockSubmitStatus(null);
+        try {
+            for (const productEntry of addWarehouseStockFormData.productEntries) {
+                for (const brandEntry of productEntry.brandEntries) {
+                    let transferQty = parseFloat(brandEntry.transferQty) || 0;
+                    let transferPkt = parseFloat(brandEntry.transferPkt) || 0;
+
+                    if (transferQty <= 0 && transferPkt <= 0) continue;
+
+                    // 1. Handle Source Deduction - Support multiple sources matching same product/brand
+                    const sourceRecords = warehouseData.filter(item =>
+                        item.whName === addWarehouseStockFormData.whName &&
+                        (item.productName || item.product) === productEntry.productName &&
+                        item.brand === brandEntry.brand &&
+                        ((parseFloat(item.whQty) > 0) || (parseFloat(item.whPkt) > 0))
+                    );
+
+                    // Sort to prioritize older stock or simply iterate
+                    // Let's iterate and deduct until transferQty/Pkt is fulfilled
+                    const updates = [];
+                    const lcSrrDeductions = [];
+
+                    for (const sourceRecord of sourceRecords) {
+                        if (transferQty <= 0 && transferPkt <= 0) break;
+
+                        const availableQty = parseFloat(sourceRecord.whQty) || 0;
+                        const availablePkt = parseFloat(sourceRecord.whPkt) || 0;
+
+                        const deductQty = Math.min(availableQty, transferQty);
+                        const deductPkt = Math.min(availablePkt, transferPkt);
+
+                        if (deductQty > 0 || deductPkt > 0) {
+                            const updatedSource = {
+                                ...sourceRecord,
+                                whQty: availableQty - deductQty,
+                                whPkt: availablePkt - deductPkt
+                            };
+
+                            updates.push({ record: updatedSource, original: sourceRecord });
+
+                            lcSrrDeductions.push({
+                                lcNo: sourceRecord.lcNo || '',
+                                qty: deductQty,
+                                pkt: deductPkt
+                            });
+
+                            transferQty -= deductQty;
+                            transferPkt -= deductPkt;
+                        }
+                    }
+
+                    // Execute Source Updates
+                    for (const { record: updatedSource, original } of updates) {
+                        const { _id, recordType, createdAt, updatedAt, ...sourceDataToEncrypt } = updatedSource;
+                        const encryptedSource = encryptData(sourceDataToEncrypt);
+
+                        if (original.recordType === 'stock') {
+                            await axios.put(`${API_BASE_URL}/api/stock/${original._id}`, { data: encryptedSource });
+                        } else {
+                            await axios.put(`${API_BASE_URL}/api/warehouses/${original._id}`, { data: encryptedSource });
+                        }
+                    }
+
+                    // 2. Handle Destination Addition (Transfer or New Stock)
+                    const destWhName = addWarehouseStockFormData.to || addWarehouseStockFormData.whName;
+
+                    for (const deduction of lcSrrDeductions) {
+                        const destRecord = warehouseData.find(item =>
+                            item.whName === destWhName &&
+                            (item.productName || item.product) === productEntry.productName &&
+                            item.brand === brandEntry.brand &&
+                            (item.lcNo === deduction.lcNo || (!item.lcNo && !deduction.lcNo))
+                        );
+
+                        if (destRecord) {
+                            const updatedDest = {
+                                ...destRecord,
+                                whQty: (parseFloat(destRecord.whQty) || 0) + deduction.qty,
+                                whPkt: (parseFloat(destRecord.whPkt) || 0) + deduction.pkt
+                            };
+                            const { _id, recordType, createdAt, updatedAt, ...destDataToEncrypt } = updatedDest;
+                            const encryptedDest = encryptData(destDataToEncrypt);
+
+                            if (destRecord.recordType === 'stock') {
+                                await axios.put(`${API_BASE_URL}/api/stock/${destRecord._id}`, { data: encryptedDest });
+                            } else {
+                                await axios.put(`${API_BASE_URL}/api/warehouses/${destRecord._id}`, { data: encryptedDest });
+                            }
+                        } else {
+                            const newEntry = {
+                                whName: destWhName,
+                                manager: addWarehouseStockFormData.toManager || addWarehouseStockFormData.manager,
+                                location: addWarehouseStockFormData.toLocation || addWarehouseStockFormData.location,
+                                capacity: parseFloat(addWarehouseStockFormData.toCapacity) || parseFloat(addWarehouseStockFormData.capacity) || 0,
+                                product: productEntry.productName,
+                                brand: brandEntry.brand,
+                                lcNo: deduction.lcNo,
+                                inhousePkt: 0, // only source retains inhouse
+                                inhouseQty: 0, // only source retains inhouse
+                                whPkt: deduction.pkt,
+                                whQty: deduction.qty,
+                                transferPkt: 0,
+                                transferQty: 0
+                            };
+                            const encryptedData = encryptData(newEntry);
+                            await axios.post(`${API_BASE_URL}/api/warehouses`, { data: encryptedData });
+                        }
+                    }
+                }
+            }
+            // Refresh data to reflect changes
+            await fetchWarehouses();
+
+            setAddWarehouseStockSubmitStatus('success');
+            setTimeout(() => {
+                setShowAddWarehouseStockForm(false);
+                setAddWarehouseStockSubmitStatus(null);
+                setAddWarehouseStockFormData({
+                    whName: '', manager: '', location: '', capacity: '',
+                    to: '', toManager: '', toLocation: '', toCapacity: '',
+                    productEntries: [{
+                        productName: '',
+                        brandEntries: [{ brand: '', inhousePkt: '', inhouseQty: '', whPkt: '', whQty: '', transferPkt: '', transferQty: '' }]
+                    }]
+                });
+            }, 1500);
+        } catch (error) {
+            console.error('Error saving warehouse stock:', error);
+            setAddWarehouseStockSubmitStatus('error');
+        } finally {
+            setIsAddingWarehouseStock(false);
+        }
+    };
 
     // Generate History Options
     const historyOptions = useMemo(() => {
@@ -176,6 +637,20 @@ const StockManagement = ({
                 }
                 if (activeDropdown === 'port' && portRef.current && !portRef.current.contains(event.target)) setActiveDropdown(null);
                 if (activeDropdown === 'importer' && importerRef.current && !importerRef.current.contains(event.target)) setActiveDropdown(null);
+            }
+
+            // Outside click for Warehouse Add Stock Form Dropdowns
+            if (showWhDropdown && whDropdownRef.current && !whDropdownRef.current.contains(event.target)) {
+                setShowWhDropdown(false);
+            }
+            if (showToDropdown && toDropdownRef.current && !toDropdownRef.current.contains(event.target)) {
+                setShowToDropdown(false);
+            }
+            if (showWhProductDropdown && whProductDropdownRef.current && !whProductDropdownRef.current.contains(event.target)) {
+                setShowWhProductDropdown(false);
+            }
+            if (showWhBrandDropdown && whBrandDropdownRef.current && !whBrandDropdownRef.current.contains(event.target)) {
+                setShowWhBrandDropdown(false);
             }
         };
 
@@ -696,208 +1171,231 @@ const StockManagement = ({
 
     return (
         <div className="space-y-6">
-            <div className="flex items-center justify-between gap-4">
-                <div className="w-1/4">
-                    <h2 className="text-2xl font-bold text-gray-800">Stock Management</h2>
-                </div>
-
-                <div className="flex-1 max-w-md mx-auto relative group">
-                    <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
-                        <SearchIcon className="h-4 w-4 text-gray-400 group-focus-within:text-blue-500 transition-colors" />
+            {(!showStockForm && !showAddWarehouseStockForm) && (
+                <div className="flex items-center justify-between gap-4">
+                    <div className="w-1/4">
+                        <h2 className="text-2xl font-bold text-gray-800">Stock Management</h2>
                     </div>
-                    <input
-                        type="text"
-                        placeholder="Search by LC, Port, Importer, Truck or Brand..."
-                        value={stockSearchQuery}
-                        onChange={(e) => setStockSearchQuery(e.target.value)}
-                        className="block w-full pl-10 pr-4 py-2 bg-white/50 border border-gray-200 rounded-xl text-[13px] placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 focus:bg-white transition-all outline-none"
-                    />
-                </div>
 
-                <div className="w-1/4 flex justify-end items-center gap-2">
+                    <div className="flex-1 max-w-md mx-auto relative group">
+                        <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
+                            <SearchIcon className="h-4 w-4 text-gray-400 group-focus-within:text-blue-500 transition-colors" />
+                        </div>
+                        <input
+                            type="text"
+                            placeholder="Search by LC, Port, Importer, Truck or Brand..."
+                            value={stockSearchQuery}
+                            onChange={(e) => setStockSearchQuery(e.target.value)}
+                            className="block w-full pl-10 pr-4 py-2 bg-white/50 border border-gray-200 rounded-xl text-[13px] placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 focus:bg-white transition-all outline-none"
+                        />
+                    </div>
 
-                    <div className="relative">
-                        <button
-                            ref={stockFilterButtonRef}
-                            onClick={() => setShowStockFilterPanel(!showStockFilterPanel)}
-                            className={`flex items-center gap-2 px-4 py-2 rounded-xl transition-all border ${showStockFilterPanel || Object.values(stockFilters).some(v => v !== '')
-                                ? 'bg-blue-600 border-blue-600 text-white shadow-lg shadow-blue-500/30'
-                                : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'
-                                }`}
-                        >
-                            <FunnelIcon className={`w-4 h-4 ${showStockFilterPanel || Object.values(stockFilters).some(v => v !== '') ? 'text-white' : 'text-gray-400'}`} />
-                            <span className="text-sm font-medium">Filter</span>
-                        </button>
+                    <div className="w-1/4 flex justify-end items-center gap-2">
+                        <div className="relative">
+                            <button
+                                ref={stockFilterButtonRef}
+                                onClick={() => setShowStockFilterPanel(!showStockFilterPanel)}
+                                className={`flex items-center gap-2 px-4 py-2 rounded-xl transition-all border ${showStockFilterPanel || Object.values(stockFilters).some(v => v !== '')
+                                    ? 'bg-blue-600 border-blue-600 text-white shadow-lg shadow-blue-500/30'
+                                    : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'
+                                    }`}
+                            >
+                                <FunnelIcon className={`w-4 h-4 ${showStockFilterPanel || Object.values(stockFilters).some(v => v !== '') ? 'text-white' : 'text-gray-400'}`} />
+                                <span className="text-sm font-medium">Filter</span>
+                            </button>
 
-                        {showStockFilterPanel && (
-                            <div ref={stockFilterRef} className="absolute right-0 mt-3 w-80 bg-white/95 backdrop-blur-2xl border border-gray-100 rounded-2xl shadow-2xl z-[60] p-5 animate-in fade-in zoom-in duration-200">
-                                <div className="flex items-center justify-between mb-6 pb-2 border-b border-gray-100">
-                                    <h4 className="font-bold text-gray-900 tracking-tight">Advance Filter</h4>
-                                    <button onClick={() => { setStockFilters({ startDate: '', endDate: '', lcNo: '', port: '', brand: '', importer: '', productName: '' }); setFilterSearchInputs({ ...filterSearchInputs, lcNoSearch: '', portSearch: '', importerSearch: '', brandSearch: '', productSearch: '' }); setShowStockFilterPanel(false); }} className="text-[11px] font-bold text-blue-600 hover:text-blue-700 uppercase tracking-widest">RESET ALL</button>
-                                </div>
-                                <div className="space-y-4">
-                                    <div className="grid grid-cols-2 gap-3">
-                                        <CustomDatePicker label="From Date" value={stockFilters.startDate} onChange={(e) => setStockFilters({ ...stockFilters, startDate: e.target.value })} compact={true} />
-                                        <CustomDatePicker label="To Date" value={stockFilters.endDate} onChange={(e) => setStockFilters({ ...stockFilters, endDate: e.target.value })} compact={true} rightAlign={true} />
+                            {showStockFilterPanel && (
+                                <div ref={stockFilterRef} className="absolute right-0 mt-3 w-80 bg-white/95 backdrop-blur-2xl border border-gray-100 rounded-2xl shadow-2xl z-[60] p-5 animate-in fade-in zoom-in duration-200">
+                                    <div className="flex items-center justify-between mb-6 pb-2 border-b border-gray-100">
+                                        <h4 className="font-bold text-gray-900 tracking-tight">Advance Filter</h4>
+                                        <button onClick={() => { setStockFilters({ startDate: '', endDate: '', lcNo: '', port: '', brand: '', importer: '', productName: '' }); setFilterSearchInputs({ ...filterSearchInputs, lcNoSearch: '', portSearch: '', importerSearch: '', brandSearch: '', productSearch: '' }); setShowStockFilterPanel(false); }} className="text-[11px] font-bold text-blue-600 hover:text-blue-700 uppercase tracking-widest">RESET ALL</button>
                                     </div>
-
-                                    <div className="grid grid-cols-2 gap-4">
-                                        {/* LC No Filter */}
-                                        <div className="space-y-1.5 relative" ref={stockLcNoFilterRef}>
-                                            <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider pl-1">LC NUMBER</label>
-                                            <div className="relative">
-                                                <input
-                                                    type="text"
-                                                    value={filterSearchInputs.lcNoSearch}
-                                                    onChange={(e) => {
-                                                        setFilterSearchInputs({ ...filterSearchInputs, lcNoSearch: e.target.value });
-                                                        setFilterDropdownOpen({ ...initialFilterDropdownState, lcNo: true });
-                                                    }}
-                                                    onFocus={() => setFilterDropdownOpen({ ...initialFilterDropdownState, lcNo: true })}
-                                                    placeholder={stockFilters.lcNo || "Search LC..."}
-                                                    className={`w-full px-4 py-2.5 bg-white border border-gray-100 rounded-xl text-sm focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all shadow-sm hover:border-gray-200 pr-14 ${stockFilters.lcNo ? 'placeholder:text-gray-900 placeholder:font-semibold' : 'placeholder:text-gray-300'}`}
-                                                />
-                                                <div className="absolute right-3.5 top-1/2 -translate-y-1/2 flex items-center gap-2">
-                                                    {stockFilters.lcNo && (
-                                                        <button onClick={() => { setStockFilters({ ...stockFilters, lcNo: '' }); setFilterSearchInputs({ ...filterSearchInputs, lcNoSearch: '' }); setFilterDropdownOpen(initialFilterDropdownState); }} className="text-gray-400 hover:text-gray-600">
-                                                            <XIcon className="w-4 h-4" />
-                                                        </button>
-                                                    )}
-                                                    <SearchIcon className="w-4.5 h-4.5 text-gray-300 pointer-events-none" />
-                                                </div>
-                                            </div>
-                                            {filterDropdownOpen.lcNo && (() => {
-                                                const options = [...new Set(stockRecords.map(r => r.lcNo).filter(Boolean))].sort();
-                                                const filtered = options.filter(lc => lc.toLowerCase().includes(filterSearchInputs.lcNoSearch.toLowerCase()));
-                                                return filtered.length > 0 ? (
-                                                    <div className="absolute z-[120] mt-1 w-full bg-white border border-gray-100 rounded-xl shadow-xl max-h-48 overflow-y-auto py-1">
-                                                        {filtered.map(lc => (
-                                                            <button
-                                                                key={lc}
-                                                                type="button"
-                                                                onClick={() => { setStockFilters({ ...stockFilters, lcNo: lc }); setFilterSearchInputs({ ...filterSearchInputs, lcNoSearch: '' }); setFilterDropdownOpen(initialFilterDropdownState); }}
-                                                                className="w-full px-4 py-2 text-left text-sm hover:bg-blue-50 transition-colors"
-                                                            >
-                                                                {lc}
-                                                            </button>
-                                                        ))}
-                                                    </div>
-                                                ) : null;
-                                            })()}
-                                        </div>
-
-                                        {/* Port Filter */}
-                                        <div className="space-y-1.5 relative" ref={stockPortFilterRef}>
-                                            <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider pl-1">PORT</label>
-                                            <div className="relative">
-                                                <input
-                                                    type="text"
-                                                    value={filterSearchInputs.portSearch}
-                                                    onChange={(e) => {
-                                                        setFilterSearchInputs({ ...filterSearchInputs, portSearch: e.target.value });
-                                                        setFilterDropdownOpen({ ...initialFilterDropdownState, port: true });
-                                                    }}
-                                                    onFocus={() => setFilterDropdownOpen({ ...initialFilterDropdownState, port: true })}
-                                                    placeholder={stockFilters.port || "Search Port..."}
-                                                    className={`w-full px-4 py-2.5 bg-white border border-gray-100 rounded-xl text-sm focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all shadow-sm hover:border-gray-200 pr-14 ${stockFilters.port ? 'placeholder:text-gray-900 placeholder:font-semibold' : 'placeholder:text-gray-300'}`}
-                                                />
-                                                <div className="absolute right-3.5 top-1/2 -translate-y-1/2 flex items-center gap-2">
-                                                    {stockFilters.port && (
-                                                        <button onClick={() => { setStockFilters({ ...stockFilters, port: '' }); setFilterSearchInputs({ ...filterSearchInputs, portSearch: '' }); setFilterDropdownOpen(initialFilterDropdownState); }} className="text-gray-400 hover:text-gray-600">
-                                                            <XIcon className="w-4 h-4" />
-                                                        </button>
-                                                    )}
-                                                    <SearchIcon className="w-4.5 h-4.5 text-gray-300 pointer-events-none" />
-                                                </div>
-                                            </div>
-                                            {filterDropdownOpen.port && (() => {
-                                                const options = [...new Set(stockRecords.map(r => r.port).filter(Boolean))].sort();
-                                                const filtered = options.filter(p => p.toLowerCase().includes(filterSearchInputs.portSearch.toLowerCase()));
-                                                return filtered.length > 0 ? (
-                                                    <div className="absolute z-[120] mt-1 w-full bg-white border border-gray-100 rounded-xl shadow-xl max-h-48 overflow-y-auto py-1">
-                                                        {filtered.map(p => (
-                                                            <button
-                                                                key={p}
-                                                                type="button"
-                                                                onClick={() => { setStockFilters({ ...stockFilters, port: p }); setFilterSearchInputs({ ...filterSearchInputs, portSearch: '' }); setFilterDropdownOpen(initialFilterDropdownState); }}
-                                                                className="w-full px-4 py-2 text-left text-sm hover:bg-blue-50 transition-colors"
-                                                            >
-                                                                {p}
-                                                            </button>
-                                                        ))}
-                                                    </div>
-                                                ) : null;
-                                            })()}
-                                        </div>
-                                    </div>
-
                                     <div className="space-y-4">
-                                        {/* Product Filter */}
-                                        <div className="space-y-1.5 relative" ref={stockProductFilterRef}>
-                                            <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider pl-1">PRODUCT</label>
-                                            <div className="relative">
-                                                <input
-                                                    type="text"
-                                                    value={filterSearchInputs.productSearch}
-                                                    onChange={(e) => {
-                                                        setFilterSearchInputs({ ...filterSearchInputs, productSearch: e.target.value });
-                                                        setFilterDropdownOpen({ ...initialFilterDropdownState, product: true });
-                                                    }}
-                                                    onFocus={() => setFilterDropdownOpen({ ...initialFilterDropdownState, product: true })}
-                                                    placeholder={stockFilters.productName || "Search Product..."}
-                                                    className={`w-full px-4 py-2.5 bg-white border border-gray-100 rounded-xl text-sm focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all shadow-sm hover:border-gray-200 pr-14 ${stockFilters.productName ? 'placeholder:text-gray-900 placeholder:font-semibold' : 'placeholder:text-gray-300'}`}
-                                                />
-                                                <div className="absolute right-3.5 top-1/2 -translate-y-1/2 flex items-center gap-2">
-                                                    {stockFilters.productName && (
-                                                        <button onClick={() => { setStockFilters({ ...stockFilters, productName: '', brand: '' }); setFilterSearchInputs({ ...filterSearchInputs, productSearch: '', brandSearch: '' }); setFilterDropdownOpen(initialFilterDropdownState); }} className="text-gray-400 hover:text-gray-600">
-                                                            <XIcon className="w-4 h-4" />
-                                                        </button>
-                                                    )}
-                                                    <SearchIcon className="w-4.5 h-4.5 text-gray-300 pointer-events-none" />
-                                                </div>
-                                            </div>
-                                            {filterDropdownOpen.product && (() => {
-                                                const options = products.map(p => p.name).sort();
-                                                const filtered = options.filter(n => n.toLowerCase().includes(filterSearchInputs.productSearch.toLowerCase()));
-                                                return filtered.length > 0 ? (
-                                                    <div className="absolute z-[120] mt-1 w-full bg-white border border-gray-100 rounded-xl shadow-xl max-h-48 overflow-y-auto py-1">
-                                                        {filtered.map(name => (
-                                                            <button
-                                                                key={name}
-                                                                type="button"
-                                                                onClick={() => { setStockFilters({ ...stockFilters, productName: name, brand: '' }); setFilterSearchInputs({ ...filterSearchInputs, productSearch: '', brandSearch: '' }); setFilterDropdownOpen(initialFilterDropdownState); }}
-                                                                className="w-full px-4 py-2 text-left text-sm hover:bg-blue-50 transition-colors"
-                                                            >
-                                                                {name}
-                                                            </button>
-                                                        ))}
-                                                    </div>
-                                                ) : null;
-                                            })()}
+                                        <div className="grid grid-cols-2 gap-3">
+                                            <CustomDatePicker label="From Date" value={stockFilters.startDate} onChange={(e) => setStockFilters({ ...stockFilters, startDate: e.target.value })} compact={true} />
+                                            <CustomDatePicker label="To Date" value={stockFilters.endDate} onChange={(e) => setStockFilters({ ...stockFilters, endDate: e.target.value })} compact={true} rightAlign={true} />
                                         </div>
 
-                                        {/* Brand Filter - Only show if product is selected */}
-                                        {stockFilters.productName && (
-                                            <div className="space-y-1.5 relative animate-in fade-in slide-in-from-top-2 duration-300" ref={stockBrandFilterRef}>
-                                                <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider pl-1">BRAND</label>
+                                        <div className="grid grid-cols-2 gap-4">
+                                            {/* LC No Filter */}
+                                            <div className="space-y-1.5 relative" ref={stockLcNoFilterRef}>
+                                                <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider pl-1">LC NUMBER</label>
+                                                <div className="relative">
+                                                    <input
+                                                        type="text"
+                                                        value={filterSearchInputs.lcNoSearch}
+                                                        onChange={(e) => {
+                                                            setFilterSearchInputs({ ...filterSearchInputs, lcNoSearch: e.target.value });
+                                                            setFilterDropdownOpen({ ...initialFilterDropdownState, lcNo: true });
+                                                        }}
+                                                        onFocus={() => setFilterDropdownOpen({ ...initialFilterDropdownState, lcNo: true })}
+                                                        placeholder={stockFilters.lcNo || "Search LC..."}
+                                                        className={`w-full px-4 py-2.5 bg-white border border-gray-100 rounded-xl text-sm focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all shadow-sm hover:border-gray-200 pr-14 ${stockFilters.lcNo ? 'placeholder:text-gray-900 placeholder:font-semibold' : 'placeholder:text-gray-300'}`}
+                                                    />
+                                                    <div className="absolute right-3.5 top-1/2 -translate-y-1/2 flex items-center gap-2">
+                                                        {stockFilters.lcNo && (
+                                                            <button onClick={() => { setStockFilters({ ...stockFilters, lcNo: '' }); setFilterSearchInputs({ ...filterSearchInputs, lcNoSearch: '' }); setFilterDropdownOpen(initialFilterDropdownState); }} className="text-gray-400 hover:text-gray-600">
+                                                                <XIcon className="w-4 h-4" />
+                                                            </button>
+                                                        )}
+                                                        <SearchIcon className="w-4.5 h-4.5 text-gray-300 pointer-events-none" />
+                                                    </div>
+                                                </div>
+                                                {filterDropdownOpen.lcNo && (() => {
+                                                    const options = [...new Set(stockRecords.map(r => r.lcNo).filter(Boolean))].sort();
+                                                    const filtered = options.filter(lc => lc.toLowerCase().includes(filterSearchInputs.lcNoSearch.toLowerCase()));
+                                                    return filtered.length > 0 ? (
+                                                        <div className="absolute z-[120] mt-1 w-full bg-white border border-gray-100 rounded-xl shadow-xl max-h-48 overflow-y-auto py-1">
+                                                            {filtered.map(lc => (
+                                                                <button
+                                                                    key={lc}
+                                                                    type="button"
+                                                                    onClick={() => { setStockFilters({ ...stockFilters, lcNo: lc }); setFilterSearchInputs({ ...filterSearchInputs, lcNoSearch: '' }); setFilterDropdownOpen(initialFilterDropdownState); }}
+                                                                    className="w-full px-4 py-2 text-left text-sm hover:bg-blue-50 transition-colors"
+                                                                >
+                                                                    {lc}
+                                                                </button>
+                                                            ))}
+                                                        </div>
+                                                    ) : null;
+                                                })()}
+                                            </div>
+
+                                            {/* Port Filter */}
+                                            <div className="space-y-1.5 relative" ref={stockPortFilterRef}>
+                                                <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider pl-1">PORT</label>
+                                                <div className="relative">
+                                                    <input
+                                                        type="text"
+                                                        value={filterSearchInputs.portSearch}
+                                                        onChange={(e) => {
+                                                            setFilterSearchInputs({ ...filterSearchInputs, portSearch: e.target.value });
+                                                            setFilterDropdownOpen({ ...initialFilterDropdownState, port: true });
+                                                        }}
+                                                        onFocus={() => setFilterDropdownOpen({ ...initialFilterDropdownState, port: true })}
+                                                        placeholder={stockFilters.port || "Search Port..."}
+                                                        className={`w-full px-4 py-2.5 bg-white border border-gray-100 rounded-xl text-sm focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all shadow-sm hover:border-gray-200 pr-14 ${stockFilters.port ? 'placeholder:text-gray-900 placeholder:font-semibold' : 'placeholder:text-gray-300'}`}
+                                                    />
+                                                    <div className="absolute right-3.5 top-1/2 -translate-y-1/2 flex items-center gap-2">
+                                                        {stockFilters.port && (
+                                                            <button onClick={() => { setStockFilters({ ...stockFilters, port: '' }); setFilterSearchInputs({ ...filterSearchInputs, portSearch: '' }); setFilterDropdownOpen(initialFilterDropdownState); }} className="text-gray-400 hover:text-gray-600">
+                                                                <XIcon className="w-4 h-4" />
+                                                            </button>
+                                                        )}
+                                                        <SearchIcon className="w-4.5 h-4.5 text-gray-300 pointer-events-none" />
+                                                    </div>
+                                                </div>
+                                                {filterDropdownOpen.port && (() => {
+                                                    const options = [...new Set(stockRecords.map(r => r.port).filter(Boolean))].sort();
+                                                    const filtered = options.filter(p => p.toLowerCase().includes(filterSearchInputs.portSearch.toLowerCase()));
+                                                    return filtered.length > 0 ? (
+                                                        <div className="absolute z-[120] mt-1 w-full bg-white border border-gray-100 rounded-xl shadow-xl max-h-48 overflow-y-auto py-1">
+                                                            {filtered.map(p => (
+                                                                <button
+                                                                    key={p}
+                                                                    type="button"
+                                                                    onClick={() => { setStockFilters({ ...stockFilters, port: p }); setFilterSearchInputs({ ...filterSearchInputs, portSearch: '' }); setFilterDropdownOpen(initialFilterDropdownState); }}
+                                                                    className="w-full px-4 py-2 text-left text-sm hover:bg-blue-50 transition-colors"
+                                                                >
+                                                                    {p}
+                                                                </button>
+                                                            ))}
+                                                        </div>
+                                                    ) : null;
+                                                })()}
+                                            </div>
+                                        </div>
+
+                                        <div className="space-y-4">
+                                            <div className="space-y-1.5 relative">
+                                                <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider pl-1">Product Name</label>
+                                                <div className="relative">
+                                                    <input
+                                                        type="text"
+                                                        value={filterSearchInputs.productSearch}
+                                                        onChange={(e) => {
+                                                            const val = e.target.value;
+                                                            setFilterSearchInputs({ ...filterSearchInputs, productSearch: val });
+                                                            setStockFilters({ ...stockFilters, productName: val });
+                                                            setFilterDropdownOpen({ ...initialFilterDropdownState, productName: true });
+                                                        }}
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            setFilterDropdownOpen({ ...initialFilterDropdownState, productName: !filterDropdownOpen.productName });
+                                                        }}
+                                                        placeholder="Search Product..."
+                                                        className={`w-full px-4 py-2.5 bg-white border border-gray-100 rounded-xl text-sm focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all shadow-sm ${stockFilters.productName ? 'text-gray-900 font-medium' : 'text-gray-500'}`}
+                                                    />
+                                                    <div className="absolute right-3 top-1/2 -translate-y-1/2 flex gap-1">
+                                                        {stockFilters.productName ? (
+                                                            <button
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    setStockFilters({ ...stockFilters, productName: '' });
+                                                                    setFilterSearchInputs({ ...filterSearchInputs, productSearch: '' });
+                                                                    setFilterDropdownOpen(initialFilterDropdownState);
+                                                                }}
+                                                                className="text-gray-400 hover:text-red-500 transition-colors bg-white p-0.5"
+                                                            >
+                                                                <XIcon className="w-4 h-4" />
+                                                            </button>
+                                                        ) : null}
+                                                        <SearchIcon className="w-4.5 h-4.5 text-gray-300 pointer-events-none" />
+                                                    </div>
+                                                </div>
+                                                {filterDropdownOpen.productName && (() => {
+                                                    const options = getFilteredProducts(filterSearchInputs.productSearch);
+                                                    return options.length > 0 ? (
+                                                        <div className="absolute z-[120] mt-1 w-full bg-white border border-gray-100 rounded-xl shadow-xl max-h-48 overflow-y-auto py-1">
+                                                            {options.map(product => (
+                                                                <button
+                                                                    key={product}
+                                                                    type="button"
+                                                                    onClick={() => { setStockFilters({ ...stockFilters, productName: product }); setFilterSearchInputs({ ...filterSearchInputs, productSearch: '' }); setFilterDropdownOpen(initialFilterDropdownState); }}
+                                                                    className="w-full px-4 py-2 text-left text-sm hover:bg-blue-50 transition-colors"
+                                                                >
+                                                                    {product}
+                                                                </button>
+                                                            ))}
+                                                        </div>
+                                                    ) : null;
+                                                })()}
+                                            </div>
+
+                                            <div className="space-y-1.5 relative">
+                                                <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider pl-1">Brand</label>
                                                 <div className="relative">
                                                     <input
                                                         type="text"
                                                         value={filterSearchInputs.brandSearch}
                                                         onChange={(e) => {
-                                                            setFilterSearchInputs({ ...filterSearchInputs, brandSearch: e.target.value });
+                                                            const val = e.target.value;
+                                                            setFilterSearchInputs({ ...filterSearchInputs, brandSearch: val });
+                                                            setStockFilters({ ...stockFilters, brand: val });
                                                             setFilterDropdownOpen({ ...initialFilterDropdownState, brand: true });
                                                         }}
-                                                        onFocus={() => setFilterDropdownOpen({ ...initialFilterDropdownState, brand: true })}
-                                                        placeholder={stockFilters.brand || "Search Brand..."}
-                                                        className={`w-full px-4 py-2.5 bg-white border border-gray-100 rounded-xl text-sm focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all shadow-sm hover:border-gray-200 pr-14 ${stockFilters.brand ? 'placeholder:text-gray-900 placeholder:font-semibold' : 'placeholder:text-gray-300'}`}
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            setFilterDropdownOpen({ ...initialFilterDropdownState, brand: !filterDropdownOpen.brand });
+                                                        }}
+                                                        placeholder="Search Brand..."
+                                                        className={`w-full px-4 py-2.5 bg-white border border-gray-100 rounded-xl text-sm focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all shadow-sm ${stockFilters.brand ? 'text-gray-900 font-medium' : 'text-gray-500'}`}
+                                                        disabled={!stockFilters.productName}
                                                     />
-                                                    <div className="absolute right-3.5 top-1/2 -translate-y-1/2 flex items-center gap-2">
-                                                        {stockFilters.brand && (
-                                                            <button onClick={() => { setStockFilters({ ...stockFilters, brand: '' }); setFilterSearchInputs({ ...filterSearchInputs, brandSearch: '' }); setFilterDropdownOpen(initialFilterDropdownState); }} className="text-gray-400 hover:text-gray-600">
+                                                    <div className="absolute right-3 top-1/2 -translate-y-1/2 flex gap-1">
+                                                        {stockFilters.brand ? (
+                                                            <button
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    setStockFilters({ ...stockFilters, brand: '' });
+                                                                    setFilterSearchInputs({ ...filterSearchInputs, brandSearch: '' });
+                                                                    setFilterDropdownOpen(initialFilterDropdownState);
+                                                                }}
+                                                                className="text-gray-400 hover:text-red-500 transition-colors bg-white p-0.5"
+                                                            >
                                                                 <XIcon className="w-4 h-4" />
                                                             </button>
-                                                        )}
+                                                        ) : null}
                                                         <SearchIcon className="w-4.5 h-4.5 text-gray-300 pointer-events-none" />
                                                     </div>
                                                 </div>
@@ -919,390 +1417,521 @@ const StockManagement = ({
                                                     ) : null;
                                                 })()}
                                             </div>
-                                        )}
+                                        </div>
                                     </div>
                                 </div>
-                            </div>
-                        )}
+                            )}
+                        </div>
+                        <button
+                            onClick={() => setShowStockReport(true)}
+                            className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 text-gray-600 rounded-xl hover:bg-gray-50 hover:border-gray-300 transition-all shadow-sm active:scale-95"
+                        >
+                            <BarChartIcon className="w-4 h-4 text-gray-400" />
+                            <span className="text-sm font-medium">Report</span>
+                        </button>
+                        <button
+                            onClick={() => setShowAddWarehouseStockForm(true)}
+                            className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl hover:from-blue-700 hover:to-indigo-700 transition-all duration-200 shadow-lg shadow-blue-500/30 hover:scale-105 font-medium"
+                        >
+                            <PlusIcon className="w-5 h-5 mr-1" />
+                            <span className="text-sm font-medium">Transfer</span>
+                        </button>
                     </div>
-                    <button
-                        onClick={() => setShowStockReport(true)}
-                        className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 text-gray-600 rounded-xl hover:bg-gray-50 hover:border-gray-300 transition-all shadow-sm active:scale-95"
-                    >
-                        <BarChartIcon className="w-4 h-4 text-gray-400" />
-                        <span className="text-sm font-medium">Report</span>
-                    </button>
                 </div>
-            </div>
+            )}
 
-            <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
-                {[
-                    { label: 'TOTAL PACKET', value: totalPackets.toLocaleString(), bgColor: 'bg-white', borderColor: 'border-gray-200', textColor: 'text-gray-900', labelColor: 'text-gray-400' },
-                    { label: 'TOTAL QUANTITY', value: `${totalQuantity.toLocaleString()} ${unit}`, bgColor: 'bg-emerald-50/50', borderColor: 'border-emerald-100', textColor: 'text-emerald-700', labelColor: 'text-emerald-600' },
-                    { label: 'INHOUSE PKT', value: `${Math.floor(totalInHousePkt).toLocaleString()} - ${Math.round(totalInHousePktDecimalKg).toLocaleString()} kg`, bgColor: 'bg-amber-50/50', borderColor: 'border-amber-100', textColor: 'text-amber-700', labelColor: 'text-amber-600' },
-                    { label: 'INHOUSE QTY', value: `${totalInHouseQty.toLocaleString()} ${unit}`, bgColor: 'bg-blue-50/50', borderColor: 'border-blue-100', textColor: 'text-blue-700', labelColor: 'text-blue-600' },
-                    { label: 'SHORTAGE', value: `${totalShortage.toLocaleString()} ${unit}`, bgColor: 'bg-rose-50/50', borderColor: 'border-rose-100', textColor: 'text-rose-700', labelColor: 'text-rose-600' },
-                ].map((card, i) => (
-                    <div key={i} className={`bg-white border ${card.bgColor} ${card.borderColor} p-4 rounded-xl shadow-sm transition-all hover:shadow-md`}>
-                        <div className={`text-[11px] font-bold ${card.labelColor} uppercase tracking-wider mb-1`}>{card.label}</div>
-                        <div className={`text-xl font-bold ${card.textColor}`}>{card.value}</div>
-                    </div>
-                ))}
-            </div>
+            {/* Summary Cards */}
+            {(!showStockForm && !showAddWarehouseStockForm) && (
+                <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+                    {[
+                        { label: 'TOTAL PACKET', value: totalPackets.toLocaleString(), bgColor: 'bg-white', borderColor: 'border-gray-200', textColor: 'text-gray-900', labelColor: 'text-gray-400' },
+                        { label: 'TOTAL QUANTITY', value: `${totalQuantity.toLocaleString()} ${unit}`, bgColor: 'bg-emerald-50/50', borderColor: 'border-emerald-100', textColor: 'text-emerald-700', labelColor: 'text-emerald-600' },
+                        { label: 'INHOUSE PKT', value: `${Math.floor(totalInHousePkt).toLocaleString()} - ${Math.round(totalInHousePktDecimalKg).toLocaleString()} kg`, bgColor: 'bg-amber-50/50', borderColor: 'border-amber-100', textColor: 'text-amber-700', labelColor: 'text-amber-600' },
+                        { label: 'INHOUSE QTY', value: `${totalInHouseQty.toLocaleString()} ${unit}`, bgColor: 'bg-blue-50/50', borderColor: 'border-blue-100', textColor: 'text-blue-700', labelColor: 'text-blue-600' },
+                        { label: 'SHORTAGE', value: `${totalShortage.toLocaleString()} ${unit}`, bgColor: 'bg-rose-50/50', borderColor: 'border-rose-100', textColor: 'text-rose-700', labelColor: 'text-rose-600' },
+                    ].map((card, i) => (
+                        <div key={i} className={`bg-white border ${card.bgColor} ${card.borderColor} p-4 rounded-xl shadow-sm transition-all hover:shadow-md`}>
+                            <div className={`text-[11px] font-bold ${card.labelColor} uppercase tracking-wider mb-1`}>{card.label}</div>
+                            <div className={`text-xl font-bold ${card.textColor}`}>{card.value}</div>
+                        </div>
+                    ))}
+                </div>
+            )}
 
-            {showStockForm && (
-                <div className="relative overflow-hidden rounded-2xl bg-white/60 backdrop-blur-xl border border-white/50 shadow-2xl p-8 transition-all duration-300">
-                    <div className="absolute -top-24 -right-24 w-64 h-64 bg-blue-400/10 rounded-full blur-3xl pointer-events-none"></div>
+            {/* Add Stock to Warehouse Form Card */}
+            {showAddWarehouseStockForm && (
+                <div className="warehouse-form-container border-blue-100 mb-6">
+                    <div className="warehouse-form-bg-orb bg-blue-400/20 left-1/4 top-1/4"></div>
+                    <div className="warehouse-form-bg-orb bg-indigo-400/20 right-1/4 bottom-1/4"></div>
 
-                    <div className="flex items-center justify-between mb-6 border-b border-gray-200/50 pb-4 relative z-10">
-                        <h3 className="text-xl font-semibold text-gray-800">{editingId ? 'Edit Stock' : 'New Stock Entry'}</h3>
-                        <button onClick={() => { setShowStockForm(false); resetStockForm(); }} className="text-gray-400 hover:text-red-500 transition-colors">
+                    <div className="warehouse-form-header">
+                        <div>
+                            <h3 className="warehouse-form-title text-blue-900">Transfer Product to Warehouse</h3>
+                            <p className="text-sm text-gray-500">Record a new stock transfer or direct entry to warehouse</p>
+                        </div>
+                        <button onClick={() => setShowAddWarehouseStockForm(false)} className="warehouse-form-close hover:bg-blue-50 hover:text-blue-600">
                             <XIcon className="w-6 h-6" />
                         </button>
                     </div>
 
-                    <form onSubmit={handleStockSubmit} autoComplete="off" className="grid grid-cols-1 md:grid-cols-2 gap-6 relative z-10">
-                        <div className="col-span-1 md:col-span-2 grid grid-cols-1 md:grid-cols-4 gap-6">
-                            <CustomDatePicker label="Date" name="date" value={stockFormData.date} onChange={handleStockInputChange} required />
-                            <div className="space-y-2">
-                                <label className="text-sm font-medium text-gray-700">LC No</label>
-                                <input type="text" name="lcNo" value={stockFormData.lcNo} onChange={handleStockInputChange} required placeholder="LC Number" className="w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg outline-none" />
-                            </div>
-                            {/* Port Dropdown */}
-                            <div className="space-y-2 relative" ref={portRef}>
-                                <label className="text-sm font-medium text-gray-700">Port</label>
-                                <div className="relative group/dropdown">
+                    <form onSubmit={handleAddWarehouseStockSubmit} className="relative z-10 space-y-6">
+                        <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+                            <div className="space-y-2 relative" ref={whDropdownRef}>
+                                <label className="text-sm font-bold text-gray-700 ml-1">From</label>
+                                <div className="relative group">
                                     <input
                                         type="text"
-                                        name="port"
-                                        value={stockFormData.port}
-                                        onChange={handleStockInputChange}
-                                        onFocus={() => setActiveDropdown('port')}
-                                        placeholder="Select or type port name"
-                                        className="w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg outline-none focus:border-blue-500 pr-10"
+                                        name="whName"
+                                        value={addWarehouseStockFormData.whName}
+                                        onChange={handleAddWarehouseStockInputChange}
+                                        onFocus={() => setShowWhDropdown(true)}
+                                        placeholder="Select or enter warehouse"
+                                        className="w-full px-4 py-2.5 bg-white/50 border border-gray-200/60 rounded-xl focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all backdrop-blur-sm text-sm pr-10"
+                                        required
                                         autoComplete="off"
                                     />
-                                    <button
-                                        type="button"
-                                        onClick={() => setActiveDropdown(activeDropdown === 'port' ? null : 'port')}
-                                        className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-gray-400 hover:text-blue-500 transition-colors"
-                                    >
-                                        <ChevronDownIcon className={`w-4 h-4 transition-transform duration-200 ${activeDropdown === 'port' ? 'rotate-180 text-blue-500' : ''}`} />
-                                    </button>
-                                    {activeDropdown === 'port' && (
-                                        <div className="absolute z-[100] mt-1 w-full bg-white border border-gray-100 rounded-xl shadow-2xl py-2 max-h-48 overflow-y-auto animate-in fade-in zoom-in duration-200">
-                                            {ports.filter(p => !stockFormData.port || p.name.toLowerCase().includes(stockFormData.port.toLowerCase())).length > 0 ? (
-                                                ports.filter(p => !stockFormData.port || p.name.toLowerCase().includes(stockFormData.port.toLowerCase())).map((p, idx) => (
+                                    <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
+                                        <ChevronDownIcon className={`w-4 h-4 text-gray-400 transition-transform ${showWhDropdown ? 'rotate-180' : ''}`} />
+                                    </div>
+                                </div>
+
+                                {showWhDropdown && (
+                                    <div className="absolute z-[100] mt-1 w-full bg-white/95 backdrop-blur-md border border-gray-100 rounded-xl shadow-2xl overflow-hidden animate-in fade-in slide-in-from-top-1 duration-200">
+                                        <div className="max-h-60 overflow-y-auto py-1">
+                                            {uniqueWarehouses
+                                                .filter(wh =>
+                                                    wh.whName.toLowerCase().includes(addWarehouseStockFormData.whName.toLowerCase()) &&
+                                                    wh.whName !== addWarehouseStockFormData.to
+                                                )
+                                                .map((wh, idx) => (
                                                     <button
                                                         key={idx}
                                                         type="button"
                                                         onClick={() => {
-                                                            handleStockInputChange({ target: { name: 'port', value: p.name } });
-                                                            setActiveDropdown(null);
+                                                            setAddWarehouseStockFormData(prev => ({
+                                                                ...prev,
+                                                                whName: wh.whName,
+                                                                manager: wh.manager || prev.manager,
+                                                                location: wh.location || prev.location,
+                                                                capacity: wh.capacity || prev.capacity
+                                                            }));
+                                                            setShowWhDropdown(false);
                                                         }}
-                                                        className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-600 transition-colors"
+                                                        className="w-full px-4 py-2 text-left hover:bg-blue-50 transition-colors group"
                                                     >
-                                                        {p.name}
+                                                        <div className="font-bold text-gray-900 text-sm group-hover:text-blue-700">{wh.whName}</div>
                                                     </button>
-                                                ))
-                                            ) : (
-                                                <div className="px-4 py-2 text-sm text-gray-400 italic">No ports found</div>
-                                            )}
+                                                ))}
+                                            {uniqueWarehouses.filter(wh =>
+                                                wh.whName.toLowerCase().includes(addWarehouseStockFormData.whName.toLowerCase()) &&
+                                                wh.whName !== addWarehouseStockFormData.to
+                                            ).length === 0 && (
+                                                    <div className="px-4 py-3 text-xs text-gray-500 italic">No warehouses found</div>
+                                                )}
                                         </div>
-                                    )}
-                                </div>
-                            </div>
-                            {/* Importer Dropdown */}
-                            <div className="space-y-2 relative" ref={importerRef}>
-                                <label className="text-sm font-medium text-gray-700">Importer</label>
-                                <div className="relative group/dropdown">
-                                    <input
-                                        type="text"
-                                        name="importer"
-                                        value={stockFormData.importer}
-                                        onChange={handleStockInputChange}
-                                        onFocus={() => setActiveDropdown('importer')}
-                                        placeholder="Select or type importer"
-                                        className="w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg outline-none focus:border-blue-500 pr-10"
-                                        autoComplete="off"
-                                    />
-                                    <button
-                                        type="button"
-                                        onClick={() => setActiveDropdown(activeDropdown === 'importer' ? null : 'importer')}
-                                        className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-gray-400 hover:text-blue-500 transition-colors"
-                                    >
-                                        <ChevronDownIcon className={`w-4 h-4 transition-transform duration-200 ${activeDropdown === 'importer' ? 'rotate-180 text-blue-500' : ''}`} />
-                                    </button>
-                                    {activeDropdown === 'importer' && (
-                                        <div className="absolute z-[100] mt-1 w-full bg-white border border-gray-100 rounded-xl shadow-2xl py-2 max-h-48 overflow-y-auto animate-in fade-in zoom-in duration-200">
-                                            {importers.filter(i => !stockFormData.importer || i.name.toLowerCase().includes(stockFormData.importer.toLowerCase())).length > 0 ? (
-                                                importers.filter(i => !stockFormData.importer || i.name.toLowerCase().includes(stockFormData.importer.toLowerCase())).map((i, idx) => (
-                                                    <button
-                                                        key={idx}
-                                                        type="button"
-                                                        onClick={() => {
-                                                            handleStockInputChange({ target: { name: 'importer', value: i.name } });
-                                                            setActiveDropdown(null);
-                                                        }}
-                                                        className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-600 transition-colors"
-                                                    >
-                                                        {i.name}
-                                                    </button>
-                                                ))
-                                            ) : (
-                                                <div className="px-4 py-2 text-sm text-gray-400 italic">No importers found</div>
-                                            )}
-                                        </div>
-                                    )}
-                                </div>
-                            </div>
-
-                            {/* Second Row Fields */}
-                            <div className="space-y-2">
-                                <label className="text-sm font-medium text-gray-700">IND CNF</label>
-                                <input type="text" name="indianCnF" value={stockFormData.indianCnF} onChange={handleStockInputChange} placeholder="IND CNF" className="w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg outline-none" />
+                                    </div>
+                                )}
                             </div>
                             <div className="space-y-2">
-                                <label className="text-sm font-medium text-gray-700">IND CNF Cost</label>
-                                <input type="number" name="indCnFCost" value={stockFormData.indCnFCost} onChange={handleStockInputChange} placeholder="0.00" className="w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg outline-none" />
+                                <label className="text-sm font-bold text-gray-700 ml-1">Manager</label>
+                                <input
+                                    type="text"
+                                    name="manager"
+                                    value={addWarehouseStockFormData.manager}
+                                    onChange={handleAddWarehouseStockInputChange}
+                                    placeholder="Manager Name"
+                                    className="w-full px-4 py-2.5 bg-white/50 border border-gray-200/60 rounded-xl focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all backdrop-blur-sm text-sm"
+                                    required
+                                    autoComplete="off"
+                                />
                             </div>
                             <div className="space-y-2">
-                                <label className="text-sm font-medium text-gray-700">BD CNF</label>
-                                <input type="text" name="bdCnF" value={stockFormData.bdCnF} onChange={handleStockInputChange} placeholder="BD CNF" className="w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg outline-none" />
+                                <label className="text-sm font-bold text-gray-700 ml-1">Address</label>
+                                <input
+                                    type="text"
+                                    name="location"
+                                    value={addWarehouseStockFormData.location}
+                                    onChange={handleAddWarehouseStockInputChange}
+                                    placeholder="Location/Address"
+                                    className="w-full px-4 py-2.5 bg-white/50 border border-gray-200/60 rounded-xl focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all backdrop-blur-sm text-sm"
+                                    autoComplete="off"
+                                />
                             </div>
                             <div className="space-y-2">
-                                <label className="text-sm font-medium text-gray-700">Bill Of Entry</label>
-                                <input type="text" name="billOfEntry" value={stockFormData.billOfEntry} onChange={handleStockInputChange} placeholder="Bill Of Entry" className="w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg outline-none" />
-                            </div>
-
-                            {/* Third Row Totals */}
-                            <div className="space-y-2 col-span-2">
-                                <label className="text-sm font-medium text-gray-700">Total LC Truck</label>
-                                <input type="number" name="totalLcTruck" value={stockFormData.totalLcTruck} readOnly placeholder="0" className="w-full px-4 py-3 bg-gray-50/50 border border-gray-200/60 rounded-xl outline-none text-gray-500 font-bold" />
-                            </div>
-                            <div className="space-y-2 col-span-2">
-                                <label className="text-sm font-medium text-gray-700">Total LC Quantity</label>
-                                <input type="number" name="totalLcQuantity" value={stockFormData.totalLcQuantity} readOnly placeholder="0.00" className="w-full px-4 py-3 bg-gray-50/50 border border-gray-200/60 rounded-xl outline-none text-gray-500 font-bold" />
+                                <label className="text-sm font-bold text-gray-700 ml-1">Capacity (KG)</label>
+                                <input
+                                    type="number"
+                                    name="capacity"
+                                    value={addWarehouseStockFormData.capacity}
+                                    onChange={handleAddWarehouseStockInputChange}
+                                    placeholder="KG Units"
+                                    className="w-full px-4 py-2.5 bg-white/50 border border-gray-200/60 rounded-xl focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all backdrop-blur-sm text-sm"
+                                    autoComplete="off"
+                                />
                             </div>
                         </div>
 
-                        <div className="col-span-1 md:col-span-2 space-y-8">
-                            <div className="flex items-center justify-between border-b border-gray-100 pb-2">
-                                <h4 className="text-lg font-bold text-gray-800">Product Details</h4>
-                                <button type="button" onClick={addProductEntry} className="flex items-center gap-2 px-4 py-2 bg-blue-50 text-blue-600 rounded-xl hover:bg-blue-600 hover:text-white transition-all">
-                                    <PlusIcon className="w-4 h-4" /> Add Product
-                                </button>
-                            </div>
-                            {stockFormData.productEntries.map((product, pIndex) => (
-                                <div key={pIndex} className="p-6 rounded-2xl bg-gray-50/30 border border-gray-100 relative group/product">
-                                    {stockFormData.productEntries.length > 1 && (
-                                        <button type="button" onClick={() => removeProductEntry(pIndex)} className="absolute -top-3 -right-3 p-2 bg-white text-red-400 shadow-md rounded-xl hover:text-red-600"><TrashIcon className="w-4 h-4" /></button>
-                                    )}
-                                    <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
-                                        <div className="space-y-2 relative" ref={el => productRefs.current[pIndex] = el}>
-                                            <label className="text-sm font-medium text-gray-700">Product Name</label>
-                                            <div className="relative group/dropdown">
-                                                <input
-                                                    type="text"
-                                                    name="productName"
-                                                    value={product.productName}
-                                                    onChange={(e) => handleStockInputChange(e, pIndex)}
-                                                    onFocus={() => setActiveDropdown(`product-${pIndex}`)}
-                                                    placeholder="Select or type product"
-                                                    className="w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg outline-none focus:border-blue-500 pr-10"
-                                                    autoComplete="off"
-                                                />
-                                                <button
-                                                    type="button"
-                                                    onClick={() => setActiveDropdown(activeDropdown === `product-${pIndex}` ? null : `product-${pIndex}`)}
-                                                    className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-gray-400 hover:text-blue-500 transition-colors"
-                                                >
-                                                    <ChevronDownIcon className={`w-4 h-4 transition-transform duration-200 ${activeDropdown === `product-${pIndex}` ? 'rotate-180 text-blue-500' : ''}`} />
-                                                </button>
-                                                {activeDropdown === `product-${pIndex}` && (
-                                                    <div className="absolute z-[100] mt-1 w-full bg-white border border-gray-100 rounded-xl shadow-2xl py-2 max-h-48 overflow-y-auto animate-in fade-in zoom-in duration-200">
-                                                        {products.filter(p => !product.productName || p.name.toLowerCase().includes(product.productName.toLowerCase())).length > 0 ? (
-                                                            products.filter(p => !product.productName || p.name.toLowerCase().includes(product.productName.toLowerCase())).map((p, idx) => (
-                                                                <button
-                                                                    key={idx}
-                                                                    type="button"
-                                                                    onClick={() => {
-                                                                        handleStockInputChange({ target: { name: 'productName', value: p.name } }, pIndex);
-                                                                        setActiveDropdown(null);
-                                                                    }}
-                                                                    className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-600 transition-colors"
-                                                                >
-                                                                    {p.name}
-                                                                </button>
-                                                            ))
-                                                        ) : (
-                                                            <div className="px-4 py-2 text-sm text-gray-400 italic">No products found</div>
-                                                        )}
-                                                    </div>
+                        <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+                            <div className="space-y-2 relative" ref={toDropdownRef}>
+                                <label className="text-sm font-bold text-gray-700 ml-1">To</label>
+                                <div className="relative group">
+                                    <input
+                                        type="text"
+                                        name="to"
+                                        value={addWarehouseStockFormData.to}
+                                        onChange={handleAddWarehouseStockInputChange}
+                                        onFocus={() => setShowToDropdown(true)}
+                                        placeholder="Select warehouse"
+                                        className="w-full px-4 py-2.5 bg-white/50 border border-gray-200/60 rounded-xl focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all backdrop-blur-sm text-sm pr-10"
+                                        required
+                                        autoComplete="off"
+                                    />
+                                    <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
+                                        <ChevronDownIcon className={`w-4 h-4 text-gray-400 transition-transform ${showToDropdown ? 'rotate-180' : ''}`} />
+                                    </div>
+                                </div>
+
+                                {showToDropdown && (
+                                    <div className="absolute z-[100] mt-1 w-full bg-white/95 backdrop-blur-md border border-gray-100 rounded-xl shadow-2xl overflow-hidden animate-in fade-in slide-in-from-top-1 duration-200">
+                                        <div className="max-h-60 overflow-y-auto py-1">
+                                            {uniqueWarehouses
+                                                .filter(wh =>
+                                                    wh.whName.toLowerCase().includes(addWarehouseStockFormData.to.toLowerCase()) &&
+                                                    wh.whName !== addWarehouseStockFormData.whName
+                                                )
+                                                .map((wh, idx) => (
+                                                    <button
+                                                        key={idx}
+                                                        type="button"
+                                                        onClick={() => {
+                                                            setAddWarehouseStockFormData(prev => ({
+                                                                ...prev,
+                                                                to: wh.whName,
+                                                                toManager: wh.manager,
+                                                                toLocation: wh.location,
+                                                                toCapacity: wh.capacity
+                                                            }));
+                                                            setShowToDropdown(false);
+                                                        }}
+                                                        className="w-full px-4 py-2 text-left hover:bg-blue-50 transition-colors group"
+                                                    >
+                                                        <div className="font-bold text-gray-900 text-sm group-hover:text-blue-700">{wh.whName}</div>
+                                                    </button>
+                                                ))}
+                                            {uniqueWarehouses.filter(wh =>
+                                                wh.whName.toLowerCase().includes(addWarehouseStockFormData.to.toLowerCase()) &&
+                                                wh.whName !== addWarehouseStockFormData.whName
+                                            ).length === 0 && (
+                                                    <div className="px-4 py-3 text-xs text-gray-500 italic">No warehouses found</div>
                                                 )}
-                                            </div>
-                                        </div>
-                                        <div className="space-y-2">
-                                            <label className="text-sm font-medium text-gray-700">Truck No</label>
-                                            <input type="text" name="truckNo" value={product.truckNo} onChange={(e) => handleStockInputChange(e, pIndex)} className="w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg outline-none focus:border-blue-500" placeholder="Truck No" />
-                                        </div>
-                                        <div className="space-y-2">
-                                            <label className="text-sm font-medium text-gray-700">Total Quantity</label>
-                                            <input type="number" value={product.totalQuantity || 0} readOnly className="w-full px-4 py-2 bg-gray-50 border border-gray-200/60 rounded-lg outline-none text-gray-500 font-bold" placeholder="0.00" />
-                                        </div>
-                                        <div className="space-y-2">
-                                            <label className="text-sm font-medium text-gray-700">Entry Mode</label>
-                                            <div className="flex items-center gap-1 p-1 bg-gray-100/50 border border-gray-200/30 rounded-xl shadow-inner">
-                                                <button
-                                                    type="button"
-                                                    onClick={() => handleProductModeToggle(pIndex, false)}
-                                                    className={`flex-1 px-4 py-1.5 text-xs font-bold rounded-lg transition-all duration-300 ${!product.isMultiBrand ? 'bg-white text-blue-600 shadow-sm scale-100' : 'text-gray-500 hover:text-gray-700 hover:bg-white/30'}`}
-                                                >
-                                                    Single
-                                                </button>
-                                                <button
-                                                    type="button"
-                                                    onClick={() => handleProductModeToggle(pIndex, true)}
-                                                    className={`flex-1 px-4 py-1.5 text-xs font-bold rounded-lg transition-all duration-300 ${product.isMultiBrand ? 'bg-white text-blue-600 shadow-sm scale-100' : 'text-gray-500 hover:text-gray-700 hover:bg-white/30'}`}
-                                                >
-                                                    Multi
-                                                </button>
-                                            </div>
                                         </div>
                                     </div>
-                                    {/* Brand Entries Breakdown */}
-                                    <div className="space-y-3 bg-white/40 p-4 rounded-2xl border border-gray-100/50 shadow-sm">
-                                        <div className="hidden md:grid grid-cols-7 gap-3 mb-1">
-                                            <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">Brand</label>
-                                            <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">Purchased Price</label>
-                                            <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">Packet</label>
-                                            <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">Size</label>
-                                            <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">Qty</label>
-                                            <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1 text-center">Unit</label>
-                                            <div className="w-8"></div>
+                                )}
+                            </div>
+
+                            <div className="space-y-2">
+                                <label className="text-sm font-bold text-gray-700 ml-1">To Manager</label>
+                                <input
+                                    type="text"
+                                    name="toManager"
+                                    value={addWarehouseStockFormData.toManager}
+                                    onChange={handleAddWarehouseStockInputChange}
+                                    placeholder="Manager Name"
+                                    className="w-full px-4 py-2.5 bg-white/50 border border-gray-200/60 rounded-xl focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all backdrop-blur-sm text-sm"
+                                    autoComplete="off"
+                                />
+                            </div>
+                            <div className="space-y-2">
+                                <label className="text-sm font-bold text-gray-700 ml-1">To Address</label>
+                                <input
+                                    type="text"
+                                    name="toLocation"
+                                    value={addWarehouseStockFormData.toLocation}
+                                    onChange={handleAddWarehouseStockInputChange}
+                                    placeholder="Location/Address"
+                                    className="w-full px-4 py-2.5 bg-white/50 border border-gray-200/60 rounded-xl focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all backdrop-blur-sm text-sm"
+                                    autoComplete="off"
+                                />
+                            </div>
+                            <div className="space-y-2">
+                                <label className="text-sm font-bold text-gray-700 ml-1">To Capacity (KG)</label>
+                                <input
+                                    type="number"
+                                    name="toCapacity"
+                                    value={addWarehouseStockFormData.toCapacity}
+                                    onChange={handleAddWarehouseStockInputChange}
+                                    placeholder="KG Units"
+                                    className="w-full px-4 py-2.5 bg-white/50 border border-gray-200/60 rounded-xl focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all backdrop-blur-sm text-sm"
+                                    autoComplete="off"
+                                />
+                            </div>
+                        </div>
+
+                        {/* Stock Details Section */}
+                        <div className="col-span-full space-y-8 mt-4 animate-in fade-in duration-500">
+                            <div className="flex items-center justify-between border-b border-gray-100 pb-2">
+                                <h4 className="text-lg font-bold text-gray-800 flex items-center gap-2">
+                                    <div className="w-1.5 h-6 bg-blue-500 rounded-full"></div>
+                                    Product Details
+                                </h4>
+                                <button
+                                    type="button"
+                                    onClick={addWarehouseProductEntry}
+                                    className="flex items-center gap-2 px-4 py-2 bg-blue-50 text-blue-600 rounded-xl hover:bg-blue-600 hover:text-white transition-all duration-300 font-semibold text-sm shadow-sm active:scale-95 group"
+                                >
+                                    <PlusIcon className="w-4 h-4 group-hover:rotate-90 transition-transform duration-300" />
+                                    Add Product
+                                </button>
+                            </div>
+
+                            <div className="space-y-12">
+                                {addWarehouseStockFormData.productEntries.map((product, pIndex) => (
+                                    <div key={pIndex} className="relative p-6 rounded-2xl bg-gray-50/30 border border-gray-100 group/product hover:border-blue-200 hover:bg-white/80 transition-all duration-500 space-y-6">
+                                        {/* Remove Product Button */}
+                                        {addWarehouseStockFormData.productEntries.length > 1 && (
+                                            <button
+                                                type="button"
+                                                onClick={() => removeWarehouseProductEntry(pIndex)}
+                                                className="absolute -top-3 -right-3 p-2 bg-white text-gray-400 hover:text-red-500 rounded-xl shadow-lg border border-gray-100 opacity-0 group-hover/product:opacity-100 transition-all duration-300 hover:scale-110 active:scale-90 z-20"
+                                            >
+                                                <TrashIcon className="w-4 h-4" />
+                                            </button>
+                                        )}
+
+                                        <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+                                            <div className="space-y-2 relative" ref={whProductDropdownRef}>
+                                                <label className="text-sm font-bold text-gray-700 ml-1">Product</label>
+                                                <div className="relative">
+                                                    <input
+                                                        type="text"
+                                                        name="productName"
+                                                        value={product.productName}
+                                                        onChange={(e) => handleAddWarehouseStockInputChange(e, pIndex)}
+                                                        onFocus={() => {
+                                                            setActiveWhProductIndex(pIndex);
+                                                            setShowWhProductDropdown(true);
+                                                        }}
+                                                        placeholder="Select Product"
+                                                        className="w-full px-4 py-2.5 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all text-sm shadow-sm"
+                                                        required
+                                                        autoComplete="off"
+                                                    />
+                                                    {showWhProductDropdown && activeWhProductIndex === pIndex && (
+                                                        <div className="absolute z-[100] mt-1 w-full bg-white border border-gray-100 rounded-xl shadow-2xl overflow-hidden min-w-[200px]">
+                                                            <div className="max-h-60 overflow-y-auto py-1">
+                                                                {products
+                                                                    .filter(p => (p.name || '').toLowerCase().includes((product.productName || '').toLowerCase()))
+                                                                    .map((p, pIdx) => (
+                                                                        <button
+                                                                            key={pIdx}
+                                                                            type="button"
+                                                                            onClick={() => {
+                                                                                const fakeEvent = { target: { name: 'productName', value: p.name } };
+                                                                                handleAddWarehouseStockInputChange(fakeEvent, pIndex);
+                                                                                setShowWhProductDropdown(false);
+                                                                            }}
+                                                                            className="w-full px-4 py-2 text-left hover:bg-blue-50 transition-colors group"
+                                                                        >
+                                                                            <div className="font-bold text-gray-900 text-sm group-hover:text-blue-700">{p.name}</div>
+                                                                        </button>
+                                                                    ))}
+                                                            </div>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            </div>
                                         </div>
-                                        {product.brandEntries.map((brandEntry, bIndex) => (
-                                            <div key={bIndex} className="space-y-3 p-4 bg-white/70 border border-gray-200/50 rounded-2xl hover:border-blue-300/50 hover:shadow-md transition-all duration-300 group/brand relative">
-                                                <div className="grid grid-cols-2 md:grid-cols-7 gap-3 items-center">
-                                                    {/* Brand Dropdown */}
-                                                    <div className="relative" ref={el => { if (!brandRefs.current[pIndex]) brandRefs.current[pIndex] = []; brandRefs.current[pIndex][bIndex] = el; }}>
-                                                        <div className="relative group/dropdown">
+
+                                        {/* Brand Entries for this Product */}
+                                        <div className="space-y-4">
+                                            <div className="hidden lg:grid grid-cols-8 gap-4 px-3 mb-1 pr-[88px]">
+                                                <div className="col-span-2 text-xs font-bold text-gray-400 uppercase tracking-wider">Brand</div>
+                                                <div className="text-xs font-bold text-gray-400 uppercase tracking-wider text-center">InHouse QTY</div>
+                                                <div className="text-xs font-bold text-gray-400 uppercase tracking-wider text-center">InHouse PKT</div>
+                                                <div className="text-xs font-bold text-gray-400 uppercase tracking-wider text-center">WareHouse QTY</div>
+                                                <div className="text-xs font-bold text-gray-400 uppercase tracking-wider text-center">WareHouse PKT</div>
+                                                <div className="text-xs font-bold text-gray-400 uppercase tracking-wider text-center">Transfer QTY</div>
+                                                <div className="text-xs font-bold text-gray-400 uppercase tracking-wider text-center">Transfer PKT</div>
+                                            </div>
+
+                                            {product.brandEntries.map((brandEntry, bIndex) => (
+                                                <div key={bIndex} className="flex items-center gap-4 p-3 bg-white/40 border border-gray-200/50 rounded-xl group/brand hover:border-blue-200 transition-all">
+                                                    <div className="flex-1 grid grid-cols-8 gap-4 items-center">
+                                                        <div className="col-span-2 relative" ref={whBrandDropdownRef}>
                                                             <input
                                                                 type="text"
+                                                                name="brand"
                                                                 value={brandEntry.brand}
-                                                                placeholder="Select Brand"
-                                                                onChange={(e) => handleBrandEntryChange(pIndex, bIndex, 'brand', e.target.value)}
-                                                                onFocus={() => setActiveDropdown(`brand-${pIndex}-${bIndex}`)}
-                                                                className="w-full px-3 py-2 bg-white border border-gray-200 rounded-xl text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/10 transition-all"
+                                                                onChange={(e) => handleAddWarehouseStockInputChange(e, pIndex, bIndex)}
+                                                                onFocus={() => {
+                                                                    setActiveWhProductIndex(pIndex);
+                                                                    setActiveWhBrandIndex(bIndex);
+                                                                    setShowWhBrandDropdown(true);
+                                                                }}
+                                                                placeholder="Brand"
+                                                                className="w-full px-3 py-2 bg-white border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all text-sm"
+                                                                required
                                                                 autoComplete="off"
+                                                                disabled={!product.productName}
                                                             />
-                                                            <button
-                                                                type="button"
-                                                                onClick={() => setActiveDropdown(activeDropdown === `brand-${pIndex}-${bIndex}` ? null : `brand-${pIndex}-${bIndex}`)}
-                                                                className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-gray-400 hover:text-blue-500 transition-colors"
-                                                            >
-                                                                <ChevronDownIcon className={`w-3.5 h-3.5 transition-transform duration-200 ${activeDropdown === `brand-${pIndex}-${bIndex}` ? 'rotate-180 text-blue-500' : ''}`} />
-                                                            </button>
-                                                            {activeDropdown === `brand-${pIndex}-${bIndex}` && (
-                                                                <div className="absolute z-[100] mt-1 w-full bg-white border border-gray-100 rounded-xl shadow-2xl py-2 max-h-48 overflow-y-auto animate-in fade-in zoom-in duration-200">
-                                                                    {/* Brands logic: Unique brands from existing records */}
-                                                                    {[...new Set(stockRecords.flatMap(r => [r.brand, ...(r.entries || []).map(e => e.brand)]).filter(Boolean))].filter(b => !brandEntry.brand || b.toLowerCase().includes(brandEntry.brand.toLowerCase())).length > 0 ? (
-                                                                        [...new Set(stockRecords.flatMap(r => [r.brand, ...(r.entries || []).map(e => e.brand)]).filter(Boolean))].filter(b => !brandEntry.brand || b.toLowerCase().includes(brandEntry.brand.toLowerCase())).map((b, idx) => (
-                                                                            <button
-                                                                                key={idx}
-                                                                                type="button"
-                                                                                onClick={() => {
-                                                                                    handleBrandEntryChange(pIndex, bIndex, 'brand', b);
-                                                                                    setActiveDropdown(null);
-                                                                                }}
-                                                                                className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-600 transition-colors"
-                                                                            >
-                                                                                {b}
-                                                                            </button>
-                                                                        ))
-                                                                    ) : (
-                                                                        <div className="px-4 py-2 text-sm text-gray-400 italic">No brands found</div>
-                                                                    )}
+                                                            {showWhBrandDropdown && activeWhProductIndex === pIndex && activeWhBrandIndex === bIndex && product.productName && (
+                                                                <div className="absolute z-[100] mt-1 w-full bg-white border border-gray-100 rounded-xl shadow-2xl overflow-hidden min-w-[220px]">
+                                                                    <div className="max-h-60 overflow-y-auto py-1">
+                                                                        {availableBrands
+                                                                            .filter(b => (b.brand || '').toLowerCase().includes((brandEntry.brand || '').toLowerCase()))
+                                                                            .map((b, bIdx) => (
+                                                                                <button
+                                                                                    key={bIdx}
+                                                                                    type="button"
+                                                                                    onClick={() => {
+                                                                                        const fakeEvent = { target: { name: 'brand', value: b.brand } };
+                                                                                        handleAddWarehouseStockInputChange(fakeEvent, pIndex, bIndex);
+                                                                                        setShowWhBrandDropdown(false);
+                                                                                    }}
+                                                                                    className="w-full px-4 py-2 text-left hover:bg-blue-50 transition-colors group"
+                                                                                >
+                                                                                    <div className="font-bold text-gray-900 text-xs group-hover:text-blue-700 whitespace-nowrap">{b.brand}</div>
+                                                                                </button>
+                                                                            ))}
+                                                                    </div>
                                                                 </div>
                                                             )}
                                                         </div>
+
+                                                        <input
+                                                            type="number"
+                                                            name="inhouseQty"
+                                                            value={brandEntry.inhouseQty}
+                                                            onChange={(e) => handleAddWarehouseStockInputChange(e, pIndex, bIndex)}
+                                                            placeholder="0"
+                                                            className="w-full px-2 py-2 bg-gray-50/50 border border-gray-100 rounded-lg text-sm text-center font-mono outline-none focus:border-blue-400"
+                                                            required
+                                                            readOnly
+                                                        />
+                                                        <input
+                                                            type="number"
+                                                            name="inhousePkt"
+                                                            value={brandEntry.inhousePkt}
+                                                            onChange={(e) => handleAddWarehouseStockInputChange(e, pIndex, bIndex)}
+                                                            placeholder="0"
+                                                            className="w-full px-2 py-2 bg-gray-50/50 border border-gray-100 rounded-lg text-sm text-center font-mono outline-none focus:border-blue-400"
+                                                            required
+                                                            readOnly
+                                                        />
+                                                        <input
+                                                            type="number"
+                                                            name="whQty"
+                                                            value={brandEntry.whQty}
+                                                            onChange={(e) => handleAddWarehouseStockInputChange(e, pIndex, bIndex)}
+                                                            placeholder="0"
+                                                            className="w-full px-2 py-2 bg-gray-50/50 border border-gray-100 rounded-lg text-sm text-center font-mono outline-none focus:border-blue-400"
+                                                            required
+                                                            readOnly
+                                                        />
+                                                        <input
+                                                            type="number"
+                                                            name="whPkt"
+                                                            value={brandEntry.whPkt}
+                                                            onChange={(e) => handleAddWarehouseStockInputChange(e, pIndex, bIndex)}
+                                                            placeholder="0"
+                                                            className="w-full px-2 py-2 bg-gray-50/50 border border-gray-100 rounded-lg text-sm text-center font-mono outline-none focus:border-blue-400"
+                                                            required
+                                                            readOnly
+                                                        />
+                                                        <input
+                                                            type="number"
+                                                            name="transferQty"
+                                                            value={brandEntry.transferQty}
+                                                            onChange={(e) => handleAddWarehouseStockInputChange(e, pIndex, bIndex)}
+                                                            placeholder="0"
+                                                            className="w-full px-2 py-2 bg-white border border-indigo-100 rounded-lg text-sm text-center font-mono outline-none focus:border-indigo-400"
+                                                            required
+                                                        />
+                                                        <input
+                                                            type="number"
+                                                            name="transferPkt"
+                                                            value={brandEntry.transferPkt}
+                                                            onChange={(e) => handleAddWarehouseStockInputChange(e, pIndex, bIndex)}
+                                                            placeholder="0"
+                                                            className="w-full px-2 py-2 bg-white border border-indigo-100 rounded-lg text-sm text-center font-mono outline-none focus:border-indigo-400"
+                                                            required
+                                                        />
                                                     </div>
-                                                    <input type="number" value={brandEntry.purchasedPrice} placeholder="Price" onChange={(e) => handleBrandEntryChange(pIndex, bIndex, 'purchasedPrice', e.target.value)} className="px-3 py-2 bg-white border border-gray-200 rounded-xl text-sm outline-none focus:border-blue-500 transition-all" />
-                                                    <input type="number" value={brandEntry.packet} placeholder="Packet" onChange={(e) => handleBrandEntryChange(pIndex, bIndex, 'packet', e.target.value)} className="px-3 py-2 bg-white border border-gray-200 rounded-xl text-sm outline-none focus:border-blue-500 transition-all font-medium" />
-                                                    <input type="number" value={brandEntry.packetSize} placeholder="Size" onChange={(e) => handleBrandEntryChange(pIndex, bIndex, 'packetSize', e.target.value)} className="px-3 py-2 bg-white border border-gray-200 rounded-xl text-sm outline-none focus:border-blue-500 transition-all" />
-                                                    <input type="text" value={brandEntry.quantity} readOnly className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-sm text-gray-500 font-bold" />
-                                                    <div className="relative group/unit">
-                                                        <select value={brandEntry.unit} onChange={(e) => handleBrandEntryChange(pIndex, bIndex, 'unit', e.target.value)} className="w-full px-3 py-2 bg-white border border-gray-200 rounded-xl text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/10 appearance-none transition-all cursor-pointer">
-                                                            <option value="kg">kg</option>
-                                                            <option value="pcs">pcs</option>
-                                                            <option value="bags">bags</option>
-                                                        </select>
-                                                        <ChevronDownIcon className="absolute right-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400 pointer-events-none group-hover/unit:text-blue-500 transition-colors" />
-                                                    </div>
-                                                    <div className="flex items-center justify-center">
-                                                        {product.isMultiBrand && (
-                                                            <div className="flex gap-1.5 opacity-0 group-hover/brand:opacity-100 transition-all duration-300">
-                                                                <button type="button" onClick={() => addBrandEntry(pIndex)} className="p-2 text-blue-500 hover:bg-blue-100 rounded-xl shadow-sm hover:shadow transition-all"><PlusIcon className="w-4 h-4" /></button>
-                                                                {product.brandEntries.length > 1 && <button type="button" onClick={() => removeBrandEntry(pIndex, bIndex)} className="p-2 text-red-500 hover:bg-red-100 rounded-xl shadow-sm hover:shadow transition-all"><TrashIcon className="w-4 h-4" /></button>}
-                                                            </div>
+                                                    <div className="flex items-center gap-1 w-[72px]">
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => addWarehouseBrandEntry(pIndex)}
+                                                            className="p-1.5 text-blue-500 hover:bg-blue-100 rounded-lg transition-all"
+                                                        >
+                                                            <PlusIcon className="w-4 h-4" />
+                                                        </button>
+                                                        {product.brandEntries.length > 1 && (
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => removeWarehouseBrandEntry(pIndex, bIndex)}
+                                                                className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all"
+                                                            >
+                                                                <TrashIcon className="w-3.5 h-3.5" />
+                                                            </button>
                                                         )}
                                                     </div>
                                                 </div>
-                                                {/* Second Row for Calculations */}
-                                                <div className="grid grid-cols-2 md:grid-cols-6 gap-3 px-3 py-2 bg-gray-50/50 rounded-xl border border-gray-100/50">
-                                                    <div className="flex flex-col gap-1">
-                                                        <label className="text-[9px] font-bold text-gray-400 uppercase tracking-tighter pl-1">SWP. PKT</label>
-                                                        <input type="number" value={brandEntry.sweepedPacket} placeholder="Packet" onChange={(e) => handleBrandEntryChange(pIndex, bIndex, 'sweepedPacket', e.target.value)} className="px-3 py-1.5 bg-white border border-gray-200 rounded-lg text-xs outline-none focus:border-blue-500 transition-all" />
-                                                    </div>
-                                                    <div className="flex flex-col gap-1">
-                                                        <label className="text-[9px] font-bold text-gray-400 uppercase tracking-tighter pl-1">SWP. QTY</label>
-                                                        <input type="text" value={brandEntry.sweepedQuantity} readOnly placeholder="Qty" className="px-3 py-1.5 bg-white/50 border border-gray-100 rounded-lg text-xs text-gray-400 font-medium" />
-                                                    </div>
-                                                    <div className="flex flex-col gap-1">
-                                                        <label className="text-[9px] font-bold text-blue-500/60 uppercase tracking-tighter pl-1">TOT. INH. PKT</label>
-                                                        <input type="text" value={brandEntry.totalInHousePacket} readOnly placeholder="Packet" className="px-3 py-1.5 bg-blue-50/30 border border-blue-100/50 rounded-lg text-xs text-blue-600 font-bold" />
-                                                    </div>
-                                                    <div className="flex flex-col gap-1">
-                                                        <label className="text-[9px] font-bold text-blue-500/60 uppercase tracking-tighter pl-1">TOT. INH. QTY</label>
-                                                        <input type="text" value={brandEntry.totalInHouseQuantity} readOnly placeholder="Qty" className="px-3 py-1.5 bg-blue-50/30 border border-blue-100/50 rounded-lg text-xs text-blue-600 font-bold" />
-                                                    </div>
-                                                    <div className="flex flex-col gap-1">
-                                                        <label className="text-[9px] font-bold text-orange-500/60 uppercase tracking-tighter pl-1">SALE PKT</label>
-                                                        <input type="number" value={brandEntry.salePacket} placeholder="Packet" onChange={(e) => handleBrandEntryChange(pIndex, bIndex, 'salePacket', e.target.value)} className="px-3 py-1.5 bg-white border border-orange-200/50 rounded-lg text-xs outline-none focus:border-orange-500 transition-all" />
-                                                    </div>
-                                                    <div className="flex flex-col gap-1">
-                                                        <label className="text-[9px] font-bold text-green-500/60 uppercase tracking-tighter pl-1">INH. PKT (REM)</label>
-                                                        <input type="text" value={brandEntry.inHousePacket} readOnly placeholder="Packet" className="px-3 py-1.5 bg-green-50/30 border border-green-100/50 rounded-lg text-xs text-green-600 font-bold" />
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        ))}
+                                            ))}
+                                        </div>
                                     </div>
-                                </div>
-                            ))}
+                                ))}
+                            </div>
                         </div>
 
-                        <div className="col-span-1 md:col-span-2 pt-6 flex items-center justify-between border-t border-gray-100 relative z-20">
-                            <div className="flex flex-col">
-                                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">Status</label>
-                                <div className="text-xs font-bold text-blue-600 bg-blue-50 px-3 py-1 rounded-lg border border-blue-100 mt-1 w-fit">{stockFormData.status}</div>
+                        <div className="warehouse-form-footer border-t border-gray-100 pt-6 mt-6 flex gap-4 justify-end">
+                            <div className="flex-1">
+                                {addWarehouseStockSubmitStatus === 'success' && (
+                                    <p className="text-green-600 font-medium flex items-center animate-bounce">
+                                        <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"></path></svg>
+                                        Stock saved successfully!
+                                    </p>
+                                )}
+                                {addWarehouseStockSubmitStatus === 'error' && (
+                                    <p className="text-red-600 font-medium flex items-center">
+                                        <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                                        Failed to save stock.
+                                    </p>
+                                )}
                             </div>
-                            <div className="flex items-center gap-4">
-                                <button type="button" onClick={() => { setShowStockForm(false); resetStockForm(); }} className="px-6 py-2.5 bg-gray-100 text-gray-700 font-semibold rounded-xl hover:bg-gray-200 transition-all">Cancel</button>
-                                <button type="submit" disabled={isSubmitting} className="px-8 py-2.5 bg-gradient-to-r from-blue-600 to-blue-500 text-white font-bold rounded-xl hover:shadow-lg transition-all disabled:opacity-70 disabled:cursor-not-allowed">
-                                    {isSubmitting ? (
-                                        <span className="flex items-center gap-2"><div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>Saving...</span>
-                                    ) : (
-                                        <span>Save Stock</span>
-                                    )}
-                                </button>
-                            </div>
+                            <button
+                                type="button"
+                                onClick={() => setShowAddWarehouseStockForm(false)}
+                                className="px-6 py-2.5 bg-white border border-gray-200 text-gray-700 rounded-xl font-bold hover:bg-gray-50 transition-all text-sm"
+                                disabled={isAddingWarehouseStock}
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                type="submit"
+                                className="px-8 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl font-bold hover:from-blue-700 hover:to-indigo-700 hover:shadow-lg hover:shadow-blue-500/30 transition-all duration-200 text-sm flex items-center shadow-md disabled:opacity-50 hover:scale-105"
+                                disabled={isAddingWarehouseStock}
+                            >
+                                {isAddingWarehouseStock ? (
+                                    <span className="flex items-center">
+                                        <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                        </svg>
+                                        Saving...
+                                    </span>
+                                ) : (
+                                    <>
+                                        <PlusIcon className="w-5 h-5 mr-2" />
+                                        Transfer
+                                    </>
+                                )}
+                            </button>
                         </div>
                     </form>
-                </div >
+                </div>
             )}
 
-            {!showStockForm && (
+            {(!showStockForm && !showAddWarehouseStockForm) && (
                 <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
                     <div className="overflow-x-auto">
                         <table className="w-full text-left">
@@ -1394,7 +2023,7 @@ const StockManagement = ({
                                             <td className="px-6 py-4 align-top text-right">
                                                 <div className="flex items-center justify-end gap-3 mt-1">
                                                     <button onClick={() => setViewRecord({ data: group })} className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all"><EyeIcon className="w-5 h-5" /></button>
-                                                    <button onClick={() => handleEdit('stock', group)} className="p-1.5 text-gray-400 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition-all"><EditIcon className="w-5 h-5" /></button>
+                                                    <button onClick={() => handleEditInternal('stock', group)} className="p-1.5 text-gray-400 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition-all"><EditIcon className="w-5 h-5" /></button>
                                                     <button onClick={() => setDeleteConfirm({ show: true, id: group.allIds, type: 'stock' })} className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all"><TrashIcon className="w-5 h-5" /></button>
                                                 </div>
                                             </td>
@@ -1781,7 +2410,7 @@ const StockManagement = ({
                                                                     </td>
                                                                     <td className="px-3 py-3 whitespace-nowrap text-right text-sm font-medium">
                                                                         <div className="flex items-center justify-center gap-2">
-                                                                            <button onClick={() => handleEdit('history', item)} className="p-1.5 text-gray-400 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition-all"><EditIcon className="w-5 h-5" /></button>
+                                                                            <button onClick={() => handleEditInternal('history', item)} className="p-1.5 text-gray-400 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition-all"><EditIcon className="w-5 h-5" /></button>
                                                                             <button onClick={() => setDeleteConfirm({ show: true, id: item.allIds, type: 'history' })} className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all"><TrashIcon className="w-5 h-5" /></button>
                                                                         </div>
                                                                     </td>

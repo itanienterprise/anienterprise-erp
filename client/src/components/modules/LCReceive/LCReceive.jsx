@@ -67,14 +67,26 @@ function LCReceive({
             const whData = Array.isArray(whRes.data) ? whRes.data : [];
             const stockData = Array.isArray(stockRes.data) ? stockRes.data : [];
 
-            // Decrypt all Warehouse records
+            // 1. Calculate Global InHouse Totals from ALL Stock Data
+            const globalInHouseMap = {};
+            stockData.forEach(item => {
+                try {
+                    const d = decryptData(item.data);
+                    const key = `${(d.productName || d.product || '').trim()}_${(d.brand || '').trim()}`;
+                    if (!globalInHouseMap[key]) globalInHouseMap[key] = true;
+                } catch { }
+            });
+
+            // 2. Decrypt all Warehouse records and check for LC source
             const allDecryptedWh = whData.map(item => {
                 const decrypted = decryptData(item.data);
+                const key = `${(decrypted.product || decrypted.productName || '').trim()}_${(decrypted.brand || '').trim()}`;
                 return {
                     ...decrypted,
                     productName: decrypted.product,
                     packetSize: decrypted.packetSize || (decrypted.whQty && decrypted.whPkt ? (parseFloat(decrypted.whQty) / parseFloat(decrypted.whPkt)).toFixed(0) : 0),
-                    _id: item._id
+                    _id: item._id,
+                    hasLCRecord: globalInHouseMap[key] !== undefined
                 };
             }).filter(Boolean);
 
@@ -88,8 +100,8 @@ function LCReceive({
                 return false;
             });
 
-            // Filter for stock display (exclude metadata entries)
-            const whStockOnly = allDecryptedWh.filter(d => d.product !== '-').map(d => ({
+            // Filter for stock display (exclude metadata entries and orphaned records)
+            const whStockOnly = allDecryptedWh.filter(d => d.product !== '-' && d.hasLCRecord).map(d => ({
                 ...d,
                 productName: d.product,
                 whPkt: d.whPkt,
@@ -109,6 +121,7 @@ function LCReceive({
                         whQty: d.inHouseQuantity || 0,
                         productName: d.productName || d.product,
                         packetSize: d.packetSize || d.size || 0,
+                        hasLCRecord: true,
                         _id: item._id
                     };
                 } catch {
@@ -145,7 +158,14 @@ function LCReceive({
     const selectedWhStock = useMemo(() => {
         const selectedWh = (stockFormData.warehouse || '').trim();
         if (!selectedWh || !allWhRecords.length) return null;
-        const filtered = allWhRecords.filter(r => (r.whName || '').trim() === selectedWh);
+
+        // Filter by warehouse and ensure there is actual stock present AND it has an LC source
+        const filtered = allWhRecords.filter(r =>
+            (r.whName || '').trim() === selectedWh &&
+            (parseFloat(r.whQty) > 0 || parseFloat(r.whPkt) > 0) &&
+            r.hasLCRecord
+        );
+
         const groups = {};
         filtered.forEach(item => {
             const prodKey = item.productName || 'Unnamed Product';
@@ -566,6 +586,7 @@ function LCReceive({
                 totalLcTruck: record.totalLcTruck,
                 totalLcQuantity: record.totalLcQuantity,
                 status: record.status,
+                warehouse: record.warehouse || '',
                 productEntries: [formProductEntry],
                 originalIds: record.allIds
             });
@@ -585,6 +606,7 @@ function LCReceive({
                 totalLcTruck: record.totalLcTruck,
                 totalLcQuantity: record.totalLcQuantity,
                 status: record.status,
+                warehouse: record.warehouse || '',
                 productEntries: [{
                     isMultiBrand: false,
                     productName: record.productName,
@@ -1982,8 +2004,8 @@ function LCReceive({
                                                         <tr>
                                                             <th className="px-6 py-3 text-[10px] font-bold text-blue-400 uppercase tracking-wider">Product</th>
                                                             <th className="px-6 py-3 text-[10px] font-bold text-blue-400 uppercase tracking-wider">Brand</th>
-                                                            <th className="px-6 py-3 text-[10px] font-bold text-blue-400 uppercase tracking-wider text-right">INHOUSE PACKET</th>
-                                                            <th className="px-6 py-3 text-[10px] font-bold text-blue-400 uppercase tracking-wider text-right">INHOUSE QUANTITY</th>
+                                                            <th className="px-6 py-3 text-[10px] font-bold text-blue-400 uppercase tracking-wider text-right">WAREHOUSE PACKET</th>
+                                                            <th className="px-6 py-3 text-[10px] font-bold text-blue-400 uppercase tracking-wider text-right">WAREHOUSE QUANTITY</th>
                                                         </tr>
                                                     </thead>
                                                     <tbody className="divide-y divide-blue-50">
@@ -2233,14 +2255,9 @@ function LCReceive({
                                                             </button>
                                                             <button onClick={(e) => {
                                                                 e.stopPropagation();
-                                                                // Handling bulk delete via parent handler logic
-                                                                // Assuming onDelete takes type, id, isBulk. 
-                                                                // Here we pass null for id and handle selection manually if expected, 
-                                                                // But typically we should select the item first.
-                                                                // Replicating original code:
-                                                                const ids = entry.ids;
+                                                                const ids = entry.allIds || entry.ids;
                                                                 setSelectedItems(new Set(ids));
-                                                                onDelete('stock', null, true);
+                                                                onDelete('stock', null, true, entry);
                                                             }} className="text-gray-400 hover:text-red-600 transition-colors">
                                                                 <TrashIcon className="w-5 h-5" />
                                                             </button>
