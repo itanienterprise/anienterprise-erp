@@ -16,12 +16,14 @@ import {
     BellIcon,
     HomeIcon,
     ChevronUpIcon,
+    FileTextIcon,
 } from '../../Icons';
 import CustomDatePicker from '../../shared/CustomDatePicker';
 import StockReport from './StockReport';
 import { encryptData, decryptData } from '../../../utils/encryption';
 import { API_BASE_URL } from '../../../utils/helpers';
 import { calculateStockData } from '../../../utils/stockHelpers';
+import { generateStockReportPDF, generateProductHistoryPDF } from '../../../utils/pdfGenerator';
 import axios from 'axios';
 
 const SortIcon = ({ config, columnKey }) => {
@@ -54,7 +56,11 @@ const StockManagement = ({
     showStockReport,
     setShowStockReport,
     stockFilters,
-    setStockFilters
+    setStockFilters,
+    salesRecords,
+    fetchSales,
+    setShowProductHistoryReport,
+    setProductHistoryReportData
 }) => {
 
     // Filtering & Search (Main View)
@@ -67,13 +73,14 @@ const StockManagement = ({
     const [historySearchQuery, setHistorySearchQuery] = useState('');
     const [showHistoryFilterPanel, setShowHistoryFilterPanel] = useState(false);
     const [historyFilters, setHistoryFilters] = useState({ startDate: '', endDate: '', lcNo: '', port: '', brand: '' });
+    const [historyTab, setHistoryTab] = useState('purchase'); // 'purchase' or 'sale'
 
     // Dropdown & Selection State
     const [activeDropdown, setActiveDropdown] = useState(null);
     const [highlightedIndex, setHighlightedIndex] = useState(-1);
     const [filterDropdownOpen, setFilterDropdownOpen] = useState({ lcNo: false, port: false, importer: false, brand: false, product: false });
     const [filterSearchInputs, setFilterSearchInputs] = useState({ lcNoSearch: '', portSearch: '', importerSearch: '', brandSearch: '', productSearch: '' });
-    const initialFilterDropdownState = { lcNo: false, port: false, importer: false, brand: false, product: false };
+    const initialFilterDropdownState = { lcNo: false, port: false, importer: false, brand: false, product: false, productName: false };
 
     // Table Selection & Sorting
     const [selectedItems, setSelectedItems] = useState(new Set());
@@ -150,6 +157,235 @@ const StockManagement = ({
         }, []);
     }, [warehouseData]);
 
+    const activePurchaseHistory = useMemo(() => {
+        if (!viewRecord) return [];
+        const searchLower = historySearchQuery.toLowerCase().trim();
+        const productName = (viewRecord.data.productName || '').trim().toLowerCase();
+
+        const filteredRaw = stockRecords.filter(item => {
+            const matchesProduct = (item.productName || '').trim().toLowerCase() === productName;
+            if (!matchesProduct) return false;
+
+            if (historyFilters.startDate && item.date < historyFilters.startDate) return false;
+            if (historyFilters.endDate && item.date > historyFilters.endDate) return false;
+            if (historyFilters.lcNo && (item.lcNo || '').trim() !== historyFilters.lcNo) return false;
+            if (historyFilters.port && (item.port || '').trim() !== historyFilters.port) return false;
+            if (historyFilters.brand) {
+                const itemBrand = (item.brand || item.productName || '').trim().toLowerCase();
+                if (itemBrand !== historyFilters.brand.toLowerCase()) return false;
+            }
+
+            if (!searchLower) return true;
+            const matchesLC = (item.lcNo || '').trim().toLowerCase().includes(searchLower);
+            const matchesPort = (item.port || '').trim().toLowerCase().includes(searchLower);
+            const matchesImporter = (item.importer || '').trim().toLowerCase().includes(searchLower);
+            const matchesTruck = (item.truckNo || '').trim().toLowerCase().includes(searchLower);
+            const brandList = item.brand ? [item.brand] : (item.entries || []).map(e => e.brand);
+            const matchesBrand = brandList.some(b => (b || '').trim().toLowerCase().includes(searchLower));
+            return matchesLC || matchesPort || matchesImporter || matchesTruck || matchesBrand;
+        });
+
+        const groupedMap = filteredRaw.reduce((acc, item) => {
+            const key = `${item.date}_${item.lcNo}_${item.truckNo}`;
+            const normalizeStr = (s) => (s || '').toString().trim().toLowerCase();
+            const targetLC = normalizeStr(item.lcNo);
+            const targetTruck = normalizeStr(item.truckNo);
+            const targetProd = normalizeStr(item.productName || item.product);
+            const targetBrand = normalizeStr(item.brand);
+
+            const relatedWhRecords = (warehouseData || []).filter(w => {
+                const wLC = normalizeStr(w.lcNo);
+                const wTruck = normalizeStr(w.truckNo);
+                const wProd = normalizeStr(w.productName || w.product);
+                const wBrand = normalizeStr(w.brand);
+                return wLC === targetLC && wProd === targetProd && wBrand === targetBrand && (wTruck === targetTruck || (!wTruck && !targetTruck));
+            });
+
+            const physicalWhQty = relatedWhRecords.reduce((sum, r) => sum + (parseFloat(r.whQty) || 0), 0);
+            const physicalWhPkt = relatedWhRecords.reduce((sum, r) => sum + (parseFloat(r.whPkt) || 0), 0);
+            const saleQty = relatedWhRecords.reduce((sum, r) => sum + (parseFloat(r.saleQuantity) || 0), 0);
+            const salePkt = relatedWhRecords.reduce((sum, r) => sum + (parseFloat(r.salePacket) || 0), 0);
+            const shortageQty = parseFloat(item.sweepedQuantity) || 0;
+
+            if (!acc[key]) {
+                acc[key] = {
+                    ...item,
+                    allIds: [item._id],
+                    totalQuantity: parseFloat(item.quantity) || 0,
+                    totalPacket: parseFloat(item.packet) || 0,
+                    totalInHousePacket: physicalWhPkt,
+                    totalInHouseQuantity: physicalWhQty,
+                    totalShortage: shortageQty,
+                    totalSaleQuantity: saleQty,
+                    totalSalePacket: salePkt,
+                    entries: [{
+                        brand: item.brand || item.productName,
+                        purchasedPrice: item.purchasedPrice,
+                        packet: item.packet,
+                        packetSize: item.packetSize,
+                        quantity: item.quantity,
+                        inHousePacket: physicalWhPkt,
+                        inHouseQuantity: physicalWhQty,
+                        sweepedPacket: item.sweepedPacket,
+                        sweepedQuantity: item.sweepedQuantity,
+                        saleQuantity: saleQty,
+                        salePacket: salePkt,
+                        unit: item.unit
+                    }]
+                };
+            } else {
+                acc[key].allIds.push(item._id);
+                acc[key].totalQuantity += parseFloat(item.quantity) || 0;
+                acc[key].totalPacket += parseFloat(item.packet) || 0;
+                acc[key].totalInHousePacket += physicalWhPkt;
+                acc[key].totalInHouseQuantity += physicalWhQty;
+                acc[key].totalShortage += shortageQty;
+                acc[key].totalSaleQuantity += saleQty;
+                acc[key].totalSalePacket += salePkt;
+                acc[key].entries.push({
+                    brand: item.brand || item.productName,
+                    purchasedPrice: item.purchasedPrice,
+                    packet: item.packet,
+                    packetSize: item.packetSize,
+                    quantity: item.quantity,
+                    inHousePacket: physicalWhPkt,
+                    inHouseQuantity: physicalWhQty,
+                    sweepedPacket: item.sweepedPacket,
+                    sweepedQuantity: item.sweepedQuantity,
+                    saleQuantity: saleQty,
+                    salePacket: salePkt,
+                    unit: item.unit
+                });
+            }
+            return acc;
+        }, {});
+
+        return Object.values(groupedMap).sort((a, b) => {
+            const config = sortConfig.history;
+            if (!config) return 0;
+            const aVal = a[config.key];
+            const bVal = b[config.key];
+            if (aVal < bVal) return config.direction === 'asc' ? -1 : 1;
+            if (aVal > bVal) return config.direction === 'asc' ? 1 : -1;
+            return 0;
+        });
+    }, [viewRecord, historyTab, stockRecords, historySearchQuery, historyFilters, warehouseData, sortConfig.history]);
+
+    const activeSaleHistory = useMemo(() => {
+        if (!viewRecord) return [];
+        const searchLower = historySearchQuery.toLowerCase().trim();
+        const productName = (viewRecord.data.productName || '').trim().toLowerCase();
+
+        const filteredSales = (salesRecords || []).filter(sale => {
+            const hasMatchingProduct = (sale.items || []).some(item =>
+                (item.productName || '').trim().toLowerCase() === productName
+            );
+            if (!hasMatchingProduct) return false;
+            if (historyFilters.startDate && sale.date < historyFilters.startDate) return false;
+            if (historyFilters.endDate && sale.date > historyFilters.endDate) return false;
+
+            if (searchLower) {
+                const matchesInvoice = (sale.invoiceNo || '').toLowerCase().includes(searchLower);
+                const matchesCompany = (sale.companyName || '').toLowerCase().includes(searchLower);
+                const matchesCustomer = (sale.customerName || '').toLowerCase().includes(searchLower);
+                const matchesPhone = (sale.contact || '').toLowerCase().includes(searchLower);
+                const matchesItemBrand = (sale.items || [])
+                    .filter(item => (item.productName || '').trim().toLowerCase() === productName)
+                    .some(item => (item.brandEntries || []).some(entry => (entry.brand || '').toLowerCase().includes(searchLower)));
+                return matchesInvoice || matchesCompany || matchesCustomer || matchesPhone || matchesItemBrand;
+            }
+            return true;
+        });
+
+        const flattened = [];
+        filteredSales.forEach(sale => {
+            const matchingItems = (sale.items || []).filter(item =>
+                (item.productName || '').trim().toLowerCase() === productName
+            );
+            matchingItems.forEach(item => {
+                (item.brandEntries || []).forEach(entry => {
+                    if (historyFilters.brand && (entry.brand || '').trim().toLowerCase() !== historyFilters.brand.toLowerCase()) return;
+                    if (searchLower) {
+                        const matchesEnv = (sale.invoiceNo || '').toLowerCase().includes(searchLower) ||
+                            (sale.companyName || '').toLowerCase().includes(searchLower) ||
+                            (sale.customerName || '').toLowerCase().includes(searchLower) ||
+                            (sale.contact || '').toLowerCase().includes(searchLower);
+                        const matchesBrand = (entry.brand || '').toLowerCase().includes(searchLower);
+                        if (!matchesEnv && !matchesBrand) return;
+                    }
+
+                    const brandLower = (entry.brand || '').trim().toLowerCase();
+                    const purchaseRecord = stockRecords.find(s =>
+                        (s.productName || '').trim().toLowerCase() === productName &&
+                        (s.brand || '').trim().toLowerCase() === brandLower
+                    );
+                    const pktSize = parseFloat(purchaseRecord?.packetSize) || 0;
+                    const qty = parseFloat(entry.quantity) || 0;
+                    const calculatedPacket = pktSize > 0 ? (qty / pktSize) : 0;
+
+                    flattened.push({
+                        ...sale,
+                        itemBrand: entry.brand,
+                        itemPacket: calculatedPacket,
+                        itemQty: qty,
+                        itemPrice: parseFloat(entry.unitPrice) || 0,
+                        itemTotal: parseFloat(entry.totalAmount) || 0,
+                        unit: 'kg'
+                    });
+                });
+            });
+        });
+
+        return flattened.sort((a, b) => {
+            const config = sortConfig.history;
+            if (!config) return 0;
+            const aVal = a[config.key];
+            const bVal = b[config.key];
+            if (aVal < bVal) return config.direction === 'asc' ? -1 : 1;
+            if (aVal > bVal) return config.direction === 'asc' ? 1 : -1;
+            return 0;
+        });
+    }, [viewRecord, salesRecords, stockRecords, historySearchQuery, historyFilters, sortConfig.history]);
+
+    const handleGenerateProductReport = () => {
+        if (!viewRecord) return;
+        const productName = (viewRecord.data.productName || '').trim().toLowerCase();
+
+        // 1. Flatten Purchase History from activePurchaseHistory
+        const purchaseFlattened = [];
+        activePurchaseHistory.forEach(record => {
+            const entries = record.entries || [];
+            entries.forEach(entry => {
+                // Apply brand filter if present, as activePurchaseHistory might not have it applied at this granular level
+                const brandMatch = !historyFilters.brand || (entry.brand || '').trim().toLowerCase() === historyFilters.brand.toLowerCase();
+                if (brandMatch) {
+                    purchaseFlattened.push({
+                        ...record,
+                        itemBrand: entry.brand,
+                        itemPurchasedPrice: entry.purchasedPrice,
+                        itemPacket: entry.packet,
+                        itemQty: entry.quantity,
+                        itemInHouseQty: entry.inHouseQuantity, // Use inHouseQuantity from entry
+                        itemShortageQty: entry.sweepedQuantity, // Add sweepedQuantity as shortage quantity
+                        itemExporter: record.exporter, // Add exporter field
+                        unit: entry.unit
+                    });
+                }
+            });
+        });
+
+        // 2. Calculate Sale History (already flattened in activeSaleHistory)
+        const saleFlattened = activeSaleHistory;
+
+        setProductHistoryReportData({
+            productName: viewRecord.data.productName,
+            filters: historyFilters,
+            purchaseHistory: purchaseFlattened,
+            saleHistory: saleFlattened
+        });
+        setShowProductHistoryReport(true);
+    };
+
     const availableBrands = useMemo(() => {
         const activeProduct = addWarehouseStockFormData.productEntries[activeWhProductIndex];
         if (!activeProduct || !activeProduct.productName || !products) return [];
@@ -206,6 +442,8 @@ const StockManagement = ({
 
                     const whPkt = decrypted.whPkt !== undefined && decrypted.whPkt !== null ? decrypted.whPkt : 0;
                     const whQty = decrypted.whQty !== undefined && decrypted.whQty !== null ? decrypted.whQty : 0;
+                    const salePacket = decrypted.salePacket !== undefined && decrypted.salePacket !== null ? decrypted.salePacket : 0;
+                    const saleQuantity = decrypted.saleQuantity !== undefined && decrypted.saleQuantity !== null ? decrypted.saleQuantity : 0;
 
                     return {
                         ...decrypted,
@@ -214,7 +452,9 @@ const StockManagement = ({
                         inhouseQty,
                         whPkt,
                         whQty,
-                        packetSize: decrypted.packetSize || (whQty && whPkt ? (parseFloat(whQty) / parseFloat(whPkt)).toFixed(0) : 0),
+                        salePacket,
+                        saleQuantity,
+                        packetSize: decrypted.packetSize || (parseFloat(whQty) > 0 && parseFloat(whPkt) > 0 ? (parseFloat(whQty) / parseFloat(whPkt)).toFixed(0) : 0),
                         _id: item._id,
                         recordType: 'warehouse',
                         createdAt: item.createdAt,
@@ -242,6 +482,9 @@ const StockManagement = ({
                 const whPkt = d.whPkt !== undefined && d.whPkt !== null ? d.whPkt : originalInHousePkt;
                 const whQty = d.whQty !== undefined && d.whQty !== null ? d.whQty : originalInHouseQty;
 
+                const salePacket = d.salePacket !== undefined && d.salePacket !== null ? d.salePacket : 0;
+                const saleQuantity = d.saleQuantity !== undefined && d.saleQuantity !== null ? d.saleQuantity : 0;
+
                 return {
                     ...d,
                     whName: rawWh,
@@ -249,6 +492,8 @@ const StockManagement = ({
                     inhouseQty,
                     whPkt,
                     whQty,
+                    salePacket,
+                    saleQuantity,
                     productName: d.productName || d.product,
                     packetSize: d.packetSize || d.size || 0,
                     recordType: 'stock',
@@ -265,6 +510,9 @@ const StockManagement = ({
 
     useEffect(() => {
         fetchWarehouses();
+        if (typeof fetchSales === 'function') {
+            fetchSales();
+        }
     }, []);
 
     const handleAddWarehouseStockInputChange = (e, pIndex = null, bIndex = null) => {
@@ -468,10 +716,19 @@ const StockManagement = ({
                         const deductPkt = Math.min(availablePkt, transferPkt);
 
                         if (deductQty > 0 || deductPkt > 0) {
+                            const newWhQty = availableQty - deductQty;
+                            const newWhPkt = availablePkt - deductPkt;
+
                             const updatedSource = {
                                 ...sourceRecord,
-                                whQty: availableQty - deductQty,
-                                whPkt: availablePkt - deductPkt
+                                whQty: newWhQty,
+                                whPkt: newWhPkt,
+                                ...(sourceRecord.recordType === 'stock' && {
+                                    inHouseQuantity: newWhQty,
+                                    inhouseQty: newWhQty,
+                                    inHousePacket: newWhPkt,
+                                    inhousePkt: newWhPkt
+                                })
                             };
 
                             updates.push({ record: updatedSource, original: sourceRecord });
@@ -511,10 +768,19 @@ const StockManagement = ({
                         );
 
                         if (destRecord) {
+                            const newWhQty = (parseFloat(destRecord.whQty) || 0) + deduction.qty;
+                            const newWhPkt = (parseFloat(destRecord.whPkt) || 0) + deduction.pkt;
+
                             const updatedDest = {
                                 ...destRecord,
-                                whQty: (parseFloat(destRecord.whQty) || 0) + deduction.qty,
-                                whPkt: (parseFloat(destRecord.whPkt) || 0) + deduction.pkt
+                                whQty: newWhQty,
+                                whPkt: newWhPkt,
+                                ...(destRecord.recordType === 'stock' && {
+                                    inHouseQuantity: newWhQty,
+                                    inhouseQty: newWhQty,
+                                    inHousePacket: newWhPkt,
+                                    inhousePkt: newWhPkt
+                                })
                             };
                             const { _id, recordType, createdAt, updatedAt, ...destDataToEncrypt } = updatedDest;
                             const encryptedDest = encryptData(destDataToEncrypt);
@@ -750,16 +1016,14 @@ const StockManagement = ({
         // 2. SWPQTY = Swp Pkt * Size
         // 3. TOTAL INHOUSE PKT = Packet - Swp Pkt
         // 4. TOTAL INHOUSE QTY = Total InHouse Pkt * Size
-        // 5. INHOUSE PKT = Total InHouse Pkt - Sale Pkt
+        // 5. INHOUSE PKT = Total InHouse Pkt
         // 6. INHOUSE QTY = InHouse Pkt * Size
-        if (field === 'packet' || field === 'packetSize' || field === 'sweepedPacket' || field === 'salePacket') {
-            const salePacket = parseFloat(entry.salePacket) || 0;
+        if (field === 'packet' || field === 'packetSize' || field === 'sweepedPacket') {
             entry.sweepedQuantity = (sweepedPacket * packetSize).toFixed(2);
             entry.totalInHousePacket = (packet - sweepedPacket).toFixed(2);
             entry.totalInHouseQuantity = (parseFloat(entry.totalInHousePacket) * packetSize).toFixed(2);
-            entry.saleQuantity = (salePacket * packetSize).toFixed(2);
-            entry.inHousePacket = (parseFloat(entry.totalInHousePacket) - salePacket).toFixed(2);
-            entry.inHouseQuantity = (parseFloat(entry.inHousePacket) * packetSize).toFixed(2);
+            entry.inHousePacket = entry.totalInHousePacket;
+            entry.inHouseQuantity = entry.totalInHouseQuantity;
         }
 
         updatedProducts[pIndex].brandEntries[bIndex] = entry;
@@ -887,6 +1151,8 @@ const StockManagement = ({
                             sweepedQuantity: brandEntry.sweepedQuantity,
                             inHousePacket: brandEntry.inHousePacket,
                             inHouseQuantity: brandEntry.inHouseQuantity,
+                            salePacket: brandEntry.salePacket,
+                            saleQuantity: brandEntry.saleQuantity,
                         };
 
                         const encryptedData = encryptData(recordData);
@@ -1121,8 +1387,8 @@ const StockManagement = ({
     // --- Calculations (Memoized) ---
 
     const stockData = useMemo(() => {
-        return calculateStockData(stockRecords, stockFilters, stockSearchQuery);
-    }, [stockRecords, stockFilters, stockSearchQuery]);
+        return calculateStockData(stockRecords, stockFilters, stockSearchQuery, warehouseData, salesRecords);
+    }, [stockRecords, stockFilters, stockSearchQuery, warehouseData, salesRecords]);
 
     const isStockGroupSelected = (productName) => {
         const groupItems = stockRecords.filter(r => r.productName === productName);
@@ -1165,6 +1431,9 @@ const StockManagement = ({
         totalInHousePkt,
         totalInHousePktDecimalKg,
         totalInHouseQty,
+        totalSalePkt,
+        totalSaleQty,
+        totalSalePktDecimalKg,
         totalShortage,
         unit
     } = stockData;
@@ -1349,12 +1618,12 @@ const StockManagement = ({
                                                         <div className="absolute z-[120] mt-1 w-full bg-white border border-gray-100 rounded-xl shadow-xl max-h-48 overflow-y-auto py-1">
                                                             {options.map(product => (
                                                                 <button
-                                                                    key={product}
+                                                                    key={product._id || product.name}
                                                                     type="button"
-                                                                    onClick={() => { setStockFilters({ ...stockFilters, productName: product }); setFilterSearchInputs({ ...filterSearchInputs, productSearch: '' }); setFilterDropdownOpen(initialFilterDropdownState); }}
+                                                                    onClick={() => { setStockFilters({ ...stockFilters, productName: product.name }); setFilterSearchInputs({ ...filterSearchInputs, productSearch: product.name }); setFilterDropdownOpen(initialFilterDropdownState); }}
                                                                     className="w-full px-4 py-2 text-left text-sm hover:bg-blue-50 transition-colors"
                                                                 >
-                                                                    {product}
+                                                                    {product.name}
                                                                 </button>
                                                             ))}
                                                         </div>
@@ -1442,13 +1711,15 @@ const StockManagement = ({
 
             {/* Summary Cards */}
             {(!showStockForm && !showAddWarehouseStockForm) && (
-                <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-7 gap-4">
                     {[
-                        { label: 'TOTAL PACKET', value: totalPackets.toLocaleString(), bgColor: 'bg-white', borderColor: 'border-gray-200', textColor: 'text-gray-900', labelColor: 'text-gray-400' },
-                        { label: 'TOTAL QUANTITY', value: `${totalQuantity.toLocaleString()} ${unit}`, bgColor: 'bg-emerald-50/50', borderColor: 'border-emerald-100', textColor: 'text-emerald-700', labelColor: 'text-emerald-600' },
-                        { label: 'INHOUSE PKT', value: `${Math.floor(totalInHousePkt).toLocaleString()} - ${Math.round(totalInHousePktDecimalKg).toLocaleString()} kg`, bgColor: 'bg-amber-50/50', borderColor: 'border-amber-100', textColor: 'text-amber-700', labelColor: 'text-amber-600' },
-                        { label: 'INHOUSE QTY', value: `${totalInHouseQty.toLocaleString()} ${unit}`, bgColor: 'bg-blue-50/50', borderColor: 'border-blue-100', textColor: 'text-blue-700', labelColor: 'text-blue-600' },
-                        { label: 'SHORTAGE', value: `${totalShortage.toLocaleString()} ${unit}`, bgColor: 'bg-rose-50/50', borderColor: 'border-rose-100', textColor: 'text-rose-700', labelColor: 'text-rose-600' },
+                        { label: 'TOTAL PACKET', value: Math.round(totalPackets).toLocaleString(), bgColor: 'bg-blue-50/50', borderColor: 'border-blue-100', textColor: 'text-blue-700', labelColor: 'text-blue-600' },
+                        { label: 'TOTAL QUANTITY', value: `${Math.round(totalQuantity).toLocaleString()} ${unit}`, bgColor: 'bg-blue-50/50', borderColor: 'border-blue-100', textColor: 'text-blue-700', labelColor: 'text-blue-600' },
+                        { label: 'TOTAL SALE PKT', value: `${Math.floor(totalSalePkt).toLocaleString()} - ${Math.round(totalSalePktDecimalKg).toLocaleString()} kg`, bgColor: 'bg-orange-50/50', borderColor: 'border-orange-100', textColor: 'text-orange-700', labelColor: 'text-orange-600' },
+                        { label: 'TOTAL SALE QTY', value: `${Math.round(totalSaleQty).toLocaleString()} ${unit}`, bgColor: 'bg-orange-50/50', borderColor: 'border-orange-100', textColor: 'text-orange-700', labelColor: 'text-orange-600' },
+                        { label: 'INHOUSE PKT', value: `${Math.floor(totalInHousePkt).toLocaleString()} - ${Math.round(totalInHousePktDecimalKg).toLocaleString()} kg`, bgColor: 'bg-emerald-50/50', borderColor: 'border-emerald-100', textColor: 'text-emerald-700', labelColor: 'text-emerald-600' },
+                        { label: 'INHOUSE QTY', value: `${Math.round(totalInHouseQty).toLocaleString()} ${unit}`, bgColor: 'bg-emerald-50/50', borderColor: 'border-emerald-100', textColor: 'text-emerald-700', labelColor: 'text-emerald-600' },
+                        { label: 'SHORTAGE', value: `${Math.round(totalShortage).toLocaleString()} ${unit}`, bgColor: 'bg-rose-50/50', borderColor: 'border-rose-100', textColor: 'text-rose-700', labelColor: 'text-rose-600' },
                     ].map((card, i) => (
                         <div key={i} className={`bg-white border ${card.bgColor} ${card.borderColor} p-4 rounded-xl shadow-sm transition-all hover:shadow-md`}>
                             <div className={`text-[11px] font-bold ${card.labelColor} uppercase tracking-wider mb-1`}>{card.label}</div>
@@ -1937,16 +2208,16 @@ const StockManagement = ({
                         <table className="w-full text-left">
                             <thead>
                                 <tr className="bg-gray-50/50 border-b border-gray-100">
-                                    <th className="px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Product Name</th>
+                                    <th className="px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase tracking-wider whitespace-nowrap">Product Name</th>
                                     <th colSpan="8" className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider">
-                                        <div className="grid grid-cols-8 gap-4">
-                                            <div className="text-left text-gray-900">Brand</div>
-                                            <div className="text-center text-blue-800">Total Inhouse Packet</div>
+                                        <div className="grid grid-cols-[2.5fr_1.2fr_1.2fr_1.2fr_1.2fr_1.2fr_1.2fr_1fr] gap-4 whitespace-nowrap min-w-[1000px]">
+                                            <div className="text-left text-gray-900 pr-2">Brand</div>
+                                            <div className="text-center text-blue-800">Total Inhouse PKT</div>
                                             <div className="text-center text-blue-800">Total Inhouse QTY</div>
-                                            <div className="text-center text-green-800">Inhouse Packet</div>
-                                            <div className="text-center text-green-800">Inhouse Quantity</div>
-                                            <div className="text-center text-orange-800">Sale Packet</div>
-                                            <div className="text-center text-orange-800">Sale Quantity</div>
+                                            <div className="text-center text-orange-800">Sale PKT</div>
+                                            <div className="text-center text-orange-800">Sale QTY</div>
+                                            <div className="text-center text-green-800">Inhouse PKT</div>
+                                            <div className="text-center text-green-800">Inhouse QTY</div>
                                             <div className="text-center text-gray-500">Status</div>
                                         </div>
                                     </th>
@@ -1962,24 +2233,18 @@ const StockManagement = ({
                                     stockData.displayRecords.map((group, gIdx) => (
                                         <tr key={group.productName || gIdx} className="hover:bg-gray-50/30 transition-colors group">
                                             <td className="px-6 py-4 align-top">
-                                                <div className="text-sm font-semibold text-gray-900 mt-1">{group.productName}</div>
+                                                <div className="text-sm font-semibold text-gray-900 mt-1 whitespace-nowrap">{group.productName}</div>
                                             </td>
                                             <td className="px-6 py-4 align-top" colSpan="8">
                                                 <div className="space-y-3">
                                                     {group.brandList.map((brand, bIdx) => (
-                                                        <div key={bIdx} className={`grid grid-cols-8 gap-4 items-center ${bIdx !== group.brandList.length - 1 ? 'border-b border-gray-100 pb-2' : 'pb-1'}`}>
-                                                            <div className="text-sm text-gray-600 font-medium">{brand.brand || '-'}</div>
+                                                        <div key={bIdx} className={`grid grid-cols-[2.5fr_1.2fr_1.2fr_1.2fr_1.2fr_1.2fr_1.2fr_1fr] gap-4 items-center whitespace-nowrap min-w-[1000px] ${bIdx !== group.brandList.length - 1 ? 'border-b border-gray-100 pb-2' : 'pb-1'}`}>
+                                                            <div className="text-sm text-gray-600 font-medium whitespace-nowrap" title={brand.brand}>{brand.brand || '-'}</div>
                                                             <div className="text-sm text-black bg-blue-50/30 px-2 py-1 rounded-lg text-center">
                                                                 {Math.floor(brand.totalInHousePacket || 0).toLocaleString()} - {Math.round(((brand.totalInHousePacket || 0) - Math.floor(brand.totalInHousePacket || 0)) * brand.packetSize).toLocaleString()} kg
                                                             </div>
                                                             <div className="text-sm text-black text-center font-medium">
                                                                 {Math.round(brand.totalInHouseQuantity || 0).toLocaleString()} {group.unit}
-                                                            </div>
-                                                            <div className="text-sm text-black bg-green-50/30 px-2 py-1 rounded-lg text-center">
-                                                                {Math.floor(brand.inHousePacket).toLocaleString()} - {Math.round((brand.inHousePacket - Math.floor(brand.inHousePacket)) * brand.packetSize).toLocaleString()} kg
-                                                            </div>
-                                                            <div className="text-sm text-black text-center font-medium">
-                                                                {Math.round(brand.inHouseQuantity).toLocaleString()} {group.unit}
                                                             </div>
                                                             <div className="text-sm text-black bg-orange-50/30 px-2 py-1 rounded-lg text-center font-medium">
                                                                 {Math.floor(brand.salePacket || 0).toLocaleString()} - {Math.round(((brand.salePacket || 0) - Math.floor(brand.salePacket || 0)) * brand.packetSize).toLocaleString()} kg
@@ -1987,14 +2252,20 @@ const StockManagement = ({
                                                             <div className="text-sm text-black text-center font-medium">
                                                                 {Math.round(brand.saleQuantity || 0).toLocaleString()} {group.unit}
                                                             </div>
-                                                            <div className="text-center">
+                                                            <div className="text-sm text-black bg-green-50/30 px-2 py-1 rounded-lg text-center">
+                                                                {Math.floor(brand.inHousePacket).toLocaleString()} - {Math.round((brand.inHousePacket - Math.floor(brand.inHousePacket)) * brand.packetSize).toLocaleString()} kg
+                                                            </div>
+                                                            <div className="text-sm text-black text-center font-medium">
+                                                                {Math.round(brand.inHouseQuantity).toLocaleString()} {group.unit}
+                                                            </div>
+                                                            <div className="text-center overflow-hidden">
                                                                 <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold ${brand.inHouseQuantity > 0 ? 'bg-emerald-50 text-emerald-600' : 'bg-red-50 text-red-600'}`}>
                                                                     {brand.inHouseQuantity > 0 ? 'In Stock' : 'Out of Stock'}
                                                                 </span>
                                                             </div>
                                                         </div>
                                                     ))}
-                                                    <div className="pt-2 border-t border-gray-200 mt-1 grid grid-cols-8 gap-4 items-center">
+                                                    <div className="pt-2 border-t border-gray-200 mt-1 grid grid-cols-[2.5fr_1.2fr_1.2fr_1.2fr_1.2fr_1.2fr_1.2fr_1fr] gap-4 items-center whitespace-nowrap min-w-[1000px]">
                                                         <div className="flex items-center gap-1">
                                                             <span className="text-[10px] font-bold text-gray-400 uppercase tracking-tighter">Total:</span>
                                                         </div>
@@ -2005,16 +2276,16 @@ const StockManagement = ({
                                                             {Math.round(group.totalInHouseQuantity).toLocaleString()} {group.unit}
                                                         </div>
                                                         <div className="text-sm text-black font-black text-center">
-                                                            {Math.floor(group.inHousePacket).toLocaleString()} - {Math.round((group.inHousePacket - Math.floor(group.inHousePacket)) * group.brandList[0].packetSize).toLocaleString()} kg
-                                                        </div>
-                                                        <div className="text-sm text-black font-black text-center">
-                                                            {Math.round(group.inHouseQuantity).toLocaleString()} {group.unit}
-                                                        </div>
-                                                        <div className="text-sm text-black font-black text-center">
                                                             {Math.floor(group.salePacket).toLocaleString()} - {Math.round((group.salePacket - Math.floor(group.salePacket)) * group.brandList[0].packetSize).toLocaleString()} kg
                                                         </div>
                                                         <div className="text-sm text-black font-black text-center">
                                                             {Math.round(group.saleQuantity).toLocaleString()} {group.unit}
+                                                        </div>
+                                                        <div className="text-sm text-black font-black text-center">
+                                                            {Math.floor(group.inHousePacket).toLocaleString()} - {Math.round((group.inHousePacket - Math.floor(group.inHousePacket)) * group.brandList[0].packetSize).toLocaleString()} kg
+                                                        </div>
+                                                        <div className="text-sm text-black font-black text-center">
+                                                            {Math.round(group.inHouseQuantity).toLocaleString()} {group.unit}
                                                         </div>
                                                         <div className="text-center"></div>
                                                     </div>
@@ -2047,18 +2318,38 @@ const StockManagement = ({
                                     <h3 className="text-2xl font-bold text-gray-900">Stock History - {viewRecord.data.productName}</h3>
                                 </div>
 
-                                {/* Center Aligned Search Bar */}
-                                <div className="flex-1 max-w-md mx-auto relative group">
-                                    <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
-                                        <SearchIcon className="h-4 w-4 text-gray-400 group-focus-within:text-blue-500 transition-colors" />
+                                {/* Center Aligned Search Bar & Tabs */}
+                                <div className="flex-1 max-w-xl mx-auto flex flex-col items-center gap-4">
+                                    <div className="w-full max-w-md relative group">
+                                        <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
+                                            <SearchIcon className="h-4 w-4 text-gray-400 group-focus-within:text-blue-500 transition-colors" />
+                                        </div>
+                                        <input
+                                            type="text"
+                                            placeholder={historyTab === 'purchase' ? "Search by LC, Port, Importer, Truck or Brand..." : "Search by Invoice, Company, Customer, Phone or Brand..."}
+                                            value={historySearchQuery}
+                                            onChange={(e) => setHistorySearchQuery(e.target.value)}
+                                            className="block w-full pl-10 pr-4 py-2 bg-gray-50/50 border border-gray-200 rounded-xl text-[13px] placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 focus:bg-white transition-all outline-none"
+                                        />
                                     </div>
-                                    <input
-                                        type="text"
-                                        placeholder="Search by LC, Port, Importer, Truck or Brand..."
-                                        value={historySearchQuery}
-                                        onChange={(e) => setHistorySearchQuery(e.target.value)}
-                                        className="block w-full pl-10 pr-4 py-2 bg-gray-50/50 border border-gray-200 rounded-xl text-[13px] placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 focus:bg-white transition-all outline-none"
-                                    />
+                                    <div className="flex items-center gap-2 p-1 bg-gray-50 rounded-xl border border-gray-100">
+                                        <button
+                                            onClick={() => setHistoryTab('purchase')}
+                                            className={`px-6 py-1.5 rounded-lg text-xs font-bold transition-all ${historyTab === 'purchase'
+                                                ? 'bg-white text-blue-600 shadow-sm border border-gray-100'
+                                                : 'text-gray-400 hover:text-gray-600'}`}
+                                        >
+                                            Purchase History
+                                        </button>
+                                        <button
+                                            onClick={() => setHistoryTab('sale')}
+                                            className={`px-6 py-1.5 rounded-lg text-xs font-bold transition-all ${historyTab === 'sale'
+                                                ? 'bg-white text-blue-600 shadow-sm border border-gray-100'
+                                                : 'text-gray-400 hover:text-gray-600'}`}
+                                        >
+                                            Sale History
+                                        </button>
+                                    </div>
                                 </div>
 
                                 <div className="w-1/4 flex justify-end items-center gap-2">
@@ -2200,6 +2491,14 @@ const StockManagement = ({
                                         )}
                                     </div>
 
+                                    <button
+                                        onClick={handleGenerateProductReport}
+                                        className="flex items-center gap-2 px-4 py-2 bg-blue-50 border border-blue-100 text-blue-600 rounded-xl hover:bg-blue-100 transition-all shadow-sm"
+                                    >
+                                        <FileTextIcon className="w-4 h-4" />
+                                        <span className="text-sm font-medium">Product Report</span>
+                                    </button>
+
                                     <button onClick={() => { setViewRecord(null); setHistorySearchQuery(''); setHistoryFilters({ startDate: '', endDate: '', lcNo: '', port: '', brand: '' }); setShowHistoryFilterPanel(false); }} className="p-2 hover:bg-gray-100 rounded-full transition-colors">
                                         <XIcon className="w-6 h-6 text-gray-400" />
                                     </button>
@@ -2207,91 +2506,9 @@ const StockManagement = ({
                             </div>
 
                             {/* Modal Content */}
-                            <div className="p-8 flex-1 overflow-y-auto">
-                                {(() => {
-                                    const searchLower = historySearchQuery.toLowerCase().trim();
-                                    const filteredRaw = stockRecords.filter(item => {
-                                        const matchesProduct = (item.productName || '').trim().toLowerCase() === (viewRecord.data.productName || '').trim().toLowerCase();
-                                        if (!matchesProduct) return false;
-
-                                        if (historyFilters.startDate && item.date < historyFilters.startDate) return false;
-                                        if (historyFilters.endDate && item.date > historyFilters.endDate) return false;
-                                        if (historyFilters.lcNo && (item.lcNo || '').trim() !== historyFilters.lcNo) return false;
-                                        if (historyFilters.port && (item.port || '').trim() !== historyFilters.port) return false;
-                                        if (historyFilters.brand) {
-                                            const itemBrand = (item.brand || item.productName || '').trim().toLowerCase();
-                                            const filterBrand = historyFilters.brand.toLowerCase();
-                                            if (itemBrand !== filterBrand) return false;
-                                        }
-
-                                        if (!searchLower) return true;
-                                        const matchesLC = (item.lcNo || '').trim().toLowerCase().includes(searchLower);
-                                        const matchesPort = (item.port || '').trim().toLowerCase().includes(searchLower);
-                                        const matchesImporter = (item.importer || '').trim().toLowerCase().includes(searchLower);
-                                        const matchesTruck = (item.truckNo || '').trim().toLowerCase().includes(searchLower);
-                                        const brandList = item.brand ? [item.brand] : (item.entries || []).map(e => e.brand);
-                                        const matchesBrand = brandList.some(b => (b || '').trim().toLowerCase().includes(searchLower));
-                                        return matchesLC || matchesPort || matchesImporter || matchesTruck || matchesBrand;
-                                    });
-
-                                    const groupedHistoryMap = filteredRaw.reduce((acc, item) => {
-                                        const key = `${item.date}_${item.lcNo}_${item.truckNo}`;
-                                        const quantity = parseFloat(item.quantity) || 0;
-                                        const packet = parseFloat(item.packet) || 0;
-                                        const inHousePacket = parseFloat(item.inHousePacket || item.packet) || 0;
-                                        const inHouseQuantity = parseFloat(item.inHouseQuantity || item.quantity) || 0;
-                                        const sweepedQuantity = parseFloat(item.sweepedQuantity) || 0;
-
-                                        if (!acc[key]) {
-                                            acc[key] = {
-                                                ...item,
-                                                allIds: [item._id],
-                                                totalQuantity: quantity,
-                                                totalPacket: packet,
-                                                totalInHousePacket: inHousePacket,
-                                                totalInHouseQuantity: inHouseQuantity,
-                                                totalShortage: sweepedQuantity,
-                                                isGrouped: false,
-                                                entries: [
-                                                    {
-                                                        brand: item.brand || item.productName,
-                                                        purchasedPrice: item.purchasedPrice,
-                                                        packet: item.packet,
-                                                        packetSize: item.packetSize,
-                                                        quantity: item.quantity,
-                                                        inHousePacket: item.inHousePacket || item.packet,
-                                                        inHouseQuantity: item.inHouseQuantity || item.quantity,
-                                                        sweepedPacket: item.sweepedPacket,
-                                                        sweepedQuantity: item.sweepedQuantity,
-                                                        unit: item.unit
-                                                    }
-                                                ]
-                                            };
-                                        } else {
-                                            acc[key].allIds.push(item._id);
-                                            acc[key].totalQuantity += quantity;
-                                            acc[key].totalPacket += packet;
-                                            acc[key].totalInHousePacket += inHousePacket;
-                                            acc[key].totalInHouseQuantity += inHouseQuantity;
-                                            acc[key].totalShortage += sweepedQuantity;
-                                            acc[key].isGrouped = true;
-                                            acc[key].entries.push({
-                                                brand: item.brand || item.productName,
-                                                purchasedPrice: item.purchasedPrice,
-                                                packet: item.packet,
-                                                packetSize: item.packetSize,
-                                                quantity: item.quantity,
-                                                inHousePacket: item.inHousePacket || item.packet,
-                                                inHouseQuantity: item.inHouseQuantity || item.quantity,
-                                                sweepedPacket: item.sweepedPacket,
-                                                sweepedQuantity: item.sweepedQuantity,
-                                                unit: item.unit
-                                            });
-                                        }
-                                        return acc;
-                                    }, {});
-
-                                    const history = sortData(Object.values(groupedHistoryMap), 'history');
+                            <div className="p-8 flex-1 overflow-y-auto custom-scrollbar">
+                                {historyTab === 'purchase' ? (() => {
+                                    const history = activePurchaseHistory;
                                     const unit = history[0]?.unit || 'kg';
 
                                     const tPkts = history.reduce((sum, item) => sum + (parseFloat(item.totalPacket) || 0), 0);
@@ -2353,55 +2570,55 @@ const StockManagement = ({
                                                             </tr>
                                                         ) : (
                                                             history.map((item, idx) => (
-                                                                <tr key={item._id || idx} className="hover:bg-gray-50/30 transition-colors group">
+                                                                <tr key={item._id || idx} className="hover:bg-gray-50/30 transition-colors group border-b border-gray-50">
                                                                     <td className="px-3 py-3 whitespace-nowrap text-sm text-gray-600">{item.date}</td>
-                                                                    <td className="px-3 py-3 whitespace-nowrap text-sm text-gray-600">{item.lcNo}</td>
+                                                                    <td className="px-3 py-3 whitespace-nowrap text-sm text-gray-600 font-semibold">{item.lcNo}</td>
                                                                     <td className="px-3 py-3 whitespace-nowrap text-sm text-gray-600">{item.port}</td>
-                                                                    <td className="px-3 py-3 whitespace-nowrap text-sm text-gray-600">{item.importer}</td>
-                                                                    <td className="px-3 py-3 whitespace-nowrap text-sm text-gray-600">{item.truckNo}</td>
-                                                                    <td className="px-3 py-3 align-top">
+                                                                    <td className="px-3 py-3 whitespace-nowrap text-sm text-gray-600 truncate max-w-[120px]" title={item.importer}>{item.importer}</td>
+                                                                    <td className="px-3 py-3 whitespace-nowrap text-sm text-gray-600">{item.itemExporter || '-'}</td>
+                                                                    <td className="px-3 py-3 align-top whitespace-nowrap">
                                                                         <div className="space-y-1">
                                                                             {item.entries.map((entry, eIdx) => (
-                                                                                <div key={eIdx} className="text-sm text-gray-600">{entry.brand}</div>
+                                                                                <div key={eIdx} className="text-sm text-gray-600 font-medium">{entry.brand}</div>
                                                                             ))}
                                                                         </div>
                                                                     </td>
                                                                     <td className="px-3 py-3 align-top">
                                                                         <div className="space-y-1">
                                                                             {item.entries.map((entry, eIdx) => (
-                                                                                <div key={eIdx} className="text-sm text-gray-600">{entry.purchasedPrice}</div>
+                                                                                <div key={eIdx} className="text-sm text-gray-600">৳{parseFloat(entry.purchasedPrice || 0).toLocaleString()}</div>
+                                                                            ))}
+                                                                        </div>
+                                                                    </td>
+                                                                    <td className="px-3 py-3 align-top font-bold">
+                                                                        <div className="space-y-1">
+                                                                            {item.entries.map((entry, eIdx) => (
+                                                                                <div key={eIdx} className="text-sm text-gray-900">{entry.packet}</div>
+                                                                            ))}
+                                                                        </div>
+                                                                    </td>
+                                                                    <td className="px-3 py-3 align-top font-bold">
+                                                                        <div className="space-y-1">
+                                                                            {item.entries.map((entry, eIdx) => (
+                                                                                <div key={eIdx} className="text-sm text-gray-900">{Math.round(parseFloat(entry.quantity || 0)).toLocaleString()} {entry.unit}</div>
                                                                             ))}
                                                                         </div>
                                                                     </td>
                                                                     <td className="px-3 py-3 align-top">
                                                                         <div className="space-y-1">
                                                                             {item.entries.map((entry, eIdx) => (
-                                                                                <div key={eIdx} className="text-sm text-gray-600">{entry.packet}</div>
+                                                                                <div key={eIdx} className="text-sm text-amber-600 font-bold">{entry.inHousePacket}</div>
                                                                             ))}
                                                                         </div>
                                                                     </td>
                                                                     <td className="px-3 py-3 align-top">
                                                                         <div className="space-y-1">
                                                                             {item.entries.map((entry, eIdx) => (
-                                                                                <div key={eIdx} className="text-sm text-gray-600">{Math.round(parseFloat(entry.quantity || 0)).toLocaleString()} {entry.unit}</div>
+                                                                                <div key={eIdx} className="text-sm text-blue-600 font-bold">{Math.round(parseFloat(entry.inHouseQuantity || 0)).toLocaleString()} {entry.unit}</div>
                                                                             ))}
                                                                         </div>
                                                                     </td>
-                                                                    <td className="px-3 py-3 align-top">
-                                                                        <div className="space-y-1">
-                                                                            {item.entries.map((entry, eIdx) => (
-                                                                                <div key={eIdx} className="text-sm text-gray-600">{entry.inHousePacket}</div>
-                                                                            ))}
-                                                                        </div>
-                                                                    </td>
-                                                                    <td className="px-3 py-3 align-top">
-                                                                        <div className="space-y-1">
-                                                                            {item.entries.map((entry, eIdx) => (
-                                                                                <div key={eIdx} className="text-sm text-gray-600">{Math.round(parseFloat(entry.inHouseQuantity || 0)).toLocaleString()} {entry.unit}</div>
-                                                                            ))}
-                                                                        </div>
-                                                                    </td>
-                                                                    <td className="px-3 py-3 align-top text-rose-600 font-medium">
+                                                                    <td className="px-3 py-3 align-top text-rose-600 font-black">
                                                                         <div className="space-y-1">
                                                                             {item.entries.map((entry, eIdx) => (
                                                                                 <div key={eIdx} className="text-sm">{Math.round(parseFloat(entry.sweepedQuantity || 0)).toLocaleString()} {entry.unit}</div>
@@ -2410,8 +2627,8 @@ const StockManagement = ({
                                                                     </td>
                                                                     <td className="px-3 py-3 whitespace-nowrap text-right text-sm font-medium">
                                                                         <div className="flex items-center justify-center gap-2">
-                                                                            <button onClick={() => handleEditInternal('history', item)} className="p-1.5 text-gray-400 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition-all"><EditIcon className="w-5 h-5" /></button>
-                                                                            <button onClick={() => setDeleteConfirm({ show: true, id: item.allIds, type: 'history' })} className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all"><TrashIcon className="w-5 h-5" /></button>
+                                                                            <button onClick={() => handleEditInternal('history', item)} className="p-1.5 text-gray-400 hover:text-amber-600 hover:bg-white rounded-lg transition-all border border-transparent hover:border-amber-100 shadow-sm"><EditIcon className="w-5 h-5" /></button>
+                                                                            <button onClick={() => setDeleteConfirm({ show: true, id: item.allIds, type: 'history' })} className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-white rounded-lg transition-all border border-transparent hover:border-red-100 shadow-sm"><TrashIcon className="w-5 h-5" /></button>
                                                                         </div>
                                                                     </td>
                                                                 </tr>
@@ -2419,6 +2636,76 @@ const StockManagement = ({
                                                         )}
                                                     </tbody>
                                                 </table>
+                                            </div>
+                                        </div>
+                                    );
+                                })() : (() => {
+                                    const flattenedSaleHistory = activeSaleHistory;
+                                    const totalSaleQty = flattenedSaleHistory.reduce((sum, s) => sum + s.itemQty, 0);
+                                    const totalSaleAmount = flattenedSaleHistory.reduce((sum, s) => sum + s.itemTotal, 0);
+
+                                    return (
+                                        <div className="space-y-6">
+                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-w-2xl">
+                                                <div className="bg-emerald-50/50 border border-emerald-100 p-6 rounded-2xl shadow-sm transition-all hover:shadow-md">
+                                                    <div className="text-[11px] font-bold text-emerald-600 uppercase tracking-wider mb-1">Total Sale Quantity</div>
+                                                    <div className="text-2xl font-black text-emerald-700">{totalSaleQty.toLocaleString()} kg</div>
+                                                </div>
+                                                <div className="bg-blue-50/50 border border-blue-100 p-6 rounded-2xl shadow-sm transition-all hover:shadow-md">
+                                                    <div className="text-[11px] font-bold text-blue-600 uppercase tracking-wider mb-1">Total Sale Amount</div>
+                                                    <div className="text-2xl font-black text-blue-700">৳ {totalSaleAmount.toLocaleString()}</div>
+                                                </div>
+                                            </div>
+
+                                            <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden shadow-sm">
+                                                <div className="overflow-x-auto">
+                                                    <table className="w-full text-left">
+                                                        <thead>
+                                                            <tr className="bg-gray-50/50 border-b border-gray-100">
+                                                                <th className="px-3 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider">Date</th>
+                                                                <th className="px-3 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider">Invoice No</th>
+                                                                <th className="px-3 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider">Company Name</th>
+                                                                <th className="px-3 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider">Customer Name</th>
+                                                                <th className="px-3 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider">Phone</th>
+                                                                <th className="px-3 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider">Brand</th>
+                                                                <th className="px-3 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider text-right">Packet</th>
+                                                                <th className="px-3 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider text-right">Quantity</th>
+                                                                <th className="px-3 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider text-right">Price</th>
+                                                                <th className="px-3 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider text-right">Total</th>
+                                                            </tr>
+                                                        </thead>
+                                                        <tbody className="divide-y divide-gray-50">
+                                                            {flattenedSaleHistory.length === 0 ? (
+                                                                <tr><td colSpan="10" className="px-6 py-20 text-center text-gray-400 font-medium">No sale history found for this product</td></tr>
+                                                            ) : (
+                                                                flattenedSaleHistory.map((sale, sIdx) => (
+                                                                    <tr key={sIdx} className="hover:bg-blue-50/20 transition-all group border-b border-gray-50">
+                                                                        <td className="px-3 py-3 text-sm text-gray-600">{sale.date}</td>
+                                                                        <td className="px-3 py-3 text-sm font-bold text-gray-900">{sale.invoiceNo}</td>
+                                                                        <td className="px-3 py-3 text-sm font-bold text-gray-800 truncate max-w-[150px]" title={sale.companyName}>{sale.companyName}</td>
+                                                                        <td className="px-3 py-3 text-sm text-gray-600">{sale.customerName}</td>
+                                                                        <td className="px-3 py-3 text-sm text-gray-600 font-medium">{sale.contact}</td>
+                                                                        <td className="px-3 py-3">
+                                                                            <div className="text-sm font-medium text-blue-600">{sale.itemBrand}</div>
+                                                                        </td>
+                                                                        <td className="px-3 py-3 text-right">
+                                                                            <div className="text-sm font-bold text-gray-900">{sale.itemPacket.toLocaleString()}</div>
+                                                                        </td>
+                                                                        <td className="px-3 py-3 text-right">
+                                                                            <div className="text-sm font-bold text-gray-900">{sale.itemQty.toLocaleString()} kg</div>
+                                                                        </td>
+                                                                        <td className="px-3 py-3 text-right">
+                                                                            <div className="text-sm font-medium text-gray-600">৳{sale.itemPrice.toLocaleString()}</div>
+                                                                        </td>
+                                                                        <td className="px-3 py-3 text-right">
+                                                                            <div className="text-sm font-bold text-blue-600">৳{sale.itemTotal.toLocaleString()}</div>
+                                                                        </td>
+                                                                    </tr>
+                                                                ))
+                                                            )}
+                                                        </tbody>
+                                                    </table>
+                                                </div>
                                             </div>
                                         </div>
                                     );

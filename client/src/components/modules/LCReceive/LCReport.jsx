@@ -99,9 +99,36 @@ const LCReport = ({
         brand: ''
     };
 
+    // Helper for robust Inhouse data handling
+    const getIHPkt = (item) => {
+        if (item.inHousePacket !== undefined && item.inHousePacket !== '') return parseFloat(item.inHousePacket) || 0;
+        return (parseFloat(item.packet) || 0) - (parseFloat(item.sweepedPacket) || 0);
+    };
+
+    const getIHQty = (item) => {
+        if (item.inHouseQuantity !== undefined && item.inHouseQuantity !== '') return parseFloat(item.inHouseQuantity) || 0;
+        const ihPkt = getIHPkt(item);
+        const size = parseFloat(item.packetSize) || 0;
+        return ihPkt * size;
+    };
+
+    const formatPktDisplay = (pkt, qty, size) => {
+        const pSize = parseFloat(size) || 0;
+        const whole = Math.floor(pkt);
+        const rem = Math.round(qty - (whole * pSize));
+        if (pSize <= 0) return Math.round(pkt).toString();
+        return `${whole}${rem > 0 ? ` - ${rem} kg` : ''}`;
+    };
+
     return (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-gray-900/40 backdrop-blur-sm">
-            <div className="w-[95%] h-[90%] bg-white rounded-3xl shadow-2xl flex flex-col overflow-hidden animate-in fade-in zoom-in duration-300 print:w-full print:h-auto print:shadow-none print:bg-white print:rounded-none">
+            <style>{`
+                @media print {
+                    @page { size: landscape; margin: 5mm; }
+                    body { margin: 0; }
+                }
+            `}</style>
+            <div className="w-[98%] h-[94%] bg-white rounded-3xl shadow-2xl flex flex-col overflow-hidden animate-in fade-in zoom-in duration-300 print:w-full print:h-auto print:shadow-none print:bg-white print:rounded-none">
                 {/* Modal Header - Hidden in Print */}
                 <div className="px-8 py-5 border-b border-gray-100 bg-gray-50/50 flex items-center justify-between print:hidden">
                     <div className="flex items-center gap-4">
@@ -573,11 +600,11 @@ const LCReport = ({
                 </div>
 
                 {/* Printable Content */}
-                <div className="flex-1 overflow-y-auto p-12 print:p-4 print:overflow-visible bg-white">
-                    <div className="max-w-[1000px] mx-auto space-y-8">
+                <div className="flex-1 overflow-y-auto p-12 print:p-6 print:overflow-visible bg-white">
+                    <div className="w-full max-w-[1400px] mx-auto space-y-8">
                         {/* Company Header */}
                         <div className="text-center space-y-1">
-                            <h1 className="text-4xl font-bold text-gray-900 tracking-tight">M/S ANI ENTERPRISE</h1>
+                            <h1 className="text-5xl font-bold text-gray-900 tracking-tight">M/S ANI ENTERPRISE</h1>
                             <p className="text-[14px] text-gray-600">766, H.M Tower, Level-06, Borogola, Bogura-5800, Bangladesh</p>
                             <p className="text-[14px] text-gray-600">+8802588813057, +8801711-406898, anienterprise051@gmail.com, www.anienterprises.com.bd</p>
                         </div>
@@ -596,7 +623,7 @@ const LCReport = ({
                         <div className="flex justify-between items-end text-[11px] text-black pt-6 px-2">
                             <div className="flex flex-col gap-1.5">
                                 <div>
-                                    <span className="font-bold text-black font-semibold">Date Range:</span> {lcFilters.startDate || 'Start'} to {lcFilters.endDate || 'Present'}
+                                    <span className="font-bold text-black font-semibold">Date Range:</span> {formatDate(lcFilters.startDate) === '-' ? 'Start' : formatDate(lcFilters.startDate)} to {formatDate(lcFilters.endDate) === '-' ? 'Present' : formatDate(lcFilters.endDate)}
                                 </div>
                                 {lcFilters.lcNo && (
                                     <div>
@@ -605,7 +632,7 @@ const LCReport = ({
                                 )}
                             </div>
                             <div className="font-bold">
-                                <span className="text-black font-semibold">Printed on:</span> <span className="text-black">{new Date().toLocaleDateString(undefined, { day: 'numeric', month: 'numeric', year: 'numeric' })}</span>
+                                <span className="text-black font-semibold">Printed on:</span> <span className="text-black">{formatDate(new Date().toISOString().split('T')[0])}</span>
                             </div>
                         </div>
 
@@ -613,159 +640,170 @@ const LCReport = ({
                         <div className="overflow-x-auto border border-gray-900">
                             <table className="w-full border-collapse">
                                 <thead>
-                                    <tr className="bg-gray-50 border-b border-gray-900">
-                                        <th className="border-r border-gray-900 px-1 py-1 text-left text-[10.5px] font-bold text-black uppercase tracking-wider w-[3%] text-center">SL</th>
-                                        <th className="border-r border-gray-900 px-1 py-1 text-left text-[10.5px] font-bold text-black uppercase tracking-wider w-[8%]">Date</th>
-                                        <th className="border-r border-gray-900 px-1 py-1 text-left text-[10.5px] font-bold text-blue-900 uppercase tracking-wider font-extrabold w-[10%]">LC No</th>
-                                        <th className="border-r border-gray-900 px-1 py-1 text-left text-[10.5px] font-bold text-black uppercase tracking-wider w-[15%]">Importer</th>
-                                        <th className="border-r border-gray-900 px-1 py-1 text-left text-[10.5px] font-bold text-black uppercase tracking-wider w-[7%]">Port</th>
-                                        <th className="border-r border-gray-900 px-1 py-1 text-left text-[10.5px] font-bold text-black uppercase tracking-wider w-[8%]">BOE No</th>
-                                        <th className="border-r border-gray-900 px-1 py-1 text-left text-[10.5px] font-bold text-black uppercase tracking-wider w-[15%]">Product</th>
-                                        <th className="border-r border-gray-900 px-1 py-1 text-left text-[10.5px] font-bold text-black uppercase tracking-wider w-[14%] text-center">Brand</th>
-                                        <th className="border-r border-gray-900 px-1 py-1 text-right text-[10.5px] font-bold text-black uppercase tracking-wider w-[6%] text-center">Packet</th>
-                                        <th className="border-r border-gray-900 px-1 py-1 text-right text-[10.5px] font-bold text-black uppercase tracking-wider w-[5%] text-center">Truck</th>
-                                        <th className="border-r border-gray-900 px-1 py-1 text-right text-[10.5px] font-bold text-black uppercase tracking-wider w-[9%]">QTY</th>
+                                    <tr className="bg-gray-100 border-b border-gray-900">
+                                        <th className="border-r border-gray-900 px-1 py-1 text-center text-[12px] font-bold text-black uppercase tracking-tight" style={{ width: '7.5%' }}>Date</th>
+                                        <th className="border-r border-gray-900 px-1 py-1 text-center text-[12px] font-bold text-blue-900 uppercase tracking-tight" style={{ width: '9.5%' }}>LC No</th>
+                                        <th className="border-r border-gray-900 px-1 py-1 text-left text-[12px] font-bold text-black uppercase tracking-tight" style={{ width: '10.5%' }}>Importer</th>
+                                        <th className="border-r border-gray-900 px-1 py-1 text-center text-[12px] font-bold text-black uppercase tracking-tight" style={{ width: '5.2%' }}>Port</th>
+                                        <th className="border-r border-gray-900 px-1 py-1 text-center text-[12px] font-bold text-black uppercase tracking-tight" style={{ width: '6.2%' }}>BOE No</th>
+                                        <th className="border-r border-gray-900 px-1 py-1 text-center text-[12px] font-bold text-black uppercase tracking-tight" style={{ width: '4.8%' }}>Truck</th>
+                                        <th className="border-r border-gray-900 px-1 py-1 text-center text-[12px] font-bold text-black uppercase tracking-tight" style={{ width: '8.2%' }}>Product</th>
+                                        <th className="border-r border-gray-900 px-1 py-1 text-left text-[12px] font-bold text-black uppercase tracking-tight" style={{ width: '16.5%' }}>Brand</th>
+                                        <th className="border-r border-gray-900 px-1 py-1 text-right text-[12px] font-bold text-black uppercase tracking-tight" style={{ width: '6.8%' }}>Packet</th>
+                                        <th className="border-r border-gray-900 px-1 py-1 text-right text-[12px] font-bold text-black uppercase tracking-tight" style={{ width: '6.8%' }}>QTY</th>
+                                        <th className="border-r border-gray-900 px-1 py-1 text-right text-[12px] font-bold text-black uppercase tracking-tight" style={{ width: '6.8%' }}>IH Qty</th>
+                                        <th className="border-r border-gray-900 px-1 py-1 text-right text-[12px] font-bold text-black uppercase tracking-tight" style={{ width: '5.2%' }}>IH PKT</th>
+                                        <th className="border-r border-gray-900 px-1 py-1 text-right text-[12px] font-bold text-black uppercase tracking-tight" style={{ width: '5.2%' }}>Short</th>
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-gray-400">
-                                    {lcReceiveRecords.length > 0 ? (
-                                        Object.values(lcReceiveRecords.reduce((acc, item) => {
-                                            const key = item.lcNo || 'unknown';
+                                    {lcReceiveRecords.length > 0 ? (() => {
+                                        // 1. Group by Date + LC No
+                                        const lcGroupMap = lcReceiveRecords.reduce((acc, item) => {
+                                            const dateStr = formatDate(item.date);
+                                            const key = `${dateStr}_${item.lcNo || 'unknown'}`;
                                             if (!acc[key]) {
                                                 acc[key] = {
-                                                    ...item,
-                                                    entries: []
+                                                    date: item.date,
+                                                    lcNo: item.lcNo,
+                                                    importer: item.importer,
+                                                    port: item.port,
+                                                    billOfEntry: item.billOfEntry,
+                                                    rows: []
                                                 };
                                             }
-                                            acc[key].entries.push(item);
+                                            acc[key].rows.push(item);
                                             return acc;
-                                        }, {})).map((entry, index) => {
-                                            // Sub-group entries by Product + Truck within each LC group
-                                            const productGroups = entry.entries.reduce((acc, item) => {
-                                                const key = `${item.date}-${item.productName}-${item.truckNo}`;
+                                        }, {});
+
+                                        const lcGroups = Object.values(lcGroupMap);
+
+                                        return lcGroups.flatMap((lcGroup, lcIdx) => {
+                                            // 2. Sub-group by Product + Truck within LC group
+                                            const subGroupMap = lcGroup.rows.reduce((acc, item) => {
+                                                const key = `${item.productName}-${item.truckNo}`;
                                                 if (!acc[key]) {
                                                     acc[key] = {
-                                                        ...item,
-                                                        brandList: [],
-                                                        packetList: [],
-                                                        qtyList: []
+                                                        productName: item.productName,
+                                                        truckNo: item.truckNo,
+                                                        rows: []
                                                     };
                                                 }
-                                                acc[key].brandList.push(item.brand || '-');
-                                                acc[key].packetList.push(item.packet || '0');
-                                                acc[key].qtyList.push({ quantity: item.quantity, unit: item.unit });
+                                                acc[key].rows.push(item);
                                                 return acc;
                                             }, {});
 
-                                            const finalEntries = Object.values(productGroups);
+                                            const subGroups = Object.values(subGroupMap);
+                                            const totalLcRows = lcGroup.rows.length + subGroups.filter(sg => sg.rows.length > 1).length;
 
-                                            return (
-                                                <tr key={index} className="border-b border-gray-400 last:border-0 hover:bg-gray-50 transition-colors">
-                                                    <td className="border-r border-gray-900 px-2 py-0.5 text-[10.5px] text-black text-center align-top">{index + 1}</td>
-                                                    <td className="border-r border-gray-900 px-2 py-0.5 text-[10.5px] text-black align-top font-medium">{formatDate(entry.date)}</td>
-                                                    <td className="border-r border-gray-900 px-2 py-0.5 text-[10.5px] font-extrabold text-blue-900 align-top">{entry.lcNo}</td>
-                                                    <td className="border-r border-gray-900 px-2 py-0.5 text-[10.5px] text-black align-top">{entry.importer || '-'}</td>
-                                                    <td className="border-r border-gray-900 px-2 py-0.5 text-[10.5px] text-black align-top">{entry.port || '-'}</td>
-                                                    <td className="border-r border-gray-900 px-2 py-0.5 text-[10.5px] text-black align-top">{entry.billOfEntry || '-'}</td>
+                                            return subGroups.flatMap((subGroup, sgIdx) => {
+                                                const subRows = subGroup.rows;
+                                                const hasTotalRow = subRows.length > 1;
+                                                const subGroupSpan = subRows.length + (hasTotalRow ? 1 : 0);
 
-                                                    {/* Product Column */}
-                                                    <td className="border-r border-gray-900 px-2 py-0.5 text-[10.5px] font-bold text-black align-top">
-                                                        {finalEntries.map((subItem, idx) => {
-                                                            const hasTotal = subItem.qtyList.length > 1;
-                                                            return (
-                                                                <div key={idx} className={`${idx < finalEntries.length - 1 ? 'border-b border-gray-300 mb-2 pb-2' : ''}`}>
-                                                                    <div className="leading-tight">{subItem.productName}</div>
-                                                                    {Array.from({ length: subItem.brandList.length - 1 }).map((_, i) => (
-                                                                        <div key={i} className="leading-tight">&nbsp;</div>
-                                                                    ))}
-                                                                    {hasTotal && <div className="mt-0 pt-0.5 border-t border-transparent leading-tight">&nbsp;</div>}
-                                                                </div>
-                                                            );
-                                                        })}
-                                                    </td>
+                                                return [
+                                                    ...subRows.map((item, rowIdx) => (
+                                                        <tr key={`${lcIdx}-${sgIdx}-${rowIdx}`} className="border-b border-gray-400 hover:bg-gray-50 transition-colors">
+                                                            {/* Group 1: LC Level (Spans entire LC group) */}
+                                                            {sgIdx === 0 && rowIdx === 0 && (
+                                                                <>
+                                                                    <td rowSpan={totalLcRows} className="border-r border-gray-900 px-2 py-0.5 text-[12px] text-black text-center align-middle">{formatDate(lcGroup.date)}</td>
+                                                                    <td rowSpan={totalLcRows} className="border-r border-gray-900 px-2 py-0.5 text-[12px] font-bold text-blue-900 text-center align-middle">{lcGroup.lcNo}</td>
+                                                                    <td rowSpan={totalLcRows} className="border-r border-gray-900 px-2 py-0.5 text-[12px] text-black align-middle">{lcGroup.importer || '-'}</td>
+                                                                    <td rowSpan={totalLcRows} className="border-r border-gray-900 px-2 py-0.5 text-[12px] text-black text-center align-middle">{lcGroup.port || '-'}</td>
+                                                                    <td rowSpan={totalLcRows} className="border-r border-gray-900 px-2 py-0.5 text-[12px] text-black text-center align-middle">{lcGroup.billOfEntry || '-'}</td>
+                                                                </>
+                                                            )}
 
-                                                    {/* Brand Column */}
-                                                    <td className="border-r border-gray-900 px-2 py-0.5 text-[10.5px] text-black align-top">
-                                                        {finalEntries.map((subItem, idx) => {
-                                                            const hasTotal = subItem.qtyList.length > 1;
-                                                            return (
-                                                                <div key={idx} className={`${idx < finalEntries.length - 1 ? 'border-b border-gray-300 mb-2 pb-2' : ''}`}>
-                                                                    {subItem.brandList.map((b, i) => (
-                                                                        <div key={i} className="leading-tight">{b}</div>
-                                                                    ))}
-                                                                    {hasTotal && <div className="mt-0 pt-0.5 border-t border-transparent leading-tight">&nbsp;</div>}
-                                                                </div>
-                                                            );
-                                                        })}
-                                                    </td>
+                                                            {/* Group 2: Product + Truck Level */}
+                                                            {rowIdx === 0 && (
+                                                                <>
+                                                                    <td rowSpan={subGroupSpan} className="border-r border-gray-900 px-2 py-0.5 text-[12px] font-bold text-black text-center align-middle">{item.truckNo || '-'}</td>
+                                                                    <td rowSpan={subGroupSpan} className="border-r border-gray-900 px-2 py-0.5 text-[12px] font-bold text-black text-center align-middle">{item.productName || '-'}</td>
+                                                                </>
+                                                            )}
 
-                                                    {/* Packet Column */}
-                                                    <td className="border-r border-gray-900 px-2 py-0.5 text-[10.5px] text-center text-black align-top">
-                                                        {finalEntries.map((subItem, idx) => {
-                                                            const hasTotal = subItem.qtyList.length > 1;
-                                                            return (
-                                                                <div key={idx} className={`${idx < finalEntries.length - 1 ? 'border-b border-gray-300 mb-2 pb-2' : ''}`}>
-                                                                    {subItem.packetList.map((p, i) => (
-                                                                        <div key={i} className="leading-tight">{p}</div>
-                                                                    ))}
-                                                                    {hasTotal && <div className="mt-0 pt-0.5 border-t border-transparent leading-tight">&nbsp;</div>}
-                                                                </div>
-                                                            );
-                                                        })}
-                                                    </td>
+                                                            {/* Item Level: Brand, Packet, Qty, IH Qty, IH Pkt, Short */}
+                                                            <td className="border-r border-gray-900 px-2 py-0.5 text-[12px] text-black">{item.brand || '-'}</td>
+                                                            <td className="border-r border-gray-900 px-2 py-0.5 text-[12px] text-right text-black">{item.packet || '0'}</td>
+                                                            <td className="border-r border-gray-900 px-2 py-0.5 text-[12px] text-right font-black text-black">{Math.round(item.quantity)} {item.unit}</td>
+                                                            <td className="border-r border-gray-900 px-2 py-0.5 text-[12px] text-right font-bold text-black">{Math.round(getIHQty(item)) || 0} {item.unit}</td>
+                                                            <td className="border-r border-gray-900 px-2 py-0.5 text-[12px] text-right font-bold text-black">
+                                                                {formatPktDisplay(getIHPkt(item), getIHQty(item), item.packetSize)}
+                                                            </td>
+                                                            <td className="border-r border-gray-900 px-2 py-0.5 text-[12px] text-right font-bold text-black">{Math.round(item.sweepedQuantity)} {item.unit}</td>
+                                                        </tr>
+                                                    )),
+                                                    // Sub-Group Total Row
+                                                    ...(hasTotalRow ? [(
+                                                        <tr key={`${lcIdx}-${sgIdx}-total`} className="border-b border-gray-400 font-bold bg-gray-50/30">
+                                                            <td className="border-r border-gray-900 px-2 py-0.5 text-[12px] text-black italic">Sub Total</td>
+                                                            <td className="border-r border-gray-900 px-2 py-0.5 text-[12px] text-right text-black"></td>
+                                                            <td className="border-r border-gray-900 px-2 py-0.5 text-[12px] text-right border-t border-gray-900 font-black text-black">
+                                                                {Math.round(subRows.reduce((sum, r) => sum + (parseFloat(r.quantity) || 0), 0))} {subRows[0].unit}
+                                                            </td>
+                                                            <td className="border-r border-gray-900 px-2 py-0.5 text-[12px] text-right border-t border-gray-900 font-bold text-black">
+                                                                {Math.round(subRows.reduce((sum, r) => sum + getIHQty(r), 0))} {subRows[0].unit}
+                                                            </td>
+                                                            <td className="border-r border-gray-900 px-2 py-0.5 text-[12px] text-right border-t border-gray-900 font-bold text-black">
+                                                                {(() => {
+                                                                    const totalPkt = subRows.reduce((sum, r) => sum + getIHPkt(r), 0);
+                                                                    const totalQty = subRows.reduce((sum, r) => sum + getIHQty(r), 0);
+                                                                    const totalWhole = subRows.reduce((sum, r) => sum + Math.floor(getIHPkt(r)), 0);
+                                                                    const totalRem = Math.round(subRows.reduce((sum, r) => {
+                                                                        const pkt = getIHPkt(r);
+                                                                        const qty = getIHQty(r);
+                                                                        const size = parseFloat(r.packetSize) || 0;
+                                                                        const whole = Math.floor(pkt);
+                                                                        return sum + (qty - (whole * size));
+                                                                    }, 0));
 
-                                                    {/* Truck Column */}
-                                                    <td className="border-r border-gray-900 px-2 py-0.5 text-[10.5px] text-center font-bold text-black align-top">
-                                                        {finalEntries.map((subItem, idx) => {
-                                                            const hasTotal = subItem.qtyList.length > 1;
-                                                            return (
-                                                                <div key={idx} className={`${idx < finalEntries.length - 1 ? 'border-b border-gray-300 mb-2 pb-2' : ''}`}>
-                                                                    <div className="leading-tight">{subItem.truckNo}</div>
-                                                                    {Array.from({ length: subItem.brandList.length - 1 }).map((_, i) => (
-                                                                        <div key={i} className="leading-tight">&nbsp;</div>
-                                                                    ))}
-                                                                    {hasTotal && <div className="mt-0 pt-0.5 border-t border-transparent leading-tight">&nbsp;</div>}
-                                                                </div>
-                                                            );
-                                                        })}
-                                                    </td>
-
-                                                    {/* QTY Column */}
-                                                    <td className="px-2 py-0.5 text-[10.5px] text-right font-bold text-black align-top border-r border-gray-900 whitespace-nowrap">
-                                                        {finalEntries.map((subItem, idx) => {
-                                                            const hasTotal = subItem.qtyList.length > 1;
-                                                            return (
-                                                                <div key={idx} className={`${idx < finalEntries.length - 1 ? 'border-b border-gray-300 mb-2 pb-2' : ''}`}>
-                                                                    {subItem.qtyList.map((q, i) => (
-                                                                        <div key={i} className="leading-tight font-black">{Math.round(q.quantity)} {q.unit}</div>
-                                                                    ))}
-                                                                    {hasTotal && (
-                                                                        <div className="mt-0 pt-0.5 border-t border-gray-900 font-extrabold leading-tight">
-                                                                            {Math.round(subItem.qtyList.reduce((sum, q) => sum + (parseFloat(q.quantity) || 0), 0))} {subItem.qtyList[0].unit}
-                                                                        </div>
-                                                                    )}
-                                                                </div>
-                                                            );
-                                                        })}
-                                                    </td>
-                                                </tr>
-                                            );
-                                        })
-                                    ) : (
+                                                                    // Re-sum wholes and remainders
+                                                                    return `${totalWhole}${totalRem > 0 ? ` - ${totalRem} kg` : ''}`;
+                                                                })()}
+                                                            </td>
+                                                            <td className="border-r border-gray-900 px-2 py-0.5 text-[12px] text-right border-t border-gray-900 font-bold text-black">
+                                                                {Math.round(subRows.reduce((sum, r) => sum + (parseFloat(r.sweepedQuantity) || 0), 0))} {subRows[0].unit}
+                                                            </td>
+                                                        </tr>
+                                                    )] : [])
+                                                ];
+                                            });
+                                        });
+                                    })() : (
                                         <tr>
-                                            <td colSpan="11" className="px-4 py-8 text-center text-black italic">No receive records found for the selected criteria.</td>
+                                            <td colSpan="13" className="px-4 py-8 text-center text-black italic">No receive records found for the selected criteria.</td>
                                         </tr>
                                     )}
                                 </tbody>
                                 {lcReceiveRecords.length > 0 && (
                                     <tfoot>
                                         <tr className="bg-gray-100 border-t-2 border-gray-900">
-                                            <td colSpan="9" className="px-2 py-2 text-[10.5px] font-black text-black text-right uppercase tracking-wider border-r border-gray-900">Grand Total</td>
-                                            <td className="px-2 py-2 text-[10.5px] text-center font-black text-black border-r border-gray-900">
-                                                {lcReceiveSummary.totalTrucks}
+                                            <td colSpan="8" className="px-2 py-2 text-[12px] font-black text-black text-right uppercase tracking-wider border-r border-gray-900">Grand Total</td>
+                                            <td className="px-2 py-2 text-[12px] text-right font-black text-black border-r border-gray-900 whitespace-nowrap">
+                                                {lcReceiveSummary.totalPackets}
                                             </td>
-                                            <td className="px-2 py-2 text-[10.5px] text-right font-black text-black border-r border-gray-900 whitespace-nowrap">
+                                            <td className="px-2 py-2 text-[12px] text-right font-black text-black border-r border-gray-900 whitespace-nowrap">
                                                 {Math.round(lcReceiveSummary.totalQuantity)} {lcReceiveSummary.unit}
+                                            </td>
+                                            <td className="px-2 py-2 text-[12px] text-right font-black text-black border-r border-gray-900 whitespace-nowrap">
+                                                {Math.round(lcReceiveRecords.reduce((sum, item) => sum + getIHQty(item), 0)) || 0} {lcReceiveSummary.unit}
+                                            </td>
+                                            <td className="px-2 py-2 text-[12px] text-right font-black text-black border-r border-gray-900 whitespace-nowrap">
+                                                {(() => {
+                                                    const totalWhole = lcReceiveRecords.reduce((sum, item) => sum + Math.floor(getIHPkt(item)), 0);
+                                                    const totalRem = Math.round(lcReceiveRecords.reduce((sum, item) => {
+                                                        const pkt = getIHPkt(item);
+                                                        const qty = getIHQty(item);
+                                                        const size = parseFloat(item.packetSize) || 0;
+                                                        const whole = Math.floor(pkt);
+                                                        return sum + (qty - (whole * size));
+                                                    }, 0));
+                                                    return `${totalWhole}${totalRem > 0 ? ` - ${totalRem} kg` : ''}`;
+                                                })()}
+                                            </td>
+                                            <td className="px-2 py-2 text-[12px] text-right font-black text-black border-r border-gray-900 whitespace-nowrap">
+                                                {Math.round(lcReceiveRecords.reduce((sum, item) => sum + (parseFloat(item.sweepedQuantity) || 0), 0))} {lcReceiveSummary.unit}
                                             </td>
                                         </tr>
                                     </tfoot>

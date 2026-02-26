@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
+import axios from 'axios';
 import {
   MenuIcon, SearchIcon, HomeIcon, UsersIcon, UserIcon, AnchorIcon,
   BarChartIcon, FunnelIcon, XIcon, DollarSignIcon, ShoppingCartIcon,
@@ -18,6 +19,7 @@ import WarehouseManagement from './components/modules/Warehouse/WarehouseManagem
 import StockManagement from "./components/modules/StockManagement/StockManagement";
 import StockReport from './components/modules/StockManagement/StockReport';
 import LCReport from './components/modules/LCReceive/LCReport';
+import ProductHistoryReport from './components/modules/StockManagement/ProductHistoryReport';
 import SaleManagement from './components/modules/Sale/SaleManagement';
 import { calculateStockData } from './utils/stockHelpers';
 
@@ -41,6 +43,8 @@ function App() {
   const [ports, setPorts] = useState([]);
   const [showStockForm, setShowStockForm] = useState(false);
   const [showStockReport, setShowStockReport] = useState(false);
+  const [showProductHistoryReport, setShowProductHistoryReport] = useState(false);
+  const [productHistoryReportData, setProductHistoryReportData] = useState(null);
   const [stockFormData, setStockFormData] = useState({
     date: new Date().toISOString().split('T')[0],
     lcNo: '',
@@ -65,6 +69,8 @@ function App() {
 
   const [isLoading, setIsLoading] = useState(false);
   const [stockRecords, setStockRecords] = useState([]);
+  const [warehouseData, setWarehouseData] = useState([]);
+  const [salesRecords, setSalesRecords] = useState([]);
   const [stockFilters, setStockFilters] = useState({ startDate: '', endDate: '', lcNo: '', port: '', brand: '', importer: '', exporter: '', productName: '' });
   const [selectedItems, setSelectedItems] = useState(new Set());
   const [isSelectionMode, setIsSelectionMode] = useState(false);
@@ -135,7 +141,7 @@ function App() {
       const matchesBrand = brandList.some(b => (b || '').trim().toLowerCase().includes(searchLower));
 
       return matchesLC || matchesImporter || matchesExporter || matchesBillOfEntry || matchesPort || matchesTruck || matchesProduct || matchesBrand;
-    });
+    }).sort((a, b) => new Date(a.date) - new Date(b.date));
   }, [stockRecords, lcSearchQuery, lcFilters]);
 
   const lcReceiveSummary = useMemo(() => {
@@ -210,6 +216,8 @@ function App() {
       fetchPorts();
     } else if (currentView === 'stock-section' || currentView === 'lc-entry-section') {
       fetchStockRecords();
+      fetchWarehouses(); // Fetch warehouse data
+      fetchSales(); // Fetch sales data
       fetchPorts(); // Fetch ports to populate the dropdown
       fetchImporters(); // Fetch importers to populate the dropdown
       fetchProducts(); // Fetch products to populate the dropdown
@@ -359,6 +367,31 @@ function App() {
         } else {
           // Single delete
           await fetch(`${API_BASE_URL}/api/${endpoint}/${id}`, { method: 'DELETE' });
+
+          if (type === 'sales') {
+            // Stock restoration logic connecting sales to stock/warehouse mathematically has been removed
+
+            if (extraData?.customerId && extraData?.invoiceNo) {
+              try {
+                const custRes = await fetch(`${API_BASE_URL}/api/customers/${extraData.customerId}`);
+                if (custRes.ok) {
+                  const custRecord = await custRes.json();
+                  const customer = decryptData(custRecord.data);
+                  if (customer.salesHistory) {
+                    const updatedSalesHistory = customer.salesHistory.filter(s => s.invoiceNo !== extraData.invoiceNo);
+                    const updatedCustomer = { ...customer, salesHistory: updatedSalesHistory };
+                    await fetch(`${API_BASE_URL}/api/customers/${extraData.customerId}`, {
+                      method: 'PUT',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ data: encryptData(updatedCustomer) }),
+                    });
+                  }
+                }
+              } catch (err) {
+                console.error('Error removing sale from customer history:', err);
+              }
+            }
+          }
         }
 
         if (type === 'ip') fetchIpRecords();
@@ -409,6 +442,8 @@ function App() {
                 inHouseQuantity: item.inHouseQuantity || '',
                 sweepedPacket: item.sweepedPacket || '',
                 sweepedQuantity: item.sweepedQuantity || '',
+                salePacket: item.salePacket || '',
+                saleQuantity: item.saleQuantity || '',
                 unit: item.unit || 'kg'
               }]
             }];
@@ -434,6 +469,8 @@ function App() {
               inHouseQuantity: ent.inHouseQuantity || '',
               sweepedPacket: ent.sweepedPacket || '',
               sweepedQuantity: ent.sweepedQuantity || '',
+              salePacket: ent.salePacket || '',
+              saleQuantity: ent.saleQuantity || '',
               unit: ent.unit || 'kg'
             });
             return acc;
@@ -504,6 +541,76 @@ function App() {
       console.error('Error fetching stock:', error);
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const fetchWarehouses = async () => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/warehouses`);
+      if (response.ok) {
+        const rawData = await response.json();
+
+        // 1. Decrypt Main Warehouse Data
+        const allDecryptedWh = (rawData.warehouses || []).map(item => {
+          try {
+            return { ...decryptData(item.data), _id: item._id, recordType: 'warehouse' };
+          } catch { return null; }
+        }).filter(Boolean);
+
+        // 2. Extract Warehouse-Specific Stock from Stock Records
+        const decryptedStock = (rawData.stockRecords || []).map(d => {
+          let rawWh = '';
+          try {
+            const dec = decryptData(d.data);
+            rawWh = dec.whName || '';
+          } catch { }
+
+          if (!rawWh) return null;
+
+          const inhousePkt = d.inhousePkt !== undefined && d.inhousePkt !== null ? d.inhousePkt : 0;
+          const inhouseQty = d.inhouseQty !== undefined && d.inhouseQty !== null ? d.inhouseQty : 0;
+          const whPkt = d.whPkt !== undefined && d.whPkt !== null ? d.whPkt : 0;
+          const whQty = d.whQty !== undefined && d.whQty !== null ? d.whQty : 0;
+          const salePacket = d.salePacket !== undefined && d.salePacket !== null ? d.salePacket : 0;
+          const saleQuantity = d.saleQuantity !== undefined && d.saleQuantity !== null ? d.saleQuantity : 0;
+
+          return {
+            ...d,
+            whName: rawWh,
+            inhousePkt,
+            inhouseQty,
+            whPkt,
+            whQty,
+            salePacket,
+            saleQuantity,
+            productName: d.productName || d.product,
+            packetSize: d.packetSize || d.size || 0,
+            recordType: 'stock',
+          };
+        }).filter(Boolean);
+
+        // Combine for comprehensive view
+        const combinedData = [...allDecryptedWh, ...decryptedStock];
+        setWarehouseData(combinedData);
+      }
+    } catch (error) {
+      console.error('Error fetching warehouse data:', error);
+    }
+  };
+
+  const fetchSales = async () => {
+    try {
+      const response = await axios.get(`${API_BASE_URL}/api/sales`);
+      if (response.data) {
+        const decryptedSales = response.data.map(item => {
+          try {
+            return { ...decryptData(item.data), _id: item._id };
+          } catch { return null; }
+        }).filter(Boolean);
+        setSalesRecords(decryptedSales);
+      }
+    } catch (error) {
+      console.error('Error fetching sales:', error);
     }
   };
 
@@ -608,6 +715,8 @@ function App() {
             setIsSubmitting={setIsSubmitting}
             submitStatus={submitStatus}
             setSubmitStatus={setSubmitStatus}
+            fetchSales={fetchSales}
+            salesRecords={salesRecords}
           />
         );
 
@@ -691,6 +800,10 @@ function App() {
             setShowStockReport={setShowStockReport}
             stockFilters={stockFilters}
             setStockFilters={setStockFilters}
+            salesRecords={salesRecords}
+            fetchSales={fetchSales}
+            setShowProductHistoryReport={setShowProductHistoryReport}
+            setProductHistoryReportData={setProductHistoryReportData}
           />
         );
       case 'products-section':
@@ -756,8 +869,8 @@ function App() {
   };
 
   const stockData = useMemo(() => {
-    return calculateStockData(stockRecords, stockFilters, '');
-  }, [stockRecords, stockFilters]);
+    return calculateStockData(stockRecords, stockFilters, '', warehouseData, salesRecords);
+  }, [stockRecords, stockFilters, warehouseData, salesRecords]);
 
   return (
     <div className={`flex h-screen bg-gray-50 font-sans text-gray-900 ${(showLcReport || showStockReport) ? 'is-printing-report' : ''}`}>
@@ -944,6 +1057,7 @@ function App() {
         setLcFilters={setLcFilters}
         lcReceiveRecords={lcReceiveRecords}
         lcReceiveSummary={lcReceiveSummary}
+        fetchSales={fetchSales}
       />
 
       {/* Stock Report Modal */}
@@ -954,10 +1068,17 @@ function App() {
         stockFilters={stockFilters}
         setStockFilters={setStockFilters}
         stockData={stockData}
+        salesRecords={salesRecords}
+      />
+
+      {/* Product History Report Modal */}
+      <ProductHistoryReport
+        isOpen={showProductHistoryReport}
+        onClose={() => setShowProductHistoryReport(false)}
+        reportData={productHistoryReportData}
       />
 
     </div >
   );
 }
-
 export default App;

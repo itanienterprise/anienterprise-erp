@@ -10,7 +10,8 @@ const WarehouseReport = ({
     warehouseData,
     uniqueWarehouses,
     filters,
-    setFilters
+    setFilters,
+    salesRecords = []
 }) => {
     if (!isOpen) return null;
 
@@ -60,82 +61,96 @@ const WarehouseReport = ({
     // --- TWO SEPARATE DATA STREAMS ---
     // Stream 1: InHouse records — all stock records, NO warehouse filter (date/product/brand only)
     //   Used to compute global InHouse totals so they are never zeroed out by a warehouse filter
-    const inhouseRecords = warehouseData.filter(item => {
-        if (item.recordType !== 'stock') return false;
+    // 1. Calculate Global Stock Map: { [brandKey]: { inhouseQty, inhousePkt } }
+    // This is the total stock (received) for each brand, minus ALL sales for that brand.
+    const globalStockMap = {};
+
+    // Sum from all records
+    warehouseData.forEach(item => {
+        if (!item.hasLCRecord && item.recordType !== 'warehouse') return;
+        const prodName = (item.productName || item.product || '').trim().toLowerCase();
+        const brandName = (item.brand || '').trim().toLowerCase();
+        const brandKey = `${prodName}|${brandName}`;
+
+        if (!globalStockMap[brandKey]) {
+            globalStockMap[brandKey] = { inhouseQty: 0, inhousePkt: 0, pktSize: parseFloat(item.packetSize || item.size || 0) };
+        }
+        globalStockMap[brandKey].inhouseQty += parseFloat(item.whQty) || 0;
+        globalStockMap[brandKey].inhousePkt += parseFloat(item.whPkt) || 0;
+    });
+
+    // Subtract ALL sales for each brand
+    salesRecords.forEach(sale => {
+        if (sale.items) {
+            sale.items.forEach(si => {
+                const prodName = (si.productName || si.product || '').trim().toLowerCase();
+                if (si.brandEntries) {
+                    si.brandEntries.forEach(be => {
+                        const brandName = (be.brand || '').trim().toLowerCase();
+                        const brandKey = `${prodName}|${brandName}`;
+                        if (globalStockMap[brandKey]) {
+                            const sQty = parseFloat(be.quantity) || 0;
+                            globalStockMap[brandKey].inhouseQty -= sQty;
+                            const size = globalStockMap[brandKey].pktSize || 0;
+                            if (size > 0) globalStockMap[brandKey].inhousePkt -= (sQty / size);
+                        }
+                    });
+                }
+            });
+        }
+    });
+
+    // Ensure no negatives
+    Object.keys(globalStockMap).forEach(key => {
+        globalStockMap[key].inhouseQty = Math.max(0, globalStockMap[key].inhouseQty);
+        globalStockMap[key].inhousePkt = Math.max(0, globalStockMap[key].inhousePkt);
+    });
+
+    // 2. Calculate Sales Map by Warehouse: { [whName]: { [brandKey]: qty } }
+    const salesMapByWh = {};
+    salesRecords.forEach(sale => {
+        if (sale.items) {
+            sale.items.forEach(si => {
+                const prodName = (si.productName || si.product || '').trim().toLowerCase();
+                if (si.brandEntries) {
+                    si.brandEntries.forEach(be => {
+                        const brandName = (be.brand || '').trim().toLowerCase();
+                        const whNameRaw = (be.warehouseName || '').trim();
+                        const whName = whNameRaw || 'General / In Stock';
+                        const brandKey = `${prodName}|${brandName}`;
+
+                        if (!salesMapByWh[whName]) salesMapByWh[whName] = {};
+                        if (!salesMapByWh[whName][brandKey]) salesMapByWh[whName][brandKey] = { qty: 0 };
+                        salesMapByWh[whName][brandKey].qty += parseFloat(be.quantity) || 0;
+                    });
+                }
+            });
+        }
+    });
+
+    // 3. Group for Display: Warehouse -> Product -> Brands
+    const groupedData = warehouseData.reduce((acc, item) => {
+        // Date filter
         const itemDate = item.createdAt ? new Date(item.createdAt) : null;
-        if (filters.startDate && itemDate && itemDate < new Date(filters.startDate)) return false;
-        if (filters.endDate && itemDate && itemDate > new Date(filters.endDate + 'T23:59:59')) return false;
-        if (filters.productName && (item.productName || '').trim() !== filters.productName) return false;
-        if (filters.brand && (item.brand || '').trim() !== filters.brand) return false;
-        const ihQty = parseFloat(item.inhouseQty) || 0;
-        return item.hasLCRecord && ihQty > 0;
-    });
+        if (filters.startDate && itemDate && itemDate < new Date(filters.startDate)) return acc;
+        if (filters.endDate && itemDate && itemDate > new Date(filters.endDate + 'T23:59:59')) return acc;
 
-    // Stream 2: Display records — ALL record types, ALL filters applied strictly (including warehouse)
-    const displayRecords = warehouseData.filter(item => {
-        const itemDate = item.createdAt ? new Date(item.createdAt) : null;
-        if (filters.startDate && itemDate && itemDate < new Date(filters.startDate)) return false;
-        if (filters.endDate && itemDate && itemDate > new Date(filters.endDate + 'T23:59:59')) return false;
-        if (filters.warehouse && (item.whName || '').trim() !== filters.warehouse) return false;
-        if (filters.productName && (item.productName || '').trim() !== filters.productName) return false;
-        if (filters.brand && (item.brand || '').trim() !== filters.brand) return false;
-        const whQty = parseFloat(item.whQty) || 0;
-        if (item.recordType === 'warehouse') return whQty > 0;
-        const ihQty = parseFloat(item.inhouseQty) || 0;
-        return item.hasLCRecord && (ihQty > 0 || whQty > 0);
-    });
-
-    // 1. Compute Global InHouse Totals from inhouseRecords (no warehouse filter applied)
-    const globalInHouseTotals = inhouseRecords.reduce((acc, item) => {
-        const brandKey = `${(item.productName || '').trim()}|${(item.brand || '-').trim()}`;
-        if (!acc[brandKey]) acc[brandKey] = { brandKey, inhouseQty: 0, inhousePkt: 0 };
-        acc[brandKey].inhouseQty += parseFloat(item.inhouseQty) || 0;
-        acc[brandKey].inhousePkt += parseFloat(item.inhousePkt) || 0;
-        return acc;
-    }, {});
-
-    // 2. Compute Warehouse Totals from displayRecords (strict warehouse filter)
-    const globalBrandTotals = displayRecords.reduce((acc, item) => {
-        const brandKey = `${(item.productName || '').trim()}|${(item.brand || '-').trim()}`;
-        if (!acc[brandKey]) {
-            acc[brandKey] = {
-                brandKey,
-                // Pull InHouse from the global (unfiltered by warehouse) source
-                inhouseQty: globalInHouseTotals[brandKey]?.inhouseQty || 0,
-                inhousePkt: globalInHouseTotals[brandKey]?.inhousePkt || 0,
-                whQty: 0,
-                whPkt: 0
-            };
-        }
-        const isRealWarehouse = item.recordType === 'warehouse' ||
-            (item.recordType === 'stock' && (item.whName || '').trim() && (item.whName || '').trim() !== 'General / In Stock');
-        if (isRealWarehouse) {
-            acc[brandKey].whQty += parseFloat(item.whQty) || 0;
-            acc[brandKey].whPkt += parseFloat(item.whPkt) || 0;
-        }
-        return acc;
-    }, {});
-
-    // Ensure all brands that have InHouse stock appear in globalBrandTotals (for grand totals)
-    Object.keys(globalInHouseTotals).forEach(brandKey => {
-        if (!globalBrandTotals[brandKey]) {
-            globalBrandTotals[brandKey] = {
-                brandKey,
-                inhouseQty: globalInHouseTotals[brandKey].inhouseQty,
-                inhousePkt: globalInHouseTotals[brandKey].inhousePkt,
-                whQty: 0,
-                whPkt: 0
-            };
-        }
-    });
-
-    // 3. Group displayRecords for table: Warehouse -> Product -> Brands
-    const groupedData = displayRecords.reduce((acc, item) => {
-        const rawWhName = (item.whName || '').trim();
+        // Grouping keys
+        const rawWhName = (item.whName || item.warehouse || '').trim();
         const whName = rawWhName || 'General / In Stock';
-        const prodName = (item.productName || 'Unknown').trim();
+
+        // Warehouse filter (strict)
+        if (filters.warehouse && whName !== filters.warehouse) return acc;
+
+        const prodName = (item.productName || item.product || 'Unknown').trim();
+        // Product filter
+        if (filters.productName && prodName !== filters.productName) return acc;
+
         const brand = (item.brand || '-').trim();
-        const brandKey = `${prodName}|${brand}`;
+        // Brand filter
+        if (filters.brand && brand !== filters.brand) return acc;
+
+        const brandKey = `${prodName.toLowerCase()}|${brand.toLowerCase()}`;
 
         if (!acc[whName]) acc[whName] = { whName, products: {} };
         if (!acc[whName].products[prodName]) {
@@ -144,38 +159,81 @@ const WarehouseReport = ({
         if (!acc[whName].products[prodName].brands[brand]) {
             acc[whName].products[prodName].brands[brand] = {
                 brand,
-                inhouseQty: globalBrandTotals[brandKey]?.inhouseQty || 0,
-                inhousePkt: globalBrandTotals[brandKey]?.inhousePkt || 0,
+                inhouseQty: globalStockMap[brandKey]?.inhouseQty || 0,
+                inhousePkt: globalStockMap[brandKey]?.inhousePkt || 0,
                 whQty: 0,
-                whPkt: 0
+                whPkt: 0,
+                packetSize: parseFloat(item.packetSize || item.size || 0)
             };
         }
+
+        const qty = parseFloat(item.whQty) || 0;
+        const pkt = parseFloat(item.whPkt) || 0;
+
         const isRealWarehouse = item.recordType === 'warehouse' ||
-            (item.recordType === 'stock' && rawWhName && rawWhName !== 'General / In Stock');
+            (item.recordType === 'stock' && rawWhName && rawWhName.toLowerCase() !== 'general / in stock');
+
         if (isRealWarehouse) {
-            acc[whName].products[prodName].brands[brand].whQty += parseFloat(item.whQty) || 0;
-            acc[whName].products[prodName].brands[brand].whPkt += parseFloat(item.whPkt) || 0;
+            acc[whName].products[prodName].brands[brand].whQty += qty;
+            acc[whName].products[prodName].brands[brand].whPkt += pkt;
         }
         return acc;
     }, {});
 
+    // 4. Subtract warehouse-specific sales from whQty
+    Object.values(groupedData).forEach(whGroup => {
+        Object.values(whGroup.products).forEach(pGroup => {
+            Object.values(pGroup.brands).forEach(brandItem => {
+                const brandKey = `${pGroup.productName.toLowerCase()}|${brandItem.brand.toLowerCase()}`;
+                const saleData = salesMapByWh[whGroup.whName]?.[brandKey];
+                if (saleData) {
+                    const sQty = saleData.qty;
+                    const size = brandItem.packetSize || 0;
+                    brandItem.whQty = Math.max(0, brandItem.whQty - sQty);
+                    if (size > 0) brandItem.whPkt = Math.max(0, brandItem.whPkt - (sQty / size));
+                }
+            });
+            // Filter out empty brands (unless they have global inhouse stock and it's the General group)
+            const brandList = Object.values(pGroup.brands).filter(b => b.whQty > 0 || (whGroup.whName === 'General / In Stock' && b.inhouseQty > 0));
+            pGroup.brands = brandList;
+        });
+        // Filter out empty products
+        whGroup.products = Object.values(whGroup.products).filter(p => p.brands.length > 0);
+    });
 
-    const displayGroups = Object.values(groupedData).map(wh => ({
+    const displayGroups = Object.values(groupedData).filter(wh => wh.products.length > 0).map(wh => ({
         ...wh,
-        products: Object.values(wh.products).map(p => ({
-            ...p,
-            brands: Object.values(p.brands).sort((a, b) => a.brand.localeCompare(b.brand))
-        })).sort((a, b) => a.productName.localeCompare(b.productName))
+        products: wh.products.sort((a, b) => a.productName.localeCompare(b.productName))
     })).sort((a, b) => a.whName.localeCompare(b.whName));
 
-    // 3. Overall Totals
-    const totals = Object.values(globalBrandTotals).reduce((acc, b) => {
-        acc.totalInHouseQty += b.inhouseQty;
-        acc.totalInHousePkt += b.inhousePkt;
-        acc.totalWhQty += b.whQty;
-        acc.totalWhPkt += b.whPkt;
+    // 5. Overall Totals (Avoid double counting brands)
+    const uniqueBrandsInReport = new Set();
+    displayGroups.forEach(wh => {
+        wh.products.forEach(p => {
+            p.brands.forEach(b => {
+                uniqueBrandsInReport.add(`${p.productName.toLowerCase()}|${b.brand.toLowerCase()}`);
+            });
+        });
+    });
+
+    const totals = [...uniqueBrandsInReport].reduce((acc, brandKey) => {
+        const globalInfo = globalStockMap[brandKey];
+        if (globalInfo) {
+            acc.totalInHouseQty += globalInfo.inhouseQty;
+            acc.totalInHousePkt += globalInfo.inhousePkt;
+        }
         return acc;
     }, { totalInHouseQty: 0, totalInHousePkt: 0, totalWhQty: 0, totalWhPkt: 0 });
+
+    // Calculate total warehouse stock separately because physical stock across warehouses IS additive
+    displayGroups.forEach(wh => {
+        wh.products.forEach(p => {
+            p.brands.forEach(b => {
+                totals.totalWhQty += b.whQty;
+                totals.totalWhPkt += b.whPkt;
+            });
+        });
+    });
 
     const getUniqueOptions = (key) => {
         return [...new Set(warehouseData.map(item => (item[key] || '').trim()).filter(Boolean))].sort();
@@ -316,7 +374,7 @@ const WarehouseReport = ({
                                 </div>
                             )}
                         </div>
-                        <button onClick={() => generateWarehouseReportPDF(displayRecords, filters, warehouseData)} className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-xl shadow-lg shadow-blue-500/30 transition-all flex items-center gap-2 no-print">
+                        <button onClick={() => generateWarehouseReportPDF(displayGroups, filters, totals)} className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-xl shadow-lg shadow-blue-500/30 transition-all flex items-center gap-2 no-print">
                             <BarChartIcon className="w-4 h-4" /> Print Report
                         </button>
                         <button onClick={onClose} className="p-2.5 hover:bg-gray-100 rounded-xl transition-colors no-print"><XIcon className="w-6 h-6 text-gray-500" /></button>
@@ -345,11 +403,11 @@ const WarehouseReport = ({
                         {/* Info Row */}
                         <div className="flex justify-between items-end text-[14px] text-gray-800 pt-6 px-2">
                             <div className="flex flex-col gap-1.5">
-                                <div><span className="font-bold text-gray-900">Date Range:</span> {filters.startDate || 'Start'} to {filters.endDate || 'Present'}</div>
+                                <div><span className="font-bold text-gray-900">Date Range:</span> {formatDate(filters.startDate) === '-' ? 'Start' : formatDate(filters.startDate)} to {formatDate(filters.endDate) === '-' ? 'Present' : formatDate(filters.endDate)}</div>
                                 {filters.warehouse && <div><span className="font-bold text-gray-900">Warehouse:</span> {filters.warehouse}</div>}
                                 {filters.productName && <div><span className="font-bold text-gray-900">Product:</span> {filters.productName}</div>}
                             </div>
-                            <div className="font-bold"><span className="text-gray-900">Printed on:</span> <span className="text-gray-900">{new Date().toLocaleDateString(undefined, { day: 'numeric', month: 'numeric', year: 'numeric' })}</span></div>
+                            <div className="font-bold"><span className="text-gray-900">Printed on:</span> <span className="text-gray-900">{formatDate(new Date().toISOString().split('T')[0])}</span></div>
                         </div>
 
                         {/* Table */}
@@ -360,11 +418,11 @@ const WarehouseReport = ({
                                         <th className="border-r border-gray-900 px-2 py-1 text-center text-[12px] font-bold text-gray-900 uppercase tracking-wider w-[4%]">SL</th>
                                         <th className="border-r border-gray-900 px-2 py-1 text-left text-[12px] font-bold text-gray-900 uppercase tracking-wider w-[10%]">Warehouse</th>
                                         <th className="border-r border-gray-900 px-2 py-1 text-left text-[12px] font-bold text-gray-900 uppercase tracking-wider w-[15%]">Product Name</th>
-                                        <th className="border-r border-gray-900 px-2 py-1 text-left text-[12px] font-bold text-gray-900 uppercase tracking-wider w-[33%]">Brand</th>
-                                        <th className="border-r border-gray-900 px-2 py-1 text-right text-[12px] font-bold text-gray-900 uppercase tracking-wider w-[10%]">Inhouse QTY</th>
-                                        <th className="border-r border-gray-900 px-2 py-1 text-right text-[12px] font-bold text-gray-900 uppercase tracking-wider w-[8%]">Inhouse PKT</th>
-                                        <th className="border-r border-gray-900 px-2 py-1 text-right text-[12px] font-bold text-gray-900 uppercase tracking-wider w-[10%]">Warehouse QTY</th>
-                                        <th className="px-2 py-1 text-right text-[12px] font-bold text-gray-900 uppercase tracking-wider w-[8%]">Warehouse PKT</th>
+                                        <th className="border-r border-gray-900 px-2 py-1 text-left text-[12px] font-bold text-gray-900 uppercase tracking-wider w-[17%]">Brand</th>
+                                        <th className="border-r border-gray-900 px-2 py-1 text-right text-[12px] font-bold text-gray-900 uppercase tracking-wider w-[12%]">Inhouse QTY</th>
+                                        <th className="border-r border-gray-900 px-2 py-1 text-right text-[12px] font-bold text-gray-900 uppercase tracking-wider w-[12%]">Inhouse PKT</th>
+                                        <th className="border-r border-gray-900 px-2 py-1 text-right text-[12px] font-bold text-gray-900 uppercase tracking-wider w-[15%]">Warehouse QTY</th>
+                                        <th className="px-2 py-1 text-right text-[12px] font-bold text-gray-900 uppercase tracking-wider w-[15%]">Warehouse PKT</th>
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-gray-900">

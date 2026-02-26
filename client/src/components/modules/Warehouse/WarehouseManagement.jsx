@@ -41,6 +41,7 @@ const WarehouseManagement = () => {
     const [submitStatus, setSubmitStatus] = useState(null);
     const [showWhDropdown, setShowWhDropdown] = useState(false);
     const whDropdownRef = useRef(null);
+    const [salesRecords, setSalesRecords] = useState([]);
 
     // Product Dropdown State
     const [products, setProducts] = useState([]);
@@ -99,9 +100,10 @@ const WarehouseManagement = () => {
 
     const fetchWarehouses = async () => {
         try {
-            const [whRes, stockRes] = await Promise.all([
+            const [whRes, stockRes, salesRes] = await Promise.all([
                 axios.get(`${API_BASE_URL}/api/warehouses`),
-                axios.get(`${API_BASE_URL}/api/stock`)
+                axios.get(`${API_BASE_URL}/api/stock`),
+                axios.get(`${API_BASE_URL}/api/sales`)
             ]);
 
             const whData = Array.isArray(whRes.data) ? whRes.data : [];
@@ -124,6 +126,13 @@ const WarehouseManagement = () => {
                 globalInHouseMap[key].pkt += parseFloat(d.inHousePacket || d.inhousePkt || 0);
                 globalInHouseMap[key].qty += parseFloat(d.inHouseQuantity || d.inhouseQty || 0);
             });
+
+            // 1.1 Decrypt and store Sales records
+            const salesData = Array.isArray(salesRes.data) ? salesRes.data : [];
+            const salesDecrypted = salesData.map(s => {
+                try { return { ...decryptData(s.data), _id: s._id }; } catch { return null; }
+            }).filter(Boolean);
+            setSalesRecords(salesDecrypted);
 
             // Track which unique product names have LC records (only those with positive stock)
             const activeProdKeys = Object.keys(globalInHouseMap).filter(key => globalInHouseMap[key].qty > 0);
@@ -149,7 +158,7 @@ const WarehouseManagement = () => {
                         productName: prodName,
                         whPkt,
                         whQty,
-                        packetSize: decrypted.packetSize || (whQty && whPkt ? (parseFloat(whQty) / parseFloat(whPkt)).toFixed(0) : 0),
+                        packetSize: decrypted.packetSize || (parseFloat(whQty) > 0 && parseFloat(whPkt) > 0 ? (parseFloat(whQty) / parseFloat(whPkt)).toFixed(0) : 0),
                         _id: item._id,
                         recordType: 'warehouse',
                         createdAt: item.createdAt,
@@ -171,11 +180,11 @@ const WarehouseManagement = () => {
                 const brand = (d.brand || '').trim();
                 const key = `${prodName.toLowerCase()}|${brand.toLowerCase()}`;
 
-                const inhousePkt = parseFloat(d.inHousePacket || d.inhousePkt || 0);
-                const inhouseQty = parseFloat(d.inHouseQuantity || d.inhouseQty || 0);
+                const inhousePkt = parseFloat(d.inHousePacket !== undefined ? d.inHousePacket : (d.inhousePkt || 0));
+                const inhouseQty = parseFloat(d.inHouseQuantity !== undefined ? d.inHouseQuantity : (d.inhouseQty || 0));
 
-                const whPkt = d.whPkt !== undefined && d.whPkt !== null ? d.whPkt : inhousePkt;
-                const whQty = d.whQty !== undefined && d.whQty !== null ? d.whQty : inhouseQty;
+                const whPkt = d.whPkt !== undefined ? parseFloat(d.whPkt) : inhousePkt;
+                const whQty = d.whQty !== undefined ? parseFloat(d.whQty) : inhouseQty;
 
                 return {
                     ...d,
@@ -286,25 +295,65 @@ const WarehouseManagement = () => {
     }, [filteredData, allWarehousesMaster]);
 
     const globalBrandTotals = useMemo(() => {
-        return warehouseData.reduce((acc, item) => {
+        const brands = warehouseData.reduce((acc, item) => {
             const brandKey = `${(item.productName || item.product || '').trim().toLowerCase()}|${(item.brand || '').trim().toLowerCase()}`;
             if (!acc[brandKey]) {
-                acc[brandKey] = { inhouseQty: 0, inhousePkt: 0, whQty: 0, whPkt: 0 };
+                acc[brandKey] = {
+                    inhouseQty: 0,
+                    inhousePkt: 0,
+                    whQty: 0,
+                    whPkt: 0,
+                    packetSize: parseFloat(item.packetSize || item.size || 0)
+                };
             }
 
-            if (item.recordType === 'stock') {
-                acc[brandKey].inhouseQty += parseFloat(item.inhouseQty || item.inHouseQuantity || 0);
-                acc[brandKey].inhousePkt += parseFloat(item.inhousePkt || item.inHousePacket || 0);
-            }
+            // Sum physical stock from all sources into the global "Inhouse" view
+            const physicalQty = parseFloat(item.whQty) || 0;
+            const physicalPkt = parseFloat(item.whPkt) || 0;
+
+            acc[brandKey].inhouseQty += physicalQty;
+            acc[brandKey].inhousePkt += physicalPkt;
 
             if (item.recordType === 'warehouse' || (item.recordType === 'stock' && item.whName)) {
-                acc[brandKey].whQty += parseFloat(item.whQty) || 0;
-                acc[brandKey].whPkt += parseFloat(item.whPkt) || 0;
+                acc[brandKey].whQty += physicalQty;
+                acc[brandKey].whPkt += physicalPkt;
             }
 
             return acc;
         }, {});
-    }, [warehouseData]);
+
+        // Subtract sales from Inhouse totals
+        salesRecords.forEach(sale => {
+            if (sale.items && Array.isArray(sale.items)) {
+                sale.items.forEach(saleItem => {
+                    const prodName = (saleItem.productName || '').trim().toLowerCase();
+                    if (saleItem.brandEntries && Array.isArray(saleItem.brandEntries)) {
+                        saleItem.brandEntries.forEach(entry => {
+                            const brandName = (entry.brand || '').trim().toLowerCase();
+                            const brandKey = `${prodName}|${brandName}`;
+                            if (brands[brandKey]) {
+                                const sQty = parseFloat(entry.quantity) || 0;
+                                // Use the brand's own packet size as the primary reference for stock reduction
+                                const pktSize = brands[brandKey].packetSize || parseFloat(saleItem.packetSize || entry.packetSize) || 0;
+                                brands[brandKey].inhouseQty -= sQty;
+                                if (pktSize > 0) {
+                                    brands[brandKey].inhousePkt -= (sQty / pktSize);
+                                }
+                            }
+                        });
+                    }
+                });
+            }
+        });
+
+        // Ensure no negatives
+        Object.keys(brands).forEach(k => {
+            brands[k].inhouseQty = Math.max(0, brands[k].inhouseQty);
+            brands[k].inhousePkt = Math.max(0, brands[k].inhousePkt);
+        });
+
+        return brands;
+    }, [warehouseData, salesRecords]);
 
     const warehouseProductCounts = useMemo(() => {
         const brandsPerWh = {};
@@ -317,8 +366,8 @@ const WarehouseManagement = () => {
             const ihQty = parseFloat(item.inhouseQty) || 0;
             const whQty = parseFloat(item.whQty) || 0;
 
-            // Only count if it's an active product with LC record and some stock
-            if (hasProduct && item.hasLCRecord && (ihQty > 0 || whQty > 0)) {
+            // Only count if it's an active product with some stock (either from LC or physical warehouse stock)
+            if (hasProduct && (item.hasLCRecord || !item.hasLCRecord) && (ihQty > 0 || whQty > 0)) {
                 if (item.brand && item.brand !== '-') {
                     brandsPerWh[item.whName].add(item.brand);
                 }
@@ -337,7 +386,7 @@ const WarehouseManagement = () => {
             const hasProduct = (item.productName && item.productName !== '-') || (item.product && item.product !== '-');
             const ihQty = parseFloat(item.inhouseQty) || 0;
             const whQty = parseFloat(item.whQty) || 0;
-            return hasProduct && item.hasLCRecord && (ihQty > 0 || whQty > 0);
+            return hasProduct && (item.hasLCRecord || !item.hasLCRecord) && (ihQty > 0 || whQty > 0);
         });
 
         const uniqueBrands = new Set();
@@ -375,17 +424,47 @@ const WarehouseManagement = () => {
             }
         });
 
-        let totalInhouseStock = 0;
-        uniqueBrandsInView.forEach(brandKey => {
-            totalInhouseStock += globalBrandTotals[brandKey]?.inhouseQty || 0;
+        // 1. Total Inhouse Stock should be the company-wide (global) stock for all brands currently in the filtered view.
+        // This value matches the "INHOUSE QTY" column in the table.
+        const totalInhouseStock = [...uniqueBrandsInView].reduce((sum, key) => {
+            return sum + (globalBrandTotals[key]?.inhouseQty || 0);
+        }, 0);
+
+        // Calculate total sales for products currently in view
+        // 2. Total Warehouse Stock should be the physical stock present in the warehouses currently in view.
+        let totalWarehouseSalesInView = 0;
+        const currentWhNamesLower = new Set([...currentWhNames].map(name => name.toLowerCase().trim()));
+
+        salesRecords.forEach(sale => {
+            if (sale.items) {
+                sale.items.forEach(si => {
+                    const prodName = (si.productName || '').trim().toLowerCase();
+                    if (si.brandEntries) {
+                        si.brandEntries.forEach(be => {
+                            const brandName = (be.brand || '').trim().toLowerCase();
+                            const whName = (be.warehouseName || '').trim().toLowerCase();
+                            const key = `${prodName}|${brandName}`;
+
+                            // Only subtract from warehouse total if it's a designated warehouse (not general pool)
+                            // AND that warehouse is currently in the filtered view.
+                            if (whName && whName !== 'general / in stock' && currentWhNamesLower.has(whName)) {
+                                if (uniqueBrandsInView.has(key)) {
+                                    totalWarehouseSalesInView += (parseFloat(be.quantity) || 0);
+                                }
+                            }
+                        });
+                    }
+                });
+            }
         });
 
-        const totalWarehouseStock = filteredData.reduce((sum, item) => {
+        const totalWarehouseStockRaw = filteredData.reduce((sum, item) => {
             if (item.recordType === 'warehouse' || (item.recordType === 'stock' && item.whName)) {
                 return sum + (parseFloat(item.whQty || 0));
             }
             return sum;
         }, 0);
+        const totalWarehouseStock = Math.max(0, totalWarehouseStockRaw - totalWarehouseSalesInView);
 
         return {
             totalItems,
@@ -395,7 +474,7 @@ const WarehouseManagement = () => {
             totalInhouseStock: `${totalInhouseStock.toLocaleString()} kg`,
             totalWarehouseStock: `${totalWarehouseStock.toLocaleString()} kg`
         };
-    }, [filteredData, uniqueWarehouses, globalBrandTotals, warehouseData]);
+    }, [filteredData, uniqueWarehouses, globalBrandTotals, warehouseData, salesRecords]);
 
     useEffect(() => {
         const handleClickOutside = (event) => {
@@ -493,8 +572,8 @@ const WarehouseManagement = () => {
             const localIhQty = item.recordType === 'stock' ? (parseFloat(item.inhouseQty || item.inHouseQuantity || 0)) : 0;
             const localWhQty = parseFloat(item.whQty || 0);
 
-            // Show if it has valid LC source AND has either local unallocated stock or physical warehouse stock
-            return item.hasLCRecord && (localIhQty > 0 || localWhQty > 0);
+            // Show if it has valid LC source OR manually transferred stock AND has either local unallocated stock or physical warehouse stock
+            return (item.hasLCRecord || !item.hasLCRecord) && (localIhQty > 0 || localWhQty > 0);
         }).forEach(item => {
             const rawWhName = (item.whName || item.warehouse || '').trim();
             if (!rawWhName) return;
@@ -527,15 +606,53 @@ const WarehouseManagement = () => {
                     inhouseQty: globalBrandTotals[brandKey]?.inhouseQty || 0,
                     inhousePkt: globalBrandTotals[brandKey]?.inhousePkt || 0,
                     whQty: 0,
-                    whPkt: 0
+                    whPkt: 0,
+                    _saleQty: 0, // Track sales for this specific warehouse+brand
+                    _salePkt: 0
                 };
             }
 
-            // Only sum physical warehouse stock from warehouse-type records
+            // 1. Sum physical warehouse stock from warehouse-type records
             if (item.recordType === 'warehouse' || (item.recordType === 'stock' && item.whName)) {
                 groups[whKey].products[prodName].brands[brand].whQty += parseFloat(item.whQty) || 0;
                 groups[whKey].products[prodName].brands[brand].whPkt += parseFloat(item.whPkt) || 0;
             }
+        });
+
+        // 2. Subtract sales matching this specific warehouse + brand
+        salesRecords.forEach(sale => {
+            if (sale.items && Array.isArray(sale.items)) {
+                sale.items.forEach(saleItem => {
+                    const prodName = (saleItem.productName || '').trim();
+                    if (saleItem.brandEntries && Array.isArray(saleItem.brandEntries)) {
+                        saleItem.brandEntries.forEach(entry => {
+                            const whName = (entry.warehouseName || '').trim();
+                            const brandName = (entry.brand || '').trim();
+
+                            if (groups[whName] && groups[whName].products[prodName] && groups[whName].products[prodName].brands[brandName]) {
+                                const bObj = groups[whName].products[prodName].brands[brandName];
+                                const sQty = parseFloat(entry.quantity) || 0;
+                                const pktSize = parseFloat(bObj.packetSize) || parseFloat(saleItem.packetSize || entry.packetSize) || 0;
+
+                                bObj.whQty -= sQty;
+                                if (pktSize > 0) {
+                                    bObj.whPkt -= (sQty / pktSize);
+                                }
+                            }
+                        });
+                    }
+                });
+            }
+        });
+
+        // 3. Final cleanup: Ensure no negatives
+        Object.values(groups).forEach(wh => {
+            Object.values(wh.products).forEach(p => {
+                Object.values(p.brands).forEach(b => {
+                    b.whQty = Math.max(0, b.whQty);
+                    b.whPkt = Math.max(0, b.whPkt);
+                });
+            });
         });
 
         return Object.values(groups)
@@ -875,6 +992,7 @@ const WarehouseManagement = () => {
                 uniqueWarehouses={uniqueWarehouses}
                 filters={warehouseFilters}
                 setFilters={setWarehouseFilters}
+                salesRecords={salesRecords}
             />
 
             {/* Warehouse Form Modal */}

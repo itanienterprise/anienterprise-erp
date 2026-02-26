@@ -39,7 +39,8 @@ function LCReceive({
     submitStatus,
     setSubmitStatus,
     lcReceiveRecords,
-    lcReceiveSummary
+    lcReceiveSummary,
+    salesRecords = []
 }) {
     const [activeDropdown, setActiveDropdown] = useState(null);
     const [highlightedIndex, setHighlightedIndex] = useState(-1);
@@ -117,8 +118,8 @@ function LCReceive({
                     return {
                         ...d,
                         whName: rawWh,
-                        whPkt: d.inHousePacket || 0,
-                        whQty: d.inHouseQuantity || 0,
+                        whPkt: (d.whPkt !== undefined && d.whPkt !== null) ? parseFloat(d.whPkt) : (parseFloat(d.inHousePacket) || 0),
+                        whQty: (d.whQty !== undefined && d.whQty !== null) ? parseFloat(d.whQty) : (parseFloat(d.inHouseQuantity) || 0),
                         productName: d.productName || d.product,
                         packetSize: d.packetSize || d.size || 0,
                         hasLCRecord: true,
@@ -159,26 +160,87 @@ function LCReceive({
         const selectedWh = (stockFormData.warehouse || '').trim();
         if (!selectedWh || !allWhRecords.length) return null;
 
-        // Filter by warehouse and ensure there is actual stock present AND it has an LC source
+        // Filter by warehouse and ensure it has an LC source
         const filtered = allWhRecords.filter(r =>
             (r.whName || '').trim() === selectedWh &&
-            (parseFloat(r.whQty) > 0 || parseFloat(r.whPkt) > 0) &&
             r.hasLCRecord
         );
 
+        // Calculate sales for this warehouse
+        const whSalesMap = {};
+        salesRecords.forEach(sale => {
+            if (sale && sale.items && Array.isArray(sale.items)) {
+                sale.items.forEach(saleItem => {
+                    if (saleItem.brandEntries) {
+                        saleItem.brandEntries.forEach(entry => {
+                            if ((entry.warehouseName || '').trim() === selectedWh) {
+                                const prodName = (saleItem.productName || '').trim();
+                                const brandName = (entry.brand || '').trim();
+                                const key = `${prodName}_${brandName}`;
+                                if (!whSalesMap[key]) whSalesMap[key] = { qty: 0, pkt: 0 };
+                                whSalesMap[key].qty += parseFloat(entry.quantity) || 0;
+                                // We might need to estimate pkt if not present, but SaleManagement brandEntries usually only has quantity
+                                // For now we focus on Qty as requested, or estimate pkt if size available
+                            }
+                        });
+                    }
+                });
+            }
+        });
+
         const groups = {};
         filtered.forEach(item => {
-            const prodKey = item.productName || 'Unnamed Product';
-            if (!groups[prodKey]) {
-                groups[prodKey] = {
-                    productName: prodKey,
-                    brands: []
+            const prodName = item.productName || 'Unnamed Product';
+            const brandName = item.brand || 'No Brand';
+            const key = `${prodName}_${brandName}`;
+
+            if (!groups[prodName]) {
+                groups[prodName] = {
+                    productName: prodName,
+                    brands: {}
                 };
             }
-            groups[prodKey].brands.push(item);
+
+            if (!groups[prodName].brands[brandName]) {
+                groups[prodName].brands[brandName] = {
+                    ...item,
+                    whPkt: 0,
+                    whQty: 0
+                };
+            }
+
+            groups[prodName].brands[brandName].whPkt += parseFloat(item.whPkt) || 0;
+            groups[prodName].brands[brandName].whQty += parseFloat(item.whQty) || 0;
         });
-        return Object.values(groups);
-    }, [stockFormData.warehouse, allWhRecords]);
+
+        // Subtract sales and convert brands map to array
+        const finalResults = Object.values(groups).map(prodGroup => {
+            const brandList = Object.values(prodGroup.brands).map(brand => {
+                const key = `${prodGroup.productName}_${brand.brand}`;
+                const saleData = whSalesMap[key] || { qty: 0, pkt: 0 };
+
+                // If we have size, calculate sale packets to be accurate
+                let salePkt = 0;
+                const size = parseFloat(brand.packetSize) || 0;
+                if (size > 0) {
+                    salePkt = saleData.qty / size;
+                }
+
+                return {
+                    ...brand,
+                    whQty: Math.max(0, brand.whQty - saleData.qty),
+                    whPkt: Math.max(0, brand.whPkt - salePkt)
+                };
+            }).filter(b => b.whQty > 0 || b.whPkt > 0);
+
+            return {
+                ...prodGroup,
+                brands: brandList
+            };
+        }).filter(p => p.brands.length > 0);
+
+        return finalResults.length > 0 ? finalResults : null;
+    }, [stockFormData.warehouse, allWhRecords, salesRecords]);
 
     // --- Handlers ---
     const resetStockForm = () => {
@@ -207,15 +269,38 @@ function LCReceive({
         setEditingId(null);
     };
 
-    const recalculateEntry = (entry) => {
-        const packet = parseFloat(entry.packet) || 0;
+    const recalculateEntry = (entry, isQuantityDriven = false) => {
+        const pkt = parseFloat(entry.packet) || 0;
+        const qty = parseFloat(entry.quantity) || 0;
         const size = parseFloat(entry.packetSize) || 0;
-        const sweepedPacket = parseFloat(entry.sweepedPacket) || 0;
+        const swpPkt = parseFloat(entry.sweepedPacket) || 0;
+        const swpQty = parseFloat(entry.sweepedQuantity) || 0;
 
-        entry.quantity = (packet * size).toFixed(2);
-        entry.inHousePacket = (packet - sweepedPacket).toFixed(2);
-        entry.sweepedQuantity = (sweepedPacket * size).toFixed(2);
-        entry.inHouseQuantity = ((packet - sweepedPacket) * size).toFixed(2);
+        if (size > 0) {
+            if (isQuantityDriven) {
+                // Arrival Qty + Size -> Packet
+                entry.packet = (qty / size).toFixed(2);
+                entry.sweepedPacket = (swpQty / size).toFixed(2);
+            } else {
+                // Packet + Size -> Arrival Qty (Legacy compatibility)
+                entry.quantity = (pkt * size).toFixed(2);
+                entry.sweepedQuantity = (swpPkt * size).toFixed(2);
+            }
+            // inHouse is always arrived - sweeped
+            const currentQty = parseFloat(entry.quantity) || 0;
+            const currentSwpQty = parseFloat(entry.sweepedQuantity) || 0;
+            const currentPkt = parseFloat(entry.packet) || 0;
+            const currentSwpPkt = parseFloat(entry.sweepedPacket) || 0;
+
+            entry.inHouseQuantity = (currentQty - currentSwpQty).toFixed(2);
+            entry.inHousePacket = (currentPkt - currentSwpPkt).toFixed(2);
+        } else {
+            // No size -> arrival qty is primary
+            const aQty = parseFloat(entry.quantity) || 0;
+            const sQty = parseFloat(entry.sweepedQuantity) || 0;
+            entry.inHouseQuantity = (aQty - sQty).toFixed(2);
+            entry.inHousePacket = (parseFloat(entry.packet) || 0) - (parseFloat(entry.sweepedPacket) || 0);
+        }
         return entry;
     };
 
@@ -285,19 +370,12 @@ function LCReceive({
             }
         }
 
-        if (['packet', 'packetSize', 'sweepedPacket'].includes(field)) {
-            recalculateEntry(entry);
+        if (field === 'packet' || field === 'sweepedPacket') {
+            recalculateEntry(entry, false); // Packet driven
         }
 
-        if (field === 'sweepedQuantity') {
-            const packet = parseFloat(entry.packet) || 0;
-            const size = parseFloat(entry.packetSize) || 0;
-            const sq = parseFloat(value) || 0;
-            const sp = size > 0 ? (sq / size) : 0;
-
-            entry.sweepedPacket = sp.toFixed(2);
-            entry.inHousePacket = (packet - sp).toFixed(2);
-            entry.inHouseQuantity = (packet * size - sq).toFixed(2);
+        if (field === 'quantity' || field === 'packetSize' || field === 'sweepedQuantity') {
+            recalculateEntry(entry, true); // Quantity/Size driven (Auto-fill Packet)
         }
 
         updatedProducts[pIndex].brandEntries[bIndex] = entry;
@@ -368,6 +446,12 @@ function LCReceive({
     const handleProductSelect = (pIndex, productName) => {
         const updatedProducts = [...stockFormData.productEntries];
         updatedProducts[pIndex].productName = productName;
+
+        // In Single mode, auto-fill the brand to match the product
+        if (!updatedProducts[pIndex].isMultiBrand && updatedProducts[pIndex].brandEntries[0]) {
+            updatedProducts[pIndex].brandEntries[0].brand = productName;
+        }
+
         const summaries = calculateSummaries(updatedProducts);
         setStockFormData({
             ...stockFormData,
@@ -414,9 +498,23 @@ function LCReceive({
 
             p.brandEntries.forEach((b, bIdx) => {
                 const brandLabel = b.brand || `Brand #${bIdx + 1}`;
+
+                // For Single mode, auto-fallback brand if empty
+                if (!p.isMultiBrand && !b.brand) b.brand = p.productName;
+
                 if (!b.brand) errors.push(`${prodLabel}: Brand is required for entry #${bIdx + 1}`);
-                if (!b.packetSize) errors.push(`${prodLabel} (${brandLabel}): Size is required`);
-                if (b.packet === '' || isNaN(parseFloat(b.packet))) errors.push(`${prodLabel} (${brandLabel}): Packet count is required`);
+
+                // Packet Size is only required in Multi mode
+                if (p.isMultiBrand && !b.packetSize) {
+                    errors.push(`${prodLabel} (${brandLabel}): Size is required`);
+                }
+
+                if (b.packet === '' || isNaN(parseFloat(b.packet))) {
+                    // Only require packet if it's multi mode or if weight isn't primary
+                    if (p.isMultiBrand) {
+                        errors.push(`${prodLabel} (${brandLabel}): Packet count is required`);
+                    }
+                }
             });
         });
 
@@ -468,6 +566,8 @@ function LCReceive({
                             sweepedQuantity: brandEntry.sweepedQuantity,
                             inHousePacket: brandEntry.inHousePacket,
                             inHouseQuantity: brandEntry.inHouseQuantity,
+                            totalInHousePacket: brandEntry.inHousePacket,
+                            totalInHouseQuantity: brandEntry.inHouseQuantity,
                         };
 
                         const encryptedData = encryptData(recordData);
@@ -518,7 +618,9 @@ function LCReceive({
                             sweepedPacket: brandEntry.sweepedPacket,
                             sweepedQuantity: brandEntry.sweepedQuantity,
                             inHousePacket: brandEntry.inHousePacket,
-                            inHouseQuantity: brandEntry.inHouseQuantity
+                            inHouseQuantity: brandEntry.inHouseQuantity,
+                            totalInHousePacket: brandEntry.inHousePacket,
+                            totalInHouseQuantity: brandEntry.inHouseQuantity
                         });
                     });
                 });
@@ -1487,7 +1589,7 @@ function LCReceive({
                                                                 </button>
                                                             </div>
                                                         </div>
-                                                        <div className="md:col-span-3 space-y-1.5">
+                                                        <div className="md:col-span-4 space-y-1.5">
                                                             <label className="text-sm font-medium text-gray-700">Product Name</label>
                                                             <div className="relative w-full" ref={el => productRefs.current[pIndex] = el}>
                                                                 <input
@@ -1536,107 +1638,28 @@ function LCReceive({
                                                                 )}
                                                             </div>
                                                         </div>
-                                                        <div className="md:col-span-2 space-y-1.5">
-                                                            <label className="text-sm font-medium text-gray-700">Brand</label>
-                                                            <div className="relative w-full" ref={el => brandRefs.current[`${pIndex}-0`] = el}>
-                                                                <input
-                                                                    type="text"
-                                                                    value={product.brandEntries[0].brand}
-                                                                    placeholder="Search brand..."
-                                                                    onChange={(e) => { handleBrandEntryChange(pIndex, 0, 'brand', e.target.value); setActiveDropdown(`lcr-brand-${pIndex}-0`); setHighlightedIndex(-1); }}
-                                                                    onFocus={() => {
-                                                                        setActiveDropdown(`lcr-brand-${pIndex}-0`);
-                                                                        setHighlightedIndex(-1);
-                                                                    }}
-                                                                    onKeyDown={(e) => handleDropdownKeyDown(e, `lcr-brand-${pIndex}-0`, (field, val) => { handleBrandEntryChange(pIndex, 0, 'brand', val); setActiveDropdown(null); }, 'brand', getFilteredBrands(product.brandEntries[0].brand, product.productName))}
-                                                                    className={`w-full h-[42px] px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm text-sm pr-14 ${product.brandEntries[0].brand ? 'placeholder:text-gray-900 placeholder:font-semibold' : 'placeholder:text-gray-400'}`}
-                                                                />
-                                                                <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-2">
-                                                                    {product.brandEntries[0].brand && (
-                                                                        <button type="button" onClick={() => { handleBrandEntryChange(pIndex, 0, 'brand', ''); setActiveDropdown(null); }} className="text-gray-400 hover:text-gray-600">
-                                                                            <XIcon className="w-4 h-4" />
-                                                                        </button>
-                                                                    )}
-                                                                    <SearchIcon className="w-4 h-4 text-gray-300 pointer-events-none" />
-                                                                </div>
-                                                                {activeDropdown === `lcr-brand-${pIndex}-0` && (
-                                                                    <div className="absolute z-[60] w-full mt-1 bg-white border border-gray-100 rounded-xl shadow-lg max-h-48 overflow-y-auto py-1">
-                                                                        {getFilteredBrands(product.brandEntries[0].brand, product.productName).map((brand, idx) => (
-                                                                            <button
-                                                                                key={idx}
-                                                                                type="button"
-                                                                                onClick={() => {
-                                                                                    handleBrandEntryChange(pIndex, 0, 'brand', brand);
-                                                                                    setActiveDropdown(null);
-                                                                                }}
-                                                                                onMouseEnter={() => setHighlightedIndex(idx)}
-                                                                                className={`w-full text-left px-4 py-2 text-sm transition-colors font-medium ${product.brandEntries[0].brand === brand ? 'bg-blue-50 text-blue-700' : highlightedIndex === idx ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-blue-50'}`}
-                                                                            >
-                                                                                {brand}
-                                                                            </button>
-                                                                        ))}
-                                                                        {getFilteredBrands(product.brandEntries[0].brand, product.productName).length === 0 && (
-                                                                            <div className="px-3 py-2 text-sm text-gray-500 italic">
-                                                                                {!product.productName ? 'Please select a product first' : 'Type to add new brand'}
-                                                                            </div>
-                                                                        )}
-                                                                    </div>
-                                                                )}
-                                                            </div>
-                                                        </div>
-                                                        <div className="md:col-span-2 space-y-1.5">
+                                                        <div className="md:col-span-3 space-y-1.5">
                                                             <label className="text-sm font-medium text-gray-700">Truck No.</label>
                                                             <input
                                                                 type="text" name="truckNo" value={product.truckNo} onChange={(e) => handleStockInputChange(e, pIndex)}
                                                                 placeholder="Truck #" autoComplete="off" className="w-full h-[42px] px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm text-sm"
                                                             />
                                                         </div>
-                                                        <div className="md:col-span-1 space-y-1.5">
-                                                            <label className="text-sm font-medium text-gray-700">Swp. Pkt</label>
-                                                            <input
-                                                                type="text"
-                                                                value={product.brandEntries[0].sweepedPacket}
-                                                                onChange={(e) => handleBrandEntryChange(pIndex, 0, 'sweepedPacket', e.target.value)}
-                                                                placeholder="Qty" autoComplete="off" className="w-full h-[42px] px-2 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm text-sm"
-                                                            />
+                                                        <div className="md:col-span-3 space-y-1.5">
+                                                            <label className="text-sm font-medium text-gray-700 text-center block w-full">Arrival Qty</label>
+                                                            <div className="relative h-[42px]">
+                                                                <input
+                                                                    type="text"
+                                                                    value={product.brandEntries[0].quantity}
+                                                                    onChange={(e) => handleBrandEntryChange(pIndex, 0, 'quantity', e.target.value)}
+                                                                    placeholder="Qty"
+                                                                    className="w-full h-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-all text-sm text-center font-bold"
+                                                                />
+                                                            </div>
                                                         </div>
-                                                        <div className="md:col-span-1 space-y-1.5">
-                                                            <label className="text-sm font-medium text-gray-700">SwpQty</label>
-                                                            <input
-                                                                type="text"
-                                                                value={product.brandEntries[0].sweepedQuantity}
-                                                                onChange={(e) => handleBrandEntryChange(pIndex, 0, 'sweepedQuantity', e.target.value)}
-                                                                placeholder="Qty" className="w-full h-[42px] px-2 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm text-sm"
-                                                            />
-                                                        </div>
-                                                        <div className="md:col-span-1 space-y-1.5">
-                                                            <label className="text-sm font-medium text-gray-700">InHouse Pkt</label>
-                                                            <input
-                                                                type="text"
-                                                                value={product.brandEntries[0].inHousePacket}
-                                                                readOnly
-                                                                placeholder="Qty" autoComplete="off" className="w-full h-[42px] px-4 py-2 bg-gray-50/80 border border-gray-200/60 rounded-lg text-gray-600 font-medium outline-none cursor-default backdrop-blur-sm text-sm"
-                                                            />
-                                                        </div>
-                                                        <div className="md:col-span-1 space-y-1.5">
-                                                            <label className="text-sm font-medium text-gray-700">InHouse Qty</label>
-                                                            <input
-                                                                type="text"
-                                                                value={product.brandEntries[0].inHouseQuantity}
-                                                                readOnly
-                                                                placeholder="Qty" className="w-full h-[42px] px-4 py-2 bg-gray-50/80 border border-gray-200/60 rounded-lg text-gray-600 font-medium outline-none cursor-default backdrop-blur-sm text-sm"
-                                                            />
-                                                        </div>
-                                                        <div className="md:col-span-1 space-y-1.5">
-                                                            <label className="text-sm font-medium text-gray-700 text-center block w-full">Packet</label>
-                                                            <input
-                                                                type="text"
-                                                                value={product.brandEntries[0].packet}
-                                                                onChange={(e) => handleBrandEntryChange(pIndex, 0, 'packet', e.target.value)}
-                                                                placeholder="Qty" autoComplete="off" className="w-full h-[42px] px-2 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm text-sm text-center"
-                                                            />
-                                                        </div>
-                                                        <div className="md:col-span-1 space-y-1.5">
+
+                                                        {/* Row 2 */}
+                                                        <div className="md:col-span-2 space-y-1.5">
                                                             <label className="text-sm font-medium text-gray-700 text-center block w-full">Size</label>
                                                             <input
                                                                 type="text"
@@ -1646,28 +1669,49 @@ function LCReceive({
                                                             />
                                                         </div>
                                                         <div className="md:col-span-2 space-y-1.5">
-                                                            <label className="text-sm font-medium text-gray-700 text-center block w-full">Total</label>
-                                                            <div className="relative h-[42px]">
-                                                                <input
-                                                                    type="text"
-                                                                    value={product.brandEntries.reduce((sum, entry) => sum + (parseFloat(entry.inHouseQuantity) || 0), 0).toFixed(2)}
-                                                                    readOnly
-                                                                    className="w-full h-full px-1 py-2 bg-gray-50/80 border border-gray-200/60 rounded-lg text-gray-600 font-bold outline-none cursor-default text-xs text-center"
-                                                                />
-                                                            </div>
+                                                            <label className="text-sm font-medium text-gray-700 text-center block w-full">Packet</label>
+                                                            <input
+                                                                type="text"
+                                                                value={product.brandEntries[0].packet}
+                                                                onChange={(e) => handleBrandEntryChange(pIndex, 0, 'packet', e.target.value)}
+                                                                placeholder="Qty" autoComplete="off" className="w-full h-[42px] px-2 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm text-sm text-center"
+                                                            />
                                                         </div>
-                                                        <div className="md:col-span-1 space-y-1.5">
-                                                            <label className="text-sm font-medium text-gray-700 text-center block w-full">Unit</label>
-                                                            <select
-                                                                value={product.brandEntries[0].unit}
-                                                                onChange={(e) => handleBrandEntryChange(pIndex, 0, 'unit', e.target.value)}
-                                                                className="w-full h-[42px] px-1 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-all backdrop-blur-sm text-sm"
-                                                            >
-                                                                <option>kg</option>
-                                                                <option>pcs</option>
-                                                                <option>boxes</option>
-                                                                <option>liters</option>
-                                                            </select>
+                                                        <div className="md:col-span-2 space-y-1.5">
+                                                            <label className="text-sm font-medium text-gray-700">Swp. Pkt</label>
+                                                            <input
+                                                                type="text"
+                                                                value={product.brandEntries[0].sweepedPacket}
+                                                                onChange={(e) => handleBrandEntryChange(pIndex, 0, 'sweepedPacket', e.target.value)}
+                                                                placeholder="Qty" autoComplete="off" className="w-full h-[42px] px-2 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm text-sm"
+                                                            />
+                                                        </div>
+                                                        <div className="md:col-span-2 space-y-1.5">
+                                                            <label className="text-sm font-medium text-gray-700">SwpQty</label>
+                                                            <input
+                                                                type="text"
+                                                                value={product.brandEntries[0].sweepedQuantity}
+                                                                onChange={(e) => handleBrandEntryChange(pIndex, 0, 'sweepedQuantity', e.target.value)}
+                                                                placeholder="Qty" className="w-full h-[42px] px-2 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm text-sm"
+                                                            />
+                                                        </div>
+                                                        <div className="md:col-span-2 space-y-1.5">
+                                                            <label className="text-sm font-medium text-gray-700">InHouse Pkt</label>
+                                                            <input
+                                                                type="text"
+                                                                value={product.brandEntries[0].inHousePacket}
+                                                                readOnly
+                                                                placeholder="Qty" autoComplete="off" className="w-full h-[42px] px-4 py-2 bg-gray-50/80 border border-gray-200/60 rounded-lg text-gray-600 font-medium outline-none cursor-default backdrop-blur-sm text-sm"
+                                                            />
+                                                        </div>
+                                                        <div className="md:col-span-2 space-y-1.5">
+                                                            <label className="text-sm font-medium text-gray-700">InHouse Qty</label>
+                                                            <input
+                                                                type="text"
+                                                                value={product.brandEntries[0].inHouseQuantity}
+                                                                readOnly
+                                                                placeholder="Qty" className="w-full h-[42px] px-4 py-2 bg-gray-50/80 border border-gray-200/60 rounded-lg text-gray-600 font-medium outline-none cursor-default backdrop-blur-sm text-sm"
+                                                            />
                                                         </div>
                                                     </div>
                                                 )}
@@ -1751,11 +1795,11 @@ function LCReceive({
                                                             />
                                                         </div>
                                                         <div className="space-y-2">
-                                                            <label className="text-sm font-medium text-gray-700">Total Quantity</label>
+                                                            <label className="text-sm font-medium text-gray-700">Total Arrival</label>
                                                             <div className="relative h-[42px]">
                                                                 <input
                                                                     type="text"
-                                                                    value={product.brandEntries.reduce((sum, entry) => sum + (parseFloat(entry.inHouseQuantity) || 0), 0).toFixed(2)}
+                                                                    value={product.brandEntries.reduce((sum, entry) => sum + (parseFloat(entry.quantity) || 0), 0).toFixed(2)}
                                                                     readOnly
                                                                     className="w-full h-full px-4 py-2 bg-gray-50/80 border border-gray-200/60 rounded-lg text-gray-600 font-semibold outline-none cursor-default"
                                                                 />
@@ -1844,7 +1888,11 @@ function LCReceive({
                                                                                 className="w-full h-9 px-2 text-sm bg-white border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-all [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                                                                             />
                                                                             <input
-                                                                                type="number" value={entry.quantity} readOnly className="w-full h-9 px-2 text-sm bg-gray-50 border border-gray-200 rounded-lg text-gray-500 font-medium [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                                                                                type="number"
+                                                                                value={entry.quantity}
+                                                                                onChange={(e) => handleBrandEntryChange(pIndex, bIndex, 'quantity', e.target.value)}
+                                                                                placeholder="Qty"
+                                                                                className="w-full h-9 px-2 text-sm bg-white border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-all [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                                                                             />
                                                                             <select
                                                                                 value={entry.unit} onChange={(e) => handleBrandEntryChange(pIndex, bIndex, 'unit', e.target.value)}

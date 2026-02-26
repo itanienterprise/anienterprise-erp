@@ -21,7 +21,7 @@ const Customer = ({
 }) => {
     const [showForm, setShowForm] = useState(false);
     const [showFilterPanel, setShowFilterPanel] = useState(false);
-    const [filters, setFilters] = useState({ type: 'General Customer' });
+    const [filters, setFilters] = useState({ type: 'All Customer' });
     const filterButtonRef = useRef(null);
     const filterPanelRef = useRef(null);
     const [isSubmitting, setIsSubmitting] = useState(false);
@@ -409,7 +409,7 @@ const Customer = ({
         }
 
         if (filters.type && filters.type !== 'All Customer') {
-            filtered = filtered.filter(c => c.customerType === filters.type);
+            filtered = filtered.filter(c => (c.customerType || 'General Customer') === filters.type);
         }
 
         return sortData(filtered);
@@ -498,7 +498,7 @@ const Customer = ({
                                         <h4 className="font-bold text-gray-900">Advanced Filters</h4>
                                         <button
                                             onClick={() => {
-                                                setFilters({ type: 'General Customer' });
+                                                setFilters({ type: 'All Customer' });
                                                 setShowFilterPanel(false);
                                             }}
                                             className="text-xs text-rose-500 hover:text-rose-600 font-medium bg-rose-50 px-2 py-1 rounded-lg transition-colors"
