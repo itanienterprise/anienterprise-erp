@@ -3,6 +3,7 @@ import { SearchIcon, XIcon, BarChartIcon, FunnelIcon, MapPinIcon } from '../../I
 import CustomDatePicker from "../../shared/CustomDatePicker";
 import { generateWarehouseReportPDF } from '../../../utils/pdfGenerator';
 import { formatDate } from '../../../utils/helpers';
+import { calculatePktRemainder } from '../../../utils/stockHelpers';
 
 const WarehouseReport = ({
     isOpen,
@@ -88,11 +89,24 @@ const WarehouseReport = ({
                     si.brandEntries.forEach(be => {
                         const brandName = (be.brand || '').trim().toLowerCase();
                         const brandKey = `${prodName}|${brandName}`;
+                        const sQty = parseFloat(be.quantity) || 0;
+
                         if (globalStockMap[brandKey]) {
-                            const sQty = parseFloat(be.quantity) || 0;
                             globalStockMap[brandKey].inhouseQty -= sQty;
                             const size = globalStockMap[brandKey].pktSize || 0;
                             if (size > 0) globalStockMap[brandKey].inhousePkt -= (sQty / size);
+                        } else if (brandName === '') {
+                            // Single-entry: try product-name-as-brand key (e.g., 'maize|-')
+                            const fallbackKey = `${prodName}|-`;
+                            const target = globalStockMap[fallbackKey] ||
+                                Object.entries(globalStockMap).find(([k]) => k.startsWith(`${prodName}|`))?.[1];
+                            const targetKey = globalStockMap[fallbackKey] ? fallbackKey :
+                                Object.keys(globalStockMap).find(k => k.startsWith(`${prodName}|`));
+                            if (targetKey && globalStockMap[targetKey]) {
+                                globalStockMap[targetKey].inhouseQty -= sQty;
+                                const size = globalStockMap[targetKey].pktSize || 0;
+                                if (size > 0) globalStockMap[targetKey].inhousePkt -= (sQty / size);
+                            }
                         }
                     });
                 }
@@ -106,7 +120,7 @@ const WarehouseReport = ({
         globalStockMap[key].inhousePkt = Math.max(0, globalStockMap[key].inhousePkt);
     });
 
-    // 2. Calculate Sales Map by Warehouse: { [whName]: { [brandKey]: qty } }
+    // 2. Calculate Sales Map by Warehouse: { [whKey]: { [brandKey]: qty } }
     const salesMapByWh = {};
     salesRecords.forEach(sale => {
         if (sale.items) {
@@ -116,12 +130,21 @@ const WarehouseReport = ({
                     si.brandEntries.forEach(be => {
                         const brandName = (be.brand || '').trim().toLowerCase();
                         const whNameRaw = (be.warehouseName || '').trim();
-                        const whName = whNameRaw || 'General / In Stock';
-                        const brandKey = `${prodName}|${brandName}`;
+                        const whKey = (whNameRaw || 'General / In Stock').toLowerCase();
 
-                        if (!salesMapByWh[whName]) salesMapByWh[whName] = {};
-                        if (!salesMapByWh[whName][brandKey]) salesMapByWh[whName][brandKey] = { qty: 0 };
-                        salesMapByWh[whName][brandKey].qty += parseFloat(be.quantity) || 0;
+                        // Store under exact key and '-' fallback for single-entry products
+                        const brandKey = brandName === '' ? `${prodName}|-` : `${prodName}|${brandName}`;
+
+                        if (!salesMapByWh[whKey]) salesMapByWh[whKey] = {};
+                        if (!salesMapByWh[whKey][brandKey]) salesMapByWh[whKey][brandKey] = { qty: 0 };
+                        salesMapByWh[whKey][brandKey].qty += parseFloat(be.quantity) || 0;
+
+                        // Also store under original empty-brand key for multi-brand fallback
+                        if (brandName === '') {
+                            const emptyKey = `${prodName}|`;
+                            if (!salesMapByWh[whKey][emptyKey]) salesMapByWh[whKey][emptyKey] = { qty: 0 };
+                            salesMapByWh[whKey][emptyKey].qty += parseFloat(be.quantity) || 0;
+                        }
                     });
                 }
             });
@@ -184,8 +207,19 @@ const WarehouseReport = ({
     Object.values(groupedData).forEach(whGroup => {
         Object.values(whGroup.products).forEach(pGroup => {
             Object.values(pGroup.brands).forEach(brandItem => {
-                const brandKey = `${pGroup.productName.toLowerCase()}|${brandItem.brand.toLowerCase()}`;
-                const saleData = salesMapByWh[whGroup.whName]?.[brandKey];
+                const whKey = whGroup.whName.toLowerCase();
+                const prodNameLower = pGroup.productName.toLowerCase();
+                const brandNameLower = brandItem.brand.toLowerCase();
+
+                const exactBrandKey = `${prodNameLower}|${brandNameLower}`;
+                let saleData = salesMapByWh[whKey]?.[exactBrandKey];
+
+                // If no exact match, and it's a single-entry product (brand equals product name)
+                if (!saleData && brandNameLower === prodNameLower) {
+                    saleData = salesMapByWh[whKey]?.[`${prodNameLower}|-`] ||
+                        salesMapByWh[whKey]?.[`${prodNameLower}|`];
+                }
+
                 if (saleData) {
                     const sQty = saleData.qty;
                     const size = brandItem.packetSize || 0;
@@ -193,8 +227,10 @@ const WarehouseReport = ({
                     if (size > 0) brandItem.whPkt = Math.max(0, brandItem.whPkt - (sQty / size));
                 }
             });
-            // Filter out empty brands (unless they have global inhouse stock and it's the General group)
-            const brandList = Object.values(pGroup.brands).filter(b => b.whQty > 0 || (whGroup.whName === 'General / In Stock' && b.inhouseQty > 0));
+            // Filter out empty brands and SORT them
+            const brandList = Object.values(pGroup.brands)
+                .filter(b => b.whQty > 0 || (whGroup.whName === 'General / In Stock' && b.inhouseQty > 0))
+                .sort((a, b) => (a.brand || '').localeCompare(b.brand || '', undefined, { sensitivity: 'base' }));
             pGroup.brands = brandList;
         });
         // Filter out empty products
@@ -203,8 +239,8 @@ const WarehouseReport = ({
 
     const displayGroups = Object.values(groupedData).filter(wh => wh.products.length > 0).map(wh => ({
         ...wh,
-        products: wh.products.sort((a, b) => a.productName.localeCompare(b.productName))
-    })).sort((a, b) => a.whName.localeCompare(b.whName));
+        products: wh.products.sort((a, b) => (a.productName || '').localeCompare(b.productName || '', undefined, { sensitivity: 'base' }))
+    })).sort((a, b) => (a.whName || '').localeCompare(b.whName || '', undefined, { sensitivity: 'base' }));
 
     // 5. Overall Totals (Avoid double counting brands)
     const uniqueBrandsInReport = new Set();
@@ -220,20 +256,32 @@ const WarehouseReport = ({
         const globalInfo = globalStockMap[brandKey];
         if (globalInfo) {
             acc.totalInHouseQty += globalInfo.inhouseQty;
-            acc.totalInHousePkt += globalInfo.inhousePkt;
+            const size = globalInfo.pktSize || 0;
+            const whole = Math.floor(globalInfo.inhousePkt);
+            acc.totalInHouseWhole += whole;
+            acc.totalInHouseRem += (globalInfo.inhouseQty - (whole * size));
         }
         return acc;
-    }, { totalInHouseQty: 0, totalInHousePkt: 0, totalWhQty: 0, totalWhPkt: 0 });
+    }, { totalInHouseQty: 0, totalInHouseWhole: 0, totalInHouseRem: 0, totalWhQty: 0, totalWhWhole: 0, totalWhRem: 0 });
 
     // Calculate total warehouse stock separately because physical stock across warehouses IS additive
     displayGroups.forEach(wh => {
         wh.products.forEach(p => {
             p.brands.forEach(b => {
-                totals.totalWhQty += b.whQty;
-                totals.totalWhPkt += b.whPkt;
+                const qty = b.whQty || 0;
+                const pkt = b.whPkt || 0;
+                const size = b.packetSize || 0;
+                const whole = Math.floor(pkt);
+                totals.totalWhQty += qty;
+                totals.totalWhWhole += whole;
+                totals.totalWhRem += (qty - (whole * size));
             });
         });
     });
+
+    // Final rounding for remainders
+    totals.totalInHouseRem = Math.round(totals.totalInHouseRem);
+    totals.totalWhRem = Math.round(totals.totalWhRem);
 
     const getUniqueOptions = (key) => {
         return [...new Set(warehouseData.map(item => (item[key] || '').trim()).filter(Boolean))].sort();
@@ -388,7 +436,7 @@ const WarehouseReport = ({
                         <div className="text-center space-y-1">
                             <h1 className="text-4xl font-bold text-gray-900 tracking-tight">M/S ANI ENTERPRISE</h1>
                             <p className="text-[14px] text-gray-600">766, H.M Tower, Level-06, Borogola, Bogura-5800, Bangladesh</p>
-                            <p className="text-[14px] text-gray-600">+8802588813057, +8801711-406898, anienterprise051@gmail.com, www.anienterprises.com.bd</p>
+                            <p className="text-[14px] text-gray-600">+8802588813057, anienterprise051@gmail.com, www.anienterprises.com.bd</p>
                         </div>
 
                         <div className="border-t-2 border-gray-900 w-full mt-4"></div>
@@ -418,9 +466,9 @@ const WarehouseReport = ({
                                         <th className="border-r border-gray-900 px-2 py-1 text-center text-[12px] font-bold text-gray-900 uppercase tracking-wider w-[4%]">SL</th>
                                         <th className="border-r border-gray-900 px-2 py-1 text-left text-[12px] font-bold text-gray-900 uppercase tracking-wider w-[10%]">Warehouse</th>
                                         <th className="border-r border-gray-900 px-2 py-1 text-left text-[12px] font-bold text-gray-900 uppercase tracking-wider w-[15%]">Product Name</th>
-                                        <th className="border-r border-gray-900 px-2 py-1 text-left text-[12px] font-bold text-gray-900 uppercase tracking-wider w-[17%]">Brand</th>
-                                        <th className="border-r border-gray-900 px-2 py-1 text-right text-[12px] font-bold text-gray-900 uppercase tracking-wider w-[12%]">Inhouse QTY</th>
-                                        <th className="border-r border-gray-900 px-2 py-1 text-right text-[12px] font-bold text-gray-900 uppercase tracking-wider w-[12%]">Inhouse PKT</th>
+                                        <th className="border-r border-gray-900 px-2 py-1 text-left text-[12px] font-bold text-gray-900 uppercase tracking-wider w-[15%]">Brand</th>
+                                        <th className="border-r border-gray-900 px-2 py-1 text-right text-[12px] font-bold text-gray-900 uppercase tracking-wider w-[13%]">Inhouse QTY</th>
+                                        <th className="border-r border-gray-900 px-2 py-1 text-right text-[12px] font-bold text-gray-900 uppercase tracking-wider w-[13%]">Inhouse PKT</th>
                                         <th className="border-r border-gray-900 px-2 py-1 text-right text-[12px] font-bold text-gray-900 uppercase tracking-wider w-[15%]">Warehouse QTY</th>
                                         <th className="px-2 py-1 text-right text-[12px] font-bold text-gray-900 uppercase tracking-wider w-[15%]">Warehouse PKT</th>
                                     </tr>
@@ -455,16 +503,22 @@ const WarehouseReport = ({
                                                                     {brandItem.brand || '-'}
                                                                 </td>
                                                                 <td className="border-r border-gray-900 px-2 py-1 text-right text-[13px] text-gray-900 align-top font-medium">
-                                                                    {Math.round(parseFloat(brandItem.inhouseQty) || 0).toLocaleString()}
+                                                                    {Math.round(parseFloat(brandItem.inhouseQty) || 0).toLocaleString()} <span className="text-[10px] text-gray-400">kg</span>
                                                                 </td>
                                                                 <td className="border-r border-gray-900 px-2 py-1 text-right text-[13px] text-gray-900 align-top font-medium">
-                                                                    {Math.round(parseFloat(brandItem.inhousePkt) || 0).toLocaleString()}
+                                                                    {(() => {
+                                                                        const { whole, remainder } = calculatePktRemainder(brandItem.inhouseQty, brandItem.packetSize);
+                                                                        return `${whole.toLocaleString()}${remainder > 0 ? ` - ${remainder.toLocaleString()} kg` : ''}`;
+                                                                    })()}
                                                                 </td>
                                                                 <td className="border-r border-gray-900 px-2 py-1 text-right text-[13px] text-gray-900 align-top font-bold">
-                                                                    {Math.round(parseFloat(brandItem.whQty) || 0).toLocaleString()}
+                                                                    {Math.round(parseFloat(brandItem.whQty) || 0).toLocaleString()} <span className="text-[10px] text-gray-400">kg</span>
                                                                 </td>
                                                                 <td className="px-2 py-1 text-right text-[13px] text-gray-900 align-top font-bold">
-                                                                    {Math.round(parseFloat(brandItem.whPkt) || 0).toLocaleString()}
+                                                                    {(() => {
+                                                                        const { whole, remainder } = calculatePktRemainder(brandItem.whQty, brandItem.packetSize);
+                                                                        return `${whole.toLocaleString()}${remainder > 0 ? ` - ${remainder.toLocaleString()} kg` : ''}`;
+                                                                    })()}
                                                                 </td>
                                                             </tr>
                                                         ))}
@@ -472,16 +526,27 @@ const WarehouseReport = ({
                                                             <tr className="border-b border-gray-900 bg-gray-50/50">
                                                                 <td className="border-r border-gray-900 px-2 py-1 text-[13px] font-bold text-gray-900 text-right uppercase tracking-wider bg-gray-50/30 italic">Sub Total</td>
                                                                 <td className="border-r border-gray-900 px-2 py-1 text-right text-[13px] font-black text-gray-900">
-                                                                    {Math.round(pGroup.brands.reduce((sum, b) => sum + (parseFloat(b.inhouseQty) || 0), 0)).toLocaleString()}
+                                                                    {Math.round(pGroup.brands.reduce((sum, b) => sum + (parseFloat(b.inhouseQty) || 0), 0)).toLocaleString()} <span className="text-[10px] text-gray-400">kg</span>
                                                                 </td>
                                                                 <td className="border-r border-gray-900 px-2 py-1 text-right text-[13px] font-black text-gray-900 text-emerald-700">
-                                                                    {Math.round(pGroup.brands.reduce((sum, b) => sum + (parseFloat(b.inhousePkt) || 0), 0)).toLocaleString()}
+                                                                    {(() => {
+                                                                        const totalQty = pGroup.brands.reduce((sum, b) => sum + (parseFloat(b.inhouseQty) || 0), 0);
+                                                                        // Use first brand's size for subtotal rollover (standard for same-product groups)
+                                                                        const pktSize = pGroup.brands[0]?.packetSize || 0;
+                                                                        const { whole, remainder } = calculatePktRemainder(totalQty, pktSize);
+                                                                        return `${whole.toLocaleString()}${remainder > 0 ? ` - ${remainder.toLocaleString()} kg` : ''}`;
+                                                                    })()}
                                                                 </td>
                                                                 <td className="border-r border-gray-900 px-2 py-1 text-right text-[13px] font-black text-gray-900">
-                                                                    {Math.round(pGroup.brands.reduce((sum, b) => sum + (parseFloat(b.whQty) || 0), 0)).toLocaleString()}
+                                                                    {Math.round(pGroup.brands.reduce((sum, b) => sum + (parseFloat(b.whQty) || 0), 0)).toLocaleString()} <span className="text-[10px] text-gray-400">kg</span>
                                                                 </td>
                                                                 <td className="px-2 py-1 text-right text-[13px] font-black text-gray-900 text-blue-700">
-                                                                    {Math.round(pGroup.brands.reduce((sum, b) => sum + (parseFloat(b.whPkt) || 0), 0)).toLocaleString()}
+                                                                    {(() => {
+                                                                        const totalQty = pGroup.brands.reduce((sum, b) => sum + (parseFloat(b.whQty) || 0), 0);
+                                                                        const pktSize = pGroup.brands[0]?.packetSize || 0;
+                                                                        const { whole, remainder } = calculatePktRemainder(totalQty, pktSize);
+                                                                        return `${whole.toLocaleString()}${remainder > 0 ? ` - ${remainder.toLocaleString()} kg` : ''}`;
+                                                                    })()}
                                                                 </td>
                                                             </tr>
                                                         )}
@@ -500,16 +565,16 @@ const WarehouseReport = ({
                                         <tr className="bg-gray-100 border-t-2 border-gray-900">
                                             <td colSpan="4" className="px-2 py-1.5 text-[14px] font-black text-gray-900 text-right uppercase tracking-wider border-r border-gray-900">Grand Total</td>
                                             <td className="px-2 py-1.5 text-[14px] text-right font-black text-gray-900 border-r border-gray-900">
-                                                {Math.round(totals.totalInHouseQty).toLocaleString()}
+                                                {Math.round(totals.totalInHouseQty).toLocaleString()} <span className="text-[11px] text-gray-400">kg</span>
                                             </td>
                                             <td className="px-2 py-1.5 text-[14px] text-right font-black text-gray-900 border-r border-gray-900 text-emerald-700">
-                                                {Math.round(totals.totalInHousePkt).toLocaleString()}
+                                                {`${totals.totalInHouseWhole.toLocaleString()}${totals.totalInHouseRem > 0 ? ` - ${totals.totalInHouseRem.toLocaleString()} kg` : ''}`}
                                             </td>
                                             <td className="px-2 py-1.5 text-[14px] text-right font-black text-gray-900 border-r border-gray-900">
-                                                {Math.round(totals.totalWhQty).toLocaleString()}
+                                                {Math.round(totals.totalWhQty).toLocaleString()} <span className="text-[11px] text-gray-400">kg</span>
                                             </td>
                                             <td className="px-2 py-1.5 text-[14px] text-right font-black text-gray-900 text-blue-700">
-                                                {Math.round(totals.totalWhPkt).toLocaleString()}
+                                                {`${totals.totalWhWhole.toLocaleString()}${totals.totalWhRem > 0 ? ` - ${totals.totalWhRem.toLocaleString()} kg` : ''}`}
                                             </td>
                                         </tr>
                                     </tfoot>
@@ -527,7 +592,9 @@ const WarehouseReport = ({
                                 <div className="px-4 py-3 space-y-1.5 text-center">
                                     <div>
                                         <span className="text-[12px] font-semibold text-gray-500">PKT: </span>
-                                        <span className="text-[15px] font-black text-gray-900">{Math.round(totals.totalInHousePkt).toLocaleString()}</span>
+                                        <span className="text-[15px] font-black text-gray-900">
+                                            {`${totals.totalInHouseWhole.toLocaleString()}${totals.totalInHouseRem > 0 ? ` - ${totals.totalInHouseRem.toLocaleString()} kg` : ''}`}
+                                        </span>
                                     </div>
                                     <div>
                                         <span className="text-[12px] font-semibold text-gray-500">QTY: </span>
@@ -544,7 +611,9 @@ const WarehouseReport = ({
                                 <div className="px-4 py-3 space-y-1.5 text-center">
                                     <div>
                                         <span className="text-[12px] font-semibold text-gray-500">PKT: </span>
-                                        <span className="text-[15px] font-black text-blue-700">{Math.round(totals.totalWhPkt).toLocaleString()}</span>
+                                        <span className="text-[15px] font-black text-blue-700">
+                                            {`${totals.totalWhWhole.toLocaleString()}${totals.totalWhRem > 0 ? ` - ${totals.totalWhRem.toLocaleString()} kg` : ''}`}
+                                        </span>
                                     </div>
                                     <div>
                                         <span className="text-[12px] font-semibold text-gray-500">QTY: </span>

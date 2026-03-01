@@ -23,6 +23,7 @@ import { API_BASE_URL } from '../../../utils/helpers';
 import { encryptData, decryptData } from '../../../utils/encryption';
 import axios from 'axios';
 import { ChevronDownIcon } from '../../Icons';
+import { calculatePktRemainder } from '../../../utils/stockHelpers';
 
 const WarehouseManagement = () => {
     const [activeTab, setActiveTab] = useState('stock'); // 'stock' or 'warehouses'
@@ -136,7 +137,8 @@ const WarehouseManagement = () => {
 
             // Track which unique product names have LC records (only those with positive stock)
             const activeProdKeys = Object.keys(globalInHouseMap).filter(key => globalInHouseMap[key].qty > 0);
-            const uniqueProdsWithLC = [...new Set(activeProdKeys.map(k => k.split('|')[0]))];
+            const uniqueProdsWithLC = [...new Set(activeProdKeys.map(k => k.split('|')[0]))]
+                .sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
             setProductsWithLC(uniqueProdsWithLC);
 
             // 2. Decrypt and normalize Warehouse records
@@ -331,13 +333,28 @@ const WarehouseManagement = () => {
                         saleItem.brandEntries.forEach(entry => {
                             const brandName = (entry.brand || '').trim().toLowerCase();
                             const brandKey = `${prodName}|${brandName}`;
+                            const sQty = parseFloat(entry.quantity) || 0;
+
                             if (brands[brandKey]) {
-                                const sQty = parseFloat(entry.quantity) || 0;
-                                // Use the brand's own packet size as the primary reference for stock reduction
+                                // Exact match (multi-brand products)
                                 const pktSize = brands[brandKey].packetSize || parseFloat(saleItem.packetSize || entry.packetSize) || 0;
                                 brands[brandKey].inhouseQty -= sQty;
-                                if (pktSize > 0) {
-                                    brands[brandKey].inhousePkt -= (sQty / pktSize);
+                                if (pktSize > 0) brands[brandKey].inhousePkt -= (sQty / pktSize);
+                            } else if (brandName === '') {
+                                // Single-entry product: sale has no brand; warehouse record uses product name as brand
+                                const fallbackKey = `${prodName}|${prodName}`;
+                                if (brands[fallbackKey]) {
+                                    const pktSize = brands[fallbackKey].packetSize || parseFloat(saleItem.packetSize || entry.packetSize) || 0;
+                                    brands[fallbackKey].inhouseQty -= sQty;
+                                    if (pktSize > 0) brands[fallbackKey].inhousePkt -= (sQty / pktSize);
+                                } else {
+                                    // Last fallback: find the only brand key that starts with this product name
+                                    const matchingKey = Object.keys(brands).find(k => k.startsWith(`${prodName}|`));
+                                    if (matchingKey) {
+                                        const pktSize = brands[matchingKey].packetSize || parseFloat(saleItem.packetSize || entry.packetSize) || 0;
+                                        brands[matchingKey].inhouseQty -= sQty;
+                                        if (pktSize > 0) brands[matchingKey].inhousePkt -= (sQty / pktSize);
+                                    }
                                 }
                             }
                         });
@@ -430,6 +447,11 @@ const WarehouseManagement = () => {
             return sum + (globalBrandTotals[key]?.inhouseQty || 0);
         }, 0);
 
+        // Build a set of product names currently in view (for single-entry product lookup)
+        const uniqueProductsInView = new Set(
+            itemsWithStock.map(item => (item.productName || item.product || '').trim().toLowerCase()).filter(Boolean)
+        );
+
         // Calculate total sales for products currently in view
         // 2. Total Warehouse Stock should be the physical stock present in the warehouses currently in view.
         let totalWarehouseSalesInView = 0;
@@ -449,6 +471,10 @@ const WarehouseManagement = () => {
                             // AND that warehouse is currently in the filtered view.
                             if (whName && whName !== 'general / in stock' && currentWhNamesLower.has(whName)) {
                                 if (uniqueBrandsInView.has(key)) {
+                                    // Multi-brand: exact match
+                                    totalWarehouseSalesInView += (parseFloat(be.quantity) || 0);
+                                } else if (brandName === '' && uniqueProductsInView.has(prodName)) {
+                                    // Single-entry product: brand is empty, match by product name alone
                                     totalWarehouseSalesInView += (parseFloat(be.quantity) || 0);
                                 }
                             }
@@ -629,14 +655,32 @@ const WarehouseManagement = () => {
                             const whName = (entry.warehouseName || '').trim();
                             const brandName = (entry.brand || '').trim();
 
-                            if (groups[whName] && groups[whName].products[prodName] && groups[whName].products[prodName].brands[brandName]) {
-                                const bObj = groups[whName].products[prodName].brands[brandName];
-                                const sQty = parseFloat(entry.quantity) || 0;
-                                const pktSize = parseFloat(bObj.packetSize) || parseFloat(saleItem.packetSize || entry.packetSize) || 0;
+                            if (!groups[whName] || !groups[whName].products[prodName]) return;
 
+                            const sQty = parseFloat(entry.quantity) || 0;
+
+                            // Try exact brand match first
+                            if (groups[whName].products[prodName].brands[brandName]) {
+                                const bObj = groups[whName].products[prodName].brands[brandName];
+                                const pktSize = parseFloat(bObj.packetSize) || parseFloat(saleItem.packetSize || entry.packetSize) || 0;
                                 bObj.whQty -= sQty;
-                                if (pktSize > 0) {
-                                    bObj.whPkt -= (sQty / pktSize);
+                                if (pktSize > 0) bObj.whPkt -= (sQty / pktSize);
+                            } else if (brandName === '') {
+                                // Single-entry product: sale has empty brand, warehouse record may have '-' brand
+                                const fallbackBrand = groups[whName].products[prodName].brands['-'];
+                                if (fallbackBrand) {
+                                    const pktSize = parseFloat(fallbackBrand.packetSize) || parseFloat(saleItem.packetSize || entry.packetSize) || 0;
+                                    fallbackBrand.whQty -= sQty;
+                                    if (pktSize > 0) fallbackBrand.whPkt -= (sQty / pktSize);
+                                } else {
+                                    // No '-' brand either, try the first (and only) brand for this product in this warehouse
+                                    const brandKeys = Object.keys(groups[whName].products[prodName].brands);
+                                    if (brandKeys.length === 1) {
+                                        const bObj = groups[whName].products[prodName].brands[brandKeys[0]];
+                                        const pktSize = parseFloat(bObj.packetSize) || parseFloat(saleItem.packetSize || entry.packetSize) || 0;
+                                        bObj.whQty -= sQty;
+                                        if (pktSize > 0) bObj.whPkt -= (sQty / pktSize);
+                                    }
                                 }
                             }
                         });
@@ -658,12 +702,15 @@ const WarehouseManagement = () => {
         return Object.values(groups)
             .map(wh => ({
                 ...wh,
-                products: Object.values(wh.products).map(p => ({
-                    ...p,
-                    brands: Object.values(p.brands)
-                }))
+                products: Object.values(wh.products)
+                    .sort((a, b) => (a.productName || '').localeCompare(b.productName || '', undefined, { sensitivity: 'base' }))
+                    .map(p => ({
+                        ...p,
+                        brands: Object.values(p.brands).sort((a, b) => (a.brand || '').localeCompare(b.brand || '', undefined, { sensitivity: 'base' }))
+                    }))
             }))
-            .filter(wh => wh.products.length > 0);
+            .filter(wh => wh.products.length > 0)
+            .sort((a, b) => a.whName.localeCompare(b.whName, undefined, { sensitivity: 'base' }));
     }, [warehouseData, uniqueWarehouses]);
 
     const handleInputChange = (e) => {
@@ -1236,11 +1283,8 @@ const WarehouseManagement = () => {
                                                                                 </div>
                                                                                 <div className="text-sm text-black text-right font-bold">
                                                                                     {(() => {
-                                                                                        const pkt = brand.inhousePkt || 0;
-                                                                                        const size = brand.packetSize || 0;
-                                                                                        const whole = Math.floor(pkt);
-                                                                                        const remainder = Math.round((pkt % 1) * size);
-                                                                                        return remainder > 0 ? `${whole.toLocaleString()} - ${remainder.toLocaleString()} kg` : whole.toLocaleString();
+                                                                                        const { whole, remainder } = calculatePktRemainder(brand.inhouseQty, brand.packetSize);
+                                                                                        return `${whole.toLocaleString()} - ${remainder.toLocaleString()} kg`;
                                                                                     })()}
                                                                                 </div>
                                                                                 <div className="text-sm text-black text-right font-bold">
@@ -1248,11 +1292,8 @@ const WarehouseManagement = () => {
                                                                                 </div>
                                                                                 <div className="text-sm text-black text-right font-bold">
                                                                                     {(() => {
-                                                                                        const pkt = brand.whPkt || 0;
-                                                                                        const size = brand.packetSize || 0;
-                                                                                        const whole = Math.floor(pkt);
-                                                                                        const remainder = Math.round((pkt % 1) * size);
-                                                                                        return remainder > 0 ? `${whole.toLocaleString()} - ${remainder.toLocaleString()} kg` : whole.toLocaleString();
+                                                                                        const { whole, remainder } = calculatePktRemainder(brand.whQty, brand.packetSize);
+                                                                                        return `${whole.toLocaleString()} - ${remainder.toLocaleString()} kg`;
                                                                                     })()}
                                                                                 </div>
                                                                                 <div className="flex items-center justify-end gap-2">

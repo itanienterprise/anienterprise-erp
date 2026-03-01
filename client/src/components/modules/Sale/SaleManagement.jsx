@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { EditIcon, TrashIcon, XIcon, SearchIcon, FunnelIcon, ChevronDownIcon, EyeIcon, ReceiptIcon, BarChartIcon, TrendingUpIcon, DollarSignIcon, FileTextIcon } from '../../Icons';
 import { generateSaleInvoicePDF } from '../../../utils/pdfGenerator';
-import { API_BASE_URL, SortIcon } from '../../../utils/helpers';
+import { API_BASE_URL, SortIcon, formatDate } from '../../../utils/helpers';
 import { encryptData, decryptData } from '../../../utils/encryption';
 import CustomDatePicker from '../../shared/CustomDatePicker';
 import './SaleManagement.css';
@@ -39,7 +39,7 @@ const SaleManagement = ({
     };
 
     const [formData, setFormData] = useState({
-        date: new Date().toISOString().split('T')[0],
+        date: '',
         invoiceNo: '',
         customerId: '',
         companyName: '',
@@ -66,7 +66,8 @@ const SaleManagement = ({
         dueAmount: '0.00',
         paymentMethod: 'Cash',
         status: 'Pending',
-        saleType: saleType // Initialize with prop value
+        saleType: saleType, // Initialize with prop value
+        previousBalance: '0.00'
     });
 
     useEffect(() => {
@@ -627,6 +628,7 @@ const SaleManagement = ({
                     setShowForm(false);
                     resetForm();
                     fetchSales();
+                    fetchCustomers();
                     fetchStockRecords();
                     fetchWarehouses();
                 }, 1500);
@@ -643,7 +645,7 @@ const SaleManagement = ({
 
     const resetForm = () => {
         setFormData({
-            date: new Date().toISOString().split('T')[0],
+            date: '',
             invoiceNo: '',
             customerId: '',
             companyName: '',
@@ -670,7 +672,8 @@ const SaleManagement = ({
             dueAmount: '0.00',
             paymentMethod: 'Cash',
             status: 'Pending',
-            saleType: saleType
+            saleType: saleType,
+            previousBalance: '0.00'
         });
         setCustomerSearch('');
         setProductSearch('');
@@ -725,7 +728,8 @@ const SaleManagement = ({
         setFormData({
             ...sale,
             items: initialItems,
-            discount: sale.discount || '0.00'
+            discount: sale.discount || '0.00',
+            previousBalance: sale.previousBalance || '0.00'
         });
         setEditingId(sale._id);
         setShowForm(true);
@@ -858,13 +862,24 @@ const SaleManagement = ({
     };
 
     const handleCustomerSelect = (customer) => {
+        // Calculate Previous Balance
+        const salesHistory = customer.salesHistory || [];
+        const paymentHistory = customer.paymentHistory || [];
+
+        const totalAmount = salesHistory.reduce((sum, item) => sum + (parseFloat(item.amount) || 0), 0);
+        const totalSalesPaid = salesHistory.reduce((sum, item) => sum + (parseFloat(item.paid) || 0), 0);
+        const totalDiscount = salesHistory.reduce((sum, item) => sum + (parseFloat(item.discount) || 0), 0);
+        const totalHistoryPaid = paymentHistory.reduce((sum, item) => sum + (parseFloat(item.amount) || 0), 0);
+        const previousBalance = Math.max(0, totalAmount - totalSalesPaid - totalDiscount - totalHistoryPaid);
+
         setFormData(prev => ({
             ...prev,
             customerId: customer._id,
             companyName: customer.companyName || '',
             customerName: customer.customerName || '',
             address: customer.address || customer.location || '',
-            contact: customer.phone || ''
+            contact: customer.phone || '',
+            previousBalance: previousBalance.toFixed(2)
         }));
         setActiveDropdown(null);
     };
@@ -877,7 +892,8 @@ const SaleManagement = ({
                 customerId: '',
                 customerName: '',
                 address: '',
-                contact: ''
+                contact: '',
+                previousBalance: '0.00'
             }));
             setCompanyNameSearch('');
             setActiveDropdown(null);
@@ -978,7 +994,7 @@ const SaleManagement = ({
                             <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Transaction Date</span>
                             <div className="font-bold text-gray-900 flex items-center gap-2">
                                 <div className="w-2 h-2 rounded-full bg-blue-500"></div>
-                                {viewData.date}
+                                {formatDate(viewData.date)}
                             </div>
                         </div>
                         <div className="space-y-1.5">
@@ -1139,10 +1155,14 @@ const SaleManagement = ({
 
                     <form onSubmit={handleSubmit} autoComplete="off" className="grid grid-cols-1 md:grid-cols-2 gap-6 relative z-10">
                         <div className="grid grid-cols-1 md:grid-cols-6 gap-4 col-span-2">
-                            <div className="space-y-2">
-                                <label className="text-sm font-medium text-gray-700">Date</label>
-                                <input type="date" name="date" value={formData.date} onChange={handleInputChange} className="w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm" required />
-                            </div>
+                            <CustomDatePicker
+                                label="Date"
+                                name="date"
+                                value={formData.date}
+                                onChange={handleInputChange}
+                                required
+                                compact={true}
+                            />
                             <div className="space-y-2">
                                 <label className="text-sm font-medium text-gray-700">Invoice No</label>
                                 <input type="text" name="invoiceNo" value={formData.invoiceNo} onChange={handleInputChange} placeholder="SALE-001" className="w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm" required />
@@ -1651,7 +1671,7 @@ const SaleManagement = ({
                                                 className={`hover:bg-blue-50/50 transition-all group border-b border-gray-50 last:border-0 align-middle ${isMultiple ? 'cursor-pointer' : ''}`}
                                             >
                                                 <td className="px-3 py-4 whitespace-nowrap">
-                                                    <div className="text-[13px] font-medium text-gray-600">{sale.date}</div>
+                                                    <div className="text-[13px] font-medium text-gray-600">{formatDate(sale.date)}</div>
                                                 </td>
                                                 <td className="px-3 py-4 whitespace-nowrap text-center">
                                                     <div className="text-[13px] font-semibold text-gray-800">{sale.invoiceNo || '-'}</div>
@@ -1737,7 +1757,7 @@ const SaleManagement = ({
                                                 <td className="px-3 py-4 text-center whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
                                                     <div className="flex items-center justify-center gap-1">
                                                         <button
-                                                            onClick={() => generateSaleInvoicePDF(sale)}
+                                                            onClick={() => generateSaleInvoicePDF(sale, customers)}
                                                             className="p-2 hover:bg-emerald-100 text-emerald-600 rounded-xl transition-all hover:scale-110 active:scale-90"
                                                             title="Generate Invoice/Challan"
                                                         >

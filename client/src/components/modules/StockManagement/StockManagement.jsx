@@ -22,7 +22,7 @@ import CustomDatePicker from '../../shared/CustomDatePicker';
 import StockReport from './StockReport';
 import { encryptData, decryptData } from '../../../utils/encryption';
 import { API_BASE_URL } from '../../../utils/helpers';
-import { calculateStockData } from '../../../utils/stockHelpers';
+import { calculateStockData, calculatePktRemainder } from '../../../utils/stockHelpers';
 import { generateStockReportPDF, generateProductHistoryPDF } from '../../../utils/pdfGenerator';
 import axios from 'axios';
 
@@ -154,7 +154,7 @@ const StockManagement = ({
                 });
             }
             return acc;
-        }, []);
+        }, []).sort((a, b) => a.whName.localeCompare(b.whName, undefined, { sensitivity: 'base' }));
     }, [warehouseData]);
 
     const activePurchaseHistory = useMemo(() => {
@@ -315,10 +315,16 @@ const StockManagement = ({
                     }
 
                     const brandLower = (entry.brand || '').trim().toLowerCase();
-                    const purchaseRecord = stockRecords.find(s =>
+                    // Try exact product+brand match first; fall back to product-only for single-entry (no-brand) products
+                    let purchaseRecord = stockRecords.find(s =>
                         (s.productName || '').trim().toLowerCase() === productName &&
                         (s.brand || '').trim().toLowerCase() === brandLower
                     );
+                    if (!purchaseRecord) {
+                        purchaseRecord = stockRecords.find(s =>
+                            (s.productName || '').trim().toLowerCase() === productName
+                        );
+                    }
                     const pktSize = parseFloat(purchaseRecord?.packetSize) || 0;
                     const qty = parseFloat(entry.quantity) || 0;
                     const calculatedPacket = pktSize > 0 ? (qty / pktSize) : 0;
@@ -465,6 +471,27 @@ const StockManagement = ({
                 }
             }).filter(Boolean);
 
+            // AUTO-FILL MISSING TRUCK NO FOR HISTORICAL TRANSFERS
+            const normalizeStr = (s) => (s || '').toString().trim().toLowerCase();
+            allDecryptedWh.forEach(wh => {
+                const wLC = normalizeStr(wh.lcNo);
+                const wProd = normalizeStr(wh.productName || wh.product);
+                const wBrand = normalizeStr(wh.brand);
+                const wTruck = normalizeStr(wh.truckNo);
+
+                if (wLC && !wTruck && (parseFloat(wh.whQty) > 0 || parseFloat(wh.whPkt) > 0)) {
+                    const matchingStock = stockDataDecrypted.find(s =>
+                        normalizeStr(s.lcNo) === wLC &&
+                        normalizeStr(s.productName || s.product) === wProd &&
+                        normalizeStr(s.brand) === wBrand &&
+                        normalizeStr(s.truckNo) !== ''
+                    );
+                    if (matchingStock && matchingStock.truckNo) {
+                        wh.truckNo = matchingStock.truckNo;
+                    }
+                }
+            });
+
             // 3. Normalize Stock records (treated as Warehouse rows)
             const decryptedStock = stockDataDecrypted.map(d => {
                 const rawWh = (d.warehouse || d.whName || '').trim();
@@ -524,42 +551,159 @@ const StockManagement = ({
                 const updatedBrands = [...updatedProducts[pIndex].brandEntries];
                 if (name === 'brand') {
                     const currentProductName = updatedProducts[pIndex].productName;
+                    const targetProd = (currentProductName || '').trim().toLowerCase();
+                    const targetBrand = (value || '').trim().toLowerCase();
+                    const targetWh = (addWarehouseStockFormData.whName || '').trim().toLowerCase();
+
                     const matchingStockEntries = warehouseData.filter(item =>
-                        item.whName === addWarehouseStockFormData.whName &&
-                        (item.productName === currentProductName || item.product === currentProductName) &&
-                        item.brand === value
+                        ((item.productName || '').trim().toLowerCase() === targetProd || (item.product || '').trim().toLowerCase() === targetProd) &&
+                        (item.brand || '').trim().toLowerCase() === targetBrand
                     );
 
-                    const totalInPkt = matchingStockEntries.reduce((sum, entry) => sum + (parseFloat(entry.inhousePkt) || 0), 0);
-                    const totalInQty = matchingStockEntries.reduce((sum, entry) => sum + (parseFloat(entry.inhouseQty) || 0), 0);
-                    const totalWhPkt = matchingStockEntries.reduce((sum, entry) => sum + (parseFloat(entry.whPkt) || 0), 0);
-                    const totalWhQty = matchingStockEntries.reduce((sum, entry) => sum + (parseFloat(entry.whQty) || 0), 0);
+                    const globalInPkt = matchingStockEntries.length > 0 ? (parseFloat(matchingStockEntries[0].inhousePkt) || 0) : 0;
+                    const globalInQty = matchingStockEntries.length > 0 ? (parseFloat(matchingStockEntries[0].inhouseQty) || 0) : 0;
+
+                    let totalWhPkt = 0;
+                    let totalWhQty = 0;
+
+                    matchingStockEntries.forEach(item => {
+                        if ((item.whName || '').trim().toLowerCase() === targetWh) {
+                            totalWhPkt += (parseFloat(item.whPkt) || 0);
+                            totalWhQty += (parseFloat(item.whQty) || 0);
+                        }
+                    });
+
+                    // Deduct Sales dynamically
+                    let totalSaleQty = 0;
+                    let totalSalePkt = 0;
+                    let whSaleQty = 0;
+                    let whSalePkt = 0;
+
+                    (salesRecords || []).forEach(sale => {
+                        if (sale.items) {
+                            sale.items.forEach(saleItem => {
+                                if ((saleItem.productName || '').trim().toLowerCase() === targetProd) {
+                                    if (saleItem.brandEntries) {
+                                        saleItem.brandEntries.forEach(entry => {
+                                            if ((entry.brand || '').trim().toLowerCase() === targetBrand) {
+                                                const sQty = parseFloat(entry.quantity) || 0;
+                                                const pktSize = parseFloat(saleItem.packetSize || entry.packetSize) || (matchingStockEntries[0]?.packetSize ? parseFloat(matchingStockEntries[0].packetSize) : 0);
+                                                const sPkt = pktSize > 0 ? sQty / pktSize : 0;
+
+                                                totalSaleQty += sQty;
+                                                totalSalePkt += sPkt;
+
+                                                if ((entry.warehouseName || '').trim().toLowerCase() === targetWh) {
+                                                    whSaleQty += sQty;
+                                                    whSalePkt += sPkt;
+                                                }
+                                            }
+                                        });
+                                    }
+                                }
+                            });
+                        }
+                    });
+
+                    const finalInPkt = Math.max(0, globalInPkt - totalSalePkt);
+                    const finalInQty = Math.max(0, globalInQty - totalSaleQty);
+                    const finalWhPkt = Math.max(0, totalWhPkt - whSalePkt);
+                    const finalWhQty = Math.max(0, totalWhQty - whSaleQty);
 
                     updatedBrands[bIndex] = {
                         ...updatedBrands[bIndex],
                         [name]: value,
-                        inhousePkt: totalInPkt || 0,
-                        inhouseQty: totalInQty || 0,
-                        whPkt: totalWhPkt || 0,
-                        whQty: totalWhQty || 0
+                        inhousePkt: finalInPkt ? Number(finalInPkt.toFixed(2)) : 0,
+                        inhouseQty: finalInQty ? Number(finalInQty.toFixed(2)) : 0,
+                        whPkt: finalWhPkt ? Number(finalWhPkt.toFixed(2)) : 0,
+                        whQty: finalWhQty ? Number(finalWhQty.toFixed(2)) : 0,
+                        packetSize: matchingStockEntries.length > 0 ? (parseFloat(matchingStockEntries[0].packetSize) || 0) : 0
                     };
                     setActiveWhProductIndex(pIndex);
                     setActiveWhBrandIndex(bIndex);
                     setShowWhBrandDropdown(true);
+                } else if (name === 'brand_refresh') {
+                    // Logic for refreshing an existing brand's data (used when whName changes)
+                    const currentProductName = updatedProducts[pIndex].productName;
+                    const targetProd = (currentProductName || '').trim().toLowerCase();
+                    const targetBrand = (value || '').trim().toLowerCase();
+                    const targetWh = (addWarehouseStockFormData.whName || '').trim().toLowerCase();
+
+                    const matchingStockEntries = warehouseData.filter(item =>
+                        ((item.productName || '').trim().toLowerCase() === targetProd || (item.product || '').trim().toLowerCase() === targetProd) &&
+                        (item.brand || '').trim().toLowerCase() === targetBrand
+                    );
+
+                    const globalInPkt = matchingStockEntries.length > 0 ? (parseFloat(matchingStockEntries[0].inhousePkt) || 0) : 0;
+                    const globalInQty = matchingStockEntries.length > 0 ? (parseFloat(matchingStockEntries[0].inhouseQty) || 0) : 0;
+
+                    let totalWhPkt = 0;
+                    let totalWhQty = 0;
+
+                    matchingStockEntries.forEach(item => {
+                        if ((item.whName || '').trim().toLowerCase() === targetWh) {
+                            totalWhPkt += (parseFloat(item.whPkt) || 0);
+                            totalWhQty += (parseFloat(item.whQty) || 0);
+                        }
+                    });
+
+                    // Deduct Sales dynamically
+                    let totalSaleQty = 0;
+                    let totalSalePkt = 0;
+                    let whSaleQty = 0;
+                    let whSalePkt = 0;
+
+                    (salesRecords || []).forEach(sale => {
+                        if (sale.items) {
+                            sale.items.forEach(saleItem => {
+                                if ((saleItem.productName || '').trim().toLowerCase() === targetProd) {
+                                    if (saleItem.brandEntries) {
+                                        saleItem.brandEntries.forEach(entry => {
+                                            if ((entry.brand || '').trim().toLowerCase() === targetBrand) {
+                                                const sQty = parseFloat(entry.quantity) || 0;
+                                                const pktSize = parseFloat(saleItem.packetSize || entry.packetSize) || (matchingStockEntries[0]?.packetSize ? parseFloat(matchingStockEntries[0].packetSize) : 0);
+                                                const sPkt = pktSize > 0 ? sQty / pktSize : 0;
+
+                                                totalSaleQty += sQty;
+                                                totalSalePkt += sPkt;
+
+                                                if ((entry.warehouseName || '').trim().toLowerCase() === targetWh) {
+                                                    whSaleQty += sQty;
+                                                    whSalePkt += sPkt;
+                                                }
+                                            }
+                                        });
+                                    }
+                                }
+                            });
+                        }
+                    });
+
+                    const finalInPkt = Math.max(0, globalInPkt - totalSalePkt);
+                    const finalInQty = Math.max(0, globalInQty - totalSaleQty);
+                    const finalWhPkt = Math.max(0, totalWhPkt - whSalePkt);
+                    const finalWhQty = Math.max(0, totalWhQty - whSaleQty);
+
+                    updatedBrands[bIndex] = {
+                        ...updatedBrands[bIndex],
+                        brand: value,
+                        inhousePkt: finalInPkt ? Number(finalInPkt.toFixed(2)) : 0,
+                        inhouseQty: finalInQty ? Number(finalInQty.toFixed(2)) : 0,
+                        whPkt: finalWhPkt ? Number(finalWhPkt.toFixed(2)) : 0,
+                        whQty: finalWhQty ? Number(finalWhQty.toFixed(2)) : 0,
+                        packetSize: matchingStockEntries.length > 0 ? (parseFloat(matchingStockEntries[0].packetSize) || 0) : 0
+                    };
                 } else if (name === 'transferQty') {
                     const currentProductName = updatedProducts[pIndex].productName;
                     const currentBrandName = updatedBrands[bIndex].brand;
 
-                    const productData = products.find(p => p.name === currentProductName);
-                    const brandData = productData?.brands?.find(b => b.brand === currentBrandName);
-                    const packetSize = brandData?.packetSize ? parseFloat(brandData.packetSize) : 0;
-
+                    const pktSize = parseFloat(updatedBrands[bIndex].packetSize) || 0;
                     let calculatedPkt = updatedBrands[bIndex].transferPkt;
 
-                    if (packetSize > 0) {
+                    if (pktSize > 0) {
                         const qty = parseFloat(value) || 0;
                         if (qty > 0) {
-                            calculatedPkt = (qty / packetSize).toFixed(2);
+                            calculatedPkt = (qty / pktSize).toFixed(2);
                             if (calculatedPkt.endsWith('.00')) calculatedPkt = calculatedPkt.slice(0, -3);
                         } else {
                             calculatedPkt = '';
@@ -571,16 +715,13 @@ const StockManagement = ({
                     const currentProductName = updatedProducts[pIndex].productName;
                     const currentBrandName = updatedBrands[bIndex].brand;
 
-                    const productData = products.find(p => p.name === currentProductName);
-                    const brandData = productData?.brands?.find(b => b.brand === currentBrandName);
-                    const packetSize = brandData?.packetSize ? parseFloat(brandData.packetSize) : 0;
-
+                    const pktSize = parseFloat(updatedBrands[bIndex].packetSize) || 0;
                     let calculatedQty = updatedBrands[bIndex].transferQty;
 
-                    if (packetSize > 0) {
+                    if (pktSize > 0) {
                         const pkt = parseFloat(value) || 0;
                         if (pkt > 0) {
-                            calculatedQty = (pkt * packetSize).toFixed(2);
+                            calculatedQty = (pkt * pktSize).toFixed(2);
                             if (calculatedQty.endsWith('.00')) calculatedQty = calculatedQty.slice(0, -3);
                         } else {
                             calculatedQty = '';
@@ -595,10 +736,88 @@ const StockManagement = ({
             } else {
                 // Update product-specific field
                 if (name === 'productName') {
+                    // Auto-populate brands for this product if whName is selected
+                    const targetWh = (addWarehouseStockFormData.whName || '').trim().toLowerCase();
+                    const targetProd = (value || '').trim().toLowerCase();
+
+                    // Find all unique brands for this product in warehouseData
+                    const productBrands = [...new Set(warehouseData
+                        .filter(item => (item.productName || item.product || '').trim().toLowerCase() === targetProd)
+                        .map(item => item.brand))]
+                        .filter(Boolean);
+
+                    let autoFilledBrands = [];
+                    if (productBrands.length > 0) {
+                        autoFilledBrands = productBrands.map(brandName => {
+                            // Calculate quantities for each brand
+                            const matchingStockEntries = warehouseData.filter(item =>
+                                ((item.productName || '').trim().toLowerCase() === targetProd || (item.product || '').trim().toLowerCase() === targetProd) &&
+                                (item.brand || '').trim().toLowerCase() === brandName.trim().toLowerCase()
+                            );
+
+                            const globalInPkt = matchingStockEntries.length > 0 ? (parseFloat(matchingStockEntries[0].inhousePkt) || 0) : 0;
+                            const globalInQty = matchingStockEntries.length > 0 ? (parseFloat(matchingStockEntries[0].inhouseQty) || 0) : 0;
+
+                            let totalWhPkt = 0;
+                            let totalWhQty = 0;
+                            matchingStockEntries.forEach(item => {
+                                if ((item.whName || '').trim().toLowerCase() === targetWh) {
+                                    totalWhPkt += (parseFloat(item.whPkt) || 0);
+                                    totalWhQty += (parseFloat(item.whQty) || 0);
+                                }
+                            });
+
+                            let tSaleQty = 0;
+                            let tSalePkt = 0;
+                            let wSaleQty = 0;
+                            let wSalePkt = 0;
+
+                            (salesRecords || []).forEach(sale => {
+                                if (sale.items) {
+                                    sale.items.forEach(saleItem => {
+                                        if ((saleItem.productName || '').trim().toLowerCase() === targetProd) {
+                                            if (saleItem.brandEntries) {
+                                                saleItem.brandEntries.forEach(entry => {
+                                                    if ((entry.brand || '').trim().toLowerCase() === brandName.trim().toLowerCase()) {
+                                                        const sQty = parseFloat(entry.quantity) || 0;
+                                                        const pktSize = parseFloat(saleItem.packetSize || entry.packetSize) || (matchingStockEntries[0]?.packetSize ? parseFloat(matchingStockEntries[0].packetSize) : 0);
+                                                        const sPkt = pktSize > 0 ? sQty / pktSize : 0;
+                                                        tSaleQty += sQty;
+                                                        tSalePkt += sPkt;
+                                                        if ((entry.warehouseName || '').trim().toLowerCase() === targetWh) {
+                                                            wSaleQty += sQty;
+                                                            wSalePkt += sPkt;
+                                                        }
+                                                    }
+                                                });
+                                            }
+                                        }
+                                    });
+                                }
+                            });
+
+                            const fInPkt = Math.max(0, globalInPkt - tSalePkt);
+                            const fInQty = Math.max(0, globalInQty - tSaleQty);
+                            const fWhPkt = Math.max(0, totalWhPkt - wSalePkt);
+                            const fWhQty = Math.max(0, totalWhQty - wSaleQty);
+
+                            return {
+                                brand: brandName,
+                                inhousePkt: fInPkt ? Number(fInPkt.toFixed(2)) : 0,
+                                inhouseQty: fInQty ? Number(fInQty.toFixed(2)) : 0,
+                                whPkt: fWhPkt ? Number(fWhPkt.toFixed(2)) : 0,
+                                whQty: fWhQty ? Number(fWhQty.toFixed(2)) : 0,
+                                transferPkt: '',
+                                transferQty: '',
+                                packetSize: matchingStockEntries.length > 0 ? (parseFloat(matchingStockEntries[0].packetSize) || 0) : 0
+                            };
+                        });
+                    }
+
                     updatedProducts[pIndex] = {
                         ...updatedProducts[pIndex],
                         [name]: value,
-                        brandEntries: updatedProducts[pIndex].brandEntries.map(b => ({ ...b, brand: '' }))
+                        brandEntries: autoFilledBrands.length > 0 ? autoFilledBrands : [{ brand: '', inhousePkt: '', inhouseQty: '', whPkt: '', whQty: '', transferPkt: '', transferQty: '', packetSize: '' }]
                     };
                     setActiveWhProductIndex(pIndex);
                     setShowWhProductDropdown(true);
@@ -625,7 +844,69 @@ const StockManagement = ({
                     toCapacity: ''
                 }));
             } else {
-                setAddWarehouseStockFormData(prev => ({ ...prev, [name]: value }));
+                setAddWarehouseStockFormData(prev => {
+                    const nextState = { ...prev, [name]: value };
+
+                    // If whName changes, refresh all current brand entries with new quantities
+                    if (name === 'whName') {
+                        const newWh = (value || '').trim().toLowerCase();
+                        nextState.productEntries = nextState.productEntries.map(prod => {
+                            if (!prod.productName) return prod;
+                            const targetProd = (prod.productName || '').trim().toLowerCase();
+
+                            const refreshedBrands = prod.brandEntries.map(brandInfo => {
+                                if (!brandInfo.brand) return brandInfo;
+                                const targetBrand = (brandInfo.brand || '').trim().toLowerCase();
+
+                                // Calculate matching stock entries for this brand
+                                const matchingStockEntries = warehouseData.filter(item =>
+                                    ((item.productName || '').trim().toLowerCase() === targetProd || (item.product || '').trim().toLowerCase() === targetProd) &&
+                                    (item.brand || '').trim().toLowerCase() === targetBrand
+                                );
+
+                                // Calculate Warehouse Specific Totals
+                                let totalWhPkt = 0;
+                                let totalWhQty = 0;
+                                matchingStockEntries.forEach(item => {
+                                    if ((item.whName || '').trim().toLowerCase() === newWh) {
+                                        totalWhPkt += (parseFloat(item.whPkt) || 0);
+                                        totalWhQty += (parseFloat(item.whQty) || 0);
+                                    }
+                                });
+
+                                // Deduct Sales specifically for this warehouse
+                                let whSaleQty = 0;
+                                let whSalePkt = 0;
+                                (salesRecords || []).forEach(sale => {
+                                    if (sale.items) {
+                                        sale.items.forEach(saleItem => {
+                                            if ((saleItem.productName || '').trim().toLowerCase() === targetProd) {
+                                                if (saleItem.brandEntries) {
+                                                    saleItem.brandEntries.forEach(entry => {
+                                                        if ((entry.brand || '').trim().toLowerCase() === targetBrand && (entry.warehouseName || '').trim().toLowerCase() === newWh) {
+                                                            const sQty = parseFloat(entry.quantity) || 0;
+                                                            const pktSize = parseFloat(saleItem.packetSize || entry.packetSize) || (matchingStockEntries[0]?.packetSize ? parseFloat(matchingStockEntries[0].packetSize) : 0);
+                                                            whSaleQty += sQty;
+                                                            whSalePkt += pktSize > 0 ? sQty / pktSize : 0;
+                                                        }
+                                                    });
+                                                }
+                                            }
+                                        });
+                                    }
+                                });
+
+                                return {
+                                    ...brandInfo,
+                                    whPkt: Number(Math.max(0, totalWhPkt - whSalePkt).toFixed(2)),
+                                    whQty: Number(Math.max(0, totalWhQty - whSaleQty).toFixed(2))
+                                };
+                            });
+                            return { ...prod, brandEntries: refreshedBrands };
+                        });
+                    }
+                    return nextState;
+                });
             }
             if (name === 'whName') setShowWhDropdown(true);
             if (name === 'to') setShowToDropdown(true);
@@ -644,7 +925,8 @@ const StockManagement = ({
                     whPkt: '',
                     whQty: '',
                     transferPkt: '',
-                    transferQty: ''
+                    transferQty: '',
+                    packetSize: ''
                 }]
             }]
         }));
@@ -668,7 +950,8 @@ const StockManagement = ({
             whPkt: '',
             whQty: '',
             transferPkt: '',
-            transferQty: ''
+            transferQty: '',
+            packetSize: ''
         });
         setAddWarehouseStockFormData(prev => ({ ...prev, productEntries: updatedProducts }));
     };
@@ -735,6 +1018,7 @@ const StockManagement = ({
 
                             lcSrrDeductions.push({
                                 lcNo: sourceRecord.lcNo || '',
+                                truckNo: sourceRecord.truckNo || '',
                                 qty: deductQty,
                                 pkt: deductPkt
                             });
@@ -764,7 +1048,8 @@ const StockManagement = ({
                             item.whName === destWhName &&
                             (item.productName || item.product) === productEntry.productName &&
                             item.brand === brandEntry.brand &&
-                            (item.lcNo === deduction.lcNo || (!item.lcNo && !deduction.lcNo))
+                            (item.lcNo === deduction.lcNo || (!item.lcNo && !deduction.lcNo)) &&
+                            (item.truckNo === deduction.truckNo || (!item.truckNo && !deduction.truckNo))
                         );
 
                         if (destRecord) {
@@ -799,6 +1084,7 @@ const StockManagement = ({
                                 product: productEntry.productName,
                                 brand: brandEntry.brand,
                                 lcNo: deduction.lcNo,
+                                truckNo: deduction.truckNo,
                                 inhousePkt: 0, // only source retains inhouse
                                 inhouseQty: 0, // only source retains inhouse
                                 whPkt: deduction.pkt,
@@ -941,17 +1227,22 @@ const StockManagement = ({
 
     const formatDate = (dateString) => {
         if (!dateString) return '-';
+        const parts = dateString.split('T')[0].split('-');
+        if (parts.length === 3) {
+            return `${parts[2]}/${parts[1]}/${parts[0]}`;
+        }
         const date = new Date(dateString);
-        return date.toLocaleDateString('en-GB', {
-            day: '2-digit',
-            month: 'short',
-            year: 'numeric'
-        });
+        if (isNaN(date.getTime())) return '-';
+        const day = String(date.getDate()).padStart(2, '0');
+        const month = String(date.getMonth() + 1).padStart(2, '0');
+        const year = date.getFullYear();
+        return `${day}/${month}/${year}`;
     };
 
     const getFilteredOptions = (type) => {
         const options = stockRecords.map(item => item[type]).filter(Boolean);
-        const uniqueOptions = [...new Set(options)].map(opt => ({ _id: opt, name: opt }));
+        const uniqueOptions = [...new Set(options)].map(opt => ({ _id: opt, name: opt }))
+            .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }));
         const inputVal = stockFormData[type] || '';
         return uniqueOptions.filter(opt => opt.name.toLowerCase().includes(inputVal.toLowerCase()));
     };
@@ -971,7 +1262,8 @@ const StockManagement = ({
             if (r.brand) allBrands.add(r.brand);
             if (r.entries) r.entries.forEach(e => { if (e.brand) allBrands.add(e.brand) });
         });
-        const brands = Array.from(allBrands).sort();
+        // Return unique brand names sorted alphabetically
+        const brands = Array.from(allBrands).filter(Boolean).sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
         if (!input) return brands;
         return brands.filter(b => b.toLowerCase().includes(input.toLowerCase()));
     };
@@ -1266,7 +1558,9 @@ const StockManagement = ({
     };
 
     const handleEditInternal = (type, record) => {
-        setEditingId(record._id || record.originalId);
+        // Use either _id (single) or the first id from the group (grouped) to mark as editing
+        const editId = record._id || (record.allIds && record.allIds[0]);
+        setEditingId(editId);
 
         const isGrouped = record.entries && Array.isArray(record.entries);
 
@@ -1325,6 +1619,7 @@ const StockManagement = ({
                 totalLcTruck: record.totalLcTruck,
                 totalLcQuantity: record.totalLcQuantity,
                 status: record.status,
+                originalIds: record.allIds || [record._id],
                 productEntries: [{
                     isMultiBrand: false,
                     productName: record.productName,
@@ -1347,7 +1642,6 @@ const StockManagement = ({
                         inHouseQuantity: record.inHouseQuantity
                     }]
                 }],
-                originalIds: [record._id]
             });
         }
 
@@ -1429,9 +1723,11 @@ const StockManagement = ({
         totalTotalInHousePkt,
         totalTotalInHouseQty,
         totalInHousePkt,
+        totalInHousePktWhole,
         totalInHousePktDecimalKg,
         totalInHouseQty,
         totalSalePkt,
+        totalSalePktWhole,
         totalSaleQty,
         totalSalePktDecimalKg,
         totalShortage,
@@ -1715,9 +2011,9 @@ const StockManagement = ({
                     {[
                         { label: 'TOTAL PACKET', value: Math.round(totalPackets).toLocaleString(), bgColor: 'bg-blue-50/50', borderColor: 'border-blue-100', textColor: 'text-blue-700', labelColor: 'text-blue-600' },
                         { label: 'TOTAL QUANTITY', value: `${Math.round(totalQuantity).toLocaleString()} ${unit}`, bgColor: 'bg-blue-50/50', borderColor: 'border-blue-100', textColor: 'text-blue-700', labelColor: 'text-blue-600' },
-                        { label: 'TOTAL SALE PKT', value: `${Math.floor(totalSalePkt).toLocaleString()} - ${Math.round(totalSalePktDecimalKg).toLocaleString()} kg`, bgColor: 'bg-orange-50/50', borderColor: 'border-orange-100', textColor: 'text-orange-700', labelColor: 'text-orange-600' },
+                        { label: 'TOTAL SALE PKT', value: `${(totalSalePktWhole || 0).toLocaleString()} - ${(totalSalePktDecimalKg || 0).toLocaleString()} kg`, bgColor: 'bg-orange-50/50', borderColor: 'border-orange-100', textColor: 'text-orange-700', labelColor: 'text-orange-600' },
                         { label: 'TOTAL SALE QTY', value: `${Math.round(totalSaleQty).toLocaleString()} ${unit}`, bgColor: 'bg-orange-50/50', borderColor: 'border-orange-100', textColor: 'text-orange-700', labelColor: 'text-orange-600' },
-                        { label: 'INHOUSE PKT', value: `${Math.floor(totalInHousePkt).toLocaleString()} - ${Math.round(totalInHousePktDecimalKg).toLocaleString()} kg`, bgColor: 'bg-emerald-50/50', borderColor: 'border-emerald-100', textColor: 'text-emerald-700', labelColor: 'text-emerald-600' },
+                        { label: 'INHOUSE PKT', value: `${(totalInHousePktWhole || 0).toLocaleString()} - ${Math.round(totalInHousePktDecimalKg || 0).toLocaleString()} kg`, bgColor: 'bg-emerald-50/50', borderColor: 'border-emerald-100', textColor: 'text-emerald-700', labelColor: 'text-emerald-600' },
                         { label: 'INHOUSE QTY', value: `${Math.round(totalInHouseQty).toLocaleString()} ${unit}`, bgColor: 'bg-emerald-50/50', borderColor: 'border-emerald-100', textColor: 'text-emerald-700', labelColor: 'text-emerald-600' },
                         { label: 'SHORTAGE', value: `${Math.round(totalShortage).toLocaleString()} ${unit}`, bgColor: 'bg-rose-50/50', borderColor: 'border-rose-100', textColor: 'text-rose-700', labelColor: 'text-rose-600' },
                     ].map((card, i) => (
@@ -2241,19 +2537,28 @@ const StockManagement = ({
                                                         <div key={bIdx} className={`grid grid-cols-[2.5fr_1.2fr_1.2fr_1.2fr_1.2fr_1.2fr_1.2fr_1fr] gap-4 items-center whitespace-nowrap min-w-[1000px] ${bIdx !== group.brandList.length - 1 ? 'border-b border-gray-100 pb-2' : 'pb-1'}`}>
                                                             <div className="text-sm text-gray-600 font-medium whitespace-nowrap" title={brand.brand}>{brand.brand || '-'}</div>
                                                             <div className="text-sm text-black bg-blue-50/30 px-2 py-1 rounded-lg text-center">
-                                                                {Math.floor(brand.totalInHousePacket || 0).toLocaleString()} - {Math.round(((brand.totalInHousePacket || 0) - Math.floor(brand.totalInHousePacket || 0)) * brand.packetSize).toLocaleString()} kg
+                                                                {(() => {
+                                                                    const { whole, remainder } = calculatePktRemainder(brand.totalInHouseQuantity, brand.packetSize);
+                                                                    return `${whole.toLocaleString()} - ${remainder.toLocaleString()} kg`;
+                                                                })()}
                                                             </div>
                                                             <div className="text-sm text-black text-center font-medium">
                                                                 {Math.round(brand.totalInHouseQuantity || 0).toLocaleString()} {group.unit}
                                                             </div>
                                                             <div className="text-sm text-black bg-orange-50/30 px-2 py-1 rounded-lg text-center font-medium">
-                                                                {Math.floor(brand.salePacket || 0).toLocaleString()} - {Math.round(((brand.salePacket || 0) - Math.floor(brand.salePacket || 0)) * brand.packetSize).toLocaleString()} kg
+                                                                {(() => {
+                                                                    const { whole, remainder } = calculatePktRemainder(brand.saleQuantity, brand.packetSize);
+                                                                    return `${whole.toLocaleString()} - ${remainder.toLocaleString()} kg`;
+                                                                })()}
                                                             </div>
                                                             <div className="text-sm text-black text-center font-medium">
                                                                 {Math.round(brand.saleQuantity || 0).toLocaleString()} {group.unit}
                                                             </div>
                                                             <div className="text-sm text-black bg-green-50/30 px-2 py-1 rounded-lg text-center">
-                                                                {Math.floor(brand.inHousePacket).toLocaleString()} - {Math.round((brand.inHousePacket - Math.floor(brand.inHousePacket)) * brand.packetSize).toLocaleString()} kg
+                                                                {(() => {
+                                                                    const { whole, remainder } = calculatePktRemainder(brand.inHouseQuantity, brand.packetSize);
+                                                                    return `${whole.toLocaleString()} - ${remainder.toLocaleString()} kg`;
+                                                                })()}
                                                             </div>
                                                             <div className="text-sm text-black text-center font-medium">
                                                                 {Math.round(brand.inHouseQuantity).toLocaleString()} {group.unit}
@@ -2270,19 +2575,31 @@ const StockManagement = ({
                                                             <span className="text-[10px] font-bold text-gray-400 uppercase tracking-tighter">Total:</span>
                                                         </div>
                                                         <div className="text-sm text-black font-black text-center">
-                                                            {Math.floor(group.totalInHousePacket).toLocaleString()} - {Math.round((group.totalInHousePacket - Math.floor(group.totalInHousePacket)) * group.brandList[0].packetSize).toLocaleString()} kg
+                                                            {(() => {
+                                                                const pktSize = group.brandList?.[0]?.packetSize || 0;
+                                                                const { whole, remainder } = calculatePktRemainder(group.totalInHouseQuantity, pktSize);
+                                                                return `${whole.toLocaleString()} - ${remainder.toLocaleString()} kg`;
+                                                            })()}
                                                         </div>
                                                         <div className="text-sm text-black font-black text-center">
                                                             {Math.round(group.totalInHouseQuantity).toLocaleString()} {group.unit}
                                                         </div>
                                                         <div className="text-sm text-black font-black text-center">
-                                                            {Math.floor(group.salePacket).toLocaleString()} - {Math.round((group.salePacket - Math.floor(group.salePacket)) * group.brandList[0].packetSize).toLocaleString()} kg
+                                                            {(() => {
+                                                                const pktSize = group.brandList?.[0]?.packetSize || 0;
+                                                                const { whole, remainder } = calculatePktRemainder(group.saleQuantity, pktSize);
+                                                                return `${whole.toLocaleString()} - ${remainder.toLocaleString()} kg`;
+                                                            })()}
                                                         </div>
                                                         <div className="text-sm text-black font-black text-center">
                                                             {Math.round(group.saleQuantity).toLocaleString()} {group.unit}
                                                         </div>
                                                         <div className="text-sm text-black font-black text-center">
-                                                            {Math.floor(group.inHousePacket).toLocaleString()} - {Math.round((group.inHousePacket - Math.floor(group.inHousePacket)) * group.brandList[0].packetSize).toLocaleString()} kg
+                                                            {(() => {
+                                                                const pktSize = group.brandList?.[0]?.packetSize || 0;
+                                                                const { whole, remainder } = calculatePktRemainder(group.inHouseQuantity, pktSize);
+                                                                return `${whole.toLocaleString()} - ${remainder.toLocaleString()} kg`;
+                                                            })()}
                                                         </div>
                                                         <div className="text-sm text-black font-black text-center">
                                                             {Math.round(group.inHouseQuantity).toLocaleString()} {group.unit}
@@ -2293,9 +2610,95 @@ const StockManagement = ({
                                             </td>
                                             <td className="px-6 py-4 align-top text-right">
                                                 <div className="flex items-center justify-end gap-3 mt-1">
+                                                    <button
+                                                        onClick={() => {
+                                                            const targetProd = group.productName;
+                                                            const targetWh = stockFilters.whName || ''; // Pre-fill if filtered
+
+                                                            setAddWarehouseStockFormData({
+                                                                whName: targetWh, manager: '', location: '', capacity: '',
+                                                                to: '', toManager: '', toLocation: '', toCapacity: '',
+                                                                productEntries: [{
+                                                                    productName: targetProd,
+                                                                    brandEntries: group.brandList.map(brand => ({
+                                                                        brand: brand.brand,
+                                                                        inhousePkt: brand.totalInHousePacket - (brand.salePacket || 0),
+                                                                        inhouseQty: brand.totalInHouseQuantity - (brand.saleQuantity || 0),
+                                                                        whPkt: 0, // Need to fetch warehouse specific if whName is known
+                                                                        whQty: 0,
+                                                                        transferPkt: '',
+                                                                        transferQty: '',
+                                                                        packetSize: brand.packetSize || 0
+                                                                    }))
+                                                                }]
+                                                            });
+
+                                                            // If whName is pre-filled, we need to manually trigger the quantity calculation for warehouse-specific stock
+                                                            if (targetWh) {
+                                                                // We use a small timeout to let the state update or we manually calculate here
+                                                                const updatedProductEntries = [{
+                                                                    productName: targetProd,
+                                                                    brandEntries: group.brandList.map(brand => {
+                                                                        const targetBrand = (brand.brand || '').trim().toLowerCase();
+                                                                        const matchingStockEntries = warehouseData.filter(item =>
+                                                                            ((item.productName || '').trim().toLowerCase() === targetProd.toLowerCase() || (item.product || '').trim().toLowerCase() === targetProd.toLowerCase()) &&
+                                                                            (item.brand || '').trim().toLowerCase() === targetBrand
+                                                                        );
+
+                                                                        let totalWhPkt = 0;
+                                                                        let totalWhQty = 0;
+                                                                        matchingStockEntries.forEach(item => {
+                                                                            if ((item.whName || '').trim().toLowerCase() === targetWh.trim().toLowerCase()) {
+                                                                                totalWhPkt += (parseFloat(item.whPkt) || 0);
+                                                                                totalWhQty += (parseFloat(item.whQty) || 0);
+                                                                            }
+                                                                        });
+
+                                                                        let whSaleQty = 0;
+                                                                        let whSalePkt = 0;
+                                                                        (salesRecords || []).forEach(sale => {
+                                                                            if (sale.items) {
+                                                                                sale.items.forEach(saleItem => {
+                                                                                    if ((saleItem.productName || '').trim().toLowerCase() === targetProd.toLowerCase()) {
+                                                                                        if (saleItem.brandEntries) {
+                                                                                            saleItem.brandEntries.forEach(entry => {
+                                                                                                if ((entry.brand || '').trim().toLowerCase() === targetBrand && (entry.warehouseName || '').trim().toLowerCase() === targetWh.trim().toLowerCase()) {
+                                                                                                    const sQty = parseFloat(entry.quantity) || 0;
+                                                                                                    const pktSize = parseFloat(saleItem.packetSize || entry.packetSize) || (matchingStockEntries[0]?.packetSize ? parseFloat(matchingStockEntries[0].packetSize) : 0);
+                                                                                                    whSaleQty += sQty;
+                                                                                                    whSalePkt += pktSize > 0 ? sQty / pktSize : 0;
+                                                                                                }
+                                                                                            });
+                                                                                        }
+                                                                                    }
+                                                                                });
+                                                                            }
+                                                                        });
+
+                                                                        return {
+                                                                            brand: brand.brand,
+                                                                            inhousePkt: Number(Math.max(0, brand.totalInHousePacket - (brand.salePacket || 0)).toFixed(2)),
+                                                                            inhouseQty: Number(Math.max(0, brand.totalInHouseQuantity - (brand.saleQuantity || 0)).toFixed(2)),
+                                                                            whPkt: Number(Math.max(0, totalWhPkt - whSalePkt).toFixed(2)),
+                                                                            whQty: Number(Math.max(0, totalWhQty - whSaleQty).toFixed(2)),
+                                                                            transferPkt: '',
+                                                                            transferQty: '',
+                                                                            packetSize: brand.packetSize || 0
+                                                                        };
+                                                                    })
+                                                                }];
+
+                                                                setAddWarehouseStockFormData(prev => ({ ...prev, productEntries: updatedProductEntries }));
+                                                            }
+
+                                                            setShowAddWarehouseStockForm(true);
+                                                        }}
+                                                        className="p-1.5 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-all"
+                                                        title="Transfer Product"
+                                                    >
+                                                        <ShoppingCartIcon className="w-5 h-5" />
+                                                    </button>
                                                     <button onClick={() => setViewRecord({ data: group })} className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all"><EyeIcon className="w-5 h-5" /></button>
-                                                    <button onClick={() => handleEditInternal('stock', group)} className="p-1.5 text-gray-400 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition-all"><EditIcon className="w-5 h-5" /></button>
-                                                    <button onClick={() => setDeleteConfirm({ show: true, id: group.allIds, type: 'stock' })} className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all"><TrashIcon className="w-5 h-5" /></button>
                                                 </div>
                                             </td>
                                         </tr>
@@ -2627,8 +3030,6 @@ const StockManagement = ({
                                                                     </td>
                                                                     <td className="px-3 py-3 whitespace-nowrap text-right text-sm font-medium">
                                                                         <div className="flex items-center justify-center gap-2">
-                                                                            <button onClick={() => handleEditInternal('history', item)} className="p-1.5 text-gray-400 hover:text-amber-600 hover:bg-white rounded-lg transition-all border border-transparent hover:border-amber-100 shadow-sm"><EditIcon className="w-5 h-5" /></button>
-                                                                            <button onClick={() => setDeleteConfirm({ show: true, id: item.allIds, type: 'history' })} className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-white rounded-lg transition-all border border-transparent hover:border-red-100 shadow-sm"><TrashIcon className="w-5 h-5" /></button>
                                                                         </div>
                                                                     </td>
                                                                 </tr>

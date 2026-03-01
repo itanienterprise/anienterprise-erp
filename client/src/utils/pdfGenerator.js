@@ -60,9 +60,9 @@ export const generateLCReceiveReportPDF = (reportData, filters, summary) => {
 
         doc.setFontSize(10);
         doc.setFont('helvetica', 'normal');
-        doc.setTextColor(100);
+        doc.setTextColor(0); // Changed from 100 to 0 (Black)
         doc.text("766, H.M Tower, Level-06, Borogola, Bogura-5800, Bangladesh", pageWidth / 2, 26, { align: 'center' });
-        doc.text("+8802588813057, +8801711-406898, anienterprise051@gmail.com, www.anienterprises.com.bd", pageWidth / 2, 31, { align: 'center' });
+        doc.text("+8802588813057, anienterprise051@gmail.com, www.anienterprises.com.bd", pageWidth / 2, 31, { align: 'center' });
 
         // Separator
         doc.setDrawColor(0);
@@ -93,7 +93,7 @@ export const generateLCReceiveReportPDF = (reportData, filters, summary) => {
             doc.setFont('helvetica', 'bold');
             doc.text("LC No:", margin, yPos);
             doc.setFont('helvetica', 'bold');
-            doc.setTextColor(0, 0, 139); // Dark Blue
+            doc.setTextColor(0); // Dark Blue
             doc.text(filters.lcNo, margin + 25, yPos);
             doc.setTextColor(0);
         }
@@ -154,7 +154,7 @@ export const generateLCReceiveReportPDF = (reportData, filters, summary) => {
                     // LC Columns: Date, LC No, Importer, Port, BOE No (Span across all rows of this LC)
                     if (isFirstRowOfLC) {
                         row.push({ content: formatDate(lcGroup.date), rowSpan: totalRowsForLC, styles: { valign: 'top', halign: 'center' } });
-                        row.push({ content: lcGroup.lcNo || '-', rowSpan: totalRowsForLC, styles: { valign: 'top', fontStyle: 'bold', textColor: [0, 0, 139], halign: 'center' } });
+                        row.push({ content: lcGroup.lcNo || '-', rowSpan: totalRowsForLC, styles: { valign: 'top', fontStyle: 'bold', textColor: [0, 0, 0], halign: 'center' } });
                         row.push({ content: lcGroup.importer || '-', rowSpan: totalRowsForLC, styles: { valign: 'top', halign: 'left' } });
                         row.push({ content: lcGroup.port || '-', rowSpan: totalRowsForLC, styles: { valign: 'top', halign: 'center' } });
                         row.push({ content: lcGroup.billOfEntry || '-', rowSpan: totalRowsForLC, styles: { valign: 'top', halign: 'center' } });
@@ -269,7 +269,7 @@ export const generateLCReceiveReportPDF = (reportData, filters, summary) => {
             margin: { left: margin, right: margin },
             columnStyles: {
                 0: { cellWidth: 22, halign: 'center' }, // Date
-                1: { cellWidth: 28, fontStyle: 'bold', textColor: [0, 0, 139], halign: 'center' }, // LC No
+                1: { cellWidth: 28, fontStyle: 'bold', textColor: [0, 0, 0], halign: 'center' }, // LC No
                 2: { cellWidth: 30, halign: 'left' },   // Importer
                 3: { cellWidth: 18, halign: 'center' }, // Port
                 4: { cellWidth: 15, halign: 'center' }, // BOE No
@@ -280,7 +280,7 @@ export const generateLCReceiveReportPDF = (reportData, filters, summary) => {
                 9: { cellWidth: 20, halign: 'right' },  // QTY
                 10: { cellWidth: 20, halign: 'right' }, // IH QTY
                 11: { cellWidth: 26, halign: 'right' }, // IH PKT
-                12: { cellWidth: 15, halign: 'right' }  // SHORT
+                12: { cellWidth: 17, halign: 'right' }  // SHORT
             }
         });
 
@@ -326,10 +326,10 @@ export const generateLCReceiveReportPDF = (reportData, filters, summary) => {
         doc.setDrawColor(0); // Pure Black Border
         doc.roundedRect(startX + (boxWidth + boxGap) * 2, finalY, boxWidth, boxHeight, 2, 2);
         doc.setFontSize(8);
-        doc.setTextColor(0, 0, 139); // Deep Blue (DarkBlue)
+        doc.setTextColor(0); // Deep Blue (DarkBlue)
         doc.text("TOTAL QUANTITY", startX + (boxWidth + boxGap) * 2 + boxWidth / 2, finalY + 7, { align: 'center' });
         doc.setFontSize(12);
-        doc.setTextColor(0, 0, 139); // Deep Blue Value
+        doc.setTextColor(0); // Deep Blue Value
         doc.text(`${summary.totalQuantity} ${summary.unit}`, startX + (boxWidth + boxGap) * 2 + boxWidth / 2, finalY + 15, { align: 'center' });
 
         // --- Signatures ---
@@ -380,9 +380,9 @@ export const generateStockReportPDF = (stockData, filters) => {
 
         doc.setFontSize(10);
         doc.setFont('helvetica', 'normal');
-        doc.setTextColor(100);
+        doc.setTextColor(0); // Changed from 100 to 0 (Black)
         doc.text("766, H.M Tower, Level-06, Borogola, Bogura-5800, Bangladesh", pageWidth / 2, 26, { align: 'center' });
-        doc.text("+8802588813057, +8801711-406898, anienterprise051@gmail.com, www.anienterprises.com.bd", pageWidth / 2, 31, { align: 'center' });
+        doc.text("+8802588813057, anienterprise051@gmail.com, www.anienterprises.com.bd", pageWidth / 2, 31, { align: 'center' });
 
         // Separator
         doc.setDrawColor(0);
@@ -421,7 +421,7 @@ export const generateStockReportPDF = (stockData, filters) => {
             doc.setFont('helvetica', 'bold');
             doc.text("LC No:", margin, yPos);
             doc.setFont('helvetica', 'bold');
-            doc.setTextColor(0, 0, 139); // Dark Blue
+            doc.setTextColor(0); // Dark Blue
             doc.text(filters.lcNo, margin + 25, yPos);
             doc.setTextColor(0);
         }
@@ -463,7 +463,11 @@ export const generateStockReportPDF = (stockData, filters) => {
 
                 // 6. Sale PKT
                 const sPkt = parseFloat(brandEnt.salePacket) || 0;
-                row.push(Number.isInteger(sPkt) ? sPkt.toString() : sPkt.toFixed(2));
+                const sQty = parseFloat(brandEnt.saleQuantity) || 0;
+                const sSize = parseFloat(brandEnt.packetSize) || 0;
+                const sWhole = Math.floor(sPkt);
+                const sRem = Math.round(sQty - (sWhole * sSize));
+                row.push(`${sWhole}${sRem > 0 ? ` - ${sRem} kg` : ''}`);
 
                 // 7. Sale QTY
                 row.push(Math.round(brandEnt.saleQuantity).toString());
@@ -497,7 +501,14 @@ export const generateStockReportPDF = (stockData, filters) => {
                     },
                     { content: Math.round(item.totalInHouseQuantity).toString(), styles: { fontStyle: 'bold', halign: 'right', fillColor: [250, 250, 250] } },
                     // Sale
-                    { content: item.brandList.reduce((sum, ent) => sum + (parseFloat(ent.salePacket) || 0), 0).toString(), styles: { fontStyle: 'bold', halign: 'right', fillColor: [250, 250, 250] } },
+                    {
+                        content: (() => {
+                            const totalWhole = item.brandList.reduce((sum, ent) => sum + Math.floor(parseFloat(ent.salePacket) || 0), 0);
+                            const totalRem = Math.round(item.brandList.reduce((sum, ent) => sum + (parseFloat(ent.saleQuantity) || 0) - (Math.floor(parseFloat(ent.salePacket) || 0) * (parseFloat(ent.packetSize) || 0)), 0));
+                            return `${totalWhole}${totalRem > 0 ? ` - ${totalRem} kg` : ''}`;
+                        })(),
+                        styles: { fontStyle: 'bold', halign: 'right', fillColor: [250, 250, 250] }
+                    },
                     { content: Math.round(item.saleQuantity).toString(), styles: { fontStyle: 'bold', halign: 'right', fillColor: [250, 250, 250] } },
                     // Inhouse PKT
                     {
@@ -527,7 +538,11 @@ export const generateStockReportPDF = (stockData, filters) => {
             return `${totalWhole}${totalRem > 0 ? ` - ${totalRem} kg` : ''}`;
         })();
 
-        const totalSalePkt = stockData.totalSalePkt;
+        const totalSalePktStr = (() => {
+            const totalWhole = stockData.displayRecords.reduce((accWhole, item) => accWhole + item.brandList.reduce((sum, ent) => sum + Math.floor(parseFloat(ent.salePacket) || 0), 0), 0);
+            const totalRem = Math.round(stockData.displayRecords.reduce((accRem, item) => accRem + item.brandList.reduce((sum, ent) => sum + (parseFloat(ent.saleQuantity) || 0) - (Math.floor(parseFloat(ent.salePacket) || 0) * (parseFloat(ent.packetSize) || 0)), 0), 0));
+            return `${totalWhole}${totalRem > 0 ? ` - ${totalRem} kg` : ''}`;
+        })();
 
         // Append Grand Total Row
         tableRows.push([
@@ -536,7 +551,7 @@ export const generateStockReportPDF = (stockData, filters) => {
             { content: '', styles: { fillColor: [240, 240, 240] } },
             { content: grandTotalPktStr, styles: { fontStyle: 'bold', halign: 'right', fillColor: [240, 240, 240] } },
             { content: Math.round(stockData.totalTotalInHouseQty).toString(), styles: { fontStyle: 'bold', halign: 'right', fillColor: [240, 240, 240] } },
-            { content: Number.isInteger(totalSalePkt) ? totalSalePkt.toString() : totalSalePkt.toFixed(2), styles: { fontStyle: 'bold', halign: 'right', fillColor: [240, 240, 240] } },
+            { content: totalSalePktStr, styles: { fontStyle: 'bold', halign: 'right', fillColor: [240, 240, 240] } },
             { content: Math.round(stockData.totalSaleQty).toString(), styles: { fontStyle: 'bold', halign: 'right', fillColor: [240, 240, 240] } },
             { content: inHousePktStr, styles: { fontStyle: 'bold', halign: 'right', fillColor: [240, 240, 240] } },
             { content: Math.round(stockData.totalInHouseQty).toString(), styles: { fontStyle: 'bold', halign: 'right', fillColor: [240, 240, 240] } }
@@ -566,13 +581,13 @@ export const generateStockReportPDF = (stockData, filters) => {
             columnStyles: {
                 0: { cellWidth: 6, halign: 'center' }, // SL
                 1: { cellWidth: 23 }, // Product Name
-                2: { cellWidth: 55 }, // Brand (increased to fit on one line)
-                3: { cellWidth: 20, halign: 'right' }, // Total Inhouse PKT
-                4: { cellWidth: 18, halign: 'right' }, // Total Inhouse QTY
-                5: { cellWidth: 16, halign: 'right' }, // Sale PKT
-                6: { cellWidth: 16, halign: 'right' }, // Sale QTY
-                7: { cellWidth: 20, halign: 'right' }, // InH PKT
-                8: { cellWidth: 18, halign: 'right' }  // InH QTY
+                2: { cellWidth: 44 }, // Brand (increased to fit on one line)
+                3: { cellWidth: 22, halign: 'right' }, // Total Inhouse PKT
+                4: { cellWidth: 22, halign: 'right' }, // Total Inhouse QTY
+                5: { cellWidth: 20, halign: 'right' }, // Sale PKT
+                6: { cellWidth: 20, halign: 'right' }, // Sale QTY
+                7: { cellWidth: 22, halign: 'right' }, // InH PKT
+                8: { cellWidth: 22, halign: 'right' }  // InH QTY
             },
             margin: { left: margin, right: margin }
         });
@@ -597,58 +612,58 @@ export const generateStockReportPDF = (stockData, filters) => {
             doc.setFillColor(255, 255, 255);
             doc.rect(x, y, cardWidth, cardHeight, 'FD');
 
-            doc.setFillColor(isBlue ? 239 : 249, isBlue ? 246 : 250, isBlue ? 255 : 251);
+            doc.setFillColor(245, 245, 245);
             doc.rect(x, y, cardWidth, 8, 'F');
-            doc.setDrawColor(isBlue ? 219 : 229, isBlue ? 234 : 231, isBlue ? 254 : 235);
+            doc.setDrawColor(200, 200, 200);
             doc.line(x, y + 8, x + cardWidth, y + 8);
 
             doc.setFontSize(9);
             doc.setFont('helvetica', 'bold');
-            doc.setTextColor(isBlue ? 59 : 107, isBlue ? 130 : 114, isBlue ? 246 : 128);
+            doc.setTextColor(0);
             const titleWidth = doc.getTextWidth(title);
             doc.text(title, x + (cardWidth - titleWidth) / 2, y + 5.5);
 
             // Row 1: PKT
             doc.setFontSize(10);
             doc.setFont('helvetica', 'normal');
-            doc.setTextColor(107, 114, 128);
+            doc.setTextColor(0);
             const pktLabelWidth = doc.getTextWidth("PKT: ");
             doc.setFont('helvetica', 'bold');
-            doc.setTextColor(isBlue ? 29 : 17, isBlue ? 78 : 24, isBlue ? 216 : 39);
+            doc.setTextColor(0);
             const pktValStr = pktVal.toString();
             const pktValWidth = doc.getTextWidth(pktValStr);
             const pktTotalWidth = pktLabelWidth + pktValWidth;
             const pktLineX = x + (cardWidth - pktTotalWidth) / 2;
 
             doc.setFont('helvetica', 'normal');
-            doc.setTextColor(107, 114, 128);
+            doc.setTextColor(0);
             doc.text("PKT: ", pktLineX, y + 15);
             doc.setFont('helvetica', 'bold');
-            doc.setTextColor(isBlue ? 29 : 17, isBlue ? 78 : 24, isBlue ? 216 : 39);
+            doc.setTextColor(0);
             doc.text(pktValStr, pktLineX + pktLabelWidth, y + 15);
 
             // Row 2: QTY
             const qtyStrVal = `${Math.round(qtyVal).toLocaleString()} kg`;
             doc.setFont('helvetica', 'normal');
-            doc.setTextColor(107, 114, 128);
+            doc.setTextColor(0);
             const qtyLabelWidth = doc.getTextWidth("QTY: ");
             doc.setFont('helvetica', 'bold');
-            doc.setTextColor(isBlue ? 29 : 17, isBlue ? 78 : 24, isBlue ? 216 : 39);
+            doc.setTextColor(0);
             const qtyValWidth = doc.getTextWidth(qtyStrVal);
             const qtyTotalWidth = qtyLabelWidth + qtyValWidth;
             const qtyLineX = x + (cardWidth - qtyTotalWidth) / 2;
 
             doc.setFont('helvetica', 'normal');
-            doc.setTextColor(107, 114, 128);
+            doc.setTextColor(0);
             doc.text("QTY: ", qtyLineX, y + 21);
             doc.setFont('helvetica', 'bold');
-            doc.setTextColor(isBlue ? 29 : 17, isBlue ? 78 : 24, isBlue ? 216 : 39);
+            doc.setTextColor(0);
             doc.text(qtyStrVal, qtyLineX + qtyLabelWidth, y + 21);
         };
 
         drawSummaryCard(cardX, finalY, "TOTAL INHOUSE STOCK", grandTotalPktStr, stockData.totalTotalInHouseQty, false);
         cardX += cardWidth + cardGap;
-        drawSummaryCard(cardX, finalY, "TOTAL SALE", totalSalePkt, stockData.totalSaleQty, false);
+        drawSummaryCard(cardX, finalY, "TOTAL SALE", totalSalePktStr, stockData.totalSaleQty, false);
         cardX += cardWidth + cardGap;
         drawSummaryCard(cardX, finalY, "CURRENT INHOUSE", inHousePktStr, stockData.totalInHouseQty, true);
 
@@ -698,9 +713,9 @@ export const generateWarehouseReportPDF = (displayGroups, filters, totals) => {
 
         doc.setFontSize(10);
         doc.setFont('helvetica', 'normal');
-        doc.setTextColor(100);
+        doc.setTextColor(0); // Changed from 100 to 0 (Black)
         doc.text("766, H.M Tower, Level-06, Borogola, Bogura-5800, Bangladesh", pageWidth / 2, 26, { align: 'center' });
-        doc.text("+8802588813057, +8801711-406898, anienterprise051@gmail.com, www.anienterprises.com.bd", pageWidth / 2, 31, { align: 'center' });
+        doc.text("+8802588813057, anienterprise051@gmail.com, www.anienterprises.com.bd", pageWidth / 2, 31, { align: 'center' });
 
         // Separator
         doc.setDrawColor(0);
@@ -724,7 +739,7 @@ export const generateWarehouseReportPDF = (displayGroups, filters, totals) => {
         doc.setFont('helvetica', 'bold');
         doc.text("Date Range:", margin, yPos);
         doc.setFont('helvetica', 'normal');
-        doc.text(`${filters.startDate || 'Start'} to ${filters.endDate || 'Present'}`, margin + 25, yPos);
+        doc.text(`${formatDate(filters.startDate) === '-' ? 'Start' : formatDate(filters.startDate)} to ${formatDate(filters.endDate) === '-' ? 'Present' : formatDate(filters.endDate)}`, margin + 25, yPos);
 
         if (filters.warehouse) {
             yPos += 5;
@@ -743,7 +758,7 @@ export const generateWarehouseReportPDF = (displayGroups, filters, totals) => {
         }
 
         // Right Side: Printed On
-        const dateStr = new Date().toLocaleDateString(undefined, { day: 'numeric', month: 'numeric', year: 'numeric' });
+        const dateStr = formatDate(new Date().toISOString().split('T')[0]);
         doc.setFont('helvetica', 'normal');
         doc.text(`Printed on: ${dateStr}`, pageWidth - margin, 55, { align: 'right' });
 
@@ -769,10 +784,30 @@ export const generateWarehouseReportPDF = (displayGroups, filters, totals) => {
 
                     // Brand details (Individual row per brand)
                     row.push({ content: (brandItem.brand || '-').toUpperCase(), styles: { valign: 'top' } });
-                    row.push({ content: Math.round(parseFloat(brandItem.inhouseQty) || 0).toLocaleString(), styles: { halign: 'right', valign: 'top' } });
-                    row.push({ content: Math.round(parseFloat(brandItem.inhousePkt) || 0).toLocaleString(), styles: { halign: 'right', valign: 'top' } });
-                    row.push({ content: Math.round(parseFloat(brandItem.whQty) || 0).toLocaleString(), styles: { halign: 'right', valign: 'top', fontStyle: 'bold' } });
-                    row.push({ content: Math.round(parseFloat(brandItem.whPkt) || 0).toLocaleString(), styles: { halign: 'right', valign: 'top', fontStyle: 'bold' } });
+                    row.push({ content: `${Math.round(parseFloat(brandItem.inhouseQty) || 0).toLocaleString()} kg`, styles: { halign: 'right', valign: 'top' } });
+                    row.push({
+                        content: (() => {
+                            const pkt = parseFloat(brandItem.inhousePkt) || 0;
+                            const qty = parseFloat(brandItem.inhouseQty) || 0;
+                            const size = parseFloat(brandItem.packetSize || brandItem.size || 0);
+                            const whole = Math.floor(pkt);
+                            const rem = Math.round(qty - (whole * size));
+                            return `${whole.toLocaleString()}${rem > 0 ? ` - ${rem.toLocaleString()} kg` : ''}`;
+                        })(),
+                        styles: { halign: 'right', valign: 'top' }
+                    });
+                    row.push({ content: `${Math.round(parseFloat(brandItem.whQty) || 0).toLocaleString()} kg`, styles: { halign: 'right', valign: 'top', fontStyle: 'bold' } });
+                    row.push({
+                        content: (() => {
+                            const pkt = parseFloat(brandItem.whPkt) || 0;
+                            const qty = parseFloat(brandItem.whQty) || 0;
+                            const size = parseFloat(brandItem.packetSize || brandItem.size || 0);
+                            const whole = Math.floor(pkt);
+                            const rem = Math.round(qty - (whole * size));
+                            return `${whole.toLocaleString()}${rem > 0 ? ` - ${rem.toLocaleString()} kg` : ''}`;
+                        })(),
+                        styles: { halign: 'right', valign: 'top', fontStyle: 'bold' }
+                    });
 
                     tableRows.push(row);
                 });
@@ -781,10 +816,40 @@ export const generateWarehouseReportPDF = (displayGroups, filters, totals) => {
                 if (hasTotal) {
                     tableRows.push([
                         { content: 'SUB TOTAL', styles: { fontStyle: 'bold', halign: 'right', fillColor: [250, 250, 250] }, colSpan: 1 }, // Spanning Brand col
-                        { content: Math.round(pGroup.brands.reduce((sum, b) => sum + (parseFloat(b.inhouseQty) || 0), 0)).toLocaleString(), styles: { halign: 'right', fontStyle: 'bold', fillColor: [250, 250, 250] } },
-                        { content: Math.round(pGroup.brands.reduce((sum, b) => sum + (parseFloat(b.inhousePkt) || 0), 0)).toLocaleString(), styles: { halign: 'right', fontStyle: 'bold', fillColor: [250, 250, 250], textColor: [0, 100, 0] } },
-                        { content: Math.round(pGroup.brands.reduce((sum, b) => sum + (parseFloat(b.whQty) || 0), 0)).toLocaleString(), styles: { halign: 'right', fontStyle: 'bold', fillColor: [250, 250, 250] } },
-                        { content: Math.round(pGroup.brands.reduce((sum, b) => sum + (parseFloat(b.whPkt) || 0), 0)).toLocaleString(), styles: { halign: 'right', fontStyle: 'bold', fillColor: [250, 250, 250], textColor: [0, 0, 150] } }
+                        {
+                            content: `${Math.round(pGroup.brands.reduce((sum, b) => sum + (parseFloat(b.inhouseQty) || 0), 0)).toLocaleString()} kg`,
+                            styles: { halign: 'right', fontStyle: 'bold', fillColor: [250, 250, 250] }
+                        },
+                        {
+                            content: (() => {
+                                const totalWhole = pGroup.brands.reduce((sum, b) => sum + Math.floor(parseFloat(b.inhousePkt) || 0), 0);
+                                const totalRem = Math.round(pGroup.brands.reduce((sum, b) => {
+                                    const pkt = parseFloat(b.inhousePkt) || 0;
+                                    const qty = parseFloat(b.inhouseQty) || 0;
+                                    const size = parseFloat(b.packetSize || b.size || 0);
+                                    return sum + (qty - (Math.floor(pkt) * size));
+                                }, 0));
+                                return `${totalWhole.toLocaleString()}${totalRem > 0 ? ` - ${totalRem.toLocaleString()} kg` : ''}`;
+                            })(),
+                            styles: { halign: 'right', fontStyle: 'bold', fillColor: [250, 250, 250], textColor: [0, 0, 0] }
+                        },
+                        {
+                            content: `${Math.round(pGroup.brands.reduce((sum, b) => sum + (parseFloat(b.whQty) || 0), 0)).toLocaleString()} kg`,
+                            styles: { halign: 'right', fontStyle: 'bold', fillColor: [250, 250, 250] }
+                        },
+                        {
+                            content: (() => {
+                                const totalWhole = pGroup.brands.reduce((sum, b) => sum + Math.floor(parseFloat(b.whPkt) || 0), 0);
+                                const totalRem = Math.round(pGroup.brands.reduce((sum, b) => {
+                                    const pkt = parseFloat(b.whPkt) || 0;
+                                    const qty = parseFloat(b.whQty) || 0;
+                                    const size = parseFloat(b.packetSize || b.size || 0);
+                                    return sum + (qty - (Math.floor(pkt) * size));
+                                }, 0));
+                                return `${totalWhole.toLocaleString()}${totalRem > 0 ? ` - ${totalRem.toLocaleString()} kg` : ''}`;
+                            })(),
+                            styles: { halign: 'right', fontStyle: 'bold', fillColor: [250, 250, 250], textColor: [0, 0, 0] }
+                        }
                     ]);
                 }
             });
@@ -793,10 +858,20 @@ export const generateWarehouseReportPDF = (displayGroups, filters, totals) => {
         // Add Grand Total Row
         tableRows.push([
             { content: 'GRAND TOTAL', styles: { fontStyle: 'bold', halign: 'right', fillColor: [240, 240, 240] }, colSpan: 4 },
-            { content: Math.round(totals.totalInHouseQty).toLocaleString(), styles: { halign: 'right', fontStyle: 'bold', fillColor: [240, 240, 240] } },
-            { content: Math.round(totals.totalInHousePkt).toLocaleString(), styles: { halign: 'right', fontStyle: 'bold', fillColor: [240, 240, 240] } },
-            { content: Math.round(totals.totalWhQty).toLocaleString(), styles: { halign: 'right', fontStyle: 'bold', fillColor: [240, 240, 240] } },
-            { content: Math.round(totals.totalWhPkt).toLocaleString(), styles: { halign: 'right', fontStyle: 'bold', fillColor: [240, 240, 240] } }
+            { content: `${Math.round(totals.totalInHouseQty).toLocaleString()} kg`, styles: { halign: 'right', fontStyle: 'bold', fillColor: [240, 240, 240] } },
+            {
+                content: (() => {
+                    return `${totals.totalInHouseWhole.toLocaleString()}${totals.totalInHouseRem > 0 ? ` - ${totals.totalInHouseRem.toLocaleString()} kg` : ''}`;
+                })(),
+                styles: { halign: 'right', fontStyle: 'bold', fillColor: [240, 240, 240] }
+            },
+            { content: `${Math.round(totals.totalWhQty).toLocaleString()} kg`, styles: { halign: 'right', fontStyle: 'bold', fillColor: [240, 240, 240] } },
+            {
+                content: (() => {
+                    return `${totals.totalWhWhole.toLocaleString()}${totals.totalWhRem > 0 ? ` - ${totals.totalWhRem.toLocaleString()} kg` : ''}`;
+                })(),
+                styles: { halign: 'right', fontStyle: 'bold', fillColor: [240, 240, 240] }
+            }
         ]);
 
         // --- Table ---
@@ -824,9 +899,9 @@ export const generateWarehouseReportPDF = (displayGroups, filters, totals) => {
                 0: { cellWidth: 8, halign: 'center' },   // SL
                 1: { cellWidth: 28 },                     // Warehouse
                 2: { cellWidth: 26 },                     // Product Name
-                3: { cellWidth: 40 },                     // Brand (reduced from 44)
-                4: { cellWidth: 20, halign: 'right' },    // Inhouse Qty
-                5: { cellWidth: 24, halign: 'right' },    // Inhouse Pkt (increased from 20)
+                3: { cellWidth: 34 },                     // Brand (reduced from 44)
+                4: { cellWidth: 26, halign: 'right' },    // Inhouse Qty
+                5: { cellWidth: 26, halign: 'right' },    // Inhouse Pkt (increased from 20)
                 6: { cellWidth: 27, halign: 'right' },    // Warehouse Qty
                 7: { cellWidth: 27, halign: 'right' }     // Warehouse Pkt
             },
@@ -857,65 +932,70 @@ export const generateWarehouseReportPDF = (displayGroups, filters, totals) => {
             doc.rect(x, y, cardWidth, cardHeight, 'FD');
 
             // Header strip
-            doc.setFillColor(isBlue ? 239 : 249, isBlue ? 246 : 250, isBlue ? 255 : 251);
+            doc.setFillColor(245, 245, 245);
             doc.rect(x, y, cardWidth, 8, 'F');
-            doc.setDrawColor(isBlue ? 219 : 229, isBlue ? 234 : 231, isBlue ? 254 : 235);
+            doc.setDrawColor(200, 200, 200);
             doc.line(x, y + 8, x + cardWidth, y + 8);
 
             // Header text (centered)
             doc.setFontSize(9);
             doc.setFont('helvetica', 'bold');
-            doc.setTextColor(isBlue ? 59 : 107, isBlue ? 130 : 114, isBlue ? 246 : 128);
+            doc.setTextColor(0);
             const titleWidth = doc.getTextWidth(title);
             doc.text(title, x + (cardWidth - titleWidth) / 2, y + 5.5);
 
             // Row 1: PKT (centered)
             doc.setFontSize(10);
             doc.setFont('helvetica', 'normal');
-            doc.setTextColor(107, 114, 128); // gray label color
+            doc.setTextColor(0); // gray label color
             const pktLabelWidth = doc.getTextWidth("PKT: ");
             doc.setFont('helvetica', 'bold');
-            doc.setTextColor(isBlue ? 29 : 17, isBlue ? 78 : 24, isBlue ? 216 : 39); // blue/black value color
-            const pktValWidth = doc.getTextWidth(Math.round(pktVal).toLocaleString());
+            doc.setTextColor(0); // blue/black value color
+            const pktValStr = pktVal; // Expecting string now
+            const pktValWidth = doc.getTextWidth(pktValStr);
 
             let pktTotalWidth = pktLabelWidth + pktValWidth;
             let pktLineX = x + (cardWidth - pktTotalWidth) / 2;
 
             doc.setFont('helvetica', 'normal');
-            doc.setTextColor(107, 114, 128);
+            doc.setTextColor(0);
             doc.text("PKT: ", pktLineX, y + 15);
 
             doc.setFont('helvetica', 'bold');
-            doc.setTextColor(isBlue ? 29 : 17, isBlue ? 78 : 24, isBlue ? 216 : 39);
-            doc.text(`${Math.round(pktVal).toLocaleString()}`, pktLineX + pktLabelWidth, y + 15);
+            doc.setTextColor(0);
+            doc.text(pktValStr, pktLineX + pktLabelWidth, y + 15);
 
             // Row 2: QTY (centered)
             const qtyStrVal = `${Math.round(qtyVal).toLocaleString()} kg`;
             doc.setFont('helvetica', 'normal');
-            doc.setTextColor(107, 114, 128);
+            doc.setTextColor(0);
             const qtyLabelWidth = doc.getTextWidth("QTY: ");
             doc.setFont('helvetica', 'bold');
-            doc.setTextColor(isBlue ? 29 : 17, isBlue ? 78 : 24, isBlue ? 216 : 39);
+            doc.setTextColor(0);
             const qtyValWidth = doc.getTextWidth(qtyStrVal);
 
             let qtyTotalWidth = qtyLabelWidth + qtyValWidth;
             let qtyLineX = x + (cardWidth - qtyTotalWidth) / 2;
 
             doc.setFont('helvetica', 'normal');
-            doc.setTextColor(107, 114, 128);
+            doc.setTextColor(0);
             doc.text("QTY: ", qtyLineX, y + 21);
 
             doc.setFont('helvetica', 'bold');
-            doc.setTextColor(isBlue ? 29 : 17, isBlue ? 78 : 24, isBlue ? 216 : 39);
+            doc.setTextColor(0);
             doc.text(qtyStrVal, qtyLineX + qtyLabelWidth, y + 21);
         };
 
         // Card 1: TOTAL INHOUSE STOCK
-        drawSummaryCard(cardX, finalY, "TOTAL INHOUSE STOCK", totals.totalInHousePkt, totals.totalInHouseQty, false);
+        drawSummaryCard(cardX, finalY, "TOTAL INHOUSE STOCK", (() => {
+            return `${totals.totalInHouseWhole.toLocaleString()}${totals.totalInHouseRem > 0 ? ` - ${totals.totalInHouseRem.toLocaleString()} kg` : ''}`;
+        })(), totals.totalInHouseQty, false);
         cardX += cardWidth + cardGap;
 
         // Card 2: WAREHOUSE STOCK
-        drawSummaryCard(cardX, finalY, "WAREHOUSE STOCK", totals.totalWhPkt, totals.totalWhQty, true);
+        drawSummaryCard(cardX, finalY, "WAREHOUSE STOCK", (() => {
+            return `${totals.totalWhWhole.toLocaleString()}${totals.totalWhRem > 0 ? ` - ${totals.totalWhRem.toLocaleString()} kg` : ''}`;
+        })(), totals.totalWhQty, true);
 
         // --- Signatures ---
         const sigY = finalY + 45;
@@ -944,12 +1024,49 @@ export const generateWarehouseReportPDF = (displayGroups, filters, totals) => {
     }
 };
 
-export const generateSaleInvoicePDF = (sale) => {
+export const generateSaleInvoicePDF = (sale, allCustomers = []) => {
     try {
         const doc = new jsPDF();
         const pageWidth = doc.internal.pageSize.width;
         const pageHeight = doc.internal.pageSize.height;
         const margin = 10;
+
+        // --- Calculate Previous Balance Dynamically ---
+        let previousBalance = parseFloat(sale.previousBalance || 0);
+
+        // If we have customer context, we can calculate a more accurate point-in-time balance
+        // identifying the matching customer from the list
+        const customer = allCustomers.find(c =>
+            c._id === sale.customerId ||
+            (c.companyName && sale.companyName && c.companyName.trim().toLowerCase() === sale.companyName.trim().toLowerCase())
+        );
+
+        if (customer) {
+            const sHistory = customer.salesHistory || [];
+            const pHistory = customer.paymentHistory || [];
+
+            // A transaction is "previous" if:
+            // 1. It happened on a strictly earlier date
+            // 2. OR it happened on the same date but has a lexicographically smaller invoice number
+            const prevSales = sHistory.filter(h => {
+                if (h.invoiceNo === sale.invoiceNo) return false; // Exclude current sale
+                if (h.date < sale.date) return true;
+                if (h.date === sale.date && h.invoiceNo < sale.invoiceNo) return true;
+                return false;
+            });
+
+            const totalPrevAmt = prevSales.reduce((sum, h) => sum + (parseFloat(h.amount) || 0), 0);
+            const totalPrevPaid = prevSales.reduce((sum, h) => sum + (parseFloat(h.paid) || 0), 0);
+            const totalPrevDisc = prevSales.reduce((sum, h) => sum + (parseFloat(h.discount) || 0), 0);
+
+            // For standalone payments, we don't have invoice numbers, so we just use date
+            const prevPayments = pHistory.filter(h => h.date < sale.date);
+            const totalPrevPayAmt = prevPayments.reduce((sum, h) => sum + (parseFloat(h.amount) || 0), 0);
+
+            const calculatedPrevBalance = totalPrevAmt - totalPrevPaid - totalPrevDisc - totalPrevPayAmt;
+            // Use calculated balance if it's non-zero or if the sale belongs to this customer
+            previousBalance = Math.max(0, calculatedPrevBalance);
+        }
 
         // --- 1. Header Section ---
         doc.setFontSize(24);
@@ -959,9 +1076,9 @@ export const generateSaleInvoicePDF = (sale) => {
 
         doc.setFontSize(9);
         doc.setFont('helvetica', 'normal');
-        doc.setTextColor(50);
+        doc.setTextColor(0); // Changed from 50 to 0 (Black)
         doc.text("766, H.M Tower, Level-06, Borogola, Bogura-5800, Bangladesh", pageWidth / 2, 26, { align: 'center' });
-        doc.text("+8802588813057, +8801711-406898, anienterprise051@gmail.com, www.anienterprises.com.bd", pageWidth / 2, 31, { align: 'center' });
+        doc.text("+8802588813057, anienterprise051@gmail.com, www.anienterprises.com.bd", pageWidth / 2, 31, { align: 'center' });
 
         // --- 2. Boxed Title with Extending Lines ---
         doc.setDrawColor(0);
@@ -1030,13 +1147,7 @@ export const generateSaleInvoicePDF = (sale) => {
         doc.setFont('helvetica', 'bold');
         doc.text("Invoice Date :", rightLabelX, ryPos);
         doc.setFont('helvetica', 'normal');
-
-        // Format date as dd/mm/yyyy
-        const dateObj = new Date(sale.date);
-        const day = String(dateObj.getDate()).padStart(2, '0');
-        const month = String(dateObj.getMonth() + 1).padStart(2, '0');
-        const year = dateObj.getFullYear();
-        doc.text(`${day}/${month}/${year}`, rightValueX, ryPos);
+        doc.text(formatDate(sale.date), rightValueX, ryPos);
 
         ryPos += 5;
         doc.setFont('helvetica', 'bold');
@@ -1162,7 +1273,6 @@ export const generateSaleInvoicePDF = (sale) => {
         const invoiceTotal = subtotal - discount;
         const paidAmount = parseFloat(sale.paidAmount || 0);
         const currentBalance = invoiceTotal - paidAmount;
-        const previousBalance = parseFloat(sale.previousBalance || 0);
         const totalBalance = currentBalance + previousBalance;
 
         drawSummaryRow("Discount", discount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }), finalY);
@@ -1224,9 +1334,9 @@ export const generateProductHistoryPDF = (productName, activeTab, purchaseData, 
 
         doc.setFontSize(10);
         doc.setFont('helvetica', 'normal');
-        doc.setTextColor(100);
+        doc.setTextColor(0);
         doc.text("766, H.M Tower, Level-06, Borogola, Bogura-5800, Bangladesh", pageWidth / 2, 26, { align: 'center' });
-        doc.text("+8802588813057, +8801711-406898, anienterprise051@gmail.com, www.anienterprises.com.bd", pageWidth / 2, 31, { align: 'center' });
+        doc.text("+8802588813057, anienterprise051@gmail.com, www.anienterprises.com.bd", pageWidth / 2, 31, { align: 'center' });
 
         // Separator
         doc.setDrawColor(0);
@@ -1327,9 +1437,9 @@ export const generateProductHistoryPDF = (productName, activeTab, purchaseData, 
             const unifiedFoot = [[
                 { content: 'TOTAL HISTORY', colSpan: 5, styles: { halign: 'right', fontStyle: 'bold' } },
                 { content: `${Math.round(purchaseTotals.qty).toLocaleString()} kg`, styles: { halign: 'right', fontStyle: 'bold' } },
-                { content: `${Math.round(saleTotals.qty).toLocaleString()} kg`, styles: { halign: 'right', fontStyle: 'bold', textColor: [37, 99, 235] } },
-                { content: `${Math.round(unifiedData[unifiedData.length - 1]?.runningInHouse || 0).toLocaleString()} kg`, styles: { halign: 'right', fontStyle: 'bold', textColor: [29, 78, 216] } },
-                { content: `${Math.round(purchaseTotals.shortage).toLocaleString()} kg`, styles: { halign: 'right', fontStyle: 'bold', textColor: [220, 38, 38] } }
+                { content: `${Math.round(saleTotals.qty).toLocaleString()} kg`, styles: { halign: 'right', fontStyle: 'bold', textColor: [0, 0, 0] } },
+                { content: `${Math.round(unifiedData[unifiedData.length - 1]?.runningInHouse || 0).toLocaleString()} kg`, styles: { halign: 'right', fontStyle: 'bold', textColor: [0, 0, 0] } },
+                { content: `${Math.round(purchaseTotals.shortage).toLocaleString()} kg`, styles: { halign: 'right', fontStyle: 'bold', textColor: [0, 0, 0] } }
             ]];
 
             autoTable(doc, {
@@ -1383,11 +1493,11 @@ export const generateProductHistoryPDF = (productName, activeTab, purchaseData, 
             ]);
             const purchaseFoot = [[
                 { content: 'TOTAL PURCHASE', colSpan: 4, styles: { halign: 'right', fontStyle: 'bold' } },
-                { content: `TK ${Math.round(purchaseTotals.totalValue).toLocaleString()}`, styles: { halign: 'right', fontStyle: 'bold', textColor: [29, 78, 216] } },
+                { content: `TK ${Math.round(purchaseTotals.totalValue).toLocaleString()}`, styles: { halign: 'right', fontStyle: 'bold', textColor: [0, 0, 0] } },
                 { content: purchaseTotals.pkt.toLocaleString(), styles: { halign: 'right', fontStyle: 'bold' } },
                 { content: `${Math.round(purchaseTotals.qty).toLocaleString()} kg`, styles: { halign: 'right', fontStyle: 'bold' } },
-                { content: `${Math.round(purchaseTotals.inHouse).toLocaleString()} kg`, styles: { halign: 'right', fontStyle: 'bold', textColor: [37, 99, 235] } },
-                { content: `${Math.round(purchaseTotals.shortage).toLocaleString()} kg`, styles: { halign: 'right', fontStyle: 'bold', textColor: [220, 38, 38] } }
+                { content: `${Math.round(purchaseTotals.inHouse).toLocaleString()} kg`, styles: { halign: 'right', fontStyle: 'bold', textColor: [0, 0, 0] } },
+                { content: `${Math.round(purchaseTotals.shortage).toLocaleString()} kg`, styles: { halign: 'right', fontStyle: 'bold', textColor: [0, 0, 0] } }
             ]];
 
             autoTable(doc, {
@@ -1434,7 +1544,7 @@ export const generateProductHistoryPDF = (productName, activeTab, purchaseData, 
                 { content: 'TOTAL SALE', colSpan: 4, styles: { halign: 'right', fontStyle: 'bold' } },
                 { content: `${Math.round(saleTotals.qty).toLocaleString()} kg`, styles: { halign: 'right', fontStyle: 'bold' } },
                 { content: '-', styles: { halign: 'right' } },
-                { content: `TK ${Math.round(saleTotals.amount).toLocaleString()}`, styles: { halign: 'right', fontStyle: 'bold', textColor: [37, 99, 235] } }
+                { content: `TK ${Math.round(saleTotals.amount).toLocaleString()}`, styles: { halign: 'right', fontStyle: 'bold', textColor: [0, 0, 0] } }
             ]];
 
             autoTable(doc, {

@@ -606,7 +606,7 @@ const LCReport = ({
                         <div className="text-center space-y-1">
                             <h1 className="text-5xl font-bold text-gray-900 tracking-tight">M/S ANI ENTERPRISE</h1>
                             <p className="text-[14px] text-gray-600">766, H.M Tower, Level-06, Borogola, Bogura-5800, Bangladesh</p>
-                            <p className="text-[14px] text-gray-600">+8802588813057, +8801711-406898, anienterprise051@gmail.com, www.anienterprises.com.bd</p>
+                            <p className="text-[14px] text-gray-600">+8802588813057, anienterprise051@gmail.com, www.anienterprises.com.bd</p>
                         </div>
 
                         {/* Sharp Separator */}

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { EditIcon, TrashIcon, UserIcon, XIcon, SearchIcon, FunnelIcon, ChevronDownIcon, EyeIcon, BoxIcon } from '../../Icons';
-import { API_BASE_URL, SortIcon } from '../../../utils/helpers';
+import { API_BASE_URL, SortIcon, formatDate } from '../../../utils/helpers';
 import { encryptData, decryptData } from '../../../utils/encryption';
 import CustomDatePicker from '../../shared/CustomDatePicker';
 import './Customer.css';
@@ -1231,7 +1231,7 @@ const Customer = ({
                                                     {filteredSalesHistory && filteredSalesHistory.length > 0 ? (
                                                         filteredSalesHistory.map((item, index) => (
                                                             <tr key={index} className="border-b border-gray-100 bg-white hover:bg-gray-50 transition-colors">
-                                                                <td className="px-4 py-3 text-gray-600 font-medium whitespace-nowrap">{new Date(item.date).toLocaleDateString()}</td>
+                                                                <td className="px-4 py-3 text-gray-600 font-medium whitespace-nowrap">{formatDate(item.date)}</td>
                                                                 <td className="px-4 py-3 text-gray-600 font-bold uppercase tracking-tight">{item.invoiceNo || '-'}</td>
                                                                 <td className="px-4 py-3 text-gray-600 font-medium">{item.product || '-'}</td>
                                                                 <td className="px-4 py-3 text-gray-500">{item.truck || '-'}</td>
@@ -1291,7 +1291,7 @@ const Customer = ({
                                                     {viewData.paymentHistory && viewData.paymentHistory.length > 0 ? (
                                                         viewData.paymentHistory.map((payment, index) => (
                                                             <tr key={payment.id || index} className="border-b border-gray-100 bg-white hover:bg-gray-50 transition-colors">
-                                                                <td className="px-4 py-3 text-gray-600">{new Date(payment.date).toLocaleDateString()}</td>
+                                                                <td className="px-4 py-3 text-gray-600">{formatDate(payment.date)}</td>
                                                                 <td className="px-4 py-3 text-gray-600 font-medium">{payment.lcNo || '-'}</td>
                                                                 <td className="px-4 py-3 font-medium text-gray-900">{payment.method}</td>
                                                                 <td className="px-4 py-3 text-gray-600">

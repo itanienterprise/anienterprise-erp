@@ -46,7 +46,7 @@ function App() {
   const [showProductHistoryReport, setShowProductHistoryReport] = useState(false);
   const [productHistoryReportData, setProductHistoryReportData] = useState(null);
   const [stockFormData, setStockFormData] = useState({
-    date: new Date().toISOString().split('T')[0],
+    date: '',
     lcNo: '',
     port: '',
     importer: '',
@@ -200,6 +200,16 @@ function App() {
     });
   };
 
+
+  useEffect(() => {
+    const handleWheel = (e) => {
+      if (document.activeElement.type === 'number') {
+        e.preventDefault();
+      }
+    };
+    window.addEventListener('wheel', handleWheel, { passive: false });
+    return () => window.removeEventListener('wheel', handleWheel);
+  }, []);
 
   useEffect(() => {
     setSelectedItems(new Set());
@@ -408,7 +418,9 @@ function App() {
   };
 
   const handleEdit = (type, item) => {
-    setEditingId(item._id);
+    // Set editingId using _id or first id in the group to mark as edit mode
+    const editId = item._id || (item.allIds && item.allIds[0]);
+    setEditingId(editId);
     if (type === 'stock') {
       // Convert single record to productEntries format for editing
       const formattedData = {
@@ -425,7 +437,7 @@ function App() {
         status: item.status || 'In Stock',
         totalLcTruck: item.totalLcTruck || '',
         totalLcQuantity: item.totalLcQuantity || '',
-        allIds: item.allIds || [item._id],
+        originalIds: item.allIds || [item._id],
         productEntries: (() => {
           if (!item.entries || item.entries.length === 0) {
             return [{
@@ -433,6 +445,7 @@ function App() {
               truckNo: item.truckNo || '',
               isMultiBrand: item.isMultiBrand || false,
               brandEntries: [{
+                _id: item._id,
                 brand: item.brand || '',
                 purchasedPrice: item.purchasedPrice || '',
                 packet: item.packet || '',
@@ -460,6 +473,7 @@ function App() {
               };
             }
             acc[pKey].brandEntries.push({
+              _id: ent._id,
               brand: ent.brand || '',
               purchasedPrice: ent.purchasedPrice || '',
               packet: ent.packet || '',
@@ -623,8 +637,16 @@ function App() {
         const rawData = await response.json();
         const decryptedProducts = rawData.map(record => {
           const decrypted = decryptData(record.data);
+          // Sort brands within the product alphabetically
+          if (decrypted.brands && Array.isArray(decrypted.brands)) {
+            decrypted.brands.sort((a, b) => (a.brand || '').localeCompare(b.brand || '', undefined, { sensitivity: 'base' }));
+          }
           return { ...decrypted, _id: record._id, createdAt: record.createdAt };
         });
+
+        // Sort products alphabetically by name
+        decryptedProducts.sort((a, b) => (a.name || '').localeCompare(b.name || '', undefined, { sensitivity: 'base' }));
+
         setProducts(decryptedProducts);
       }
     } catch (error) {

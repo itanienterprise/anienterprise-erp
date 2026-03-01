@@ -3,6 +3,7 @@ import { SearchIcon, XIcon, BarChartIcon, FunnelIcon } from '../../Icons';
 import CustomDatePicker from "../../shared/CustomDatePicker";
 import { generateStockReportPDF } from '../../../utils/pdfGenerator';
 import { formatDate } from '../../../utils/helpers';
+import { calculatePktRemainder } from '../../../utils/stockHelpers';
 
 const StockReport = ({
     isOpen,
@@ -300,7 +301,7 @@ const StockReport = ({
                         <div className="text-center space-y-1">
                             <h1 className="text-4xl font-bold text-gray-900 tracking-tight">M/S ANI ENTERPRISE</h1>
                             <p className="text-[14px] text-gray-600">766, H.M Tower, Level-06, Borogola, Bogura-5800, Bangladesh</p>
-                            <p className="text-[14px] text-gray-600">+8802588813057, +8801711-406898, anienterprise051@gmail.com, www.anienterprises.com.bd</p>
+                            <p className="text-[14px] text-gray-600">+8802588813057, anienterprise051@gmail.com, www.anienterprises.com.bd</p>
                         </div>
                         <div className="border-t-2 border-gray-900 w-full mt-4"></div>
                         <div className="flex justify-center -mt-6">
@@ -322,13 +323,13 @@ const StockReport = ({
                                 <thead>
                                     <tr className="bg-gray-50 border-b border-gray-900">
                                         <th className="border-r border-gray-900 px-2 py-1 text-left text-[13px] font-bold text-gray-900 uppercase tracking-wider w-[4%] text-center">SL</th>
-                                        <th className="border-r border-gray-900 px-2 py-1 text-left text-[13px] font-bold text-gray-900 uppercase tracking-wider w-[20%]">Product<br />Name</th>
-                                        <th className="border-r border-gray-900 px-2 py-1 text-left text-[13px] font-bold text-gray-900 uppercase tracking-wider w-[12%]">Brand</th>
+                                        <th className="border-r border-gray-900 px-2 py-1 text-left text-[13px] font-bold text-gray-900 uppercase tracking-wider w-[12%]">Product<br />Name</th>
+                                        <th className="border-r border-gray-900 px-2 py-1 text-left text-[13px] font-bold text-gray-900 uppercase tracking-wider w-[18%]">Brand</th>
                                         <th className="border-r border-gray-900 px-2 py-1 text-right text-[13px] font-bold text-gray-900 uppercase tracking-wider w-[12%] whitespace-nowrap">Total Inhouse<br />PKT</th>
                                         <th className="border-r border-gray-900 px-2 py-1 text-right text-[13px] font-bold text-gray-900 uppercase tracking-wider w-[13%] whitespace-nowrap">Total Inhouse<br />QTY</th>
                                         <th className="border-r border-gray-900 px-2 py-1 text-right text-[13px] font-bold text-gray-900 uppercase tracking-wider w-[8%] whitespace-nowrap">Sale<br />PKT</th>
                                         <th className="border-r border-gray-900 px-2 py-1 text-right text-[13px] font-bold text-gray-900 uppercase tracking-wider w-[8%] whitespace-nowrap">Sale<br />QTY</th>
-                                        <th className="border-r border-gray-900 px-2 py-1 text-right text-[13px] font-bold text-gray-900 uppercase tracking-wider w-[11%] whitespace-nowrap">Inhouse<br />PKT</th>
+                                        <th className="border-r border-gray-900 px-2 py-1 text-right text-[13px] font-bold text-gray-900 uppercase tracking-wider w-[13%] whitespace-nowrap">Inhouse<br />PKT</th>
                                         <th className="border-r border-gray-900 px-2 py-1 text-right text-[13px] font-bold text-gray-900 uppercase tracking-wider w-[12%] whitespace-nowrap">Inhouse<br />QTY</th>
                                     </tr>
                                 </thead>
@@ -353,19 +354,15 @@ const StockReport = ({
                                                     {/* Total Inhouse Column */}
                                                     <td className="border-r border-gray-900 px-2 py-0.5 text-[14px] text-right text-gray-900 font-medium align-top whitespace-nowrap">
                                                         {item.brandList.map((ent, i) => {
-                                                            const pkt = parseFloat(ent.totalInHousePacket) || 0;
-                                                            const qty = parseFloat(ent.totalInHouseQuantity) || 0;
-                                                            const size = parseFloat(ent.packetSize) || 0;
-                                                            const whole = Math.floor(pkt);
-                                                            const rem = Math.round(qty - (whole * size));
-                                                            return <div key={i} className="leading-tight">{whole}{rem > 0 ? ` - ${rem} kg` : ''}</div>;
+                                                            const { whole, remainder } = calculatePktRemainder(ent.totalInHouseQuantity, ent.packetSize);
+                                                            return <div key={i} className="leading-tight">{whole}{remainder > 0 ? ` - ${remainder} kg` : ''}</div>;
                                                         })}
                                                         {hasTotal && (
                                                             <div className="mt-0 pt-0.5 border-t border-gray-900 font-bold leading-tight">
                                                                 {(() => {
-                                                                    const totalWhole = item.brandList.reduce((sum, ent) => sum + Math.floor(parseFloat(ent.totalInHousePacket) || 0), 0);
-                                                                    const totalRem = Math.round(item.brandList.reduce((sum, ent) => sum + (parseFloat(ent.totalInHouseQuantity) || 0) - (Math.floor(parseFloat(ent.totalInHousePacket) || 0) * (parseFloat(ent.packetSize) || 0)), 0));
-                                                                    return `${totalWhole}${totalRem > 0 ? ` - ${totalRem} kg` : ''}`;
+                                                                    const pktSize = item.brandList[0]?.packetSize || 0;
+                                                                    const { whole, remainder } = calculatePktRemainder(item.totalInHouseQuantity, pktSize);
+                                                                    return `${whole}${remainder > 0 ? ` - ${remainder} kg` : ''}`;
                                                                 })()}
                                                             </div>
                                                         )}
@@ -389,19 +386,15 @@ const StockReport = ({
                                                     {/* Inhouse Remaining Column */}
                                                     <td className="border-r border-gray-900 px-2 py-0.5 text-[14px] text-right text-gray-900 font-medium align-top whitespace-nowrap">
                                                         {item.brandList.map((ent, i) => {
-                                                            const pkt = parseFloat(ent.inHousePacket) || 0;
-                                                            const qty = parseFloat(ent.inHouseQuantity) || 0;
-                                                            const size = parseFloat(ent.packetSize) || 0;
-                                                            const whole = Math.floor(pkt);
-                                                            const rem = Math.round(qty - (whole * size));
-                                                            return <div key={i} className="leading-tight">{whole}{rem > 0 ? ` - ${rem} kg` : ''}</div>;
+                                                            const { whole, remainder } = calculatePktRemainder(ent.inHouseQuantity, ent.packetSize);
+                                                            return <div key={i} className="leading-tight">{whole}{remainder > 0 ? ` - ${remainder} kg` : ''}</div>;
                                                         })}
                                                         {hasTotal && (
                                                             <div className="mt-0 pt-0.5 border-t border-gray-900 font-bold leading-tight">
                                                                 {(() => {
-                                                                    const totalWhole = item.brandList.reduce((sum, ent) => sum + Math.floor(parseFloat(ent.inHousePacket) || 0), 0);
-                                                                    const totalRem = Math.round(item.brandList.reduce((sum, ent) => sum + (parseFloat(ent.inHouseQuantity) || 0) - (Math.floor(parseFloat(ent.inHousePacket) || 0) * (parseFloat(ent.packetSize) || 0)), 0));
-                                                                    return `${totalWhole}${totalRem > 0 ? ` - ${totalRem} kg` : ''}`;
+                                                                    const pktSize = item.brandList[0]?.packetSize || 0;
+                                                                    const { whole, remainder } = calculatePktRemainder(item.inHouseQuantity, pktSize);
+                                                                    return `${whole}${remainder > 0 ? ` - ${remainder} kg` : ''}`;
                                                                 })()}
                                                             </div>
                                                         )}
@@ -423,9 +416,9 @@ const StockReport = ({
                                             <td colSpan="3" className="px-2 py-1.5 text-[14px] font-black text-gray-900 text-right uppercase tracking-wider border-r border-gray-900">Grand Total</td>
                                             <td className="px-2 py-1.5 text-[14px] text-right font-black text-gray-900 border-r border-gray-900">
                                                 {(() => {
-                                                    const totalWhole = stockData.displayRecords.reduce((accWhole, item) => accWhole + item.brandList.reduce((sum, ent) => sum + Math.floor(parseFloat(ent.totalInHousePacket) || 0), 0), 0);
-                                                    const totalRem = Math.round(stockData.displayRecords.reduce((accRem, item) => accRem + item.brandList.reduce((sum, ent) => sum + (parseFloat(ent.totalInHouseQuantity) || 0) - (Math.floor(parseFloat(ent.totalInHousePacket) || 0) * (parseFloat(ent.packetSize) || 0)), 0), 0));
-                                                    return `${totalWhole}${totalRem > 0 ? ` - ${totalRem} kg` : ''}`;
+                                                    const totalWhole = stockData.displayRecords.reduce((accWhole, item) => accWhole + item.brandList.reduce((sum, ent) => sum + calculatePktRemainder(ent.totalInHouseQuantity, ent.packetSize).whole, 0), 0);
+                                                    const totalRem = stockData.displayRecords.reduce((accRem, item) => accRem + item.brandList.reduce((sum, ent) => sum + calculatePktRemainder(ent.totalInHouseQuantity, ent.packetSize).remainder, 0), 0);
+                                                    return `${totalWhole}${totalRem > 0 ? ` - ${totalRem.toLocaleString()} kg` : ''}`;
                                                 })()}
                                             </td>
                                             <td className="px-2 py-1.5 text-[14px] text-right font-black text-gray-900 border-r border-gray-900">
@@ -439,9 +432,9 @@ const StockReport = ({
                                             </td>
                                             <td className="px-2 py-1.5 text-[14px] text-right font-black text-gray-900 border-r border-gray-900">
                                                 {(() => {
-                                                    const totalWhole = stockData.displayRecords.reduce((accWhole, item) => accWhole + item.brandList.reduce((sum, ent) => sum + Math.floor(parseFloat(ent.inHousePacket) || 0), 0), 0);
-                                                    const totalRem = Math.round(stockData.displayRecords.reduce((accRem, item) => accRem + item.brandList.reduce((sum, ent) => sum + (parseFloat(ent.inHouseQuantity) || 0) - (Math.floor(parseFloat(ent.inHousePacket) || 0) * (parseFloat(ent.packetSize) || 0)), 0), 0));
-                                                    return `${totalWhole}${totalRem > 0 ? ` - ${totalRem} kg` : ''}`;
+                                                    const totalWhole = stockData.displayRecords.reduce((accWhole, item) => accWhole + item.brandList.reduce((sum, ent) => sum + calculatePktRemainder(ent.inHouseQuantity, ent.packetSize).whole, 0), 0);
+                                                    const totalRem = stockData.displayRecords.reduce((accRem, item) => accRem + item.brandList.reduce((sum, ent) => sum + calculatePktRemainder(ent.inHouseQuantity, ent.packetSize).remainder, 0), 0);
+                                                    return `${totalWhole}${totalRem > 0 ? ` - ${totalRem.toLocaleString()} kg` : ''}`;
                                                 })()}
                                             </td>
                                             <td className="px-2 py-1.5 text-[14px] text-right font-black text-gray-900">
@@ -459,9 +452,9 @@ const StockReport = ({
                                 <div className="text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-3">Total Inhouse Stock</div>
                                 <div className="text-sm font-bold text-gray-700 mb-1">
                                     PKT: {(() => {
-                                        const totalWhole = stockData.displayRecords.reduce((accWhole, item) => accWhole + item.brandList.reduce((sum, ent) => sum + Math.floor(parseFloat(ent.totalInHousePacket) || 0), 0), 0);
-                                        const totalRem = Math.round(stockData.displayRecords.reduce((accRem, item) => accRem + item.brandList.reduce((sum, ent) => sum + (parseFloat(ent.totalInHouseQuantity) || 0) - (Math.floor(parseFloat(ent.totalInHousePacket) || 0) * (parseFloat(ent.packetSize) || 0)), 0), 0));
-                                        return `${totalWhole}${totalRem > 0 ? ` - ${totalRem} kg` : ''}`;
+                                        const totalWhole = stockData.displayRecords.reduce((accWhole, item) => accWhole + item.brandList.reduce((sum, ent) => sum + calculatePktRemainder(ent.totalInHouseQuantity, ent.packetSize).whole, 0), 0);
+                                        const totalRem = stockData.displayRecords.reduce((accRem, item) => accRem + item.brandList.reduce((sum, ent) => sum + calculatePktRemainder(ent.totalInHouseQuantity, ent.packetSize).remainder, 0), 0);
+                                        return `${totalWhole}${totalRem > 0 ? ` - ${totalRem.toLocaleString()} kg` : ''}`;
                                     })()}
                                 </div>
                                 <div className="text-2xl font-black text-gray-900">
@@ -485,9 +478,9 @@ const StockReport = ({
                                 <div className="text-[11px] font-bold text-blue-500 uppercase tracking-wider mb-3">Current Inhouse</div>
                                 <div className="text-sm font-bold text-gray-700 mb-1">
                                     PKT: {(() => {
-                                        const totalWhole = stockData.displayRecords.reduce((accWhole, item) => accWhole + item.brandList.reduce((sum, ent) => sum + Math.floor(parseFloat(ent.inHousePacket) || 0), 0), 0);
-                                        const totalRem = Math.round(stockData.displayRecords.reduce((accRem, item) => accRem + item.brandList.reduce((sum, ent) => sum + (parseFloat(ent.inHouseQuantity) || 0) - (Math.floor(parseFloat(ent.inHousePacket) || 0) * (parseFloat(ent.packetSize) || 0)), 0), 0));
-                                        return `${totalWhole}${totalRem > 0 ? ` - ${totalRem} kg` : ''}`;
+                                        const totalWhole = stockData.displayRecords.reduce((accWhole, item) => accWhole + item.brandList.reduce((sum, ent) => sum + calculatePktRemainder(ent.inHouseQuantity, ent.packetSize).whole, 0), 0);
+                                        const totalRem = stockData.displayRecords.reduce((accRem, item) => accRem + item.brandList.reduce((sum, ent) => sum + calculatePktRemainder(ent.inHouseQuantity, ent.packetSize).remainder, 0), 0);
+                                        return `${totalWhole}${totalRem > 0 ? ` - ${totalRem.toLocaleString()} kg` : ''}`;
                                     })()}
                                 </div>
                                 <div className="text-3xl font-black text-blue-600">

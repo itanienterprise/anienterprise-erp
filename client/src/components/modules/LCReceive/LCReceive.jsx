@@ -245,7 +245,7 @@ function LCReceive({
     // --- Handlers ---
     const resetStockForm = () => {
         setStockFormData({
-            date: new Date().toISOString().split('T')[0],
+            date: '',
             lcNo: '',
             port: '',
             importer: '',
@@ -650,29 +650,61 @@ function LCReceive({
     };
 
     const handleEditInternal = (type, record) => {
-        setEditingId(record._id || record.originalId);
+        // Use either _id (single) or the first id from the group (grouped) to mark as editing
+        const editId = record._id || (record.allIds && record.allIds[0]);
+        setEditingId(editId);
 
         const isGrouped = record.entries && Array.isArray(record.entries);
 
         if (isGrouped) {
-            const formProductEntry = {
-                isMultiBrand: record.entries.length > 1,
-                productName: record.productName,
-                truckNo: record.entries[0].truckNo || '',
-                brandEntries: record.entries.map(e => ({
-                    _id: e._id,
-                    brand: e.brand,
-                    purchasedPrice: e.purchasedPrice,
-                    packet: e.packet,
-                    packetSize: e.packetSize,
-                    quantity: e.quantity,
-                    unit: e.unit,
-                    sweepedPacket: e.sweepedPacket,
-                    sweepedQuantity: e.sweepedQuantity,
-                    inHousePacket: e.inHousePacket,
-                    inHouseQuantity: e.inHouseQuantity
-                }))
-            };
+            // Group the entries by productName AND truckNo to correctly restore multi-product LC receives
+            // If they have different truck numbers, they should be distinct product blocks (Single Mode)
+            // If they share the same truck number, they are likely brands under the same product block (Multi Mode)
+            const entriesByProduct = record.entries.reduce((acc, e) => {
+                const pName = e.productName || '';
+                const tNo = e.truckNo || '';
+                const key = `${pName}|${tNo}`;
+                if (!acc[key]) acc[key] = [];
+                acc[key].push(e);
+                return acc;
+            }, {});
+
+            const formProductEntries = Object.keys(entriesByProduct).map(key => {
+                const prodEntries = entriesByProduct[key];
+                const pName = prodEntries[0]?.productName || '';
+
+                // It is multi-brand if there are multiple entries.
+                // If there's only 1 entry, it is SINGLE mode if the brand is empty, a hyphen, OR exactly matches the product name.
+                let isMulti = false;
+                if (prodEntries.length > 1) {
+                    isMulti = true;
+                } else if (prodEntries.length === 1) {
+                    const b = (prodEntries[0].brand || '').trim().toLowerCase();
+                    const p = pName.trim().toLowerCase();
+                    if (b !== '-' && b !== '' && b !== p) {
+                        isMulti = true;
+                    }
+                }
+
+                return {
+                    isMultiBrand: isMulti,
+                    productName: pName,
+                    truckNo: prodEntries[0]?.truckNo || '',
+                    brandEntries: prodEntries.map(e => ({
+                        _id: e._id,
+                        brand: e.brand,
+                        purchasedPrice: e.purchasedPrice,
+                        packet: e.packet,
+                        packetSize: e.packetSize,
+                        quantity: e.quantity,
+                        unit: e.unit,
+                        sweepedPacket: e.sweepedPacket,
+                        sweepedQuantity: e.sweepedQuantity,
+                        inHousePacket: e.inHousePacket,
+                        inHouseQuantity: e.inHouseQuantity
+                    }))
+                };
+            });
 
             setStockFormData({
                 date: record.date || new Date().toISOString().split('T')[0],
@@ -689,7 +721,7 @@ function LCReceive({
                 totalLcQuantity: record.totalLcQuantity,
                 status: record.status,
                 warehouse: record.warehouse || '',
-                productEntries: [formProductEntry],
+                productEntries: formProductEntries,
                 originalIds: record.allIds
             });
 
@@ -709,6 +741,7 @@ function LCReceive({
                 totalLcQuantity: record.totalLcQuantity,
                 status: record.status,
                 warehouse: record.warehouse || '',
+                originalIds: record.allIds || [record._id],
                 productEntries: [{
                     isMultiBrand: false,
                     productName: record.productName,
@@ -1526,7 +1559,7 @@ function LCReceive({
                                     <input
                                         type="text"
                                         name="totalLcQuantity"
-                                        value={stockFormData.totalLcQuantity || '0.00'}
+                                        value={stockFormData.totalLcQuantity && parseFloat(stockFormData.totalLcQuantity) !== 0 ? stockFormData.totalLcQuantity : ''}
                                         readOnly
                                         placeholder="Total LC Quantity"
                                         autoComplete="off"
@@ -1650,7 +1683,7 @@ function LCReceive({
                                                             <div className="relative h-[42px]">
                                                                 <input
                                                                     type="text"
-                                                                    value={product.brandEntries[0].quantity}
+                                                                    value={product.brandEntries[0].quantity && parseFloat(product.brandEntries[0].quantity) !== 0 ? product.brandEntries[0].quantity : ''}
                                                                     onChange={(e) => handleBrandEntryChange(pIndex, 0, 'quantity', e.target.value)}
                                                                     placeholder="Qty"
                                                                     className="w-full h-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-all text-sm text-center font-bold"
@@ -1672,7 +1705,7 @@ function LCReceive({
                                                             <label className="text-sm font-medium text-gray-700 text-center block w-full">Packet</label>
                                                             <input
                                                                 type="text"
-                                                                value={product.brandEntries[0].packet}
+                                                                value={product.brandEntries[0].packet && parseFloat(product.brandEntries[0].packet) !== 0 ? product.brandEntries[0].packet : ''}
                                                                 onChange={(e) => handleBrandEntryChange(pIndex, 0, 'packet', e.target.value)}
                                                                 placeholder="Qty" autoComplete="off" className="w-full h-[42px] px-2 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm text-sm text-center"
                                                             />
@@ -1681,7 +1714,7 @@ function LCReceive({
                                                             <label className="text-sm font-medium text-gray-700">Swp. Pkt</label>
                                                             <input
                                                                 type="text"
-                                                                value={product.brandEntries[0].sweepedPacket}
+                                                                value={product.brandEntries[0].sweepedPacket && parseFloat(product.brandEntries[0].sweepedPacket) !== 0 ? product.brandEntries[0].sweepedPacket : ''}
                                                                 onChange={(e) => handleBrandEntryChange(pIndex, 0, 'sweepedPacket', e.target.value)}
                                                                 placeholder="Qty" autoComplete="off" className="w-full h-[42px] px-2 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm text-sm"
                                                             />
@@ -1690,7 +1723,7 @@ function LCReceive({
                                                             <label className="text-sm font-medium text-gray-700">SwpQty</label>
                                                             <input
                                                                 type="text"
-                                                                value={product.brandEntries[0].sweepedQuantity}
+                                                                value={product.brandEntries[0].sweepedQuantity && parseFloat(product.brandEntries[0].sweepedQuantity) !== 0 ? product.brandEntries[0].sweepedQuantity : ''}
                                                                 onChange={(e) => handleBrandEntryChange(pIndex, 0, 'sweepedQuantity', e.target.value)}
                                                                 placeholder="Qty" className="w-full h-[42px] px-2 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm text-sm"
                                                             />
@@ -1799,7 +1832,10 @@ function LCReceive({
                                                             <div className="relative h-[42px]">
                                                                 <input
                                                                     type="text"
-                                                                    value={product.brandEntries.reduce((sum, entry) => sum + (parseFloat(entry.quantity) || 0), 0).toFixed(2)}
+                                                                    value={(() => {
+                                                                        const total = product.brandEntries.reduce((sum, entry) => sum + (parseFloat(entry.quantity) || 0), 0);
+                                                                        return total > 0 ? total.toFixed(2) : '';
+                                                                    })()}
                                                                     readOnly
                                                                     className="w-full h-full px-4 py-2 bg-gray-50/80 border border-gray-200/60 rounded-lg text-gray-600 font-semibold outline-none cursor-default"
                                                                 />
@@ -1880,7 +1916,7 @@ function LCReceive({
                                                                                 className="w-full h-9 px-2 text-sm bg-white border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-all [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                                                                             />
                                                                             <input
-                                                                                type="number" value={entry.packet} placeholder="Packet" onChange={(e) => handleBrandEntryChange(pIndex, bIndex, 'packet', e.target.value)}
+                                                                                type="number" value={entry.packet && parseFloat(entry.packet) !== 0 ? entry.packet : ''} placeholder="Packet" onChange={(e) => handleBrandEntryChange(pIndex, bIndex, 'packet', e.target.value)}
                                                                                 className="w-full h-9 px-2 text-sm bg-white border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-all [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                                                                             />
                                                                             <input
@@ -1889,7 +1925,7 @@ function LCReceive({
                                                                             />
                                                                             <input
                                                                                 type="number"
-                                                                                value={entry.quantity}
+                                                                                value={entry.quantity && parseFloat(entry.quantity) !== 0 ? entry.quantity : ''}
                                                                                 onChange={(e) => handleBrandEntryChange(pIndex, bIndex, 'quantity', e.target.value)}
                                                                                 placeholder="Qty"
                                                                                 className="w-full h-9 px-2 text-sm bg-white border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-all [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
@@ -1924,14 +1960,14 @@ function LCReceive({
                                                                         <div className="flex items-center gap-2">
                                                                             <label className="text-[10px] font-bold text-gray-400 uppercase min-w-[60px]">SWP. PKT</label>
                                                                             <input
-                                                                                type="number" value={entry.sweepedPacket} placeholder="Packet" onChange={(e) => handleBrandEntryChange(pIndex, bIndex, 'sweepedPacket', e.target.value)}
+                                                                                type="number" value={entry.sweepedPacket && parseFloat(entry.sweepedPacket) !== 0 ? entry.sweepedPacket : ''} placeholder="Packet" onChange={(e) => handleBrandEntryChange(pIndex, bIndex, 'sweepedPacket', e.target.value)}
                                                                                 className="flex-1 h-8 px-2 text-xs bg-white/70 border border-gray-200 rounded-md focus:ring-2 focus:ring-blue-500 outline-none transition-all [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                                                                             />
                                                                         </div>
                                                                         <div className="flex items-center gap-2">
                                                                             <label className="text-[10px] font-bold text-gray-400 uppercase min-w-[60px]">SWPQTY</label>
                                                                             <input
-                                                                                type="number" value={entry.sweepedQuantity}
+                                                                                type="number" value={entry.sweepedQuantity && parseFloat(entry.sweepedQuantity) !== 0 ? entry.sweepedQuantity : ''}
                                                                                 onChange={(e) => handleBrandEntryChange(pIndex, bIndex, 'sweepedQuantity', e.target.value)}
                                                                                 placeholder="Qty"
                                                                                 className="flex-1 h-8 px-2 text-xs bg-white border border-gray-200 rounded-md focus:ring-2 focus:ring-blue-500 outline-none transition-all [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
@@ -2136,7 +2172,7 @@ function LCReceive({
                                     {isSubmitting ? 'Saving...' : editingId ? 'Update LC Receive' : 'Add LC Receive'}
                                 </button>
                             </div>
-                        </form>
+                        </form >
                     </div >
                 )
             }

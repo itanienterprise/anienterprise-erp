@@ -1,3 +1,29 @@
+// Helper to parse numbers safely and handle potential strings with commas
+const safeParse = (val) => {
+    if (val === undefined || val === null || val === '') return 0;
+    const parsed = typeof val === 'string' ? parseFloat(val.replace(/,/g, '')) : parseFloat(val);
+    return isNaN(parsed) ? 0 : parsed;
+};
+
+// Helper for robust packet and weight remainder calculation (fixing 4,999 - 60 kg issue)
+export const calculatePktRemainder = (totalQty, pktSize) => {
+    const qty = safeParse(totalQty);
+    const size = safeParse(pktSize);
+    if (size <= 0) return { whole: 0, remainder: qty };
+
+    // Use a small epsilon to handle floating point precision (e.g. 299999.9999 / 60 should be 5000)
+    const rawPkt = qty / size;
+    const whole = Math.floor(rawPkt + 1e-9);
+    const remainder = Math.max(0, Math.round(qty - (whole * size)));
+
+    // Final rollover check: if remainder equals or exceeds size due to rounding errors, roll it over
+    if (remainder >= size) {
+        return { whole: whole + 1, remainder: 0 };
+    }
+
+    return { whole, remainder };
+};
+
 export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery = '', warehouseData = [], salesRecords = []) => {
     const filteredRecords = stockRecords.filter(item => {
         if (stockFilters.startDate && item.date < stockFilters.startDate) return false;
@@ -19,13 +45,6 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
             (item.productName || '').toLowerCase().includes(q)
         );
     });
-
-    // Helper to parse numbers safely and handle potential strings with commas
-    const safeParse = (val) => {
-        if (val === undefined || val === null || val === '') return 0;
-        const parsed = typeof val === 'string' ? parseFloat(val.replace(/,/g, '')) : parseFloat(val);
-        return isNaN(parsed) ? 0 : parsed;
-    };
 
     const groupedStock = filteredRecords.reduce((acc, item) => {
         const key = item.productName || 'Unknown';
@@ -174,7 +193,8 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
                 inHouseQuantity: Math.max(0, dynamicInHouseQty - b.saleQuantity),
                 inHousePacket: Math.max(0, dynamicInHousePkt - b.salePacket)
             };
-        });
+        }).sort((a, b) => (a.brand || '').localeCompare(b.brand || '', undefined, { sensitivity: 'base' }));
+
         const grpInHouseQty = group.totalInHouseQuantity;
         const grpInHousePkt = group.totalInHousePacket;
 
@@ -184,7 +204,7 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
             inHouseQuantity: Math.max(0, grpInHouseQty - group.saleQuantity),
             inHousePacket: Math.max(0, grpInHousePkt - group.salePacket)
         };
-    });
+    }).sort((a, b) => (a.productName || '').localeCompare(b.productName || '', undefined, { sensitivity: 'base' }));
 
     const totalPackets = filteredRecords.reduce((sum, item) => sum + safeParse(item.packet), 0);
     const totalQuantity = filteredRecords.reduce((sum, item) => sum + safeParse(item.quantity), 0);
@@ -216,21 +236,29 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
     const totalInHousePkt = Math.max(0, totalTotalInHousePkt - totalSalePkt);
     const totalInHouseQty = Math.max(0, totalTotalInHouseQty - totalSaleQty);
 
-    const totalInHousePktDecimalKg = displayRecords.reduce((sum, group) => {
-        return sum + group.brandList.reduce((brandSum, brand) => {
-            const pkt = safeParse(brand.inHousePacket);
-            const size = safeParse(brand.packetSize);
-            const decimalPortion = pkt - Math.floor(pkt);
-            return brandSum + (decimalPortion * size);
-        }, 0);
-    }, 0);
+    const totalInHousePktDetails = displayRecords.reduce((acc, group) => {
+        group.brandList.forEach(brand => {
+            const { whole, remainder } = calculatePktRemainder(brand.inHouseQuantity, brand.packetSize);
+            acc.whole += whole;
+            acc.remainder += remainder;
+        });
+        return acc;
+    }, { whole: 0, remainder: 0 });
 
-    const totalSalePktDecimalKg = filteredRecords.reduce((sum, item) => {
-        const pkt = safeParse(item.salePacket);
-        const size = safeParse(item.packetSize);
-        const decimalPortion = pkt - Math.floor(pkt);
-        return sum + (decimalPortion * size);
-    }, 0);
+    const totalInHousePktWhole = totalInHousePktDetails.whole;
+    const totalInHousePktDecimalKg = totalInHousePktDetails.remainder;
+
+    const totalSalePktDetails = Object.values(groupedStock).reduce((acc, group) => {
+        Object.values(group.brands).forEach(brand => {
+            const { whole, remainder } = calculatePktRemainder(brand.saleQuantity, brand.packetSize);
+            acc.whole += whole;
+            acc.remainder += remainder;
+        });
+        return acc;
+    }, { whole: 0, remainder: 0 });
+
+    const totalSalePktWhole = totalSalePktDetails.whole;
+    const totalSalePktDecimalKg = totalSalePktDetails.remainder;
     const unit = displayRecords[0]?.unit || 'kg';
 
     return {
@@ -238,6 +266,8 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
         totalPackets,
         totalQuantity,
         totalInHousePkt,
+        totalInHousePktWhole,
+        totalSalePktWhole,
         totalInHouseQty,
         totalTotalInHousePkt,
         totalTotalInHouseQty,
