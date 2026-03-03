@@ -1320,12 +1320,13 @@ export const generateSaleInvoicePDF = (sale, allCustomers = []) => {
 };
 
 
-export const generateProductHistoryPDF = (productName, activeTab, purchaseData, saleData, summary, filters) => {
+export const generateProductHistoryPDF = (productName, category, activeTab, purchaseData, saleData, summary, filters) => {
     try {
         const doc = new jsPDF();
         const pageWidth = doc.internal.pageSize.width;
         const pageHeight = doc.internal.pageSize.height;
         const margin = 7; // Reduced margin to gain space
+        const isFruitCategory = (category || '').toLowerCase() === 'fruit';
 
         // --- Header ---
         doc.setFontSize(22);
@@ -1530,22 +1531,67 @@ export const generateProductHistoryPDF = (productName, activeTab, purchaseData, 
                 amount: acc.amount + (parseFloat(sale.itemTotal) || 0)
             }), { qty: 0, amount: 0 });
 
-            const saleHead = [['Date', 'Invoice', 'Company', 'Brand', 'Qty', 'Price', 'Total Price']];
-            const saleBody = saleData.map(sale => [
-                formatDate(sale.date),
-                sale.invoiceNo || '-',
-                sale.companyName || '-',
-                sale.itemBrand || '-',
-                `${sale.itemQty.toLocaleString()} kg`,
-                `TK ${sale.itemPrice.toLocaleString()}`,
-                `TK ${sale.itemTotal.toLocaleString()}`
-            ]);
-            const saleFoot = [[
-                { content: 'TOTAL SALE', colSpan: 4, styles: { halign: 'right', fontStyle: 'bold' } },
-                { content: `${Math.round(saleTotals.qty).toLocaleString()} kg`, styles: { halign: 'right', fontStyle: 'bold' } },
-                { content: '-', styles: { halign: 'right' } },
-                { content: `TK ${Math.round(saleTotals.amount).toLocaleString()}`, styles: { halign: 'right', fontStyle: 'bold', textColor: [0, 0, 0] } }
-            ]];
+            let saleHead, saleBody, saleFoot, saleColumnStyles;
+
+            if (isFruitCategory) {
+                saleHead = [['Date', 'Invoice', 'Company', 'Customer', 'Phone', 'Qty', 'Truck', 'Price', 'Total Price']];
+                saleBody = saleData.map(sale => [
+                    formatDate(sale.date),
+                    sale.invoiceNo || '-',
+                    sale.companyName || '-',
+                    sale.customerName || '-',
+                    sale.phone || '-',
+                    `${sale.itemQty.toLocaleString()} kg`,
+                    sale.itemTruck || '-',
+                    `TK ${sale.itemPrice.toLocaleString()}`,
+                    `TK ${sale.itemTotal.toLocaleString()}`
+                ]);
+                saleFoot = [[
+                    { content: 'TOTAL SALE', colSpan: 5, styles: { halign: 'right', fontStyle: 'bold' } },
+                    { content: `${Math.round(saleTotals.qty).toLocaleString()} kg`, styles: { halign: 'right', fontStyle: 'bold' } },
+                    { content: '-', colSpan: 2, styles: { halign: 'right' } },
+                    { content: `TK ${Math.round(saleTotals.amount).toLocaleString()}`, styles: { halign: 'right', fontStyle: 'bold', textColor: [0, 0, 0] } }
+                ]];
+                saleColumnStyles = {
+                    0: { cellWidth: 20, halign: 'center' }, // Date (increased from 16)
+                    1: { cellWidth: 16, halign: 'center' }, // Invoice
+                    2: { cellWidth: 25, halign: 'left' },   // Company (slightly reduced from 26)
+                    3: { cellWidth: 25, halign: 'left' },   // Customer (slightly reduced from 26)
+                    4: { cellWidth: 22, halign: 'left' },   // Phone (reduced from 24)
+                    5: { cellWidth: 24, halign: 'right' },  // Qty (increased from 20)
+                    6: { cellWidth: 12, halign: 'center' }, // Truck (reduced from 16)
+                    7: { cellWidth: 20, halign: 'right' },  // Price (reduced from 22)
+                    8: { cellWidth: 26, halign: 'right' }   // Total Price (reduced from 30)
+                };
+            } else {
+                saleHead = [['Date', 'Invoice', 'Company', 'Brand', 'Packet', 'Qty', 'Price', 'Total Price']];
+                saleBody = saleData.map(sale => [
+                    formatDate(sale.date),
+                    sale.invoiceNo || '-',
+                    sale.companyName || '-',
+                    sale.itemBrand || '-',
+                    sale.itemPacket.toLocaleString(),
+                    `${sale.itemQty.toLocaleString()} kg`,
+                    `TK ${sale.itemPrice.toLocaleString()}`,
+                    `TK ${sale.itemTotal.toLocaleString()}`
+                ]);
+                saleFoot = [[
+                    { content: 'TOTAL SALE', colSpan: 5, styles: { halign: 'right', fontStyle: 'bold' } },
+                    { content: `${Math.round(saleTotals.qty).toLocaleString()} kg`, styles: { halign: 'right', fontStyle: 'bold' } },
+                    { content: '-', styles: { halign: 'right' } },
+                    { content: `TK ${Math.round(saleTotals.amount).toLocaleString()}`, styles: { halign: 'right', fontStyle: 'bold', textColor: [0, 0, 0] } }
+                ]];
+                saleColumnStyles = {
+                    0: { cellWidth: 18, halign: 'center' }, // Date
+                    1: { cellWidth: 20, halign: 'center' }, // Invoice
+                    2: { cellWidth: 32, halign: 'left' },   // Company
+                    3: { cellWidth: 34, halign: 'left' },   // Brand
+                    4: { cellWidth: 20, halign: 'right' },  // Packet
+                    5: { cellWidth: 22, halign: 'right' },  // Qty
+                    6: { cellWidth: 22, halign: 'right' },  // Price
+                    7: { cellWidth: 32, halign: 'right' }   // Total Price
+                };
+            }
 
             autoTable(doc, {
                 startY: currentY,
@@ -1556,15 +1602,7 @@ export const generateProductHistoryPDF = (productName, activeTab, purchaseData, 
                 styles: { fontSize: 9, cellPadding: 1, lineColor: [0, 0, 0], lineWidth: 0.1, font: 'helvetica', textColor: [0, 0, 0], minCellHeight: 0 },
                 headStyles: { fillColor: [245, 245, 245], textColor: [0, 0, 0], fontStyle: 'bold', halign: 'center' },
                 footStyles: { fillColor: [245, 245, 245], textColor: [0, 0, 0], fontStyle: 'bold', lineWidth: 0.1 },
-                columnStyles: {
-                    0: { cellWidth: 18, halign: 'center' }, // Date
-                    1: { cellWidth: 20, halign: 'center' }, // Invoice
-                    2: { cellWidth: 34, halign: 'left' },   // Company
-                    3: { cellWidth: 48, halign: 'left' },   // Brand (reduced to 48 from 52)
-                    4: { cellWidth: 22, halign: 'right' },  // Qty (increased from 18)
-                    5: { cellWidth: 22, halign: 'right' },  // Price
-                    6: { cellWidth: 32, halign: 'right' }   // Total Price
-                },
+                columnStyles: saleColumnStyles,
                 margin: { left: margin, right: margin }
             });
         }

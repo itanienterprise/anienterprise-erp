@@ -26,6 +26,16 @@ import { calculateStockData } from './utils/stockHelpers';
 
 function App() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
+
+  // Lock body scroll when mobile sidebar is open
+  useEffect(() => {
+    if (sidebarOpen) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = '';
+    }
+    return () => { document.body.style.overflow = ''; };
+  }, [sidebarOpen]);
   const [currentView, setCurrentView] = useState(() => {
     return localStorage.getItem('currentView') || 'dashboard';
   });
@@ -71,7 +81,7 @@ function App() {
   const [stockRecords, setStockRecords] = useState([]);
   const [warehouseData, setWarehouseData] = useState([]);
   const [salesRecords, setSalesRecords] = useState([]);
-  const [stockFilters, setStockFilters] = useState({ startDate: '', endDate: '', lcNo: '', port: '', brand: '', importer: '', exporter: '', productName: '' });
+  const [stockFilters, setStockFilters] = useState({ startDate: '', endDate: '', lcNo: '', port: '', brand: '', importer: '', exporter: '', productName: '', category: 'Crop' });
   const [selectedItems, setSelectedItems] = useState(new Set());
   const [isSelectionMode, setIsSelectionMode] = useState(false);
   const longPressTimer = useRef(null);
@@ -871,11 +881,11 @@ function App() {
             endLongPress={endLongPress}
           />
         );
-      case 'boarder-sale-section':
+      case 'border-sale-section':
         return (
           <SaleManagement
             key={refreshKey}
-            saleType="Boarder"
+            saleType="Border"
             isSelectionMode={isSelectionMode}
             setIsSelectionMode={setIsSelectionMode}
             selectedItems={selectedItems}
@@ -891,8 +901,8 @@ function App() {
   };
 
   const stockData = useMemo(() => {
-    return calculateStockData(stockRecords, stockFilters, '', warehouseData, salesRecords);
-  }, [stockRecords, stockFilters, warehouseData, salesRecords]);
+    return calculateStockData(stockRecords, stockFilters, '', warehouseData, salesRecords, products);
+  }, [stockRecords, stockFilters, warehouseData, salesRecords, products]);
 
   return (
     <div className={`flex h-screen bg-gray-50 font-sans text-gray-900 ${(showLcReport || showStockReport) ? 'is-printing-report' : ''}`}>
@@ -915,7 +925,7 @@ function App() {
             </div>
           </div>
         </div>
-        <nav className="flex-1 px-4 py-6 space-y-2">
+        <nav className="flex-1 px-4 py-6 space-y-2 overflow-y-auto">
           <button onClick={() => { setCurrentView('dashboard'); setSidebarOpen(false); }} className={`w-full flex items-center px-4 py-3 rounded-lg transition-all ${currentView === 'dashboard' ? 'bg-blue-50 text-blue-600 shadow-sm' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'}`}>
             <HomeIcon className="w-5 h-5 mr-3" />
             <span className="font-medium">Dashboard</span>
@@ -961,11 +971,11 @@ function App() {
                   <span>General Sale</span>
                 </button>
                 <button
-                  onClick={() => { setCurrentView('boarder-sale-section'); setSidebarOpen(false); }}
-                  className={`w-full flex flex-row items-center py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'boarder-sale-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'}`}
+                  onClick={() => { setCurrentView('border-sale-section'); setSidebarOpen(false); }}
+                  className={`w-full flex flex-row items-center py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'border-sale-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'}`}
                 >
                   <TrendingUpIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
-                  <span>Boarder Sale</span>
+                  <span>Border Sale</span>
                 </button>
               </div>
             </div>
@@ -1091,6 +1101,7 @@ function App() {
         setStockFilters={setStockFilters}
         stockData={stockData}
         salesRecords={salesRecords}
+        products={products}
       />
 
       {/* Product History Report Modal */}

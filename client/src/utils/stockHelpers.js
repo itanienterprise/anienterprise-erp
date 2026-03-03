@@ -24,7 +24,7 @@ export const calculatePktRemainder = (totalQty, pktSize) => {
     return { whole, remainder };
 };
 
-export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery = '', warehouseData = [], salesRecords = []) => {
+export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery = '', warehouseData = [], salesRecords = [], products = []) => {
     const filteredRecords = stockRecords.filter(item => {
         if (stockFilters.startDate && item.date < stockFilters.startDate) return false;
         if (stockFilters.endDate && item.date > stockFilters.endDate) return false;
@@ -32,7 +32,19 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
         if (stockFilters.port && (item.port || '').trim() !== stockFilters.port) return false;
         if (stockFilters.importer && (item.importer || '').trim() !== stockFilters.importer) return false;
         if (stockFilters.brand && (item.brand || '').trim() !== stockFilters.brand) return false;
-        if (stockFilters.productName && (item.productName || '').trim().toLowerCase() !== stockFilters.productName.toLowerCase()) return false;
+        if (stockFilters.productName) {
+            const itemName = (item.productName || item.product || '').trim().toLowerCase();
+            if (itemName !== stockFilters.productName.toLowerCase()) return false;
+        }
+
+        if (stockFilters.category) {
+            const product = products.find(p => {
+                const pName = (p.name || p.productName || '').trim().toLowerCase();
+                const itemName = (item.productName || item.product || '').trim().toLowerCase();
+                return pName === itemName;
+            });
+            if (!product || (product.category || '').trim().toLowerCase() !== stockFilters.category.toLowerCase()) return false;
+        }
 
         if (!stockSearchQuery) return true;
         const q = stockSearchQuery.toLowerCase();
@@ -42,16 +54,18 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
             (item.importer || '').toLowerCase().includes(q) ||
             (item.truckNo || '').toLowerCase().includes(q) ||
             (item.brand || '').toLowerCase().includes(q) ||
-            (item.productName || '').toLowerCase().includes(q)
+            (item.productName || item.product || '').toLowerCase().includes(q)
         );
     });
 
     const groupedStock = filteredRecords.reduce((acc, item) => {
-        const key = item.productName || 'Unknown';
+        const key = item.productName || item.product || 'Unknown';
 
         if (!acc[key]) {
+            const product = products.find(p => (p.name || p.productName || '').trim().toLowerCase() === key.toLowerCase());
             acc[key] = {
-                productName: item.productName,
+                productName: key,
+                category: product ? product.category : '',
                 quantity: 0,
                 inHousePacket: 0,
                 inHouseQuantity: 0,
@@ -93,7 +107,7 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
             let dynamicSaleQty = 0;
             let dynamicSalePkt = 0;
             const currentPktSize = safeParse(item.packetSize);
-            const targetProd = (item.productName || '').toLowerCase().trim();
+            const targetProd = (item.productName || item.product || '').toLowerCase().trim();
             const targetBrand = (item.brand || '').toLowerCase().trim();
 
             // 1. Accumulate from Sales Records (Direct Sales)

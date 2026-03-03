@@ -78,9 +78,9 @@ const StockManagement = ({
     // Dropdown & Selection State
     const [activeDropdown, setActiveDropdown] = useState(null);
     const [highlightedIndex, setHighlightedIndex] = useState(-1);
-    const [filterDropdownOpen, setFilterDropdownOpen] = useState({ lcNo: false, port: false, importer: false, brand: false, product: false });
-    const [filterSearchInputs, setFilterSearchInputs] = useState({ lcNoSearch: '', portSearch: '', importerSearch: '', brandSearch: '', productSearch: '' });
-    const initialFilterDropdownState = { lcNo: false, port: false, importer: false, brand: false, product: false, productName: false };
+    const [filterDropdownOpen, setFilterDropdownOpen] = useState({ lcNo: false, port: false, importer: false, brand: false, product: false, category: false });
+    const [filterSearchInputs, setFilterSearchInputs] = useState({ lcNoSearch: '', portSearch: '', importerSearch: '', brandSearch: '', productSearch: '', categorySearch: '' });
+    const initialFilterDropdownState = { lcNo: false, port: false, importer: false, brand: false, product: false, productName: false, category: false };
 
     // Table Selection & Sorting
     const [selectedItems, setSelectedItems] = useState(new Set());
@@ -105,6 +105,7 @@ const StockManagement = ({
     const stockImporterFilterRef = useRef(null);
     const stockProductFilterRef = useRef(null);
     const stockBrandFilterRef = useRef(null);
+    const stockCategoryFilterRef = useRef(null);
 
     const lcNoFilterRef = useRef(null);
     const portFilterRef = useRef(null);
@@ -332,6 +333,7 @@ const StockManagement = ({
                     flattened.push({
                         ...sale,
                         itemBrand: entry.brand,
+                        itemTruck: entry.truck,
                         itemPacket: calculatedPacket,
                         itemQty: qty,
                         itemPrice: parseFloat(entry.unitPrice) || 0,
@@ -385,6 +387,7 @@ const StockManagement = ({
 
         setProductHistoryReportData({
             productName: viewRecord.data.productName,
+            category: viewRecord.data.category,
             filters: historyFilters,
             purchaseHistory: purchaseFlattened,
             saleHistory: saleFlattened
@@ -1681,8 +1684,8 @@ const StockManagement = ({
     // --- Calculations (Memoized) ---
 
     const stockData = useMemo(() => {
-        return calculateStockData(stockRecords, stockFilters, stockSearchQuery, warehouseData, salesRecords);
-    }, [stockRecords, stockFilters, stockSearchQuery, warehouseData, salesRecords]);
+        return calculateStockData(stockRecords, stockFilters, stockSearchQuery, warehouseData, salesRecords, products);
+    }, [stockRecords, stockFilters, stockSearchQuery, warehouseData, salesRecords, products]);
 
     const isStockGroupSelected = (productName) => {
         const groupItems = stockRecords.filter(r => r.productName === productName);
@@ -1773,7 +1776,7 @@ const StockManagement = ({
                                 <div ref={stockFilterRef} className="absolute right-0 mt-3 w-80 bg-white/95 backdrop-blur-2xl border border-gray-100 rounded-2xl shadow-2xl z-[60] p-5 animate-in fade-in zoom-in duration-200">
                                     <div className="flex items-center justify-between mb-6 pb-2 border-b border-gray-100">
                                         <h4 className="font-bold text-gray-900 tracking-tight">Advance Filter</h4>
-                                        <button onClick={() => { setStockFilters({ startDate: '', endDate: '', lcNo: '', port: '', brand: '', importer: '', productName: '' }); setFilterSearchInputs({ ...filterSearchInputs, lcNoSearch: '', portSearch: '', importerSearch: '', brandSearch: '', productSearch: '' }); setShowStockFilterPanel(false); }} className="text-[11px] font-bold text-blue-600 hover:text-blue-700 uppercase tracking-widest">RESET ALL</button>
+                                        <button onClick={() => { setStockFilters({ startDate: '', endDate: '', lcNo: '', port: '', brand: '', importer: '', productName: '', category: 'Crop' }); setFilterSearchInputs({ ...filterSearchInputs, lcNoSearch: '', portSearch: '', importerSearch: '', brandSearch: '', productSearch: '', categorySearch: '' }); setShowStockFilterPanel(false); }} className="text-[11px] font-bold text-blue-600 hover:text-blue-700 uppercase tracking-widest">RESET ALL</button>
                                     </div>
                                     <div className="space-y-4">
                                         <div className="grid grid-cols-2 gap-3">
@@ -1872,6 +1875,52 @@ const StockManagement = ({
                                         </div>
 
                                         <div className="space-y-4">
+                                            {/* Category Filter */}
+                                            <div className="space-y-1.5 relative" ref={stockCategoryFilterRef}>
+                                                <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider pl-1">Category</label>
+                                                <div className="relative">
+                                                    <input
+                                                        type="text"
+                                                        value={filterSearchInputs.categorySearch}
+                                                        onChange={(e) => {
+                                                            const val = e.target.value;
+                                                            setFilterSearchInputs({ ...filterSearchInputs, categorySearch: val });
+                                                            setStockFilters({ ...stockFilters, category: val });
+                                                            setFilterDropdownOpen({ ...initialFilterDropdownState, category: true });
+                                                        }}
+                                                        onFocus={() => setFilterDropdownOpen({ ...initialFilterDropdownState, category: true })}
+                                                        placeholder={stockFilters.category || "Search Category..."}
+                                                        className={`w-full px-4 py-2.5 bg-white border border-gray-100 rounded-xl text-sm focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all shadow-sm hover:border-gray-200 pr-14 ${stockFilters.category ? 'placeholder:text-gray-900 placeholder:font-semibold' : 'placeholder:text-gray-300'}`}
+                                                    />
+                                                    <div className="absolute right-3.5 top-1/2 -translate-y-1/2 flex items-center gap-2">
+                                                        {stockFilters.category && (
+                                                            <button onClick={() => { setStockFilters({ ...stockFilters, category: '' }); setFilterSearchInputs({ ...filterSearchInputs, categorySearch: '' }); setFilterDropdownOpen(initialFilterDropdownState); }} className="text-gray-400 hover:text-gray-600">
+                                                                <XIcon className="w-4 h-4" />
+                                                            </button>
+                                                        )}
+                                                        <SearchIcon className="w-4.5 h-4.5 text-gray-300 pointer-events-none" />
+                                                    </div>
+                                                </div>
+                                                {filterDropdownOpen.category && (() => {
+                                                    const options = [...new Set(products.map(p => p.category).filter(Boolean))].sort();
+                                                    const filtered = options.filter(c => c.toLowerCase().includes(filterSearchInputs.categorySearch.toLowerCase()));
+                                                    return filtered.length > 0 ? (
+                                                        <div className="absolute z-[120] mt-1 w-full bg-white border border-gray-100 rounded-xl shadow-xl max-h-48 overflow-y-auto py-1">
+                                                            {filtered.map(c => (
+                                                                <button
+                                                                    key={c}
+                                                                    type="button"
+                                                                    onClick={() => { setStockFilters({ ...stockFilters, category: c }); setFilterSearchInputs({ ...filterSearchInputs, categorySearch: '' }); setFilterDropdownOpen(initialFilterDropdownState); }}
+                                                                    className="w-full px-4 py-2 text-left text-sm hover:bg-blue-50 transition-colors"
+                                                                >
+                                                                    {c}
+                                                                </button>
+                                                            ))}
+                                                        </div>
+                                                    ) : null;
+                                                })()}
+                                            </div>
+
                                             <div className="space-y-1.5 relative">
                                                 <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider pl-1">Product Name</label>
                                                 <div className="relative">
@@ -1909,7 +1958,10 @@ const StockManagement = ({
                                                     </div>
                                                 </div>
                                                 {filterDropdownOpen.productName && (() => {
-                                                    const options = getFilteredProducts(filterSearchInputs.productSearch);
+                                                    let options = getFilteredProducts(filterSearchInputs.productSearch);
+                                                    if (stockFilters.category) {
+                                                        options = options.filter(p => (p.category || '').toLowerCase() === stockFilters.category.toLowerCase());
+                                                    }
                                                     return options.length > 0 ? (
                                                         <div className="absolute z-[120] mt-1 w-full bg-white border border-gray-100 rounded-xl shadow-xl max-h-48 overflow-y-auto py-1">
                                                             {options.map(product => (
@@ -2954,7 +3006,7 @@ const StockManagement = ({
                                                                 <div className="flex items-center">Importer <SortIcon config={sortConfig.history} columnKey="importer" /></div>
                                                             </th>
                                                             <th onClick={() => requestSort('history', 'truckNo')} className="px-3 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-50 transition-colors">
-                                                                <div className="flex items-center">Truck No. <SortIcon config={sortConfig.history} columnKey="truckNo" /></div>
+                                                                <div className="flex items-center">Truck <SortIcon config={sortConfig.history} columnKey="truckNo" /></div>
                                                             </th>
                                                             <th className="px-3 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Brand</th>
                                                             <th className="px-3 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Purchase Price</th>
@@ -3045,6 +3097,8 @@ const StockManagement = ({
                                     const totalSaleQty = flattenedSaleHistory.reduce((sum, s) => sum + s.itemQty, 0);
                                     const totalSaleAmount = flattenedSaleHistory.reduce((sum, s) => sum + s.itemTotal, 0);
 
+                                    const isFruitHistory = (viewRecord.data.category || '').toLowerCase() === 'fruit';
+
                                     return (
                                         <div className="space-y-6">
                                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-w-2xl">
@@ -3066,40 +3120,49 @@ const StockManagement = ({
                                                                 <th className="px-3 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider">Date</th>
                                                                 <th className="px-3 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider">Invoice No</th>
                                                                 <th className="px-3 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider">Company Name</th>
-                                                                <th className="px-3 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider">Customer Name</th>
-                                                                <th className="px-3 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider">Phone</th>
-                                                                <th className="px-3 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider">Brand</th>
-                                                                <th className="px-3 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider text-right">Packet</th>
+                                                                <th className="px-3 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider">{isFruitHistory ? "Customer Name" : "Brand"}</th>
+                                                                <th className={`px-3 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider ${!isFruitHistory ? 'text-right' : ''}`}>{isFruitHistory ? "Phone" : "Packet"}</th>
                                                                 <th className="px-3 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider text-right">Quantity</th>
+                                                                {isFruitHistory && <th className="px-3 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider text-right">Truck</th>}
                                                                 <th className="px-3 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider text-right">Price</th>
                                                                 <th className="px-3 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider text-right">Total</th>
                                                             </tr>
                                                         </thead>
                                                         <tbody className="divide-y divide-gray-50">
                                                             {flattenedSaleHistory.length === 0 ? (
-                                                                <tr><td colSpan="10" className="px-6 py-20 text-center text-gray-400 font-medium">No sale history found for this product</td></tr>
+                                                                <tr><td colSpan={isFruitHistory ? "9" : "8"} className="px-6 py-20 text-center text-gray-400 font-medium">No sale history found for this product</td></tr>
                                                             ) : (
                                                                 flattenedSaleHistory.map((sale, sIdx) => (
                                                                     <tr key={sIdx} className="hover:bg-blue-50/20 transition-all group border-b border-gray-50">
                                                                         <td className="px-3 py-3 text-sm text-gray-600">{sale.date}</td>
                                                                         <td className="px-3 py-3 text-sm font-bold text-gray-900">{sale.invoiceNo}</td>
                                                                         <td className="px-3 py-3 text-sm font-bold text-gray-800 truncate max-w-[150px]" title={sale.companyName}>{sale.companyName}</td>
-                                                                        <td className="px-3 py-3 text-sm text-gray-600">{sale.customerName}</td>
-                                                                        <td className="px-3 py-3 text-sm text-gray-600 font-medium">{sale.contact}</td>
-                                                                        <td className="px-3 py-3">
-                                                                            <div className="text-sm font-medium text-blue-600">{sale.itemBrand}</div>
-                                                                        </td>
-                                                                        <td className="px-3 py-3 text-right">
-                                                                            <div className="text-sm font-bold text-gray-900">{sale.itemPacket.toLocaleString()}</div>
-                                                                        </td>
+                                                                        {isFruitHistory ? (
+                                                                            <>
+                                                                                <td className="px-3 py-3 text-sm text-gray-600">{sale.customerName || '-'}</td>
+                                                                                <td className="px-3 py-3 text-sm text-gray-600 font-medium">{sale.contact || '-'}</td>
+                                                                            </>
+                                                                        ) : (
+                                                                            <>
+                                                                                <td className="px-3 py-3">
+                                                                                    <div className="text-sm font-medium text-blue-600">{sale.itemBrand}</div>
+                                                                                </td>
+                                                                                <td className={`px-3 py-3 text-right ${!isFruitHistory ? 'text-right' : ''}`}>
+                                                                                    <div className="text-sm font-bold text-gray-900">{sale.itemPacket.toLocaleString()}</div>
+                                                                                </td>
+                                                                            </>
+                                                                        )}
                                                                         <td className="px-3 py-3 text-right">
                                                                             <div className="text-sm font-bold text-gray-900">{sale.itemQty.toLocaleString()} kg</div>
                                                                         </td>
+                                                                        {isFruitHistory && (
+                                                                            <td className="px-3 py-3 text-sm text-gray-600 font-medium text-right">{sale.itemTruck || '-'}</td>
+                                                                        )}
                                                                         <td className="px-3 py-3 text-right">
                                                                             <div className="text-sm font-medium text-gray-600">৳{sale.itemPrice.toLocaleString()}</div>
                                                                         </td>
                                                                         <td className="px-3 py-3 text-right">
-                                                                            <div className="text-sm font-bold text-blue-600">৳{sale.itemTotal.toLocaleString()}</div>
+                                                                            <div className="text-sm font-black text-blue-600 group-hover:text-blue-700">৳{sale.itemTotal.toLocaleString()}</div>
                                                                         </td>
                                                                     </tr>
                                                                 ))

@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { XIcon, BarChartIcon, FunnelIcon, SearchIcon } from '../../Icons';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
+import { XIcon, PrinterIcon, BarChartIcon, FunnelIcon, SearchIcon, ChevronDownIcon } from '../../Icons';
 import { formatDate } from '../../../utils/helpers';
 import { generateLCReceiveReportPDF } from '../../../utils/pdfGenerator';
 import CustomDatePicker from '../../shared/CustomDatePicker';
@@ -14,6 +14,7 @@ const LCReport = ({
     lcReceiveSummary
 }) => {
     const [showFilterPanel, setShowFilterPanel] = useState(false);
+    const [expandedCard, setExpandedCard] = useState(null);
     const [filterSearchInputs, setFilterSearchInputs] = useState({
         lcNoSearch: '',
         portSearch: '',
@@ -83,9 +84,9 @@ const LCReport = ({
             document.removeEventListener('mousedown', handleClickOutside);
             document.removeEventListener('keydown', handleEscape);
         };
-    }, [showFilterPanel, filterDropdownOpen]);
+    }, [showFilterPanel, filterDropdownOpen, initialFilterDropdownState]);
 
-    if (!isOpen) return null;
+
 
     const initialLcFilterState = {
         startDate: '',
@@ -100,6 +101,10 @@ const LCReport = ({
     };
 
     // Helper for robust Inhouse data handling
+    const toggleCard = (idx) => {
+        setExpandedCard(prev => prev === idx ? null : idx);
+    };
+
     const getIHPkt = (item) => {
         if (item.inHousePacket !== undefined && item.inHousePacket !== '') return parseFloat(item.inHousePacket) || 0;
         return (parseFloat(item.packet) || 0) - (parseFloat(item.sweepedPacket) || 0);
@@ -120,6 +125,28 @@ const LCReport = ({
         return `${whole}${rem > 0 ? ` - ${rem} kg` : ''}`;
     };
 
+    const lcGroups = useMemo(() => {
+        const lcGroupMap = lcReceiveRecords.reduce((acc, item) => {
+            const dateStr = formatDate(item.date);
+            const key = `${dateStr}_${item.lcNo || 'unknown'}`;
+            if (!acc[key]) {
+                acc[key] = {
+                    date: item.date,
+                    lcNo: item.lcNo,
+                    importer: item.importer,
+                    port: item.port,
+                    billOfEntry: item.billOfEntry,
+                    rows: []
+                };
+            }
+            acc[key].rows.push(item);
+            return acc;
+        }, {});
+        return Object.values(lcGroupMap);
+    }, [lcReceiveRecords]);
+
+    if (!isOpen) return null;
+
     return (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-gray-900/40 backdrop-blur-sm">
             <style>{`
@@ -128,25 +155,25 @@ const LCReport = ({
                     body { margin: 0; }
                 }
             `}</style>
-            <div className="w-[98%] h-[94%] bg-white rounded-3xl shadow-2xl flex flex-col overflow-hidden animate-in fade-in zoom-in duration-300 print:w-full print:h-auto print:shadow-none print:bg-white print:rounded-none">
+            <div className="w-full h-full md:w-[98%] md:h-[94%] bg-white md:rounded-3xl shadow-2xl flex flex-col overflow-hidden animate-in fade-in zoom-in duration-300 print:w-full print:h-auto print:shadow-none print:bg-white print:rounded-none">
                 {/* Modal Header - Hidden in Print */}
-                <div className="px-8 py-5 border-b border-gray-100 bg-gray-50/50 flex items-center justify-between print:hidden">
-                    <div className="flex items-center gap-4">
-                        <div className="w-10 h-10 bg-blue-100 rounded-xl flex items-center justify-center">
-                            <BarChartIcon className="w-6 h-6 text-blue-600" />
+                <div className="px-4 md:px-8 py-3 md:py-5 border-b border-gray-100 bg-gray-50/50 flex items-center justify-between print:hidden">
+                    <div className="flex items-center gap-3 md:gap-4">
+                        <div className="w-8 h-8 md:w-10 md:h-10 bg-blue-100 rounded-xl flex items-center justify-center">
+                            <BarChartIcon className="w-5 h-5 md:w-6 md:h-6 text-blue-600" />
                         </div>
                         <div>
-                            <h2 className="text-xl font-bold text-gray-900">LC Receive Report</h2>
-                            <p className="text-sm text-gray-500 font-medium">Generate and print LC receiving reports</p>
+                            <h2 className="text-lg md:text-xl font-bold text-gray-900 leading-tight">LC Report</h2>
+                            <p className="hidden md:block text-sm text-gray-500 font-medium">Generate and print LC receiving reports</p>
                         </div>
                     </div>
-                    <div className="flex items-center gap-4">
+                    <div className="flex items-center gap-2 md:gap-4">
                         {/* Advanced Filter for Report */}
                         <div className="relative">
                             <button
                                 ref={filterButtonRef}
                                 onClick={() => setShowFilterPanel(!showFilterPanel)}
-                                className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 text-gray-600 rounded-xl hover:bg-gray-50 hover:border-gray-300 transition-all shadow-sm active:scale-95"
+                                className="flex items-center gap-2 px-3 md:px-4 py-2 bg-white border border-gray-200 text-gray-600 rounded-xl hover:bg-gray-50 hover:border-gray-300 transition-all shadow-sm active:scale-95"
                             >
                                 <FunnelIcon className="w-4 h-4 text-gray-400" />
                                 <span className="text-sm font-medium">Filter</span>
@@ -154,7 +181,7 @@ const LCReport = ({
 
                             {/* Filter Panel */}
                             {showFilterPanel && (
-                                <div ref={filterPanelRef} className="absolute right-0 mt-2 w-[450px] bg-white rounded-2xl shadow-2xl border border-gray-100 p-6 z-[110] animate-in fade-in slide-in-from-top-2 duration-200">
+                                <div ref={filterPanelRef} className="absolute right-0 mt-2 w-[calc(100vw-2rem)] md:w-[450px] bg-white rounded-2xl shadow-2xl border border-gray-100 p-4 md:p-6 z-[110] animate-in fade-in slide-in-from-top-2 duration-200">
                                     <div className="flex items-center justify-between mb-6">
                                         <h3 className="text-base font-bold text-gray-900">Advance Filter</h3>
                                         <button
@@ -585,28 +612,34 @@ const LCReport = ({
                         </div>
                         <button
                             onClick={() => generateLCReceiveReportPDF(lcReceiveRecords, lcFilters, lcReceiveSummary)}
-                            className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-xl shadow-lg shadow-blue-500/30 transition-all flex items-center gap-2 no-print"
+                            className="hidden md:flex px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-xl shadow-lg shadow-blue-500/30 transition-all items-center gap-2 no-print"
                         >
-                            <BarChartIcon className="w-4 h-4" />
+                            <PrinterIcon className="w-4 h-4" />
                             Print Report
+                        </button>
+                        <button
+                            onClick={() => generateLCReceiveReportPDF(lcReceiveRecords, lcFilters, lcReceiveSummary)}
+                            className="md:hidden p-2.5 bg-blue-50 text-blue-600 rounded-xl hover:bg-blue-100 transition-colors no-print"
+                        >
+                            <PrinterIcon className="w-5 h-5 text-blue-600" />
                         </button>
                         <button
                             onClick={onClose}
                             className="p-2.5 hover:bg-gray-100 rounded-xl transition-colors no-print"
                         >
-                            <XIcon className="w-6 h-6 text-gray-500" />
+                            <XIcon className="w-5 h-5 md:w-6 md:h-6 text-gray-500" />
                         </button>
                     </div>
                 </div>
 
                 {/* Printable Content */}
-                <div className="flex-1 overflow-y-auto p-12 print:p-6 print:overflow-visible bg-white">
-                    <div className="w-full max-w-[1400px] mx-auto space-y-8">
+                <div className="flex-1 overflow-y-auto p-4 md:p-12 print:p-6 print:overflow-visible bg-white">
+                    <div className="w-full max-w-[1400px] mx-auto space-y-6 md:space-y-8">
                         {/* Company Header */}
                         <div className="text-center space-y-1">
-                            <h1 className="text-5xl font-bold text-gray-900 tracking-tight">M/S ANI ENTERPRISE</h1>
-                            <p className="text-[14px] text-gray-600">766, H.M Tower, Level-06, Borogola, Bogura-5800, Bangladesh</p>
-                            <p className="text-[14px] text-gray-600">+8802588813057, anienterprise051@gmail.com, www.anienterprises.com.bd</p>
+                            <h1 className="text-3xl md:text-5xl font-bold text-gray-900 tracking-tight">M/S ANI ENTERPRISE</h1>
+                            <p className="text-[12px] md:text-[14px] text-gray-600">766, H.M Tower, Level-06, Borogola, Bogura-5800, Bangladesh</p>
+                            <p className="text-[12px] md:text-[14px] text-gray-600">+8802588813057, anienterprise051@gmail.com, www.anienterprises.com.bd</p>
                         </div>
 
                         {/* Sharp Separator */}
@@ -614,13 +647,13 @@ const LCReport = ({
 
                         {/* Report Title Box */}
                         <div className="flex justify-center -mt-6">
-                            <div className="bg-white border-2 border-gray-900 px-12 py-1.5 inline-block">
-                                <h2 className="text-xl font-bold text-gray-900 tracking-wide uppercase">LC Receive Report</h2>
+                            <div className="bg-white border-2 border-gray-900 px-8 md:px-12 py-1 md:py-1.5 inline-block">
+                                <h2 className="text-base md:text-xl font-bold text-gray-900 tracking-wide uppercase">LC Receive Report</h2>
                             </div>
                         </div>
 
                         {/* Date/Info Row */}
-                        <div className="flex justify-between items-end text-[11px] text-black pt-6 px-2">
+                        <div className="flex flex-col md:flex-row justify-between items-start md:items-end text-[11px] md:text-[12px] text-black pt-4 md:pt-6 px-2 gap-2">
                             <div className="flex flex-col gap-1.5">
                                 <div>
                                     <span className="font-bold text-black font-semibold">Date Range:</span> {formatDate(lcFilters.startDate) === '-' ? 'Start' : formatDate(lcFilters.startDate)} to {formatDate(lcFilters.endDate) === '-' ? 'Present' : formatDate(lcFilters.endDate)}
@@ -636,8 +669,8 @@ const LCReport = ({
                             </div>
                         </div>
 
-                        {/* Report Table */}
-                        <div className="overflow-x-auto border border-gray-900">
+                        {/* Report Table - Desktop View */}
+                        <div className="hidden md:block overflow-x-auto border border-gray-900">
                             <table className="w-full border-collapse">
                                 <thead>
                                     <tr className="bg-gray-100 border-b border-gray-900">
@@ -657,29 +690,8 @@ const LCReport = ({
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-gray-400">
-                                    {lcReceiveRecords.length > 0 ? (() => {
-                                        // 1. Group by Date + LC No
-                                        const lcGroupMap = lcReceiveRecords.reduce((acc, item) => {
-                                            const dateStr = formatDate(item.date);
-                                            const key = `${dateStr}_${item.lcNo || 'unknown'}`;
-                                            if (!acc[key]) {
-                                                acc[key] = {
-                                                    date: item.date,
-                                                    lcNo: item.lcNo,
-                                                    importer: item.importer,
-                                                    port: item.port,
-                                                    billOfEntry: item.billOfEntry,
-                                                    rows: []
-                                                };
-                                            }
-                                            acc[key].rows.push(item);
-                                            return acc;
-                                        }, {});
-
-                                        const lcGroups = Object.values(lcGroupMap);
-
-                                        return lcGroups.flatMap((lcGroup, lcIdx) => {
-                                            // 2. Sub-group by Product + Truck within LC group
+                                    {lcGroups.length > 0 ? (
+                                        lcGroups.flatMap((lcGroup, lcIdx) => {
                                             const subGroupMap = lcGroup.rows.reduce((acc, item) => {
                                                 const key = `${item.productName}-${item.truckNo}`;
                                                 if (!acc[key]) {
@@ -704,7 +716,6 @@ const LCReport = ({
                                                 return [
                                                     ...subRows.map((item, rowIdx) => (
                                                         <tr key={`${lcIdx}-${sgIdx}-${rowIdx}`} className="border-b border-gray-400 hover:bg-gray-50 transition-colors">
-                                                            {/* Group 1: LC Level (Spans entire LC group) */}
                                                             {sgIdx === 0 && rowIdx === 0 && (
                                                                 <>
                                                                     <td rowSpan={totalLcRows} className="border-r border-gray-900 px-2 py-0.5 text-[12px] text-black text-center align-middle">{formatDate(lcGroup.date)}</td>
@@ -715,7 +726,6 @@ const LCReport = ({
                                                                 </>
                                                             )}
 
-                                                            {/* Group 2: Product + Truck Level */}
                                                             {rowIdx === 0 && (
                                                                 <>
                                                                     <td rowSpan={subGroupSpan} className="border-r border-gray-900 px-2 py-0.5 text-[12px] font-bold text-black text-center align-middle">{item.truckNo || '-'}</td>
@@ -723,7 +733,6 @@ const LCReport = ({
                                                                 </>
                                                             )}
 
-                                                            {/* Item Level: Brand, Packet, Qty, IH Qty, IH Pkt, Short */}
                                                             <td className="border-r border-gray-900 px-2 py-0.5 text-[12px] text-black">{item.brand || '-'}</td>
                                                             <td className="border-r border-gray-900 px-2 py-0.5 text-[12px] text-right text-black">{item.packet || '0'}</td>
                                                             <td className="border-r border-gray-900 px-2 py-0.5 text-[12px] text-right font-black text-black">{Math.round(item.quantity)} {item.unit}</td>
@@ -734,7 +743,6 @@ const LCReport = ({
                                                             <td className="border-r border-gray-900 px-2 py-0.5 text-[12px] text-right font-bold text-black">{Math.round(item.sweepedQuantity)} {item.unit}</td>
                                                         </tr>
                                                     )),
-                                                    // Sub-Group Total Row
                                                     ...(hasTotalRow ? [(
                                                         <tr key={`${lcIdx}-${sgIdx}-total`} className="border-b border-gray-400 font-bold bg-gray-50/30">
                                                             <td className="border-r border-gray-900 px-2 py-0.5 text-[12px] text-black italic">Sub Total</td>
@@ -747,8 +755,6 @@ const LCReport = ({
                                                             </td>
                                                             <td className="border-r border-gray-900 px-2 py-0.5 text-[12px] text-right border-t border-gray-900 font-bold text-black">
                                                                 {(() => {
-                                                                    const totalPkt = subRows.reduce((sum, r) => sum + getIHPkt(r), 0);
-                                                                    const totalQty = subRows.reduce((sum, r) => sum + getIHQty(r), 0);
                                                                     const totalWhole = subRows.reduce((sum, r) => sum + Math.floor(getIHPkt(r)), 0);
                                                                     const totalRem = Math.round(subRows.reduce((sum, r) => {
                                                                         const pkt = getIHPkt(r);
@@ -757,8 +763,6 @@ const LCReport = ({
                                                                         const whole = Math.floor(pkt);
                                                                         return sum + (qty - (whole * size));
                                                                     }, 0));
-
-                                                                    // Re-sum wholes and remainders
                                                                     return `${totalWhole}${totalRem > 0 ? ` - ${totalRem} kg` : ''}`;
                                                                 })()}
                                                             </td>
@@ -768,11 +772,11 @@ const LCReport = ({
                                                         </tr>
                                                     )] : [])
                                                 ];
-                                            });
-                                        });
-                                    })() : (
+                                            })
+                                        })
+                                    ) : (
                                         <tr>
-                                            <td colSpan="13" className="px-4 py-8 text-center text-black italic">No receive records found for the selected criteria.</td>
+                                            <td colSpan="13" className="px-4 py-8 text-center text-black italic font-medium">No receive records found for the selected criteria.</td>
                                         </tr>
                                     )}
                                 </tbody>
@@ -811,38 +815,122 @@ const LCReport = ({
                             </table>
                         </div>
 
+                        {/* Mobile Card View */}
+                        <div className="md:hidden space-y-4 no-print pb-8">
+                            {lcGroups.length > 0 ? (
+                                lcGroups.map((lcGroup, lcIdx) => {
+                                    const isExpanded = expandedCard === lcIdx;
+                                    return (
+                                        <div key={lcIdx} className="bg-white border border-gray-100 rounded-xl overflow-hidden shadow-sm">
+                                            <div
+                                                className={`bg-gray-50/80 border-b border-gray-100 p-3 cursor-pointer hover:bg-gray-100/50 transition-colors`}
+                                                onClick={() => toggleCard(lcIdx)}
+                                            >
+                                                <div className="flex justify-between items-start mb-1.5">
+                                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">{formatDate(lcGroup.date)}</span>
+                                                    <div className="flex items-center gap-2">
+                                                        <span className="text-[10px] font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded-lg uppercase tracking-wider">LC: {lcGroup.lcNo}</span>
+                                                        <div className={`transition-transform duration-300 ${isExpanded ? 'rotate-180' : ''}`}>
+                                                            <ChevronDownIcon className="w-3.5 h-3.5 text-gray-400" />
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                                <div className="text-xs font-bold text-gray-900 mb-1 leading-tight">{lcGroup.importer || 'No Importer'}</div>
+                                                <div className="flex justify-between text-[10px] text-gray-500 font-medium">
+                                                    <span className="truncate max-w-[48%] flex items-center gap-1">Port: <span className="font-bold text-gray-700">{lcGroup.port || '-'}</span></span>
+                                                    <span className="truncate max-w-[48%] flex items-center gap-1">BOE: <span className="font-bold text-gray-700">{lcGroup.billOfEntry || '-'}</span></span>
+                                                </div>
+                                            </div>
+                                            {isExpanded && (
+                                                <div className="divide-y divide-gray-100 animate-in fade-in slide-in-from-top-1 duration-200">
+                                                    {Object.values(lcGroup.rows.reduce((acc, item) => {
+                                                        const key = `${item.productName}-${item.truckNo}`;
+                                                        if (!acc[key]) acc[key] = { productName: item.productName, truckNo: item.truckNo, rows: [] };
+                                                        acc[key].rows.push(item);
+                                                        return acc;
+                                                    }, {})).map((subGroup, sgIdx) => (
+                                                        <div key={sgIdx} className="p-3">
+                                                            <div className="flex justify-between items-center mb-2.5">
+                                                                <span className="text-[10px] font-bold text-gray-900 px-2 py-0.5 bg-gray-100 rounded-md truncate max-w-[60%]">{subGroup.productName}</span>
+                                                                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-tighter">Truck: {subGroup.truckNo || '-'}</span>
+                                                            </div>
+                                                            <div className="space-y-2">
+                                                                {subGroup.rows.map((item, rowIdx) => (
+                                                                    <div key={rowIdx} className="bg-white p-2.5 rounded-lg border border-gray-50 shadow-sm relative overflow-hidden">
+                                                                        <div className="absolute top-0 left-0 w-1 h-full bg-blue-500/20"></div>
+                                                                        <div className="text-[11px] font-bold text-gray-800 mb-1.5 border-b border-gray-50 pb-1 flex justify-between items-center">
+                                                                            <span className="truncate max-w-[70%]">{item.brand || 'No Brand'}</span>
+                                                                            {parseFloat(item.sweepedQuantity) > 0 && (
+                                                                                <span className="text-red-500 text-[9px] font-black uppercase tracking-tighter px-1.5 py-0.5 bg-red-50 rounded">Short {Math.round(item.sweepedQuantity)} kg</span>
+                                                                            )}
+                                                                        </div>
+                                                                        <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-[10px]">
+                                                                            <div className="flex justify-between border-r border-gray-50 pr-2">
+                                                                                <span className="text-gray-400 font-bold uppercase tracking-tighter">Packet</span>
+                                                                                <span className="text-gray-900 font-semibold">{item.packet || '0'}</span>
+                                                                            </div>
+                                                                            <div className="flex justify-between pl-2">
+                                                                                <span className="text-gray-400 font-bold uppercase tracking-tighter">Total QTY</span>
+                                                                                <span className="text-gray-950 font-black">{Math.round(item.quantity) || '0'} {item.unit}</span>
+                                                                            </div>
+                                                                            <div className="flex justify-between border-r border-gray-50 pr-2 pt-0.5">
+                                                                                <span className="text-gray-400 font-bold uppercase tracking-tighter">In-House</span>
+                                                                                <span className="text-emerald-600 font-bold">{Math.round(getIHQty(item)) || 0} {item.unit}</span>
+                                                                            </div>
+                                                                            <div className="flex justify-between pl-2 pt-0.5">
+                                                                                <span className="text-gray-400 font-bold uppercase tracking-tighter">IH Pkt</span>
+                                                                                <span className="text-blue-600 font-bold">{formatPktDisplay(getIHPkt(item), getIHQty(item), item.packetSize)}</span>
+                                                                            </div>
+                                                                        </div>
+                                                                    </div>
+                                                                ))}
+                                                            </div>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            )}
+                                        </div>
+                                    );
+                                })
+                            ) : (
+                                <div className="p-12 text-center bg-gray-50 rounded-2xl border-2 border-dashed border-gray-200 text-gray-400 font-medium italic">
+                                    No receive records found for mobile.
+                                </div>
+                            )}
+                        </div>
+
                         {/* Summary Info Cards for Print */}
-                        <div className="grid grid-cols-3 gap-6 pt-6 px-2 print:grid">
-                            <div className="border-2 border-gray-100 p-6 rounded-3xl bg-white shadow-sm print:border-gray-200">
-                                <div className="text-[13px] font-bold text-black uppercase tracking-wider mb-2">Total Packets</div>
-                                <div className="text-2xl font-black text-black">{lcReceiveSummary.totalPackets}</div>
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-6 pt-4 md:pt-6 px-1 md:px-2 print:grid">
+                            <div className="border-2 border-gray-100 p-4 md:p-6 rounded-2xl md:rounded-3xl bg-white shadow-sm print:border-gray-200 text-center">
+                                <div className="text-[11px] md:text-[13px] font-bold text-gray-500 md:text-black uppercase tracking-wider mb-1 md:mb-2">Total Packets</div>
+                                <div className="text-xl md:text-2xl font-black text-gray-900 md:text-black">{lcReceiveSummary.totalPackets}</div>
                             </div>
-                            <div className="border-2 border-gray-100 p-6 rounded-3xl bg-white shadow-sm print:border-gray-200">
-                                <div className="text-[13px] font-bold text-black uppercase tracking-wider mb-2">Total Quantity</div>
-                                <div className="text-2xl font-black text-black">{Math.round(lcReceiveSummary.totalQuantity)} <span className="text-lg font-bold">{lcReceiveSummary.unit}</span></div>
+                            <div className="border-2 border-gray-100 p-4 md:p-6 rounded-2xl md:rounded-3xl bg-white shadow-sm print:border-gray-200 text-center">
+                                <div className="text-[11px] md:text-[13px] font-bold text-gray-500 md:text-black uppercase tracking-wider mb-1 md:mb-2">Total Quantity</div>
+                                <div className="text-xl md:text-2xl font-black text-gray-900 md:text-black">{Math.round(lcReceiveSummary.totalQuantity)} <span className="text-sm md:text-lg font-bold">{lcReceiveSummary.unit}</span></div>
                             </div>
-                            <div className="border-2 border-gray-100 p-6 rounded-3xl bg-white shadow-sm print:border-gray-200">
-                                <div className="text-[13px] font-bold text-black uppercase tracking-wider mb-2">Total Truck</div>
-                                <div className="text-3xl font-black text-black">{lcReceiveSummary.totalTrucks}</div>
+                            <div className="border-2 border-gray-100 p-4 md:p-6 rounded-2xl md:rounded-3xl bg-white shadow-sm print:border-gray-200 text-center">
+                                <div className="text-[11px] md:text-[13px] font-bold text-gray-500 md:text-black uppercase tracking-wider mb-1 md:mb-2">Total Truck</div>
+                                <div className="text-xl md:text-3xl font-black text-gray-900 md:text-black">{lcReceiveSummary.totalTrucks || '0'}</div>
                             </div>
                         </div>
 
                         {/* Footer Signatures */}
-                        <div className="grid grid-cols-3 gap-8 pt-24 px-4 pb-12">
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-12 md:gap-8 pt-16 md:pt-24 px-4 pb-12">
                             <div className="text-center">
-                                <div className="border-t border-dotted border-gray-900 pt-2 text-[13px] font-bold text-black uppercase">Prepared By</div>
+                                <div className="border-t border-dotted border-gray-900 pt-2 text-[12px] md:text-[13px] font-bold text-black uppercase">Prepared By</div>
                             </div>
                             <div className="text-center">
-                                <div className="border-t border-dotted border-gray-900 pt-2 text-[13px] font-bold text-black uppercase">Verified By</div>
+                                <div className="border-t border-dotted border-gray-900 pt-2 text-[12px] md:text-[13px] font-bold text-black uppercase">Verified By</div>
                             </div>
                             <div className="text-center">
-                                <div className="border-t border-dotted border-gray-900 pt-2 text-[13px] font-bold text-black uppercase">Authorized Signature</div>
+                                <div className="border-t border-dotted border-gray-900 pt-2 text-[12px] md:text-[13px] font-bold text-black uppercase">Authorized Signature</div>
                             </div>
                         </div>
                     </div>
                 </div>
             </div>
-        </div>
+        </div >
     );
 };
 

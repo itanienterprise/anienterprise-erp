@@ -12,7 +12,8 @@ const WarehouseReport = ({
     uniqueWarehouses,
     filters,
     setFilters,
-    salesRecords = []
+    salesRecords = [],
+    products = []
 }) => {
     if (!isOpen) return null;
 
@@ -20,12 +21,14 @@ const WarehouseReport = ({
     const [filterSearchInputs, setFilterSearchInputs] = useState({
         warehouseSearch: '',
         productSearch: '',
-        brandSearch: ''
+        brandSearch: '',
+        categorySearch: ''
     });
     const [filterDropdownOpen, setFilterDropdownOpen] = useState({
         warehouse: false,
         product: false,
-        brand: false
+        brand: false,
+        category: false
     });
 
     const filterButtonRef = useRef(null);
@@ -33,6 +36,7 @@ const WarehouseReport = ({
     const warehouseRef = useRef(null);
     const productRef = useRef(null);
     const brandRef = useRef(null);
+    const categoryRef = useRef(null);
 
     useEffect(() => {
         const handleClickOutside = (event) => {
@@ -42,12 +46,13 @@ const WarehouseReport = ({
             if (filterDropdownOpen.warehouse && warehouseRef.current && !warehouseRef.current.contains(event.target)) setFilterDropdownOpen(prev => ({ ...prev, warehouse: false }));
             if (filterDropdownOpen.product && productRef.current && !productRef.current.contains(event.target)) setFilterDropdownOpen(prev => ({ ...prev, product: false }));
             if (filterDropdownOpen.brand && brandRef.current && !brandRef.current.contains(event.target)) setFilterDropdownOpen(prev => ({ ...prev, brand: false }));
+            if (filterDropdownOpen.category && categoryRef.current && !categoryRef.current.contains(event.target)) setFilterDropdownOpen(prev => ({ ...prev, category: false }));
         };
 
         const handleEscape = (e) => {
             if (e.key === 'Escape') {
                 setShowFilterPanel(false);
-                setFilterDropdownOpen({ warehouse: false, product: false, brand: false });
+                setFilterDropdownOpen({ warehouse: false, product: false, brand: false, category: false });
             }
         };
 
@@ -169,6 +174,15 @@ const WarehouseReport = ({
         // Product filter
         if (filters.productName && prodName !== filters.productName) return acc;
 
+        // Category filter
+        if (filters.category) {
+            const productMatch = products.find(p => {
+                const pName = (p.name || p.productName || '').trim().toLowerCase();
+                return pName === prodName.toLowerCase();
+            });
+            if (!productMatch || (productMatch.category || '').trim() !== filters.category) return acc;
+        }
+
         const brand = (item.brand || '-').trim();
         // Brand filter
         if (filters.brand && brand !== filters.brand) return acc;
@@ -284,6 +298,9 @@ const WarehouseReport = ({
     totals.totalWhRem = Math.round(totals.totalWhRem);
 
     const getUniqueOptions = (key) => {
+        if (key === 'productName') {
+            return [...new Set(warehouseData.map(item => (item.productName || item.product || '').trim()).filter(Boolean))].sort();
+        }
         return [...new Set(warehouseData.map(item => (item[key] || '').trim()).filter(Boolean))].sort();
     };
 
@@ -319,9 +336,9 @@ const WarehouseReport = ({
                                         <h4 className="font-bold text-gray-900 text-sm">Advance Filter</h4>
                                         <button
                                             onClick={() => {
-                                                setFilters({ startDate: '', endDate: '', warehouse: '', productName: '', brand: '' });
-                                                setFilterSearchInputs({ warehouseSearch: '', productSearch: '', brandSearch: '' });
-                                                setFilterDropdownOpen({ warehouse: false, product: false, brand: false });
+                                                setFilters({ startDate: '', endDate: '', warehouse: '', productName: '', brand: '', category: 'Crop' });
+                                                setFilterSearchInputs({ warehouseSearch: '', productSearch: '', brandSearch: '', categorySearch: '' });
+                                                setFilterDropdownOpen({ warehouse: false, product: false, brand: false, category: false });
                                             }}
                                             className="text-[11px] font-bold text-blue-600 hover:text-blue-700 uppercase tracking-wider"
                                         >
@@ -381,6 +398,42 @@ const WarehouseReport = ({
                                             })()}
                                         </div>
 
+                                        <div className="space-y-1.5 relative" ref={categoryRef}>
+                                            <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider pl-1">Category</label>
+                                            <div className="relative">
+                                                <input
+                                                    type="text"
+                                                    value={filterSearchInputs.categorySearch}
+                                                    onChange={(e) => {
+                                                        setFilterSearchInputs({ ...filterSearchInputs, categorySearch: e.target.value });
+                                                        setFilterDropdownOpen({ warehouse: false, product: false, brand: false, category: true });
+                                                    }}
+                                                    onFocus={() => setFilterDropdownOpen({ warehouse: false, product: false, brand: false, category: true })}
+                                                    placeholder={filters.category || "Search Category..."}
+                                                    className={`w-full px-4 py-2.5 bg-white border border-gray-100 rounded-xl text-sm focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all shadow-sm hover:border-gray-200 pr-14 ${filters.category ? 'placeholder:text-gray-900 placeholder:font-semibold' : 'placeholder:text-gray-300'}`}
+                                                />
+                                                <div className="absolute right-3.5 top-1/2 -translate-y-1/2 flex items-center gap-2">
+                                                    {filters.category && (
+                                                        <button onClick={() => { setFilters({ ...filters, category: '' }); setFilterSearchInputs({ ...filterSearchInputs, categorySearch: '' }); setFilterDropdownOpen({ warehouse: false, product: false, brand: false, category: false }); }} className="text-gray-400 hover:text-gray-600">
+                                                            <XIcon className="w-4 h-4" />
+                                                        </button>
+                                                    )}
+                                                    <SearchIcon className="w-4.5 h-4.5 text-gray-300 pointer-events-none" />
+                                                </div>
+                                            </div>
+                                            {filterDropdownOpen.category && (() => {
+                                                const options = [...new Set(products.map(p => p.category).filter(Boolean))].sort();
+                                                const filtered = options.filter(c => c.toLowerCase().includes(filterSearchInputs.categorySearch.toLowerCase()));
+                                                return filtered.length > 0 ? (
+                                                    <div className="absolute z-[120] mt-1 w-full bg-white border border-gray-100 rounded-xl shadow-xl max-h-48 overflow-y-auto py-1">
+                                                        {filtered.map(c => (
+                                                            <button key={c} type="button" onClick={() => { setFilters({ ...filters, category: c }); setFilterSearchInputs({ ...filterSearchInputs, categorySearch: '' }); setFilterDropdownOpen({ warehouse: false, product: false, brand: false, category: false }); }} className="w-full px-4 py-2 text-left text-sm hover:bg-blue-50 transition-colors font-medium text-gray-700">{c}</button>
+                                                        ))}
+                                                    </div>
+                                                ) : null;
+                                            })()}
+                                        </div>
+
                                         <div className="space-y-1.5 relative" ref={productRef}>
                                             <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider pl-1">Product</label>
                                             <div className="relative">
@@ -405,7 +458,14 @@ const WarehouseReport = ({
                                                 </div>
                                             </div>
                                             {filterDropdownOpen.product && (() => {
-                                                const options = getUniqueOptions('productName');
+                                                let options = getUniqueOptions('productName');
+                                                if (filters.category && products && products.length > 0) {
+                                                    const categoryProducts = new Set(
+                                                        products.filter(p => (p.category || '').toLowerCase() === filters.category.toLowerCase())
+                                                            .map(p => (p.name || p.productName || '').toLowerCase())
+                                                    );
+                                                    options = options.filter(o => categoryProducts.has(o.toLowerCase()));
+                                                }
                                                 const filtered = options.filter(p => p.toLowerCase().includes(filterSearchInputs.productSearch.toLowerCase()));
                                                 return filtered.length > 0 ? (
                                                     <div className="absolute z-[120] mt-1 w-full bg-white border border-gray-100 rounded-xl shadow-xl max-h-48 overflow-y-auto py-1">

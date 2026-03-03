@@ -11,14 +11,15 @@ const StockReport = ({
     stockRecords,
     stockFilters,
     setStockFilters,
-    stockData
+    stockData,
+    products
 }) => {
     if (!isOpen) return null;
 
     const [showFilterPanel, setShowFilterPanel] = useState(false);
-    const [filterSearchInputs, setFilterSearchInputs] = useState({ lcNoSearch: '', portSearch: '', brandSearch: '', productSearch: '' });
-    const [filterDropdownOpen, setFilterDropdownOpen] = useState({ lcNo: false, port: false, brand: false, product: false });
-    const initialFilterDropdownState = { lcNo: false, port: false, brand: false, product: false };
+    const [filterSearchInputs, setFilterSearchInputs] = useState({ lcNoSearch: '', portSearch: '', brandSearch: '', productSearch: '', categorySearch: '' });
+    const [filterDropdownOpen, setFilterDropdownOpen] = useState({ lcNo: false, port: false, brand: false, product: false, category: false });
+    const initialFilterDropdownState = { lcNo: false, port: false, brand: false, product: false, category: false };
 
     const filterButtonRef = useRef(null);
     const filterPanelRef = useRef(null);
@@ -26,6 +27,7 @@ const StockReport = ({
     const portFilterRef = useRef(null);
     const productFilterRef = useRef(null);
     const brandFilterRef = useRef(null);
+    const categoryFilterRef = useRef(null);
 
     useEffect(() => {
         const handleClickOutside = (event) => {
@@ -36,6 +38,7 @@ const StockReport = ({
             if (filterDropdownOpen.port && portFilterRef.current && !portFilterRef.current.contains(event.target)) setFilterDropdownOpen(prev => ({ ...prev, port: false }));
             if (filterDropdownOpen.product && productFilterRef.current && !productFilterRef.current.contains(event.target)) setFilterDropdownOpen(prev => ({ ...prev, product: false }));
             if (filterDropdownOpen.brand && brandFilterRef.current && !brandFilterRef.current.contains(event.target)) setFilterDropdownOpen(prev => ({ ...prev, brand: false }));
+            if (filterDropdownOpen.category && categoryFilterRef.current && !categoryFilterRef.current.contains(event.target)) setFilterDropdownOpen(prev => ({ ...prev, category: false }));
         };
 
         const handleEscape = (e) => {
@@ -55,6 +58,9 @@ const StockReport = ({
 
     // Helper to get Unique Options
     const getUniqueOptions = (key) => {
+        if (key === 'productName') {
+            return [...new Set(stockRecords.map(item => (item.productName || item.product || '').trim()).filter(Boolean))].sort();
+        }
         return [...new Set(stockRecords.map(item => (item[key] || '').trim()).filter(Boolean))].sort();
     };
 
@@ -90,8 +96,8 @@ const StockReport = ({
                                         <h4 className="font-bold text-gray-900 text-sm">Advance Filter</h4>
                                         <button
                                             onClick={() => {
-                                                setStockFilters({ startDate: '', endDate: '', lcNo: '', port: '', brand: '', productName: '' });
-                                                setFilterSearchInputs({ lcNoSearch: '', portSearch: '', brandSearch: '', productSearch: '' });
+                                                setStockFilters({ startDate: '', endDate: '', lcNo: '', port: '', brand: '', productName: '', category: 'Crop' });
+                                                setFilterSearchInputs({ lcNoSearch: '', portSearch: '', brandSearch: '', productSearch: '', categorySearch: '' });
                                                 setFilterDropdownOpen(initialFilterDropdownState);
                                             }}
                                             className="text-[11px] font-bold text-blue-600 hover:text-blue-700 uppercase tracking-wider"
@@ -195,6 +201,43 @@ const StockReport = ({
                                         </div>
 
                                         <div className="space-y-4">
+                                            {/* Category Selection */}
+                                            <div className="space-y-1.5 relative" ref={categoryFilterRef}>
+                                                <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider pl-1">Category</label>
+                                                <div className="relative">
+                                                    <input
+                                                        type="text"
+                                                        value={filterSearchInputs.categorySearch}
+                                                        onChange={(e) => {
+                                                            setFilterSearchInputs({ ...filterSearchInputs, categorySearch: e.target.value });
+                                                            setFilterDropdownOpen({ ...initialFilterDropdownState, category: true });
+                                                        }}
+                                                        onFocus={() => setFilterDropdownOpen({ ...initialFilterDropdownState, category: true })}
+                                                        placeholder={stockFilters.category || "Search Category..."}
+                                                        className={`w-full px-4 py-2.5 bg-white border border-gray-100 rounded-xl text-sm focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all shadow-sm hover:border-gray-200 pr-14 ${stockFilters.category ? 'placeholder:text-gray-900 placeholder:font-semibold' : 'placeholder:text-gray-300'}`}
+                                                    />
+                                                    <div className="absolute right-3.5 top-1/2 -translate-y-1/2 flex items-center gap-2">
+                                                        {stockFilters.category && (
+                                                            <button onClick={() => { setStockFilters({ ...stockFilters, category: '' }); setFilterSearchInputs({ ...filterSearchInputs, categorySearch: '' }); setFilterDropdownOpen(initialFilterDropdownState); }} className="text-gray-400 hover:text-gray-600">
+                                                                <XIcon className="w-4 h-4" />
+                                                            </button>
+                                                        )}
+                                                        <SearchIcon className="w-4.5 h-4.5 text-gray-300 pointer-events-none" />
+                                                    </div>
+                                                </div>
+                                                {filterDropdownOpen.category && (() => {
+                                                    const options = [...new Set(products.map(p => p.category).filter(Boolean))].sort();
+                                                    const filtered = options.filter(c => c.toLowerCase().includes(filterSearchInputs.categorySearch.toLowerCase()));
+                                                    return filtered.length > 0 ? (
+                                                        <div className="absolute z-[120] mt-1 w-full bg-white border border-gray-100 rounded-xl shadow-xl max-h-48 overflow-y-auto py-1">
+                                                            {filtered.map(c => (
+                                                                <button key={c} type="button" onClick={() => { setStockFilters({ ...stockFilters, category: c }); setFilterSearchInputs({ ...filterSearchInputs, categorySearch: '' }); setFilterDropdownOpen(initialFilterDropdownState); }} className="w-full px-4 py-2 text-left text-sm hover:bg-blue-50 transition-colors">{c}</button>
+                                                            ))}
+                                                        </div>
+                                                    ) : null;
+                                                })()}
+                                            </div>
+
                                             {/* Product Name Selection */}
                                             <div className="space-y-1.5 relative" ref={productFilterRef}>
                                                 <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider pl-1">Product</label>
@@ -220,7 +263,14 @@ const StockReport = ({
                                                     </div>
                                                 </div>
                                                 {filterDropdownOpen.product && (() => {
-                                                    const options = getUniqueOptions('productName');
+                                                    let options = getUniqueOptions('productName');
+                                                    if (stockFilters.category && products && products.length > 0) {
+                                                        const categoryProducts = new Set(
+                                                            products.filter(p => (p.category || '').toLowerCase() === stockFilters.category.toLowerCase())
+                                                                .map(p => (p.name || p.productName || '').toLowerCase())
+                                                        );
+                                                        options = options.filter(o => categoryProducts.has(o.toLowerCase()));
+                                                    }
                                                     const filtered = options.filter(p => p.toLowerCase().includes(filterSearchInputs.productSearch.toLowerCase()));
                                                     return filtered.length > 0 ? (
                                                         <div className="absolute z-[120] mt-1 w-full bg-white border border-gray-100 rounded-xl shadow-xl max-h-48 overflow-y-auto py-1">

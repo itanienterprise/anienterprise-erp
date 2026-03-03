@@ -44,18 +44,25 @@ const SaleManagement = ({
         customerId: '',
         companyName: '',
         customerName: '',
-        address: '',
+        lcNo: '',
         contact: '',
+        importer: '',
+        port: '',
+        indianCnF: '',
+        bdCnf: '',
+        truck: '',
         items: [{
             productId: '',
             productName: '',
             brandEntries: [{
                 brand: '',
+                brandName: '',
                 inhouseQty: '',
                 warehouseId: '',
                 warehouseName: '',
                 warehouseQty: '',
                 quantity: '',
+                truck: '',
                 unitPrice: '',
                 totalAmount: ''
             }]
@@ -178,6 +185,9 @@ const SaleManagement = ({
     const [activeEntryIndex, setActiveEntryIndex] = useState(null);
 
     useEffect(() => {
+        // Skip stock calculations for Border Sales - they have no connection to stock/LC Receive
+        if (formData.saleType === 'Border') return;
+
         setFormData(prev => {
             let hasChanges = false;
             const newItems = prev.items.map(item => {
@@ -417,11 +427,13 @@ const SaleManagement = ({
                 productName: '',
                 brandEntries: [{
                     brand: '',
+                    brandName: '',
                     inhouseQty: '',
                     warehouseId: '',
                     warehouseName: '',
                     warehouseQty: '',
                     quantity: '',
+                    truck: '',
                     unitPrice: '',
                     totalAmount: ''
                 }]
@@ -436,11 +448,13 @@ const SaleManagement = ({
                 ...newItems[productIdx],
                 brandEntries: [...newItems[productIdx].brandEntries, {
                     brand: '',
+                    brandName: '',
                     inhouseQty: '',
                     warehouseId: '',
                     warehouseName: '',
                     warehouseQty: '',
                     quantity: '',
+                    truck: '',
                     unitPrice: '',
                     totalAmount: ''
                 }]
@@ -497,10 +511,27 @@ const SaleManagement = ({
             const brandEntries = [...product.brandEntries];
             const entry = { ...brandEntries[entryIdx], [name]: value };
 
-            if (name === 'quantity' || name === 'unitPrice') {
-                const qty = parseFloat(name === 'quantity' ? value : entry.quantity) || 0;
-                const price = parseFloat(name === 'unitPrice' ? value : entry.unitPrice) || 0;
-                entry.totalAmount = (qty * price).toFixed(2);
+            // Synchronize brand and brandName for consistency
+            if (name === 'brandName') {
+                entry.brand = value;
+            } else if (name === 'brand') {
+                entry.brandName = value;
+            }
+
+            if (prev.saleType === 'Border') {
+                // Border Sale: Total = Truck * Price
+                if (name === 'truck' || name === 'unitPrice') {
+                    const truck = parseFloat(name === 'truck' ? value : entry.truck) || 0;
+                    const price = parseFloat(name === 'unitPrice' ? value : entry.unitPrice) || 0;
+                    entry.totalAmount = (truck * price).toFixed(2);
+                }
+            } else {
+                // General Sale: Total = Quantity * Price
+                if (name === 'quantity' || name === 'unitPrice') {
+                    const qty = parseFloat(name === 'quantity' ? value : entry.quantity) || 0;
+                    const price = parseFloat(name === 'unitPrice' ? value : entry.unitPrice) || 0;
+                    entry.totalAmount = (qty * price).toFixed(2);
+                }
             }
 
             brandEntries[entryIdx] = entry;
@@ -622,7 +653,62 @@ const SaleManagement = ({
                     }
                 }
 
-                // Mathematical stock deduction logic connecting sales to warehouse/stock has been removed
+                // Border Sale: Auto-deduct sold Qty from matching warehouse records
+                if (formData.saleType === 'Border') {
+                    try {
+                        // Re-fetch latest warehouse data to avoid stale state
+                        const whRes = await fetch(`${API_BASE_URL}/api/warehouses`);
+                        if (whRes.ok) {
+                            const rawWarehouses = await whRes.json();
+                            const liveWarehouses = rawWarehouses.map(record => ({
+                                ...decryptData(record.data),
+                                _id: record._id
+                            }));
+
+                            // Build a map of warehouse updates needed: id -> qty to deduct
+                            const deductions = {}; // { warehouseId: amountToDeduct }
+
+                            formData.items.forEach(product => {
+                                const soldProductName = (product.productName || '').trim().toLowerCase();
+                                (product.brandEntries || []).forEach(entry => {
+                                    const soldQty = parseFloat(entry.quantity) || 0;
+                                    if (soldQty === 0) return;
+
+                                    // Find matching warehouse record by product name
+                                    const matchingWh = liveWarehouses.find(wh => {
+                                        const whProduct = (wh.productName || wh.product || '').trim().toLowerCase();
+                                        return whProduct === soldProductName;
+                                    });
+
+                                    if (matchingWh) {
+                                        if (!deductions[matchingWh._id]) {
+                                            deductions[matchingWh._id] = { wh: matchingWh, totalDeduct: 0 };
+                                        }
+                                        deductions[matchingWh._id].totalDeduct += soldQty;
+                                    }
+                                });
+                            });
+
+                            // Apply deductions and PUT each affected warehouse
+                            await Promise.all(
+                                Object.values(deductions).map(async ({ wh, totalDeduct }) => {
+                                    const currentQty = parseFloat(wh.whQty) || 0;
+                                    const updatedWh = {
+                                        ...wh,
+                                        whQty: Math.max(0, currentQty - totalDeduct).toString()
+                                    };
+                                    await fetch(`${API_BASE_URL}/api/warehouses/${wh._id}`, {
+                                        method: 'PUT',
+                                        headers: { 'Content-Type': 'application/json' },
+                                        body: JSON.stringify({ data: encryptData(updatedWh) }),
+                                    });
+                                })
+                            );
+                        }
+                    } catch (err) {
+                        console.error('Error auto-deducting warehouse stock for Border Sale:', err);
+                    }
+                }
 
                 setTimeout(() => {
                     setShowForm(false);
@@ -650,18 +736,25 @@ const SaleManagement = ({
             customerId: '',
             companyName: '',
             customerName: '',
-            address: '',
+            lcNo: '',
             contact: '',
+            importer: '',
+            port: '',
+            indianCnF: '',
+            bdCnf: '',
+            truck: '',
             items: [{
                 productId: '',
                 productName: '',
                 brandEntries: [{
                     brand: '',
+                    brandName: '',
                     inhouseQty: '',
                     warehouseId: '',
                     warehouseName: '',
                     warehouseQty: '',
                     quantity: '',
+                    truck: '',
                     unitPrice: '',
                     totalAmount: ''
                 }]
@@ -877,7 +970,7 @@ const SaleManagement = ({
             customerId: customer._id,
             companyName: customer.companyName || '',
             customerName: customer.customerName || '',
-            address: customer.address || customer.location || '',
+            lcNo: customer.lcNo || '',
             contact: customer.phone || '',
             previousBalance: previousBalance.toFixed(2)
         }));
@@ -891,7 +984,7 @@ const SaleManagement = ({
                 companyName: '',
                 customerId: '',
                 customerName: '',
-                address: '',
+                lcNo: '',
                 contact: '',
                 previousBalance: '0.00'
             }));
@@ -911,7 +1004,19 @@ const SaleManagement = ({
                 ...newItems[activeItemIndex],
                 productId: product._id,
                 productName: product.name,
-                brand: '' // Clear brand when product changes
+                brand: '', // Clear item-level brand
+                brandEntries: [{ // Reset brand entries for new product
+                    brand: '',
+                    brandName: '',
+                    inhouseQty: '',
+                    warehouseId: '',
+                    warehouseName: '',
+                    warehouseQty: '',
+                    quantity: '',
+                    truck: '',
+                    unitPrice: '',
+                    totalAmount: ''
+                }]
             };
             return { ...prev, items: newItems };
         });
@@ -927,7 +1032,8 @@ const SaleManagement = ({
             const brandEntries = [...item.brandEntries];
             brandEntries[activeEntryIndex] = {
                 ...brandEntries[activeEntryIndex],
-                brand: brand
+                brand: brand,
+                brandName: brand // Ensure both are set for UI/Stock calculation
             };
             item.brandEntries = brandEntries;
             newItems[activeItemIndex] = item;
@@ -1117,7 +1223,7 @@ const SaleManagement = ({
                             onClick={() => setShowForm(true)}
                             className="px-4 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-medium rounded-xl shadow-lg shadow-blue-500/30 transition-all transform hover:scale-105 flex items-center"
                         >
-                            <span className="mr-2 text-xl">+</span> Add Sale
+                            <span className="mr-2 text-xl">+</span> {saleType === 'Border' ? 'New G.P' : 'Add Sale'}
                         </button>
                     </div>
                 )}
@@ -1147,14 +1253,14 @@ const SaleManagement = ({
                     <div className="absolute -bottom-24 -left-24 w-64 h-64 bg-indigo-400/10 rounded-full blur-3xl pointer-events-none"></div>
 
                     <div className="flex items-center justify-between mb-6 border-b border-gray-200/50 pb-4 relative z-10">
-                        <h3 className="text-xl font-semibold text-gray-800">{editingId ? 'Edit Sale' : 'New Sale Entry'}</h3>
+                        <h3 className="text-xl font-semibold text-gray-800">{editingId ? 'Edit Sale' : (saleType === 'Border' ? 'New Gate Pass Entry' : 'New Sale Entry')}</h3>
                         <button onClick={() => { setShowForm(false); resetForm(); }} className="text-gray-400 hover:text-red-500 transition-colors">
                             <XIcon className="w-6 h-6" />
                         </button>
                     </div>
 
                     <form onSubmit={handleSubmit} autoComplete="off" className="grid grid-cols-1 md:grid-cols-2 gap-6 relative z-10">
-                        <div className="grid grid-cols-1 md:grid-cols-6 gap-4 col-span-2">
+                        <div className={`grid grid-cols-1 ${saleType === 'Border' ? 'md:grid-cols-5' : 'md:grid-cols-6'} gap-4 col-span-2`}>
                             <CustomDatePicker
                                 label="Date"
                                 name="date"
@@ -1166,6 +1272,10 @@ const SaleManagement = ({
                             <div className="space-y-2">
                                 <label className="text-sm font-medium text-gray-700">Invoice No</label>
                                 <input type="text" name="invoiceNo" value={formData.invoiceNo} onChange={handleInputChange} placeholder="SALE-001" className="w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm" required />
+                            </div>
+                            <div className="space-y-2">
+                                <label className="text-sm font-medium text-gray-700">LC No</label>
+                                <input type="text" name="lcNo" value={formData.lcNo} onChange={handleInputChange} placeholder="LC-001" className="w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm" />
                             </div>
                             {/* Company Name Select */}
                             <div className="space-y-2 relative company-dropdown-container">
@@ -1221,13 +1331,29 @@ const SaleManagement = ({
                                 <input type="text" name="customerName" value={formData.customerName} readOnly placeholder="Customer" className="w-full px-4 py-2 bg-gray-50/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm cursor-not-allowed" />
                             </div>
                             <div className="space-y-2">
-                                <label className="text-sm font-medium text-gray-700">Address</label>
-                                <input type="text" name="address" value={formData.address} readOnly placeholder="Address" className="w-full px-4 py-2 bg-gray-50/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm cursor-not-allowed" />
-                            </div>
-                            <div className="space-y-2">
                                 <label className="text-sm font-medium text-gray-700">Contact</label>
                                 <input type="text" name="contact" value={formData.contact} readOnly placeholder="Contact" className="w-full px-4 py-2 bg-gray-50/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm cursor-not-allowed" />
                             </div>
+                            {saleType === 'Border' && (
+                                <>
+                                    <div className="space-y-2">
+                                        <label className="text-sm font-medium text-gray-700">Importer</label>
+                                        <input type="text" name="importer" value={formData.importer} onChange={handleInputChange} placeholder="Importer" className="w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm" />
+                                    </div>
+                                    <div className="space-y-2">
+                                        <label className="text-sm font-medium text-gray-700">Port</label>
+                                        <input type="text" name="port" value={formData.port} onChange={handleInputChange} placeholder="Port" className="w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm" />
+                                    </div>
+                                    <div className="space-y-2">
+                                        <label className="text-sm font-medium text-gray-700">IND CNF</label>
+                                        <input type="text" name="indianCnF" value={formData.indianCnF} onChange={handleInputChange} placeholder="IND CNF" className="w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm" />
+                                    </div>
+                                    <div className="space-y-2">
+                                        <label className="text-sm font-medium text-gray-700">BD CNF</label>
+                                        <input type="text" name="bdCnf" value={formData.bdCnf} onChange={handleInputChange} placeholder="BD CNF" className="w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm" />
+                                    </div>
+                                </>
+                            )}
                         </div>
 
                         <div className="col-span-2 space-y-6">
@@ -1259,9 +1385,9 @@ const SaleManagement = ({
                                             </button>
                                         )}
 
-                                        <div className="space-y-6">
-                                            {/* Product Selection Row */}
-                                            <div className="space-y-1.5 relative max-w-sm px-4 product-dropdown-container">
+                                        <div className={`${saleType === 'Border' ? 'flex flex-row items-center gap-4' : 'space-y-6'}`}>
+                                            {/* Product Selection */}
+                                            <div className={`space-y-1.5 relative px-4 product-dropdown-container ${saleType === 'Border' ? 'flex-1' : 'max-w-sm'}`}>
                                                 <label className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">Product</label>
                                                 <div className="relative">
                                                     <input
@@ -1323,49 +1449,130 @@ const SaleManagement = ({
                                                 </div>
                                             </div>
 
-                                            {/* Brand Entries Section */}
-                                            <div className="space-y-4">
+                                            {saleType === 'Border' && (
+                                                <div className="flex-[3] space-y-4 pt-1">
+                                                    <div className="hidden md:grid grid-cols-5 gap-4 px-4">
+                                                        <div className="text-[10px] font-bold text-gray-400 uppercase tracking-widest text-center">Warehouse</div>
+                                                        <div className="text-[10px] font-bold text-gray-400 uppercase tracking-widest text-center">Qty</div>
+                                                        <div className="text-[10px] font-bold text-gray-400 uppercase tracking-widest text-center">Truck</div>
+                                                        <div className="text-[10px] font-bold text-gray-400 uppercase tracking-widest text-center">Price</div>
+                                                        <div className="text-[10px] font-bold text-gray-400 uppercase tracking-widest text-center">Total</div>
+                                                    </div>
+                                                    {item.brandEntries.map((entry, entryIndex) => (
+                                                        <div key={entryIndex} className="grid grid-cols-1 md:grid-cols-5 gap-4 items-center px-4">
+                                                            {/* Warehouse Selection */}
+                                                            <div className="relative warehouse-dropdown-container">
+                                                                <input
+                                                                    type="text"
+                                                                    placeholder={entry.warehouseName || "Warehouse"}
+                                                                    value={activeDropdown === 'warehouse' && activeItemIndex === index && activeEntryIndex === entryIndex ? warehouseSearch : ''}
+                                                                    onChange={(e) => {
+                                                                        setWarehouseSearch(e.target.value);
+                                                                        setActiveDropdown('warehouse');
+                                                                        setActiveItemIndex(index);
+                                                                        setActiveEntryIndex(entryIndex);
+                                                                        handleItemInputChange(index, entryIndex, { target: { name: 'warehouseName', value: e.target.value } });
+                                                                    }}
+                                                                    onFocus={() => {
+                                                                        setActiveDropdown('warehouse');
+                                                                        setActiveItemIndex(index);
+                                                                        setActiveEntryIndex(entryIndex);
+                                                                        setWarehouseSearch(entry.warehouseName || '');
+                                                                    }}
+                                                                    className={`w-full px-3 py-2 pr-9 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm text-xs ${entry.warehouseName ? 'placeholder:text-gray-900 placeholder:font-semibold' : 'placeholder:text-gray-400'}`}
+                                                                />
+                                                                <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
+                                                                    {entry.warehouseName ? (
+                                                                        <button type="button" onClick={() => { handleWarehouseSelect({ _id: '', whName: '' }); setWarehouseSearch(''); }} className="text-gray-400 hover:text-red-500">
+                                                                            <XIcon className="w-3.5 h-3.5" />
+                                                                        </button>
+                                                                    ) : (
+                                                                        <button type="button" onClick={() => { setActiveDropdown(activeDropdown === 'warehouse' && activeItemIndex === index && activeEntryIndex === entryIndex ? null : 'warehouse'); setActiveItemIndex(index); setActiveEntryIndex(entryIndex); }} className="text-gray-300 hover:text-blue-500 transition-colors">
+                                                                            <ChevronDownIcon className={`w-3.5 h-3.5 transition-transform duration-200 ${activeDropdown === 'warehouse' && activeItemIndex === index && activeEntryIndex === entryIndex ? 'rotate-180' : ''}`} />
+                                                                        </button>
+                                                                    )}
+                                                                </div>
+                                                                {activeDropdown === 'warehouse' && activeItemIndex === index && activeEntryIndex === entryIndex && getFilteredWarehouses().length > 0 && (
+                                                                    <div className="absolute z-[70] w-full mt-1 bg-white border border-gray-100 rounded-xl shadow-xl max-h-40 overflow-y-auto py-1">
+                                                                        {getFilteredWarehouses().map((w) => (
+                                                                            <button key={w._id} type="button" onClick={() => handleWarehouseSelect(w)} className="w-full px-4 py-2 text-left text-xs hover:bg-blue-50 font-medium text-gray-700">
+                                                                                {w.whName}
+                                                                            </button>
+                                                                        ))}
+                                                                    </div>
+                                                                )}
+                                                            </div>
+                                                            <div>
+                                                                <input type="number" name="quantity" value={entry.quantity} onChange={(e) => handleItemInputChange(index, entryIndex, e)} placeholder="0" className="w-full px-2 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm text-[13px] font-black text-gray-900 text-center" />
+                                                            </div>
+                                                            <div>
+                                                                <input type="number" name="truck" value={entry.truck || ''} onChange={(e) => handleItemInputChange(index, entryIndex, e)} placeholder="0" className="w-full px-2 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm text-[13px] font-bold text-gray-600 text-center" />
+                                                            </div>
+                                                            <div>
+                                                                <input type="number" name="unitPrice" value={entry.unitPrice} onChange={(e) => handleItemInputChange(index, entryIndex, e)} placeholder="0" className="w-full px-2 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm text-[13px] font-bold text-gray-600 text-center" />
+                                                            </div>
+                                                            <div className="flex items-center gap-2">
+                                                                <div className="flex-1 h-10 flex items-center justify-center bg-white/50 border border-gray-200/60 rounded-lg backdrop-blur-sm text-[13px] font-black text-blue-600">
+                                                                    {parseFloat(entry.totalAmount || 0).toLocaleString()}
+                                                                </div>
+                                                                <div className="flex flex-row gap-1 items-center justify-center">
+                                                                    {entryIndex === item.brandEntries.length - 1 && (
+                                                                        <button type="button" onClick={() => addBrandEntry(index)} className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-lg transition-all active:scale-90" title="Add Brand"><span className="text-xl font-bold">+</span></button>
+                                                                    )}
+                                                                    {item.brandEntries.length > 1 && (
+                                                                        <button type="button" onClick={() => removeBrandEntry(index, entryIndex)} className="p-1.5 text-red-500 hover:bg-red-50 rounded-lg transition-all active:scale-90" title="Remove Brand"><TrashIcon className="w-3.5 h-3.5" /></button>
+                                                                    )}
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            )}
+                                        </div>
+
+                                        {saleType !== 'Border' && (
+                                            <div className="space-y-1">
                                                 {/* Header Row for Brands (Hidden on Mobile) */}
-                                                <div className="hidden md:grid grid-cols-7 gap-4 px-4">
-                                                    <div className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Brand</div>
-                                                    <div className="text-[10px] font-bold text-gray-400 uppercase tracking-widest text-center">Inhouse</div>
-                                                    <div className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Warehouse</div>
-                                                    <div className="text-[10px] font-bold text-gray-400 uppercase tracking-widest text-center">Wh Stock</div>
-                                                    <div className="text-[10px] font-bold text-gray-400 uppercase tracking-widest text-center">Qty</div>
-                                                    <div className="text-[10px] font-bold text-gray-400 uppercase tracking-widest text-center">Price</div>
-                                                    <div className="text-[10px] font-bold text-gray-400 uppercase tracking-widest text-center">Total</div>
+                                                <div className="hidden md:grid grid-cols-9 gap-4 px-6 py-1 border border-transparent">
+                                                    <div className="col-span-2 text-[10px] font-bold text-gray-400 uppercase tracking-widest text-center text-ellipsis overflow-hidden">Brand</div>
+                                                    <div className="text-[10px] font-bold text-gray-400 uppercase tracking-widest text-center text-ellipsis overflow-hidden">Inhouse</div>
+                                                    <div className="text-[10px] font-bold text-gray-400 uppercase tracking-widest text-center text-ellipsis overflow-hidden">Warehouse</div>
+                                                    <div className="text-[10px] font-bold text-gray-400 uppercase tracking-widest text-center text-ellipsis overflow-hidden">Wh Stock</div>
+                                                    <div className="text-[10px] font-bold text-gray-400 uppercase tracking-widest text-center text-ellipsis overflow-hidden">Qty</div>
+                                                    <div className="text-[10px] font-bold text-gray-400 uppercase tracking-widest text-center text-ellipsis overflow-hidden">Price</div>
+                                                    <div className="col-span-2 text-[10px] font-bold text-gray-400 uppercase tracking-widest text-center text-ellipsis overflow-hidden">Total</div>
                                                 </div>
 
                                                 {item.brandEntries.map((entry, entryIndex) => (
-                                                    <div key={entryIndex} className="relative grid grid-cols-1 md:grid-cols-7 gap-4 items-center px-4 py-1 transition-all group/entry">
+                                                    <div key={entryIndex} className="grid grid-cols-1 md:grid-cols-9 gap-4 items-center px-6 group/entry transition-all hover:bg-gray-50/50 rounded-xl py-1.5 border border-transparent hover:border-gray-100/50 relative">
                                                         {/* Brand Selection */}
-                                                        <div className="relative brand-dropdown-container">
+                                                        <div className="col-span-2 space-y-1 relative brand-dropdown-container">
                                                             <div className="relative">
                                                                 <input
                                                                     type="text"
-                                                                    placeholder={entry.brand || "Brand"}
-                                                                    value={activeItemIndex === index && activeEntryIndex === entryIndex && activeDropdown === 'brand' ? brandSearch : ''}
+                                                                    placeholder={entry.brandName || "Brand"}
+                                                                    value={activeDropdown === 'brand' && activeItemIndex === index && activeEntryIndex === entryIndex ? brandSearch : ''}
                                                                     onChange={(e) => {
                                                                         setBrandSearch(e.target.value);
                                                                         setActiveDropdown('brand');
                                                                         setActiveItemIndex(index);
                                                                         setActiveEntryIndex(entryIndex);
-                                                                        handleItemInputChange(index, entryIndex, { target: { name: 'brand', value: e.target.value } });
+                                                                        handleItemInputChange(index, entryIndex, { target: { name: 'brandName', value: e.target.value } });
                                                                     }}
                                                                     onFocus={() => {
                                                                         setActiveDropdown('brand');
                                                                         setActiveItemIndex(index);
                                                                         setActiveEntryIndex(entryIndex);
-                                                                        setBrandSearch(entry.brand || '');
+                                                                        setBrandSearch(entry.brandName || '');
                                                                     }}
-                                                                    className={`w-full px-4 py-2 pr-10 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm text-xs ${entry.brand ? 'placeholder:text-gray-900 placeholder:font-semibold' : 'placeholder:text-gray-400'}`}
+                                                                    className={`w-full px-4 py-2 pr-10 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm text-xs ${entry.brandName ? 'placeholder:text-gray-900 placeholder:font-semibold' : 'placeholder:text-gray-400'}`}
                                                                 />
                                                                 <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
-                                                                    {entry.brand && (
+                                                                    {entry.brandName && (
                                                                         <button
                                                                             type="button"
                                                                             onClick={() => {
-                                                                                handleBrandSelect('');
+                                                                                handleBrandSelect({ _id: '', brandName: '' });
                                                                                 setBrandSearch('');
                                                                             }}
                                                                             className="text-gray-400 hover:text-red-500"
@@ -1387,10 +1594,10 @@ const SaleManagement = ({
                                                                 </div>
                                                             </div>
                                                             {activeDropdown === 'brand' && activeItemIndex === index && activeEntryIndex === entryIndex && getFilteredBrands().length > 0 && (
-                                                                <div className="absolute z-[70] w-full mt-1 bg-white border border-gray-100 rounded-xl shadow-xl max-h-40 overflow-y-auto py-1">
-                                                                    {getFilteredBrands().map((b) => (
-                                                                        <button key={b} type="button" onClick={() => handleBrandSelect(b)} className="w-full px-4 py-2 text-left text-xs hover:bg-blue-50 font-medium text-gray-700">
-                                                                            {b}
+                                                                <div className="absolute z-[70] w-full mt-1 bg-white border border-gray-100 rounded-xl shadow-xl max-h-40 overflow-y-auto py-1 animate-in fade-in slide-in-from-top-1 duration-200">
+                                                                    {getFilteredBrands().map((sb, idx) => (
+                                                                        <button key={idx} type="button" onClick={() => handleBrandSelect(sb)} className="w-full px-4 py-2 text-left text-xs hover:bg-blue-50 font-medium text-gray-700 transition-colors">
+                                                                            {sb}
                                                                         </button>
                                                                     ))}
                                                                 </div>
@@ -1404,62 +1611,65 @@ const SaleManagement = ({
                                                             </div>
                                                         </div>
 
-                                                        {/* Warehouse */}
-                                                        <div className="relative warehouse-dropdown-container">
-                                                            <div className="relative">
-                                                                <input
-                                                                    type="text"
-                                                                    placeholder={entry.warehouseName || "Warehouse"}
-                                                                    value={activeItemIndex === index && activeEntryIndex === entryIndex && activeDropdown === 'warehouse' ? warehouseSearch : ''}
-                                                                    onChange={(e) => {
-                                                                        setWarehouseSearch(e.target.value);
-                                                                        setActiveDropdown('warehouse');
-                                                                        setActiveItemIndex(index);
-                                                                        setActiveEntryIndex(entryIndex);
-                                                                    }}
-                                                                    onFocus={() => {
-                                                                        setActiveDropdown('warehouse');
-                                                                        setActiveItemIndex(index);
-                                                                        setActiveEntryIndex(entryIndex);
-                                                                        setWarehouseSearch(entry.warehouseName || '');
-                                                                    }}
-                                                                    className={`w-full px-4 py-2 pr-10 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm text-xs ${entry.warehouseName ? 'placeholder:text-gray-900 placeholder:font-semibold' : 'placeholder:text-gray-400'}`}
-                                                                />
-                                                                <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
-                                                                    {entry.warehouseName && (
+                                                        {/* Warehouse Selection */}
+                                                        <div className="">
+                                                            <div className="space-y-1 relative warehouse-dropdown-container">
+                                                                <div className="relative">
+                                                                    <input
+                                                                        type="text"
+                                                                        placeholder={entry.warehouseName || "Warehouse"}
+                                                                        value={activeDropdown === 'warehouse' && activeItemIndex === index && activeEntryIndex === entryIndex ? warehouseSearch : ''}
+                                                                        onChange={(e) => {
+                                                                            setWarehouseSearch(e.target.value);
+                                                                            setActiveDropdown('warehouse');
+                                                                            setActiveItemIndex(index);
+                                                                            setActiveEntryIndex(entryIndex);
+                                                                            handleItemInputChange(index, entryIndex, { target: { name: 'warehouseName', value: e.target.value } });
+                                                                        }}
+                                                                        onFocus={() => {
+                                                                            setActiveDropdown('warehouse');
+                                                                            setActiveItemIndex(index);
+                                                                            setActiveEntryIndex(entryIndex);
+                                                                            setWarehouseSearch(entry.warehouseName || '');
+                                                                        }}
+                                                                        className={`w-full px-4 py-2 pr-10 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm text-xs ${entry.warehouseName ? 'placeholder:text-gray-900 placeholder:font-semibold' : 'placeholder:text-gray-400'}`}
+                                                                    />
+                                                                    <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
+                                                                        {entry.warehouseName && (
+                                                                            <button
+                                                                                type="button"
+                                                                                onClick={() => {
+                                                                                    handleWarehouseSelect({ _id: '', whName: '' });
+                                                                                    setWarehouseSearch('');
+                                                                                }}
+                                                                                className="text-gray-400 hover:text-red-500"
+                                                                            >
+                                                                                <XIcon className="w-3.5 h-3.5" />
+                                                                            </button>
+                                                                        )}
                                                                         <button
                                                                             type="button"
                                                                             onClick={() => {
-                                                                                handleWarehouseSelect({ _id: '', whName: '' });
-                                                                                setWarehouseSearch('');
+                                                                                setActiveDropdown(activeDropdown === 'warehouse' && activeItemIndex === index && activeEntryIndex === entryIndex ? null : 'warehouse');
+                                                                                setActiveItemIndex(index);
+                                                                                setActiveEntryIndex(entryIndex);
                                                                             }}
-                                                                            className="text-gray-400 hover:text-red-500"
+                                                                            className="text-gray-300 hover:text-blue-500 transition-colors"
                                                                         >
-                                                                            <XIcon className="w-3.5 h-3.5" />
+                                                                            <ChevronDownIcon className={`w-3.5 h-3.5 transition-transform duration-200 ${activeDropdown === 'warehouse' && activeItemIndex === index && activeEntryIndex === entryIndex ? 'rotate-180' : ''}`} />
                                                                         </button>
-                                                                    )}
-                                                                    <button
-                                                                        type="button"
-                                                                        onClick={() => {
-                                                                            setActiveDropdown(activeDropdown === 'warehouse' && activeItemIndex === index && activeEntryIndex === entryIndex ? null : 'warehouse');
-                                                                            setActiveItemIndex(index);
-                                                                            setActiveEntryIndex(entryIndex);
-                                                                        }}
-                                                                        className="text-gray-300 hover:text-blue-500 transition-colors"
-                                                                    >
-                                                                        <ChevronDownIcon className={`w-3.5 h-3.5 transition-transform duration-200 ${activeDropdown === 'warehouse' && activeItemIndex === index && activeEntryIndex === entryIndex ? 'rotate-180' : ''}`} />
-                                                                    </button>
+                                                                    </div>
                                                                 </div>
+                                                                {activeDropdown === 'warehouse' && activeItemIndex === index && activeEntryIndex === entryIndex && getFilteredWarehouses().length > 0 && (
+                                                                    <div className="absolute z-[70] w-full mt-1 bg-white border border-gray-100 rounded-xl shadow-xl max-h-40 overflow-y-auto py-1">
+                                                                        {getFilteredWarehouses().map((w) => (
+                                                                            <button key={w._id} type="button" onClick={() => handleWarehouseSelect(w)} className="w-full px-4 py-2 text-left text-xs hover:bg-blue-50 font-medium text-gray-700">
+                                                                                {w.whName}
+                                                                            </button>
+                                                                        ))}
+                                                                    </div>
+                                                                )}
                                                             </div>
-                                                            {activeDropdown === 'warehouse' && activeItemIndex === index && activeEntryIndex === entryIndex && getFilteredWarehouses().length > 0 && (
-                                                                <div className="absolute z-[70] w-full mt-1 bg-white border border-gray-100 rounded-xl shadow-xl max-h-40 overflow-y-auto py-1">
-                                                                    {getFilteredWarehouses().map((w) => (
-                                                                        <button key={w._id} type="button" onClick={() => handleWarehouseSelect(w)} className="w-full px-4 py-2 text-left text-xs hover:bg-blue-50 font-medium text-gray-700">
-                                                                            {w.whName}
-                                                                        </button>
-                                                                    ))}
-                                                                </div>
-                                                            )}
                                                         </div>
 
                                                         {/* Wh Stock */}
@@ -1494,26 +1704,26 @@ const SaleManagement = ({
                                                         </div>
 
                                                         {/* Total + Add/Remove */}
-                                                        <div className="flex items-center gap-2">
+                                                        <div className="col-span-2 flex items-center gap-1.5">
                                                             <div className="flex-1 h-10 flex items-center justify-center bg-white/50 border border-gray-200/60 rounded-lg backdrop-blur-sm text-[13px] font-black text-blue-600">
                                                                 {parseFloat(entry.totalAmount || 0).toLocaleString()}
                                                             </div>
-                                                            <div className="flex flex-row gap-1 items-center justify-center">
+                                                            <div className="flex flex-row items-center gap-0.5 shrink-0">
                                                                 {entryIndex === item.brandEntries.length - 1 && (
                                                                     <button
                                                                         type="button"
                                                                         onClick={() => addBrandEntry(index)}
-                                                                        className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-lg transition-all active:scale-90"
+                                                                        className="p-1 text-blue-600 hover:bg-blue-50 rounded-full transition-all active:scale-95 hover:scale-110"
                                                                         title="Add Brand"
                                                                     >
-                                                                        <span className="text-xl font-bold">+</span>
+                                                                        <span className="text-xl font-black">+</span>
                                                                     </button>
                                                                 )}
                                                                 {item.brandEntries.length > 1 && (
                                                                     <button
                                                                         type="button"
                                                                         onClick={() => removeBrandEntry(index, entryIndex)}
-                                                                        className="p-1.5 text-gray-300 hover:text-red-500 transition-all opacity-0 group-hover/entry:opacity-100"
+                                                                        className="p-1 text-gray-300 hover:text-red-500 transition-all opacity-0 group-hover/entry:opacity-100"
                                                                         title="Remove Brand"
                                                                     >
                                                                         <TrashIcon className="w-3.5 h-3.5" />
@@ -1524,7 +1734,7 @@ const SaleManagement = ({
                                                     </div>
                                                 ))}
                                             </div>
-                                        </div>
+                                        )}
                                     </div>
                                 ))}
                             </div>
@@ -1624,27 +1834,42 @@ const SaleManagement = ({
                         <div className="overflow-x-auto">
                             <table className="w-full text-left">
                                 <thead className="bg-gray-50 text-gray-500 text-xs font-bold uppercase tracking-wider">
-                                    <tr>
-                                        <th className="px-3 py-4 whitespace-nowrap">Date</th>
-                                        <th className="px-3 py-4 whitespace-nowrap text-center">Invoice</th>
-                                        <th className="px-3 py-4 whitespace-nowrap">Company</th>
-                                        <th className="px-3 py-4 whitespace-nowrap">Customer</th>
-                                        <th className="px-3 py-4 whitespace-nowrap">Product</th>
-                                        <th className="px-3 py-4 whitespace-nowrap">Brand</th>
-                                        <th className="px-3 py-4 whitespace-nowrap text-center">Quantity</th>
-                                        <th className="px-3 py-4 whitespace-nowrap text-center">Rate</th>
-                                        <th className="px-3 py-4 whitespace-nowrap text-center">Discount</th>
-                                        <th className="px-3 py-4 whitespace-nowrap text-center">Total</th>
-                                        <th className="px-3 py-4 whitespace-nowrap text-center">Paid</th>
-                                        <th className="px-3 py-4 whitespace-nowrap text-center">Due</th>
-                                        <th className="px-3 py-4 text-center whitespace-nowrap">Actions</th>
-                                    </tr>
+                                    {saleType === 'Border' ? (
+                                        <tr>
+                                            <th className="px-3 py-4 whitespace-nowrap">Date</th>
+                                            <th className="px-3 py-4 whitespace-nowrap">Importer</th>
+                                            <th className="px-3 py-4 whitespace-nowrap">Port</th>
+                                            <th className="px-3 py-4 whitespace-nowrap">IND CNF</th>
+                                            <th className="px-3 py-4 whitespace-nowrap">BD CNF</th>
+                                            <th className="px-3 py-4 whitespace-nowrap">Party Name</th>
+                                            <th className="px-3 py-4 whitespace-nowrap">Product</th>
+                                            <th className="px-3 py-4 whitespace-nowrap text-center">QTY</th>
+                                            <th className="px-3 py-4 whitespace-nowrap">Truck</th>
+                                            <th className="px-3 py-4 whitespace-nowrap text-center">Rate</th>
+                                            <th className="px-3 py-4 whitespace-nowrap text-center">Total Rate</th>
+                                            <th className="px-3 py-4 text-center whitespace-nowrap">Actions</th>
+                                        </tr>
+                                    ) : (
+                                        <tr>
+                                            <th className="px-3 py-4 whitespace-nowrap">Date</th>
+                                            <th className="px-3 py-4 whitespace-nowrap text-center">Invoice</th>
+                                            <th className="px-3 py-4 whitespace-nowrap">Company</th>
+                                            <th className="px-3 py-4 whitespace-nowrap">Customer</th>
+                                            <th className="px-3 py-4 whitespace-nowrap">Product</th>
+                                            <th className="px-3 py-4 whitespace-nowrap">Brand</th>
+                                            <th className="px-3 py-4 whitespace-nowrap text-center">Quantity</th>
+                                            <th className="px-3 py-4 whitespace-nowrap text-center">Rate</th>
+                                            <th className="px-3 py-4 whitespace-nowrap text-center">Discount</th>
+                                            <th className="px-3 py-4 whitespace-nowrap text-center">Total</th>
+                                            <th className="px-3 py-4 whitespace-nowrap text-center">Paid</th>
+                                            <th className="px-3 py-4 whitespace-nowrap text-center">Due</th>
+                                            <th className="px-3 py-4 text-center whitespace-nowrap">Actions</th>
+                                        </tr>
+                                    )}
                                 </thead>
                                 <tbody className="divide-y divide-gray-50">
                                     {isLoading ? (
-                                        <tr><td colSpan="13" className="px-3 py-20 text-center text-gray-400 font-medium">Loading sales records...</td></tr>
-                                    ) : getFilteredData().length === 0 ? (
-                                        <tr><td colSpan="13" className="px-3 py-20 text-center text-gray-400 font-medium">No sales records found</td></tr>
+                                        <tr><td colSpan={saleType === 'Border' ? "12" : "13"} className="px-3 py-20 text-center text-gray-400 font-medium">No sales records found</td></tr>
                                     ) : getFilteredData().map(sale => {
                                         const isExpanded = expandedRows.includes(sale._id);
                                         const isMultiple = (sale.items && sale.items.length > 0)
@@ -1663,6 +1888,57 @@ const SaleManagement = ({
                                                 quantity: sale.quantity,
                                                 unitPrice: sale.unitPrice
                                             }];
+
+                                        if (saleType === 'Border') {
+                                            return (
+                                                <tr key={sale._id} className="hover:bg-blue-50/50 transition-all border-b border-gray-50 text-[13px]">
+                                                    <td className="px-3 py-4 whitespace-nowrap text-gray-600">{formatDate(sale.date)}</td>
+                                                    <td className="px-3 py-4 whitespace-nowrap font-semibold text-gray-800">{sale.importer || '-'}</td>
+                                                    <td className="px-3 py-4 whitespace-nowrap font-semibold text-gray-800">{sale.port || '-'}</td>
+                                                    <td className="px-3 py-4 whitespace-nowrap font-semibold text-gray-800">{sale.indianCnF || '-'}</td>
+                                                    <td className="px-3 py-4 whitespace-nowrap font-semibold text-gray-800">{sale.bdCnf || '-'}</td>
+                                                    <td className="px-3 py-4 whitespace-nowrap font-semibold text-gray-800">{sale.companyName || sale.customerName || '-'}</td>
+                                                    <td className="px-3 py-4 whitespace-nowrap">
+                                                        <div className="flex flex-col gap-1">
+                                                            {items.map((it, idx) => (
+                                                                <div key={idx} className="font-bold text-gray-800 border-b border-gray-100 last:border-0 pb-0.5">{it.productName || '-'}</div>
+                                                            ))}
+                                                        </div>
+                                                    </td>
+                                                    <td className="px-3 py-4 whitespace-nowrap text-center">
+                                                        <div className="flex flex-col gap-1">
+                                                            {items.map((it, idx) => (
+                                                                <div key={idx} className="font-semibold text-gray-800 border-b border-gray-100 last:border-0 pb-0.5">{parseFloat(it.quantity || 0).toLocaleString()}</div>
+                                                            ))}
+                                                        </div>
+                                                    </td>
+                                                    <td className="px-3 py-4 whitespace-nowrap text-center text-gray-800">
+                                                        <div className="flex flex-col gap-1">
+                                                            {items.map((it, idx) => (
+                                                                <div key={idx} className="font-semibold text-gray-800 border-b border-gray-100 last:border-0 pb-0.5">
+                                                                    {it.truck || sale.truck || '-'}
+                                                                </div>
+                                                            ))}
+                                                        </div>
+                                                    </td>
+                                                    <td className="px-3 py-4 whitespace-nowrap text-center">
+                                                        <div className="flex flex-col gap-1">
+                                                            {items.map((it, idx) => (
+                                                                <div key={idx} className="font-semibold text-gray-800 border-b border-gray-100 last:border-0 pb-0.5">৳ {parseFloat(it.unitPrice || 0).toLocaleString()}</div>
+                                                            ))}
+                                                        </div>
+                                                    </td>
+                                                    <td className="px-3 py-4 whitespace-nowrap text-center font-black text-gray-900">৳ {parseFloat(sale.totalAmount).toLocaleString()}</td>
+                                                    <td className="px-3 py-4 text-center">
+                                                        <div className="flex items-center justify-center gap-1">
+                                                            <button onClick={() => generateSaleInvoicePDF(sale, customers)} className="p-2 hover:bg-emerald-100 text-emerald-600 rounded-xl transition-all" title="Invoice"><FileTextIcon className="w-4 h-4" /></button>
+                                                            <button onClick={() => handleEdit(sale)} className="p-2 hover:bg-blue-100 text-blue-600 rounded-xl transition-all" title="Edit"><EditIcon className="w-4 h-4" /></button>
+                                                            <button onClick={() => handleDelete(sale)} className="p-2 hover:bg-red-100 text-red-600 rounded-xl transition-all" title="Delete"><TrashIcon className="w-4 h-4" /></button>
+                                                        </div>
+                                                    </td>
+                                                </tr>
+                                            );
+                                        }
 
                                         return (
                                             <tr

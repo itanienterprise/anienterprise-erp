@@ -64,18 +64,21 @@ const WarehouseManagement = () => {
     const [filterSearchInputs, setFilterSearchInputs] = useState({
         productSearch: '',
         brandSearch: '',
-        warehouseSearch: ''
+        warehouseSearch: '',
+        categorySearch: ''
     });
 
     const initialFilterDropdownState = {
         productName: false,
         brand: false,
-        warehouse: false
+        warehouse: false,
+        category: false
     };
     const [filterDropdownOpen, setFilterDropdownOpen] = useState(initialFilterDropdownState);
     const productFilterRef = useRef(null);
     const brandFilterRef = useRef(null);
     const warehouseFilterDropdownRef = useRef(null);
+    const categoryFilterRef = useRef(null);
 
     const fetchProducts = async () => {
         try {
@@ -222,7 +225,8 @@ const WarehouseManagement = () => {
         endDate: '',
         warehouse: '',
         productName: '',
-        brand: ''
+        brand: '',
+        category: 'Crop'
     });
 
     const [editingWarehouseId, setEditingWarehouseId] = useState(null);
@@ -254,6 +258,15 @@ const WarehouseManagement = () => {
             if (warehouseFilters.warehouse && item.whName !== warehouseFilters.warehouse) return false;
             if (warehouseFilters.productName && (item.productName || item.product) !== warehouseFilters.productName) return false;
             if (warehouseFilters.brand && item.brand !== warehouseFilters.brand) return false;
+
+            if (warehouseFilters.category) {
+                const product = products.find(p => {
+                    const pName = (p.name || p.productName || '').trim().toLowerCase();
+                    const itemName = (item.productName || item.product || '').trim().toLowerCase();
+                    return pName === itemName;
+                });
+                if (!product || (product.category || '').trim().toLowerCase() !== warehouseFilters.category.toLowerCase()) return false;
+            }
 
             return true;
         });
@@ -528,6 +541,9 @@ const WarehouseManagement = () => {
             }
             if (warehouseFilterDropdownRef.current && !warehouseFilterDropdownRef.current.contains(event.target)) {
                 setFilterDropdownOpen(prev => ({ ...prev, warehouse: false }));
+            }
+            if (categoryFilterRef.current && !categoryFilterRef.current.contains(event.target)) {
+                setFilterDropdownOpen(prev => ({ ...prev, category: false }));
             }
         };
         document.addEventListener('mousedown', handleClickOutside);
@@ -823,8 +839,8 @@ const WarehouseManagement = () => {
                                         <h4 className="font-bold text-gray-900 tracking-tight">Advance Filter</h4>
                                         <button
                                             onClick={() => {
-                                                setWarehouseFilters({ startDate: '', endDate: '', warehouse: '', productName: '', brand: '' });
-                                                setFilterSearchInputs({ productSearch: '', brandSearch: '', warehouseSearch: '' });
+                                                setWarehouseFilters({ startDate: '', endDate: '', warehouse: '', productName: '', brand: '', category: 'Crop' });
+                                                setFilterSearchInputs({ productSearch: '', brandSearch: '', warehouseSearch: '', categorySearch: '' });
                                                 setShowWarehouseFilterPanel(false);
                                             }}
                                             className="text-[11px] font-bold text-blue-600 hover:text-blue-700 uppercase tracking-widest"
@@ -848,6 +864,52 @@ const WarehouseManagement = () => {
                                                 compact={true}
                                                 rightAlign={true}
                                             />
+                                        </div>
+
+                                        {/* Category Filter */}
+                                        <div className="space-y-1.5 relative" ref={categoryFilterRef}>
+                                            <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider pl-1">Category</label>
+                                            <div className="relative">
+                                                <input
+                                                    type="text"
+                                                    value={filterSearchInputs.categorySearch}
+                                                    onChange={(e) => {
+                                                        const val = e.target.value;
+                                                        setFilterSearchInputs({ ...filterSearchInputs, categorySearch: val });
+                                                        setWarehouseFilters({ ...warehouseFilters, category: val });
+                                                        setFilterDropdownOpen({ ...initialFilterDropdownState, category: true });
+                                                    }}
+                                                    onFocus={() => setFilterDropdownOpen({ ...initialFilterDropdownState, category: true })}
+                                                    placeholder={warehouseFilters.category || "Search Category..."}
+                                                    className={`w-full px-4 py-2.5 bg-white border border-gray-100 rounded-xl text-sm focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all shadow-sm hover:border-gray-200 pr-14 ${warehouseFilters.category ? 'placeholder:text-gray-900 placeholder:font-semibold' : 'placeholder:text-gray-300'}`}
+                                                />
+                                                <div className="absolute right-3.5 top-1/2 -translate-y-1/2 flex items-center gap-2">
+                                                    {warehouseFilters.category && (
+                                                        <button onClick={() => { setWarehouseFilters({ ...warehouseFilters, category: '' }); setFilterSearchInputs({ ...filterSearchInputs, categorySearch: '' }); setFilterDropdownOpen(initialFilterDropdownState); }} className="text-gray-400 hover:text-gray-600">
+                                                            <XIcon className="w-4 h-4" />
+                                                        </button>
+                                                    )}
+                                                    <SearchIcon className="w-4.5 h-4.5 text-gray-300 pointer-events-none" />
+                                                </div>
+                                            </div>
+                                            {filterDropdownOpen.category && (() => {
+                                                const options = [...new Set(products.map(p => p.category).filter(Boolean))].sort();
+                                                const filtered = options.filter(c => (c || '').toString().toLowerCase().includes(filterSearchInputs.categorySearch.toLowerCase()));
+                                                return filtered.length > 0 ? (
+                                                    <div className="absolute z-[120] mt-1 w-full bg-white border border-gray-100 rounded-xl shadow-xl max-h-48 overflow-y-auto py-1">
+                                                        {filtered.map(c => (
+                                                            <button
+                                                                key={c}
+                                                                type="button"
+                                                                onClick={() => { setWarehouseFilters({ ...warehouseFilters, category: c }); setFilterSearchInputs({ ...filterSearchInputs, categorySearch: '' }); setFilterDropdownOpen(initialFilterDropdownState); }}
+                                                                className="w-full px-4 py-2 text-left text-sm hover:bg-blue-50 transition-colors"
+                                                            >
+                                                                {c}
+                                                            </button>
+                                                        ))}
+                                                    </div>
+                                                ) : null;
+                                            })()}
                                         </div>
 
                                         <div className="space-y-1.5 relative" ref={warehouseFilterDropdownRef}>
@@ -918,7 +980,14 @@ const WarehouseManagement = () => {
                                                 </div>
                                             </div>
                                             {filterDropdownOpen.productName && (() => {
-                                                const options = getFilteredProducts(filterSearchInputs.productSearch);
+                                                let options = getFilteredProducts(filterSearchInputs.productSearch);
+                                                if (warehouseFilters.category && products && products.length > 0) {
+                                                    const categoryProducts = new Set(
+                                                        products.filter(p => (p.category || '').toLowerCase() === warehouseFilters.category.toLowerCase())
+                                                            .map(p => (p.name || p.productName || '').toLowerCase())
+                                                    );
+                                                    options = options.filter(o => categoryProducts.has((o || '').toLowerCase()));
+                                                }
                                                 return options.length > 0 ? (
                                                     <div className="absolute z-[160] mt-1 w-full bg-white border border-gray-100 rounded-xl shadow-xl max-h-48 overflow-y-auto py-1">
                                                         {options.map(prod => (
@@ -1040,6 +1109,7 @@ const WarehouseManagement = () => {
                 filters={warehouseFilters}
                 setFilters={setWarehouseFilters}
                 salesRecords={salesRecords}
+                products={products}
             />
 
             {/* Warehouse Form Modal */}
@@ -1433,7 +1503,7 @@ const WarehouseManagement = () => {
                     </div>
                 </div>
             )}
-        </div >
+        </div>
     );
 };
 

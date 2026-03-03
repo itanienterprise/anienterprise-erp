@@ -49,6 +49,7 @@ function LCReceive({
     const [whSearchQuery, setWhSearchQuery] = useState('');
     const [validationErrors, setValidationErrors] = useState([]);
     const [showWhSelectDropdown, setShowWhSelectDropdown] = useState(false);
+    const [expandedCard, setExpandedCard] = useState(null);
 
     const productRefs = useRef([]);
     const brandRefs = useRef({});
@@ -138,6 +139,10 @@ function LCReceive({
         } catch (err) {
             console.error('Failed to fetch warehouse data:', err);
         }
+    };
+
+    const toggleCard = (key) => {
+        setExpandedCard(prev => prev === key ? null : key);
     };
 
     // Fetch warehouses
@@ -974,13 +979,13 @@ function LCReceive({
     return (
         <div className="space-y-6">
             {!showStockForm && (
-                <div className="flex items-center justify-between gap-4">
-                    <div className="w-1/4">
-                        <h2 className="text-2xl font-bold text-gray-800">LC Receive Management</h2>
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                    <div className="w-full md:w-1/4">
+                        <h2 className="text-xl md:text-2xl font-bold text-gray-800 text-center md:text-left">LC Receive Management</h2>
                     </div>
 
                     {/* Center Aligned Search Bar */}
-                    <div className="flex-1 max-w-md mx-auto relative group">
+                    <div className="flex-1 w-full max-w-none md:max-w-md mx-auto relative group">
                         <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
                             <SearchIcon className="h-4 w-4 text-gray-400 group-focus-within:text-blue-500 transition-colors" />
                         </div>
@@ -993,12 +998,12 @@ function LCReceive({
                         />
                     </div>
 
-                    <div className="w-1/4 flex justify-end items-center gap-2">
-                        <div className="relative">
+                    <div className="w-full md:w-auto flex items-center gap-2">
+                        <div className="relative flex-1 md:flex-none">
                             <button
                                 ref={lcFilterButtonRef}
                                 onClick={() => setShowLcFilterPanel(!showLcFilterPanel)}
-                                className={`flex items-center gap-2 px-4 py-2 rounded-xl transition-all border ${showLcFilterPanel || Object.values(lcFilters).some(v => v !== '') ? 'bg-blue-600 border-blue-600 text-white shadow-lg shadow-blue-500/30' : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'}`}
+                                className={`w-full md:w-auto flex items-center justify-center gap-2 px-4 py-2 rounded-xl transition-all border ${showLcFilterPanel || Object.values(lcFilters).some(v => v !== '') ? 'bg-blue-600 border-blue-600 text-white shadow-lg shadow-blue-500/30' : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'}`}
                             >
                                 <FunnelIcon className={`w-4 h-4 ${(showLcFilterPanel || (lcFilters && Object.values(lcFilters).some(v => v !== ''))) ? 'text-white' : 'text-gray-400'}`} />
                                 <span className="text-sm font-medium">Filter</span>
@@ -1006,7 +1011,7 @@ function LCReceive({
 
                             {/* Floating Filter Panel */}
                             {showLcFilterPanel && lcFilters && (
-                                <div ref={lcFilterPanelRef} className="absolute right-0 mt-3 w-[450px] bg-white/95 backdrop-blur-2xl border border-gray-100 rounded-2xl shadow-2xl z-[60] p-6 animate-in fade-in zoom-in duration-200">
+                                <div ref={lcFilterPanelRef} className="fixed inset-x-4 top-24 md:absolute md:inset-auto md:right-0 md:mt-3 w-auto md:w-[450px] bg-white/95 backdrop-blur-2xl border border-gray-100 rounded-2xl shadow-2xl z-[60] p-4 md:p-6 animate-in fade-in zoom-in duration-200">
                                     <div className="flex items-center justify-between mb-6 pb-2 border-b border-gray-50">
                                         <h4 className="font-extrabold text-gray-900 text-lg">Advance Filter</h4>
                                         <button
@@ -1329,19 +1334,23 @@ function LCReceive({
                             )}
                         </div>
 
-                        <button
-                            onClick={() => setShowLcReport(true)}
-                            className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 text-gray-600 rounded-xl hover:bg-gray-50 hover:border-gray-300 transition-all shadow-sm active:scale-95"
-                        >
-                            <BarChartIcon className="w-4 h-4 text-gray-400" />
-                            <span className="text-sm font-medium">Report</span>
-                        </button>
-                        <button
-                            onClick={() => setShowStockForm(!showStockForm)}
-                            className="px-4 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-medium rounded-xl shadow-lg shadow-blue-500/30 transition-all transform hover:scale-105 flex items-center"
-                        >
-                            <span className="mr-2 text-xl font-light">+</span> Add New
-                        </button>
+                        <div className="flex-1 md:flex-none">
+                            <button
+                                onClick={() => setShowLcReport(true)}
+                                className="w-full h-11 md:h-auto flex items-center justify-center gap-2 px-4 py-2 bg-white border border-gray-200 text-gray-600 rounded-xl hover:bg-gray-50 hover:border-gray-300 transition-all shadow-sm active:scale-95 text-sm font-medium"
+                            >
+                                <BarChartIcon className="w-4 h-4 text-gray-400" />
+                                <span>Report</span>
+                            </button>
+                        </div>
+                        <div className="flex-1 md:flex-none">
+                            <button
+                                onClick={() => setShowStockForm(!showStockForm)}
+                                className="w-full h-11 md:h-auto justify-center px-4 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-medium rounded-xl shadow-lg shadow-blue-500/30 transition-all transform active:scale-95 flex items-center gap-2 text-sm"
+                            >
+                                <span className="text-lg font-light">+</span> <span>Add New</span>
+                            </button>
+                        </div>
                     </div>
                 </div >
             )
@@ -1350,18 +1359,20 @@ function LCReceive({
             {/* Summary Cards */}
             {
                 !showStockForm && (
-                    <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                        <div className="bg-white border border-gray-200 p-4 rounded-xl shadow-sm transition-all hover:shadow-md">
-                            <div className="text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-1">Total Packet</div>
-                            <div className="text-xl font-bold text-gray-900">{lcReceiveSummary.totalPackets}</div>
+                    <div className="grid grid-cols-2 md:grid-cols-3 gap-2 md:gap-4">
+                        <div className="order-2 md:order-1 bg-white border border-gray-100 p-2.5 md:p-4 rounded-xl shadow-sm transition-all hover:shadow-md">
+                            <div className="text-[9px] md:text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-0.5 md:mb-1">Total Packet</div>
+                            <div className="text-base md:text-xl font-bold text-gray-900">{lcReceiveSummary.totalPackets}</div>
                         </div>
-                        <div className="bg-emerald-50/50 border border-emerald-100 p-4 rounded-xl shadow-sm transition-all hover:shadow-md">
-                            <div className="text-[11px] font-bold text-emerald-600 uppercase tracking-wider mb-1">Total Quantity</div>
-                            <div className="text-xl font-bold text-emerald-700">{Math.round(lcReceiveSummary.totalQuantity)} {lcReceiveSummary.unit}</div>
+                        <div className="order-3 col-span-2 md:col-span-1 md:order-2 bg-emerald-50/50 border border-emerald-100 p-2.5 md:p-4 rounded-xl shadow-sm transition-all hover:shadow-md">
+                            <div className="text-[9px] md:text-[11px] font-bold text-emerald-600 uppercase tracking-wider mb-0.5 md:mb-1">Total Qty</div>
+                            <div className="text-base md:text-xl font-bold text-emerald-700 truncate">{Math.round(lcReceiveSummary.totalQuantity)} {lcReceiveSummary.unit}</div>
                         </div>
-                        <div className="bg-blue-50/50 border border-blue-100 p-4 rounded-xl shadow-sm transition-all hover:shadow-md">
-                            <div className="text-[11px] font-bold text-blue-600 uppercase tracking-wider mb-1">Truck</div>
-                            <div className="text-xl font-bold text-blue-700">{lcReceiveSummary.totalTrucks}</div>
+                        <div className="order-1 md:order-3 bg-blue-50/50 border border-blue-100 p-2.5 md:p-4 rounded-xl shadow-sm transition-all hover:shadow-md">
+                            <div className="text-[9px] md:text-[11px] font-bold text-blue-600 uppercase tracking-wider mb-0.5 md:mb-1">Truck</div>
+                            <div className="text-base md:text-xl font-bold text-blue-700">
+                                {lcReceiveRecords.reduce((acc, curr) => acc + (parseFloat(curr.truckNo) || 0), 0)}
+                            </div>
                         </div>
                     </div>
                 )
@@ -1370,7 +1381,7 @@ function LCReceive({
             {/* Form Section */}
             {
                 showStockForm && (
-                    <div className="relative overflow-hidden rounded-2xl bg-white/60 backdrop-blur-xl border border-white/50 shadow-2xl p-8 transition-all duration-300">
+                    <div className="relative overflow-hidden rounded-2xl bg-white/60 backdrop-blur-xl border border-white/50 shadow-2xl p-4 md:p-8 transition-all duration-300">
                         <div className="absolute -top-24 -right-24 w-64 h-64 bg-blue-400/10 rounded-full blur-3xl pointer-events-none"></div>
                         <div className="absolute -bottom-24 -left-24 w-64 h-64 bg-indigo-400/10 rounded-full blur-3xl pointer-events-none"></div>
 
@@ -1602,8 +1613,8 @@ function LCReceive({
                                             <div className="space-y-6">
                                                 {/* Product Info - Single Brand Mode */}
                                                 {!product.isMultiBrand && (
-                                                    <div className="w-full grid grid-cols-1 md:grid-cols-12 gap-4 items-end animate-in fade-in duration-300">
-                                                        <div className="md:col-span-2 space-y-1.5">
+                                                    <div className="w-full grid grid-cols-2 md:grid-cols-12 gap-4 items-end animate-in fade-in duration-300">
+                                                        <div className="col-span-2 md:col-span-2 space-y-1.5">
                                                             <label className="text-sm font-medium text-gray-700 text-center block w-full">Mode</label>
                                                             <div className="h-[42px] flex items-center gap-1 p-1 bg-gray-100/50 rounded-lg w-full">
                                                                 <button
@@ -1622,7 +1633,7 @@ function LCReceive({
                                                                 </button>
                                                             </div>
                                                         </div>
-                                                        <div className="md:col-span-4 space-y-1.5">
+                                                        <div className="col-span-2 md:col-span-4 space-y-1.5">
                                                             <label className="text-sm font-medium text-gray-700">Product Name</label>
                                                             <div className="relative w-full" ref={el => productRefs.current[pIndex] = el}>
                                                                 <input
@@ -1671,14 +1682,14 @@ function LCReceive({
                                                                 )}
                                                             </div>
                                                         </div>
-                                                        <div className="md:col-span-3 space-y-1.5">
+                                                        <div className="col-span-2 md:col-span-3 space-y-1.5">
                                                             <label className="text-sm font-medium text-gray-700">Truck No.</label>
                                                             <input
                                                                 type="text" name="truckNo" value={product.truckNo} onChange={(e) => handleStockInputChange(e, pIndex)}
                                                                 placeholder="Truck #" autoComplete="off" className="w-full h-[42px] px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm text-sm"
                                                             />
                                                         </div>
-                                                        <div className="md:col-span-3 space-y-1.5">
+                                                        <div className="col-span-2 md:col-span-3 space-y-1.5">
                                                             <label className="text-sm font-medium text-gray-700 text-center block w-full">Arrival Qty</label>
                                                             <div className="relative h-[42px]">
                                                                 <input
@@ -1692,7 +1703,7 @@ function LCReceive({
                                                         </div>
 
                                                         {/* Row 2 */}
-                                                        <div className="md:col-span-2 space-y-1.5">
+                                                        <div className="col-span-1 md:col-span-2 space-y-1.5">
                                                             <label className="text-sm font-medium text-gray-700 text-center block w-full">Size</label>
                                                             <input
                                                                 type="text"
@@ -1701,7 +1712,7 @@ function LCReceive({
                                                                 placeholder="Size" autoComplete="off" className="w-full h-[42px] px-2 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm text-sm text-center"
                                                             />
                                                         </div>
-                                                        <div className="md:col-span-2 space-y-1.5">
+                                                        <div className="col-span-1 md:col-span-2 space-y-1.5">
                                                             <label className="text-sm font-medium text-gray-700 text-center block w-full">Packet</label>
                                                             <input
                                                                 type="text"
@@ -1710,7 +1721,7 @@ function LCReceive({
                                                                 placeholder="Qty" autoComplete="off" className="w-full h-[42px] px-2 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm text-sm text-center"
                                                             />
                                                         </div>
-                                                        <div className="md:col-span-2 space-y-1.5">
+                                                        <div className="col-span-1 md:col-span-2 space-y-1.5">
                                                             <label className="text-sm font-medium text-gray-700">Swp. Pkt</label>
                                                             <input
                                                                 type="text"
@@ -1719,7 +1730,7 @@ function LCReceive({
                                                                 placeholder="Qty" autoComplete="off" className="w-full h-[42px] px-2 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm text-sm"
                                                             />
                                                         </div>
-                                                        <div className="md:col-span-2 space-y-1.5">
+                                                        <div className="col-span-1 md:col-span-2 space-y-1.5">
                                                             <label className="text-sm font-medium text-gray-700">SwpQty</label>
                                                             <input
                                                                 type="text"
@@ -1728,7 +1739,7 @@ function LCReceive({
                                                                 placeholder="Qty" className="w-full h-[42px] px-2 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm text-sm"
                                                             />
                                                         </div>
-                                                        <div className="md:col-span-2 space-y-1.5">
+                                                        <div className="col-span-1 md:col-span-2 space-y-1.5">
                                                             <label className="text-sm font-medium text-gray-700">InHouse Pkt</label>
                                                             <input
                                                                 type="text"
@@ -1737,7 +1748,7 @@ function LCReceive({
                                                                 placeholder="Qty" autoComplete="off" className="w-full h-[42px] px-4 py-2 bg-gray-50/80 border border-gray-200/60 rounded-lg text-gray-600 font-medium outline-none cursor-default backdrop-blur-sm text-sm"
                                                             />
                                                         </div>
-                                                        <div className="md:col-span-2 space-y-1.5">
+                                                        <div className="col-span-1 md:col-span-2 space-y-1.5">
                                                             <label className="text-sm font-medium text-gray-700">InHouse Qty</label>
                                                             <input
                                                                 type="text"
@@ -1849,13 +1860,13 @@ function LCReceive({
 
                                                 {/* Brand Entries Section (Multi-Brand Only) */}
                                                 {product.isMultiBrand && (
-                                                    <div className="mt-4 space-y-3 animate-in fade-in slide-in-from-top-2 duration-300 bg-gray-50/50 p-4 rounded-xl border border-gray-100">
+                                                    <div className="mt-4 space-y-3 animate-in fade-in slide-in-from-top-2 duration-300 bg-gray-50/50 p-2 md:p-4 rounded-xl border border-gray-100 mx-[-4px] md:mx-0">
                                                         <div className="flex items-center justify-between mb-1 px-1">
                                                             <label className="text-xs font-bold text-gray-500 uppercase tracking-wider">Brand Breakdown</label>
                                                         </div>
                                                         <div className="hidden md:grid grid-cols-6 gap-2 px-1 mb-1 pr-12">
                                                             <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">BRAND</div>
-                                                            <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">PURCHASED PRICE</div>
+                                                            <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">PRICE</div>
                                                             <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">PACKET</div>
                                                             <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">SIZE</div>
                                                             <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">QTY</div>
@@ -1863,29 +1874,50 @@ function LCReceive({
                                                         </div>
                                                         <div className="space-y-4">
                                                             {product.brandEntries.map((entry, bIndex) => (
-                                                                <div key={bIndex} className="p-3 bg-white/40 border border-gray-200/50 rounded-lg space-y-3 group/brand">
+                                                                <div key={bIndex} className="p-2 md:p-3 bg-white/40 border border-gray-200/50 rounded-lg space-y-4 group/brand">
                                                                     <div className="flex items-center gap-2">
                                                                         <div className="flex-1 grid grid-cols-2 md:grid-cols-6 gap-2">
-                                                                            <div className="relative w-full" ref={el => brandRefs.current[`${pIndex}-${bIndex}`] = el}>
-                                                                                <input
-                                                                                    type="text"
-                                                                                    value={entry.brand}
-                                                                                    placeholder="Search brand..."
-                                                                                    onChange={(e) => { handleBrandEntryChange(pIndex, bIndex, 'brand', e.target.value); setActiveDropdown(`lcr-brand-${pIndex}-${bIndex}`); setHighlightedIndex(-1); }}
-                                                                                    onFocus={() => {
-                                                                                        setActiveDropdown(`lcr-brand-${pIndex}-${bIndex}`);
-                                                                                        setHighlightedIndex(-1);
-                                                                                    }}
-                                                                                    onKeyDown={(e) => handleDropdownKeyDown(e, `lcr-brand-${pIndex}-${bIndex}`, (field, val) => { handleBrandEntryChange(pIndex, bIndex, 'brand', val); setActiveDropdown(null); }, 'brand', getFilteredBrands(entry.brand, product.productName))}
-                                                                                    className={`w-full h-9 px-2 text-sm bg-white border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-all pr-12 ${entry.brand ? 'placeholder:text-gray-900 placeholder:font-semibold' : 'placeholder:text-gray-400'}`}
-                                                                                />
-                                                                                <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
-                                                                                    {entry.brand && (
-                                                                                        <button type="button" onClick={() => { handleBrandEntryChange(pIndex, bIndex, 'brand', ''); setActiveDropdown(null); }} className="text-gray-400 hover:text-gray-600">
-                                                                                            <XIcon className="w-3.5 h-3.5" />
+                                                                            <div className="relative w-full col-span-2 md:col-span-1" ref={el => brandRefs.current[`${pIndex}-${bIndex}`] = el}>
+                                                                                <label className="md:hidden text-[10px] font-bold text-gray-400 uppercase mb-1">Brand</label>
+                                                                                <div className="flex items-center gap-1">
+                                                                                    <div className="relative flex-1">
+                                                                                        <input
+                                                                                            type="text"
+                                                                                            value={entry.brand}
+                                                                                            placeholder="Search brand..."
+                                                                                            onChange={(e) => { handleBrandEntryChange(pIndex, bIndex, 'brand', e.target.value); setActiveDropdown(`lcr-brand-${pIndex}-${bIndex}`); setHighlightedIndex(-1); }}
+                                                                                            onFocus={() => {
+                                                                                                setActiveDropdown(`lcr-brand-${pIndex}-${bIndex}`);
+                                                                                                setHighlightedIndex(-1);
+                                                                                            }}
+                                                                                            onKeyDown={(e) => handleDropdownKeyDown(e, `lcr-brand-${pIndex}-${bIndex}`, (field, val) => { handleBrandEntryChange(pIndex, bIndex, 'brand', val); setActiveDropdown(null); }, 'brand', getFilteredBrands(entry.brand, product.productName))}
+                                                                                            className={`w-full h-9 px-2 text-sm bg-white border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-all pr-12 ${entry.brand ? 'placeholder:text-gray-900 placeholder:font-semibold' : 'placeholder:text-gray-400'}`}
+                                                                                        />
+                                                                                        <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
+                                                                                            {entry.brand && (
+                                                                                                <button type="button" onClick={() => { handleBrandEntryChange(pIndex, bIndex, 'brand', ''); setActiveDropdown(null); }} className="text-gray-400 hover:text-gray-600">
+                                                                                                    <XIcon className="w-3.5 h-3.5" />
+                                                                                                </button>
+                                                                                            )}
+                                                                                            <SearchIcon className="w-3.5 h-3.5 text-gray-300 pointer-events-none" />
+                                                                                        </div>
+                                                                                    </div>
+                                                                                    <div className="md:hidden flex items-center gap-0.5">
+                                                                                        <button
+                                                                                            type="button" onClick={() => addBrandEntry(pIndex)}
+                                                                                            className="p-1.5 text-blue-500 hover:bg-blue-100 rounded-lg transition-all"
+                                                                                        >
+                                                                                            <PlusIcon className="w-5 h-5 shadow-sm" />
                                                                                         </button>
-                                                                                    )}
-                                                                                    <SearchIcon className="w-3.5 h-3.5 text-gray-300 pointer-events-none" />
+                                                                                        {product.brandEntries.length > 1 && (
+                                                                                            <button
+                                                                                                type="button" onClick={() => removeBrandEntry(pIndex, bIndex)}
+                                                                                                className="p-1.5 text-red-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all"
+                                                                                            >
+                                                                                                <TrashIcon className="w-4 h-4" />
+                                                                                            </button>
+                                                                                        )}
+                                                                                    </div>
                                                                                 </div>
                                                                                 {activeDropdown === `lcr-brand-${pIndex}-${bIndex}` && (
                                                                                     <div className="absolute z-[60] w-full mt-1 bg-white border border-gray-100 rounded-xl shadow-lg max-h-48 overflow-y-auto py-1">
@@ -1911,80 +1943,95 @@ function LCReceive({
                                                                                     </div>
                                                                                 )}
                                                                             </div>
-                                                                            <input
-                                                                                type="number" value={entry.purchasedPrice} placeholder="Price" onChange={(e) => handleBrandEntryChange(pIndex, bIndex, 'purchasedPrice', e.target.value)}
-                                                                                className="w-full h-9 px-2 text-sm bg-white border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-all [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                                                                            />
-                                                                            <input
-                                                                                type="number" value={entry.packet && parseFloat(entry.packet) !== 0 ? entry.packet : ''} placeholder="Packet" onChange={(e) => handleBrandEntryChange(pIndex, bIndex, 'packet', e.target.value)}
-                                                                                className="w-full h-9 px-2 text-sm bg-white border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-all [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                                                                            />
-                                                                            <input
-                                                                                type="number" value={entry.packetSize} placeholder="Size" onChange={(e) => handleBrandEntryChange(pIndex, bIndex, 'packetSize', e.target.value)}
-                                                                                className="w-full h-9 px-2 text-sm bg-white border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-all [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                                                                            />
-                                                                            <input
-                                                                                type="number"
-                                                                                value={entry.quantity && parseFloat(entry.quantity) !== 0 ? entry.quantity : ''}
-                                                                                onChange={(e) => handleBrandEntryChange(pIndex, bIndex, 'quantity', e.target.value)}
-                                                                                placeholder="Qty"
-                                                                                className="w-full h-9 px-2 text-sm bg-white border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-all [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                                                                            />
-                                                                            <select
-                                                                                value={entry.unit} onChange={(e) => handleBrandEntryChange(pIndex, bIndex, 'unit', e.target.value)}
-                                                                                className="w-full h-9 px-2 text-sm bg-white border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-all"
-                                                                            >
-                                                                                <option>kg</option><option>pcs</option><option>boxes</option><option>liters</option>
-                                                                            </select>
+                                                                            <div className="space-y-1 md:space-y-0 col-span-2 md:col-span-1">
+                                                                                <label className="md:hidden text-[10px] font-bold text-gray-400 uppercase mb-1">Price</label>
+                                                                                <input
+                                                                                    type="number" value={entry.purchasedPrice} placeholder="Price" onChange={(e) => handleBrandEntryChange(pIndex, bIndex, 'purchasedPrice', e.target.value)}
+                                                                                    className="w-full h-9 px-2 text-sm bg-white border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-all [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                                                                                />
+                                                                            </div>
+                                                                            <div className="space-y-1 md:space-y-0 relative col-span-2 md:col-span-1">
+                                                                                <label className="md:hidden text-[10px] font-bold text-gray-400 uppercase mb-1">Packet</label>
+                                                                                <input
+                                                                                    type="number" value={entry.packet && parseFloat(entry.packet) !== 0 ? entry.packet : ''} placeholder="Packet" onChange={(e) => handleBrandEntryChange(pIndex, bIndex, 'packet', e.target.value)}
+                                                                                    className="w-full h-9 px-2 text-sm bg-white border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-all [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                                                                                />
+                                                                            </div>
+                                                                            <div className="space-y-1 md:space-y-0 col-span-2 md:col-span-1">
+                                                                                <label className="md:hidden text-[10px] font-bold text-gray-400 uppercase mb-1">Size</label>
+                                                                                <input
+                                                                                    type="number" value={entry.packetSize} placeholder="Size" onChange={(e) => handleBrandEntryChange(pIndex, bIndex, 'packetSize', e.target.value)}
+                                                                                    className="w-full h-9 px-2 text-sm bg-white border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-all [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                                                                                />
+                                                                            </div>
+                                                                            <div className="space-y-1 md:space-y-0 col-span-2 md:col-span-1">
+                                                                                <label className="md:hidden text-[10px] font-bold text-gray-400 uppercase mb-1">Qty</label>
+                                                                                <input
+                                                                                    type="number"
+                                                                                    value={entry.quantity && parseFloat(entry.quantity) !== 0 ? entry.quantity : ''}
+                                                                                    onChange={(e) => handleBrandEntryChange(pIndex, bIndex, 'quantity', e.target.value)}
+                                                                                    placeholder="Qty"
+                                                                                    className="w-full h-9 px-2 text-sm bg-white border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-all [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                                                                                />
+                                                                            </div>
+                                                                            <div className="space-y-1 md:space-y-0 col-span-2 md:col-span-1">
+                                                                                <label className="md:hidden text-[10px] font-bold text-gray-400 uppercase mb-1">Unit</label>
+                                                                                <select
+                                                                                    value={entry.unit} onChange={(e) => handleBrandEntryChange(pIndex, bIndex, 'unit', e.target.value)}
+                                                                                    className="w-full h-9 px-2 text-sm bg-white border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-all"
+                                                                                >
+                                                                                    <option>kg</option><option>pcs</option><option>boxes</option><option>liters</option>
+                                                                                </select>
+                                                                            </div>
                                                                         </div>
-                                                                        <div className="flex items-center">
+                                                                        <div className="hidden md:flex items-center md:flex-col gap-1">
                                                                             <button
                                                                                 type="button" onClick={() => addBrandEntry(pIndex)}
                                                                                 className="p-1.5 text-blue-500 hover:bg-blue-100 rounded-lg transition-all"
                                                                             >
-                                                                                <PlusIcon className="w-4 h-4" />
+                                                                                <PlusIcon className="w-5 h-5 shadow-sm" />
                                                                             </button>
                                                                             {product.brandEntries.length > 1 && (
                                                                                 <button
                                                                                     type="button" onClick={() => removeBrandEntry(pIndex, bIndex)}
                                                                                     className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all"
                                                                                 >
-                                                                                    <TrashIcon className="w-3.5 h-3.5" />
+                                                                                    <TrashIcon className="w-4 h-4" />
                                                                                 </button>
                                                                             )}
                                                                         </div>
                                                                     </div>
 
                                                                     {/* Combined line for Sweeped and InHouse fields */}
-                                                                    <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 pl-0 md:pl-0">
-                                                                        <div className="flex items-center gap-2">
-                                                                            <label className="text-[10px] font-bold text-gray-400 uppercase min-w-[60px]">SWP. PKT</label>
+                                                                    <div className="space-y-3 md:space-y-0 md:grid md:grid-cols-2 lg:grid-cols-4 md:gap-3">
+                                                                        <div className="flex flex-col gap-1.5 md:flex-row md:items-center md:gap-2">
+                                                                            <label className="text-[10px] font-bold text-gray-400 uppercase md:min-w-[60px]">SWP. PKT</label>
                                                                             <input
                                                                                 type="number" value={entry.sweepedPacket && parseFloat(entry.sweepedPacket) !== 0 ? entry.sweepedPacket : ''} placeholder="Packet" onChange={(e) => handleBrandEntryChange(pIndex, bIndex, 'sweepedPacket', e.target.value)}
-                                                                                className="flex-1 h-8 px-2 text-xs bg-white/70 border border-gray-200 rounded-md focus:ring-2 focus:ring-blue-500 outline-none transition-all [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                                                                                className="w-full h-9 md:h-8 px-2 text-xs bg-white/70 border border-gray-200 rounded-md focus:ring-2 focus:ring-blue-500 outline-none transition-all [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                                                                             />
                                                                         </div>
-                                                                        <div className="flex items-center gap-2">
-                                                                            <label className="text-[10px] font-bold text-gray-400 uppercase min-w-[60px]">SWPQTY</label>
+                                                                        <div className="flex flex-col gap-1.5 md:flex-row md:items-center md:gap-2">
+                                                                            <label className="text-[10px] font-bold text-gray-400 uppercase md:min-w-[60px]">SWPQTY</label>
                                                                             <input
                                                                                 type="number" value={entry.sweepedQuantity && parseFloat(entry.sweepedQuantity) !== 0 ? entry.sweepedQuantity : ''}
                                                                                 onChange={(e) => handleBrandEntryChange(pIndex, bIndex, 'sweepedQuantity', e.target.value)}
                                                                                 placeholder="Qty"
-                                                                                className="flex-1 h-8 px-2 text-xs bg-white border border-gray-200 rounded-md focus:ring-2 focus:ring-blue-500 outline-none transition-all [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                                                                                className="w-full h-9 md:h-8 px-2 text-xs bg-white border border-gray-200 rounded-md focus:ring-2 focus:ring-blue-500 outline-none transition-all [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                                                                             />
                                                                         </div>
-                                                                        <div className="flex items-center gap-2">
-                                                                            <label className="text-[10px] font-bold text-gray-400 uppercase min-w-[60px]">INHOUSE PKT</label>
+                                                                        <div className="flex flex-col gap-1.5 md:flex-row md:items-center md:gap-2">
+                                                                            <label className="text-[10px] font-bold text-gray-400 uppercase md:min-w-[60px]">INHOUSE PKT</label>
                                                                             <input
-                                                                                type="number" value={entry.inHousePacket} placeholder="Packet" readOnly
-                                                                                className="flex-1 h-8 px-2 text-xs bg-gray-50/70 border border-gray-200 rounded-md text-gray-500 outline-none cursor-default [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                                                                                type="text" value={entry.inHousePacket} readOnly placeholder="Packet"
+                                                                                className="w-full h-9 md:h-8 px-2 text-xs bg-gray-50/80 border border-gray-200 rounded-md text-gray-600 font-medium outline-none cursor-default"
                                                                             />
                                                                         </div>
-                                                                        <div className="flex items-center gap-2">
-                                                                            <label className="text-[10px] font-bold text-gray-400 uppercase min-w-[60px]">INHOUSE QTY</label>
+                                                                        <div className="flex flex-col gap-1.5 md:flex-row md:items-center md:gap-2">
+                                                                            <label className="text-[10px] font-bold text-gray-400 uppercase md:min-w-[60px]">INHOUSE QTY</label>
                                                                             <input
-                                                                                type="number" value={entry.inHouseQuantity} placeholder="Qty" readOnly
-                                                                                className="flex-1 h-8 px-2 text-xs bg-gray-50/70 border border-gray-200 rounded-md text-gray-500 outline-none cursor-default [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                                                                                type="text" value={entry.inHouseQuantity} readOnly placeholder="Qty"
+                                                                                className="w-full h-9 md:h-8 px-2 text-xs bg-gray-50/80 border border-gray-200 rounded-md text-gray-600 font-medium outline-none cursor-default"
                                                                             />
                                                                         </div>
                                                                     </div>
@@ -2137,14 +2184,14 @@ function LCReceive({
                                 )}
                             </div>
 
-                            <div className="col-span-1 md:col-span-2 pt-4 flex items-center justify-between">
+                            <div className="col-span-1 md:col-span-2 pt-4 flex flex-col md:flex-row items-center justify-center md:justify-between gap-4">
                                 {validationErrors.length > 0 && (
-                                    <div className="col-span-1 md:col-span-2 mb-4 bg-red-50 border border-red-100 rounded-xl p-4 animate-in fade-in slide-in-from-top-2">
-                                        <h5 className="text-xs font-bold text-red-600 uppercase tracking-wider mb-2 flex items-center gap-2">
+                                    <div className="w-full mb-4 bg-red-50 border border-red-100 rounded-xl p-4 animate-in fade-in slide-in-from-top-2">
+                                        <h5 className="text-xs font-bold text-red-600 uppercase tracking-wider mb-2 flex items-center justify-center md:justify-start gap-2">
                                             <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
                                             Please correct the following:
                                         </h5>
-                                        <ul className="list-disc list-inside space-y-1">
+                                        <ul className="list-disc list-inside space-y-1 text-center md:text-left">
                                             {validationErrors.map((err, i) => (
                                                 <li key={i} className="text-xs text-red-500 font-medium">{err}</li>
                                             ))}
@@ -2152,25 +2199,26 @@ function LCReceive({
                                     </div>
                                 )}
 
-                                {submitStatus === 'success' && (
-                                    <p className="text-green-600 font-medium flex items-center animate-bounce">
-                                        <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"></path></svg>
-                                        Stock saved successfully!
-                                    </p>
-                                )}
-                                {submitStatus === 'error' && validationErrors.length === 0 && (
-                                    <p className="text-red-600 font-medium flex items-center">
-                                        <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path></svg>
-                                        Failed to save LC receive.
-                                    </p>
-                                )}
-                                <div className="flex-1"></div>
-                                <button
-                                    type="submit" disabled={isSubmitting}
-                                    className="px-6 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-medium rounded-lg shadow-lg shadow-blue-500/30 transition-all transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed"
-                                >
-                                    {isSubmitting ? 'Saving...' : editingId ? 'Update LC Receive' : 'Add LC Receive'}
-                                </button>
+                                <div className="flex flex-col md:flex-row items-center gap-4 w-full md:w-auto md:ml-auto">
+                                    {submitStatus === 'success' && (
+                                        <p className="text-green-600 font-medium flex items-center justify-center md:justify-start animate-bounce">
+                                            <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"></path></svg>
+                                            Stock saved successfully!
+                                        </p>
+                                    )}
+                                    {submitStatus === 'error' && validationErrors.length === 0 && (
+                                        <p className="text-red-600 font-medium flex items-center justify-center md:justify-start">
+                                            <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                                            Failed to save LC receive.
+                                        </p>
+                                    )}
+                                    <button
+                                        type="submit" disabled={isSubmitting}
+                                        className="w-full md:w-auto px-10 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold rounded-xl shadow-lg shadow-blue-500/30 transition-all transform hover:scale-105 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed text-sm uppercase tracking-wider"
+                                    >
+                                        {isSubmitting ? 'Saving...' : editingId ? 'Update LC Receive' : 'Add LC Receive'}
+                                    </button>
+                                </div>
                             </div>
                         </form >
                     </div >
@@ -2182,7 +2230,7 @@ function LCReceive({
                 !showStockForm && (
                     <div className="bg-white/60 backdrop-blur-xl border border-white/50 rounded-2xl shadow-sm overflow-hidden">
                         {/* ... Table logic ... */}
-                        <div className="overflow-x-auto">
+                        <div className="overflow-x-auto hidden md:block">
                             <table className="w-full">
                                 <thead className="bg-gray-50/50 border-b border-gray-100">
                                     <tr>
@@ -2353,6 +2401,183 @@ function LCReceive({
                                     )}
                                 </tbody>
                             </table>
+                        </div>
+
+                        {/* Mobile List View */}
+                        <div className="md:hidden divide-y divide-gray-100">
+                            {lcReceiveRecords.length === 0 ? (
+                                <div className="px-6 py-12 text-center text-gray-400 bg-white/50">
+                                    <BoxIcon className="w-12 h-12 mx-auto mb-3 opacity-20" />
+                                    <p>No LC receive records found</p>
+                                </div>
+                            ) : (
+                                Object.values(lcReceiveRecords.reduce((acc, item) => {
+                                    const dateStr = formatDate(item.date);
+                                    const groupedKey = `${dateStr}-${item.lcNo}-${item.port}-${item.importer}-${item.billOfEntry}-${item.indianCnF}-${item.bdCnF}`;
+
+                                    if (!acc[groupedKey]) {
+                                        acc[groupedKey] = {
+                                            groupedKey,
+                                            date: item.date,
+                                            lcNo: item.lcNo,
+                                            port: item.port,
+                                            importer: item.importer,
+                                            exporter: item.exporter,
+                                            indianCnF: item.indianCnF,
+                                            indCnFCost: item.indCnFCost,
+                                            bdCnF: item.bdCnF,
+                                            bdCnFCost: item.bdCnFCost,
+                                            billOfEntry: item.billOfEntry,
+                                            status: item.status,
+                                            warehouse: item.warehouse,
+                                            totalQuantity: 0,
+                                            totalLcQuantity: 0,
+                                            totalShort: 0,
+                                            totalInQty: 0,
+                                            totalLcTruck: 0,
+                                            truckEntries: new Set(),
+                                            allIds: [],
+                                            entries: []
+                                        };
+                                    }
+                                    const itemQty = parseFloat(item.quantity) || 0;
+                                    acc[groupedKey].totalQuantity += itemQty;
+                                    acc[groupedKey].totalLcQuantity += itemQty;
+                                    acc[groupedKey].totalShort += (parseFloat(item.sweepedQuantity) || 0);
+                                    acc[groupedKey].totalInQty += (parseFloat(item.inHouseQuantity) || 0);
+
+                                    const truckEntryKey = `${item.date}-${item.productName}-${item.truckNo}`;
+                                    if (!acc[groupedKey].truckEntries.has(truckEntryKey)) {
+                                        acc[groupedKey].truckEntries.add(truckEntryKey);
+                                        acc[groupedKey].totalLcTruck += (parseFloat(item.truckNo) || 0);
+                                    }
+
+                                    acc[groupedKey].allIds.push(item._id);
+                                    acc[groupedKey].entries.push(item);
+                                    return acc;
+                                }, {})).map((entry) => {
+                                    const isExpanded = expandedCard === entry.groupedKey;
+                                    const uniqueEntriesMap = entry.entries.reduce((acc, item) => {
+                                        const key = `${item.productName}-${item.truckNo}-${item.unit}`;
+                                        if (!acc[key]) {
+                                            acc[key] = { ...item, quantity: 0 };
+                                        }
+                                        acc[key].quantity += (parseFloat(item.quantity) || 0);
+                                        return acc;
+                                    }, {});
+                                    const uniqueEntries = Object.values(uniqueEntriesMap);
+
+                                    return (
+                                        <div
+                                            key={entry.groupedKey}
+                                            className="p-4 bg-white hover:bg-gray-50 transition-all cursor-pointer"
+                                            onClick={() => toggleCard(entry.groupedKey)}
+                                        >
+                                            <div className={`flex justify-between items-center ${isExpanded ? 'mb-2' : ''}`}>
+                                                <div className="flex-1 min-w-0">
+                                                    <div className="text-xs text-gray-400 mb-0.5">{formatDate(entry.date)}</div>
+                                                    <div className="flex items-center gap-2 overflow-hidden">
+                                                        <div className="text-sm font-bold text-gray-900 truncate">{entry.lcNo || 'N/A'}</div>
+                                                        <span className="text-gray-200 text-[10px]">|</span>
+                                                        <div className="text-[10px] font-bold text-blue-600 bg-blue-50/50 px-1.5 py-0.5 rounded uppercase tracking-wider shrink-0">{entry.port || '-'}</div>
+                                                        {!isExpanded && (
+                                                            <>
+                                                                <span className="text-gray-200 text-[10px]">|</span>
+                                                                <div className="text-[10px] font-bold text-amber-600 bg-amber-50/50 px-1.5 py-0.5 rounded uppercase tracking-wider shrink-0">Truck: {entry.totalLcTruck}</div>
+                                                            </>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                                <div className="flex items-center gap-2 shrink-0">
+                                                    {isExpanded && (
+                                                        <>
+                                                            <button
+                                                                onClick={(e) => { e.stopPropagation(); handleEditInternal('stock', entry); }}
+                                                                className="p-2 text-blue-600 bg-blue-50/50 rounded-lg transition-colors hover:bg-blue-100"
+                                                            >
+                                                                <EditIcon className="w-4 h-4" />
+                                                            </button>
+                                                            <button
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    const ids = entry.allIds || entry.entries.map(e => e._id);
+                                                                    setSelectedItems(new Set(ids));
+                                                                    onDelete('stock', null, true, entry);
+                                                                }}
+                                                                className="p-2 text-red-600 bg-red-50/50 rounded-lg transition-colors hover:bg-red-100"
+                                                            >
+                                                                <TrashIcon className="w-4 h-4" />
+                                                            </button>
+                                                        </>
+                                                    )}
+                                                    <div className={`p-1 transition-transform duration-300 ${isExpanded ? 'rotate-180' : ''}`}>
+                                                        <ChevronDownIcon className="w-4 h-4 text-gray-400" />
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            {isExpanded && (
+                                                <div className="mt-4 space-y-4 animate-in fade-in slide-in-from-top-2 duration-300">
+                                                    <div className="grid grid-cols-2 gap-x-4 gap-y-3 pt-3 border-t border-gray-50">
+                                                        <div className="col-span-1">
+                                                            <span className="block text-gray-400 uppercase font-black tracking-widest text-[9px] mb-0.5">Importer</span>
+                                                            <div className="text-gray-700 text-xs font-semibold truncate">{entry.importer || "-"}</div>
+                                                        </div>
+                                                        <div className="col-span-1 text-right">
+                                                            <span className="block text-gray-400 uppercase font-black tracking-widest text-[9px] mb-0.5">Exporter</span>
+                                                            <div className="text-gray-700 text-xs font-semibold truncate">{entry.exporter || "-"}</div>
+                                                        </div>
+
+                                                        <div className="col-span-1">
+                                                            <span className="block text-gray-400 uppercase font-black tracking-widest text-[9px] mb-0.5">IND CNF</span>
+                                                            <div className="text-gray-700 text-xs font-semibold truncate">{entry.indianCnF || "-"}</div>
+                                                        </div>
+                                                        <div className="col-span-1 text-right">
+                                                            <span className="block text-gray-400 uppercase font-black tracking-widest text-[9px] mb-0.5">BD CNF</span>
+                                                            <div className="text-gray-700 text-xs font-semibold truncate">{entry.bdCnF || "-"}</div>
+                                                        </div>
+
+                                                        <div className="col-span-1">
+                                                            <span className="block text-gray-400 uppercase font-black tracking-widest text-[9px] mb-0.5">BOE</span>
+                                                            <div className="text-gray-700 text-xs font-semibold truncate">{entry.billOfEntry || "-"}</div>
+                                                        </div>
+                                                        <div className="col-span-1 text-right">
+                                                            <span className="block text-gray-400 uppercase font-black tracking-widest text-[9px] mb-0.5">Truck</span>
+                                                            <div className="text-gray-900 text-xs font-bold">{entry.totalLcTruck}</div>
+                                                        </div>
+                                                    </div>
+
+                                                    <div className="grid grid-cols-3 gap-x-2 p-3 bg-gray-50/50 rounded-xl border border-gray-100">
+                                                        <div className="col-span-1 text-center">
+                                                            <span className="block text-gray-400 uppercase font-black tracking-widest text-[9px] mb-0.5">Total Qty</span>
+                                                            <div className="text-gray-900 font-bold text-xs">{Math.round(entry.totalQuantity).toLocaleString()} kg</div>
+                                                        </div>
+                                                        <div className="col-span-1 text-center">
+                                                            <span className="block text-gray-400 uppercase font-black tracking-widest text-[9px] mb-0.5">Short</span>
+                                                            <div className="text-red-500 font-bold text-xs">{Math.round(entry.totalShort).toLocaleString()} kg</div>
+                                                        </div>
+                                                        <div className="col-span-1 text-center">
+                                                            <span className="block text-gray-400 uppercase font-black tracking-widest text-[9px] mb-0.5">IN QTY</span>
+                                                            <div className="text-blue-600 font-bold text-xs">{Math.round(entry.totalInQty).toLocaleString()} kg</div>
+                                                        </div>
+                                                    </div>
+
+                                                    <div className="space-y-1.5">
+                                                        {uniqueEntries.map((item, idx) => (
+                                                            <div key={idx} className="flex justify-between items-center p-2.5 bg-gray-50 rounded-lg text-xs hover:bg-gray-100 transition-colors">
+                                                                <span className="font-bold text-gray-900 truncate mr-2">{item.productName}</span>
+                                                                <span className="shrink-0 text-gray-600 font-medium">
+                                                                    QTY: {Math.round(item.quantity).toLocaleString()} kg | Truck: {item.truckNo}
+                                                                </span>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                </div>
+                                            )}
+                                        </div>
+                                    );
+                                })
+                            )}
                         </div>
                     </div>
                 )
