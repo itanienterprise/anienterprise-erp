@@ -1604,9 +1604,9 @@ function LCReceive({
                                                 <button
                                                     type="button"
                                                     onClick={() => removeProductEntry(pIndex)}
-                                                    className="absolute -top-3 -right-3 p-2 bg-white text-gray-400 hover:text-red-500 rounded-xl shadow-lg border border-gray-100 opacity-0 group-hover/product:opacity-100 transition-all duration-300 hover:scale-110 active:scale-90 z-20"
+                                                    className="absolute -top-3 -right-3 p-2 bg-white text-gray-500 hover:text-red-500 rounded-xl shadow-lg border border-gray-100 opacity-100 md:opacity-0 md:group-hover/product:opacity-100 transition-all duration-300 hover:scale-110 active:scale-90 z-20"
                                                 >
-                                                    <TrashIcon className="w-4 h-4" />
+                                                    <TrashIcon className="w-5 h-5 md:w-4 md:h-4" />
                                                 </button>
                                             )}
 

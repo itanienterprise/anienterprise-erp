@@ -835,6 +835,7 @@ function App() {
             salesRecords={salesRecords}
             fetchSales={fetchSales}
             setShowProductHistoryReport={setShowProductHistoryReport}
+            showProductHistoryReport={showProductHistoryReport}
             setProductHistoryReportData={setProductHistoryReportData}
           />
         );

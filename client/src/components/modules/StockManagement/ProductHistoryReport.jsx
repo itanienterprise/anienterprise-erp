@@ -142,52 +142,63 @@ const ProductHistoryReport = ({
     };
 
     return (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4 print:p-0 print:bg-white print:backdrop-none">
-            <div className="bg-white w-full max-w-5xl max-h-[90vh] overflow-hidden rounded-3xl shadow-2xl flex flex-col print:max-h-none print:shadow-none print:rounded-none print:w-full print:h-auto">
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[100] flex items-center justify-center p-0 md:p-4 print:p-0 print:bg-white print:backdrop-none">
+            <div className="bg-white w-full max-w-5xl h-full md:max-h-[90vh] overflow-hidden md:rounded-3xl shadow-2xl flex flex-col print:max-h-none print:shadow-none print:rounded-none print:w-full print:h-auto">
                 {/* Modal Header/Toolbar */}
-                <div className="flex items-center justify-between px-8 py-4 border-b border-gray-100 print:hidden">
-                    <div className="flex items-center gap-3 w-1/4">
-                        <div className="p-2 bg-blue-50 rounded-xl">
+                <div className="flex flex-col md:flex-row items-center justify-between px-4 md:px-8 py-3 md:py-4 border-b border-gray-100 print:hidden gap-3">
+                    <div className="flex items-center gap-3 w-full md:w-1/4">
+                        <div className="p-2 bg-blue-50 rounded-xl shrink-0">
                             <FileTextIcon className="w-5 h-5 text-blue-600" />
                         </div>
-                        <div>
-                            <h3 className="text-sm font-bold text-gray-800">Product Report</h3>
-                            <p className="text-[10px] text-gray-500 font-medium uppercase tracking-wider">{productName}</p>
+                        <div className="min-w-0">
+                            <h3 className="text-sm font-bold text-gray-800 truncate">Product Report</h3>
+                            <p className="text-[10px] text-gray-500 font-medium uppercase tracking-wider truncate">{productName}</p>
+                        </div>
+                        <div className="md:hidden ml-auto flex items-center gap-2">
+                            <button
+                                onClick={handlePrint}
+                                className="p-2 bg-blue-50 text-blue-600 rounded-lg"
+                            >
+                                <PrinterIcon className="w-5 h-5" />
+                            </button>
+                            <button onClick={onClose} className="p-2 text-gray-400">
+                                <XIcon className="w-6 h-6" />
+                            </button>
                         </div>
                     </div>
 
                     {/* Tabs in Center */}
-                    <div className="flex items-center gap-2 p-1 bg-gray-50 rounded-xl border border-gray-100">
+                    <div className="flex items-center gap-1 md:gap-2 p-1 bg-gray-50 rounded-xl border border-gray-100 w-full md:w-auto overflow-x-auto no-scrollbar">
                         <button
                             onClick={() => setActiveTab('purchase')}
-                            className={`px-6 py-1.5 rounded-lg text-xs font-bold transition-all ${activeTab === 'purchase'
+                            className={`flex-1 md:flex-none px-3 md:px-6 py-1.5 rounded-lg text-[10px] md:text-xs font-bold transition-all whitespace-nowrap ${activeTab === 'purchase'
                                 ? 'bg-white text-blue-600 shadow-sm border border-gray-100'
                                 : 'text-gray-400 hover:text-gray-600'
                                 }`}
                         >
-                            Purchase History
+                            Purchase
                         </button>
                         <button
                             onClick={() => setActiveTab('sale')}
-                            className={`px-6 py-1.5 rounded-lg text-xs font-bold transition-all ${activeTab === 'sale'
+                            className={`flex-1 md:flex-none px-3 md:px-6 py-1.5 rounded-lg text-[10px] md:text-xs font-bold transition-all whitespace-nowrap ${activeTab === 'sale'
                                 ? 'bg-white text-blue-600 shadow-sm border border-gray-100'
                                 : 'text-gray-400 hover:text-gray-600'
                                 }`}
                         >
-                            Sale History
+                            Sale
                         </button>
                         <button
                             onClick={() => setActiveTab('total')}
-                            className={`px-6 py-1.5 rounded-lg text-xs font-bold transition-all ${activeTab === 'total'
+                            className={`flex-1 md:flex-none px-3 md:px-6 py-1.5 rounded-lg text-[10px] md:text-xs font-bold transition-all whitespace-nowrap ${activeTab === 'total'
                                 ? 'bg-white text-blue-600 shadow-sm border border-gray-100'
                                 : 'text-gray-400 hover:text-gray-600'
                                 }`}
                         >
-                            Total History
+                            Total
                         </button>
                     </div>
 
-                    <div className="flex items-center justify-end gap-3 w-1/4">
+                    <div className="hidden md:flex items-center justify-end gap-3 w-1/4">
                         <div className="relative">
                             <button
                                 ref={filterButtonRef}
@@ -202,7 +213,7 @@ const ProductHistoryReport = ({
                             </button>
 
                             {showFilterPanel && (
-                                <div ref={filterPanelRef} className="absolute right-0 mt-3 w-[380px] bg-white/95 backdrop-blur-2xl border border-gray-100 rounded-2xl shadow-2xl z-[110] p-5 animate-in fade-in zoom-in duration-200">
+                                <div ref={filterPanelRef} className="absolute right-0 mt-3 w-[320px] md:w-[380px] bg-white border border-gray-100 rounded-2xl shadow-2xl z-[110] p-5 animate-in fade-in zoom-in duration-200">
                                     <div className="flex items-center justify-between mb-4 pb-2 border-b border-gray-50">
                                         <h4 className="font-bold text-gray-900">Advanced Filters</h4>
                                         <button
@@ -324,41 +335,134 @@ const ProductHistoryReport = ({
                             <XIcon className="w-6 h-6 text-gray-500" />
                         </button>
                     </div>
+
+                    {/* Mobile specific toolbar buttons when header is stacked */}
+                    <div className="md:hidden flex items-center gap-2 w-full">
+                        <div className="relative flex-1">
+                            <button
+                                onClick={() => setShowFilterPanel(!showFilterPanel)}
+                                className={`w-full py-2 px-4 rounded-xl transition-all shadow-sm flex items-center justify-center gap-2 font-bold text-xs ${showFilterPanel || isFilterApplied ? 'bg-blue-600 text-white' : 'bg-blue-50 text-blue-600'}`}
+                            >
+                                <FunnelIcon className="w-4 h-4" />
+                                {isFilterApplied ? 'Filters Applied' : 'Filters'}
+                            </button>
+                            {showFilterPanel && (
+                                <div ref={filterPanelRef} className="fixed left-4 right-4 top-40 bg-white border border-gray-100 rounded-2xl shadow-2xl z-[150] p-5 animate-in fade-in zoom-in duration-200">
+                                    <div className="flex items-center justify-between mb-4 pb-2 border-b border-gray-50">
+                                        <h4 className="font-bold text-gray-900 text-sm">Advanced Filters</h4>
+                                        <button
+                                            onClick={() => {
+                                                setModalFilters({ startDate: '', endDate: '', party: '', brand: '' });
+                                                setDropdownOpen({ party: false, brand: false });
+                                            }}
+                                            className="text-[10px] font-bold text-blue-600 hover:text-blue-700 uppercase tracking-wider"
+                                        >
+                                            Reset
+                                        </button>
+                                    </div>
+                                    <div className="space-y-4">
+                                        <div className="grid grid-cols-2 gap-2">
+                                            <CustomDatePicker
+                                                label="FROM"
+                                                value={modalFilters.startDate}
+                                                onChange={(e) => setModalFilters({ ...modalFilters, startDate: e.target.value })}
+                                                name="startDate"
+                                                compact={true}
+                                                fullWidth={true}
+                                            />
+                                            <CustomDatePicker
+                                                label="TO"
+                                                value={modalFilters.endDate}
+                                                onChange={(e) => setModalFilters({ ...modalFilters, endDate: e.target.value })}
+                                                name="endDate"
+                                                compact={true}
+                                                fullWidth={true}
+                                            />
+                                        </div>
+                                        <div className="grid grid-cols-2 gap-2">
+                                            <div ref={partyDropdownRef} className="space-y-1 relative">
+                                                <label className="text-[9px] font-bold text-gray-400 uppercase tracking-wider">Party</label>
+                                                <div className="relative">
+                                                    <input
+                                                        type="text"
+                                                        value={dropdownOpen.party ? dropdownSearch.party : modalFilters.party}
+                                                        onFocus={() => { setDropdownOpen({ party: true, brand: false }); setDropdownSearch(s => ({ ...s, party: '' })); }}
+                                                        onChange={e => setDropdownSearch(s => ({ ...s, party: e.target.value }))}
+                                                        placeholder="Party..."
+                                                        className="w-full px-2 py-1.5 bg-white border border-gray-100 rounded-lg text-xs"
+                                                    />
+                                                    {dropdownOpen.party && (
+                                                        <div className="absolute z-[160] mt-1 w-full bg-white border border-gray-100 rounded-lg shadow-xl max-h-40 overflow-y-auto py-1">
+                                                            {partyOptions.filter(p => p.toLowerCase().includes(dropdownSearch.party.toLowerCase())).map(p => (
+                                                                <button key={p} type="button" onClick={() => { setModalFilters({ ...modalFilters, party: p }); setDropdownOpen({ party: false, brand: false }); }} className="w-full px-3 py-1.5 text-left text-xs hover:bg-blue-50">{p}</button>
+                                                            ))}
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            </div>
+                                            <div ref={brandDropdownRef} className="space-y-1 relative">
+                                                <label className="text-[9px] font-bold text-gray-400 uppercase tracking-wider">Brand</label>
+                                                <div className="relative">
+                                                    <input
+                                                        type="text"
+                                                        value={dropdownOpen.brand ? dropdownSearch.brand : modalFilters.brand}
+                                                        onFocus={() => { setDropdownOpen({ party: false, brand: true }); setDropdownSearch(s => ({ ...s, brand: '' })); }}
+                                                        onChange={e => setDropdownSearch(s => ({ ...s, brand: e.target.value }))}
+                                                        placeholder="Brand..."
+                                                        className="w-full px-2 py-1.5 bg-white border border-gray-100 rounded-lg text-xs"
+                                                    />
+                                                    {dropdownOpen.brand && (
+                                                        <div className="absolute z-[160] mt-1 w-full bg-white border border-gray-100 rounded-lg shadow-xl max-h-40 overflow-y-auto py-1">
+                                                            {brandOptions.filter(b => b.toLowerCase().includes(dropdownSearch.brand.toLowerCase())).map(b => (
+                                                                <button key={b} type="button" onClick={() => { setModalFilters({ ...modalFilters, brand: b }); setDropdownOpen({ party: false, brand: false }); }} className="w-full px-3 py-1.5 text-left text-xs hover:bg-blue-50">{b}</button>
+                                                            ))}
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <button onClick={() => setShowFilterPanel(false)} className="w-full py-2 bg-gray-900 text-white rounded-xl text-xs font-medium">Apply</button>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    </div>
                 </div>
 
                 {/* Printable Content */}
-                <div className="flex-1 overflow-y-auto p-12 print:p-4 print:overflow-visible bg-white">
+                <div className="flex-1 overflow-y-auto p-4 md:p-12 print:p-4 print:overflow-visible bg-white">
                     <div className="max-w-[1000px] mx-auto space-y-8">
                         {/* Header */}
                         <div className="text-center space-y-1">
-                            <h1 className="text-4xl font-bold text-gray-900 tracking-tight">M/S ANI ENTERPRISE</h1>
-                            <p className="text-[14px] text-gray-600">766, H.M Tower, Level-06, Borogola, Bogura-5800, Bangladesh</p>
-                            <p className="text-[14px] text-gray-600">+8802588813057, anienterprise051@gmail.com, www.anienterprises.com.bd</p>
+                            <h1 className="text-2xl md:text-4xl font-bold text-gray-900 tracking-tight">M/S ANI ENTERPRISE</h1>
+                            <p className="text-[10px] md:text-[14px] text-gray-600 px-4">766, H.M Tower, Level-06, Borogola, Bogura-5800, Bangladesh</p>
+                            <p className="text-[10px] md:text-[14px] text-gray-600 px-4 truncate">+8802588813057, anienterprise051@gmail.com</p>
                         </div>
                         <div className="border-t-2 border-gray-900 w-full mt-4"></div>
                         <div className="flex justify-center -mt-6">
-                            <div className="bg-white border-2 border-gray-900 px-12 py-1.5 inline-block">
-                                <h2 className="text-xl font-bold text-gray-900 tracking-wide uppercase">
-                                    {activeTab === 'purchase' ? 'Purchase History Report' : activeTab === 'sale' ? 'Sale History Report' : 'Product History Report'}
+                            <div className="bg-white border-2 border-gray-900 px-6 md:px-12 py-1.5 inline-block mx-4">
+                                <h2 className="text-sm md:text-xl font-bold text-gray-900 tracking-wide uppercase text-center">
+                                    {activeTab === 'purchase' ? 'Purchase Report' : activeTab === 'sale' ? 'Sale Report' : 'History Report'}
                                 </h2>
                             </div>
                         </div>
 
                         {/* Metadata */}
-                        <div className="flex justify-between items-end text-[14px] text-gray-800 pt-6 px-2">
+                        <div className="flex flex-col md:flex-row justify-between items-start md:items-end text-xs md:text-[14px] text-gray-800 pt-6 px-2 gap-4">
                             <div className="flex flex-col gap-1.5">
-                                <div className="flex"><span className="font-bold text-gray-900 w-28">Product:</span> <span>{productName}</span></div>
-                                <div className="flex"><span className="font-bold text-gray-900 w-28">Date Range:</span> <span>{formatDate(modalFilters.startDate) || 'Start'} to {formatDate(modalFilters.endDate) || 'Present'}</span></div>
-                                {modalFilters.party && <div className="flex"><span className="font-bold text-gray-900 w-28">Party Filter:</span> <span>{modalFilters.party}</span></div>}
-                                {modalFilters.brand && <div className="flex"><span className="font-bold text-gray-900 w-28">Brand Filter:</span> <span>{modalFilters.brand}</span></div>}
+                                <div className="flex"><span className="font-bold text-gray-900 w-24 md:w-28">Product:</span> <span>{productName}</span></div>
+                                <div className="flex"><span className="font-bold text-gray-900 w-24 md:w-28 shrink-0">Date Range:</span> <span className="truncate">{formatDate(modalFilters.startDate) || 'Start'} to {formatDate(modalFilters.endDate) || 'Present'}</span></div>
+                                {modalFilters.party && <div className="flex"><span className="font-bold text-gray-900 w-24 md:w-28">Party:</span> <span className="truncate">{modalFilters.party}</span></div>}
+                                {modalFilters.brand && <div className="flex"><span className="font-bold text-gray-900 w-24 md:w-28">Brand:</span> <span className="truncate">{modalFilters.brand}</span></div>}
                             </div>
-                            <div className="font-bold"><span className="text-gray-900">Printed on:</span> <span className="text-gray-900">{formatDate(new Date())}</span></div>
+                            <div className="font-bold text-[10px] md:text-sm whitespace-nowrap"><span className="text-gray-900">Printed:</span> <span className="text-gray-900">{formatDate(new Date())}</span></div>
                         </div>
 
                         {/* Unified History Section (for Total Tab) */}
                         {activeTab === 'total' && (
                             <div className="space-y-4">
-                                <div className="overflow-x-auto border border-gray-900">
+                                {/* Desktop Table */}
+                                <div className="hidden md:block overflow-x-auto border border-gray-900">
                                     <table className="w-full border-collapse">
                                         <thead>
                                             <tr className="bg-gray-50 border-b border-gray-900 text-center">
@@ -407,13 +511,45 @@ const ProductHistoryReport = ({
                                         </tfoot>
                                     </table>
                                 </div>
+                                {/* Mobile Cards */}
+                                <div className="md:hidden space-y-3">
+                                    {unifiedHistory.map((item, idx) => (
+                                        <div key={idx} className={`rounded-xl border p-3 text-xs ${item.type === 'purchase' ? 'border-emerald-200 bg-emerald-50/30' : 'border-blue-200 bg-blue-50/30'}`}>
+                                            <div className="flex items-center justify-between mb-2">
+                                                <span className={`text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full ${item.type === 'purchase' ? 'bg-emerald-100 text-emerald-700' : 'bg-blue-100 text-blue-700'}`}>{item.type}</span>
+                                                <span className="font-bold text-gray-800">{formatDate(item.date)}</span>
+                                            </div>
+                                            <div className="grid grid-cols-2 gap-x-3 gap-y-1">
+                                                {item.type === 'purchase' && <><div className="text-gray-500">LC No</div><div className="font-bold text-gray-900 text-right">{item.lcNo || '-'}</div>
+                                                    <div className="text-gray-500">Exporter</div><div className="font-medium text-gray-800 text-right truncate">{item.itemExporter || '-'}</div>
+                                                    <div className="text-gray-500">Purchase Qty</div><div className="font-bold text-gray-900 text-right">{Math.round(item.itemQty).toLocaleString()} kg</div>
+                                                    {item.itemShortageQty > 0 && <><div className="text-rose-500">Shortage</div><div className="font-bold text-rose-600 text-right">{Math.round(item.itemShortageQty).toLocaleString()} kg</div></>}</>
+                                                }
+                                                {item.type === 'sale' && <><div className="text-gray-500">Invoice</div><div className="font-bold text-gray-900 text-right">{item.invoiceNo || '-'}</div>
+                                                    <div className="text-gray-500">Party</div><div className="font-medium text-gray-800 text-right truncate">{item.companyName || '-'}</div>
+                                                    <div className="text-gray-500">Sale Qty</div><div className="font-bold text-blue-600 text-right">{Math.round(item.itemQty).toLocaleString()} kg</div></>
+                                                }
+                                                <div className="text-gray-500">InHouse Balance</div><div className="font-black text-blue-700 text-right">{Math.round(item.runningInHouse).toLocaleString()} kg</div>
+                                            </div>
+                                        </div>
+                                    ))}
+                                    <div className="rounded-xl border-2 border-gray-900 bg-gray-100 p-3 text-xs font-black">
+                                        <div className="grid grid-cols-2 gap-x-3 gap-y-1">
+                                            <div className="text-gray-700 uppercase">Total Purchase</div><div className="text-right">{Math.round(purchaseHistory.reduce((sum, i) => sum + (parseFloat(i.itemQty) || 0), 0)).toLocaleString()} kg</div>
+                                            <div className="text-blue-600 uppercase">Total Sale</div><div className="text-blue-600 text-right">{Math.round(saleHistory.reduce((sum, s) => sum + (parseFloat(s.itemQty) || 0), 0)).toLocaleString()} kg</div>
+                                            <div className="text-blue-700 uppercase">InHouse</div><div className="text-blue-700 text-right">{Math.round(unifiedHistory[unifiedHistory.length - 1]?.runningInHouse || 0).toLocaleString()} kg</div>
+                                            <div className="text-rose-600 uppercase">Shortage</div><div className="text-rose-600 text-right">{Math.round(purchaseHistory.reduce((sum, i) => sum + (parseFloat(i.itemShortageQty) || 0), 0)).toLocaleString()} kg</div>
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
                         )}
 
-                        {/* Purchase History Section (Indiviual Tab) */}
+                        {/* Purchase History Section (Individual Tab) */}
                         {activeTab === 'purchase' && purchaseHistory.length > 0 && (
                             <div className="space-y-4">
-                                <div className="overflow-x-auto border border-gray-900">
+                                {/* Desktop Table */}
+                                <div className="hidden md:block overflow-x-auto border border-gray-900">
                                     <table className="w-full border-collapse">
                                         <thead>
                                             <tr className="bg-gray-50 border-b border-gray-900">
@@ -465,13 +601,42 @@ const ProductHistoryReport = ({
                                         </tfoot>
                                     </table>
                                 </div>
+                                {/* Mobile Cards */}
+                                <div className="md:hidden space-y-3">
+                                    {purchaseHistory.map((item, idx) => (
+                                        <div key={idx} className="rounded-xl border border-emerald-200 bg-emerald-50/20 p-3 text-xs">
+                                            <div className="flex items-center justify-between mb-2">
+                                                <span className="font-black text-gray-900">{item.lcNo}</span>
+                                                <span className="text-gray-600 font-medium">{formatDate(item.date)}</span>
+                                            </div>
+                                            <div className="grid grid-cols-2 gap-x-3 gap-y-1">
+                                                <div className="text-gray-500">Exporter</div><div className="font-medium text-gray-800 text-right truncate">{item.itemExporter || '-'}</div>
+                                                <div className="text-gray-500">Brand</div><div className="font-bold text-gray-900 text-right">{item.itemBrand}</div>
+                                                <div className="text-gray-500">Price</div><div className="font-medium text-gray-800 text-right">৳{parseFloat(item.itemPurchasedPrice || 0).toLocaleString()}</div>
+                                                <div className="text-gray-500">Packet</div><div className="font-bold text-gray-900 text-right">{item.itemPacket}</div>
+                                                <div className="text-gray-500">LC Qty</div><div className="font-bold text-gray-900 text-right">{Math.round(item.itemQty).toLocaleString()} {item.unit}</div>
+                                                <div className="text-blue-500">InHouse</div><div className="font-bold text-blue-600 text-right">{Math.round(item.itemInHouseQty).toLocaleString()} {item.unit}</div>
+                                                {(item.itemShortageQty || 0) > 0 && <><div className="text-rose-500">Shortage</div><div className="font-bold text-rose-600 text-right">{Math.round(item.itemShortageQty).toLocaleString()} {item.unit}</div></>}
+                                            </div>
+                                        </div>
+                                    ))}
+                                    <div className="rounded-xl border-2 border-gray-900 bg-gray-100 p-3 text-xs font-black">
+                                        <div className="text-[10px] uppercase tracking-wider text-gray-500 mb-2">Total Purchase</div>
+                                        <div className="grid grid-cols-2 gap-x-3 gap-y-1">
+                                            <div className="text-gray-700">LC Qty</div><div className="text-right">{Math.round(purchaseHistory.reduce((sum, i) => sum + (parseFloat(i.itemQty) || 0), 0)).toLocaleString()} {purchaseHistory[0]?.unit}</div>
+                                            <div className="text-blue-600">InHouse</div><div className="text-blue-600 text-right">{Math.round(purchaseHistory.reduce((sum, i) => sum + (parseFloat(i.itemInHouseQty) || 0), 0)).toLocaleString()} {purchaseHistory[0]?.unit}</div>
+                                            <div className="text-rose-600">Shortage</div><div className="text-rose-600 text-right">{Math.round(purchaseHistory.reduce((sum, i) => sum + (parseFloat(i.itemShortageQty) || 0), 0)).toLocaleString()} {purchaseHistory[0]?.unit}</div>
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
                         )}
 
                         {/* Sale History Section (Individual Tab) */}
                         {activeTab === 'sale' && saleHistory.length > 0 && (
                             <div className="space-y-4 pt-4">
-                                <div className="overflow-x-auto border border-gray-900">
+                                {/* Desktop Table */}
+                                <div className="hidden md:block overflow-x-auto border border-gray-900">
                                     <table className="w-full border-collapse">
                                         {isFruitCategory ? (
                                             <>
@@ -561,31 +726,63 @@ const ProductHistoryReport = ({
                                         )}
                                     </table>
                                 </div>
+                                {/* Mobile Cards for Sale */}
+                                <div className="md:hidden space-y-3">
+                                    {saleHistory.map((sale, idx) => (
+                                        <div key={idx} className="rounded-xl border border-blue-200 bg-blue-50/20 p-3 text-xs">
+                                            <div className="flex items-center justify-between mb-2">
+                                                <span className="font-black text-gray-900">{sale.invoiceNo}</span>
+                                                <span className="text-gray-600 font-medium">{formatDate(sale.date)}</span>
+                                            </div>
+                                            <div className="grid grid-cols-2 gap-x-3 gap-y-1">
+                                                <div className="text-gray-500">Company</div><div className="font-bold text-gray-900 text-right truncate">{sale.companyName || '-'}</div>
+                                                {isFruitCategory ? (<>
+                                                    <div className="text-gray-500">Customer</div><div className="font-medium text-gray-800 text-right">{sale.customerName || '-'}</div>
+                                                    <div className="text-gray-500">Phone</div><div className="font-medium text-gray-800 text-right">{sale.phone || '-'}</div>
+                                                    {sale.itemTruck && <><div className="text-gray-500">Truck</div><div className="font-medium text-gray-800 text-right">{sale.itemTruck}</div></>}
+                                                </>) : (<>
+                                                    <div className="text-gray-500">Brand</div><div className="font-medium text-gray-800 text-right">{sale.itemBrand}</div>
+                                                    <div className="text-gray-500">Packet</div><div className="font-medium text-gray-800 text-right">{sale.itemPacket?.toLocaleString()}</div>
+                                                </>)}
+                                                <div className="text-gray-500">Qty</div><div className="font-bold text-gray-900 text-right">{sale.itemQty?.toLocaleString()} kg</div>
+                                                <div className="text-gray-500">Price</div><div className="font-medium text-gray-600 text-right">৳{sale.itemPrice?.toLocaleString()}</div>
+                                                <div className="text-blue-600 font-bold">Total</div><div className="font-black text-blue-700 text-right">৳{sale.itemTotal?.toLocaleString()}</div>
+                                            </div>
+                                        </div>
+                                    ))}
+                                    <div className="rounded-xl border-2 border-gray-900 bg-gray-100 p-3 text-xs font-black">
+                                        <div className="text-[10px] uppercase tracking-wider text-gray-500 mb-2">Total Sale</div>
+                                        <div className="grid grid-cols-2 gap-x-3 gap-y-1">
+                                            <div className="text-gray-700">Qty</div><div className="text-right">{saleHistory.reduce((sum, s) => sum + s.itemQty, 0).toLocaleString()} kg</div>
+                                            <div className="text-blue-700">Amount</div><div className="text-blue-700 text-right">৳{saleHistory.reduce((sum, s) => sum + s.itemTotal, 0).toLocaleString()}</div>
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
                         )}
 
                         {/* Summary Cards */}
-                        <div className="flex flex-wrap justify-center gap-6 pt-8 px-2 print:flex print:justify-center">
+                        <div className="flex flex-col md:flex-row justify-center gap-4 md:gap-6 pt-8 px-2 print:flex print:justify-center">
                             {(activeTab === 'total' || activeTab === 'purchase') && (
-                                <div className="border border-gray-200 p-5 rounded-2xl bg-gray-50 shadow-sm print:border-gray-200 min-w-[350px] max-w-[450px] w-full">
-                                    <div className="text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-2">Final Conclusion</div>
+                                <div className="border border-gray-200 p-4 md:p-5 rounded-2xl bg-gray-50 shadow-sm print:border-gray-200 w-full md:min-w-[350px] md:max-w-[450px]">
+                                    <div className="text-[10px] md:text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-2 text-center md:text-left">Final Conclusion</div>
                                     <div className="space-y-1">
-                                        <div className="flex justify-between text-sm">
-                                            <span className="text-gray-600">Total Purchase Qty:</span>
+                                        <div className="flex justify-between text-xs md:text-sm">
+                                            <span className="text-gray-600">Total Purchase:</span>
                                             <span className="font-bold">{Math.round(purchaseHistory.reduce((sum, i) => sum + (parseFloat(i.itemQty) || 0), 0)).toLocaleString()} kg</span>
                                         </div>
-                                        <div className="flex justify-between text-sm">
-                                            <span className="text-gray-600">Total Short Qty:</span>
+                                        <div className="flex justify-between text-xs md:text-sm">
+                                            <span className="text-gray-600">Total Short:</span>
                                             <span className="font-bold text-rose-600">{Math.round(purchaseHistory.reduce((sum, i) => sum + (parseFloat(i.itemShortageQty) || 0), 0)).toLocaleString()} kg</span>
                                         </div>
                                         {activeTab === 'total' && (
-                                            <div className="flex justify-between text-sm">
-                                                <span className="text-gray-600">Total Sale Qty:</span>
+                                            <div className="flex justify-between text-xs md:text-sm">
+                                                <span className="text-gray-600">Total Sale:</span>
                                                 <span className="font-bold">{saleHistory.reduce((sum, s) => sum + s.itemQty, 0).toLocaleString()} kg</span>
                                             </div>
                                         )}
-                                        <div className="border-t border-gray-300 pt-1 mt-1 flex justify-between text-base font-black">
-                                            <span className="text-blue-600 uppercase">Remaining InHouse:</span>
+                                        <div className="border-t border-gray-300 pt-1 mt-1 flex justify-between text-sm md:text-base font-black">
+                                            <span className="text-blue-600 uppercase">InHouse:</span>
                                             <span className="text-blue-700">
                                                 {Math.round(purchaseHistory.reduce((sum, i) => sum + (parseFloat(i.itemInHouseQty) || 0), 0)).toLocaleString()} kg
                                             </span>
@@ -595,15 +792,15 @@ const ProductHistoryReport = ({
                             )}
 
                             {(activeTab === 'total' || activeTab === 'sale') && (
-                                <div className="border border-gray-200 p-5 rounded-2xl bg-blue-50/30 shadow-sm print:border-gray-200 min-w-[350px] max-w-[450px] w-full">
-                                    <div className="text-[11px] font-bold text-blue-500 uppercase tracking-wider mb-2">Financial Summary</div>
+                                <div className="border border-gray-200 p-4 md:p-5 rounded-2xl bg-blue-50/30 shadow-sm print:border-gray-200 w-full md:min-w-[350px] md:max-w-[450px]">
+                                    <div className="text-[10px] md:text-[11px] font-bold text-blue-500 uppercase tracking-wider mb-2 text-center md:text-left">Financial Summary</div>
                                     <div className="space-y-1">
-                                        <div className="flex justify-between text-sm">
+                                        <div className="flex justify-between text-xs md:text-sm">
                                             <span className="text-gray-600">Total Sales Value:</span>
                                             <span className="font-bold text-blue-700">৳{saleHistory.reduce((sum, s) => sum + s.itemTotal, 0).toLocaleString()}</span>
                                         </div>
-                                        <p className="text-[10px] text-gray-400 mt-4 leading-tight italic">
-                                            * This report provides a comprehensive overview of the product movement, including {activeTab === 'total' ? 'purchases and sales' : activeTab} history.
+                                        <p className="text-[9px] md:text-[10px] text-gray-400 mt-4 leading-tight italic text-center md:text-left">
+                                            * Comprehensive overview of product movement.
                                         </p>
                                     </div>
                                 </div>
@@ -611,10 +808,10 @@ const ProductHistoryReport = ({
                         </div>
 
                         {/* Signatures */}
-                        <div className="grid grid-cols-3 gap-8 pt-24 px-4 pb-12">
-                            <div className="text-center"><div className="border-t border-dotted border-gray-900 pt-2 text-[10px] font-bold text-gray-900 uppercase">Prepared By</div></div>
-                            <div className="text-center"><div className="border-t border-dotted border-gray-900 pt-2 text-[10px] font-bold text-gray-900 uppercase">Verified By</div></div>
-                            <div className="text-center"><div className="border-t border-dotted border-gray-900 pt-2 text-[10px] font-bold text-gray-900 uppercase">Authorized Signature</div></div>
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-8 md:gap-8 pt-16 md:pt-24 px-4 pb-12">
+                            <div className="text-center group"><div className="border-t border-dotted border-gray-900 pt-2 text-[10px] font-bold text-gray-900 uppercase">Prepared By</div></div>
+                            <div className="text-center group hidden md:block"><div className="border-t border-dotted border-gray-900 pt-2 text-[10px] font-bold text-gray-900 uppercase">Verified By</div></div>
+                            <div className="text-center group"><div className="border-t border-dotted border-gray-900 pt-2 text-[10px] font-bold text-gray-900 uppercase">Authorized Signature</div></div>
                         </div>
                     </div>
                 </div>

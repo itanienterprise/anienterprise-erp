@@ -1454,14 +1454,14 @@ export const generateProductHistoryPDF = (productName, category, activeTab, purc
                 footStyles: { fillColor: [245, 245, 245], textColor: [0, 0, 0], fontStyle: 'bold', lineWidth: 0.1 },
                 columnStyles: {
                     0: { cellWidth: 18, halign: 'center' }, // Date
-                    1: { cellWidth: 28, halign: 'center' }, // LC No (reduced)
-                    2: { cellWidth: 18, halign: 'left' },   // Exporter
-                    3: { cellWidth: 16, halign: 'center' }, // Invoice
-                    4: { cellWidth: 26, halign: 'left' },   // Party (reduced)
-                    5: { cellWidth: 23, halign: 'right' },  // Purchase (increased)
-                    6: { cellWidth: 23, halign: 'right' },  // Sale (increased)
-                    7: { cellWidth: 23, halign: 'right' },  // InHouse (increased)
-                    8: { cellWidth: 21, halign: 'right' }   // Short (increased)
+                    1: { cellWidth: 24, halign: 'center' }, // LC No
+                    2: { cellWidth: 26, halign: 'left' },   // Exporter (Increased)
+                    3: { cellWidth: 18, halign: 'center' }, // Invoice
+                    4: { cellWidth: 36, halign: 'left' },   // Party (Increased)
+                    5: { cellWidth: 21, halign: 'right' },  // Purchase
+                    6: { cellWidth: 21, halign: 'right' },  // Sale
+                    7: { cellWidth: 21, halign: 'right' },  // InHouse
+                    8: { cellWidth: 13, halign: 'right' }   // Short
                 },
                 margin: { left: margin, right: margin }
             });
@@ -1507,19 +1507,19 @@ export const generateProductHistoryPDF = (productName, category, activeTab, purc
                 body: purchaseBody,
                 foot: purchaseFoot,
                 theme: 'grid',
-                styles: { fontSize: 9, cellPadding: 1, lineColor: [0, 0, 0], lineWidth: 0.1, font: 'helvetica', textColor: [0, 0, 0], minCellHeight: 0 },
+                styles: { fontSize: 8.5, cellPadding: 1, lineColor: [0, 0, 0], lineWidth: 0.1, font: 'helvetica', textColor: [0, 0, 0], minCellHeight: 0 },
                 headStyles: { fillColor: [245, 245, 245], textColor: [0, 0, 0], fontStyle: 'bold', halign: 'center' },
                 footStyles: { fillColor: [245, 245, 245], textColor: [0, 0, 0], fontStyle: 'bold', lineWidth: 0.1 },
                 columnStyles: {
-                    0: { cellWidth: 18, halign: 'center' }, // Date
-                    1: { cellWidth: 24, halign: 'center' }, // LC No
-                    2: { cellWidth: 18, halign: 'left' },   // Exporter
-                    3: { cellWidth: 46, halign: 'left' },   // Brand (reduced to 46 from 54)
+                    0: { cellWidth: 16, halign: 'center' }, // Date
+                    1: { cellWidth: 20, halign: 'center' }, // LC No
+                    2: { cellWidth: 28, halign: 'left' },   // Exporter (Increased)
+                    3: { cellWidth: 44, halign: 'left' },   // Brand
                     4: { cellWidth: 16, halign: 'right' },  // Price
                     5: { cellWidth: 14, halign: 'right' },  // Packet
-                    6: { cellWidth: 21, halign: 'right' },  // LC Qty (increased from 19)
-                    7: { cellWidth: 21, halign: 'right' },  // InHouse (increased from 19)
-                    8: { cellWidth: 18, halign: 'right' }   // Short (increased from 14)
+                    6: { cellWidth: 20, halign: 'right' },  // LC Qty
+                    7: { cellWidth: 20, halign: 'right' },  // InHouse
+                    8: { cellWidth: 18, halign: 'right' }   // Short
                 },
                 margin: { left: margin, right: margin }
             });
@@ -1583,13 +1583,13 @@ export const generateProductHistoryPDF = (productName, category, activeTab, purc
                 ]];
                 saleColumnStyles = {
                     0: { cellWidth: 18, halign: 'center' }, // Date
-                    1: { cellWidth: 20, halign: 'center' }, // Invoice
-                    2: { cellWidth: 32, halign: 'left' },   // Company
+                    1: { cellWidth: 16, halign: 'center' }, // Invoice
+                    2: { cellWidth: 38, halign: 'left' },   // Company (Increased)
                     3: { cellWidth: 34, halign: 'left' },   // Brand
-                    4: { cellWidth: 20, halign: 'right' },  // Packet
-                    5: { cellWidth: 22, halign: 'right' },  // Qty
+                    4: { cellWidth: 18, halign: 'right' },  // Packet
+                    5: { cellWidth: 20, halign: 'right' },  // Qty
                     6: { cellWidth: 22, halign: 'right' },  // Price
-                    7: { cellWidth: 32, halign: 'right' }   // Total Price
+                    7: { cellWidth: 30, halign: 'right' }   // Total Price
                 };
             }
 

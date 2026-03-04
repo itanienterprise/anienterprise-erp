@@ -65,3 +65,21 @@ input[readonly] {
     cursor: default;
     user-select: none;
 }
+
+/* Hide scrollbars on mobile */
+@media (max-width: 767px) {
+
+    .stock-management-container,
+    .stock-management-container * {
+        scrollbar-width: none !important;
+        /* Firefox */
+        -ms-overflow-style: none !important;
+        /* IE and Edge */
+    }
+
+    .stock-management-container::-webkit-scrollbar,
+    .stock-management-container *::-webkit-scrollbar {
+        display: none !important;
+        /* Chrome, Safari, and Opera */
+    }
+}

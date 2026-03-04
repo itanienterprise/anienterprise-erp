@@ -81,7 +81,7 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
             };
         }
 
-        const brandKey = `${item.brand || 'No Brand'}_${item.importer || 'No Importer'}_${item.port || 'No Port'}`;
+        const brandKey = (item.brand || 'No Brand').trim().toLowerCase();
         if (!acc[key].brands[brandKey]) {
             acc[key].brands[brandKey] = {
                 brand: item.brand,

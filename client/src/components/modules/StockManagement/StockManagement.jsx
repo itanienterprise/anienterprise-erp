@@ -60,6 +60,7 @@ const StockManagement = ({
     salesRecords,
     fetchSales,
     setShowProductHistoryReport,
+    showProductHistoryReport,
     setProductHistoryReportData
 }) => {
 
@@ -138,9 +139,29 @@ const StockManagement = ({
     const [showToDropdown, setShowToDropdown] = useState(false);
     const toDropdownRef = useRef(null);
     const [showWhProductDropdown, setShowWhProductDropdown] = useState(false);
-    const whProductDropdownRef = useRef(null);
+    const whProductDropdownRefs = useRef([]);
     const [showWhBrandDropdown, setShowWhBrandDropdown] = useState(false);
-    const whBrandDropdownRef = useRef(null);
+    const whBrandDropdownRefs = useRef({}); // Using object for nested indices
+
+
+    // Expand/Collapse state for mobile cards
+    const [expandedProducts, setExpandedProducts] = useState(null);
+    const [expandedHistoryId, setExpandedHistoryId] = useState(null);
+    const [expandedSaleId, setExpandedSaleId] = useState(null);
+
+    const toggleProductExpansion = (productName) => {
+        setExpandedProducts(prev => prev === productName ? null : productName);
+    };
+
+    const toggleHistoryExpansion = (historyId) => {
+        setExpandedHistoryId(prev => prev === historyId ? null : historyId);
+        setExpandedSaleId(null); // Close any open sale history card
+    };
+
+    const toggleSaleExpansion = (saleId) => {
+        setExpandedSaleId(prev => prev === saleId ? null : saleId);
+        setExpandedHistoryId(null); // Close any open purchase history card
+    };
 
     const uniqueWarehouses = useMemo(() => {
         if (!warehouseData || !Array.isArray(warehouseData)) return [];
@@ -1201,10 +1222,10 @@ const StockManagement = ({
             if (showToDropdown && toDropdownRef.current && !toDropdownRef.current.contains(event.target)) {
                 setShowToDropdown(false);
             }
-            if (showWhProductDropdown && whProductDropdownRef.current && !whProductDropdownRef.current.contains(event.target)) {
+            if (showWhProductDropdown && whProductDropdownRefs.current[activeWhProductIndex] && !whProductDropdownRefs.current[activeWhProductIndex].contains(event.target)) {
                 setShowWhProductDropdown(false);
             }
-            if (showWhBrandDropdown && whBrandDropdownRef.current && !whBrandDropdownRef.current.contains(event.target)) {
+            if (showWhBrandDropdown && whBrandDropdownRefs.current[`${activeWhProductIndex}-${activeWhBrandIndex}`] && !whBrandDropdownRefs.current[`${activeWhProductIndex}-${activeWhBrandIndex}`].contains(event.target)) {
                 setShowWhBrandDropdown(false);
             }
         };
@@ -1224,7 +1245,28 @@ const StockManagement = ({
             document.removeEventListener('mousedown', handleClickOutside);
             document.removeEventListener('keydown', handleKeyDown);
         };
-    }, [showStockFilterPanel, showHistoryFilterPanel, activeDropdown, filterDropdownOpen, viewRecord]);
+    }, [showStockFilterPanel, showHistoryFilterPanel, activeDropdown, filterDropdownOpen, viewRecord, showWhDropdown, showToDropdown, showWhProductDropdown, showWhBrandDropdown, activeWhProductIndex, activeWhBrandIndex]);
+
+    // Scroll Lock Effect
+    useEffect(() => {
+        const hasActiveOverlay =
+            showStockFilterPanel ||
+            viewRecord ||
+            showStockReport ||
+            showProductHistoryReport ||
+            showAddWarehouseStockForm ||
+            showStockForm;
+
+        if (hasActiveOverlay) {
+            document.body.style.overflow = 'hidden';
+        } else {
+            document.body.style.overflow = 'unset';
+        }
+
+        return () => {
+            document.body.style.overflow = 'unset';
+        };
+    }, [showStockFilterPanel, viewRecord, showStockReport, showProductHistoryReport, showAddWarehouseStockForm, showStockForm]);
 
     // --- Helpers ---
 
@@ -1738,343 +1780,358 @@ const StockManagement = ({
     } = stockData;
 
     return (
-        <div className="space-y-6">
+        <div className="stock-management-container space-y-6">
             {(!showStockForm && !showAddWarehouseStockForm) && (
-                <div className="flex items-center justify-between gap-4">
-                    <div className="w-1/4">
-                        <h2 className="text-2xl font-bold text-gray-800">Stock Management</h2>
-                    </div>
-
-                    <div className="flex-1 max-w-md mx-auto relative group">
-                        <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
-                            <SearchIcon className="h-4 w-4 text-gray-400 group-focus-within:text-blue-500 transition-colors" />
+                <>
+                    <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4">
+                        <div className="w-full md:w-1/4">
+                            <h2 className="text-xl md:text-2xl font-bold text-gray-800 text-center md:text-left">Stock Management</h2>
                         </div>
-                        <input
-                            type="text"
-                            placeholder="Search by LC, Port, Importer, Truck or Brand..."
-                            value={stockSearchQuery}
-                            onChange={(e) => setStockSearchQuery(e.target.value)}
-                            className="block w-full pl-10 pr-4 py-2 bg-white/50 border border-gray-200 rounded-xl text-[13px] placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 focus:bg-white transition-all outline-none"
-                        />
-                    </div>
 
-                    <div className="w-1/4 flex justify-end items-center gap-2">
-                        <div className="relative">
+                        <div className="w-full md:flex-1 max-w-none md:max-w-md mx-auto relative group">
+                            <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
+                                <SearchIcon className="h-4 w-4 text-gray-400 group-focus-within:text-blue-500 transition-colors" />
+                            </div>
+                            <input
+                                type="text"
+                                placeholder="Search by LC, Port, Importer, Truck or Brand..."
+                                value={stockSearchQuery}
+                                onChange={(e) => setStockSearchQuery(e.target.value)}
+                                className="block w-full pl-10 pr-4 py-2 bg-white/50 border border-gray-200 rounded-xl text-[13px] placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 focus:bg-white transition-all outline-none"
+                            />
+                        </div>
+
+                        <div className="w-full md:w-1/4 flex items-center justify-between md:justify-end gap-2">
+                            <div className="relative flex-1 md:flex-none">
+                                <button
+                                    ref={stockFilterButtonRef}
+                                    onClick={() => setShowStockFilterPanel(!showStockFilterPanel)}
+                                    className={`w-full flex justify-center items-center gap-2 px-4 py-2 rounded-xl transition-all border ${showStockFilterPanel || Object.values(stockFilters).some(v => v !== '')
+                                        ? 'bg-blue-600 border-blue-600 text-white shadow-lg shadow-blue-500/30'
+                                        : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'
+                                        }`}
+                                >
+                                    <FunnelIcon className={`w-4 h-4 ${showStockFilterPanel || Object.values(stockFilters).some(v => v !== '') ? 'text-white' : 'text-gray-400'}`} />
+                                    <span className="text-sm font-medium">Filter</span>
+                                </button>
+
+                                {showStockFilterPanel && (
+                                    <>
+                                        {/* Backdrop for mobile */}
+                                        <div
+                                            className="md:hidden fixed inset-0 bg-black/20 backdrop-blur-sm z-[55]"
+                                            onClick={() => setShowStockFilterPanel(false)}
+                                        />
+                                        <div ref={stockFilterRef} className="fixed inset-x-4 top-24 md:absolute md:inset-auto md:right-0 md:mt-3 md:w-80 bg-white border border-gray-100 rounded-2xl shadow-2xl z-[60] p-5 animate-in fade-in zoom-in duration-200 overflow-y-auto max-h-[80vh] md:max-h-none">
+                                            <div className="flex items-center justify-between mb-6 pb-2 border-b border-gray-100">
+                                                <h4 className="font-bold text-gray-900 tracking-tight">Advance Filter</h4>
+                                                <button onClick={() => { setStockFilters({ startDate: '', endDate: '', lcNo: '', port: '', brand: '', importer: '', productName: '', category: 'Crop' }); setFilterSearchInputs({ ...filterSearchInputs, lcNoSearch: '', portSearch: '', importerSearch: '', brandSearch: '', productSearch: '', categorySearch: '' }); setShowStockFilterPanel(false); }} className="text-[11px] font-bold text-blue-600 hover:text-blue-700 uppercase tracking-widest">RESET ALL</button>
+                                            </div>
+                                            <div className="space-y-4">
+                                                <div className="grid grid-cols-2 gap-3">
+                                                    <CustomDatePicker label="From Date" value={stockFilters.startDate} onChange={(e) => setStockFilters({ ...stockFilters, startDate: e.target.value })} compact={true} />
+                                                    <CustomDatePicker label="To Date" value={stockFilters.endDate} onChange={(e) => setStockFilters({ ...stockFilters, endDate: e.target.value })} compact={true} rightAlign={true} />
+                                                </div>
+
+                                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                                    {/* LC No Filter */}
+                                                    <div className="space-y-1.5 relative" ref={stockLcNoFilterRef}>
+                                                        <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider pl-1">LC NUMBER</label>
+                                                        <div className="relative">
+                                                            <input
+                                                                type="text"
+                                                                value={filterSearchInputs.lcNoSearch}
+                                                                onChange={(e) => {
+                                                                    setFilterSearchInputs({ ...filterSearchInputs, lcNoSearch: e.target.value });
+                                                                    setFilterDropdownOpen({ ...initialFilterDropdownState, lcNo: true });
+                                                                }}
+                                                                onFocus={() => setFilterDropdownOpen({ ...initialFilterDropdownState, lcNo: true })}
+                                                                placeholder={stockFilters.lcNo || "Search LC..."}
+                                                                className={`w-full px-4 py-2.5 bg-white border border-gray-100 rounded-xl text-sm focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all shadow-sm hover:border-gray-200 pr-14 ${stockFilters.lcNo ? 'placeholder:text-gray-900 placeholder:font-semibold' : 'placeholder:text-gray-300'}`}
+                                                            />
+                                                            <div className="absolute right-3.5 top-1/2 -translate-y-1/2 flex items-center gap-2">
+                                                                {stockFilters.lcNo && (
+                                                                    <button onClick={() => { setStockFilters({ ...stockFilters, lcNo: '' }); setFilterSearchInputs({ ...filterSearchInputs, lcNoSearch: '' }); setFilterDropdownOpen(initialFilterDropdownState); }} className="text-gray-400 hover:text-gray-600">
+                                                                        <XIcon className="w-4 h-4" />
+                                                                    </button>
+                                                                )}
+                                                                <SearchIcon className="w-4.5 h-4.5 text-gray-300 pointer-events-none" />
+                                                            </div>
+                                                        </div>
+                                                        {filterDropdownOpen.lcNo && (() => {
+                                                            const options = [...new Set(stockRecords.map(r => r.lcNo).filter(Boolean))].sort();
+                                                            const filtered = options.filter(lc => lc.toLowerCase().includes(filterSearchInputs.lcNoSearch.toLowerCase()));
+                                                            return filtered.length > 0 ? (
+                                                                <div className="absolute z-[120] mt-1 w-full bg-white border border-gray-100 rounded-xl shadow-xl max-h-48 overflow-y-auto py-1">
+                                                                    {filtered.map(lc => (
+                                                                        <button
+                                                                            key={lc}
+                                                                            type="button"
+                                                                            onClick={() => { setStockFilters({ ...stockFilters, lcNo: lc }); setFilterSearchInputs({ ...filterSearchInputs, lcNoSearch: '' }); setFilterDropdownOpen(initialFilterDropdownState); }}
+                                                                            className="w-full px-4 py-2 text-left text-sm hover:bg-blue-50 transition-colors"
+                                                                        >
+                                                                            {lc}
+                                                                        </button>
+                                                                    ))}
+                                                                </div>
+                                                            ) : null;
+                                                        })()}
+                                                    </div>
+
+                                                    {/* Port Filter */}
+                                                    <div className="space-y-1.5 relative" ref={stockPortFilterRef}>
+                                                        <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider pl-1">PORT</label>
+                                                        <div className="relative">
+                                                            <input
+                                                                type="text"
+                                                                value={filterSearchInputs.portSearch}
+                                                                onChange={(e) => {
+                                                                    setFilterSearchInputs({ ...filterSearchInputs, portSearch: e.target.value });
+                                                                    setFilterDropdownOpen({ ...initialFilterDropdownState, port: true });
+                                                                }}
+                                                                onFocus={() => setFilterDropdownOpen({ ...initialFilterDropdownState, port: true })}
+                                                                placeholder={stockFilters.port || "Search Port..."}
+                                                                className={`w-full px-4 py-2.5 bg-white border border-gray-100 rounded-xl text-sm focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all shadow-sm hover:border-gray-200 pr-14 ${stockFilters.port ? 'placeholder:text-gray-900 placeholder:font-semibold' : 'placeholder:text-gray-300'}`}
+                                                            />
+                                                            <div className="absolute right-3.5 top-1/2 -translate-y-1/2 flex items-center gap-2">
+                                                                {stockFilters.port && (
+                                                                    <button onClick={() => { setStockFilters({ ...stockFilters, port: '' }); setFilterSearchInputs({ ...filterSearchInputs, portSearch: '' }); setFilterDropdownOpen(initialFilterDropdownState); }} className="text-gray-400 hover:text-gray-600">
+                                                                        <XIcon className="w-4 h-4" />
+                                                                    </button>
+                                                                )}
+                                                                <SearchIcon className="w-4.5 h-4.5 text-gray-300 pointer-events-none" />
+                                                            </div>
+                                                        </div>
+                                                        {filterDropdownOpen.port && (() => {
+                                                            const options = [...new Set(stockRecords.map(r => r.port).filter(Boolean))].sort();
+                                                            const filtered = options.filter(p => p.toLowerCase().includes(filterSearchInputs.portSearch.toLowerCase()));
+                                                            return filtered.length > 0 ? (
+                                                                <div className="absolute z-[120] mt-1 w-full bg-white border border-gray-100 rounded-xl shadow-xl max-h-48 overflow-y-auto py-1">
+                                                                    {filtered.map(p => (
+                                                                        <button
+                                                                            key={p}
+                                                                            type="button"
+                                                                            onClick={() => { setStockFilters({ ...stockFilters, port: p }); setFilterSearchInputs({ ...filterSearchInputs, portSearch: '' }); setFilterDropdownOpen(initialFilterDropdownState); }}
+                                                                            className="w-full px-4 py-2 text-left text-sm hover:bg-blue-50 transition-colors"
+                                                                        >
+                                                                            {p}
+                                                                        </button>
+                                                                    ))}
+                                                                </div>
+                                                            ) : null;
+                                                        })()}
+                                                    </div>
+                                                </div>
+
+                                                <div className="space-y-4">
+                                                    {/* Category Filter */}
+                                                    <div className="space-y-1.5 relative" ref={stockCategoryFilterRef}>
+                                                        <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider pl-1">Category</label>
+                                                        <div className="relative">
+                                                            <input
+                                                                type="text"
+                                                                value={filterSearchInputs.categorySearch}
+                                                                onChange={(e) => {
+                                                                    const val = e.target.value;
+                                                                    setFilterSearchInputs({ ...filterSearchInputs, categorySearch: val });
+                                                                    setStockFilters({ ...stockFilters, category: val });
+                                                                    setFilterDropdownOpen({ ...initialFilterDropdownState, category: true });
+                                                                }}
+                                                                onFocus={() => setFilterDropdownOpen({ ...initialFilterDropdownState, category: true })}
+                                                                placeholder={stockFilters.category || "Search Category..."}
+                                                                className={`w-full px-4 py-2.5 bg-white border border-gray-100 rounded-xl text-sm focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all shadow-sm hover:border-gray-200 pr-14 ${stockFilters.category ? 'placeholder:text-gray-900 placeholder:font-semibold' : 'placeholder:text-gray-300'}`}
+                                                            />
+                                                            <div className="absolute right-3.5 top-1/2 -translate-y-1/2 flex items-center gap-2">
+                                                                {stockFilters.category && (
+                                                                    <button onClick={() => { setStockFilters({ ...stockFilters, category: '' }); setFilterSearchInputs({ ...filterSearchInputs, categorySearch: '' }); setFilterDropdownOpen(initialFilterDropdownState); }} className="text-gray-400 hover:text-gray-600">
+                                                                        <XIcon className="w-4 h-4" />
+                                                                    </button>
+                                                                )}
+                                                                <SearchIcon className="w-4.5 h-4.5 text-gray-300 pointer-events-none" />
+                                                            </div>
+                                                        </div>
+                                                        {filterDropdownOpen.category && (() => {
+                                                            const options = [...new Set(products.map(p => p.category).filter(Boolean))].sort();
+                                                            const filtered = options.filter(c => c.toLowerCase().includes(filterSearchInputs.categorySearch.toLowerCase()));
+                                                            return filtered.length > 0 ? (
+                                                                <div className="absolute z-[120] mt-1 w-full bg-white border border-gray-100 rounded-xl shadow-xl max-h-48 overflow-y-auto py-1">
+                                                                    {filtered.map(c => (
+                                                                        <button
+                                                                            key={c}
+                                                                            type="button"
+                                                                            onClick={() => { setStockFilters({ ...stockFilters, category: c }); setFilterSearchInputs({ ...filterSearchInputs, categorySearch: '' }); setFilterDropdownOpen(initialFilterDropdownState); }}
+                                                                            className="w-full px-4 py-2 text-left text-sm hover:bg-blue-50 transition-colors"
+                                                                        >
+                                                                            {c}
+                                                                        </button>
+                                                                    ))}
+                                                                </div>
+                                                            ) : null;
+                                                        })()}
+                                                    </div>
+
+                                                    <div className="space-y-1.5 relative">
+                                                        <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider pl-1">Product Name</label>
+                                                        <div className="relative">
+                                                            <input
+                                                                type="text"
+                                                                value={filterSearchInputs.productSearch}
+                                                                onChange={(e) => {
+                                                                    const val = e.target.value;
+                                                                    setFilterSearchInputs({ ...filterSearchInputs, productSearch: val });
+                                                                    setStockFilters({ ...stockFilters, productName: val });
+                                                                    setFilterDropdownOpen({ ...initialFilterDropdownState, productName: true });
+                                                                }}
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    setFilterDropdownOpen({ ...initialFilterDropdownState, productName: !filterDropdownOpen.productName });
+                                                                }}
+                                                                placeholder="Search Product..."
+                                                                className={`w-full px-4 py-2.5 bg-white border border-gray-100 rounded-xl text-sm focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all shadow-sm ${stockFilters.productName ? 'text-gray-900 font-medium' : 'text-gray-500'}`}
+                                                            />
+                                                            <div className="absolute right-3 top-1/2 -translate-y-1/2 flex gap-1">
+                                                                {stockFilters.productName ? (
+                                                                    <button
+                                                                        onClick={(e) => {
+                                                                            e.stopPropagation();
+                                                                            setStockFilters({ ...stockFilters, productName: '' });
+                                                                            setFilterSearchInputs({ ...filterSearchInputs, productSearch: '' });
+                                                                            setFilterDropdownOpen(initialFilterDropdownState);
+                                                                        }}
+                                                                        className="text-gray-400 hover:text-red-500 transition-colors bg-white p-0.5"
+                                                                    >
+                                                                        <XIcon className="w-4 h-4" />
+                                                                    </button>
+                                                                ) : null}
+                                                                <SearchIcon className="w-4.5 h-4.5 text-gray-300 pointer-events-none" />
+                                                            </div>
+                                                        </div>
+                                                        {filterDropdownOpen.productName && (() => {
+                                                            let options = getFilteredProducts(filterSearchInputs.productSearch);
+                                                            if (stockFilters.category) {
+                                                                options = options.filter(p => (p.category || '').toLowerCase() === stockFilters.category.toLowerCase());
+                                                            }
+                                                            return options.length > 0 ? (
+                                                                <div className="absolute z-[120] mt-1 w-full bg-white border border-gray-100 rounded-xl shadow-xl max-h-48 overflow-y-auto py-1">
+                                                                    {options.map(product => (
+                                                                        <button
+                                                                            key={product._id || product.name}
+                                                                            type="button"
+                                                                            onClick={() => { setStockFilters({ ...stockFilters, productName: product.name }); setFilterSearchInputs({ ...filterSearchInputs, productSearch: product.name }); setFilterDropdownOpen(initialFilterDropdownState); }}
+                                                                            className="w-full px-4 py-2 text-left text-sm hover:bg-blue-50 transition-colors"
+                                                                        >
+                                                                            {product.name}
+                                                                        </button>
+                                                                    ))}
+                                                                </div>
+                                                            ) : null;
+                                                        })()}
+                                                    </div>
+
+                                                    <div className="space-y-1.5 relative">
+                                                        <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider pl-1">Brand</label>
+                                                        <div className="relative">
+                                                            <input
+                                                                type="text"
+                                                                value={filterSearchInputs.brandSearch}
+                                                                onChange={(e) => {
+                                                                    const val = e.target.value;
+                                                                    setFilterSearchInputs({ ...filterSearchInputs, brandSearch: val });
+                                                                    setStockFilters({ ...stockFilters, brand: val });
+                                                                    setFilterDropdownOpen({ ...initialFilterDropdownState, brand: true });
+                                                                }}
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    setFilterDropdownOpen({ ...initialFilterDropdownState, brand: !filterDropdownOpen.brand });
+                                                                }}
+                                                                placeholder="Search Brand..."
+                                                                className={`w-full px-4 py-2.5 bg-white border border-gray-100 rounded-xl text-sm focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all shadow-sm ${stockFilters.brand ? 'text-gray-900 font-medium' : 'text-gray-500'}`}
+                                                                disabled={!stockFilters.productName}
+                                                            />
+                                                            <div className="absolute right-3 top-1/2 -translate-y-1/2 flex gap-1">
+                                                                {stockFilters.brand ? (
+                                                                    <button
+                                                                        onClick={(e) => {
+                                                                            e.stopPropagation();
+                                                                            setStockFilters({ ...stockFilters, brand: '' });
+                                                                            setFilterSearchInputs({ ...filterSearchInputs, brandSearch: '' });
+                                                                            setFilterDropdownOpen(initialFilterDropdownState);
+                                                                        }}
+                                                                        className="text-gray-400 hover:text-red-500 transition-colors bg-white p-0.5"
+                                                                    >
+                                                                        <XIcon className="w-4 h-4" />
+                                                                    </button>
+                                                                ) : null}
+                                                                <SearchIcon className="w-4.5 h-4.5 text-gray-300 pointer-events-none" />
+                                                            </div>
+                                                        </div>
+                                                        {filterDropdownOpen.brand && (() => {
+                                                            const options = getFilteredBrands(filterSearchInputs.brandSearch, stockFilters.productName);
+                                                            return options.length > 0 ? (
+                                                                <div className="absolute z-[120] mt-1 w-full bg-white border border-gray-100 rounded-xl shadow-xl max-h-48 overflow-y-auto py-1">
+                                                                    {options.map(brand => (
+                                                                        <button
+                                                                            key={brand}
+                                                                            type="button"
+                                                                            onClick={() => { setStockFilters({ ...stockFilters, brand }); setFilterSearchInputs({ ...filterSearchInputs, brandSearch: '' }); setFilterDropdownOpen(initialFilterDropdownState); }}
+                                                                            className="w-full px-4 py-2 text-left text-sm hover:bg-blue-50 transition-colors"
+                                                                        >
+                                                                            {brand}
+                                                                        </button>
+                                                                    ))}
+                                                                </div>
+                                                            ) : null;
+                                                        })()}
+                                                    </div>
+                                                </div>
+
+                                                <div className="mt-6 pt-4 border-t border-gray-50 flex md:hidden">
+                                                    <button
+                                                        onClick={() => setShowStockFilterPanel(false)}
+                                                        className="w-full py-3 bg-blue-600 text-white rounded-xl font-bold shadow-lg shadow-blue-500/30 active:scale-95 transition-all"
+                                                    >
+                                                        Apply Filters
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </>
+                                )}
+                            </div>
                             <button
-                                ref={stockFilterButtonRef}
-                                onClick={() => setShowStockFilterPanel(!showStockFilterPanel)}
-                                className={`flex items-center gap-2 px-4 py-2 rounded-xl transition-all border ${showStockFilterPanel || Object.values(stockFilters).some(v => v !== '')
-                                    ? 'bg-blue-600 border-blue-600 text-white shadow-lg shadow-blue-500/30'
-                                    : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'
-                                    }`}
+                                onClick={() => setShowStockReport(true)}
+                                className="flex-1 md:flex-none flex items-center justify-center gap-2 px-3 py-2 md:px-4 bg-white border border-gray-200 text-gray-600 rounded-xl hover:bg-gray-50 hover:border-gray-300 transition-all shadow-sm active:scale-95 text-sm font-medium"
                             >
-                                <FunnelIcon className={`w-4 h-4 ${showStockFilterPanel || Object.values(stockFilters).some(v => v !== '') ? 'text-white' : 'text-gray-400'}`} />
-                                <span className="text-sm font-medium">Filter</span>
+                                <BarChartIcon className="w-4 h-4 text-gray-400" />
+                                <span>Report</span>
                             </button>
-
-                            {showStockFilterPanel && (
-                                <div ref={stockFilterRef} className="absolute right-0 mt-3 w-80 bg-white/95 backdrop-blur-2xl border border-gray-100 rounded-2xl shadow-2xl z-[60] p-5 animate-in fade-in zoom-in duration-200">
-                                    <div className="flex items-center justify-between mb-6 pb-2 border-b border-gray-100">
-                                        <h4 className="font-bold text-gray-900 tracking-tight">Advance Filter</h4>
-                                        <button onClick={() => { setStockFilters({ startDate: '', endDate: '', lcNo: '', port: '', brand: '', importer: '', productName: '', category: 'Crop' }); setFilterSearchInputs({ ...filterSearchInputs, lcNoSearch: '', portSearch: '', importerSearch: '', brandSearch: '', productSearch: '', categorySearch: '' }); setShowStockFilterPanel(false); }} className="text-[11px] font-bold text-blue-600 hover:text-blue-700 uppercase tracking-widest">RESET ALL</button>
-                                    </div>
-                                    <div className="space-y-4">
-                                        <div className="grid grid-cols-2 gap-3">
-                                            <CustomDatePicker label="From Date" value={stockFilters.startDate} onChange={(e) => setStockFilters({ ...stockFilters, startDate: e.target.value })} compact={true} />
-                                            <CustomDatePicker label="To Date" value={stockFilters.endDate} onChange={(e) => setStockFilters({ ...stockFilters, endDate: e.target.value })} compact={true} rightAlign={true} />
-                                        </div>
-
-                                        <div className="grid grid-cols-2 gap-4">
-                                            {/* LC No Filter */}
-                                            <div className="space-y-1.5 relative" ref={stockLcNoFilterRef}>
-                                                <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider pl-1">LC NUMBER</label>
-                                                <div className="relative">
-                                                    <input
-                                                        type="text"
-                                                        value={filterSearchInputs.lcNoSearch}
-                                                        onChange={(e) => {
-                                                            setFilterSearchInputs({ ...filterSearchInputs, lcNoSearch: e.target.value });
-                                                            setFilterDropdownOpen({ ...initialFilterDropdownState, lcNo: true });
-                                                        }}
-                                                        onFocus={() => setFilterDropdownOpen({ ...initialFilterDropdownState, lcNo: true })}
-                                                        placeholder={stockFilters.lcNo || "Search LC..."}
-                                                        className={`w-full px-4 py-2.5 bg-white border border-gray-100 rounded-xl text-sm focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all shadow-sm hover:border-gray-200 pr-14 ${stockFilters.lcNo ? 'placeholder:text-gray-900 placeholder:font-semibold' : 'placeholder:text-gray-300'}`}
-                                                    />
-                                                    <div className="absolute right-3.5 top-1/2 -translate-y-1/2 flex items-center gap-2">
-                                                        {stockFilters.lcNo && (
-                                                            <button onClick={() => { setStockFilters({ ...stockFilters, lcNo: '' }); setFilterSearchInputs({ ...filterSearchInputs, lcNoSearch: '' }); setFilterDropdownOpen(initialFilterDropdownState); }} className="text-gray-400 hover:text-gray-600">
-                                                                <XIcon className="w-4 h-4" />
-                                                            </button>
-                                                        )}
-                                                        <SearchIcon className="w-4.5 h-4.5 text-gray-300 pointer-events-none" />
-                                                    </div>
-                                                </div>
-                                                {filterDropdownOpen.lcNo && (() => {
-                                                    const options = [...new Set(stockRecords.map(r => r.lcNo).filter(Boolean))].sort();
-                                                    const filtered = options.filter(lc => lc.toLowerCase().includes(filterSearchInputs.lcNoSearch.toLowerCase()));
-                                                    return filtered.length > 0 ? (
-                                                        <div className="absolute z-[120] mt-1 w-full bg-white border border-gray-100 rounded-xl shadow-xl max-h-48 overflow-y-auto py-1">
-                                                            {filtered.map(lc => (
-                                                                <button
-                                                                    key={lc}
-                                                                    type="button"
-                                                                    onClick={() => { setStockFilters({ ...stockFilters, lcNo: lc }); setFilterSearchInputs({ ...filterSearchInputs, lcNoSearch: '' }); setFilterDropdownOpen(initialFilterDropdownState); }}
-                                                                    className="w-full px-4 py-2 text-left text-sm hover:bg-blue-50 transition-colors"
-                                                                >
-                                                                    {lc}
-                                                                </button>
-                                                            ))}
-                                                        </div>
-                                                    ) : null;
-                                                })()}
-                                            </div>
-
-                                            {/* Port Filter */}
-                                            <div className="space-y-1.5 relative" ref={stockPortFilterRef}>
-                                                <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider pl-1">PORT</label>
-                                                <div className="relative">
-                                                    <input
-                                                        type="text"
-                                                        value={filterSearchInputs.portSearch}
-                                                        onChange={(e) => {
-                                                            setFilterSearchInputs({ ...filterSearchInputs, portSearch: e.target.value });
-                                                            setFilterDropdownOpen({ ...initialFilterDropdownState, port: true });
-                                                        }}
-                                                        onFocus={() => setFilterDropdownOpen({ ...initialFilterDropdownState, port: true })}
-                                                        placeholder={stockFilters.port || "Search Port..."}
-                                                        className={`w-full px-4 py-2.5 bg-white border border-gray-100 rounded-xl text-sm focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all shadow-sm hover:border-gray-200 pr-14 ${stockFilters.port ? 'placeholder:text-gray-900 placeholder:font-semibold' : 'placeholder:text-gray-300'}`}
-                                                    />
-                                                    <div className="absolute right-3.5 top-1/2 -translate-y-1/2 flex items-center gap-2">
-                                                        {stockFilters.port && (
-                                                            <button onClick={() => { setStockFilters({ ...stockFilters, port: '' }); setFilterSearchInputs({ ...filterSearchInputs, portSearch: '' }); setFilterDropdownOpen(initialFilterDropdownState); }} className="text-gray-400 hover:text-gray-600">
-                                                                <XIcon className="w-4 h-4" />
-                                                            </button>
-                                                        )}
-                                                        <SearchIcon className="w-4.5 h-4.5 text-gray-300 pointer-events-none" />
-                                                    </div>
-                                                </div>
-                                                {filterDropdownOpen.port && (() => {
-                                                    const options = [...new Set(stockRecords.map(r => r.port).filter(Boolean))].sort();
-                                                    const filtered = options.filter(p => p.toLowerCase().includes(filterSearchInputs.portSearch.toLowerCase()));
-                                                    return filtered.length > 0 ? (
-                                                        <div className="absolute z-[120] mt-1 w-full bg-white border border-gray-100 rounded-xl shadow-xl max-h-48 overflow-y-auto py-1">
-                                                            {filtered.map(p => (
-                                                                <button
-                                                                    key={p}
-                                                                    type="button"
-                                                                    onClick={() => { setStockFilters({ ...stockFilters, port: p }); setFilterSearchInputs({ ...filterSearchInputs, portSearch: '' }); setFilterDropdownOpen(initialFilterDropdownState); }}
-                                                                    className="w-full px-4 py-2 text-left text-sm hover:bg-blue-50 transition-colors"
-                                                                >
-                                                                    {p}
-                                                                </button>
-                                                            ))}
-                                                        </div>
-                                                    ) : null;
-                                                })()}
-                                            </div>
-                                        </div>
-
-                                        <div className="space-y-4">
-                                            {/* Category Filter */}
-                                            <div className="space-y-1.5 relative" ref={stockCategoryFilterRef}>
-                                                <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider pl-1">Category</label>
-                                                <div className="relative">
-                                                    <input
-                                                        type="text"
-                                                        value={filterSearchInputs.categorySearch}
-                                                        onChange={(e) => {
-                                                            const val = e.target.value;
-                                                            setFilterSearchInputs({ ...filterSearchInputs, categorySearch: val });
-                                                            setStockFilters({ ...stockFilters, category: val });
-                                                            setFilterDropdownOpen({ ...initialFilterDropdownState, category: true });
-                                                        }}
-                                                        onFocus={() => setFilterDropdownOpen({ ...initialFilterDropdownState, category: true })}
-                                                        placeholder={stockFilters.category || "Search Category..."}
-                                                        className={`w-full px-4 py-2.5 bg-white border border-gray-100 rounded-xl text-sm focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all shadow-sm hover:border-gray-200 pr-14 ${stockFilters.category ? 'placeholder:text-gray-900 placeholder:font-semibold' : 'placeholder:text-gray-300'}`}
-                                                    />
-                                                    <div className="absolute right-3.5 top-1/2 -translate-y-1/2 flex items-center gap-2">
-                                                        {stockFilters.category && (
-                                                            <button onClick={() => { setStockFilters({ ...stockFilters, category: '' }); setFilterSearchInputs({ ...filterSearchInputs, categorySearch: '' }); setFilterDropdownOpen(initialFilterDropdownState); }} className="text-gray-400 hover:text-gray-600">
-                                                                <XIcon className="w-4 h-4" />
-                                                            </button>
-                                                        )}
-                                                        <SearchIcon className="w-4.5 h-4.5 text-gray-300 pointer-events-none" />
-                                                    </div>
-                                                </div>
-                                                {filterDropdownOpen.category && (() => {
-                                                    const options = [...new Set(products.map(p => p.category).filter(Boolean))].sort();
-                                                    const filtered = options.filter(c => c.toLowerCase().includes(filterSearchInputs.categorySearch.toLowerCase()));
-                                                    return filtered.length > 0 ? (
-                                                        <div className="absolute z-[120] mt-1 w-full bg-white border border-gray-100 rounded-xl shadow-xl max-h-48 overflow-y-auto py-1">
-                                                            {filtered.map(c => (
-                                                                <button
-                                                                    key={c}
-                                                                    type="button"
-                                                                    onClick={() => { setStockFilters({ ...stockFilters, category: c }); setFilterSearchInputs({ ...filterSearchInputs, categorySearch: '' }); setFilterDropdownOpen(initialFilterDropdownState); }}
-                                                                    className="w-full px-4 py-2 text-left text-sm hover:bg-blue-50 transition-colors"
-                                                                >
-                                                                    {c}
-                                                                </button>
-                                                            ))}
-                                                        </div>
-                                                    ) : null;
-                                                })()}
-                                            </div>
-
-                                            <div className="space-y-1.5 relative">
-                                                <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider pl-1">Product Name</label>
-                                                <div className="relative">
-                                                    <input
-                                                        type="text"
-                                                        value={filterSearchInputs.productSearch}
-                                                        onChange={(e) => {
-                                                            const val = e.target.value;
-                                                            setFilterSearchInputs({ ...filterSearchInputs, productSearch: val });
-                                                            setStockFilters({ ...stockFilters, productName: val });
-                                                            setFilterDropdownOpen({ ...initialFilterDropdownState, productName: true });
-                                                        }}
-                                                        onClick={(e) => {
-                                                            e.stopPropagation();
-                                                            setFilterDropdownOpen({ ...initialFilterDropdownState, productName: !filterDropdownOpen.productName });
-                                                        }}
-                                                        placeholder="Search Product..."
-                                                        className={`w-full px-4 py-2.5 bg-white border border-gray-100 rounded-xl text-sm focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all shadow-sm ${stockFilters.productName ? 'text-gray-900 font-medium' : 'text-gray-500'}`}
-                                                    />
-                                                    <div className="absolute right-3 top-1/2 -translate-y-1/2 flex gap-1">
-                                                        {stockFilters.productName ? (
-                                                            <button
-                                                                onClick={(e) => {
-                                                                    e.stopPropagation();
-                                                                    setStockFilters({ ...stockFilters, productName: '' });
-                                                                    setFilterSearchInputs({ ...filterSearchInputs, productSearch: '' });
-                                                                    setFilterDropdownOpen(initialFilterDropdownState);
-                                                                }}
-                                                                className="text-gray-400 hover:text-red-500 transition-colors bg-white p-0.5"
-                                                            >
-                                                                <XIcon className="w-4 h-4" />
-                                                            </button>
-                                                        ) : null}
-                                                        <SearchIcon className="w-4.5 h-4.5 text-gray-300 pointer-events-none" />
-                                                    </div>
-                                                </div>
-                                                {filterDropdownOpen.productName && (() => {
-                                                    let options = getFilteredProducts(filterSearchInputs.productSearch);
-                                                    if (stockFilters.category) {
-                                                        options = options.filter(p => (p.category || '').toLowerCase() === stockFilters.category.toLowerCase());
-                                                    }
-                                                    return options.length > 0 ? (
-                                                        <div className="absolute z-[120] mt-1 w-full bg-white border border-gray-100 rounded-xl shadow-xl max-h-48 overflow-y-auto py-1">
-                                                            {options.map(product => (
-                                                                <button
-                                                                    key={product._id || product.name}
-                                                                    type="button"
-                                                                    onClick={() => { setStockFilters({ ...stockFilters, productName: product.name }); setFilterSearchInputs({ ...filterSearchInputs, productSearch: product.name }); setFilterDropdownOpen(initialFilterDropdownState); }}
-                                                                    className="w-full px-4 py-2 text-left text-sm hover:bg-blue-50 transition-colors"
-                                                                >
-                                                                    {product.name}
-                                                                </button>
-                                                            ))}
-                                                        </div>
-                                                    ) : null;
-                                                })()}
-                                            </div>
-
-                                            <div className="space-y-1.5 relative">
-                                                <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider pl-1">Brand</label>
-                                                <div className="relative">
-                                                    <input
-                                                        type="text"
-                                                        value={filterSearchInputs.brandSearch}
-                                                        onChange={(e) => {
-                                                            const val = e.target.value;
-                                                            setFilterSearchInputs({ ...filterSearchInputs, brandSearch: val });
-                                                            setStockFilters({ ...stockFilters, brand: val });
-                                                            setFilterDropdownOpen({ ...initialFilterDropdownState, brand: true });
-                                                        }}
-                                                        onClick={(e) => {
-                                                            e.stopPropagation();
-                                                            setFilterDropdownOpen({ ...initialFilterDropdownState, brand: !filterDropdownOpen.brand });
-                                                        }}
-                                                        placeholder="Search Brand..."
-                                                        className={`w-full px-4 py-2.5 bg-white border border-gray-100 rounded-xl text-sm focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all shadow-sm ${stockFilters.brand ? 'text-gray-900 font-medium' : 'text-gray-500'}`}
-                                                        disabled={!stockFilters.productName}
-                                                    />
-                                                    <div className="absolute right-3 top-1/2 -translate-y-1/2 flex gap-1">
-                                                        {stockFilters.brand ? (
-                                                            <button
-                                                                onClick={(e) => {
-                                                                    e.stopPropagation();
-                                                                    setStockFilters({ ...stockFilters, brand: '' });
-                                                                    setFilterSearchInputs({ ...filterSearchInputs, brandSearch: '' });
-                                                                    setFilterDropdownOpen(initialFilterDropdownState);
-                                                                }}
-                                                                className="text-gray-400 hover:text-red-500 transition-colors bg-white p-0.5"
-                                                            >
-                                                                <XIcon className="w-4 h-4" />
-                                                            </button>
-                                                        ) : null}
-                                                        <SearchIcon className="w-4.5 h-4.5 text-gray-300 pointer-events-none" />
-                                                    </div>
-                                                </div>
-                                                {filterDropdownOpen.brand && (() => {
-                                                    const options = getFilteredBrands(filterSearchInputs.brandSearch, stockFilters.productName);
-                                                    return options.length > 0 ? (
-                                                        <div className="absolute z-[120] mt-1 w-full bg-white border border-gray-100 rounded-xl shadow-xl max-h-48 overflow-y-auto py-1">
-                                                            {options.map(brand => (
-                                                                <button
-                                                                    key={brand}
-                                                                    type="button"
-                                                                    onClick={() => { setStockFilters({ ...stockFilters, brand }); setFilterSearchInputs({ ...filterSearchInputs, brandSearch: '' }); setFilterDropdownOpen(initialFilterDropdownState); }}
-                                                                    className="w-full px-4 py-2 text-left text-sm hover:bg-blue-50 transition-colors"
-                                                                >
-                                                                    {brand}
-                                                                </button>
-                                                            ))}
-                                                        </div>
-                                                    ) : null;
-                                                })()}
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                            )}
+                            <button
+                                onClick={() => setShowAddWarehouseStockForm(true)}
+                                className="flex-1 md:flex-none flex items-center justify-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl hover:from-blue-700 hover:to-indigo-700 transition-all duration-200 shadow-lg shadow-blue-500/20 active:scale-95 font-bold text-sm"
+                            >
+                                <PlusIcon className="w-5 h-5 text-white/90" />
+                                <span>Transfer</span>
+                            </button>
                         </div>
-                        <button
-                            onClick={() => setShowStockReport(true)}
-                            className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 text-gray-600 rounded-xl hover:bg-gray-50 hover:border-gray-300 transition-all shadow-sm active:scale-95"
-                        >
-                            <BarChartIcon className="w-4 h-4 text-gray-400" />
-                            <span className="text-sm font-medium">Report</span>
-                        </button>
-                        <button
-                            onClick={() => setShowAddWarehouseStockForm(true)}
-                            className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl hover:from-blue-700 hover:to-indigo-700 transition-all duration-200 shadow-lg shadow-blue-500/30 hover:scale-105 font-medium"
-                        >
-                            <PlusIcon className="w-5 h-5 mr-1" />
-                            <span className="text-sm font-medium">Transfer</span>
-                        </button>
                     </div>
-                </div>
-            )}
-
-            {/* Summary Cards */}
-            {(!showStockForm && !showAddWarehouseStockForm) && (
-                <div className="grid grid-cols-1 md:grid-cols-7 gap-4">
-                    {[
-                        { label: 'TOTAL PACKET', value: Math.round(totalPackets).toLocaleString(), bgColor: 'bg-blue-50/50', borderColor: 'border-blue-100', textColor: 'text-blue-700', labelColor: 'text-blue-600' },
-                        { label: 'TOTAL QUANTITY', value: `${Math.round(totalQuantity).toLocaleString()} ${unit}`, bgColor: 'bg-blue-50/50', borderColor: 'border-blue-100', textColor: 'text-blue-700', labelColor: 'text-blue-600' },
-                        { label: 'TOTAL SALE PKT', value: `${(totalSalePktWhole || 0).toLocaleString()} - ${(totalSalePktDecimalKg || 0).toLocaleString()} kg`, bgColor: 'bg-orange-50/50', borderColor: 'border-orange-100', textColor: 'text-orange-700', labelColor: 'text-orange-600' },
-                        { label: 'TOTAL SALE QTY', value: `${Math.round(totalSaleQty).toLocaleString()} ${unit}`, bgColor: 'bg-orange-50/50', borderColor: 'border-orange-100', textColor: 'text-orange-700', labelColor: 'text-orange-600' },
-                        { label: 'INHOUSE PKT', value: `${(totalInHousePktWhole || 0).toLocaleString()} - ${Math.round(totalInHousePktDecimalKg || 0).toLocaleString()} kg`, bgColor: 'bg-emerald-50/50', borderColor: 'border-emerald-100', textColor: 'text-emerald-700', labelColor: 'text-emerald-600' },
-                        { label: 'INHOUSE QTY', value: `${Math.round(totalInHouseQty).toLocaleString()} ${unit}`, bgColor: 'bg-emerald-50/50', borderColor: 'border-emerald-100', textColor: 'text-emerald-700', labelColor: 'text-emerald-600' },
-                        { label: 'SHORTAGE', value: `${Math.round(totalShortage).toLocaleString()} ${unit}`, bgColor: 'bg-rose-50/50', borderColor: 'border-rose-100', textColor: 'text-rose-700', labelColor: 'text-rose-600' },
-                    ].map((card, i) => (
-                        <div key={i} className={`bg-white border ${card.bgColor} ${card.borderColor} p-4 rounded-xl shadow-sm transition-all hover:shadow-md`}>
-                            <div className={`text-[11px] font-bold ${card.labelColor} uppercase tracking-wider mb-1`}>{card.label}</div>
-                            <div className={`text-xl font-bold ${card.textColor}`}>{card.value}</div>
-                        </div>
-                    ))}
-                </div>
+                    {/* Summary Cards */}
+                    <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3 md:gap-4 mb-4 md:mb-0">
+                        {[
+                            { label: 'TOTAL PACKET', value: Math.round(totalPackets).toLocaleString(), bgColor: 'bg-blue-50/50', borderColor: 'border-blue-100', textColor: 'text-blue-700', labelColor: 'text-blue-600' },
+                            { label: 'TOTAL QUANTITY', value: `${Math.round(totalQuantity).toLocaleString()} ${unit}`, bgColor: 'bg-blue-50/50', borderColor: 'border-blue-100', textColor: 'text-blue-700', labelColor: 'text-blue-600' },
+                            { label: 'TOTAL SALE PKT', value: `${(totalSalePktWhole || 0).toLocaleString()} - ${(totalSalePktDecimalKg || 0).toLocaleString()} kg`, bgColor: 'bg-orange-50/50', borderColor: 'border-orange-100', textColor: 'text-orange-700', labelColor: 'text-orange-600' },
+                            { label: 'TOTAL SALE QTY', value: `${Math.round(totalSaleQty).toLocaleString()} ${unit}`, bgColor: 'bg-orange-50/50', borderColor: 'border-orange-100', textColor: 'text-orange-700', labelColor: 'text-orange-600' },
+                            { label: 'INHOUSE PKT', value: `${(totalInHousePktWhole || 0).toLocaleString()} - ${Math.round(totalInHousePktDecimalKg || 0).toLocaleString()} kg`, bgColor: 'bg-emerald-50/50', borderColor: 'border-emerald-100', textColor: 'text-emerald-700', labelColor: 'text-emerald-600' },
+                            { label: 'INHOUSE QTY', value: `${Math.round(totalInHouseQty).toLocaleString()} ${unit}`, bgColor: 'bg-emerald-50/50', borderColor: 'border-emerald-100', textColor: 'text-emerald-700', labelColor: 'text-emerald-600' },
+                            { label: 'SHORTAGE', value: `${Math.round(totalShortage).toLocaleString()} ${unit}`, bgColor: 'bg-rose-50/50', borderColor: 'border-rose-100', textColor: 'text-rose-700', labelColor: 'text-rose-600' },
+                        ].map((card, i) => (
+                            <div key={i} className={`bg-white border ${card.bgColor} ${card.borderColor} p-3 md:p-4 rounded-xl shadow-sm transition-all hover:shadow-md ${i === 6 ? 'col-span-2 md:col-span-1' : ''}`}>
+                                <div className={`text-[10px] md:text-[11px] font-bold ${card.labelColor} uppercase tracking-wider mb-0.5 md:mb-1 whitespace-nowrap`}>{card.label}</div>
+                                <div className={`text-sm md:text-xl font-bold ${card.textColor} truncate`} title={card.value}>{card.value}</div>
+                            </div>
+                        ))}
+                    </div>
+                </>
             )}
 
             {/* Add Stock to Warehouse Form Card */}
@@ -2085,8 +2142,8 @@ const StockManagement = ({
 
                     <div className="warehouse-form-header">
                         <div>
-                            <h3 className="warehouse-form-title text-blue-900">Transfer Product to Warehouse</h3>
-                            <p className="text-sm text-gray-500">Record a new stock transfer or direct entry to warehouse</p>
+                            <h3 className="warehouse-form-title">Transfer Product to Warehouse</h3>
+                            <p className="text-[12px] md:text-sm text-gray-500">Record a new stock transfer or direct entry to warehouse</p>
                         </div>
                         <button onClick={() => setShowAddWarehouseStockForm(false)} className="warehouse-form-close hover:bg-blue-50 hover:text-blue-600">
                             <XIcon className="w-6 h-6" />
@@ -2094,7 +2151,7 @@ const StockManagement = ({
                     </div>
 
                     <form onSubmit={handleAddWarehouseStockSubmit} className="relative z-10 space-y-6">
-                        <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+                        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 md:gap-6">
                             <div className="space-y-2 relative" ref={whDropdownRef}>
                                 <label className="text-sm font-bold text-gray-700 ml-1">From</label>
                                 <div className="relative group">
@@ -2190,7 +2247,7 @@ const StockManagement = ({
                             </div>
                         </div>
 
-                        <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+                        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 md:gap-6">
                             <div className="space-y-2 relative" ref={toDropdownRef}>
                                 <label className="text-sm font-bold text-gray-700 ml-1">To</label>
                                 <div className="relative group">
@@ -2311,14 +2368,14 @@ const StockManagement = ({
                                             <button
                                                 type="button"
                                                 onClick={() => removeWarehouseProductEntry(pIndex)}
-                                                className="absolute -top-3 -right-3 p-2 bg-white text-gray-400 hover:text-red-500 rounded-xl shadow-lg border border-gray-100 opacity-0 group-hover/product:opacity-100 transition-all duration-300 hover:scale-110 active:scale-90 z-20"
+                                                className="absolute -top-3 -right-3 p-2 bg-white text-red-400 hover:text-red-500 rounded-xl shadow-lg border border-gray-100 opacity-100 md:opacity-0 md:group-hover/product:opacity-100 transition-all duration-300 hover:scale-110 active:scale-90 z-20"
                                             >
                                                 <TrashIcon className="w-4 h-4" />
                                             </button>
                                         )}
 
                                         <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-                                            <div className="space-y-2 relative" ref={whProductDropdownRef}>
+                                            <div className="space-y-2 relative" ref={el => whProductDropdownRefs.current[pIndex] = el}>
                                                 <label className="text-sm font-bold text-gray-700 ml-1">Product</label>
                                                 <div className="relative">
                                                     <input
@@ -2374,9 +2431,10 @@ const StockManagement = ({
                                             </div>
 
                                             {product.brandEntries.map((brandEntry, bIndex) => (
-                                                <div key={bIndex} className="flex items-center gap-4 p-3 bg-white/40 border border-gray-200/50 rounded-xl group/brand hover:border-blue-200 transition-all">
-                                                    <div className="flex-1 grid grid-cols-8 gap-4 items-center">
-                                                        <div className="col-span-2 relative" ref={whBrandDropdownRef}>
+                                                <div key={bIndex} className="flex flex-col lg:flex-row items-center gap-4 p-4 lg:p-3 bg-white/40 border border-gray-200/50 rounded-xl group/brand hover:border-blue-200 transition-all">
+                                                    <div className="flex-1 w-full grid grid-cols-1 lg:grid-cols-8 gap-4 items-center">
+                                                        <div className="lg:col-span-2 relative" ref={el => whBrandDropdownRefs.current[`${pIndex}-${bIndex}`] = el}>
+                                                            <label className="block lg:hidden text-xs font-bold text-gray-500 mb-1">Brand</label>
                                                             <input
                                                                 type="text"
                                                                 name="brand"
@@ -2417,80 +2475,102 @@ const StockManagement = ({
                                                             )}
                                                         </div>
 
-                                                        <input
-                                                            type="number"
-                                                            name="inhouseQty"
-                                                            value={brandEntry.inhouseQty}
-                                                            onChange={(e) => handleAddWarehouseStockInputChange(e, pIndex, bIndex)}
-                                                            placeholder="0"
-                                                            className="w-full px-2 py-2 bg-gray-50/50 border border-gray-100 rounded-lg text-sm text-center font-mono outline-none focus:border-blue-400"
-                                                            required
-                                                            readOnly
-                                                        />
-                                                        <input
-                                                            type="number"
-                                                            name="inhousePkt"
-                                                            value={brandEntry.inhousePkt}
-                                                            onChange={(e) => handleAddWarehouseStockInputChange(e, pIndex, bIndex)}
-                                                            placeholder="0"
-                                                            className="w-full px-2 py-2 bg-gray-50/50 border border-gray-100 rounded-lg text-sm text-center font-mono outline-none focus:border-blue-400"
-                                                            required
-                                                            readOnly
-                                                        />
-                                                        <input
-                                                            type="number"
-                                                            name="whQty"
-                                                            value={brandEntry.whQty}
-                                                            onChange={(e) => handleAddWarehouseStockInputChange(e, pIndex, bIndex)}
-                                                            placeholder="0"
-                                                            className="w-full px-2 py-2 bg-gray-50/50 border border-gray-100 rounded-lg text-sm text-center font-mono outline-none focus:border-blue-400"
-                                                            required
-                                                            readOnly
-                                                        />
-                                                        <input
-                                                            type="number"
-                                                            name="whPkt"
-                                                            value={brandEntry.whPkt}
-                                                            onChange={(e) => handleAddWarehouseStockInputChange(e, pIndex, bIndex)}
-                                                            placeholder="0"
-                                                            className="w-full px-2 py-2 bg-gray-50/50 border border-gray-100 rounded-lg text-sm text-center font-mono outline-none focus:border-blue-400"
-                                                            required
-                                                            readOnly
-                                                        />
-                                                        <input
-                                                            type="number"
-                                                            name="transferQty"
-                                                            value={brandEntry.transferQty}
-                                                            onChange={(e) => handleAddWarehouseStockInputChange(e, pIndex, bIndex)}
-                                                            placeholder="0"
-                                                            className="w-full px-2 py-2 bg-white border border-indigo-100 rounded-lg text-sm text-center font-mono outline-none focus:border-indigo-400"
-                                                            required
-                                                        />
-                                                        <input
-                                                            type="number"
-                                                            name="transferPkt"
-                                                            value={brandEntry.transferPkt}
-                                                            onChange={(e) => handleAddWarehouseStockInputChange(e, pIndex, bIndex)}
-                                                            placeholder="0"
-                                                            className="w-full px-2 py-2 bg-white border border-indigo-100 rounded-lg text-sm text-center font-mono outline-none focus:border-indigo-400"
-                                                            required
-                                                        />
+                                                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-3 lg:col-span-6">
+                                                            <div>
+                                                                <label className="block lg:hidden text-xs font-bold text-gray-500 mb-1">InHouse QTY</label>
+                                                                <input
+                                                                    type="number"
+                                                                    name="inhouseQty"
+                                                                    value={brandEntry.inhouseQty}
+                                                                    onChange={(e) => handleAddWarehouseStockInputChange(e, pIndex, bIndex)}
+                                                                    placeholder="0"
+                                                                    className="w-full px-2 py-2 bg-gray-50/50 border border-gray-100 rounded-lg text-sm text-center font-mono outline-none focus:border-blue-400"
+                                                                    required
+                                                                    readOnly
+                                                                />
+                                                            </div>
+                                                            <div>
+                                                                <label className="block lg:hidden text-xs font-bold text-gray-500 mb-1">InHouse PKT</label>
+                                                                <input
+                                                                    type="number"
+                                                                    name="inhousePkt"
+                                                                    value={brandEntry.inhousePkt}
+                                                                    onChange={(e) => handleAddWarehouseStockInputChange(e, pIndex, bIndex)}
+                                                                    placeholder="0"
+                                                                    className="w-full px-2 py-2 bg-gray-50/50 border border-gray-100 rounded-lg text-sm text-center font-mono outline-none focus:border-blue-400"
+                                                                    required
+                                                                    readOnly
+                                                                />
+                                                            </div>
+                                                            <div>
+                                                                <label className="block lg:hidden text-xs font-bold text-gray-500 mb-1">Warehouse QTY</label>
+                                                                <input
+                                                                    type="number"
+                                                                    name="whQty"
+                                                                    value={brandEntry.whQty}
+                                                                    onChange={(e) => handleAddWarehouseStockInputChange(e, pIndex, bIndex)}
+                                                                    placeholder="0"
+                                                                    className="w-full px-2 py-2 bg-gray-50/50 border border-gray-100 rounded-lg text-sm text-center font-mono outline-none focus:border-blue-400"
+                                                                    required
+                                                                    readOnly
+                                                                />
+                                                            </div>
+                                                            <div>
+                                                                <label className="block lg:hidden text-xs font-bold text-gray-500 mb-1">Warehouse PKT</label>
+                                                                <input
+                                                                    type="number"
+                                                                    name="whPkt"
+                                                                    value={brandEntry.whPkt}
+                                                                    onChange={(e) => handleAddWarehouseStockInputChange(e, pIndex, bIndex)}
+                                                                    placeholder="0"
+                                                                    className="w-full px-2 py-2 bg-gray-50/50 border border-gray-100 rounded-lg text-sm text-center font-mono outline-none focus:border-blue-400"
+                                                                    required
+                                                                    readOnly
+                                                                />
+                                                            </div>
+                                                            <div>
+                                                                <label className="block lg:hidden text-xs font-bold text-indigo-500 mb-1">Transfer QTY</label>
+                                                                <input
+                                                                    type="number"
+                                                                    name="transferQty"
+                                                                    value={brandEntry.transferQty}
+                                                                    onChange={(e) => handleAddWarehouseStockInputChange(e, pIndex, bIndex)}
+                                                                    placeholder="0"
+                                                                    className="w-full px-2 py-2 bg-white border border-indigo-200 rounded-lg text-sm text-center font-mono outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100"
+                                                                    required
+                                                                />
+                                                            </div>
+                                                            <div>
+                                                                <label className="block lg:hidden text-xs font-bold text-indigo-500 mb-1">Transfer PKT</label>
+                                                                <input
+                                                                    type="number"
+                                                                    name="transferPkt"
+                                                                    value={brandEntry.transferPkt}
+                                                                    onChange={(e) => handleAddWarehouseStockInputChange(e, pIndex, bIndex)}
+                                                                    placeholder="0"
+                                                                    className="w-full px-2 py-2 bg-white border border-indigo-200 rounded-lg text-sm text-center font-mono outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100"
+                                                                    required
+                                                                />
+                                                            </div>
+                                                        </div>
                                                     </div>
-                                                    <div className="flex items-center gap-1 w-[72px]">
+                                                    <div className="flex justify-end lg:justify-start items-center gap-2 w-full lg:w-[72px] mt-2 lg:mt-0 pt-2 lg:pt-0 border-t border-gray-100 lg:border-t-0">
                                                         <button
                                                             type="button"
                                                             onClick={() => addWarehouseBrandEntry(pIndex)}
-                                                            className="p-1.5 text-blue-500 hover:bg-blue-100 rounded-lg transition-all"
+                                                            className="flex-1 lg:flex-none flex items-center justify-center px-4 py-2 text-blue-600 bg-blue-50/50 hover:bg-blue-600 hover:text-white rounded-xl transition-all duration-300 font-bold text-xs shadow-sm active:scale-95 lg:w-9 lg:h-9 lg:p-0"
                                                         >
                                                             <PlusIcon className="w-4 h-4" />
+                                                            <span className="lg:hidden ml-2">Add Brand</span>
                                                         </button>
                                                         {product.brandEntries.length > 1 && (
                                                             <button
                                                                 type="button"
                                                                 onClick={() => removeWarehouseBrandEntry(pIndex, bIndex)}
-                                                                className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all"
+                                                                className="flex-1 lg:flex-none flex items-center justify-center px-4 py-2 text-red-600 bg-red-50/50 hover:bg-red-600 hover:text-white rounded-xl transition-all duration-300 font-bold text-xs shadow-sm active:scale-95 lg:w-9 lg:h-9 lg:p-0"
                                                             >
-                                                                <TrashIcon className="w-3.5 h-3.5" />
+                                                                <TrashIcon className="w-4 h-4" />
+                                                                <span className="lg:hidden ml-2">Remove</span>
                                                             </button>
                                                         )}
                                                     </div>
@@ -2502,35 +2582,36 @@ const StockManagement = ({
                             </div>
                         </div>
 
-                        <div className="warehouse-form-footer border-t border-gray-100 pt-6 mt-6 flex gap-4 justify-end">
-                            <div className="flex-1">
-                                {addWarehouseStockSubmitStatus === 'success' && (
-                                    <p className="text-green-600 font-medium flex items-center animate-bounce">
-                                        <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"></path></svg>
-                                        Stock saved successfully!
-                                    </p>
-                                )}
-                                {addWarehouseStockSubmitStatus === 'error' && (
-                                    <p className="text-red-600 font-medium flex items-center">
-                                        <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path></svg>
-                                        Failed to save stock.
-                                    </p>
-                                )}
-                            </div>
+                        {/* Status Messages */}
+                        <div className="px-6 mb-2">
+                            {addWarehouseStockSubmitStatus === 'success' && (
+                                <p className="text-green-600 font-medium flex items-center justify-center animate-bounce text-sm">
+                                    <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"></path></svg>
+                                    Stock saved successfully!
+                                </p>
+                            )}
+                            {addWarehouseStockSubmitStatus === 'error' && (
+                                <p className="text-red-600 font-medium flex items-center justify-center text-sm">
+                                    <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                                    Failed to save stock.
+                                </p>
+                            )}
+                        </div>
+
+                        <div className="warehouse-form-footer border-t border-gray-100 pt-6 mt-6">
                             <button
                                 type="button"
                                 onClick={() => setShowAddWarehouseStockForm(false)}
-                                className="px-6 py-2.5 bg-white border border-gray-200 text-gray-700 rounded-xl font-bold hover:bg-gray-50 transition-all text-sm"
-                                disabled={isAddingWarehouseStock}
+                                className="px-6 py-2.5 border border-gray-200 text-gray-700 rounded-xl hover:bg-gray-50 transition-all font-bold text-sm"
                             >
                                 Cancel
                             </button>
                             <button
                                 type="submit"
-                                className="px-8 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl font-bold hover:from-blue-700 hover:to-indigo-700 hover:shadow-lg hover:shadow-blue-500/30 transition-all duration-200 text-sm flex items-center shadow-md disabled:opacity-50 hover:scale-105"
-                                disabled={isAddingWarehouseStock}
+                                disabled={addWarehouseStockSubmitStatus === 'submitting'}
+                                className="flex items-center justify-center gap-2 px-6 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl hover:from-blue-700 hover:to-indigo-700 transition-all shadow-lg shadow-blue-200 active:scale-95 disabled:opacity-50 font-bold text-sm"
                             >
-                                {isAddingWarehouseStock ? (
+                                {addWarehouseStockSubmitStatus === 'submitting' ? (
                                     <span className="flex items-center">
                                         <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                                             <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
@@ -2552,7 +2633,193 @@ const StockManagement = ({
 
             {(!showStockForm && !showAddWarehouseStockForm) && (
                 <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-                    <div className="overflow-x-auto">
+
+                    {/* Mobile View: Cards */}
+                    <div className="md:hidden divide-y divide-gray-100">
+                        {stockData.displayRecords.length === 0 ? (
+                            <div className="p-8 text-center text-gray-400 font-medium italic">No stock records found</div>
+                        ) : (
+                            stockData.displayRecords.map((group, gIdx) => {
+                                const isExpanded = expandedProducts === group.productName;
+                                return (
+                                    <div key={group.productName || gIdx} className="p-4 space-y-4 hover:bg-gray-50/50 transition-colors">
+                                        <div className="flex justify-between items-start w-full">
+                                            <div
+                                                className="flex flex-col gap-1 cursor-pointer select-none flex-1 pr-2"
+                                                onClick={() => toggleProductExpansion(group.productName)}
+                                            >
+                                                <div className="flex items-center gap-2">
+                                                    <h3 className="text-lg font-bold text-gray-900 leading-none">{group.productName}</h3>
+                                                    {isExpanded ? <ChevronUpIcon className="w-4 h-4 text-gray-400" /> : <ChevronDownIcon className="w-4 h-4 text-gray-400" />}
+                                                </div>
+                                                {!isExpanded && (
+                                                    <div className="flex items-center gap-2 mt-1">
+                                                        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold ${group.totalInHouseQuantity > 0 ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'}`}>
+                                                            {group.totalInHouseQuantity > 0 ? 'In Stock' : 'Out of Stock'}
+                                                        </span>
+                                                    </div>
+                                                )}
+                                            </div>
+                                            <div className="flex items-center gap-1.5 shrink-0 pt-0.5">
+                                                <button
+                                                    onClick={() => {
+                                                        const targetProd = group.productName;
+                                                        const targetWh = stockFilters.whName || ''; // Pre-fill if filtered
+                                                        setAddWarehouseStockFormData({
+                                                            whName: targetWh, manager: '', location: '', capacity: '',
+                                                            to: '', toManager: '', toLocation: '', toCapacity: '',
+                                                            productEntries: [{
+                                                                productName: targetProd,
+                                                                brandEntries: group.brandList.map(brand => ({
+                                                                    brand: brand.brand,
+                                                                    inhousePkt: brand.totalInHousePacket - (brand.salePacket || 0),
+                                                                    inhouseQty: brand.totalInHouseQuantity - (brand.saleQuantity || 0),
+                                                                    whPkt: 0,
+                                                                    whQty: 0,
+                                                                    transferPkt: '',
+                                                                    transferQty: '',
+                                                                    packetSize: brand.packetSize || 0
+                                                                }))
+                                                            }]
+                                                        });
+                                                        if (targetWh) {
+                                                            const updatedProductEntries = [{
+                                                                productName: targetProd,
+                                                                brandEntries: group.brandList.map(brand => {
+                                                                    const targetBrand = (brand.brand || '').trim().toLowerCase();
+                                                                    const matchingStockEntries = warehouseData.filter(item =>
+                                                                        ((item.productName || '').trim().toLowerCase() === targetProd.toLowerCase() || (item.product || '').trim().toLowerCase() === targetProd.toLowerCase()) &&
+                                                                        (item.brand || '').trim().toLowerCase() === targetBrand
+                                                                    );
+                                                                    let totalWhPkt = 0; let totalWhQty = 0;
+                                                                    matchingStockEntries.forEach(item => {
+                                                                        if ((item.whName || '').trim().toLowerCase() === targetWh.trim().toLowerCase()) {
+                                                                            totalWhPkt += (parseFloat(item.whPkt) || 0); totalWhQty += (parseFloat(item.whQty) || 0);
+                                                                        }
+                                                                    });
+                                                                    let whSaleQty = 0; let whSalePkt = 0;
+                                                                    (salesRecords || []).forEach(sale => {
+                                                                        if (sale.items) {
+                                                                            sale.items.forEach(saleItem => {
+                                                                                if ((saleItem.productName || '').trim().toLowerCase() === targetProd.toLowerCase()) {
+                                                                                    if (saleItem.brandEntries) {
+                                                                                        saleItem.brandEntries.forEach(entry => {
+                                                                                            if ((entry.brand || '').trim().toLowerCase() === targetBrand && (entry.warehouseName || '').trim().toLowerCase() === targetWh.trim().toLowerCase()) {
+                                                                                                const sQty = parseFloat(entry.quantity) || 0;
+                                                                                                const pktSize = parseFloat(saleItem.packetSize || entry.packetSize) || (matchingStockEntries[0]?.packetSize ? parseFloat(matchingStockEntries[0].packetSize) : 0);
+                                                                                                whSaleQty += sQty; whSalePkt += pktSize > 0 ? sQty / pktSize : 0;
+                                                                                            }
+                                                                                        });
+                                                                                    }
+                                                                                }
+                                                                            });
+                                                                        }
+                                                                    });
+
+                                                                    return {
+                                                                        brand: brand.brand,
+                                                                        inhousePkt: Number(Math.max(0, brand.totalInHousePacket - (brand.salePacket || 0)).toFixed(2)),
+                                                                        inhouseQty: Number(Math.max(0, brand.totalInHouseQuantity - (brand.saleQuantity || 0)).toFixed(2)),
+                                                                        whPkt: Number(Math.max(0, totalWhPkt - whSalePkt).toFixed(2)),
+                                                                        whQty: Number(Math.max(0, totalWhQty - whSaleQty).toFixed(2)),
+                                                                        transferPkt: '', transferQty: '', packetSize: brand.packetSize || 0
+                                                                    };
+                                                                })
+                                                            }];
+                                                            setAddWarehouseStockFormData(prev => ({ ...prev, productEntries: updatedProductEntries }));
+                                                        }
+                                                        setShowAddWarehouseStockForm(true);
+                                                    }}
+                                                    className="p-1.5 text-indigo-500 hover:bg-indigo-50 rounded-lg transition-all shadow-sm border border-indigo-100"
+                                                    title="Transfer Product"
+                                                >
+                                                    <ShoppingCartIcon className="w-5 h-5" />
+                                                </button>
+                                                <button
+                                                    onClick={() => setViewRecord({ data: group })}
+                                                    className="p-1.5 text-blue-500 hover:bg-blue-50 rounded-lg transition-all shadow-sm border border-blue-100"
+                                                    title="View History"
+                                                >
+                                                    <EyeIcon className="w-5 h-5" />
+                                                </button>
+                                            </div>
+                                        </div>
+
+                                        {isExpanded && (
+                                            <div className="space-y-4 animate-in fade-in slide-in-from-top-2 duration-200">
+                                                <div className="flex flex-col gap-2 w-full mt-1">
+                                                    <div className="grid grid-cols-3 gap-1 md:gap-2 w-full">
+                                                        <div className="bg-blue-50 text-blue-700 py-1.5 rounded-md text-[10px] sm:text-xs font-bold border border-blue-100 flex items-center justify-center text-center whitespace-nowrap px-1">
+                                                            TOT: {Math.round(group.totalInHousePacket).toLocaleString()} PKT
+                                                        </div>
+                                                        <div className="bg-orange-50 text-orange-700 py-1.5 rounded-md text-[10px] sm:text-xs font-bold border border-orange-100 flex items-center justify-center text-center whitespace-nowrap px-1">
+                                                            SALE: {Math.round(group.salePacket || 0).toLocaleString()} PKT
+                                                        </div>
+                                                        <div className="bg-emerald-50 text-emerald-700 py-1.5 rounded-md text-[10px] sm:text-xs font-bold border border-emerald-100 flex items-center justify-center text-center whitespace-nowrap px-1">
+                                                            IN: {Math.round(group.inHousePacket).toLocaleString()} PKT
+                                                        </div>
+                                                    </div>
+                                                    <div className="grid grid-cols-3 gap-1 md:gap-2 w-full">
+                                                        <div className="bg-blue-50 text-blue-700 py-1.5 rounded-md text-[10px] sm:text-xs font-bold border border-blue-100 flex items-center justify-center text-center whitespace-nowrap px-1">
+                                                            TOT: {Math.round(group.totalInHouseQuantity).toLocaleString()} {group.unit}
+                                                        </div>
+                                                        <div className="bg-orange-50 text-orange-700 py-1.5 rounded-md text-[10px] sm:text-xs font-bold border border-orange-100 flex items-center justify-center text-center whitespace-nowrap px-1">
+                                                            SALE: {Math.round(group.saleQuantity).toLocaleString()} {group.unit}
+                                                        </div>
+                                                        <div className="bg-emerald-50 text-emerald-700 py-1.5 rounded-md text-[10px] sm:text-xs font-bold border border-emerald-100 flex items-center justify-center text-center whitespace-nowrap px-1">
+                                                            IN: {Math.round(group.inHouseQuantity).toLocaleString()} {group.unit}
+                                                        </div>
+                                                    </div>
+                                                </div>
+
+                                                {/* Brands List Mobile */}
+                                                <div className="space-y-3 pl-2 border-l-2 border-blue-100">
+                                                    {group.brandList.map((brand, bIdx) => (
+                                                        <div key={bIdx} className="bg-gray-50/50 rounded-xl p-3 border border-gray-100 space-y-2">
+                                                            <div className="flex justify-between items-center">
+                                                                <span className="font-bold text-gray-800 text-sm truncate pr-2">{brand.brand || '-'}</span>
+                                                                <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold ${brand.totalInHouseQuantity > 0 ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'}`}>
+                                                                    {brand.totalInHouseQuantity > 0 ? 'In Stock' : 'Out of Stock'}
+                                                                </span>
+                                                            </div>
+                                                            <div className="flex flex-col gap-1.5">
+                                                                <div className="grid grid-cols-3 gap-1">
+                                                                    <div className="bg-blue-50 text-blue-700 py-0.5 rounded text-[9px] sm:text-[10px] font-bold border border-blue-100 flex items-center justify-center text-center whitespace-nowrap px-0.5">
+                                                                        TOT: {Math.round(brand.totalInHousePacket).toLocaleString()} PKT
+                                                                    </div>
+                                                                    <div className="bg-orange-50 text-orange-700 py-0.5 rounded text-[9px] sm:text-[10px] font-bold border border-orange-100 flex items-center justify-center text-center whitespace-nowrap px-0.5">
+                                                                        SALE: {Math.round(brand.salePacket || 0).toLocaleString()} PKT
+                                                                    </div>
+                                                                    <div className="bg-emerald-50 text-emerald-700 py-0.5 rounded text-[9px] sm:text-[10px] font-bold border border-emerald-100 flex items-center justify-center text-center whitespace-nowrap px-0.5">
+                                                                        IN: {Math.round(brand.inHousePacket).toLocaleString()} PKT
+                                                                    </div>
+                                                                </div>
+                                                                <div className="grid grid-cols-3 gap-1">
+                                                                    <div className="bg-blue-50 text-blue-700 py-0.5 rounded text-[9px] sm:text-[10px] font-bold border border-blue-100 flex items-center justify-center text-center whitespace-nowrap px-0.5">
+                                                                        TOT: {Math.round(brand.totalInHouseQuantity).toLocaleString()} {group.unit}
+                                                                    </div>
+                                                                    <div className="bg-orange-50 text-orange-700 py-0.5 rounded text-[9px] sm:text-[10px] font-bold border border-orange-100 flex items-center justify-center text-center whitespace-nowrap px-0.5">
+                                                                        SALE: {Math.round(brand.saleQuantity || 0).toLocaleString()} {group.unit}
+                                                                    </div>
+                                                                    <div className="bg-emerald-50 text-emerald-700 py-0.5 rounded text-[9px] sm:text-[10px] font-bold border border-emerald-100 flex items-center justify-center text-center whitespace-nowrap px-0.5">
+                                                                        IN: {Math.round(brand.inHouseQuantity).toLocaleString()} {group.unit}
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+                                );
+                            })
+                        )}
+                    </div>
+
+                    {/* Desktop View: Table */}
+
+                    < div className="overflow-x-auto hidden md:block" >
                         <table className="w-full text-left">
                             <thead>
                                 <tr className="bg-gray-50/50 border-b border-gray-100">
@@ -2768,13 +3035,13 @@ const StockManagement = ({
                         <div className="absolute inset-0 bg-gray-900/60 backdrop-blur-sm"></div>
                         <div className="relative bg-white/95 backdrop-blur-2xl border border-white/50 rounded-3xl shadow-2xl max-w-[95vw] w-full animate-in zoom-in duration-300 flex flex-col max-h-[90vh]">
                             {/* Modal Header */}
-                            <div className="px-8 py-6 border-b border-gray-100 flex items-center justify-between bg-white sticky top-0 z-10 rounded-t-3xl">
-                                <div className="w-1/4">
-                                    <h3 className="text-2xl font-bold text-gray-900">Stock History - {viewRecord.data.productName}</h3>
+                            <div className="px-4 sm:px-8 pt-2 pb-4 sm:pt-4 sm:pb-6 border-b border-gray-100 flex items-center justify-between bg-white sticky top-0 z-10 rounded-t-3xl gap-3">
+                                <div className="flex-shrink-0 min-w-0">
+                                    <h3 className="text-lg sm:text-2xl font-bold text-gray-900 truncate">Stock History - {viewRecord.data.productName}</h3>
                                 </div>
 
-                                {/* Center Aligned Search Bar & Tabs */}
-                                <div className="flex-1 max-w-xl mx-auto flex flex-col items-center gap-4">
+                                {/* Center Aligned Search Bar & Tabs - Hidden on mobile if needed, or condensed */}
+                                <div className="hidden lg:flex flex-1 max-w-xl mx-auto flex-col items-center gap-4">
                                     <div className="w-full max-w-md relative group">
                                         <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
                                             <SearchIcon className="h-4 w-4 text-gray-400 group-focus-within:text-blue-500 transition-colors" />
@@ -2794,7 +3061,7 @@ const StockManagement = ({
                                                 ? 'bg-white text-blue-600 shadow-sm border border-gray-100'
                                                 : 'text-gray-400 hover:text-gray-600'}`}
                                         >
-                                            Purchase History
+                                            Purchase
                                         </button>
                                         <button
                                             onClick={() => setHistoryTab('sale')}
@@ -2802,28 +3069,33 @@ const StockManagement = ({
                                                 ? 'bg-white text-blue-600 shadow-sm border border-gray-100'
                                                 : 'text-gray-400 hover:text-gray-600'}`}
                                         >
-                                            Sale History
+                                            Sale
                                         </button>
                                     </div>
                                 </div>
 
-                                <div className="w-1/4 flex justify-end items-center gap-2">
+                                <div className="flex items-center gap-2">
                                     <div className="relative">
                                         <button
                                             ref={filterButtonRef}
                                             onClick={() => setShowHistoryFilterPanel(!showHistoryFilterPanel)}
-                                            className={`flex items-center gap-2 px-4 py-2 rounded-xl transition-all border ${showHistoryFilterPanel || Object.values(historyFilters).some(v => v !== '')
+                                            className={`flex items-center justify-center sm:gap-2 w-9 h-9 sm:w-auto sm:h-10 sm:px-4 rounded-xl transition-all border ${showHistoryFilterPanel || Object.values(historyFilters).some(v => v !== '')
                                                 ? 'bg-blue-600 border-blue-600 text-white shadow-lg shadow-blue-500/30'
                                                 : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'
                                                 }`}
                                         >
                                             <FunnelIcon className={`w-4 h-4 ${showHistoryFilterPanel || Object.values(historyFilters).some(v => v !== '') ? 'text-white' : 'text-gray-400'}`} />
-                                            <span className="text-sm font-medium">Filter</span>
+                                            <span className="hidden sm:block text-sm font-medium">Filter</span>
                                         </button>
+
+                                        {/* Mobile Filter Overlay Backdrop */}
+                                        {showHistoryFilterPanel && (
+                                            <div className="fixed inset-0 bg-black/20 backdrop-blur-[2px] z-[55] lg:hidden" onClick={() => setShowHistoryFilterPanel(false)}></div>
+                                        )}
 
                                         {/* Floating Filter Panel */}
                                         {showHistoryFilterPanel && (
-                                            <div ref={historyFilterRef} className="absolute right-0 mt-3 w-[420px] bg-white/95 backdrop-blur-2xl border border-gray-100 rounded-2xl shadow-2xl z-[60] p-5 animate-in fade-in zoom-in duration-200">
+                                            <div ref={historyFilterRef} className="fixed inset-x-4 top-24 lg:absolute lg:inset-auto lg:right-0 lg:mt-3 w-auto lg:w-[420px] bg-white/95 backdrop-blur-2xl border border-gray-100 rounded-2xl shadow-2xl z-[60] p-5 animate-in fade-in zoom-in duration-200 overflow-y-auto max-h-[70vh]">
                                                 <div className="flex items-center justify-between mb-4 pb-2 border-b border-gray-50">
                                                     <h4 className="font-bold text-gray-900">Advanced Filters</h4>
                                                     <button
@@ -2839,7 +3111,7 @@ const StockManagement = ({
 
                                                 <div className="space-y-4">
                                                     {/* Date Range: One Line */}
-                                                    <div className="grid grid-cols-2 gap-3">
+                                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                                                         <CustomDatePicker
                                                             label="FROM DATE"
                                                             value={historyFilters.startDate}
@@ -2861,7 +3133,7 @@ const StockManagement = ({
                                                     </div>
 
                                                     {/* LC No and Port: Next Line */}
-                                                    <div className="grid grid-cols-2 gap-3">
+                                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                                                         {/* LC No Filter */}
                                                         <div className="space-y-1.5 relative" ref={lcNoFilterRef}>
                                                             <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider pl-1">LC No</label>
@@ -2948,20 +3220,63 @@ const StockManagement = ({
 
                                     <button
                                         onClick={handleGenerateProductReport}
-                                        className="flex items-center gap-2 px-4 py-2 bg-blue-50 border border-blue-100 text-blue-600 rounded-xl hover:bg-blue-100 transition-all shadow-sm"
+                                        className="flex items-center justify-center w-9 h-9 sm:w-auto sm:h-10 sm:px-4 bg-blue-50 border border-blue-100 text-blue-600 rounded-xl hover:bg-blue-100 transition-all shadow-sm"
+                                        title="Product Report"
                                     >
                                         <FileTextIcon className="w-4 h-4" />
-                                        <span className="text-sm font-medium">Product Report</span>
+                                        <span className="hidden sm:block text-sm font-medium ml-2">Report</span>
                                     </button>
 
-                                    <button onClick={() => { setViewRecord(null); setHistorySearchQuery(''); setHistoryFilters({ startDate: '', endDate: '', lcNo: '', port: '', brand: '' }); setShowHistoryFilterPanel(false); }} className="p-2 hover:bg-gray-100 rounded-full transition-colors">
+                                    <button
+                                        onClick={() => {
+                                            setViewRecord(null);
+                                            setHistorySearchQuery('');
+                                            setHistoryFilters({ startDate: '', endDate: '', lcNo: '', port: '', brand: '' });
+                                            setShowHistoryFilterPanel(false);
+                                            setExpandedHistoryId(null);
+                                            setExpandedSaleId(null);
+                                        }}
+                                        className="w-9 h-9 flex items-center justify-center hover:bg-gray-100 rounded-full transition-colors"
+                                    >
                                         <XIcon className="w-6 h-6 text-gray-400" />
                                     </button>
                                 </div>
                             </div>
 
+                            {/* Mobile Tabs & Search Unified - Visible only on mobile */}
+                            <div className="lg:hidden px-4 pb-4 border-b border-gray-100">
+                                <div className="bg-gray-50 rounded-2xl border border-gray-200/60 p-2 space-y-2.5 shadow-inner-sm">
+                                    <div className="w-full relative group">
+                                        <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
+                                            <SearchIcon className="h-4 w-4 text-gray-400 group-focus-within:text-blue-500 transition-colors" />
+                                        </div>
+                                        <input
+                                            type="text"
+                                            placeholder="Search..."
+                                            value={historySearchQuery}
+                                            onChange={(e) => setHistorySearchQuery(e.target.value)}
+                                            className="block w-full pl-10 pr-4 py-2.5 bg-white border border-gray-200 rounded-xl text-[13px] outline-none shadow-sm focus:ring-1 focus:ring-blue-500/20 focus:border-blue-400 transition-all placeholder-gray-400"
+                                        />
+                                    </div>
+                                    <div className="flex items-center gap-2 p-1 bg-gray-200/50 rounded-xl">
+                                        <button
+                                            onClick={() => setHistoryTab('purchase')}
+                                            className={`flex-1 py-1.5 rounded-lg text-xs font-bold transition-all duration-200 ${historyTab === 'purchase' ? 'bg-white text-blue-600 shadow-sm scale-[1.02]' : 'text-gray-500 hover:text-gray-700'}`}
+                                        >
+                                            Purchase
+                                        </button>
+                                        <button
+                                            onClick={() => setHistoryTab('sale')}
+                                            className={`flex-1 py-1.5 rounded-lg text-xs font-bold transition-all duration-200 ${historyTab === 'sale' ? 'bg-white text-blue-600 shadow-sm scale-[1.02]' : 'text-gray-500 hover:text-gray-700'}`}
+                                        >
+                                            Sale
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+
                             {/* Modal Content */}
-                            <div className="p-8 flex-1 overflow-y-auto custom-scrollbar">
+                            <div className="px-4 sm:px-8 py-6 sm:py-8 flex-1 overflow-y-auto custom-scrollbar">
                                 {historyTab === 'purchase' ? (() => {
                                     const history = activePurchaseHistory;
                                     const unit = history[0]?.unit || 'kg';
@@ -2974,121 +3289,219 @@ const StockManagement = ({
 
                                     return (
                                         <div className="space-y-6">
-                                            <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+                                            <div className="grid grid-cols-2 md:grid-cols-5 gap-3 sm:gap-4">
                                                 {[
-                                                    { label: 'TOTAL PACKET', value: tPkts.toLocaleString(), bgColor: 'bg-white', borderColor: 'border-gray-200', textColor: 'text-gray-900', labelColor: 'text-gray-400' },
-                                                    { label: 'TOTAL QUANTITY', value: `${Math.round(tQty).toLocaleString()} ${unit}`, bgColor: 'bg-emerald-50/50', borderColor: 'border-emerald-100', textColor: 'text-emerald-700', labelColor: 'text-emerald-600' },
-                                                    { label: 'INHOUSE PKT', value: tIHPkt.toLocaleString(), bgColor: 'bg-amber-50/50', borderColor: 'border-amber-100', textColor: 'text-amber-700', labelColor: 'text-amber-600' },
-                                                    { label: 'INHOUSE QTY', value: `${Math.round(tIHQty).toLocaleString()} ${unit}`, bgColor: 'bg-blue-50/50', borderColor: 'border-blue-100', textColor: 'text-blue-700', labelColor: 'text-blue-600' },
-                                                    { label: 'SHORTAGE', value: `${Math.round(tShort).toLocaleString()} ${unit}`, bgColor: 'bg-rose-50/50', borderColor: 'border-rose-100', textColor: 'text-rose-700', labelColor: 'text-rose-600' },
+                                                    { label: 'TOTAL PKT', value: tPkts.toLocaleString(), bgColor: 'bg-white', borderColor: 'border-gray-200', textColor: 'text-gray-900', labelColor: 'text-gray-400' },
+                                                    { label: 'TOTAL QTY', value: `${Math.round(tQty).toLocaleString()} ${unit}`, bgColor: 'bg-emerald-50/10', borderColor: 'border-emerald-100', textColor: 'text-emerald-700', labelColor: 'text-emerald-600' },
+                                                    { label: 'INHOUSE PKT', value: tIHPkt.toLocaleString(), bgColor: 'bg-amber-50/10', borderColor: 'border-amber-100', textColor: 'text-amber-700', labelColor: 'text-amber-600' },
+                                                    { label: 'INHOUSE QTY', value: `${Math.round(tIHQty).toLocaleString()} ${unit}`, bgColor: 'bg-blue-50/10', borderColor: 'border-blue-100', textColor: 'text-blue-700', labelColor: 'text-blue-600' },
+                                                    { label: 'SHORTAGE', value: `${Math.round(tShort).toLocaleString()} ${unit}`, bgColor: 'bg-rose-50/10', borderColor: 'border-rose-100', textColor: 'text-rose-700', labelColor: 'text-rose-600', span: 'col-span-2 md:col-span-1' },
                                                 ].map((card, i) => (
-                                                    <div key={i} className={`bg-white border ${card.bgColor} ${card.borderColor} p-4 rounded-xl shadow-sm transition-all hover:shadow-md`}>
-                                                        <div className={`text-[11px] font-bold ${card.labelColor} uppercase tracking-wider mb-1`}>{card.label}</div>
-                                                        <div className={`text-xl font-bold ${card.textColor}`}>{card.value}</div>
+                                                    <div key={i} className={`bg-white border ${card.bgColor} ${card.borderColor} p-3 sm:p-4 rounded-xl shadow-sm transition-all hover:shadow-md ${card.span || ''}`}>
+                                                        <div className={`text-[10px] sm:text-[11px] font-bold ${card.labelColor} uppercase tracking-wider mb-0.5 sm:mb-1`}>{card.label}</div>
+                                                        <div className={`text-sm sm:text-xl font-bold ${card.textColor}`}>{card.value}</div>
                                                     </div>
                                                 ))}
                                             </div>
 
-                                            <div className="bg-gray-50 rounded-2xl border border-gray-100 overflow-x-auto">
-                                                <table className="w-full text-left min-w-[800px]">
-                                                    <thead>
-                                                        <tr className="bg-white border-b border-gray-100">
-                                                            <th onClick={() => requestSort('history', 'date')} className="px-3 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-50 transition-colors">
-                                                                <div className="flex items-center">Date <SortIcon config={sortConfig.history} columnKey="date" /></div>
-                                                            </th>
-                                                            <th onClick={() => requestSort('history', 'lcNo')} className="px-3 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-50 transition-colors">
-                                                                <div className="flex items-center">LC No <SortIcon config={sortConfig.history} columnKey="lcNo" /></div>
-                                                            </th>
-                                                            <th onClick={() => requestSort('history', 'port')} className="px-3 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-50 transition-colors">
-                                                                <div className="flex items-center">Port <SortIcon config={sortConfig.history} columnKey="port" /></div>
-                                                            </th>
-                                                            <th onClick={() => requestSort('history', 'importer')} className="px-3 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-50 transition-colors">
-                                                                <div className="flex items-center">Importer <SortIcon config={sortConfig.history} columnKey="importer" /></div>
-                                                            </th>
-                                                            <th onClick={() => requestSort('history', 'truckNo')} className="px-3 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-50 transition-colors">
-                                                                <div className="flex items-center">Truck <SortIcon config={sortConfig.history} columnKey="truckNo" /></div>
-                                                            </th>
-                                                            <th className="px-3 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Brand</th>
-                                                            <th className="px-3 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Purchase Price</th>
-                                                            <th className="px-3 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Packet</th>
-                                                            <th className="px-3 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Quantity</th>
-                                                            <th className="px-3 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">InHouse Pkt</th>
-                                                            <th className="px-3 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">InHouse Qty</th>
-                                                            <th className="px-3 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider text-rose-600">Shortage</th>
-                                                            <th className="px-3 py-3 text-center text-xs font-bold text-gray-500 uppercase tracking-wider">Actions</th>
-                                                        </tr>
-                                                    </thead>
-                                                    <tbody className="divide-y divide-gray-100">
-                                                        {history.length === 0 ? (
-                                                            <tr>
-                                                                <td colSpan="13" className="px-6 py-12 text-center text-gray-400 font-medium italic">No history records found</td>
+                                            <div className="bg-gray-50 rounded-2xl border border-gray-100 overflow-hidden">
+                                                <div className="hidden md:block overflow-x-auto">
+                                                    <table className="w-full text-left min-w-[1000px]">
+                                                        <thead>
+                                                            <tr className="bg-white border-b border-gray-100">
+                                                                <th onClick={() => requestSort('history', 'date')} className="px-3 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-50 transition-colors">
+                                                                    <div className="flex items-center">Date <SortIcon config={sortConfig.history} columnKey="date" /></div>
+                                                                </th>
+                                                                <th onClick={() => requestSort('history', 'lcNo')} className="px-3 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-50 transition-colors">
+                                                                    <div className="flex items-center">LC No <SortIcon config={sortConfig.history} columnKey="lcNo" /></div>
+                                                                </th>
+                                                                <th onClick={() => requestSort('history', 'port')} className="px-3 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-50 transition-colors">
+                                                                    <div className="flex items-center">Port <SortIcon config={sortConfig.history} columnKey="port" /></div>
+                                                                </th>
+                                                                <th onClick={() => requestSort('history', 'importer')} className="px-3 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-50 transition-colors">
+                                                                    <div className="flex items-center">Importer <SortIcon config={sortConfig.history} columnKey="importer" /></div>
+                                                                </th>
+                                                                <th onClick={() => requestSort('history', 'truckNo')} className="px-3 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-50 transition-colors">
+                                                                    <div className="flex items-center">Truck <SortIcon config={sortConfig.history} columnKey="truckNo" /></div>
+                                                                </th>
+                                                                <th className="px-3 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Brand</th>
+                                                                <th className="px-3 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Purchase Price</th>
+                                                                <th className="px-3 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Packet</th>
+                                                                <th className="px-3 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Quantity</th>
+                                                                <th className="px-3 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">InHouse Pkt</th>
+                                                                <th className="px-3 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">InHouse Qty</th>
+                                                                <th className="px-3 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider text-rose-600">Shortage</th>
+                                                                <th className="px-3 py-3 text-center text-xs font-bold text-gray-500 uppercase tracking-wider">Actions</th>
                                                             </tr>
-                                                        ) : (
-                                                            history.map((item, idx) => (
-                                                                <tr key={item._id || idx} className="hover:bg-gray-50/30 transition-colors group border-b border-gray-50">
-                                                                    <td className="px-3 py-3 whitespace-nowrap text-sm text-gray-600">{item.date}</td>
-                                                                    <td className="px-3 py-3 whitespace-nowrap text-sm text-gray-600 font-semibold">{item.lcNo}</td>
-                                                                    <td className="px-3 py-3 whitespace-nowrap text-sm text-gray-600">{item.port}</td>
-                                                                    <td className="px-3 py-3 whitespace-nowrap text-sm text-gray-600 truncate max-w-[120px]" title={item.importer}>{item.importer}</td>
-                                                                    <td className="px-3 py-3 whitespace-nowrap text-sm text-gray-600">{item.itemExporter || '-'}</td>
-                                                                    <td className="px-3 py-3 align-top whitespace-nowrap">
-                                                                        <div className="space-y-1">
-                                                                            {item.entries.map((entry, eIdx) => (
-                                                                                <div key={eIdx} className="text-sm text-gray-600 font-medium">{entry.brand}</div>
-                                                                            ))}
-                                                                        </div>
-                                                                    </td>
-                                                                    <td className="px-3 py-3 align-top">
-                                                                        <div className="space-y-1">
-                                                                            {item.entries.map((entry, eIdx) => (
-                                                                                <div key={eIdx} className="text-sm text-gray-600">৳{parseFloat(entry.purchasedPrice || 0).toLocaleString()}</div>
-                                                                            ))}
-                                                                        </div>
-                                                                    </td>
-                                                                    <td className="px-3 py-3 align-top font-bold">
-                                                                        <div className="space-y-1">
-                                                                            {item.entries.map((entry, eIdx) => (
-                                                                                <div key={eIdx} className="text-sm text-gray-900">{entry.packet}</div>
-                                                                            ))}
-                                                                        </div>
-                                                                    </td>
-                                                                    <td className="px-3 py-3 align-top font-bold">
-                                                                        <div className="space-y-1">
-                                                                            {item.entries.map((entry, eIdx) => (
-                                                                                <div key={eIdx} className="text-sm text-gray-900">{Math.round(parseFloat(entry.quantity || 0)).toLocaleString()} {entry.unit}</div>
-                                                                            ))}
-                                                                        </div>
-                                                                    </td>
-                                                                    <td className="px-3 py-3 align-top">
-                                                                        <div className="space-y-1">
-                                                                            {item.entries.map((entry, eIdx) => (
-                                                                                <div key={eIdx} className="text-sm text-amber-600 font-bold">{entry.inHousePacket}</div>
-                                                                            ))}
-                                                                        </div>
-                                                                    </td>
-                                                                    <td className="px-3 py-3 align-top">
-                                                                        <div className="space-y-1">
-                                                                            {item.entries.map((entry, eIdx) => (
-                                                                                <div key={eIdx} className="text-sm text-blue-600 font-bold">{Math.round(parseFloat(entry.inHouseQuantity || 0)).toLocaleString()} {entry.unit}</div>
-                                                                            ))}
-                                                                        </div>
-                                                                    </td>
-                                                                    <td className="px-3 py-3 align-top text-rose-600 font-black">
-                                                                        <div className="space-y-1">
-                                                                            {item.entries.map((entry, eIdx) => (
-                                                                                <div key={eIdx} className="text-sm">{Math.round(parseFloat(entry.sweepedQuantity || 0)).toLocaleString()} {entry.unit}</div>
-                                                                            ))}
-                                                                        </div>
-                                                                    </td>
-                                                                    <td className="px-3 py-3 whitespace-nowrap text-right text-sm font-medium">
-                                                                        <div className="flex items-center justify-center gap-2">
-                                                                        </div>
-                                                                    </td>
+                                                        </thead>
+                                                        <tbody className="divide-y divide-gray-100">
+                                                            {history.length === 0 ? (
+                                                                <tr>
+                                                                    <td colSpan="13" className="px-6 py-12 text-center text-gray-400 font-medium italic">No history records found</td>
                                                                 </tr>
-                                                            ))
-                                                        )}
-                                                    </tbody>
-                                                </table>
+                                                            ) : (
+                                                                history.map((item, idx) => (
+                                                                    <tr key={item._id || idx} className="hover:bg-gray-50/30 transition-colors group border-b border-gray-50">
+                                                                        <td className="px-3 py-3 whitespace-nowrap text-sm text-gray-600">{item.date}</td>
+                                                                        <td className="px-3 py-3 whitespace-nowrap text-sm text-gray-600 font-semibold">{item.lcNo}</td>
+                                                                        <td className="px-3 py-3 whitespace-nowrap text-sm text-gray-600">{item.port}</td>
+                                                                        <td className="px-3 py-3 whitespace-nowrap text-sm text-gray-600 truncate max-w-[120px]" title={item.importer}>{item.importer}</td>
+                                                                        <td className="px-3 py-3 whitespace-nowrap text-sm text-gray-600">{item.itemExporter || '-'}</td>
+                                                                        <td className="px-3 py-3 align-top whitespace-nowrap">
+                                                                            <div className="space-y-1">
+                                                                                {item.entries.map((entry, eIdx) => (
+                                                                                    <div key={eIdx} className="text-sm text-gray-600 font-medium">{entry.brand}</div>
+                                                                                ))}
+                                                                            </div>
+                                                                        </td>
+                                                                        <td className="px-3 py-3 align-top">
+                                                                            <div className="space-y-1">
+                                                                                {item.entries.map((entry, eIdx) => (
+                                                                                    <div key={eIdx} className="text-sm text-gray-600">৳{parseFloat(entry.purchasedPrice || 0).toLocaleString()}</div>
+                                                                                ))}
+                                                                            </div>
+                                                                        </td>
+                                                                        <td className="px-3 py-3 align-top font-bold">
+                                                                            <div className="space-y-1">
+                                                                                {item.entries.map((entry, eIdx) => (
+                                                                                    <div key={eIdx} className="text-sm text-gray-900">{entry.packet}</div>
+                                                                                ))}
+                                                                            </div>
+                                                                        </td>
+                                                                        <td className="px-3 py-3 align-top font-bold">
+                                                                            <div className="space-y-1">
+                                                                                {item.entries.map((entry, eIdx) => (
+                                                                                    <div key={eIdx} className="text-sm text-gray-900">{Math.round(parseFloat(entry.quantity || 0)).toLocaleString()} {entry.unit}</div>
+                                                                                ))}
+                                                                            </div>
+                                                                        </td>
+                                                                        <td className="px-3 py-3 align-top">
+                                                                            <div className="space-y-1">
+                                                                                {item.entries.map((entry, eIdx) => (
+                                                                                    <div key={eIdx} className="text-sm text-amber-600 font-bold">{entry.inHousePacket}</div>
+                                                                                ))}
+                                                                            </div>
+                                                                        </td>
+                                                                        <td className="px-3 py-3 align-top">
+                                                                            <div className="space-y-1">
+                                                                                {item.entries.map((entry, eIdx) => (
+                                                                                    <div key={eIdx} className="text-sm text-blue-600 font-bold">{Math.round(parseFloat(entry.inHouseQuantity || 0)).toLocaleString()} {entry.unit}</div>
+                                                                                ))}
+                                                                            </div>
+                                                                        </td>
+                                                                        <td className="px-3 py-3 align-top text-rose-600 font-black">
+                                                                            <div className="space-y-1">
+                                                                                {item.entries.map((entry, eIdx) => (
+                                                                                    <div key={eIdx} className="text-sm">{Math.round(parseFloat(entry.sweepedQuantity || 0)).toLocaleString()} {entry.unit}</div>
+                                                                                ))}
+                                                                            </div>
+                                                                        </td>
+                                                                        <td className="px-3 py-3 whitespace-nowrap text-right text-sm font-medium">
+                                                                            <div className="flex items-center justify-center gap-2">
+                                                                            </div>
+                                                                        </td>
+                                                                    </tr>
+                                                                ))
+                                                            )}
+                                                        </tbody>
+                                                    </table>
+                                                </div>
+
+                                                {/* Mobile Card View */}
+                                                <div className="md:hidden space-y-4">
+                                                    {history.length === 0 ? (
+                                                        <div className="p-8 text-center text-gray-400 font-medium italic bg-white rounded-xl border border-gray-100">No history records found</div>
+                                                    ) : (
+                                                        history.map((item, idx) => {
+                                                            const historyId = item._id || idx;
+                                                            const isExpanded = expandedHistoryId === historyId;
+
+                                                            return (
+                                                                <div
+                                                                    key={historyId}
+                                                                    onClick={() => toggleHistoryExpansion(historyId)}
+                                                                    className={`bg-white rounded-2xl border border-gray-100 p-4 shadow-sm transition-all duration-200 cursor-pointer hover:border-blue-100 ${isExpanded ? 'ring-1 ring-blue-500/10' : ''}`}
+                                                                >
+                                                                    {/* Summary Header */}
+                                                                    <div className="flex items-center justify-between gap-3">
+                                                                        <div className="flex flex-col min-w-0 flex-1">
+                                                                            <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Date</span>
+                                                                            <span className="text-sm font-bold text-gray-900 truncate">{formatDate(item.date)}</span>
+                                                                        </div>
+                                                                        <div className="flex flex-col items-center flex-1">
+                                                                            <span className="text-[10px] font-black text-blue-400 uppercase tracking-widest">LC No</span>
+                                                                            <span className="text-sm font-bold text-blue-600 truncate">{item.lcNo}</span>
+                                                                        </div>
+                                                                        <div className="flex items-center gap-2">
+                                                                            {!isExpanded && (
+                                                                                <div className="flex flex-col items-end mr-1">
+                                                                                    <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Total Pkt</span>
+                                                                                    <span className="text-sm font-bold text-gray-900">{item.totalPacket || 0} PKT</span>
+                                                                                </div>
+                                                                            )}
+                                                                            <div className={`p-1 rounded-full transition-colors ${isExpanded ? 'bg-blue-50 text-blue-500' : 'text-gray-400'}`}>
+                                                                                {isExpanded ? (
+                                                                                    <ChevronUpIcon className="w-5 h-5" />
+                                                                                ) : (
+                                                                                    <ChevronDownIcon className="w-5 h-5" />
+                                                                                )}
+                                                                            </div>
+                                                                        </div>
+                                                                    </div>
+
+                                                                    {/* Expanded Content */}
+                                                                    {isExpanded && (
+                                                                        <div className="mt-4 pt-4 border-t border-gray-50 space-y-4 animate-in slide-in-from-top-2 duration-200">
+                                                                            <div className="grid grid-cols-2 gap-4 text-sm">
+                                                                                <div>
+                                                                                    <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-0.5">Port</div>
+                                                                                    <div className="text-gray-700 font-medium truncate">{item.port}</div>
+                                                                                </div>
+                                                                                <div>
+                                                                                    <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-0.5">Importer</div>
+                                                                                    <div className="text-gray-700 font-medium truncate" title={item.importer}>{item.importer}</div>
+                                                                                </div>
+                                                                            </div>
+
+                                                                            <div className="bg-gray-50/50 rounded-xl p-3 space-y-3">
+                                                                                {item.entries.map((entry, eIdx) => (
+                                                                                    <div key={eIdx} className={`${eIdx !== 0 ? 'border-t border-gray-100 pt-3' : ''}`}>
+                                                                                        <div className="flex justify-between items-center mb-2">
+                                                                                            <span className="text-sm font-bold text-gray-900">{entry.brand}</span>
+                                                                                            <span className="text-xs font-medium text-gray-500">৳{parseFloat(entry.purchasedPrice || 0).toLocaleString()}</span>
+                                                                                        </div>
+                                                                                        <div className="grid grid-cols-2 gap-3">
+                                                                                            <div className="flex flex-col bg-white p-2 rounded-lg border border-gray-100">
+                                                                                                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Total LC Amount</span>
+                                                                                                <div className="flex flex-col gap-1">
+                                                                                                    <span className="text-xs font-bold text-gray-900">{entry.packet} PKT</span>
+                                                                                                    <span className="text-xs font-bold text-gray-600">{Math.round(parseFloat(entry.quantity || 0)).toLocaleString()} {entry.unit}</span>
+                                                                                                </div>
+                                                                                            </div>
+                                                                                            <div className="flex flex-col bg-white p-2 rounded-lg border border-gray-100">
+                                                                                                <span className="text-[10px] font-bold text-blue-400 uppercase tracking-wider">InHouse</span>
+                                                                                                <div className="flex flex-col gap-1">
+                                                                                                    <span className="text-xs font-bold text-blue-600">{entry.inHousePacket} PKT</span>
+                                                                                                    <span className="text-xs font-bold text-blue-500">{Math.round(parseFloat(entry.inHouseQuantity || 0)).toLocaleString()} {entry.unit}</span>
+                                                                                                </div>
+                                                                                            </div>
+                                                                                        </div>
+                                                                                        {parseFloat(entry.sweepedQuantity || 0) > 0 && (
+                                                                                            <div className="mt-2 flex items-center gap-2 bg-rose-50 px-2 py-1 rounded-md">
+                                                                                                <span className="text-[10px] font-bold text-rose-400 uppercase tracking-wider">Shortage:</span>
+                                                                                                <span className="text-xs font-bold text-rose-600">{Math.round(parseFloat(entry.sweepedQuantity || 0)).toLocaleString()} {entry.unit}</span>
+                                                                                            </div>
+                                                                                        )}
+                                                                                    </div>
+                                                                                ))}
+                                                                            </div>
+                                                                        </div>
+                                                                    )}
+                                                                </div>
+                                                            );
+                                                        })
+                                                    )}
+                                                </div>
                                             </div>
                                         </div>
                                     );
@@ -3097,24 +3510,25 @@ const StockManagement = ({
                                     const totalSaleQty = flattenedSaleHistory.reduce((sum, s) => sum + s.itemQty, 0);
                                     const totalSaleAmount = flattenedSaleHistory.reduce((sum, s) => sum + s.itemTotal, 0);
 
+                                    const unit = activePurchaseHistory[0]?.unit || 'kg';
                                     const isFruitHistory = (viewRecord.data.category || '').toLowerCase() === 'fruit';
 
                                     return (
                                         <div className="space-y-6">
-                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-w-2xl">
-                                                <div className="bg-emerald-50/50 border border-emerald-100 p-6 rounded-2xl shadow-sm transition-all hover:shadow-md">
+                                            <div className="grid grid-cols-2 gap-4 max-w-2xl">
+                                                <div className="bg-emerald-50/10 border border-emerald-100 p-4 sm:p-6 rounded-2xl shadow-sm transition-all hover:shadow-md">
                                                     <div className="text-[11px] font-bold text-emerald-600 uppercase tracking-wider mb-1">Total Sale Quantity</div>
-                                                    <div className="text-2xl font-black text-emerald-700">{totalSaleQty.toLocaleString()} kg</div>
+                                                    <div className="text-lg sm:text-2xl font-black text-emerald-700">{totalSaleQty.toLocaleString()} {unit}</div>
                                                 </div>
-                                                <div className="bg-blue-50/50 border border-blue-100 p-6 rounded-2xl shadow-sm transition-all hover:shadow-md">
+                                                <div className="bg-blue-50/10 border border-blue-100 p-4 sm:p-6 rounded-2xl shadow-sm transition-all hover:shadow-md">
                                                     <div className="text-[11px] font-bold text-blue-600 uppercase tracking-wider mb-1">Total Sale Amount</div>
-                                                    <div className="text-2xl font-black text-blue-700">৳ {totalSaleAmount.toLocaleString()}</div>
+                                                    <div className="text-lg sm:text-2xl font-black text-blue-700">৳ {totalSaleAmount.toLocaleString()}</div>
                                                 </div>
                                             </div>
 
                                             <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden shadow-sm">
-                                                <div className="overflow-x-auto">
-                                                    <table className="w-full text-left">
+                                                <div className="hidden md:block overflow-x-auto">
+                                                    <table className="w-full text-left min-w-[800px]">
                                                         <thead>
                                                             <tr className="bg-gray-50/50 border-b border-gray-100">
                                                                 <th className="px-3 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider">Date</th>
@@ -3153,7 +3567,7 @@ const StockManagement = ({
                                                                             </>
                                                                         )}
                                                                         <td className="px-3 py-3 text-right">
-                                                                            <div className="text-sm font-bold text-gray-900">{sale.itemQty.toLocaleString()} kg</div>
+                                                                            <div className="text-sm font-bold text-gray-900">{sale.itemQty.toLocaleString()} {unit}</div>
                                                                         </td>
                                                                         {isFruitHistory && (
                                                                             <td className="px-3 py-3 text-sm text-gray-600 font-medium text-right">{sale.itemTruck || '-'}</td>
@@ -3169,6 +3583,100 @@ const StockManagement = ({
                                                             )}
                                                         </tbody>
                                                     </table>
+                                                </div>
+
+                                                {/* Mobile Card View for Sale History */}
+                                                <div className="md:hidden space-y-4 p-4 bg-gray-50/30">
+                                                    {flattenedSaleHistory.length === 0 ? (
+                                                        <div className="p-8 text-center text-gray-400 font-medium italic bg-white rounded-xl border border-gray-100">No sale history found for this product</div>
+                                                    ) : (
+                                                        flattenedSaleHistory.map((sale, sIdx) => {
+                                                            const saleId = sale._id || sIdx;
+                                                            const isExpanded = expandedSaleId === saleId;
+
+                                                            return (
+                                                                <div
+                                                                    key={saleId}
+                                                                    onClick={() => toggleSaleExpansion(saleId)}
+                                                                    className={`bg-white rounded-2xl border border-gray-100 p-4 shadow-sm transition-all duration-200 cursor-pointer hover:border-blue-100 ${isExpanded ? 'ring-1 ring-blue-500/10' : ''}`}
+                                                                >
+                                                                    {/* Summary Header */}
+                                                                    <div className={`${isExpanded ? 'space-y-3' : ''}`}>
+                                                                        <div className="flex items-center justify-between gap-2 sm:gap-3">
+                                                                            <div className="flex flex-col min-w-0 flex-[0.8]">
+                                                                                <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Date</span>
+                                                                                <span className="text-sm font-bold text-gray-900 truncate">{formatDate(sale.date)}</span>
+                                                                            </div>
+                                                                            <div className="flex flex-col items-center flex-1">
+                                                                                <span className="text-[10px] font-black text-blue-400 uppercase tracking-widest">Invoice</span>
+                                                                                <span className="text-sm font-bold text-blue-600 truncate">{sale.invoiceNo}</span>
+                                                                            </div>
+                                                                            {!isExpanded && (
+                                                                                <div className="flex flex-col min-w-0 flex-1">
+                                                                                    <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Company</span>
+                                                                                    <span className="text-xs font-bold text-gray-800 truncate">{sale.companyName}</span>
+                                                                                </div>
+                                                                            )}
+                                                                            <div className="flex items-center">
+                                                                                <div className={`p-1 rounded-full transition-colors ${isExpanded ? 'bg-blue-50 text-blue-500' : 'text-gray-400'}`}>
+                                                                                    {isExpanded ? (
+                                                                                        <ChevronUpIcon className="w-5 h-5" />
+                                                                                    ) : (
+                                                                                        <ChevronDownIcon className="w-5 h-5" />
+                                                                                    )}
+                                                                                </div>
+                                                                            </div>
+                                                                        </div>
+
+                                                                        {isExpanded && (
+                                                                            <div className="flex flex-col animate-in fade-in slide-in-from-top-1 duration-200">
+                                                                                <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Company</span>
+                                                                                <span className="text-sm font-bold text-gray-800 truncate">{sale.companyName}</span>
+                                                                            </div>
+                                                                        )}
+                                                                    </div>
+
+                                                                    {/* Expanded Content */}
+                                                                    {isExpanded && (
+                                                                        <div className="mt-4 pt-4 border-t border-gray-50 space-y-4 animate-in slide-in-from-top-2 duration-200">
+                                                                            <div className="grid grid-cols-2 gap-4 bg-gray-50/50 rounded-xl p-3">
+                                                                                <div>
+                                                                                    <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-0.5">{isFruitHistory ? "Customer" : "Brand"}</div>
+                                                                                    <div className="text-sm font-bold text-blue-600 truncate">{isFruitHistory ? (sale.customerName || '-') : sale.itemBrand}</div>
+                                                                                </div>
+                                                                                <div className="text-right">
+                                                                                    <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-0.5">{isFruitHistory ? "Phone" : "Packet"}</div>
+                                                                                    <div className="text-sm font-bold text-gray-900 truncate">{isFruitHistory ? (sale.contact || '-') : `${sale.itemPacket.toLocaleString()} PKT`}</div>
+                                                                                </div>
+                                                                            </div>
+
+                                                                            <div className="flex items-end justify-between pt-1">
+                                                                                <div className="flex flex-col">
+                                                                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Quantity</span>
+                                                                                    <span className="text-sm font-black text-gray-900">{sale.itemQty.toLocaleString()} {unit}</span>
+                                                                                </div>
+                                                                                <div className="flex flex-col items-center">
+                                                                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Price</span>
+                                                                                    <span className="text-xs font-bold text-gray-600">৳{sale.itemPrice.toLocaleString()}</span>
+                                                                                </div>
+                                                                                <div className="flex flex-col items-end">
+                                                                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Total Amount</span>
+                                                                                    <span className="text-lg font-black text-blue-600">৳{sale.itemTotal.toLocaleString()}</span>
+                                                                                </div>
+                                                                            </div>
+
+                                                                            {isFruitHistory && (
+                                                                                <div className="pt-2 border-t border-gray-50 flex justify-between items-center text-sm">
+                                                                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Truck:</span>
+                                                                                    <span className="font-bold text-gray-700">{sale.itemTruck || '-'}</span>
+                                                                                </div>
+                                                                            )}
+                                                                        </div>
+                                                                    )}
+                                                                </div>
+                                                            );
+                                                        })
+                                                    )}
                                                 </div>
                                             </div>
                                         </div>
