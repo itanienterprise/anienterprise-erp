@@ -40,6 +40,7 @@ function LCReceive({
     setSubmitStatus,
     lcReceiveRecords,
     lcReceiveSummary,
+    fetchProducts,
     salesRecords = []
 }) {
     const [activeDropdown, setActiveDropdown] = useState(null);
@@ -441,6 +442,41 @@ function LCReceive({
             productEntries: updatedProducts,
             ...summaries
         });
+    };
+
+    const handleAddBrand = async (pIndex, bIndex, newBrandName) => {
+        if (!newBrandName) return;
+        const productName = stockFormData.productEntries[pIndex].productName;
+        if (!productName) return;
+
+        const product = products.find(p => p.name === productName);
+        if (!product) return;
+
+        try {
+            const currentBrands = product.brands || [];
+            if (currentBrands.some(b => b.brand.toLowerCase() === newBrandName.toLowerCase())) {
+                handleBrandEntryChange(pIndex, bIndex, 'brand', newBrandName);
+                return;
+            }
+
+            const updatedBrands = [...currentBrands, { brand: newBrandName, purchasedPrice: '', packetSize: '' }];
+            const updatedProductData = { ...product, brands: updatedBrands };
+
+            // Remove helper fields before encrypting and sending to backend
+            const { _id, createdAt, ...dataToEncrypt } = updatedProductData;
+
+            await axios.put(`${API_BASE_URL}/api/products/${product._id}`, {
+                data: encryptData(dataToEncrypt)
+            });
+
+            if (fetchProducts) await fetchProducts();
+
+            handleBrandEntryChange(pIndex, bIndex, 'brand', newBrandName);
+            setActiveDropdown(null);
+        } catch (error) {
+            console.error('Error adding brand:', error);
+            alert('Failed to add new brand. Please try again.');
+        }
     };
 
     const handleStockDropdownSelect = (field, value) => {
@@ -1359,19 +1395,19 @@ function LCReceive({
             {/* Summary Cards */}
             {
                 !showStockForm && (
-                    <div className="grid grid-cols-2 md:grid-cols-3 gap-2 md:gap-4">
-                        <div className="order-2 md:order-1 bg-white border border-gray-100 p-2.5 md:p-4 rounded-xl shadow-sm transition-all hover:shadow-md">
+                    <div className="flex flex-wrap md:flex-nowrap gap-2 md:gap-4">
+                        <div className="order-1 flex-1 min-w-[calc(50%-4px)] md:min-w-0 bg-white border border-gray-100 p-2.5 md:p-4 rounded-xl shadow-sm transition-all hover:shadow-md">
                             <div className="text-[9px] md:text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-0.5 md:mb-1">Total Packet</div>
                             <div className="text-base md:text-xl font-bold text-gray-900">{lcReceiveSummary.totalPackets}</div>
                         </div>
-                        <div className="order-3 col-span-2 md:col-span-1 md:order-2 bg-emerald-50/50 border border-emerald-100 p-2.5 md:p-4 rounded-xl shadow-sm transition-all hover:shadow-md">
+                        <div className="order-2 flex-1 min-w-[calc(50%-4px)] md:min-w-0 bg-emerald-50/50 border border-emerald-100 p-2.5 md:p-4 rounded-xl shadow-sm transition-all hover:shadow-md">
                             <div className="text-[9px] md:text-[11px] font-bold text-emerald-600 uppercase tracking-wider mb-0.5 md:mb-1">Total Qty</div>
                             <div className="text-base md:text-xl font-bold text-emerald-700 truncate">{Math.round(lcReceiveSummary.totalQuantity)} {lcReceiveSummary.unit}</div>
                         </div>
-                        <div className="order-1 md:order-3 bg-blue-50/50 border border-blue-100 p-2.5 md:p-4 rounded-xl shadow-sm transition-all hover:shadow-md">
+                        <div className="order-3 w-full md:w-auto md:flex-1 bg-blue-50/50 border border-blue-100 p-2.5 md:p-4 rounded-xl shadow-sm transition-all hover:shadow-md">
                             <div className="text-[9px] md:text-[11px] font-bold text-blue-600 uppercase tracking-wider mb-0.5 md:mb-1">Truck</div>
                             <div className="text-base md:text-xl font-bold text-blue-700">
-                                {lcReceiveRecords.reduce((acc, curr) => acc + (parseFloat(curr.truckNo) || 0), 0)}
+                                {lcReceiveSummary.totalTrucks}
                             </div>
                         </div>
                     </div>
@@ -1861,23 +1897,23 @@ function LCReceive({
                                                 {/* Brand Entries Section (Multi-Brand Only) */}
                                                 {product.isMultiBrand && (
                                                     <div className="mt-4 space-y-3 animate-in fade-in slide-in-from-top-2 duration-300 bg-gray-50/50 p-2 md:p-4 rounded-xl border border-gray-100 mx-[-4px] md:mx-0">
-                                                        <div className="flex items-center justify-between mb-1 px-1">
-                                                            <label className="text-xs font-bold text-gray-500 uppercase tracking-wider">Brand Breakdown</label>
-                                                        </div>
-                                                        <div className="hidden md:grid grid-cols-6 gap-2 px-1 mb-1 pr-12">
-                                                            <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">BRAND</div>
-                                                            <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">PRICE</div>
-                                                            <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">PACKET</div>
-                                                            <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">SIZE</div>
-                                                            <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">QTY</div>
-                                                            <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">UNIT</div>
+                                                        <div className="hidden md:flex items-center gap-2 mb-1 px-3">
+                                                            <div className="flex-1 grid grid-cols-6 gap-2">
+                                                                <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">BRAND</div>
+                                                                <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">PRICE</div>
+                                                                <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">PACKET</div>
+                                                                <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">SIZE</div>
+                                                                <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">QTY</div>
+                                                                <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">UNIT</div>
+                                                            </div>
+                                                            <div className="w-10"></div>
                                                         </div>
                                                         <div className="space-y-4">
                                                             {product.brandEntries.map((entry, bIndex) => (
                                                                 <div key={bIndex} className="p-2 md:p-3 bg-white/40 border border-gray-200/50 rounded-lg space-y-4 group/brand">
                                                                     <div className="flex items-center gap-2">
-                                                                        <div className="flex-1 grid grid-cols-2 md:grid-cols-6 gap-2">
-                                                                            <div className="relative w-full col-span-2 md:col-span-1" ref={el => brandRefs.current[`${pIndex}-${bIndex}`] = el}>
+                                                                        <div className="flex-1 grid grid-cols-1 md:grid-cols-6 lg:grid-cols-6 gap-2">
+                                                                            <div className="relative w-full col-span-1" ref={el => brandRefs.current[`${pIndex}-${bIndex}`] = el}>
                                                                                 <label className="md:hidden text-[10px] font-bold text-gray-400 uppercase mb-1">Brand</label>
                                                                                 <div className="flex items-center gap-1">
                                                                                     <div className="relative flex-1">
@@ -1937,34 +1973,58 @@ function LCReceive({
                                                                                         ))}
                                                                                         {getFilteredBrands(entry.brand, product.productName).length === 0 && (
                                                                                             <div className="px-3 py-2 text-sm text-gray-500 italic">
-                                                                                                {!product.productName ? 'Please select a product first' : 'Type to add new brand'}
+                                                                                                {!product.productName ? 'Please select a product first' : (
+                                                                                                    <div className="flex flex-col gap-2">
+                                                                                                        <span>No brands found</span>
+                                                                                                        {entry.brand && (
+                                                                                                            <button
+                                                                                                                type="button"
+                                                                                                                onClick={() => handleAddBrand(pIndex, bIndex, entry.brand)}
+                                                                                                                className="w-full px-3 py-2 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-600 hover:text-white transition-all font-semibold text-xs border border-blue-100"
+                                                                                                            >
+                                                                                                                + Add "{entry.brand}"
+                                                                                                            </button>
+                                                                                                        )}
+                                                                                                    </div>
+                                                                                                )}
+                                                                                            </div>
+                                                                                        )}
+                                                                                        {entry.brand && getFilteredBrands(entry.brand, product.productName).length > 0 && !getFilteredBrands(entry.brand, product.productName).some(b => b.toLowerCase() === entry.brand.toLowerCase()) && (
+                                                                                            <div className="px-1 py-1 border-t border-gray-50">
+                                                                                                <button
+                                                                                                    type="button"
+                                                                                                    onClick={() => handleAddBrand(pIndex, bIndex, entry.brand)}
+                                                                                                    className="w-full px-3 py-2 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-600 hover:text-white transition-all font-semibold text-xs text-left flex items-center gap-2"
+                                                                                                >
+                                                                                                    <PlusIcon className="w-3 h-3" /> Add "{entry.brand}"
+                                                                                                </button>
                                                                                             </div>
                                                                                         )}
                                                                                     </div>
                                                                                 )}
                                                                             </div>
-                                                                            <div className="space-y-1 md:space-y-0 col-span-2 md:col-span-1">
+                                                                            <div className="space-y-1 md:space-y-0 col-span-1">
                                                                                 <label className="md:hidden text-[10px] font-bold text-gray-400 uppercase mb-1">Price</label>
                                                                                 <input
                                                                                     type="number" value={entry.purchasedPrice} placeholder="Price" onChange={(e) => handleBrandEntryChange(pIndex, bIndex, 'purchasedPrice', e.target.value)}
                                                                                     className="w-full h-9 px-2 text-sm bg-white border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-all [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                                                                                 />
                                                                             </div>
-                                                                            <div className="space-y-1 md:space-y-0 relative col-span-2 md:col-span-1">
+                                                                            <div className="space-y-1 md:space-y-0 relative col-span-1">
                                                                                 <label className="md:hidden text-[10px] font-bold text-gray-400 uppercase mb-1">Packet</label>
                                                                                 <input
                                                                                     type="number" value={entry.packet && parseFloat(entry.packet) !== 0 ? entry.packet : ''} placeholder="Packet" onChange={(e) => handleBrandEntryChange(pIndex, bIndex, 'packet', e.target.value)}
                                                                                     className="w-full h-9 px-2 text-sm bg-white border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-all [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                                                                                 />
                                                                             </div>
-                                                                            <div className="space-y-1 md:space-y-0 col-span-2 md:col-span-1">
+                                                                            <div className="space-y-1 md:space-y-0 col-span-1">
                                                                                 <label className="md:hidden text-[10px] font-bold text-gray-400 uppercase mb-1">Size</label>
                                                                                 <input
                                                                                     type="number" value={entry.packetSize} placeholder="Size" onChange={(e) => handleBrandEntryChange(pIndex, bIndex, 'packetSize', e.target.value)}
                                                                                     className="w-full h-9 px-2 text-sm bg-white border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-all [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                                                                                 />
                                                                             </div>
-                                                                            <div className="space-y-1 md:space-y-0 col-span-2 md:col-span-1">
+                                                                            <div className="space-y-1 md:space-y-0 col-span-1">
                                                                                 <label className="md:hidden text-[10px] font-bold text-gray-400 uppercase mb-1">Qty</label>
                                                                                 <input
                                                                                     type="number"
@@ -1974,7 +2034,7 @@ function LCReceive({
                                                                                     className="w-full h-9 px-2 text-sm bg-white border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-all [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                                                                                 />
                                                                             </div>
-                                                                            <div className="space-y-1 md:space-y-0 col-span-2 md:col-span-1">
+                                                                            <div className="space-y-1 md:space-y-0 col-span-1">
                                                                                 <label className="md:hidden text-[10px] font-bold text-gray-400 uppercase mb-1">Unit</label>
                                                                                 <select
                                                                                     value={entry.unit} onChange={(e) => handleBrandEntryChange(pIndex, bIndex, 'unit', e.target.value)}

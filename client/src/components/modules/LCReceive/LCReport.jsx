@@ -155,7 +155,7 @@ const LCReport = ({
                     body { margin: 0; }
                 }
             `}</style>
-            <div className="w-full h-full md:w-[98%] md:h-[94%] bg-white md:rounded-3xl shadow-2xl flex flex-col overflow-hidden animate-in fade-in zoom-in duration-300 print:w-full print:h-auto print:shadow-none print:bg-white print:rounded-none">
+            <div className="w-full h-full md:w-[98%] md:h-[94%] bg-white md:rounded-3xl shadow-2xl flex flex-col animate-in fade-in zoom-in duration-300 print:w-full print:h-auto print:shadow-none print:bg-white print:rounded-none">
                 {/* Modal Header - Hidden in Print */}
                 <div className="px-4 md:px-8 py-3 md:py-5 border-b border-gray-100 bg-gray-50/50 flex items-center justify-between print:hidden">
                     <div className="flex items-center gap-3 md:gap-4">
@@ -181,433 +181,438 @@ const LCReport = ({
 
                             {/* Filter Panel */}
                             {showFilterPanel && (
-                                <div ref={filterPanelRef} className="absolute right-0 mt-2 w-[calc(100vw-2rem)] md:w-[450px] bg-white rounded-2xl shadow-2xl border border-gray-100 p-4 md:p-6 z-[110] animate-in fade-in slide-in-from-top-2 duration-200">
-                                    <div className="flex items-center justify-between mb-6">
-                                        <h3 className="text-base font-bold text-gray-900">Advance Filter</h3>
-                                        <button
-                                            onClick={() => {
-                                                setLcFilters(initialLcFilterState);
-                                                setFilterSearchInputs({
-                                                    lcNoSearch: '',
-                                                    portSearch: '',
-                                                    indCnfSearch: '',
-                                                    bdCnfSearch: '',
-                                                    billOfEntrySearch: '',
-                                                    productSearch: '',
-                                                    brandSearch: ''
-                                                });
-                                                setFilterDropdownOpen(initialFilterDropdownState);
-                                            }}
-                                            className="text-xs font-bold text-blue-600 hover:text-blue-700 uppercase tracking-wider"
-                                        >
-                                            Reset All
-                                        </button>
-                                    </div>
+                                <>
+                                    {/* Backdrop for mobile */}
+                                    <div className="fixed inset-0 bg-black/20 backdrop-blur-[2px] z-[210] md:hidden" onClick={() => setShowFilterPanel(false)} />
 
-                                    <div className="grid grid-cols-2 gap-4">
-                                        <CustomDatePicker
-                                            label="From Date"
-                                            value={lcFilters.startDate}
-                                            onChange={(e) => setLcFilters({ ...lcFilters, startDate: e.target.value })}
-                                            compact={true}
-                                        />
-                                        <CustomDatePicker
-                                            label="To Date"
-                                            value={lcFilters.endDate}
-                                            onChange={(e) => setLcFilters({ ...lcFilters, endDate: e.target.value })}
-                                            compact={true}
-                                            rightAlign={true}
-                                        />
+                                    <div ref={filterPanelRef} className="fixed inset-x-4 md:inset-x-auto top-24 md:absolute md:top-full md:right-0 md:mt-3 w-auto md:w-[480px] bg-white rounded-2xl shadow-[0_20px_50px_rgba(0,0,0,0.15)] border border-gray-100 p-4 md:p-6 z-[220] animate-in fade-in zoom-in-95 duration-200">
+                                        <div className="flex items-center justify-between mb-6">
+                                            <h3 className="text-base font-bold text-gray-900">Advance Filter</h3>
+                                            <button
+                                                onClick={() => {
+                                                    setLcFilters(initialLcFilterState);
+                                                    setFilterSearchInputs({
+                                                        lcNoSearch: '',
+                                                        portSearch: '',
+                                                        indCnfSearch: '',
+                                                        bdCnfSearch: '',
+                                                        billOfEntrySearch: '',
+                                                        productSearch: '',
+                                                        brandSearch: ''
+                                                    });
+                                                    setFilterDropdownOpen(initialFilterDropdownState);
+                                                }}
+                                                className="text-xs font-bold text-blue-600 hover:text-blue-700 uppercase tracking-wider"
+                                            >
+                                                Reset All
+                                            </button>
+                                        </div>
 
-                                        {/* LC No Filter */}
-                                        <div className="space-y-1.5 relative" ref={reportLcNoFilterRef}>
-                                            <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">LC No</label>
-                                            <div className="relative">
-                                                <input
-                                                    type="text"
-                                                    value={filterSearchInputs.lcNoSearch}
-                                                    onChange={(e) => {
-                                                        setFilterSearchInputs({ ...filterSearchInputs, lcNoSearch: e.target.value });
-                                                        setFilterDropdownOpen({ ...initialFilterDropdownState, lcNo: true });
-                                                    }}
-                                                    onFocus={() => setFilterDropdownOpen({ ...initialFilterDropdownState, lcNo: true })}
-                                                    placeholder={lcFilters.lcNo || "Search LC..."}
-                                                    className={`w-full px-3 py-2 bg-white border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all shadow-sm hover:border-gray-300 pr-14 ${lcFilters.lcNo ? 'placeholder:text-gray-900 placeholder:font-semibold' : 'placeholder:text-gray-300'}`}
-                                                />
-                                                <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1.5">
-                                                    {lcFilters.lcNo && (
-                                                        <button
-                                                            onClick={() => {
-                                                                setLcFilters({ ...lcFilters, lcNo: '' });
-                                                                setFilterSearchInputs({ ...filterSearchInputs, lcNoSearch: '' });
-                                                            }}
-                                                            className="text-gray-400 hover:text-gray-600"
-                                                        >
-                                                            <XIcon className="w-4 h-4" />
-                                                        </button>
-                                                    )}
-                                                    <SearchIcon className="w-4 h-4 text-gray-400 pointer-events-none" />
-                                                </div>
-                                            </div>
-                                            {filterDropdownOpen.lcNo && (() => {
-                                                const lcOptions = [...new Set(stockRecords.map(item => (item.lcNo || '').trim()).filter(Boolean))].sort();
-                                                const filtered = lcOptions.filter(lc => lc.toLowerCase().includes(filterSearchInputs.lcNoSearch.toLowerCase()));
-                                                return filtered.length > 0 ? (
-                                                    <div className="absolute z-[120] mt-1 w-full bg-white border border-gray-200 rounded-xl shadow-lg max-h-48 overflow-y-auto">
-                                                        {filtered.map(lc => (
+                                        <div className="grid grid-cols-2 gap-4">
+                                            <CustomDatePicker
+                                                label="From Date"
+                                                value={lcFilters.startDate}
+                                                onChange={(e) => setLcFilters({ ...lcFilters, startDate: e.target.value })}
+                                                compact={true}
+                                            />
+                                            <CustomDatePicker
+                                                label="To Date"
+                                                value={lcFilters.endDate}
+                                                onChange={(e) => setLcFilters({ ...lcFilters, endDate: e.target.value })}
+                                                compact={true}
+                                                rightAlign={true}
+                                            />
+
+                                            {/* LC No Filter */}
+                                            <div className="space-y-1.5 relative" ref={reportLcNoFilterRef}>
+                                                <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">LC No</label>
+                                                <div className="relative">
+                                                    <input
+                                                        type="text"
+                                                        value={filterSearchInputs.lcNoSearch}
+                                                        onChange={(e) => {
+                                                            setFilterSearchInputs({ ...filterSearchInputs, lcNoSearch: e.target.value });
+                                                            setFilterDropdownOpen({ ...initialFilterDropdownState, lcNo: true });
+                                                        }}
+                                                        onFocus={() => setFilterDropdownOpen({ ...initialFilterDropdownState, lcNo: true })}
+                                                        placeholder={lcFilters.lcNo || "Search LC..."}
+                                                        className={`w-full px-3 py-2 bg-white border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all shadow-sm hover:border-gray-300 pr-14 ${lcFilters.lcNo ? 'placeholder:text-gray-900 placeholder:font-semibold' : 'placeholder:text-gray-300'}`}
+                                                    />
+                                                    <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1.5">
+                                                        {lcFilters.lcNo && (
                                                             <button
-                                                                key={lc}
-                                                                type="button"
                                                                 onClick={() => {
-                                                                    setLcFilters({ ...lcFilters, lcNo: lc });
+                                                                    setLcFilters({ ...lcFilters, lcNo: '' });
                                                                     setFilterSearchInputs({ ...filterSearchInputs, lcNoSearch: '' });
-                                                                    setFilterDropdownOpen(initialFilterDropdownState);
                                                                 }}
-                                                                className="w-full px-3 py-2 text-left text-sm hover:bg-blue-50 transition-colors"
+                                                                className="text-gray-400 hover:text-gray-600"
                                                             >
-                                                                {lc}
+                                                                <XIcon className="w-4 h-4" />
                                                             </button>
-                                                        ))}
+                                                        )}
+                                                        <SearchIcon className="w-4 h-4 text-gray-400 pointer-events-none" />
                                                     </div>
-                                                ) : null;
-                                            })()}
-                                        </div>
-
-                                        {/* Port Filter */}
-                                        <div className="space-y-1.5 relative" ref={reportPortFilterRef}>
-                                            <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Port</label>
-                                            <div className="relative">
-                                                <input
-                                                    type="text"
-                                                    value={filterSearchInputs.portSearch}
-                                                    onChange={(e) => {
-                                                        setFilterSearchInputs({ ...filterSearchInputs, portSearch: e.target.value });
-                                                        setFilterDropdownOpen({ ...initialFilterDropdownState, port: true });
-                                                    }}
-                                                    onFocus={() => setFilterDropdownOpen({ ...initialFilterDropdownState, port: true })}
-                                                    placeholder={lcFilters.port || "Search Port..."}
-                                                    className={`w-full px-3 py-2 bg-white border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all shadow-sm hover:border-gray-300 pr-14 ${lcFilters.port ? 'placeholder:text-gray-900 placeholder:font-semibold' : 'placeholder:text-gray-300'}`}
-                                                />
-                                                <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1.5">
-                                                    {lcFilters.port && (
-                                                        <button
-                                                            onClick={() => {
-                                                                setLcFilters({ ...lcFilters, port: '' });
-                                                                setFilterSearchInputs({ ...filterSearchInputs, portSearch: '' });
-                                                            }}
-                                                            className="text-gray-400 hover:text-gray-600"
-                                                        >
-                                                            <XIcon className="w-4 h-4" />
-                                                        </button>
-                                                    )}
-                                                    <SearchIcon className="w-4 h-4 text-gray-400 pointer-events-none" />
                                                 </div>
+                                                {filterDropdownOpen.lcNo && (() => {
+                                                    const lcOptions = [...new Set(stockRecords.map(item => (item.lcNo || '').trim()).filter(Boolean))].sort();
+                                                    const filtered = lcOptions.filter(lc => lc.toLowerCase().includes(filterSearchInputs.lcNoSearch.toLowerCase()));
+                                                    return filtered.length > 0 ? (
+                                                        <div className="absolute z-[120] mt-1 w-full bg-white border border-gray-200 rounded-xl shadow-lg max-h-48 overflow-y-auto">
+                                                            {filtered.map(lc => (
+                                                                <button
+                                                                    key={lc}
+                                                                    type="button"
+                                                                    onClick={() => {
+                                                                        setLcFilters({ ...lcFilters, lcNo: lc });
+                                                                        setFilterSearchInputs({ ...filterSearchInputs, lcNoSearch: '' });
+                                                                        setFilterDropdownOpen(initialFilterDropdownState);
+                                                                    }}
+                                                                    className="w-full px-3 py-2 text-left text-sm hover:bg-blue-50 transition-colors"
+                                                                >
+                                                                    {lc}
+                                                                </button>
+                                                            ))}
+                                                        </div>
+                                                    ) : null;
+                                                })()}
                                             </div>
-                                            {filterDropdownOpen.port && (() => {
-                                                const portOptions = [...new Set(stockRecords.map(item => (item.port || '').trim()).filter(Boolean))].sort();
-                                                const filtered = portOptions.filter(p => p.toLowerCase().includes(filterSearchInputs.portSearch.toLowerCase()));
-                                                return filtered.length > 0 ? (
-                                                    <div className="absolute z-[120] mt-1 w-full bg-white border border-gray-200 rounded-xl shadow-lg max-h-48 overflow-y-auto">
-                                                        {filtered.map(p => (
+
+                                            {/* Port Filter */}
+                                            <div className="space-y-1.5 relative" ref={reportPortFilterRef}>
+                                                <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Port</label>
+                                                <div className="relative">
+                                                    <input
+                                                        type="text"
+                                                        value={filterSearchInputs.portSearch}
+                                                        onChange={(e) => {
+                                                            setFilterSearchInputs({ ...filterSearchInputs, portSearch: e.target.value });
+                                                            setFilterDropdownOpen({ ...initialFilterDropdownState, port: true });
+                                                        }}
+                                                        onFocus={() => setFilterDropdownOpen({ ...initialFilterDropdownState, port: true })}
+                                                        placeholder={lcFilters.port || "Search Port..."}
+                                                        className={`w-full px-3 py-2 bg-white border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all shadow-sm hover:border-gray-300 pr-14 ${lcFilters.port ? 'placeholder:text-gray-900 placeholder:font-semibold' : 'placeholder:text-gray-300'}`}
+                                                    />
+                                                    <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1.5">
+                                                        {lcFilters.port && (
                                                             <button
-                                                                key={p}
-                                                                type="button"
                                                                 onClick={() => {
-                                                                    setLcFilters({ ...lcFilters, port: p });
+                                                                    setLcFilters({ ...lcFilters, port: '' });
                                                                     setFilterSearchInputs({ ...filterSearchInputs, portSearch: '' });
-                                                                    setFilterDropdownOpen(initialFilterDropdownState);
                                                                 }}
-                                                                className="w-full px-3 py-2 text-left text-sm hover:bg-blue-50 transition-colors"
+                                                                className="text-gray-400 hover:text-gray-600"
                                                             >
-                                                                {p}
+                                                                <XIcon className="w-4 h-4" />
                                                             </button>
-                                                        ))}
+                                                        )}
+                                                        <SearchIcon className="w-4 h-4 text-gray-400 pointer-events-none" />
                                                     </div>
-                                                ) : null;
-                                            })()}
-                                        </div>
-
-                                        {/* Product Filter */}
-                                        <div className="space-y-1.5 relative" ref={reportProductFilterRef}>
-                                            <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Product</label>
-                                            <div className="relative">
-                                                <input
-                                                    type="text"
-                                                    value={filterSearchInputs.productSearch}
-                                                    onChange={(e) => {
-                                                        setFilterSearchInputs({ ...filterSearchInputs, productSearch: e.target.value });
-                                                        setFilterDropdownOpen({ ...initialFilterDropdownState, product: true });
-                                                    }}
-                                                    onFocus={() => setFilterDropdownOpen({ ...initialFilterDropdownState, product: true })}
-                                                    placeholder={lcFilters.productName || "Search Product..."}
-                                                    className={`w-full px-3 py-2 bg-white border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all shadow-sm hover:border-gray-300 pr-14 ${lcFilters.productName ? 'placeholder:text-gray-900 placeholder:font-semibold' : 'placeholder:text-gray-300'}`}
-                                                />
-                                                <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1.5">
-                                                    {lcFilters.productName && (
-                                                        <button
-                                                            onClick={() => {
-                                                                setLcFilters({ ...lcFilters, productName: '' });
-                                                                setFilterSearchInputs({ ...filterSearchInputs, productSearch: '' });
-                                                            }}
-                                                            className="text-gray-400 hover:text-gray-600"
-                                                        >
-                                                            <XIcon className="w-4 h-4" />
-                                                        </button>
-                                                    )}
-                                                    <SearchIcon className="w-4 h-4 text-gray-400 pointer-events-none" />
                                                 </div>
+                                                {filterDropdownOpen.port && (() => {
+                                                    const portOptions = [...new Set(stockRecords.map(item => (item.port || '').trim()).filter(Boolean))].sort();
+                                                    const filtered = portOptions.filter(p => p.toLowerCase().includes(filterSearchInputs.portSearch.toLowerCase()));
+                                                    return filtered.length > 0 ? (
+                                                        <div className="absolute z-[120] mt-1 w-full bg-white border border-gray-200 rounded-xl shadow-lg max-h-48 overflow-y-auto">
+                                                            {filtered.map(p => (
+                                                                <button
+                                                                    key={p}
+                                                                    type="button"
+                                                                    onClick={() => {
+                                                                        setLcFilters({ ...lcFilters, port: p });
+                                                                        setFilterSearchInputs({ ...filterSearchInputs, portSearch: '' });
+                                                                        setFilterDropdownOpen(initialFilterDropdownState);
+                                                                    }}
+                                                                    className="w-full px-3 py-2 text-left text-sm hover:bg-blue-50 transition-colors"
+                                                                >
+                                                                    {p}
+                                                                </button>
+                                                            ))}
+                                                        </div>
+                                                    ) : null;
+                                                })()}
                                             </div>
-                                            {filterDropdownOpen.product && (() => {
-                                                const options = [...new Set(stockRecords.map(item => (item.productName || '').trim()).filter(Boolean))].sort();
-                                                const filtered = options.filter(o => o.toLowerCase().includes(filterSearchInputs.productSearch.toLowerCase()));
-                                                return filtered.length > 0 ? (
-                                                    <div className="absolute z-[120] mt-1 w-full bg-white border border-gray-200 rounded-xl shadow-lg max-h-48 overflow-y-auto">
-                                                        {filtered.map(o => (
+
+                                            {/* Product Filter */}
+                                            <div className="space-y-1.5 relative" ref={reportProductFilterRef}>
+                                                <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Product</label>
+                                                <div className="relative">
+                                                    <input
+                                                        type="text"
+                                                        value={filterSearchInputs.productSearch}
+                                                        onChange={(e) => {
+                                                            setFilterSearchInputs({ ...filterSearchInputs, productSearch: e.target.value });
+                                                            setFilterDropdownOpen({ ...initialFilterDropdownState, product: true });
+                                                        }}
+                                                        onFocus={() => setFilterDropdownOpen({ ...initialFilterDropdownState, product: true })}
+                                                        placeholder={lcFilters.productName || "Search Product..."}
+                                                        className={`w-full px-3 py-2 bg-white border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all shadow-sm hover:border-gray-300 pr-14 ${lcFilters.productName ? 'placeholder:text-gray-900 placeholder:font-semibold' : 'placeholder:text-gray-300'}`}
+                                                    />
+                                                    <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1.5">
+                                                        {lcFilters.productName && (
                                                             <button
-                                                                key={o}
-                                                                type="button"
                                                                 onClick={() => {
-                                                                    setLcFilters({ ...lcFilters, productName: o });
+                                                                    setLcFilters({ ...lcFilters, productName: '' });
                                                                     setFilterSearchInputs({ ...filterSearchInputs, productSearch: '' });
-                                                                    setFilterDropdownOpen(initialFilterDropdownState);
                                                                 }}
-                                                                className="w-full px-3 py-2 text-left text-sm hover:bg-blue-50 transition-colors"
+                                                                className="text-gray-400 hover:text-gray-600"
                                                             >
-                                                                {o}
+                                                                <XIcon className="w-4 h-4" />
                                                             </button>
-                                                        ))}
+                                                        )}
+                                                        <SearchIcon className="w-4 h-4 text-gray-400 pointer-events-none" />
                                                     </div>
-                                                ) : null;
-                                            })()}
-                                        </div>
-
-                                        {/* Brand Filter */}
-                                        <div className="space-y-1.5 relative" ref={reportBrandFilterRef}>
-                                            <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Brand</label>
-                                            <div className="relative">
-                                                <input
-                                                    type="text"
-                                                    value={filterSearchInputs.brandSearch}
-                                                    onChange={(e) => {
-                                                        setFilterSearchInputs({ ...filterSearchInputs, brandSearch: e.target.value });
-                                                        setFilterDropdownOpen({ ...initialFilterDropdownState, brand: true });
-                                                    }}
-                                                    onFocus={() => setFilterDropdownOpen({ ...initialFilterDropdownState, brand: true })}
-                                                    placeholder={lcFilters.brand || "Search Brand..."}
-                                                    className={`w-full px-3 py-2 bg-white border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all shadow-sm hover:border-gray-300 pr-14 ${lcFilters.brand ? 'placeholder:text-gray-900 placeholder:font-semibold' : 'placeholder:text-gray-300'}`}
-                                                />
-                                                <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1.5">
-                                                    {lcFilters.brand && (
-                                                        <button
-                                                            onClick={() => {
-                                                                setLcFilters({ ...lcFilters, brand: '' });
-                                                                setFilterSearchInputs({ ...filterSearchInputs, brandSearch: '' });
-                                                            }}
-                                                            className="text-gray-400 hover:text-gray-600"
-                                                        >
-                                                            <XIcon className="w-4 h-4" />
-                                                        </button>
-                                                    )}
-                                                    <SearchIcon className="w-4 h-4 text-gray-400 pointer-events-none" />
                                                 </div>
+                                                {filterDropdownOpen.product && (() => {
+                                                    const options = [...new Set(stockRecords.map(item => (item.productName || '').trim()).filter(Boolean))].sort();
+                                                    const filtered = options.filter(o => o.toLowerCase().includes(filterSearchInputs.productSearch.toLowerCase()));
+                                                    return filtered.length > 0 ? (
+                                                        <div className="absolute z-[120] mt-1 w-full bg-white border border-gray-200 rounded-xl shadow-lg max-h-48 overflow-y-auto">
+                                                            {filtered.map(o => (
+                                                                <button
+                                                                    key={o}
+                                                                    type="button"
+                                                                    onClick={() => {
+                                                                        setLcFilters({ ...lcFilters, productName: o });
+                                                                        setFilterSearchInputs({ ...filterSearchInputs, productSearch: '' });
+                                                                        setFilterDropdownOpen(initialFilterDropdownState);
+                                                                    }}
+                                                                    className="w-full px-3 py-2 text-left text-sm hover:bg-blue-50 transition-colors"
+                                                                >
+                                                                    {o}
+                                                                </button>
+                                                            ))}
+                                                        </div>
+                                                    ) : null;
+                                                })()}
                                             </div>
-                                            {filterDropdownOpen.brand && (() => {
-                                                const productFilteredRecords = lcFilters.productName
-                                                    ? stockRecords.filter(item => (item.productName || '').trim().toLowerCase() === lcFilters.productName.toLowerCase())
-                                                    : stockRecords;
-                                                const options = [...new Set(productFilteredRecords.flatMap(item => {
-                                                    if (item.brand) return [(item.brand || '').trim()];
-                                                    return (item.brandEntries || []).map(e => (e.brand || '').trim());
-                                                }).filter(Boolean))].sort();
-                                                const filtered = options.filter(o => o.toLowerCase().includes(filterSearchInputs.brandSearch.toLowerCase()));
-                                                return filtered.length > 0 ? (
-                                                    <div className="absolute z-[120] mt-1 w-full bg-white border border-gray-200 rounded-xl shadow-lg max-h-48 overflow-y-auto">
-                                                        {filtered.map(o => (
+
+                                            {/* Brand Filter */}
+                                            <div className="space-y-1.5 relative" ref={reportBrandFilterRef}>
+                                                <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Brand</label>
+                                                <div className="relative">
+                                                    <input
+                                                        type="text"
+                                                        value={filterSearchInputs.brandSearch}
+                                                        onChange={(e) => {
+                                                            setFilterSearchInputs({ ...filterSearchInputs, brandSearch: e.target.value });
+                                                            setFilterDropdownOpen({ ...initialFilterDropdownState, brand: true });
+                                                        }}
+                                                        onFocus={() => setFilterDropdownOpen({ ...initialFilterDropdownState, brand: true })}
+                                                        placeholder={lcFilters.brand || "Search Brand..."}
+                                                        className={`w-full px-3 py-2 bg-white border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all shadow-sm hover:border-gray-300 pr-14 ${lcFilters.brand ? 'placeholder:text-gray-900 placeholder:font-semibold' : 'placeholder:text-gray-300'}`}
+                                                    />
+                                                    <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1.5">
+                                                        {lcFilters.brand && (
                                                             <button
-                                                                key={o}
-                                                                type="button"
                                                                 onClick={() => {
-                                                                    setLcFilters({ ...lcFilters, brand: o });
+                                                                    setLcFilters({ ...lcFilters, brand: '' });
                                                                     setFilterSearchInputs({ ...filterSearchInputs, brandSearch: '' });
-                                                                    setFilterDropdownOpen(initialFilterDropdownState);
                                                                 }}
-                                                                className="w-full px-3 py-2 text-left text-sm hover:bg-blue-50 transition-colors"
+                                                                className="text-gray-400 hover:text-gray-600"
                                                             >
-                                                                {o}
+                                                                <XIcon className="w-4 h-4" />
                                                             </button>
-                                                        ))}
+                                                        )}
+                                                        <SearchIcon className="w-4 h-4 text-gray-400 pointer-events-none" />
                                                     </div>
-                                                ) : null;
-                                            })()}
-                                        </div>
-
-                                        {/* IND CNF Filter */}
-                                        <div className="space-y-1.5 relative" ref={reportLcIndCnfFilterRef}>
-                                            <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">IND CNF</label>
-                                            <div className="relative">
-                                                <input
-                                                    type="text"
-                                                    value={filterSearchInputs.indCnfSearch}
-                                                    onChange={(e) => {
-                                                        setFilterSearchInputs({ ...filterSearchInputs, indCnfSearch: e.target.value });
-                                                        setFilterDropdownOpen({ ...initialFilterDropdownState, indCnf: true });
-                                                    }}
-                                                    onFocus={() => setFilterDropdownOpen({ ...initialFilterDropdownState, indCnf: true })}
-                                                    placeholder={lcFilters.indCnf || "Search..."}
-                                                    className={`w-full px-3 py-2 bg-white border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all shadow-sm hover:border-gray-300 pr-14 ${lcFilters.indCnf ? 'placeholder:text-gray-900 placeholder:font-semibold' : 'placeholder:text-gray-300'}`}
-                                                />
-                                                <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1.5">
-                                                    {lcFilters.indCnf && (
-                                                        <button
-                                                            onClick={() => {
-                                                                setLcFilters({ ...lcFilters, indCnf: '' });
-                                                                setFilterSearchInputs({ ...filterSearchInputs, indCnfSearch: '' });
-                                                            }}
-                                                            className="text-gray-400 hover:text-gray-600"
-                                                        >
-                                                            <XIcon className="w-4 h-4" />
-                                                        </button>
-                                                    )}
-                                                    <SearchIcon className="w-4 h-4 text-gray-400 pointer-events-none" />
                                                 </div>
+                                                {filterDropdownOpen.brand && (() => {
+                                                    const productFilteredRecords = lcFilters.productName
+                                                        ? stockRecords.filter(item => (item.productName || '').trim().toLowerCase() === lcFilters.productName.toLowerCase())
+                                                        : stockRecords;
+                                                    const options = [...new Set(productFilteredRecords.flatMap(item => {
+                                                        if (item.brand) return [(item.brand || '').trim()];
+                                                        return (item.brandEntries || []).map(e => (e.brand || '').trim());
+                                                    }).filter(Boolean))].sort();
+                                                    const filtered = options.filter(o => o.toLowerCase().includes(filterSearchInputs.brandSearch.toLowerCase()));
+                                                    return filtered.length > 0 ? (
+                                                        <div className="absolute z-[120] mt-1 w-full bg-white border border-gray-200 rounded-xl shadow-lg max-h-48 overflow-y-auto">
+                                                            {filtered.map(o => (
+                                                                <button
+                                                                    key={o}
+                                                                    type="button"
+                                                                    onClick={() => {
+                                                                        setLcFilters({ ...lcFilters, brand: o });
+                                                                        setFilterSearchInputs({ ...filterSearchInputs, brandSearch: '' });
+                                                                        setFilterDropdownOpen(initialFilterDropdownState);
+                                                                    }}
+                                                                    className="w-full px-3 py-2 text-left text-sm hover:bg-blue-50 transition-colors"
+                                                                >
+                                                                    {o}
+                                                                </button>
+                                                            ))}
+                                                        </div>
+                                                    ) : null;
+                                                })()}
                                             </div>
-                                            {filterDropdownOpen.indCnf && (() => {
-                                                const options = [...new Set(stockRecords.map(item => (item.indianCnF || '').trim()).filter(Boolean))].sort();
-                                                const filtered = options.filter(o => o.toLowerCase().includes(filterSearchInputs.indCnfSearch.toLowerCase()));
-                                                return filtered.length > 0 ? (
-                                                    <div className="absolute z-[120] mt-1 w-full bg-white border border-gray-200 rounded-xl shadow-lg max-h-48 overflow-y-auto">
-                                                        {filtered.map(o => (
+
+                                            {/* IND CNF Filter */}
+                                            <div className="space-y-1.5 relative" ref={reportLcIndCnfFilterRef}>
+                                                <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">IND CNF</label>
+                                                <div className="relative">
+                                                    <input
+                                                        type="text"
+                                                        value={filterSearchInputs.indCnfSearch}
+                                                        onChange={(e) => {
+                                                            setFilterSearchInputs({ ...filterSearchInputs, indCnfSearch: e.target.value });
+                                                            setFilterDropdownOpen({ ...initialFilterDropdownState, indCnf: true });
+                                                        }}
+                                                        onFocus={() => setFilterDropdownOpen({ ...initialFilterDropdownState, indCnf: true })}
+                                                        placeholder={lcFilters.indCnf || "Search..."}
+                                                        className={`w-full px-3 py-2 bg-white border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all shadow-sm hover:border-gray-300 pr-14 ${lcFilters.indCnf ? 'placeholder:text-gray-900 placeholder:font-semibold' : 'placeholder:text-gray-300'}`}
+                                                    />
+                                                    <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1.5">
+                                                        {lcFilters.indCnf && (
                                                             <button
-                                                                key={o}
                                                                 onClick={() => {
-                                                                    setLcFilters({ ...lcFilters, indCnf: o });
+                                                                    setLcFilters({ ...lcFilters, indCnf: '' });
                                                                     setFilterSearchInputs({ ...filterSearchInputs, indCnfSearch: '' });
-                                                                    setFilterDropdownOpen(initialFilterDropdownState);
                                                                 }}
-                                                                className="w-full px-3 py-2 text-left text-sm hover:bg-blue-50 transition-colors"
+                                                                className="text-gray-400 hover:text-gray-600"
                                                             >
-                                                                {o}
+                                                                <XIcon className="w-4 h-4" />
                                                             </button>
-                                                        ))}
+                                                        )}
+                                                        <SearchIcon className="w-4 h-4 text-gray-400 pointer-events-none" />
                                                     </div>
-                                                ) : null;
-                                            })()}
-                                        </div>
-
-                                        {/* BD CNF Filter */}
-                                        <div className="space-y-1.5 relative" ref={reportLcBdCnfFilterRef}>
-                                            <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">BD CNF</label>
-                                            <div className="relative">
-                                                <input
-                                                    type="text"
-                                                    value={filterSearchInputs.bdCnfSearch}
-                                                    onChange={(e) => {
-                                                        setFilterSearchInputs({ ...filterSearchInputs, bdCnfSearch: e.target.value });
-                                                        setFilterDropdownOpen({ ...initialFilterDropdownState, bdCnf: true });
-                                                    }}
-                                                    onFocus={() => setFilterDropdownOpen({ ...initialFilterDropdownState, bdCnf: true })}
-                                                    placeholder={lcFilters.bdCnf || "Search..."}
-                                                    className={`w-full px-3 py-2 bg-white border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all shadow-sm hover:border-gray-300 pr-14 ${lcFilters.bdCnf ? 'placeholder:text-gray-900 placeholder:font-semibold' : 'placeholder:text-gray-300'}`}
-                                                />
-                                                <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1.5">
-                                                    {lcFilters.bdCnf && (
-                                                        <button
-                                                            onClick={() => {
-                                                                setLcFilters({ ...lcFilters, bdCnf: '' });
-                                                                setFilterSearchInputs({ ...filterSearchInputs, bdCnfSearch: '' });
-                                                            }}
-                                                            className="text-gray-400 hover:text-gray-600"
-                                                        >
-                                                            <XIcon className="w-4 h-4" />
-                                                        </button>
-                                                    )}
-                                                    <SearchIcon className="w-4 h-4 text-gray-400 pointer-events-none" />
                                                 </div>
+                                                {filterDropdownOpen.indCnf && (() => {
+                                                    const options = [...new Set(stockRecords.map(item => (item.indianCnF || '').trim()).filter(Boolean))].sort();
+                                                    const filtered = options.filter(o => o.toLowerCase().includes(filterSearchInputs.indCnfSearch.toLowerCase()));
+                                                    return filtered.length > 0 ? (
+                                                        <div className="absolute z-[120] mt-1 w-full bg-white border border-gray-200 rounded-xl shadow-lg max-h-48 overflow-y-auto">
+                                                            {filtered.map(o => (
+                                                                <button
+                                                                    key={o}
+                                                                    onClick={() => {
+                                                                        setLcFilters({ ...lcFilters, indCnf: o });
+                                                                        setFilterSearchInputs({ ...filterSearchInputs, indCnfSearch: '' });
+                                                                        setFilterDropdownOpen(initialFilterDropdownState);
+                                                                    }}
+                                                                    className="w-full px-3 py-2 text-left text-sm hover:bg-blue-50 transition-colors"
+                                                                >
+                                                                    {o}
+                                                                </button>
+                                                            ))}
+                                                        </div>
+                                                    ) : null;
+                                                })()}
                                             </div>
-                                            {filterDropdownOpen.bdCnf && (() => {
-                                                const options = [...new Set(stockRecords.map(item => (item.bdCnF || '').trim()).filter(Boolean))].sort();
-                                                const filtered = options.filter(o => o.toLowerCase().includes(filterSearchInputs.bdCnfSearch.toLowerCase()));
-                                                return filtered.length > 0 ? (
-                                                    <div className="absolute z-[120] mt-1 w-full bg-white border border-gray-200 rounded-xl shadow-lg max-h-48 overflow-y-auto">
-                                                        {filtered.map(o => (
+
+                                            {/* BD CNF Filter */}
+                                            <div className="space-y-1.5 relative" ref={reportLcBdCnfFilterRef}>
+                                                <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">BD CNF</label>
+                                                <div className="relative">
+                                                    <input
+                                                        type="text"
+                                                        value={filterSearchInputs.bdCnfSearch}
+                                                        onChange={(e) => {
+                                                            setFilterSearchInputs({ ...filterSearchInputs, bdCnfSearch: e.target.value });
+                                                            setFilterDropdownOpen({ ...initialFilterDropdownState, bdCnf: true });
+                                                        }}
+                                                        onFocus={() => setFilterDropdownOpen({ ...initialFilterDropdownState, bdCnf: true })}
+                                                        placeholder={lcFilters.bdCnf || "Search..."}
+                                                        className={`w-full px-3 py-2 bg-white border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all shadow-sm hover:border-gray-300 pr-14 ${lcFilters.bdCnf ? 'placeholder:text-gray-900 placeholder:font-semibold' : 'placeholder:text-gray-300'}`}
+                                                    />
+                                                    <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1.5">
+                                                        {lcFilters.bdCnf && (
                                                             <button
-                                                                key={o}
                                                                 onClick={() => {
-                                                                    setLcFilters({ ...lcFilters, bdCnf: o });
+                                                                    setLcFilters({ ...lcFilters, bdCnf: '' });
                                                                     setFilterSearchInputs({ ...filterSearchInputs, bdCnfSearch: '' });
-                                                                    setFilterDropdownOpen(initialFilterDropdownState);
                                                                 }}
-                                                                className="w-full px-3 py-2 text-left text-sm hover:bg-blue-50 transition-colors"
+                                                                className="text-gray-400 hover:text-gray-600"
                                                             >
-                                                                {o}
+                                                                <XIcon className="w-4 h-4" />
                                                             </button>
-                                                        ))}
+                                                        )}
+                                                        <SearchIcon className="w-4 h-4 text-gray-400 pointer-events-none" />
                                                     </div>
-                                                ) : null;
-                                            })()}
-                                        </div>
-
-                                        {/* Bill Of Entry Filter */}
-                                        <div className="col-span-2 space-y-1.5 relative" ref={reportLcBillOfEntryFilterRef}>
-                                            <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Bill Of Entry</label>
-                                            <div className="relative">
-                                                <input
-                                                    type="text"
-                                                    value={filterSearchInputs.billOfEntrySearch}
-                                                    onChange={(e) => {
-                                                        setFilterSearchInputs({ ...filterSearchInputs, billOfEntrySearch: e.target.value });
-                                                        setFilterDropdownOpen({ ...initialFilterDropdownState, billOfEntry: true });
-                                                    }}
-                                                    onFocus={() => setFilterDropdownOpen({ ...initialFilterDropdownState, billOfEntry: true })}
-                                                    placeholder={lcFilters.billOfEntry || "Search Bill Of Entry..."}
-                                                    className={`w-full px-3 py-2 bg-white border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all shadow-sm hover:border-gray-300 pr-14 ${lcFilters.billOfEntry ? 'placeholder:text-gray-900 placeholder:font-semibold' : 'placeholder:text-gray-300'}`}
-                                                />
-                                                <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1.5">
-                                                    {lcFilters.billOfEntry && (
-                                                        <button
-                                                            onClick={() => {
-                                                                setLcFilters({ ...lcFilters, billOfEntry: '' });
-                                                                setFilterSearchInputs({ ...filterSearchInputs, billOfEntrySearch: '' });
-                                                            }}
-                                                            className="text-gray-400 hover:text-gray-600"
-                                                        >
-                                                            <XIcon className="w-4 h-4" />
-                                                        </button>
-                                                    )}
-                                                    <SearchIcon className="w-4 h-4 text-gray-400 pointer-events-none" />
                                                 </div>
+                                                {filterDropdownOpen.bdCnf && (() => {
+                                                    const options = [...new Set(stockRecords.map(item => (item.bdCnF || '').trim()).filter(Boolean))].sort();
+                                                    const filtered = options.filter(o => o.toLowerCase().includes(filterSearchInputs.bdCnfSearch.toLowerCase()));
+                                                    return filtered.length > 0 ? (
+                                                        <div className="absolute z-[120] mt-1 w-full bg-white border border-gray-200 rounded-xl shadow-lg max-h-48 overflow-y-auto">
+                                                            {filtered.map(o => (
+                                                                <button
+                                                                    key={o}
+                                                                    onClick={() => {
+                                                                        setLcFilters({ ...lcFilters, bdCnf: o });
+                                                                        setFilterSearchInputs({ ...filterSearchInputs, bdCnfSearch: '' });
+                                                                        setFilterDropdownOpen(initialFilterDropdownState);
+                                                                    }}
+                                                                    className="w-full px-3 py-2 text-left text-sm hover:bg-blue-50 transition-colors"
+                                                                >
+                                                                    {o}
+                                                                </button>
+                                                            ))}
+                                                        </div>
+                                                    ) : null;
+                                                })()}
                                             </div>
-                                            {filterDropdownOpen.billOfEntry && (() => {
-                                                const options = [...new Set(stockRecords.map(item => (item.billOfEntry || '').trim()).filter(Boolean))].sort();
-                                                const filtered = options.filter(o => o.toLowerCase().includes(filterSearchInputs.billOfEntrySearch.toLowerCase()));
-                                                return filtered.length > 0 ? (
-                                                    <div className="absolute z-[120] mt-1 w-full bg-white border border-gray-200 rounded-xl shadow-lg max-h-48 overflow-y-auto">
-                                                        {filtered.map(o => (
-                                                            <button
-                                                                key={o}
-                                                                onClick={() => {
-                                                                    setLcFilters({ ...lcFilters, billOfEntry: o });
-                                                                    setFilterSearchInputs({ ...filterSearchInputs, billOfEntrySearch: '' });
-                                                                    setFilterDropdownOpen(initialFilterDropdownState);
-                                                                }}
-                                                                className="w-full px-3 py-2 text-left text-sm hover:bg-blue-50 transition-colors"
-                                                            >
-                                                                {o}
-                                                            </button>
-                                                        ))}
-                                                    </div>
-                                                ) : null;
-                                            })()}
-                                        </div>
 
-                                        <button
-                                            onClick={() => setShowFilterPanel(false)}
-                                            className="col-span-2 py-2 bg-gray-900 text-white rounded-xl text-sm font-medium hover:bg-gray-800 transition-all mt-2"
-                                        >
-                                            Apply Filters
-                                        </button>
+                                            {/* Bill Of Entry Filter */}
+                                            <div className="col-span-2 space-y-1.5 relative" ref={reportLcBillOfEntryFilterRef}>
+                                                <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Bill Of Entry</label>
+                                                <div className="relative">
+                                                    <input
+                                                        type="text"
+                                                        value={filterSearchInputs.billOfEntrySearch}
+                                                        onChange={(e) => {
+                                                            setFilterSearchInputs({ ...filterSearchInputs, billOfEntrySearch: e.target.value });
+                                                            setFilterDropdownOpen({ ...initialFilterDropdownState, billOfEntry: true });
+                                                        }}
+                                                        onFocus={() => setFilterDropdownOpen({ ...initialFilterDropdownState, billOfEntry: true })}
+                                                        placeholder={lcFilters.billOfEntry || "Search Bill Of Entry..."}
+                                                        className={`w-full px-3 py-2 bg-white border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all shadow-sm hover:border-gray-300 pr-14 ${lcFilters.billOfEntry ? 'placeholder:text-gray-900 placeholder:font-semibold' : 'placeholder:text-gray-300'}`}
+                                                    />
+                                                    <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1.5">
+                                                        {lcFilters.billOfEntry && (
+                                                            <button
+                                                                onClick={() => {
+                                                                    setLcFilters({ ...lcFilters, billOfEntry: '' });
+                                                                    setFilterSearchInputs({ ...filterSearchInputs, billOfEntrySearch: '' });
+                                                                }}
+                                                                className="text-gray-400 hover:text-gray-600"
+                                                            >
+                                                                <XIcon className="w-4 h-4" />
+                                                            </button>
+                                                        )}
+                                                        <SearchIcon className="w-4 h-4 text-gray-400 pointer-events-none" />
+                                                    </div>
+                                                </div>
+                                                {filterDropdownOpen.billOfEntry && (() => {
+                                                    const options = [...new Set(stockRecords.map(item => (item.billOfEntry || '').trim()).filter(Boolean))].sort();
+                                                    const filtered = options.filter(o => o.toLowerCase().includes(filterSearchInputs.billOfEntrySearch.toLowerCase()));
+                                                    return filtered.length > 0 ? (
+                                                        <div className="absolute z-[120] mt-1 w-full bg-white border border-gray-200 rounded-xl shadow-lg max-h-48 overflow-y-auto">
+                                                            {filtered.map(o => (
+                                                                <button
+                                                                    key={o}
+                                                                    onClick={() => {
+                                                                        setLcFilters({ ...lcFilters, billOfEntry: o });
+                                                                        setFilterSearchInputs({ ...filterSearchInputs, billOfEntrySearch: '' });
+                                                                        setFilterDropdownOpen(initialFilterDropdownState);
+                                                                    }}
+                                                                    className="w-full px-3 py-2 text-left text-sm hover:bg-blue-50 transition-colors"
+                                                                >
+                                                                    {o}
+                                                                </button>
+                                                            ))}
+                                                        </div>
+                                                    ) : null;
+                                                })()}
+                                            </div>
+
+                                            <button
+                                                onClick={() => setShowFilterPanel(false)}
+                                                className="col-span-2 py-2 bg-gray-900 text-white rounded-xl text-sm font-medium hover:bg-gray-800 transition-all mt-2"
+                                            >
+                                                Apply Filters
+                                            </button>
+                                        </div>
                                     </div>
-                                </div>
+                                </>
                             )}
                         </div>
                         <button
@@ -684,9 +689,9 @@ const LCReport = ({
                                         <th className="border-r border-gray-900 px-1 py-1 text-left text-[12px] font-bold text-black uppercase tracking-tight" style={{ width: '16.5%' }}>Brand</th>
                                         <th className="border-r border-gray-900 px-1 py-1 text-right text-[12px] font-bold text-black uppercase tracking-tight" style={{ width: '6.8%' }}>Packet</th>
                                         <th className="border-r border-gray-900 px-1 py-1 text-right text-[12px] font-bold text-black uppercase tracking-tight" style={{ width: '6.8%' }}>QTY</th>
+                                        <th className="border-r border-gray-900 px-1 py-1 text-right text-[12px] font-bold text-black uppercase tracking-tight" style={{ width: '5.2%' }}>Short</th>
                                         <th className="border-r border-gray-900 px-1 py-1 text-right text-[12px] font-bold text-black uppercase tracking-tight" style={{ width: '6.8%' }}>IH Qty</th>
                                         <th className="border-r border-gray-900 px-1 py-1 text-right text-[12px] font-bold text-black uppercase tracking-tight" style={{ width: '5.2%' }}>IH PKT</th>
-                                        <th className="border-r border-gray-900 px-1 py-1 text-right text-[12px] font-bold text-black uppercase tracking-tight" style={{ width: '5.2%' }}>Short</th>
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-gray-400">
@@ -736,11 +741,11 @@ const LCReport = ({
                                                             <td className="border-r border-gray-900 px-2 py-0.5 text-[12px] text-black">{item.brand || '-'}</td>
                                                             <td className="border-r border-gray-900 px-2 py-0.5 text-[12px] text-right text-black">{item.packet || '0'}</td>
                                                             <td className="border-r border-gray-900 px-2 py-0.5 text-[12px] text-right font-black text-black">{Math.round(item.quantity)} {item.unit}</td>
+                                                            <td className="border-r border-gray-900 px-2 py-0.5 text-[12px] text-right font-bold text-black">{Math.round(item.sweepedQuantity)} {item.unit}</td>
                                                             <td className="border-r border-gray-900 px-2 py-0.5 text-[12px] text-right font-bold text-black">{Math.round(getIHQty(item)) || 0} {item.unit}</td>
                                                             <td className="border-r border-gray-900 px-2 py-0.5 text-[12px] text-right font-bold text-black">
                                                                 {formatPktDisplay(getIHPkt(item), getIHQty(item), item.packetSize)}
                                                             </td>
-                                                            <td className="border-r border-gray-900 px-2 py-0.5 text-[12px] text-right font-bold text-black">{Math.round(item.sweepedQuantity)} {item.unit}</td>
                                                         </tr>
                                                     )),
                                                     ...(hasTotalRow ? [(
@@ -749,6 +754,9 @@ const LCReport = ({
                                                             <td className="border-r border-gray-900 px-2 py-0.5 text-[12px] text-right text-black"></td>
                                                             <td className="border-r border-gray-900 px-2 py-0.5 text-[12px] text-right border-t border-gray-900 font-black text-black">
                                                                 {Math.round(subRows.reduce((sum, r) => sum + (parseFloat(r.quantity) || 0), 0))} {subRows[0].unit}
+                                                            </td>
+                                                            <td className="border-r border-gray-900 px-2 py-0.5 text-[12px] text-right border-t border-gray-900 font-bold text-black">
+                                                                {Math.round(subRows.reduce((sum, r) => sum + (parseFloat(r.sweepedQuantity) || 0), 0))} {subRows[0].unit}
                                                             </td>
                                                             <td className="border-r border-gray-900 px-2 py-0.5 text-[12px] text-right border-t border-gray-900 font-bold text-black">
                                                                 {Math.round(subRows.reduce((sum, r) => sum + getIHQty(r), 0))} {subRows[0].unit}
@@ -765,9 +773,6 @@ const LCReport = ({
                                                                     }, 0));
                                                                     return `${totalWhole}${totalRem > 0 ? ` - ${totalRem} kg` : ''}`;
                                                                 })()}
-                                                            </td>
-                                                            <td className="border-r border-gray-900 px-2 py-0.5 text-[12px] text-right border-t border-gray-900 font-bold text-black">
-                                                                {Math.round(subRows.reduce((sum, r) => sum + (parseFloat(r.sweepedQuantity) || 0), 0))} {subRows[0].unit}
                                                             </td>
                                                         </tr>
                                                     )] : [])
@@ -791,6 +796,9 @@ const LCReport = ({
                                                 {Math.round(lcReceiveSummary.totalQuantity)} {lcReceiveSummary.unit}
                                             </td>
                                             <td className="px-2 py-2 text-[12px] text-right font-black text-black border-r border-gray-900 whitespace-nowrap">
+                                                {Math.round(lcReceiveRecords.reduce((sum, item) => sum + (parseFloat(item.sweepedQuantity) || 0), 0))} {lcReceiveSummary.unit}
+                                            </td>
+                                            <td className="px-2 py-2 text-[12px] text-right font-black text-black border-r border-gray-900 whitespace-nowrap">
                                                 {Math.round(lcReceiveRecords.reduce((sum, item) => sum + getIHQty(item), 0)) || 0} {lcReceiveSummary.unit}
                                             </td>
                                             <td className="px-2 py-2 text-[12px] text-right font-black text-black border-r border-gray-900 whitespace-nowrap">
@@ -805,9 +813,6 @@ const LCReport = ({
                                                     }, 0));
                                                     return `${totalWhole}${totalRem > 0 ? ` - ${totalRem} kg` : ''}`;
                                                 })()}
-                                            </td>
-                                            <td className="px-2 py-2 text-[12px] text-right font-black text-black border-r border-gray-900 whitespace-nowrap">
-                                                {Math.round(lcReceiveRecords.reduce((sum, item) => sum + (parseFloat(item.sweepedQuantity) || 0), 0))} {lcReceiveSummary.unit}
                                             </td>
                                         </tr>
                                     </tfoot>

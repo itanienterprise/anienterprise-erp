@@ -1,0 +1,68 @@
+.employee-container {
+    animation: fadeIn 0.5s ease-out;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.employee-form-container {
+    background: rgba(255, 255, 255, 0.8);
+    backdrop-filter: blur(20px);
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    border-radius: 24px;
+    padding: 2rem;
+    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.05);
+    position: relative;
+    overflow: hidden;
+}
+
+.employee-form-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 2rem;
+}
+
+.employee-form-title {
+    font-size: 1.5rem;
+    font-weight: 800;
+    color: #1f2937;
+    letter-spacing: -0.025em;
+}
+
+.employee-form-close {
+    padding: 0.5rem;
+    color: #9ca3af;
+    border-radius: 9999px;
+    transition: all 0.2s;
+}
+
+.employee-form-close:hover {
+    background: #f3f4f6;
+    color: #111827;
+}
+
+/* Custom styles for select inputs to match the theme */
+select {
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%239ca3af'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'%3E%3C/path%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 1rem center;
+    background-size: 1.25rem;
+}
+
+/* Custom Table Responsive adjustments */
+@media (max-width: 768px) {
+    .employee-container {
+        padding: 0 1rem;
+    }
+}

@@ -3,7 +3,7 @@ import axios from 'axios';
 import {
   MenuIcon, SearchIcon, HomeIcon, UsersIcon, UserIcon, AnchorIcon,
   BarChartIcon, FunnelIcon, XIcon, DollarSignIcon, ShoppingCartIcon,
-  ChevronDownIcon, BoxIcon, BellIcon, TrashIcon, VegetableIcon, ReceiptIcon, TrendingUpIcon
+  ChevronDownIcon, BoxIcon, BellIcon, TrashIcon, VegetableIcon, ReceiptIcon, TrendingUpIcon, LogOutIcon, BriefcaseIcon
 } from './components/Icons';
 
 import { encryptData, decryptData } from './utils/encryption';
@@ -21,10 +21,58 @@ import StockReport from './components/modules/StockManagement/StockReport';
 import LCReport from './components/modules/LCReceive/LCReport';
 import ProductHistoryReport from './components/modules/StockManagement/ProductHistoryReport';
 import SaleManagement from './components/modules/Sale/SaleManagement';
+import EmployeeManagement from './components/modules/Employee/EmployeeManagement';
 import { calculateStockData } from './utils/stockHelpers';
+import LoginPage from './components/auth/LoginPage';
+import Profile from './components/modules/Profile/Profile';
 
 
 function App() {
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [currentUser, setCurrentUser] = useState(null);
+  const [isCheckingSession, setIsCheckingSession] = useState(true);
+  const [showProfile, setShowProfile] = useState(false);
+
+  const handleLogin = (user) => {
+    setIsAuthenticated(true);
+    setCurrentUser(user);
+    localStorage.setItem('isAuthenticated', 'true');
+    localStorage.setItem('currentUser', JSON.stringify(user));
+  };
+
+  const handleLogout = async () => {
+    try {
+      await axios.post(`${API_BASE_URL}/api/auth/logout`);
+    } catch (err) {
+      console.error('Logout error:', err);
+    } finally {
+      setIsAuthenticated(false);
+      setCurrentUser(null);
+      localStorage.removeItem('currentUser');
+      localStorage.setItem('isAuthenticated', 'false');
+    }
+  };
+
+  // Check session on mount
+  useEffect(() => {
+    const checkSession = async () => {
+      try {
+        const response = await axios.get(`${API_BASE_URL}/api/auth/check`);
+        if (response.data.authenticated) {
+          setIsAuthenticated(true);
+          setCurrentUser(response.data.user);
+        }
+      } catch (err) {
+        // Not authenticated, that's fine
+        setIsAuthenticated(false);
+        setCurrentUser(null);
+      } finally {
+        setIsCheckingSession(false);
+      }
+    };
+    checkSession();
+  }, []);
+
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   // Lock body scroll when mobile sidebar is open
@@ -32,10 +80,35 @@ function App() {
     if (sidebarOpen) {
       document.body.style.overflow = 'hidden';
     } else {
-      document.body.style.overflow = '';
+      document.body.style.overflow = 'unset';
     }
     return () => { document.body.style.overflow = ''; };
   }, [sidebarOpen]);
+
+  // Fetch employee name if missing
+  useEffect(() => {
+    if (isAuthenticated && currentUser && !currentUser.name) {
+      if (currentUser.username === 'admin') {
+        setCurrentUser(prev => ({ ...prev, name: 'Administrator' }));
+      } else {
+        fetch(`${API_BASE_URL}/api/employees`)
+          .then(res => res.json())
+          .then(data => {
+            const employees = data.map(record => {
+              const decrypted = decryptData(record.data);
+              return { ...decrypted, _id: record._id };
+            });
+            const currentEmp = employees.find(e => e.employeeId === currentUser.username);
+            if (currentEmp) {
+              const updatedUser = { ...currentUser, name: currentEmp.name };
+              setCurrentUser(updatedUser);
+              localStorage.setItem('currentUser', JSON.stringify(updatedUser));
+            }
+          })
+          .catch(err => console.error('Error fetching name:', err));
+      }
+    }
+  }, [isAuthenticated, currentUser]);
   const [currentView, setCurrentView] = useState(() => {
     return localStorage.getItem('currentView') || 'dashboard';
   });
@@ -46,6 +119,11 @@ function App() {
   const [saleDropdownOpen, setSaleDropdownOpen] = useState(() => {
     const initialView = localStorage.getItem('currentView') || 'dashboard';
     return initialView.includes('sale-section');
+  });
+
+  const [hrmsDropdownOpen, setHrmsDropdownOpen] = useState(() => {
+    const initialView = localStorage.getItem('currentView') || 'dashboard';
+    return initialView === 'employee-section';
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitStatus, setSubmitStatus] = useState(null);
@@ -329,7 +407,15 @@ function App() {
 
   const confirmDelete = async () => {
     const { type, id, isBulk, extraData } = deleteConfirm;
-    const endpoint = type === 'sales' ? 'sales' : type === 'ip' ? 'ip-records' : type === 'importer' ? 'importers' : type === 'port' ? 'ports' : type === 'product' ? 'products' : 'stock';
+    const endpoint =
+      type === 'sales' ? 'sales' :
+        type === 'ip' ? 'ip-records' :
+          type === 'importer' ? 'importers' :
+            type === 'port' ? 'ports' :
+              type === 'product' ? 'products' :
+                type === 'employees' ? 'employees' :
+                  type === 'customer' ? 'customers' :
+                    'stock';
 
 
     try {
@@ -389,8 +475,6 @@ function App() {
           await fetch(`${API_BASE_URL}/api/${endpoint}/${id}`, { method: 'DELETE' });
 
           if (type === 'sales') {
-            // Stock restoration logic connecting sales to stock/warehouse mathematically has been removed
-
             if (extraData?.customerId && extraData?.invoiceNo) {
               try {
                 const custRes = await fetch(`${API_BASE_URL}/api/customers/${extraData.customerId}`);
@@ -418,12 +502,16 @@ function App() {
         else if (type === 'importer') fetchImporters();
         else if (type === 'port') fetchPorts();
         else if (type === 'product') fetchProducts();
-        else if (type === 'sales' || type === 'customer') setRefreshKey(prev => prev + 1);
+        else if (type === 'stock') fetchStockRecords();
+        else if (['employees', 'sales', 'customer'].includes(type)) {
+          setRefreshKey(prev => prev + 1);
+        }
       }
-
-      setDeleteConfirm({ show: false, type: '', id: null, isBulk: false, extraData: null });
     } catch (error) {
       console.error('Error deleting:', error);
+      alert('Failed to delete. Please check the console for details.');
+    } finally {
+      setDeleteConfirm({ show: false, type: '', id: null, isBulk: false, extraData: null });
     }
   };
 
@@ -703,8 +791,25 @@ function App() {
     return baseBrands.filter(b => b.toLowerCase().includes(query.toLowerCase()));
   };
 
-
-
+  const fetchEmployees = async () => {
+    setIsLoading(true);
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/employees`);
+      if (response.ok) {
+        const rawData = await response.json();
+        const decryptedEmployees = rawData.map(record => {
+          const decrypted = decryptData(record.data);
+          return { ...decrypted, _id: record._id, createdAt: record.createdAt };
+        });
+        // We don't necessarily need to store employees here if we fetch them in the component,
+        // but it's consistent with how other modules are handled in App.jsx.
+      }
+    } catch (error) {
+      console.error('Error fetching employees:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
   const renderContent = () => {
     switch (currentView) {
       case 'dashboard':
@@ -749,6 +854,7 @@ function App() {
             setSubmitStatus={setSubmitStatus}
             fetchSales={fetchSales}
             salesRecords={salesRecords}
+            fetchProducts={fetchProducts}
           />
         );
 
@@ -896,6 +1002,24 @@ function App() {
             endLongPress={endLongPress}
           />
         );
+      case 'employee-section':
+        return (
+          <EmployeeManagement
+            key={refreshKey}
+            isSelectionMode={isSelectionMode}
+            setIsSelectionMode={setIsSelectionMode}
+            selectedItems={selectedItems}
+            setSelectedItems={setSelectedItems}
+            editingId={editingId}
+            setEditingId={setEditingId}
+            sortConfig={sortConfig}
+            setSortConfig={setSortConfig}
+            onDeleteConfirm={(data) => handleDelete(data.type, data.id, data.isBulk, data.extraData)}
+            startLongPress={startLongPress}
+            endLongPress={endLongPress}
+            isLongPressTriggered={isLongPressTriggered}
+          />
+        );
       default:
         return null;
     }
@@ -904,6 +1028,18 @@ function App() {
   const stockData = useMemo(() => {
     return calculateStockData(stockRecords, stockFilters, '', warehouseData, salesRecords, products);
   }, [stockRecords, stockFilters, warehouseData, salesRecords, products]);
+
+  if (isCheckingSession) {
+    return (
+      <div className="flex items-center justify-center h-screen bg-slate-50">
+        <div className="w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+      </div>
+    );
+  }
+
+  if (!isAuthenticated) {
+    return <LoginPage onLogin={handleLogin} />;
+  }
 
   return (
     <div className={`flex h-screen bg-gray-50 font-sans text-gray-900 ${(showLcReport || showStockReport) ? 'is-printing-report' : ''}`}>
@@ -919,10 +1055,30 @@ function App() {
       <aside className={`fixed inset-y-0 left-0 z-50 w-64 bg-white text-gray-900 border-r border-gray-200 transform transition-transform duration-300 ease-in-out ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'} md:relative md:translate-x-0 flex flex-col print:hidden`}>
         <div className="p-5 border-b border-gray-200 bg-gray-50/50">
           <div className="flex items-center">
-            <img src="https://ui-avatars.com/api/?name=Admin+User&background=3b82f6&color=fff" alt="Admin" className="w-12 h-12 rounded-full border-2 border-white shadow-md transition-transform hover:scale-105" />
+            <button
+              onClick={() => setShowProfile(true)}
+              className="relative group focus:outline-none"
+            >
+              <img
+                src={`https://ui-avatars.com/api/?name=${currentUser?.name || currentUser?.username || 'User'}&background=3b82f6&color=fff`}
+                alt="Profile"
+                className="w-12 h-12 rounded-full border-2 border-white shadow-md transition-all group-hover:scale-110 group-hover:border-blue-400"
+              />
+              <div className="absolute inset-0 rounded-full bg-blue-600/0 group-hover:bg-blue-600/10 transition-colors flex items-center justify-center">
+                <span className="sr-only">View Profile</span>
+              </div>
+            </button>
             <div className="ml-4">
-              <p className="text-base font-bold text-gray-900 leading-tight">Admin User</p>
-              <p className="text-sm text-blue-600 font-medium hover:underline cursor-pointer">View Profile</p>
+              <p className="text-base font-bold text-gray-900 leading-tight uppercase tracking-tight">
+                {currentUser?.name || currentUser?.username || 'Admin User'}
+              </p>
+              <button
+                onClick={handleLogout}
+                className="text-sm text-red-600 font-medium hover:underline cursor-pointer flex items-center mt-1"
+              >
+                <LogOutIcon className="w-3.5 h-3.5 mr-1" />
+                Logout
+              </button>
             </div>
           </div>
         </div>
@@ -951,6 +1107,30 @@ function App() {
             <DollarSignIcon className="w-5 h-5 mr-3" />
             <span className="font-medium">LC Receive</span>
           </button>
+
+          <div>
+            <button
+              onClick={() => setHrmsDropdownOpen(!hrmsDropdownOpen)}
+              className={`w-full flex items-center justify-between px-4 py-3 rounded-lg transition-all ${currentView === 'employee-section' ? 'bg-blue-50 text-blue-600 shadow-sm' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'}`}
+            >
+              <div className="flex items-center">
+                <BriefcaseIcon className="w-5 h-5 mr-3" />
+                <span className="font-medium">HRMS</span>
+              </div>
+              <ChevronDownIcon className={`w-4 h-4 transition-transform duration-200 ${hrmsDropdownOpen ? 'transform rotate-180' : ''}`} />
+            </button>
+            <div className={`overflow-hidden transition-all duration-300 ease-in-out ${hrmsDropdownOpen ? 'max-h-48 opacity-100 mt-1' : 'max-h-0 opacity-0'}`}>
+              <div className="pl-9 pr-2 space-y-1">
+                <button
+                  onClick={() => { setCurrentView('employee-section'); setSidebarOpen(false); }}
+                  className={`w-full flex flex-row items-center py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'employee-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'}`}
+                >
+                  <UserIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
+                  <span>Employee</span>
+                </button>
+              </div>
+            </div>
+          </div>
           <div>
             <button
               onClick={() => setSaleDropdownOpen(!saleDropdownOpen)}
@@ -1112,7 +1292,13 @@ function App() {
         reportData={productHistoryReportData}
       />
 
-    </div >
+      {showProfile && (
+        <Profile
+          currentUser={currentUser}
+          onClose={() => setShowProfile(false)}
+        />
+      )}
+    </div>
   );
 }
 export default App;

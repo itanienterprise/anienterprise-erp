@@ -193,8 +193,12 @@ const StockManagement = ({
             if (historyFilters.lcNo && (item.lcNo || '').trim() !== historyFilters.lcNo) return false;
             if (historyFilters.port && (item.port || '').trim() !== historyFilters.port) return false;
             if (historyFilters.brand) {
-                const itemBrand = (item.brand || item.productName || '').trim().toLowerCase();
-                if (itemBrand !== historyFilters.brand.toLowerCase()) return false;
+                const brandLower = historyFilters.brand.toLowerCase();
+                // Check top-level brand, entries (old), and brandEntries (LC Receive)
+                const hasBrand = (item.brand || '').trim().toLowerCase() === brandLower ||
+                    (item.entries || []).some(e => (e.brand || '').trim().toLowerCase() === brandLower) ||
+                    (item.brandEntries || []).some(e => (e.brand || '').trim().toLowerCase() === brandLower);
+                if (!hasBrand) return false;
             }
 
             if (!searchLower) return true;
@@ -202,7 +206,11 @@ const StockManagement = ({
             const matchesPort = (item.port || '').trim().toLowerCase().includes(searchLower);
             const matchesImporter = (item.importer || '').trim().toLowerCase().includes(searchLower);
             const matchesTruck = (item.truckNo || '').trim().toLowerCase().includes(searchLower);
-            const brandList = item.brand ? [item.brand] : (item.entries || []).map(e => e.brand);
+            const brandList = [
+                item.brand,
+                ...(item.entries || []).map(e => e.brand),
+                ...(item.brandEntries || []).map(e => e.brand)
+            ].filter(Boolean);
             const matchesBrand = brandList.some(b => (b || '').trim().toLowerCase().includes(searchLower));
             return matchesLC || matchesPort || matchesImporter || matchesTruck || matchesBrand;
         });
@@ -383,9 +391,10 @@ const StockManagement = ({
         // 1. Flatten Purchase History from activePurchaseHistory
         const purchaseFlattened = [];
         activePurchaseHistory.forEach(record => {
-            const entries = record.entries || [];
+            // Support both old `entries` format and LC Receive `brandEntries` format
+            const entries = record.brandEntries || record.entries || [];
             entries.forEach(entry => {
-                // Apply brand filter if present, as activePurchaseHistory might not have it applied at this granular level
+                // Apply brand filter if present
                 const brandMatch = !historyFilters.brand || (entry.brand || '').trim().toLowerCase() === historyFilters.brand.toLowerCase();
                 if (brandMatch) {
                     purchaseFlattened.push({
@@ -394,9 +403,9 @@ const StockManagement = ({
                         itemPurchasedPrice: entry.purchasedPrice,
                         itemPacket: entry.packet,
                         itemQty: entry.quantity,
-                        itemInHouseQty: entry.inHouseQuantity, // Use inHouseQuantity from entry
-                        itemShortageQty: entry.sweepedQuantity, // Add sweepedQuantity as shortage quantity
-                        itemExporter: record.exporter, // Add exporter field
+                        itemInHouseQty: entry.inHouseQuantity,
+                        itemShortageQty: entry.sweepedQuantity,
+                        itemExporter: record.exporter,
                         unit: entry.unit
                     });
                 }
@@ -1160,9 +1169,15 @@ const StockManagement = ({
         const brandsSet = new Set();
         productHistory.forEach(item => {
             if (item.brand) brandsSet.add(item.brand.trim());
-            // Check nested entries for multi-brand records
+            // Check nested entries for multi-brand records (old format)
             if (item.entries) {
                 item.entries.forEach(e => {
+                    if (e.brand) brandsSet.add(e.brand.trim());
+                });
+            }
+            // Check brandEntries (LC Receive format)
+            if (item.brandEntries) {
+                item.brandEntries.forEach(e => {
                     if (e.brand) brandsSet.add(e.brand.trim());
                 });
             }
@@ -1305,7 +1320,9 @@ const StockManagement = ({
                 return;
             }
             if (r.brand) allBrands.add(r.brand);
+            // Check both entries (old format) and brandEntries (LC Receive format)
             if (r.entries) r.entries.forEach(e => { if (e.brand) allBrands.add(e.brand) });
+            if (r.brandEntries) r.brandEntries.forEach(e => { if (e.brand) allBrands.add(e.brand) });
         });
         // Return unique brand names sorted alphabetically
         const brands = Array.from(allBrands).filter(Boolean).sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
@@ -2033,11 +2050,11 @@ const StockManagement = ({
                                                         <div className="relative">
                                                             <input
                                                                 type="text"
-                                                                value={filterSearchInputs.brandSearch}
+                                                                value={stockFilters.brand || filterSearchInputs.brandSearch}
                                                                 onChange={(e) => {
                                                                     const val = e.target.value;
                                                                     setFilterSearchInputs({ ...filterSearchInputs, brandSearch: val });
-                                                                    setStockFilters({ ...stockFilters, brand: val });
+                                                                    setStockFilters({ ...stockFilters, brand: '' });
                                                                     setFilterDropdownOpen({ ...initialFilterDropdownState, brand: true });
                                                                 }}
                                                                 onClick={(e) => {
@@ -2073,7 +2090,7 @@ const StockManagement = ({
                                                                         <button
                                                                             key={brand}
                                                                             type="button"
-                                                                            onClick={() => { setStockFilters({ ...stockFilters, brand }); setFilterSearchInputs({ ...filterSearchInputs, brandSearch: '' }); setFilterDropdownOpen(initialFilterDropdownState); }}
+                                                                            onClick={() => { setStockFilters({ ...stockFilters, brand }); setFilterSearchInputs({ ...filterSearchInputs, brandSearch: brand }); setFilterDropdownOpen(initialFilterDropdownState); }}
                                                                             className="w-full px-4 py-2 text-left text-sm hover:bg-blue-50 transition-colors"
                                                                         >
                                                                             {brand}
@@ -2115,7 +2132,7 @@ const StockManagement = ({
                         </div>
                     </div>
                     {/* Summary Cards */}
-                    <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3 md:gap-4 mb-4 md:mb-0">
+                    <div className="flex flex-wrap md:flex-nowrap gap-3 md:gap-4 mb-4 md:mb-0">
                         {[
                             { label: 'TOTAL PACKET', value: Math.round(totalPackets).toLocaleString(), bgColor: 'bg-blue-50/50', borderColor: 'border-blue-100', textColor: 'text-blue-700', labelColor: 'text-blue-600' },
                             { label: 'TOTAL QUANTITY', value: `${Math.round(totalQuantity).toLocaleString()} ${unit}`, bgColor: 'bg-blue-50/50', borderColor: 'border-blue-100', textColor: 'text-blue-700', labelColor: 'text-blue-600' },
@@ -2125,7 +2142,7 @@ const StockManagement = ({
                             { label: 'INHOUSE QTY', value: `${Math.round(totalInHouseQty).toLocaleString()} ${unit}`, bgColor: 'bg-emerald-50/50', borderColor: 'border-emerald-100', textColor: 'text-emerald-700', labelColor: 'text-emerald-600' },
                             { label: 'SHORTAGE', value: `${Math.round(totalShortage).toLocaleString()} ${unit}`, bgColor: 'bg-rose-50/50', borderColor: 'border-rose-100', textColor: 'text-rose-700', labelColor: 'text-rose-600' },
                         ].map((card, i) => (
-                            <div key={i} className={`bg-white border ${card.bgColor} ${card.borderColor} p-3 md:p-4 rounded-xl shadow-sm transition-all hover:shadow-md ${i === 6 ? 'col-span-2 md:col-span-1' : ''}`}>
+                            <div key={i} className={`bg-white border ${card.bgColor} ${card.borderColor} p-3 md:p-4 rounded-xl shadow-sm transition-all hover:shadow-md md:flex-1 ${i === 6 ? 'w-full md:w-auto' : 'w-[calc(50%-6px)] md:w-auto'}`}>
                                 <div className={`text-[10px] md:text-[11px] font-bold ${card.labelColor} uppercase tracking-wider mb-0.5 md:mb-1 whitespace-nowrap`}>{card.label}</div>
                                 <div className={`text-sm md:text-xl font-bold ${card.textColor} truncate`} title={card.value}>{card.value}</div>
                             </div>

@@ -175,11 +175,11 @@ export const generateLCReceiveReportPDF = (reportData, filters, summary) => {
                         isFirstRowOfProduct = false;
                     }
 
-                    // Numeric Columns (Unique per row): QTY, IH QTY, IH PKT, SHORT
+                    // Numeric Columns (Unique per row): QTY, SHORT, IH QTY, IH PKT
                     row.push(`${Math.round(item.quantity)} ${item.unit}`);
+                    row.push(`${Math.round(item.sweepedQuantity)} ${item.unit}`);
                     row.push(`${Math.round(getIHQty(item))} ${item.unit}`);
                     row.push(`${formatPktDisplay(getIHPkt(item), getIHQty(item), item.packetSize)}`);
-                    row.push(`${Math.round(item.sweepedQuantity)} ${item.unit}`);
 
                     tableRows.push(row);
                 });
@@ -190,6 +190,7 @@ export const generateLCReceiveReportPDF = (reportData, filters, summary) => {
                         { content: 'SUB TOTAL', styles: { fontStyle: 'italic', halign: 'left' } },
                         '', // Empty Packet col
                         { content: `${Math.round(subGroup.brandDetails.reduce((sum, e) => sum + (parseFloat(e.quantity) || 0), 0))} ${subGroup.brandDetails[0].unit}`, styles: { fontStyle: 'bold', halign: 'right' } },
+                        { content: `${Math.round(subGroup.brandDetails.reduce((sum, e) => sum + (parseFloat(e.sweepedQuantity) || 0), 0))} ${subGroup.brandDetails[0].unit}`, styles: { fontStyle: 'bold', halign: 'right' } },
                         { content: `${Math.round(subGroup.brandDetails.reduce((sum, e) => sum + getIHQty(e), 0))} ${subGroup.brandDetails[0].unit}`, styles: { fontStyle: 'bold', halign: 'right' } },
                         {
                             content: (() => {
@@ -204,8 +205,7 @@ export const generateLCReceiveReportPDF = (reportData, filters, summary) => {
                                 return `${totalWhole}${totalRem > 0 ? ` - ${totalRem} kg` : ''}`;
                             })(),
                             styles: { fontStyle: 'bold', halign: 'right' }
-                        },
-                        { content: `${Math.round(subGroup.brandDetails.reduce((sum, e) => sum + (parseFloat(e.sweepedQuantity) || 0), 0))} ${subGroup.brandDetails[0].unit}`, styles: { fontStyle: 'bold', halign: 'right' } }
+                        }
                     ];
                     tableRows.push(subTotalRow);
                 }
@@ -220,12 +220,13 @@ export const generateLCReceiveReportPDF = (reportData, filters, summary) => {
         // --- Table ---
         autoTable(doc, {
             startY: yPos + 10,
-            head: [['Date', 'LC No', 'Importer', 'Port', 'BOE No', 'Truck', 'Product', 'Brand', 'Packet', 'QTY', 'IH QTY', 'IH PKT', 'SHORT']],
+            head: [['Date', 'LC No', 'Importer', 'Port', 'BOE No', 'Truck', 'Product', 'Brand', 'Packet', 'QTY', 'SHORT', 'IH QTY', 'IH PKT']],
             body: tableRows,
             foot: [[
                 { content: 'GRAND TOTAL', colSpan: 8, styles: { halign: 'right', fontStyle: 'bold' } },
                 { content: summary.totalPackets.toString(), styles: { halign: 'right', fontStyle: 'bold' } },
                 { content: `${Math.round(summary.totalQuantity)} ${summary.unit}`, styles: { halign: 'right', fontStyle: 'bold' } },
+                { content: `${Math.round(totalShortage)} ${summary.unit}`, styles: { halign: 'right', fontStyle: 'bold' } },
                 { content: `${Math.round(totalIHQuantity)} ${summary.unit}`, styles: { halign: 'right', fontStyle: 'bold' } },
                 {
                     content: (() => {
@@ -240,8 +241,7 @@ export const generateLCReceiveReportPDF = (reportData, filters, summary) => {
                         return `${totalWhole}${totalRem > 0 ? ` - ${totalRem} kg` : ''}`;
                     })(),
                     styles: { halign: 'right', fontStyle: 'bold' }
-                },
-                { content: `${Math.round(totalShortage)} ${summary.unit}`, styles: { halign: 'right', fontStyle: 'bold' } }
+                }
             ]],
             theme: 'plain',
             styles: {
@@ -278,9 +278,9 @@ export const generateLCReceiveReportPDF = (reportData, filters, summary) => {
                 7: { cellWidth: 37, halign: 'left' },   // Brand
                 8: { cellWidth: 20, halign: 'right' },  // Packet
                 9: { cellWidth: 20, halign: 'right' },  // QTY
-                10: { cellWidth: 20, halign: 'right' }, // IH QTY
-                11: { cellWidth: 26, halign: 'right' }, // IH PKT
-                12: { cellWidth: 17, halign: 'right' }  // SHORT
+                10: { cellWidth: 17, halign: 'right' }, // SHORT
+                11: { cellWidth: 20, halign: 'right' }, // IH QTY
+                12: { cellWidth: 26, halign: 'right' }  // IH PKT
             }
         });
 

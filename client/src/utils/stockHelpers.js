@@ -25,7 +25,33 @@ export const calculatePktRemainder = (totalQty, pktSize) => {
 };
 
 export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery = '', warehouseData = [], salesRecords = [], products = []) => {
-    const filteredRecords = stockRecords.filter(item => {
+    // Expand LC Receive records that have brandEntries into individual brand-level records
+    const expandedRecords = [];
+    stockRecords.forEach(item => {
+        if (item.brandEntries && item.brandEntries.length > 0) {
+            item.brandEntries.forEach(entry => {
+                expandedRecords.push({
+                    ...item,
+                    brand: entry.brand || item.brand || '',
+                    quantity: safeParse(entry.quantity) || safeParse(item.quantity),
+                    packet: safeParse(entry.packet) || safeParse(item.packet),
+                    packetSize: safeParse(entry.packetSize) || safeParse(item.packetSize),
+                    inHousePacket: safeParse(entry.inHousePacket),
+                    inHouseQuantity: safeParse(entry.inHouseQuantity),
+                    totalInHousePacket: safeParse(entry.inHousePacket),
+                    totalInHouseQuantity: safeParse(entry.inHouseQuantity),
+                    sweepedPacket: safeParse(entry.sweepedPacket),
+                    sweepedQuantity: safeParse(entry.sweepedQuantity),
+                    unit: entry.unit || item.unit,
+                    _expandedFromBrandEntries: true
+                });
+            });
+        } else {
+            expandedRecords.push(item);
+        }
+    });
+
+    const filteredRecords = expandedRecords.filter(item => {
         if (stockFilters.startDate && item.date < stockFilters.startDate) return false;
         if (stockFilters.endDate && item.date > stockFilters.endDate) return false;
         if (stockFilters.lcNo && (item.lcNo || '').trim() !== stockFilters.lcNo) return false;

@@ -39,7 +39,7 @@ const Customer = ({
         customerName: '',
         address: '',
         location: '',
-        phone: '+88',
+        phone: '+880',
         customerType: 'General Customer',
         status: 'Active'
     });
@@ -213,12 +213,13 @@ const Customer = ({
         const { name, value } = e.target;
 
         if (name === 'phone') {
-            // Enforce +88 prefix and 14 characters limit
-            if (!value.startsWith('+88')) {
-                return; // Prevent removing +88
-            }
-            if (value.length > 14) {
-                return; // Limit to 14 characters
+            if (value.length > 14) return;
+            if (!value.startsWith('+880')) {
+                if ('+880'.startsWith(value)) {
+                    setFormData(prev => ({ ...prev, [name]: '+880' }));
+                    return;
+                }
+                return;
             }
         }
 
@@ -335,7 +336,7 @@ const Customer = ({
             customerName: '',
             address: '',
             location: '',
-            phone: '+88',
+            phone: '+880',
             customerType: 'General Customer',
             status: 'Active'
         });
@@ -349,7 +350,7 @@ const Customer = ({
             customerName: customer.customerName || '',
             address: customer.address || '',
             location: customer.location || '',
-            phone: customer.phone || '+88',
+            phone: (customer.phone && customer.phone.startsWith('+880')) ? customer.phone : '+880',
             customerType: customer.customerType || 'General Customer',
             status: customer.status || 'Active'
         });

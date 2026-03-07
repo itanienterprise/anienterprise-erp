@@ -1,8 +1,12 @@
 import React from 'react';
+import axios from 'axios';
 import { ChevronUpIcon, ChevronDownIcon } from '../components/Icons';
 
-// API Base URL
-export const API_BASE_URL = `http://${window.location.hostname}:5000`;
+// Set axios defaults for session handling
+axios.defaults.withCredentials = true;
+
+// API Base URL - In production, use empty string to rely on Nginx reverse proxy routing.
+export const API_BASE_URL = import.meta.env.PROD ? '' : `http://${window.location.hostname}:5000`;
 
 // Date Formatting Utilities
 export const formatDate = (dateString) => {

@@ -2,6 +2,9 @@ const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
 const dotenv = require('dotenv');
+const cookieParser = require('cookie-parser');
+const session = require('express-session');
+const { MongoStore } = require('connect-mongo');
 
 dotenv.config();
 
@@ -9,12 +12,36 @@ const app = express();
 const PORT = process.env.PORT || 5000;
 
 // Middleware
-app.use(cors());
+app.use(cors({
+  origin: true,
+  credentials: true
+}));
 app.use(express.json());
+app.use(cookieParser());
+
+// Session Configuration
+app.use(session({
+  secret: process.env.SESSION_SECRET || 'ani_enterprise_erp_secret_key',
+  resave: false,
+  saveUninitialized: false,
+  store: MongoStore.create({
+    mongoUrl: process.env.MONGODB_URI || 'mongodb://mongo:27017/erp_db',
+    collectionName: 'sessions'
+  }),
+  cookie: {
+    maxAge: 1000 * 60 * 60 * 24, // 1 day
+    httpOnly: true,
+    secure: false, // Set to true if using HTTPS
+    sameSite: 'lax'
+  }
+}));
 
 // Database Connection
 mongoose.connect(process.env.MONGODB_URI || 'mongodb://mongo:27017/erp_db')
-  .then(() => console.log('MongoDB connected successfully'))
+  .then(() => {
+    console.log('MongoDB connected successfully');
+    seedAdminUser();
+  })
   .catch(err => console.log('MongoDB connection error:', err));
 
 const IpRecord = require('./models/IpRecord');
@@ -25,6 +52,31 @@ const Product = require('./models/Product');
 const Customer = require('./models/Customer');
 const Warehouse = require('./models/Warehouse');
 const Sale = require('./models/Sale');
+const User = require('./models/User');
+const Employee = require('./models/Employee');
+const { encryptData, decryptData } = require('./utils/encryption');
+const CryptoJS = require('crypto-js');
+
+// Auto-seed admin user if no users exist
+const seedAdminUser = async () => {
+  try {
+    const userCount = await User.countDocuments();
+    if (userCount === 0) {
+      const hashedPassword = CryptoJS.SHA256('admin123').toString(CryptoJS.enc.Hex);
+      const adminUser = new User({
+        username: 'admin',
+        password: hashedPassword,
+        role: 'admin'
+      });
+      await adminUser.save();
+      console.log('Default admin user created successfully.');
+    }
+  } catch (error) {
+    console.error('Error seeding admin user:', error);
+  }
+};
+
+
 
 
 // Routes
@@ -366,11 +418,221 @@ app.get('/api/sales', async (req, res) => {
   }
 });
 
+// Function to generate random password
+const generatePassword = (length = 8) => {
+  const charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+  let retVal = "";
+  for (let i = 0, n = charset.length; i < n; ++i) {
+    retVal += charset.charAt(Math.floor(Math.random() * n));
+    if (retVal.length === length) break;
+  }
+  return retVal;
+};
+
+// Employee APIs
+app.post('/api/employees', async (req, res) => {
+  try {
+    const { data } = req.body;
+    const decryptedData = decryptData(data);
+    const { employeeId, role } = decryptedData;
+
+    // Check if user already exists
+    const existingUser = await User.findOne({ username: employeeId });
+    if (existingUser) {
+      return res.status(400).json({ message: 'Employee ID already exists as a username' });
+    }
+
+    // Generate password
+    const plainPassword = generatePassword();
+    const hashedPassword = CryptoJS.SHA256(plainPassword).toString(CryptoJS.enc.Hex);
+
+    // Create User record
+    const newUser = new User({
+      username: employeeId,
+      password: hashedPassword,
+      role: role ? role.toLowerCase() : 'staff'
+    });
+    await newUser.save();
+
+    // Add password to employee data (encrypted)
+    decryptedData.password = plainPassword;
+    const updatedEncryptedData = encryptData(decryptedData);
+
+    const newEmployee = new Employee({ data: updatedEncryptedData });
+    const savedEmployee = await newEmployee.save();
+
+    // Return the saved employee along with the plain password for display once
+    res.status(201).json({
+      ...savedEmployee._doc,
+      plainPassword // Only sent once during creation
+    });
+  } catch (err) {
+    console.error('Error creating employee:', err);
+    res.status(400).json({ message: err.message });
+  }
+});
+
+app.delete('/api/employees/:id', async (req, res) => {
+  try {
+    const employee = await Employee.findById(req.params.id);
+    if (!employee) return res.status(404).json({ message: 'Employee not found' });
+
+    const decryptedData = decryptData(employee.data);
+    const { employeeId } = decryptedData;
+
+    // Delete associated User record
+    await User.findOneAndDelete({ username: employeeId });
+
+    await Employee.findByIdAndDelete(req.params.id);
+    res.json({ message: 'Employee and associated user account deleted' });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+app.put('/api/employees/:id', async (req, res) => {
+  try {
+    const oldEmployee = await Employee.findById(req.params.id);
+    if (!oldEmployee) return res.status(404).json({ message: 'Employee not found' });
+
+    const oldDecrypted = decryptData(oldEmployee.data);
+    const { employeeId: oldId } = oldDecrypted;
+
+    const { data } = req.body;
+    const newDecrypted = decryptData(data);
+    const { employeeId: newId, role } = newDecrypted;
+
+    // Update associated User record if employeeId or role changed
+    const user = await User.findOne({ username: oldId });
+    if (user) {
+      user.username = newId;
+      if (role) user.role = role.toLowerCase();
+      await user.save();
+    }
+
+    const updatedEmployee = await Employee.findByIdAndUpdate(req.params.id, req.body, { new: true });
+    res.json(updatedEmployee);
+  } catch (err) {
+    res.status(400).json({ message: err.message });
+  }
+});
+
+app.get('/api/employees', async (req, res) => {
+  try {
+    const employees = await Employee.find().sort({ createdAt: -1 });
+    res.json(employees);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// Authentication APIs
+app.post('/api/auth/login', async (req, res) => {
+  try {
+    const { username, password } = req.body;
+
+    // Find user
+    const user = await User.findOne({ username });
+    if (!user) {
+      return res.status(401).json({ message: 'Invalid username or password' });
+    }
+
+    // Verify password
+    const hashedPassword = CryptoJS.SHA256(password).toString(CryptoJS.enc.Hex);
+    if (user.password !== hashedPassword) {
+      return res.status(401).json({ message: 'Invalid username or password' });
+    }
+
+    // For a production app, we would generate a JWT token here
+    // Find employee name if exists
+    let displayName = username === 'admin' ? 'Administrator' : username;
+    if (username !== 'admin') {
+      const employees = await Employee.find();
+      for (const emp of employees) {
+        try {
+          const decrypted = decryptData(emp.data);
+          if (decrypted.employeeId === username) {
+            displayName = decrypted.name;
+            break;
+          }
+        } catch (e) {
+          console.error('Error decrypting employee data during login:', e);
+        }
+      }
+    }
+
+    const userData = {
+      id: user._id,
+      username: user.username,
+      role: user.role,
+      name: displayName
+    };
+
+    // Store user data in session
+    req.session.user = userData;
+
+    res.json({
+      success: true,
+      user: userData
+    });
+  } catch (err) {
+    console.error('Login error:', err);
+    res.status(500).json({ message: 'Server error during login' });
+  }
+});
+
+// Check Session Status
+app.get('/api/auth/check', (req, res) => {
+  if (req.session.user) {
+    res.json({
+      authenticated: true,
+      user: req.session.user
+    });
+  } else {
+    res.status(401).json({
+      authenticated: false,
+      message: 'Not authenticated'
+    });
+  }
+});
+
+// Logout API
+app.post('/api/auth/logout', (req, res) => {
+  req.session.destroy((err) => {
+    if (err) {
+      return res.status(500).json({ message: 'Could not log out' });
+    }
+    res.clearCookie('connect.sid'); // Default session cookie name
+    res.json({ success: true, message: 'Logged out successfully' });
+  });
+});
+
+app.post('/api/auth/change-password', async (req, res) => {
+  try {
+    const { username, currentPassword, newPassword } = req.body;
+    const user = await User.findOne({ username });
+    if (!user) return res.status(404).json({ message: 'User not found' });
+
+    const hashedCurrent = CryptoJS.SHA256(currentPassword).toString(CryptoJS.enc.Hex);
+    if (user.password !== hashedCurrent) {
+      return res.status(401).json({ message: 'Current password is incorrect' });
+    }
+
+    const hashedNew = CryptoJS.SHA256(newPassword).toString(CryptoJS.enc.Hex);
+    user.password = hashedNew;
+    await user.save();
+
+    res.json({ success: true, message: 'Password changed successfully' });
+  } catch (err) {
+    console.error('Password change error:', err);
+    res.status(500).json({ message: 'Server error during password change' });
+  }
+});
 
 app.get('/health', (req, res) => {
   res.status(200).json({ status: 'ok', message: 'Server is healthy' });
 });
 
-app.listen(PORT, () => {
+app.listen(PORT, '0.0.0.0', () => {
   console.log(`Server running on port ${PORT}`);
 });

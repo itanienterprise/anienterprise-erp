@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { SearchIcon, XIcon, BarChartIcon, FunnelIcon, MapPinIcon } from '../../Icons';
+import { SearchIcon, XIcon, BarChartIcon, FunnelIcon, MapPinIcon, PrinterIcon } from '../../Icons';
 import CustomDatePicker from "../../shared/CustomDatePicker";
 import { generateWarehouseReportPDF } from '../../../utils/pdfGenerator';
 import { formatDate } from '../../../utils/helpers';
@@ -30,6 +30,21 @@ const WarehouseReport = ({
         brand: false,
         category: false
     });
+
+    // --- Mobile Accordion State ---
+    const [expandedMobileWHIndex, setExpandedMobileWHIndex] = useState(null);
+    const [expandedMobileProdIndex, setExpandedMobileProdIndex] = useState(null);
+
+    const toggleMobileWH = (idx) => {
+        setExpandedMobileWHIndex(prev => {
+            if (prev !== idx) setExpandedMobileProdIndex(null);
+            return prev === idx ? null : idx;
+        });
+    };
+
+    const toggleMobileProd = (idx) => {
+        setExpandedMobileProdIndex(prev => prev === idx ? null : idx);
+    };
 
     const filterButtonRef = useRef(null);
     const filterPanelRef = useRef(null);
@@ -306,197 +321,243 @@ const WarehouseReport = ({
 
     return (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[200] flex items-center justify-center p-4 print:p-0 print:bg-white print:backdrop-none">
-            <div className="bg-white w-full max-w-5xl max-h-[90vh] overflow-hidden rounded-3xl shadow-2xl flex flex-col print:max-h-none print:shadow-none print:rounded-none print:w-full print:h-auto">
+            <div className="bg-white w-full max-w-5xl max-h-[90vh] rounded-3xl shadow-2xl flex flex-col print:max-h-none print:shadow-none print:rounded-none print:w-full print:h-auto">
                 {/* Header */}
-                <div className="flex items-center justify-between px-8 py-4 border-b border-gray-100 print:hidden">
-                    <div className="flex items-center gap-3">
-                        <div className="p-2 bg-blue-50 rounded-xl">
-                            <BarChartIcon className="w-5 h-5 text-blue-600" />
+                <div className="flex flex-row items-center justify-between px-4 sm:px-8 py-4 border-b border-gray-100 print:hidden gap-2">
+                    <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+                        <div className="w-9 h-9 sm:w-10 sm:h-10 flex-shrink-0 flex items-center justify-center bg-blue-50 rounded-lg sm:rounded-xl">
+                            <BarChartIcon className="w-4 h-4 sm:w-5 sm:h-5 text-blue-600" />
                         </div>
-                        <h3 className="text-xl font-bold text-gray-800">Warehouse Report</h3>
+                        <h3 className="text-base sm:text-xl font-black text-gray-800 truncate leading-none">Warehouse Report</h3>
                     </div>
-                    <div className="flex items-center gap-3">
-                        <div className="relative">
+                    <div className="flex items-center justify-end gap-1.5 sm:gap-3 flex-shrink-0">
+                        <div className="relative flex items-center">
                             <button
                                 ref={filterButtonRef}
                                 onClick={() => setShowFilterPanel(!showFilterPanel)}
-                                className={`flex items-center gap-2 px-4 py-2 rounded-xl transition-all border ${showFilterPanel || Object.values(filters).some(v => v !== '')
+                                className={`w-9 h-9 sm:w-10 sm:h-10 flex items-center justify-center rounded-lg sm:rounded-xl transition-all border ${showFilterPanel || Object.values(filters).some(v => v !== '')
                                     ? 'bg-blue-600 border-blue-600 text-white shadow-lg shadow-blue-500/30'
-                                    : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'
+                                    : 'bg-white border-gray-200 text-gray-600 hover:border-blue-200 hover:bg-blue-50/30'
                                     }`}
                             >
-                                <FunnelIcon className={`w-4 h-4 ${showFilterPanel || Object.values(filters).some(v => v !== '') ? 'text-white' : 'text-gray-400'}`} />
-                                <span className="text-sm font-medium">Filter</span>
+                                <FunnelIcon className={`w-4 h-4 sm:w-5 sm:h-5 ${showFilterPanel || Object.values(filters).some(v => v !== '') ? 'text-white' : 'text-gray-400'}`} />
                             </button>
 
                             {/* Floating Filter Panel */}
                             {showFilterPanel && (
-                                <div ref={filterPanelRef} className="absolute right-0 mt-3 w-80 bg-white/95 backdrop-blur-2xl border border-gray-100 rounded-2xl shadow-2xl z-[110] p-5 animate-in fade-in zoom-in duration-200">
-                                    <div className="flex items-center justify-between mb-6 pb-2 border-b border-gray-100">
-                                        <h4 className="font-bold text-gray-900 text-sm">Advance Filter</h4>
-                                        <button
-                                            onClick={() => {
-                                                setFilters({ startDate: '', endDate: '', warehouse: '', productName: '', brand: '', category: 'Crop' });
-                                                setFilterSearchInputs({ warehouseSearch: '', productSearch: '', brandSearch: '', categorySearch: '' });
-                                                setFilterDropdownOpen({ warehouse: false, product: false, brand: false, category: false });
-                                            }}
-                                            className="text-[11px] font-bold text-blue-600 hover:text-blue-700 uppercase tracking-wider"
-                                        >
-                                            Reset All
-                                        </button>
+                                <>
+                                    {/* Backdrop for mobile */}
+                                    <div className="fixed inset-0 bg-black/20 backdrop-blur-[2px] z-[210] md:hidden" onClick={() => setShowFilterPanel(false)} />
+
+                                    <div ref={filterPanelRef} className="fixed inset-x-4 md:inset-x-auto top-24 md:absolute md:top-full md:right-0 md:mt-3 w-auto md:w-72 bg-white border border-gray-100 rounded-2xl shadow-[0_20px_50px_rgba(0,0,0,0.15)] z-[220] p-5 flex flex-col max-h-[calc(100vh-160px)] animate-in fade-in zoom-in-95 duration-200">
+                                        <div className="flex items-center justify-between mb-6 pb-2 border-b border-gray-100 flex-shrink-0">
+                                            <h4 className="font-bold text-gray-900 tracking-tight">Advance Filter</h4>
+                                            <button
+                                                onClick={() => {
+                                                    setFilters({ startDate: '', endDate: '', warehouse: '', productName: '', brand: '', category: 'Crop' });
+                                                    setFilterSearchInputs({ warehouseSearch: '', productSearch: '', brandSearch: '', categorySearch: '' });
+                                                    setFilterDropdownOpen({ warehouse: false, product: false, brand: false, category: false });
+                                                }}
+                                                className="text-[11px] font-bold text-blue-600 hover:text-blue-700 uppercase tracking-widest"
+                                            >
+                                                RESET ALL
+                                            </button>
+                                        </div>
+
+                                        <div className="space-y-4 overflow-y-auto pr-1 custom-scrollbar">
+                                            <div className="grid grid-cols-2 gap-3">
+                                                <CustomDatePicker
+                                                    label="From Date"
+                                                    value={filters.startDate}
+                                                    onChange={(e) => setFilters({ ...filters, startDate: e.target.value })}
+                                                    compact={true}
+                                                />
+                                                <CustomDatePicker
+                                                    label="To Date"
+                                                    value={filters.endDate}
+                                                    onChange={(e) => setFilters({ ...filters, endDate: e.target.value })}
+                                                    compact={true}
+                                                    rightAlign={true}
+                                                />
+                                            </div>
+
+                                            {/* Category Filter */}
+                                            <div className="space-y-1.5 relative" ref={categoryRef}>
+                                                <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider pl-1 font-mono">CATEGORY</label>
+                                                <div className="relative">
+                                                    <input
+                                                        type="text"
+                                                        value={filterSearchInputs.categorySearch}
+                                                        onChange={(e) => {
+                                                            setFilterSearchInputs({ ...filterSearchInputs, categorySearch: e.target.value });
+                                                            setFilterDropdownOpen({ warehouse: false, product: false, brand: false, category: true });
+                                                        }}
+                                                        onFocus={() => setFilterDropdownOpen({ warehouse: false, product: false, brand: false, category: true })}
+                                                        placeholder={filters.category || "Search Category..."}
+                                                        className={`w-full px-4 py-2.5 bg-white border border-gray-100 rounded-xl text-sm focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all shadow-sm hover:border-gray-200 pr-14 ${filters.category ? 'placeholder:text-gray-900 placeholder:font-semibold' : 'placeholder:text-gray-300'}`}
+                                                    />
+                                                    <div className="absolute right-3.5 top-1/2 -translate-y-1/2 flex items-center gap-2">
+                                                        {filters.category && (
+                                                            <button onClick={() => { setFilters({ ...filters, category: '' }); setFilterSearchInputs({ ...filterSearchInputs, categorySearch: '' }); setFilterDropdownOpen({ warehouse: false, product: false, brand: false, category: false }); }} className="text-gray-400 hover:text-gray-600">
+                                                                <XIcon className="w-4 h-4" />
+                                                            </button>
+                                                        )}
+                                                        <SearchIcon className="w-4.5 h-4.5 text-gray-300 pointer-events-none" />
+                                                    </div>
+                                                </div>
+                                                {filterDropdownOpen.category && (() => {
+                                                    const options = [...new Set(products.map(p => p.category).filter(Boolean))].sort();
+                                                    const filtered = options.filter(c => c.toLowerCase().includes(filterSearchInputs.categorySearch.toLowerCase()));
+                                                    return filtered.length > 0 ? (
+                                                        <div className="absolute z-[120] mt-1 w-full bg-white border border-gray-100 rounded-xl shadow-xl max-h-48 overflow-y-auto py-1">
+                                                            {filtered.map(c => (
+                                                                <button key={c} type="button" onClick={() => { setFilters({ ...filters, category: c }); setFilterSearchInputs({ ...filterSearchInputs, categorySearch: '' }); setFilterDropdownOpen({ warehouse: false, product: false, brand: false, category: false }); }} className="w-full px-4 py-2 text-left text-sm hover:bg-blue-50 transition-colors font-medium text-gray-700">{c}</button>
+                                                            ))}
+                                                        </div>
+                                                    ) : null;
+                                                })()}
+                                            </div>
+
+                                            {/* Warehouse Filter */}
+                                            <div className="space-y-1.5 relative" ref={warehouseRef}>
+                                                <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider pl-1 font-mono">WAREHOUSE</label>
+                                                <div className="relative">
+                                                    <input
+                                                        type="text"
+                                                        value={filterSearchInputs.warehouseSearch}
+                                                        onChange={(e) => {
+                                                            setFilterSearchInputs({ ...filterSearchInputs, warehouseSearch: e.target.value });
+                                                            setFilterDropdownOpen({ warehouse: true, product: false, brand: false, category: false });
+                                                        }}
+                                                        onFocus={() => setFilterDropdownOpen({ warehouse: true, product: false, brand: false, category: false })}
+                                                        placeholder={filters.warehouse || "Search warehouse..."}
+                                                        className={`w-full px-4 py-2.5 bg-white border border-gray-100 rounded-xl text-sm focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all shadow-sm hover:border-gray-200 pr-14 ${filters.warehouse ? 'placeholder:text-gray-900 placeholder:font-semibold' : 'placeholder:text-gray-300'}`}
+                                                    />
+                                                    <div className="absolute right-3.5 top-1/2 -translate-y-1/2 flex items-center gap-2">
+                                                        {filters.warehouse && (
+                                                            <button onClick={() => { setFilters({ ...filters, warehouse: '' }); setFilterSearchInputs({ ...filterSearchInputs, warehouseSearch: '' }); setFilterDropdownOpen({ warehouse: false, product: false, brand: false, category: false }); }} className="text-gray-400 hover:text-gray-600">
+                                                                <XIcon className="w-4 h-4" />
+                                                            </button>
+                                                        )}
+                                                        <SearchIcon className="w-4.5 h-4.5 text-gray-300 pointer-events-none" />
+                                                    </div>
+                                                </div>
+                                                {filterDropdownOpen.warehouse && (() => {
+                                                    const filtered = uniqueWarehouses.filter(wh => wh.whName.toLowerCase().includes(filterSearchInputs.warehouseSearch.toLowerCase()));
+                                                    return filtered.length > 0 ? (
+                                                        <div className="absolute z-[120] mt-1 w-full bg-white border border-gray-100 rounded-xl shadow-xl max-h-48 overflow-y-auto py-1">
+                                                            {filtered.map(wh => (
+                                                                <button key={wh.whName} type="button" onClick={() => { setFilters({ ...filters, warehouse: wh.whName }); setFilterSearchInputs({ ...filterSearchInputs, warehouseSearch: '' }); setFilterDropdownOpen({ warehouse: false, product: false, brand: false, category: false }); }} className="w-full px-4 py-2 text-left text-sm hover:bg-blue-50 transition-colors font-medium text-gray-700">{wh.whName}</button>
+                                                            ))}
+                                                        </div>
+                                                    ) : null;
+                                                })()}
+                                            </div>
+
+                                            {/* Product Filter */}
+                                            <div className="space-y-1.5 relative" ref={productRef}>
+                                                <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider pl-1 font-mono">PRODUCT</label>
+                                                <div className="relative">
+                                                    <input
+                                                        type="text"
+                                                        value={filterSearchInputs.productSearch}
+                                                        onChange={(e) => {
+                                                            setFilterSearchInputs({ ...filterSearchInputs, productSearch: e.target.value });
+                                                            setFilterDropdownOpen({ warehouse: false, product: true, brand: false, category: false });
+                                                        }}
+                                                        onFocus={() => setFilterDropdownOpen({ warehouse: false, product: true, brand: false, category: false })}
+                                                        placeholder={filters.productName || "Search product..."}
+                                                        className={`w-full px-4 py-2.5 bg-white border border-gray-100 rounded-xl text-sm focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all shadow-sm hover:border-gray-200 pr-14 ${filters.productName ? 'placeholder:text-gray-900 placeholder:font-semibold' : 'placeholder:text-gray-300'}`}
+                                                    />
+                                                    <div className="absolute right-3.5 top-1/2 -translate-y-1/2 flex items-center gap-2">
+                                                        {filters.productName && (
+                                                            <button onClick={() => { setFilters({ ...filters, productName: '', brand: '' }); setFilterSearchInputs({ ...filterSearchInputs, productSearch: '', brandSearch: '' }); setFilterDropdownOpen({ warehouse: false, product: false, brand: false, category: false }); }} className="text-gray-400 hover:text-gray-600">
+                                                                <XIcon className="w-4 h-4" />
+                                                            </button>
+                                                        )}
+                                                        <SearchIcon className="w-4.5 h-4.5 text-gray-300 pointer-events-none" />
+                                                    </div>
+                                                </div>
+                                                {filterDropdownOpen.product && (() => {
+                                                    let options = getUniqueOptions('productName');
+                                                    if (filters.category && products && products.length > 0) {
+                                                        const categoryProducts = new Set(
+                                                            products.filter(p => (p.category || '').toLowerCase() === filters.category.toLowerCase())
+                                                                .map(p => (p.name || p.productName || '').toLowerCase())
+                                                        );
+                                                        options = options.filter(o => categoryProducts.has(o.toLowerCase()));
+                                                    }
+                                                    const filtered = options.filter(p => p.toLowerCase().includes(filterSearchInputs.productSearch.toLowerCase()));
+                                                    return filtered.length > 0 ? (
+                                                        <div className="absolute z-[120] mt-1 w-full bg-white border border-gray-100 rounded-xl shadow-xl max-h-48 overflow-y-auto py-1">
+                                                            {filtered.map(p => (
+                                                                <button key={p} type="button" onClick={() => { setFilters({ ...filters, productName: p, brand: '' }); setFilterSearchInputs({ ...filterSearchInputs, productSearch: '', brandSearch: '' }); setFilterDropdownOpen({ warehouse: false, product: false, brand: false, category: false }); }} className="w-full px-4 py-2 text-left text-sm hover:bg-blue-50 transition-colors font-medium text-gray-700">{p}</button>
+                                                            ))}
+                                                        </div>
+                                                    ) : null;
+                                                })()}
+                                            </div>
+
+                                            {/* Brand Filter */}
+                                            {filters.productName && (
+                                                <div className="space-y-1.5 relative" ref={brandRef}>
+                                                    <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider pl-1 font-mono">BRAND</label>
+                                                    <div className="relative">
+                                                        <input
+                                                            type="text"
+                                                            value={filterSearchInputs.brandSearch}
+                                                            onChange={(e) => {
+                                                                setFilterSearchInputs({ ...filterSearchInputs, brandSearch: e.target.value });
+                                                                setFilterDropdownOpen({ warehouse: false, product: false, brand: true, category: false });
+                                                            }}
+                                                            onFocus={() => setFilterDropdownOpen({ warehouse: false, product: false, brand: true, category: false })}
+                                                            placeholder={filters.brand || "Search brand..."}
+                                                            className={`w-full px-4 py-2.5 bg-white border border-gray-100 rounded-xl text-sm focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all shadow-sm hover:border-gray-200 pr-14 ${filters.brand ? 'placeholder:text-gray-900 placeholder:font-semibold' : 'placeholder:text-gray-300'}`}
+                                                        />
+                                                        <div className="absolute right-3.5 top-1/2 -translate-y-1/2 flex items-center gap-2">
+                                                            {filters.brand && (
+                                                                <button onClick={() => { setFilters({ ...filters, brand: '' }); setFilterSearchInputs({ ...filterSearchInputs, brandSearch: '' }); setFilterDropdownOpen({ warehouse: false, product: false, brand: false, category: false }); }} className="text-gray-400 hover:text-gray-600">
+                                                                    <XIcon className="w-4 h-4" />
+                                                                </button>
+                                                            )}
+                                                            <SearchIcon className="w-4.5 h-4.5 text-gray-300 pointer-events-none" />
+                                                        </div>
+                                                    </div>
+                                                    {filterDropdownOpen.brand && (() => {
+                                                        const options = getUniqueOptions('brand');
+                                                        const filtered = options.filter(b => b.toLowerCase().includes(filterSearchInputs.brandSearch.toLowerCase()));
+                                                        return filtered.length > 0 ? (
+                                                            <div className="absolute z-[120] mt-1 w-full bg-white border border-gray-100 rounded-xl shadow-xl max-h-48 overflow-y-auto py-1">
+                                                                {filtered.map(b => (
+                                                                    <button key={b} type="button" onClick={() => { setFilters({ ...filters, brand: b }); setFilterSearchInputs({ ...filterSearchInputs, brandSearch: '' }); setFilterDropdownOpen({ warehouse: false, product: false, brand: false, category: false }); }} className="w-full px-4 py-2 text-left text-sm hover:bg-blue-50 transition-colors font-medium text-gray-700">{b}</button>
+                                                                ))}
+                                                            </div>
+                                                        ) : null;
+                                                    })()}
+                                                </div>
+                                            )}
+
+                                            <button onClick={() => setShowFilterPanel(false)} className="w-full py-2.5 bg-gray-900 text-white rounded-xl text-sm font-bold hover:bg-gray-800 transition-all mt-2 flex-shrink-0 active:scale-[0.98]">APPLY FILTERS</button>
+                                        </div>
                                     </div>
-
-                                    <div className="space-y-4">
-                                        <div className="grid grid-cols-2 gap-3">
-                                            <CustomDatePicker
-                                                label="From Date"
-                                                value={filters.startDate}
-                                                onChange={(e) => setFilters({ ...filters, startDate: e.target.value })}
-                                                compact={true}
-                                            />
-                                            <CustomDatePicker
-                                                label="To Date"
-                                                value={filters.endDate}
-                                                onChange={(e) => setFilters({ ...filters, endDate: e.target.value })}
-                                                compact={true}
-                                                rightAlign={true}
-                                            />
-                                        </div>
-
-                                        <div className="space-y-1.5 relative" ref={warehouseRef}>
-                                            <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider pl-1">Warehouse</label>
-                                            <div className="relative">
-                                                <input
-                                                    type="text"
-                                                    value={filterSearchInputs.warehouseSearch}
-                                                    onChange={(e) => {
-                                                        setFilterSearchInputs({ ...filterSearchInputs, warehouseSearch: e.target.value });
-                                                        setFilterDropdownOpen({ warehouse: true, product: false, brand: false });
-                                                    }}
-                                                    onFocus={() => setFilterDropdownOpen({ warehouse: true, product: false, brand: false })}
-                                                    placeholder={filters.warehouse || "Search warehouse..."}
-                                                    className={`w-full px-4 py-2.5 bg-white border border-gray-100 rounded-xl text-sm focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all shadow-sm hover:border-gray-200 pr-14 ${filters.warehouse ? 'placeholder:text-gray-900 placeholder:font-semibold' : 'placeholder:text-gray-300'}`}
-                                                />
-                                                <div className="absolute right-3.5 top-1/2 -translate-y-1/2 flex items-center gap-2">
-                                                    {filters.warehouse && (
-                                                        <button onClick={() => { setFilters({ ...filters, warehouse: '' }); setFilterSearchInputs({ ...filterSearchInputs, warehouseSearch: '' }); setFilterDropdownOpen({ warehouse: false, product: false, brand: false }); }} className="text-gray-400 hover:text-gray-600">
-                                                            <XIcon className="w-4 h-4" />
-                                                        </button>
-                                                    )}
-                                                    <SearchIcon className="w-4.5 h-4.5 text-gray-300 pointer-events-none" />
-                                                </div>
-                                            </div>
-                                            {filterDropdownOpen.warehouse && (() => {
-                                                const filtered = uniqueWarehouses.filter(wh => wh.whName.toLowerCase().includes(filterSearchInputs.warehouseSearch.toLowerCase()));
-                                                return filtered.length > 0 ? (
-                                                    <div className="absolute z-[120] mt-1 w-full bg-white border border-gray-100 rounded-xl shadow-xl max-h-48 overflow-y-auto py-1">
-                                                        {filtered.map(wh => (
-                                                            <button key={wh.whName} type="button" onClick={() => { setFilters({ ...filters, warehouse: wh.whName }); setFilterSearchInputs({ ...filterSearchInputs, warehouseSearch: '' }); setFilterDropdownOpen({ warehouse: false, product: false, brand: false }); }} className="w-full px-4 py-2 text-left text-sm hover:bg-blue-50 transition-colors font-medium text-gray-700">{wh.whName}</button>
-                                                        ))}
-                                                    </div>
-                                                ) : null;
-                                            })()}
-                                        </div>
-
-                                        <div className="space-y-1.5 relative" ref={categoryRef}>
-                                            <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider pl-1">Category</label>
-                                            <div className="relative">
-                                                <input
-                                                    type="text"
-                                                    value={filterSearchInputs.categorySearch}
-                                                    onChange={(e) => {
-                                                        setFilterSearchInputs({ ...filterSearchInputs, categorySearch: e.target.value });
-                                                        setFilterDropdownOpen({ warehouse: false, product: false, brand: false, category: true });
-                                                    }}
-                                                    onFocus={() => setFilterDropdownOpen({ warehouse: false, product: false, brand: false, category: true })}
-                                                    placeholder={filters.category || "Search Category..."}
-                                                    className={`w-full px-4 py-2.5 bg-white border border-gray-100 rounded-xl text-sm focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all shadow-sm hover:border-gray-200 pr-14 ${filters.category ? 'placeholder:text-gray-900 placeholder:font-semibold' : 'placeholder:text-gray-300'}`}
-                                                />
-                                                <div className="absolute right-3.5 top-1/2 -translate-y-1/2 flex items-center gap-2">
-                                                    {filters.category && (
-                                                        <button onClick={() => { setFilters({ ...filters, category: '' }); setFilterSearchInputs({ ...filterSearchInputs, categorySearch: '' }); setFilterDropdownOpen({ warehouse: false, product: false, brand: false, category: false }); }} className="text-gray-400 hover:text-gray-600">
-                                                            <XIcon className="w-4 h-4" />
-                                                        </button>
-                                                    )}
-                                                    <SearchIcon className="w-4.5 h-4.5 text-gray-300 pointer-events-none" />
-                                                </div>
-                                            </div>
-                                            {filterDropdownOpen.category && (() => {
-                                                const options = [...new Set(products.map(p => p.category).filter(Boolean))].sort();
-                                                const filtered = options.filter(c => c.toLowerCase().includes(filterSearchInputs.categorySearch.toLowerCase()));
-                                                return filtered.length > 0 ? (
-                                                    <div className="absolute z-[120] mt-1 w-full bg-white border border-gray-100 rounded-xl shadow-xl max-h-48 overflow-y-auto py-1">
-                                                        {filtered.map(c => (
-                                                            <button key={c} type="button" onClick={() => { setFilters({ ...filters, category: c }); setFilterSearchInputs({ ...filterSearchInputs, categorySearch: '' }); setFilterDropdownOpen({ warehouse: false, product: false, brand: false, category: false }); }} className="w-full px-4 py-2 text-left text-sm hover:bg-blue-50 transition-colors font-medium text-gray-700">{c}</button>
-                                                        ))}
-                                                    </div>
-                                                ) : null;
-                                            })()}
-                                        </div>
-
-                                        <div className="space-y-1.5 relative" ref={productRef}>
-                                            <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider pl-1">Product</label>
-                                            <div className="relative">
-                                                <input
-                                                    type="text"
-                                                    value={filterSearchInputs.productSearch}
-                                                    onChange={(e) => {
-                                                        setFilterSearchInputs({ ...filterSearchInputs, productSearch: e.target.value });
-                                                        setFilterDropdownOpen({ warehouse: false, product: true, brand: false });
-                                                    }}
-                                                    onFocus={() => setFilterDropdownOpen({ warehouse: false, product: true, brand: false })}
-                                                    placeholder={filters.productName || "Search product..."}
-                                                    className={`w-full px-4 py-2.5 bg-white border border-gray-100 rounded-xl text-sm focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all shadow-sm hover:border-gray-200 pr-14 ${filters.productName ? 'placeholder:text-gray-900 placeholder:font-semibold' : 'placeholder:text-gray-300'}`}
-                                                />
-                                                <div className="absolute right-3.5 top-1/2 -translate-y-1/2 flex items-center gap-2">
-                                                    {filters.productName && (
-                                                        <button onClick={() => { setFilters({ ...filters, productName: '', brand: '' }); setFilterSearchInputs({ ...filterSearchInputs, productSearch: '', brandSearch: '' }); setFilterDropdownOpen({ warehouse: false, product: false, brand: false }); }} className="text-gray-400 hover:text-gray-600">
-                                                            <XIcon className="w-4 h-4" />
-                                                        </button>
-                                                    )}
-                                                    <SearchIcon className="w-4.5 h-4.5 text-gray-300 pointer-events-none" />
-                                                </div>
-                                            </div>
-                                            {filterDropdownOpen.product && (() => {
-                                                let options = getUniqueOptions('productName');
-                                                if (filters.category && products && products.length > 0) {
-                                                    const categoryProducts = new Set(
-                                                        products.filter(p => (p.category || '').toLowerCase() === filters.category.toLowerCase())
-                                                            .map(p => (p.name || p.productName || '').toLowerCase())
-                                                    );
-                                                    options = options.filter(o => categoryProducts.has(o.toLowerCase()));
-                                                }
-                                                const filtered = options.filter(p => p.toLowerCase().includes(filterSearchInputs.productSearch.toLowerCase()));
-                                                return filtered.length > 0 ? (
-                                                    <div className="absolute z-[120] mt-1 w-full bg-white border border-gray-100 rounded-xl shadow-xl max-h-48 overflow-y-auto py-1">
-                                                        {filtered.map(p => (
-                                                            <button key={p} type="button" onClick={() => { setFilters({ ...filters, productName: p, brand: '' }); setFilterSearchInputs({ ...filterSearchInputs, productSearch: '', brandSearch: '' }); setFilterDropdownOpen({ warehouse: false, product: false, brand: false }); }} className="w-full px-4 py-2 text-left text-sm hover:bg-blue-50 transition-colors font-medium text-gray-700">{p}</button>
-                                                        ))}
-                                                    </div>
-                                                ) : null;
-                                            })()}
-                                        </div>
-
-                                        <button onClick={() => setShowFilterPanel(false)} className="w-full py-2.5 bg-gray-900 text-white rounded-xl text-sm font-bold hover:bg-gray-800 transition-all mt-2 active:scale-[0.98]">APPLY FILTERS</button>
-                                    </div>
-                                </div>
+                                </>
                             )}
                         </div>
-                        <button onClick={() => generateWarehouseReportPDF(displayGroups, filters, totals)} className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-xl shadow-lg shadow-blue-500/30 transition-all flex items-center gap-2 no-print">
-                            <BarChartIcon className="w-4 h-4" /> Print Report
+                        <button onClick={() => generateWarehouseReportPDF(displayGroups, filters, totals)} className="w-9 h-9 sm:w-10 sm:h-10 flex items-center justify-center bg-blue-600 hover:bg-blue-700 text-white rounded-lg sm:rounded-xl shadow-lg shadow-blue-500/30 transition-all flex-shrink-0 no-print">
+                            <PrinterIcon className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
                         </button>
-                        <button onClick={onClose} className="p-2.5 hover:bg-gray-100 rounded-xl transition-colors no-print"><XIcon className="w-6 h-6 text-gray-500" /></button>
+                        <button onClick={onClose} className="w-9 h-9 sm:w-10 sm:h-10 flex items-center justify-center hover:bg-gray-100 rounded-lg sm:rounded-xl transition-colors no-print"><XIcon className="w-4 h-4 sm:w-6 sm:h-6 text-gray-500" /></button>
                     </div>
                 </div>
 
                 {/* Content */}
-                <div className="flex-1 overflow-y-auto p-12 bg-white print:p-0">
-                    <div className="max-w-[1000px] mx-auto space-y-8">
+                <div className="flex-1 overflow-y-auto p-4 sm:p-12 print:p-4 print:overflow-visible bg-white">
+                    <div className="max-w-[1000px] mx-auto space-y-6 sm:space-y-8">
                         {/* Company Header */}
                         <div className="text-center space-y-1">
-                            <h1 className="text-4xl font-bold text-gray-900 tracking-tight">M/S ANI ENTERPRISE</h1>
-                            <p className="text-[14px] text-gray-600">766, H.M Tower, Level-06, Borogola, Bogura-5800, Bangladesh</p>
-                            <p className="text-[14px] text-gray-600">+8802588813057, anienterprise051@gmail.com, www.anienterprises.com.bd</p>
+                            <h1 className="text-2xl sm:text-4xl font-bold text-gray-900 tracking-tight">M/S ANI ENTERPRISE</h1>
+                            <p className="text-[12px] sm:text-[14px] text-gray-600">766, H.M Tower, Level-06, Borogola, Bogura-5800, Bangladesh</p>
+                            <p className="text-[12px] sm:text-[14px] text-gray-600">+8802588813057, anienterprise051@gmail.com, www.anienterprises.com.bd</p>
                         </div>
 
                         <div className="border-t-2 border-gray-900 w-full mt-4"></div>
@@ -509,26 +570,26 @@ const WarehouseReport = ({
                         </div>
 
                         {/* Info Row */}
-                        <div className="flex justify-between items-end text-[14px] text-gray-800 pt-6 px-2">
+                        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-end text-[14px] text-gray-800 pt-6 px-2 gap-4">
                             <div className="flex flex-col gap-1.5">
-                                <div><span className="font-bold text-gray-900">Date Range:</span> {formatDate(filters.startDate) === '-' ? 'Start' : formatDate(filters.startDate)} to {formatDate(filters.endDate) === '-' ? 'Present' : formatDate(filters.endDate)}</div>
-                                {filters.warehouse && <div><span className="font-bold text-gray-900">Warehouse:</span> {filters.warehouse}</div>}
-                                {filters.productName && <div><span className="font-bold text-gray-900">Product:</span> {filters.productName}</div>}
+                                <div className="flex"><span className="font-bold text-gray-900 w-28">Date Range:</span> <span className="text-gray-900">{formatDate(filters.startDate) === '-' ? 'Start' : formatDate(filters.startDate)} to {formatDate(filters.endDate) === '-' ? 'Present' : formatDate(filters.endDate)}</span></div>
+                                {filters.warehouse && <div className="flex"><span className="font-bold text-gray-900 w-28">Warehouse:</span> <span className="text-blue-700 font-extrabold">{filters.warehouse}</span></div>}
+                                {filters.productName && <div className="flex"><span className="font-bold text-gray-900 w-28">Product:</span> <span className="text-gray-900">{filters.productName}</span></div>}
                             </div>
                             <div className="font-bold"><span className="text-gray-900">Printed on:</span> <span className="text-gray-900">{formatDate(new Date().toISOString().split('T')[0])}</span></div>
                         </div>
 
                         {/* Table */}
-                        <div className="overflow-x-auto border border-gray-900">
+                        <div className="hidden md:block print:block overflow-x-auto border border-gray-900">
                             <table className="w-full border-collapse">
                                 <thead>
                                     <tr className="bg-gray-50 border-b border-gray-900">
-                                        <th className="border-r border-gray-900 px-2 py-1 text-center text-[12px] font-bold text-gray-900 uppercase tracking-wider w-[4%]">SL</th>
+                                        <th className="border-r border-gray-900 px-2 py-1 text-center text-[12px] font-bold text-gray-900 uppercase tracking-wider w-[3%]">SL</th>
                                         <th className="border-r border-gray-900 px-2 py-1 text-left text-[12px] font-bold text-gray-900 uppercase tracking-wider w-[10%]">Warehouse</th>
                                         <th className="border-r border-gray-900 px-2 py-1 text-left text-[12px] font-bold text-gray-900 uppercase tracking-wider w-[15%]">Product Name</th>
                                         <th className="border-r border-gray-900 px-2 py-1 text-left text-[12px] font-bold text-gray-900 uppercase tracking-wider w-[15%]">Brand</th>
                                         <th className="border-r border-gray-900 px-2 py-1 text-right text-[12px] font-bold text-gray-900 uppercase tracking-wider w-[13%]">Inhouse QTY</th>
-                                        <th className="border-r border-gray-900 px-2 py-1 text-right text-[12px] font-bold text-gray-900 uppercase tracking-wider w-[13%]">Inhouse PKT</th>
+                                        <th className="border-r border-gray-900 px-2 py-1 text-right text-[12px] font-bold text-gray-900 uppercase tracking-wider w-[14%]">Inhouse PKT</th>
                                         <th className="border-r border-gray-900 px-2 py-1 text-right text-[12px] font-bold text-gray-900 uppercase tracking-wider w-[15%]">Warehouse QTY</th>
                                         <th className="px-2 py-1 text-right text-[12px] font-bold text-gray-900 uppercase tracking-wider w-[15%]">Warehouse PKT</th>
                                     </tr>
@@ -642,52 +703,171 @@ const WarehouseReport = ({
                             </table>
                         </div>
 
-                        {/* Summary Cards */}
-                        <div className="grid grid-cols-2 gap-4 pt-6 px-2 no-print">
-                            {/* Card 1: Total InHouse Stock */}
-                            <div className="rounded-2xl border border-gray-200 bg-white shadow-sm overflow-hidden">
-                                <div className="bg-gray-50 px-4 py-2 border-b border-gray-200 text-center">
-                                    <span className="text-[11px] font-bold text-gray-500 uppercase tracking-widest">Total InHouse Stock</span>
+                        {/* Mobile Card View */}
+                        <div className="md:hidden print:hidden space-y-4">
+                            {displayGroups.length > 0 ? (
+                                displayGroups.map((whGroup, whIdx) => {
+                                    const isExpanded = expandedMobileWHIndex === whIdx;
+                                    return (
+                                        <div key={whIdx} className="bg-white border border-gray-200 rounded-2xl overflow-hidden shadow-sm transition-all duration-300">
+                                            <div
+                                                className="bg-gray-50/50 px-4 py-3 border-b border-gray-100 flex justify-between items-center cursor-pointer hover:bg-gray-100/50 transition-colors"
+                                                onClick={() => toggleMobileWH(whIdx)}
+                                            >
+                                                <h4 className="font-black text-gray-900 tracking-tight">{whGroup.whName}</h4>
+                                                <div className="flex items-center gap-2">
+                                                    {!isExpanded && (
+                                                        <span className="text-[10px] font-bold text-blue-600 bg-blue-50 border border-blue-100 px-2 py-0.5 rounded-full">
+                                                            {whGroup.products.reduce((total, p) => total + p.brands.length, 0)} Items
+                                                        </span>
+                                                    )}
+                                                    <span className="text-[10px] font-bold text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">#{whIdx + 1}</span>
+                                                </div>
+                                            </div>
+                                            {isExpanded && (
+                                                <div className="p-4 space-y-4 animate-in slide-in-from-top-2 duration-300">
+                                                    {whGroup.products.map((pGroup, pIdx) => {
+                                                        const isProdExpanded = expandedMobileProdIndex === pIdx;
+                                                        return (
+                                                            <div key={pIdx} className="border border-gray-100 rounded-xl overflow-hidden bg-white/50">
+                                                                <div
+                                                                    className="px-3 py-2 flex items-center justify-between cursor-pointer hover:bg-white transition-colors"
+                                                                    onClick={() => toggleMobileProd(pIdx)}
+                                                                >
+                                                                    <h5 className="font-bold text-sm text-gray-800">{pGroup.productName}</h5>
+                                                                    <div className="flex items-center gap-2">
+                                                                        {!isProdExpanded && (
+                                                                            <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-100">
+                                                                                {pGroup.brands.length} {pGroup.brands.length > 1 ? 'Brands' : 'Brand'}
+                                                                            </span>
+                                                                        )}
+                                                                        {/* Using text label since Chevron might not be imported if not in Icons list, 
+                                                                            but Icons.js usually has them. Checking imports... 
+                                                                            WarehouseReport.jsx doesn't import Chevron. Let me use +/- or common text.
+                                                                            Wait, I should check Icons.js or just add them to imports if possible.
+                                                                            Actually, let me use simple text or CSS arrows to avoid import errors.
+                                                                        */}
+                                                                        <span className="text-gray-400 text-xs">{isProdExpanded ? '▲' : '▼'}</span>
+                                                                    </div>
+                                                                </div>
+
+                                                                {isProdExpanded && (
+                                                                    <div className="p-3 pt-0 space-y-4 animate-in slide-in-from-top-1 duration-200">
+                                                                        {pGroup.brands.map((brandItem, bIdx) => (
+                                                                            <div key={bIdx} className="bg-gray-50 rounded-xl p-3 border border-gray-100">
+                                                                                <div className="flex justify-between items-center pb-2 border-b border-gray-200 mb-2">
+                                                                                    <span className="text-sm font-bold text-blue-600">{brandItem.brand || '-'}</span>
+                                                                                </div>
+                                                                                <div className="grid grid-cols-2 gap-x-4 gap-y-3">
+                                                                                    <div className="space-y-0.5">
+                                                                                        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Inhouse</p>
+                                                                                        <p className="text-xs font-bold text-gray-700">
+                                                                                            {(() => {
+                                                                                                const { whole, remainder } = calculatePktRemainder(brandItem.inhouseQty, brandItem.packetSize);
+                                                                                                return `${whole.toLocaleString()}${remainder > 0 ? ` - ${remainder.toLocaleString()} kg` : ''}`;
+                                                                                            })()} PKT
+                                                                                        </p>
+                                                                                        <p className="text-sm font-black text-gray-900">{Math.round(parseFloat(brandItem.inhouseQty) || 0).toLocaleString()} kg</p>
+                                                                                    </div>
+                                                                                    <div className="space-y-0.5 text-right">
+                                                                                        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Warehouse</p>
+                                                                                        <p className="text-xs font-bold text-gray-700">
+                                                                                            {(() => {
+                                                                                                const { whole, remainder } = calculatePktRemainder(brandItem.whQty, brandItem.packetSize);
+                                                                                                return `${whole.toLocaleString()}${remainder > 0 ? ` - ${remainder.toLocaleString()} kg` : ''}`;
+                                                                                            })()} PKT
+                                                                                        </p>
+                                                                                        <p className="text-sm font-black text-gray-900">{Math.round(parseFloat(brandItem.whQty) || 0).toLocaleString()} kg</p>
+                                                                                    </div>
+                                                                                </div>
+                                                                            </div>
+                                                                        ))}
+
+                                                                        {pGroup.brands.length > 1 && (
+                                                                            <div className="mt-2 pt-3 border-t-2 border-dashed border-gray-200 bg-blue-50/50 rounded-xl p-3">
+                                                                                <p className="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-2">Product Subtotal</p>
+                                                                                <div className="grid grid-cols-2 gap-4">
+                                                                                    <div>
+                                                                                        <p className="text-[10px] font-bold text-gray-400">Inhouse</p>
+                                                                                        <p className="text-sm font-black text-emerald-700">{Math.round(pGroup.brands.reduce((sum, b) => sum + (parseFloat(b.inhouseQty) || 0), 0)).toLocaleString()} kg</p>
+                                                                                    </div>
+                                                                                    <div className="text-right">
+                                                                                        <p className="text-[10px] font-bold text-gray-400">Warehouse</p>
+                                                                                        <p className="text-sm font-black text-blue-700">{Math.round(pGroup.brands.reduce((sum, b) => sum + (parseFloat(b.whQty) || 0), 0)).toLocaleString()} kg</p>
+                                                                                    </div>
+                                                                                </div>
+                                                                            </div>
+                                                                        )}
+                                                                    </div>
+                                                                )}
+                                                            </div>
+                                                        );
+                                                    })}
+                                                </div>
+                                            )}
+                                        </div>
+                                    );
+                                })
+                            ) : (
+                                <div className="text-center py-12 px-4 bg-gray-50 rounded-2xl border-2 border-dashed border-gray-200">
+                                    <p className="text-gray-500 italic">No warehouse stock data matches your criteria.</p>
                                 </div>
-                                <div className="px-4 py-3 space-y-1.5 text-center">
-                                    <div>
-                                        <span className="text-[12px] font-semibold text-gray-500">PKT: </span>
-                                        <span className="text-[15px] font-black text-gray-900">
-                                            {`${totals.totalInHouseWhole.toLocaleString()}${totals.totalInHouseRem > 0 ? ` - ${totals.totalInHouseRem.toLocaleString()} kg` : ''}`}
-                                        </span>
+                            )}
+
+                            {/* Mobile Grand Total */}
+                            {displayGroups.length > 0 && (
+                                <div className="mt-8 p-5 bg-gray-900 rounded-2xl shadow-xl shadow-gray-200">
+                                    <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-4 text-center">Grand Total Summary</h4>
+                                    <div className="grid grid-cols-2 gap-y-6 gap-x-4">
+                                        <div className="space-y-1">
+                                            <p className="text-[10px] font-bold text-gray-500 uppercase tracking-wider text-center">Total Inhouse</p>
+                                            <p className="text-xl font-black text-emerald-400 text-center">{Math.round(totals.totalInHouseQty).toLocaleString()}<span className="text-[10px] ml-1 text-gray-500 uppercase">kg</span></p>
+                                            <p className="text-xs font-bold text-gray-400 text-center">
+                                                {`${totals.totalInHouseWhole.toLocaleString()}${totals.totalInHouseRem > 0 ? ` - ${totals.totalInHouseRem.toLocaleString()} kg` : ''}`} PKT
+                                            </p>
+                                        </div>
+                                        <div className="space-y-1">
+                                            <p className="text-[10px] font-bold text-gray-500 uppercase tracking-wider text-center">Total Warehouse</p>
+                                            <p className="text-xl font-black text-blue-400 text-center">{Math.round(totals.totalWhQty).toLocaleString()}<span className="text-[10px] ml-1 text-gray-500 uppercase">kg</span></p>
+                                            <p className="text-xs font-bold text-gray-400 text-center">
+                                                {`${totals.totalWhWhole.toLocaleString()}${totals.totalWhRem > 0 ? ` - ${totals.totalWhRem.toLocaleString()} kg` : ''}`} PKT
+                                            </p>
+                                        </div>
                                     </div>
-                                    <div>
-                                        <span className="text-[12px] font-semibold text-gray-500">QTY: </span>
-                                        <span className="text-[15px] font-black text-gray-900">{Math.round(totals.totalInHouseQty).toLocaleString()} <span className="text-[11px] font-semibold text-gray-400">kg</span></span>
-                                    </div>
+                                </div>
+                            )}
+                        </div>
+
+                        {/* Summary Cards */}
+                        <div className="grid grid-cols-2 gap-3 sm:gap-4 pt-6 px-2 print:grid no-print">
+                            {/* Card 1: Total InHouse Stock */}
+                            <div className="border border-gray-200 p-3 sm:p-5 rounded-2xl bg-gray-50 shadow-sm print:border-gray-200 flex flex-col justify-center">
+                                <div className="text-[9px] sm:text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-1 sm:mb-3 text-center sm:text-left">Total Inhouse Stock</div>
+                                <div className="text-[10px] sm:text-sm font-bold text-gray-700 mb-1 text-center sm:text-left">
+                                    PKT: <span className="text-xs sm:text-[15px] font-black text-gray-900">{`${totals.totalInHouseWhole.toLocaleString()}${totals.totalInHouseRem > 0 ? ` - ${totals.totalInHouseRem.toLocaleString()} kg` : ''}`}</span>
+                                </div>
+                                <div className="text-sm sm:text-2xl font-black text-gray-900 text-center sm:text-left">
+                                    QTY: {Math.round(totals.totalInHouseQty).toLocaleString()} <span className="text-[9px] sm:text-[11px] font-semibold text-gray-400">kg</span>
                                 </div>
                             </div>
 
                             {/* Card 2: Warehouse Stock */}
-                            <div className="rounded-2xl border border-blue-100 bg-white shadow-sm overflow-hidden">
-                                <div className="bg-blue-50 px-4 py-2 border-b border-blue-100 text-center">
-                                    <span className="text-[11px] font-bold text-blue-500 uppercase tracking-widest">Warehouse Stock</span>
+                            <div className="border border-blue-100 p-3 sm:p-5 rounded-2xl bg-blue-50 shadow-sm print:border-gray-200 flex flex-col justify-center">
+                                <div className="text-[9px] sm:text-[11px] font-bold text-blue-500 uppercase tracking-wider mb-1 sm:mb-3 text-center sm:text-left">Warehouse Stock</div>
+                                <div className="text-[10px] sm:text-sm font-bold text-gray-700 mb-1 text-center sm:text-left">
+                                    PKT: <span className="text-xs sm:text-[15px] font-black text-blue-700">{`${totals.totalWhWhole.toLocaleString()}${totals.totalWhRem > 0 ? ` - ${totals.totalWhRem.toLocaleString()} kg` : ''}`}</span>
                                 </div>
-                                <div className="px-4 py-3 space-y-1.5 text-center">
-                                    <div>
-                                        <span className="text-[12px] font-semibold text-gray-500">PKT: </span>
-                                        <span className="text-[15px] font-black text-blue-700">
-                                            {`${totals.totalWhWhole.toLocaleString()}${totals.totalWhRem > 0 ? ` - ${totals.totalWhRem.toLocaleString()} kg` : ''}`}
-                                        </span>
-                                    </div>
-                                    <div>
-                                        <span className="text-[12px] font-semibold text-gray-500">QTY: </span>
-                                        <span className="text-[15px] font-black text-blue-700">{Math.round(totals.totalWhQty).toLocaleString()} <span className="text-[11px] font-semibold text-blue-300">kg</span></span>
-                                    </div>
+                                <div className="text-sm sm:text-2xl font-black text-blue-600 text-center sm:text-left">
+                                    QTY: {Math.round(totals.totalWhQty).toLocaleString()} <span className="text-[9px] sm:text-[11px] font-semibold text-blue-300">kg</span>
                                 </div>
                             </div>
                         </div>
 
                         {/* Signatures */}
-                        <div className="grid grid-cols-3 gap-8 pt-24 px-4 pb-12">
-                            <div className="text-center"><div className="border-t border-dotted border-gray-900 pt-2 text-[10px] font-bold text-gray-900 uppercase">Prepared By</div></div>
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 sm:gap-8 pt-12 sm:pt-24 px-4 pb-12 print:grid-cols-3 print:pt-24 print:gap-8">
+                            <div className="text-center sm:text-left"><div className="border-t border-dotted border-gray-900 pt-2 text-[10px] font-bold text-gray-900 uppercase">Prepared By</div></div>
                             <div className="text-center"><div className="border-t border-dotted border-gray-900 pt-2 text-[10px] font-bold text-gray-900 uppercase">Verified By</div></div>
-                            <div className="text-center"><div className="border-t border-dotted border-gray-900 pt-2 text-[10px] font-bold text-gray-900 uppercase">Authorized Signature</div></div>
+                            <div className="text-center sm:text-right"><div className="border-t border-dotted border-gray-900 pt-2 text-[10px] font-bold text-gray-900 uppercase">Authorized Signature</div></div>
                         </div>
                     </div>
                 </div>

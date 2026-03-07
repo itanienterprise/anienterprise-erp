@@ -44,6 +44,21 @@ const WarehouseManagement = () => {
     const whDropdownRef = useRef(null);
     const [salesRecords, setSalesRecords] = useState([]);
 
+    // Expand/Collapse state for Mobile Warehouse Cards (one at a time)
+    const [expandedMobileWHIndex, setExpandedMobileWHIndex] = useState(null);
+    const [expandedMobileProdIndex, setExpandedMobileProdIndex] = useState(null);
+
+    const toggleMobileWH = (idx) => {
+        setExpandedMobileWHIndex(prev => {
+            if (prev !== idx) setExpandedMobileProdIndex(null);
+            return prev === idx ? null : idx;
+        });
+    };
+
+    const toggleMobileProd = (idx) => {
+        setExpandedMobileProdIndex(prev => prev === idx ? null : idx);
+    };
+
     // Product Dropdown State
     const [products, setProducts] = useState([]);
     const [showProductDropdown, setShowProductDropdown] = useState(false);
@@ -798,13 +813,13 @@ const WarehouseManagement = () => {
 
     return (
         <div className="space-y-6">
-            <div className="flex items-center justify-between">
-                <div>
-                    <h2 className="text-2xl font-bold text-gray-800">Ware House Management</h2>
-                    <p className="text-sm text-gray-500 mt-1">Manage and track warehouse specific stock and locations</p>
+            <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4">
+                <div className="w-full md:w-1/4">
+                    <h2 className="text-xl md:text-2xl font-bold text-gray-800 text-center md:text-left">Ware House Management</h2>
+                    <p className="text-sm text-gray-500 mt-1 text-center md:text-left hidden md:block">Manage and track warehouse specific stock and locations</p>
                 </div>
                 {!showWarehouseForm && (
-                    <div className="flex-1 max-w-md mx-6 relative group">
+                    <div className="w-full md:flex-1 max-w-none md:max-w-md mx-auto relative group">
                         <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
                             <SearchIcon className="h-4 w-4 text-gray-400 group-focus-within:text-indigo-500 transition-colors" />
                         </div>
@@ -819,12 +834,12 @@ const WarehouseManagement = () => {
                     </div>
                 )}
                 {!showWarehouseForm && (
-                    <div className="flex justify-end gap-3 flex-wrap">
-                        <div className="relative">
+                    <div className="w-full md:w-1/4 flex flex-row items-center justify-between md:justify-end gap-2">
+                        <div className="relative flex-1 md:flex-none">
                             <button
                                 ref={warehouseFilterButtonRef}
                                 onClick={() => setShowWarehouseFilterPanel(!showWarehouseFilterPanel)}
-                                className={`flex items-center gap-2 px-4 py-2 rounded-xl transition-all border h-[42px] ${showWarehouseFilterPanel || Object.values(warehouseFilters).some(v => v !== '')
+                                className={`w-full flex justify-center items-center gap-2 px-4 py-2 rounded-xl transition-all border h-[42px] ${showWarehouseFilterPanel || Object.values(warehouseFilters).some(v => v !== '')
                                     ? 'bg-blue-600 border-blue-600 text-white shadow-lg shadow-blue-500/30'
                                     : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50 hover:border-gray-300 transition-all shadow-sm active:scale-95'
                                     }`}
@@ -834,237 +849,249 @@ const WarehouseManagement = () => {
                             </button>
 
                             {showWarehouseFilterPanel && (
-                                <div ref={warehouseFilterRef} className="absolute right-0 mt-3 w-80 bg-white border border-gray-100 rounded-2xl shadow-2xl z-[150] p-5 animate-in fade-in zoom-in duration-200">
-                                    <div className="flex items-center justify-between mb-6 pb-2 border-b border-gray-100">
-                                        <h4 className="font-bold text-gray-900 tracking-tight">Advance Filter</h4>
-                                        <button
-                                            onClick={() => {
-                                                setWarehouseFilters({ startDate: '', endDate: '', warehouse: '', productName: '', brand: '', category: 'Crop' });
-                                                setFilterSearchInputs({ productSearch: '', brandSearch: '', warehouseSearch: '', categorySearch: '' });
-                                                setShowWarehouseFilterPanel(false);
-                                            }}
-                                            className="text-[11px] font-bold text-blue-600 hover:text-blue-700 uppercase tracking-widest"
-                                        >
-                                            RESET ALL
-                                        </button>
-                                    </div>
+                                <>
+                                    {/* Mobile Backdrop */}
+                                    <div className="fixed inset-0 bg-black/20 backdrop-blur-[2px] z-[140] md:hidden" onClick={() => setShowWarehouseFilterPanel(false)} />
 
-                                    <div className="space-y-4">
-                                        <div className="grid grid-cols-2 gap-3">
-                                            <CustomDatePicker
-                                                label="From Date"
-                                                value={warehouseFilters.startDate}
-                                                onChange={(e) => setWarehouseFilters({ ...warehouseFilters, startDate: e.target.value })}
-                                                compact={true}
-                                            />
-                                            <CustomDatePicker
-                                                label="To Date"
-                                                value={warehouseFilters.endDate}
-                                                onChange={(e) => setWarehouseFilters({ ...warehouseFilters, endDate: e.target.value })}
-                                                compact={true}
-                                                rightAlign={true}
-                                            />
+                                    <div ref={warehouseFilterRef} className="fixed inset-x-4 top-24 md:absolute md:top-full md:right-0 md:mt-2 w-auto md:w-80 bg-white border border-gray-100 rounded-2xl shadow-[0_20px_50px_rgba(0,0,0,0.15)] z-[150] p-5 animate-in fade-in zoom-in-95 duration-200">
+                                        <div className="flex items-center justify-between mb-6 pb-2 border-b border-gray-100">
+                                            <h4 className="font-bold text-gray-900 tracking-tight">Advance Filter</h4>
+                                            <button
+                                                onClick={() => {
+                                                    setWarehouseFilters({ startDate: '', endDate: '', warehouse: '', productName: '', brand: '', category: 'Crop' });
+                                                    setFilterSearchInputs({ productSearch: '', brandSearch: '', warehouseSearch: '', categorySearch: '' });
+                                                    setFilterDropdownOpen(initialFilterDropdownState);
+                                                }}
+                                                className="text-[11px] font-bold text-blue-600 hover:text-blue-700 uppercase tracking-widest"
+                                            >
+                                                RESET ALL
+                                            </button>
                                         </div>
 
-                                        {/* Category Filter */}
-                                        <div className="space-y-1.5 relative" ref={categoryFilterRef}>
-                                            <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider pl-1">Category</label>
-                                            <div className="relative">
-                                                <input
-                                                    type="text"
-                                                    value={filterSearchInputs.categorySearch}
-                                                    onChange={(e) => {
-                                                        const val = e.target.value;
-                                                        setFilterSearchInputs({ ...filterSearchInputs, categorySearch: val });
-                                                        setWarehouseFilters({ ...warehouseFilters, category: val });
-                                                        setFilterDropdownOpen({ ...initialFilterDropdownState, category: true });
-                                                    }}
-                                                    onFocus={() => setFilterDropdownOpen({ ...initialFilterDropdownState, category: true })}
-                                                    placeholder={warehouseFilters.category || "Search Category..."}
-                                                    className={`w-full px-4 py-2.5 bg-white border border-gray-100 rounded-xl text-sm focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all shadow-sm hover:border-gray-200 pr-14 ${warehouseFilters.category ? 'placeholder:text-gray-900 placeholder:font-semibold' : 'placeholder:text-gray-300'}`}
+                                        <div className="space-y-4">
+                                            <div className="grid grid-cols-2 gap-3">
+                                                <CustomDatePicker
+                                                    label="From Date"
+                                                    value={warehouseFilters.startDate}
+                                                    onChange={(e) => setWarehouseFilters({ ...warehouseFilters, startDate: e.target.value })}
+                                                    compact={true}
                                                 />
-                                                <div className="absolute right-3.5 top-1/2 -translate-y-1/2 flex items-center gap-2">
-                                                    {warehouseFilters.category && (
-                                                        <button onClick={() => { setWarehouseFilters({ ...warehouseFilters, category: '' }); setFilterSearchInputs({ ...filterSearchInputs, categorySearch: '' }); setFilterDropdownOpen(initialFilterDropdownState); }} className="text-gray-400 hover:text-gray-600">
-                                                            <XIcon className="w-4 h-4" />
-                                                        </button>
-                                                    )}
-                                                    <SearchIcon className="w-4.5 h-4.5 text-gray-300 pointer-events-none" />
-                                                </div>
-                                            </div>
-                                            {filterDropdownOpen.category && (() => {
-                                                const options = [...new Set(products.map(p => p.category).filter(Boolean))].sort();
-                                                const filtered = options.filter(c => (c || '').toString().toLowerCase().includes(filterSearchInputs.categorySearch.toLowerCase()));
-                                                return filtered.length > 0 ? (
-                                                    <div className="absolute z-[120] mt-1 w-full bg-white border border-gray-100 rounded-xl shadow-xl max-h-48 overflow-y-auto py-1">
-                                                        {filtered.map(c => (
-                                                            <button
-                                                                key={c}
-                                                                type="button"
-                                                                onClick={() => { setWarehouseFilters({ ...warehouseFilters, category: c }); setFilterSearchInputs({ ...filterSearchInputs, categorySearch: '' }); setFilterDropdownOpen(initialFilterDropdownState); }}
-                                                                className="w-full px-4 py-2 text-left text-sm hover:bg-blue-50 transition-colors"
-                                                            >
-                                                                {c}
-                                                            </button>
-                                                        ))}
-                                                    </div>
-                                                ) : null;
-                                            })()}
-                                        </div>
-
-                                        <div className="space-y-1.5 relative" ref={warehouseFilterDropdownRef}>
-                                            <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider pl-1">WAREHOUSE</label>
-                                            <div className="relative">
-                                                <input
-                                                    type="text"
-                                                    value={filterSearchInputs.warehouseSearch}
-                                                    onChange={(e) => {
-                                                        const val = e.target.value;
-                                                        setFilterSearchInputs({ ...filterSearchInputs, warehouseSearch: val });
-                                                        setFilterDropdownOpen({ ...initialFilterDropdownState, warehouse: true });
-                                                    }}
-                                                    onClick={() => setFilterDropdownOpen({ ...initialFilterDropdownState, warehouse: !filterDropdownOpen.warehouse })}
-                                                    placeholder={warehouseFilters.warehouse || "Search Warehouse..."}
-                                                    className={`w-full px-4 py-2.5 bg-white border border-gray-100 rounded-xl text-sm focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all shadow-sm ${warehouseFilters.warehouse ? 'placeholder:text-gray-900 placeholder:font-semibold' : 'placeholder:text-gray-300'}`}
+                                                <CustomDatePicker
+                                                    label="To Date"
+                                                    value={warehouseFilters.endDate}
+                                                    onChange={(e) => setWarehouseFilters({ ...warehouseFilters, endDate: e.target.value })}
+                                                    compact={true}
+                                                    rightAlign={true}
                                                 />
-                                                <div className="absolute right-3.5 top-1/2 -translate-y-1/2 flex items-center gap-2">
-                                                    {warehouseFilters.warehouse && (
-                                                        <button onClick={() => { setWarehouseFilters({ ...warehouseFilters, warehouse: '' }); setFilterSearchInputs({ ...filterSearchInputs, warehouseSearch: '' }); setFilterDropdownOpen(initialFilterDropdownState); }} className="text-gray-400 hover:text-gray-600">
-                                                            <XIcon className="w-4 h-4" />
-                                                        </button>
-                                                    )}
-                                                    <SearchIcon className="w-4.5 h-4.5 text-gray-300 pointer-events-none" />
-                                                </div>
                                             </div>
-                                            {filterDropdownOpen.warehouse && (() => {
-                                                const options = getFilteredWarehouses(filterSearchInputs.warehouseSearch);
-                                                return options.length > 0 ? (
-                                                    <div className="absolute z-[160] mt-1 w-full bg-white border border-gray-100 rounded-xl shadow-xl max-h-48 overflow-y-auto py-1">
-                                                        {options.map(wh => (
-                                                            <button
-                                                                key={wh}
-                                                                type="button"
-                                                                onClick={() => { setWarehouseFilters({ ...warehouseFilters, warehouse: wh }); setFilterSearchInputs({ ...filterSearchInputs, warehouseSearch: '' }); setFilterDropdownOpen(initialFilterDropdownState); }}
-                                                                className="w-full px-4 py-2 text-left text-sm hover:bg-blue-50 transition-colors"
-                                                            >
-                                                                {wh}
-                                                            </button>
-                                                        ))}
-                                                    </div>
-                                                ) : null;
-                                            })()}
-                                        </div>
 
-                                        <div className="space-y-1.5 relative" ref={productFilterRef}>
-                                            <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider pl-1">PRODUCT</label>
-                                            <div className="relative">
-                                                <input
-                                                    type="text"
-                                                    value={filterSearchInputs.productSearch}
-                                                    onChange={(e) => {
-                                                        const val = e.target.value;
-                                                        setFilterSearchInputs({ ...filterSearchInputs, productSearch: val });
-                                                        setFilterDropdownOpen({ ...initialFilterDropdownState, productName: true });
-                                                    }}
-                                                    onClick={() => setFilterDropdownOpen({ ...initialFilterDropdownState, productName: !filterDropdownOpen.productName })}
-                                                    placeholder={warehouseFilters.productName || "Search Product..."}
-                                                    className={`w-full px-4 py-2.5 bg-white border border-gray-100 rounded-xl text-sm focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all shadow-sm ${warehouseFilters.productName ? 'placeholder:text-gray-900 placeholder:font-semibold' : 'placeholder:text-gray-300'}`}
-                                                />
-                                                <div className="absolute right-3.5 top-1/2 -translate-y-1/2 flex items-center gap-2">
-                                                    {warehouseFilters.productName && (
-                                                        <button onClick={() => { setWarehouseFilters({ ...warehouseFilters, productName: '', brand: '' }); setFilterSearchInputs({ ...filterSearchInputs, productSearch: '', brandSearch: '' }); setFilterDropdownOpen(initialFilterDropdownState); }} className="text-gray-400 hover:text-gray-600">
-                                                            <XIcon className="w-4 h-4" />
-                                                        </button>
-                                                    )}
-                                                    <SearchIcon className="w-4.5 h-4.5 text-gray-300 pointer-events-none" />
-                                                </div>
-                                            </div>
-                                            {filterDropdownOpen.productName && (() => {
-                                                let options = getFilteredProducts(filterSearchInputs.productSearch);
-                                                if (warehouseFilters.category && products && products.length > 0) {
-                                                    const categoryProducts = new Set(
-                                                        products.filter(p => (p.category || '').toLowerCase() === warehouseFilters.category.toLowerCase())
-                                                            .map(p => (p.name || p.productName || '').toLowerCase())
-                                                    );
-                                                    options = options.filter(o => categoryProducts.has((o || '').toLowerCase()));
-                                                }
-                                                return options.length > 0 ? (
-                                                    <div className="absolute z-[160] mt-1 w-full bg-white border border-gray-100 rounded-xl shadow-xl max-h-48 overflow-y-auto py-1">
-                                                        {options.map(prod => (
-                                                            <button
-                                                                key={prod}
-                                                                type="button"
-                                                                onClick={() => { setWarehouseFilters({ ...warehouseFilters, productName: prod }); setFilterSearchInputs({ ...filterSearchInputs, productSearch: '' }); setFilterDropdownOpen(initialFilterDropdownState); }}
-                                                                className="w-full px-4 py-2 text-left text-sm hover:bg-blue-50 transition-colors"
-                                                            >
-                                                                {prod}
-                                                            </button>
-                                                        ))}
-                                                    </div>
-                                                ) : null;
-                                            })()}
-                                        </div>
-
-                                        {warehouseFilters.productName && (
-                                            <div className="space-y-1.5 relative" ref={brandFilterRef}>
-                                                <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider pl-1">BRAND</label>
+                                            {/* Category Filter */}
+                                            <div className="space-y-1.5 relative" ref={categoryFilterRef}>
+                                                <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider pl-1">Category</label>
                                                 <div className="relative">
                                                     <input
                                                         type="text"
-                                                        value={filterSearchInputs.brandSearch}
+                                                        value={filterSearchInputs.categorySearch}
                                                         onChange={(e) => {
                                                             const val = e.target.value;
-                                                            setFilterSearchInputs({ ...filterSearchInputs, brandSearch: val });
-                                                            setFilterDropdownOpen({ ...initialFilterDropdownState, brand: true });
+                                                            setFilterSearchInputs({ ...filterSearchInputs, categorySearch: val });
+                                                            setFilterDropdownOpen({ ...initialFilterDropdownState, category: true });
                                                         }}
-                                                        onClick={() => setFilterDropdownOpen({ ...initialFilterDropdownState, brand: !filterDropdownOpen.brand })}
-                                                        placeholder={warehouseFilters.brand || "Search Brand..."}
-                                                        className={`w-full px-4 py-2.5 bg-white border border-gray-100 rounded-xl text-sm focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all shadow-sm ${warehouseFilters.brand ? 'placeholder:text-gray-900 placeholder:font-semibold' : 'placeholder:text-gray-300'}`}
+                                                        onFocus={() => setFilterDropdownOpen({ ...initialFilterDropdownState, category: true })}
+                                                        placeholder={warehouseFilters.category || "Search Category..."}
+                                                        className={`w-full px-4 py-2.5 bg-white border border-gray-100 rounded-xl text-sm focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all shadow-sm hover:border-gray-200 pr-14 ${warehouseFilters.category ? 'placeholder:text-gray-900 placeholder:font-semibold' : 'placeholder:text-gray-300'}`}
                                                     />
                                                     <div className="absolute right-3.5 top-1/2 -translate-y-1/2 flex items-center gap-2">
-                                                        {warehouseFilters.brand && (
-                                                            <button onClick={() => { setWarehouseFilters({ ...warehouseFilters, brand: '' }); setFilterSearchInputs({ ...filterSearchInputs, brandSearch: '' }); setFilterDropdownOpen(initialFilterDropdownState); }} className="text-gray-400 hover:text-gray-600">
+                                                        {warehouseFilters.category && (
+                                                            <button onClick={() => { setWarehouseFilters({ ...warehouseFilters, category: '' }); setFilterSearchInputs({ ...filterSearchInputs, categorySearch: '' }); setFilterDropdownOpen(initialFilterDropdownState); }} className="text-gray-400 hover:text-gray-600">
                                                                 <XIcon className="w-4 h-4" />
                                                             </button>
                                                         )}
                                                         <SearchIcon className="w-4.5 h-4.5 text-gray-300 pointer-events-none" />
                                                     </div>
                                                 </div>
-                                                {filterDropdownOpen.brand && (() => {
-                                                    const options = getFilteredBrands(filterSearchInputs.brandSearch, warehouseFilters.productName);
-                                                    return options.length > 0 ? (
-                                                        <div className="absolute z-[160] mt-1 w-full bg-white border border-gray-100 rounded-xl shadow-xl max-h-48 overflow-y-auto py-1">
-                                                            {options.map(brand => (
+                                                {filterDropdownOpen.category && (() => {
+                                                    const options = [...new Set(products.map(p => p.category).filter(Boolean))].sort();
+                                                    const filtered = options.filter(c => (c || '').toString().toLowerCase().includes(filterSearchInputs.categorySearch.toLowerCase()));
+                                                    return filtered.length > 0 ? (
+                                                        <div className="absolute z-[120] mt-1 w-full bg-white border border-gray-100 rounded-xl shadow-xl max-h-48 overflow-y-auto py-1">
+                                                            {filtered.map(c => (
                                                                 <button
-                                                                    key={brand}
+                                                                    key={c}
                                                                     type="button"
-                                                                    onClick={() => { setWarehouseFilters({ ...warehouseFilters, brand: brand }); setFilterSearchInputs({ ...filterSearchInputs, brandSearch: '' }); setFilterDropdownOpen(initialFilterDropdownState); }}
+                                                                    onClick={() => { setWarehouseFilters({ ...warehouseFilters, category: c }); setFilterSearchInputs({ ...filterSearchInputs, categorySearch: '' }); setFilterDropdownOpen(initialFilterDropdownState); }}
                                                                     className="w-full px-4 py-2 text-left text-sm hover:bg-blue-50 transition-colors"
                                                                 >
-                                                                    {brand}
+                                                                    {c}
                                                                 </button>
                                                             ))}
                                                         </div>
                                                     ) : null;
                                                 })()}
                                             </div>
-                                        )}
+
+                                            <div className="space-y-1.5 relative" ref={warehouseFilterDropdownRef}>
+                                                <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider pl-1">WAREHOUSE</label>
+                                                <div className="relative">
+                                                    <input
+                                                        type="text"
+                                                        value={filterSearchInputs.warehouseSearch}
+                                                        onChange={(e) => {
+                                                            const val = e.target.value;
+                                                            setFilterSearchInputs({ ...filterSearchInputs, warehouseSearch: val });
+                                                            setFilterDropdownOpen({ ...initialFilterDropdownState, warehouse: true });
+                                                        }}
+                                                        onFocus={() => setFilterDropdownOpen({ ...initialFilterDropdownState, warehouse: true })}
+                                                        placeholder={warehouseFilters.warehouse || "Search Warehouse..."}
+                                                        className={`w-full px-4 py-2.5 bg-white border border-gray-100 rounded-xl text-sm focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all shadow-sm ${warehouseFilters.warehouse ? 'placeholder:text-gray-900 placeholder:font-semibold' : 'placeholder:text-gray-300'}`}
+                                                    />
+                                                    <div className="absolute right-3.5 top-1/2 -translate-y-1/2 flex items-center gap-2">
+                                                        {warehouseFilters.warehouse && (
+                                                            <button onClick={() => { setWarehouseFilters({ ...warehouseFilters, warehouse: '' }); setFilterSearchInputs({ ...filterSearchInputs, warehouseSearch: '' }); setFilterDropdownOpen(initialFilterDropdownState); }} className="text-gray-400 hover:text-gray-600">
+                                                                <XIcon className="w-4 h-4" />
+                                                            </button>
+                                                        )}
+                                                        <SearchIcon className="w-4.5 h-4.5 text-gray-300 pointer-events-none" />
+                                                    </div>
+                                                </div>
+                                                {filterDropdownOpen.warehouse && (() => {
+                                                    const options = getFilteredWarehouses(filterSearchInputs.warehouseSearch);
+                                                    return options.length > 0 ? (
+                                                        <div className="absolute z-[160] mt-1 w-full bg-white border border-gray-100 rounded-xl shadow-xl max-h-48 overflow-y-auto py-1">
+                                                            {options.map(wh => (
+                                                                <button
+                                                                    key={wh}
+                                                                    type="button"
+                                                                    onClick={() => { setWarehouseFilters({ ...warehouseFilters, warehouse: wh }); setFilterSearchInputs({ ...filterSearchInputs, warehouseSearch: '' }); setFilterDropdownOpen(initialFilterDropdownState); }}
+                                                                    className="w-full px-4 py-2 text-left text-sm hover:bg-blue-50 transition-colors"
+                                                                >
+                                                                    {wh}
+                                                                </button>
+                                                            ))}
+                                                        </div>
+                                                    ) : null;
+                                                })()}
+                                            </div>
+
+                                            <div className="space-y-1.5 relative" ref={productFilterRef}>
+                                                <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider pl-1">PRODUCT</label>
+                                                <div className="relative">
+                                                    <input
+                                                        type="text"
+                                                        value={filterSearchInputs.productSearch}
+                                                        onChange={(e) => {
+                                                            const val = e.target.value;
+                                                            setFilterSearchInputs({ ...filterSearchInputs, productSearch: val });
+                                                            setFilterDropdownOpen({ ...initialFilterDropdownState, productName: true });
+                                                        }}
+                                                        onFocus={() => setFilterDropdownOpen({ ...initialFilterDropdownState, productName: true })}
+                                                        placeholder={warehouseFilters.productName || "Search Product..."}
+                                                        className={`w-full px-4 py-2.5 bg-white border border-gray-100 rounded-xl text-sm focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all shadow-sm ${warehouseFilters.productName ? 'placeholder:text-gray-900 placeholder:font-semibold' : 'placeholder:text-gray-300'}`}
+                                                    />
+                                                    <div className="absolute right-3.5 top-1/2 -translate-y-1/2 flex items-center gap-2">
+                                                        {warehouseFilters.productName && (
+                                                            <button onClick={() => { setWarehouseFilters({ ...warehouseFilters, productName: '', brand: '' }); setFilterSearchInputs({ ...filterSearchInputs, productSearch: '', brandSearch: '' }); setFilterDropdownOpen(initialFilterDropdownState); }} className="text-gray-400 hover:text-gray-600">
+                                                                <XIcon className="w-4 h-4" />
+                                                            </button>
+                                                        )}
+                                                        <SearchIcon className="w-4.5 h-4.5 text-gray-300 pointer-events-none" />
+                                                    </div>
+                                                </div>
+                                                {filterDropdownOpen.productName && (() => {
+                                                    let options = getFilteredProducts(filterSearchInputs.productSearch);
+                                                    if (warehouseFilters.category && products && products.length > 0) {
+                                                        const categoryProducts = new Set(
+                                                            products.filter(p => (p.category || '').toLowerCase() === warehouseFilters.category.toLowerCase())
+                                                                .map(p => (p.name || p.productName || '').toLowerCase())
+                                                        );
+                                                        options = options.filter(o => categoryProducts.has((o || '').toLowerCase()));
+                                                    }
+                                                    return options.length > 0 ? (
+                                                        <div className="absolute z-[160] mt-1 w-full bg-white border border-gray-100 rounded-xl shadow-xl max-h-48 overflow-y-auto py-1">
+                                                            {options.map(prod => (
+                                                                <button
+                                                                    key={prod}
+                                                                    type="button"
+                                                                    onClick={() => { setWarehouseFilters({ ...warehouseFilters, productName: prod }); setFilterSearchInputs({ ...filterSearchInputs, productSearch: '' }); setFilterDropdownOpen(initialFilterDropdownState); }}
+                                                                    className="w-full px-4 py-2 text-left text-sm hover:bg-blue-50 transition-colors"
+                                                                >
+                                                                    {prod}
+                                                                </button>
+                                                            ))}
+                                                        </div>
+                                                    ) : null;
+                                                })()}
+                                            </div>
+
+                                            {warehouseFilters.productName && (
+                                                <div className="space-y-1.5 relative" ref={brandFilterRef}>
+                                                    <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider pl-1">BRAND</label>
+                                                    <div className="relative">
+                                                        <input
+                                                            type="text"
+                                                            value={filterSearchInputs.brandSearch}
+                                                            onChange={(e) => {
+                                                                const val = e.target.value;
+                                                                setFilterSearchInputs({ ...filterSearchInputs, brandSearch: val });
+                                                                setFilterDropdownOpen({ ...initialFilterDropdownState, brand: true });
+                                                            }}
+                                                            onFocus={() => setFilterDropdownOpen({ ...initialFilterDropdownState, brand: true })}
+                                                            placeholder={warehouseFilters.brand || "Search Brand..."}
+                                                            className={`w-full px-4 py-2.5 bg-white border border-gray-100 rounded-xl text-sm focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all shadow-sm ${warehouseFilters.brand ? 'placeholder:text-gray-900 placeholder:font-semibold' : 'placeholder:text-gray-300'}`}
+                                                        />
+                                                        <div className="absolute right-3.5 top-1/2 -translate-y-1/2 flex items-center gap-2">
+                                                            {warehouseFilters.brand && (
+                                                                <button onClick={() => { setWarehouseFilters({ ...warehouseFilters, brand: '' }); setFilterSearchInputs({ ...filterSearchInputs, brandSearch: '' }); setFilterDropdownOpen(initialFilterDropdownState); }} className="text-gray-400 hover:text-gray-600">
+                                                                    <XIcon className="w-4 h-4" />
+                                                                </button>
+                                                            )}
+                                                            <SearchIcon className="w-4.5 h-4.5 text-gray-300 pointer-events-none" />
+                                                        </div>
+                                                    </div>
+                                                    {filterDropdownOpen.brand && (() => {
+                                                        const options = getFilteredBrands(filterSearchInputs.brandSearch, warehouseFilters.productName);
+                                                        return options.length > 0 ? (
+                                                            <div className="absolute z-[160] mt-1 w-full bg-white border border-gray-100 rounded-xl shadow-xl max-h-48 overflow-y-auto py-1">
+                                                                {options.map(brand => (
+                                                                    <button
+                                                                        key={brand}
+                                                                        type="button"
+                                                                        onClick={() => { setWarehouseFilters({ ...warehouseFilters, brand: brand }); setFilterSearchInputs({ ...filterSearchInputs, brandSearch: '' }); setFilterDropdownOpen(initialFilterDropdownState); }}
+                                                                        className="w-full px-4 py-2 text-left text-sm hover:bg-blue-50 transition-colors"
+                                                                    >
+                                                                        {brand}
+                                                                    </button>
+                                                                ))}
+                                                            </div>
+                                                        ) : null;
+                                                    })()}
+                                                </div>
+                                            )}
+
+                                            <button
+                                                onClick={() => setShowWarehouseFilterPanel(false)}
+                                                className="w-full py-2.5 bg-gray-900 text-white rounded-xl text-sm font-bold hover:bg-gray-800 transition-all mt-2 active:scale-[0.98]"
+                                            >
+                                                APPLY FILTERS
+                                            </button>
+                                        </div>
                                     </div>
-                                </div>
+                                </>
                             )}
                         </div>
                         <button
                             onClick={() => setShowWarehouseReport(true)}
-                            className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 text-gray-600 rounded-xl hover:bg-gray-50 hover:border-gray-300 transition-all shadow-sm active:scale-95 h-[42px]"
+                            className="flex-1 md:flex-none w-full md:w-auto flex justify-center items-center gap-2 px-2 sm:px-4 py-2 bg-white border border-gray-200 text-gray-600 rounded-xl hover:bg-gray-50 hover:border-gray-300 transition-all shadow-sm active:scale-95 h-[42px]"
                         >
-                            <BarChartIcon className="w-4 h-4 text-gray-400" />
+                            <BarChartIcon className="w-4 h-4 text-gray-400 hidden sm:block" />
                             <span className="text-sm font-medium">Report</span>
                         </button>
                         <button
                             onClick={() => setShowWarehouseForm(true)}
-                            className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl hover:from-blue-700 hover:to-indigo-700 transition-all duration-200 shadow-lg shadow-blue-500/30 hover:scale-105 h-[42px]"
+                            className="flex-1 md:flex-none w-full md:w-auto flex justify-center items-center gap-2 px-2 sm:px-4 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl hover:from-blue-700 hover:to-indigo-700 transition-all duration-200 shadow-lg shadow-blue-500/30 hover:scale-105 h-[42px]"
                         >
-                            <HomeIcon className="w-5 h-5 text-white/90" />
+                            <HomeIcon className="w-5 h-5 text-white/90 hidden sm:block" />
+                            <PlusIcon className="w-4 h-4 text-white/90 sm:hidden" />
                             <span className="text-sm font-medium">Add New</span>
                         </button>
                     </div>
@@ -1072,11 +1099,11 @@ const WarehouseManagement = () => {
             </div>
 
             {!showWarehouseForm && (
-                <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-1 bg-gray-100/50 p-1 rounded-xl w-fit">
+                <div className="flex items-center justify-between w-full md:w-auto">
+                    <div className="flex items-center gap-1 bg-gray-100/50 p-1 rounded-xl w-full md:w-fit justify-between md:justify-start">
                         <button
                             onClick={() => setActiveTab('stock')}
-                            className={`px-6 py-2 rounded-lg text-sm font-bold transition-all ${activeTab === 'stock'
+                            className={`flex-1 md:flex-none px-4 md:px-6 py-2 rounded-lg text-sm font-bold transition-all text-center ${activeTab === 'stock'
                                 ? 'bg-white text-blue-600 shadow-sm'
                                 : 'text-gray-500 hover:text-gray-700 hover:bg-gray-200/50'
                                 }`}
@@ -1085,7 +1112,7 @@ const WarehouseManagement = () => {
                         </button>
                         <button
                             onClick={() => setActiveTab('warehouses')}
-                            className={`px-6 py-2 rounded-lg text-sm font-bold transition-all ${activeTab === 'warehouses'
+                            className={`flex-1 md:flex-none px-4 md:px-6 py-2 rounded-lg text-sm font-bold transition-all text-center ${activeTab === 'warehouses'
                                 ? 'bg-white text-blue-600 shadow-sm'
                                 : 'text-gray-500 hover:text-gray-700 hover:bg-gray-200/50'
                                 }`}
@@ -1287,100 +1314,204 @@ const WarehouseManagement = () => {
                 !showWarehouseForm && (
                     <>
                         {/* Placeholder Summary Cards */}
-                        <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-6">
+                        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-6">
                             {[
                                 { label: 'Total InHouse Stock', value: dashboardStats.totalInhouseStock, icon: BoxIcon, color: 'emerald' },
                                 { label: 'Total Warehouse Stock', value: dashboardStats.totalWarehouseStock, icon: HomeIcon, color: 'blue' },
                                 { label: 'Total Items', value: dashboardStats.totalItems.toString(), icon: BarChartIcon, color: 'indigo' },
                                 { label: 'Available Capacity', value: dashboardStats.availableCapacity, icon: TrendingUpIcon, color: 'emerald' },
-                                { label: 'Pending Transfers', value: dashboardStats.pendingTransfers.toString(), icon: BellIcon, color: 'amber' },
-                                { label: 'Low Stock Alerts', value: dashboardStats.lowStockCount.toString(), icon: ShoppingCartIcon, color: 'red' },
                             ].map((card, i) => (
-                                <div key={i} className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm hover:shadow-md transition-all">
-                                    <div className="flex items-center justify-between mb-4">
-                                        <div className={`p-3 bg-${card.color}-50 rounded-xl`}>
-                                            <card.icon className={`w-6 h-6 text-${card.color}-600`} />
+                                <div key={i} className="bg-white p-3 sm:p-6 rounded-2xl border border-gray-100 shadow-sm hover:shadow-md transition-all">
+                                    <div className="flex items-center justify-between mb-2 sm:mb-4">
+                                        <div className={`p-2 sm:p-3 bg-${card.color}-50 rounded-xl`}>
+                                            <card.icon className={`w-4 h-4 sm:w-6 sm:h-6 text-${card.color}-600`} />
                                         </div>
-                                        <span className="text-xs font-bold text-emerald-600 bg-emerald-50 px-2 py-1 rounded-lg">+0%</span>
+                                        <span className="text-[10px] sm:text-xs font-bold text-emerald-600 bg-emerald-50 px-1.5 sm:px-2 py-0.5 sm:py-1 rounded-lg">+0%</span>
                                     </div>
-                                    <p className="text-sm font-medium text-gray-500">{card.label}</p>
-                                    <p className="text-2xl font-black text-gray-900 mt-1">{card.value}</p>
+                                    <p className="text-[10px] sm:text-sm font-medium text-gray-500 leading-tight">{card.label}</p>
+                                    <p className="text-sm sm:text-2xl font-black text-gray-900 mt-1">{card.value}</p>
                                 </div>
                             ))}
                         </div>
 
                         {activeTab === 'stock' && (
                             filteredData.length > 0 ? (
-                                <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-                                    <div className="overflow-x-auto">
-                                        <table className="w-full text-left border-collapse">
-                                            <thead>
-                                                <tr className="bg-gray-50/50 border-b border-gray-100">
-                                                    <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider">WH Name</th>
-                                                    <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Product</th>
-                                                    <th colSpan="6" className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider">
-                                                        <div className="grid grid-cols-6 gap-4">
-                                                            <div className="text-left font-bold text-gray-800">Brand</div>
-                                                            <div className="text-right font-bold text-emerald-800 uppercase">InHouse QTY</div>
-                                                            <div className="text-right font-bold text-emerald-800 uppercase">InHouse PKT</div>
-                                                            <div className="text-right font-bold text-blue-800 uppercase">WareHouse QTY</div>
-                                                            <div className="text-right font-bold text-blue-800 uppercase">WareHouse PKT</div>
-                                                            <div className="text-right font-bold text-gray-500">Actions</div>
-                                                        </div>
-                                                    </th>
-                                                </tr>
-                                            </thead>
-                                            <tbody className="divide-y divide-gray-100">
-                                                {groupedStockData.map((whGroup, whIdx) => (
-                                                    <React.Fragment key={whIdx}>
-                                                        {whGroup.products.map((prodGroup, prodIdx) => (
-                                                            <tr key={`${whIdx}-${prodIdx}`} className="hover:bg-gray-50/30 transition-colors group border-b border-gray-50">
-                                                                <td className="px-6 py-4 align-top">
-                                                                    {prodIdx === 0 && (
-                                                                        <div className="text-sm font-bold text-gray-900">{whGroup.whName}</div>
-                                                                    )}
-                                                                </td>
-                                                                <td className="px-6 py-4 align-top">
-                                                                    <div className="text-sm font-semibold text-gray-800">{prodGroup.productName}</div>
-                                                                </td>
-                                                                <td className="px-6 py-4 align-top" colSpan="6">
-                                                                    <div className="space-y-4">
-                                                                        {prodGroup.brands.map((brand, bIdx) => (
-                                                                            <div key={bIdx} className="grid grid-cols-6 gap-4 items-center">
-                                                                                <div className="text-sm text-gray-600 font-medium">{brand.brand}</div>
-                                                                                <div className="text-sm text-black text-right font-bold">
-                                                                                    {parseFloat(brand.inhouseQty || 0).toLocaleString()} kg
+                                <div className="space-y-4">
+                                    <div className="hidden md:block bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+                                        <div className="overflow-x-auto">
+                                            <table className="w-full text-left border-collapse">
+                                                <thead>
+                                                    <tr className="bg-gray-50/50 border-b border-gray-100">
+                                                        <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider">WH Name</th>
+                                                        <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Product</th>
+                                                        <th colSpan="6" className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider">
+                                                            <div className="grid grid-cols-6 gap-4">
+                                                                <div className="text-left font-bold text-gray-800">Brand</div>
+                                                                <div className="text-right font-bold text-emerald-800 uppercase">InHouse QTY</div>
+                                                                <div className="text-right font-bold text-emerald-800 uppercase">InHouse PKT</div>
+                                                                <div className="text-right font-bold text-blue-800 uppercase">WareHouse QTY</div>
+                                                                <div className="text-right font-bold text-blue-800 uppercase">WareHouse PKT</div>
+                                                                <div className="text-right font-bold text-gray-500">Actions</div>
+                                                            </div>
+                                                        </th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody className="divide-y divide-gray-100">
+                                                    {groupedStockData.map((whGroup, whIdx) => (
+                                                        <React.Fragment key={whIdx}>
+                                                            {whGroup.products.map((prodGroup, prodIdx) => (
+                                                                <tr key={`${whIdx}-${prodIdx}`} className="hover:bg-gray-50/30 transition-colors group border-b border-gray-50">
+                                                                    <td className="px-6 py-4 align-top">
+                                                                        {prodIdx === 0 && (
+                                                                            <div className="text-sm font-bold text-gray-900">{whGroup.whName}</div>
+                                                                        )}
+                                                                    </td>
+                                                                    <td className="px-6 py-4 align-top">
+                                                                        <div className="text-sm font-semibold text-gray-800">{prodGroup.productName}</div>
+                                                                    </td>
+                                                                    <td className="px-6 py-4 align-top" colSpan="6">
+                                                                        <div className="space-y-4">
+                                                                            {prodGroup.brands.map((brand, bIdx) => (
+                                                                                <div key={bIdx} className="grid grid-cols-6 gap-4 items-center">
+                                                                                    <div className="text-sm text-gray-600 font-medium">{brand.brand}</div>
+                                                                                    <div className="text-sm text-black text-right font-bold">
+                                                                                        {parseFloat(brand.inhouseQty || 0).toLocaleString()} kg
+                                                                                    </div>
+                                                                                    <div className="text-sm text-black text-right font-bold">
+                                                                                        {(() => {
+                                                                                            const { whole, remainder } = calculatePktRemainder(brand.inhouseQty, brand.packetSize);
+                                                                                            return `${whole.toLocaleString()} - ${remainder.toLocaleString()} kg`;
+                                                                                        })()}
+                                                                                    </div>
+                                                                                    <div className="text-sm text-black text-right font-bold">
+                                                                                        {parseFloat(brand.whQty || 0).toLocaleString()} kg
+                                                                                    </div>
+                                                                                    <div className="text-sm text-black text-right font-bold">
+                                                                                        {(() => {
+                                                                                            const { whole, remainder } = calculatePktRemainder(brand.whQty, brand.packetSize);
+                                                                                            return `${whole.toLocaleString()} - ${remainder.toLocaleString()} kg`;
+                                                                                        })()}
+                                                                                    </div>
+                                                                                    <div className="flex items-center justify-end gap-2">
+                                                                                        <button onClick={() => handleEditStock(brand)} className="p-1.5 text-gray-400 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition-all"><EditIcon className="w-4 h-4" /></button>
+                                                                                        <button onClick={() => setDeleteConfirm({ show: true, id: brand._id, type: 'stock' })} className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all"><TrashIcon className="w-4 h-4" /></button>
+                                                                                    </div>
                                                                                 </div>
-                                                                                <div className="text-sm text-black text-right font-bold">
-                                                                                    {(() => {
-                                                                                        const { whole, remainder } = calculatePktRemainder(brand.inhouseQty, brand.packetSize);
-                                                                                        return `${whole.toLocaleString()} - ${remainder.toLocaleString()} kg`;
-                                                                                    })()}
-                                                                                </div>
-                                                                                <div className="text-sm text-black text-right font-bold">
-                                                                                    {parseFloat(brand.whQty || 0).toLocaleString()} kg
-                                                                                </div>
-                                                                                <div className="text-sm text-black text-right font-bold">
-                                                                                    {(() => {
-                                                                                        const { whole, remainder } = calculatePktRemainder(brand.whQty, brand.packetSize);
-                                                                                        return `${whole.toLocaleString()} - ${remainder.toLocaleString()} kg`;
-                                                                                    })()}
-                                                                                </div>
-                                                                                <div className="flex items-center justify-end gap-2">
-                                                                                    <button onClick={() => handleEditStock(brand)} className="p-1.5 text-gray-400 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition-all"><EditIcon className="w-4 h-4" /></button>
-                                                                                    <button onClick={() => setDeleteConfirm({ show: true, id: brand._id, type: 'stock' })} className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all"><TrashIcon className="w-4 h-4" /></button>
-                                                                                </div>
-                                                                            </div>
-                                                                        ))}
+                                                                            ))}
 
+                                                                        </div>
+                                                                    </td>
+                                                                </tr>
+                                                            ))}
+                                                        </React.Fragment>
+                                                    ))}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    </div>
+
+                                    {/* Mobile View */}
+                                    <div className="md:hidden space-y-4">
+                                        {groupedStockData.map((whGroup, whIdx) => {
+                                            const isExpanded = expandedMobileWHIndex === whIdx;
+                                            return (
+                                                <div key={whIdx} className="bg-white border border-gray-200 rounded-2xl overflow-hidden shadow-sm transition-all duration-300">
+                                                    <div
+                                                        className="bg-gray-50/50 px-4 py-3 border-b border-gray-100 flex items-center justify-between cursor-pointer hover:bg-gray-100/50 transition-colors"
+                                                        onClick={() => toggleMobileWH(whIdx)}
+                                                    >
+                                                        <h4 className="font-black text-gray-900 tracking-tight">{whGroup.whName}</h4>
+                                                        <div className="flex items-center gap-2">
+                                                            {!isExpanded && (
+                                                                <span className="text-[10px] font-bold text-blue-600 bg-blue-50 border border-blue-100 px-2 py-0.5 rounded-full">
+                                                                    {whGroup.products.reduce((total, p) => total + p.brands.length, 0)} Items
+                                                                </span>
+                                                            )}
+                                                            {isExpanded ? <ChevronUpIcon className="w-5 h-5 text-gray-400" /> : <ChevronDownIcon className="w-5 h-5 text-gray-400" />}
+                                                        </div>
+                                                    </div>
+                                                    {isExpanded && (
+                                                        <div className="p-4 space-y-4 animate-in slide-in-from-top-2 duration-300">
+                                                            {whGroup.products.map((prodGroup, prodIdx) => {
+                                                                const isProdExpanded = expandedMobileProdIndex === prodIdx;
+                                                                return (
+                                                                    <div key={prodIdx} className="border border-gray-100 rounded-xl overflow-hidden bg-white/50">
+                                                                        <div
+                                                                            className="px-3 py-2 flex items-center justify-between cursor-pointer hover:bg-white transition-colors"
+                                                                            onClick={() => toggleMobileProd(prodIdx)}
+                                                                        >
+                                                                            <h5 className="font-bold text-sm text-gray-800">{prodGroup.productName}</h5>
+                                                                            <div className="flex items-center gap-2">
+                                                                                {!isProdExpanded && (
+                                                                                    <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-100">
+                                                                                        {prodGroup.brands.length} {prodGroup.brands.length > 1 ? 'Brands' : 'Brand'}
+                                                                                    </span>
+                                                                                )}
+                                                                                {isProdExpanded ? <ChevronUpIcon className="w-4 h-4 text-gray-400" /> : <ChevronDownIcon className="w-4 h-4 text-gray-400" />}
+                                                                            </div>
+                                                                        </div>
+
+                                                                        {isProdExpanded && (
+                                                                            <div className="p-3 pt-0 space-y-4 animate-in slide-in-from-top-1 duration-200">
+                                                                                {prodGroup.brands.map((brand, bIdx) => (
+                                                                                    <div key={bIdx} className="bg-gray-50 rounded-xl p-3 border border-gray-100">
+                                                                                        <div className="flex justify-between items-center pb-2 border-b border-gray-200 mb-3">
+                                                                                            <span className="text-sm font-bold text-blue-600">{brand.brand}</span>
+                                                                                            <div className="flex items-center gap-2">
+                                                                                                <button onClick={() => handleEditStock(brand)} className="p-1.5 text-gray-400 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition-all"><EditIcon className="w-4 h-4" /></button>
+                                                                                                <button onClick={() => setDeleteConfirm({ show: true, id: brand._id, type: 'stock' })} className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all"><TrashIcon className="w-4 h-4" /></button>
+                                                                                            </div>
+                                                                                        </div>
+                                                                                        <div className="grid grid-cols-2 gap-x-2 sm:gap-x-4 gap-y-4 w-full">
+                                                                                            <div className="space-y-1 min-w-0">
+                                                                                                <p className="text-[10px] font-bold text-emerald-600 uppercase tracking-wider truncate">InHouse Info</p>
+                                                                                                <div className="bg-white p-1.5 sm:p-2 rounded-lg border border-emerald-100 h-full flex flex-col justify-center min-w-0">
+                                                                                                    <div className="flex flex-col xl:flex-row xl:items-end justify-between mb-1 gap-0.5 xl:gap-1">
+                                                                                                        <span className="text-[10px] font-bold text-gray-400 uppercase">QTY</span>
+                                                                                                        <span className="text-[11px] sm:text-xs font-black text-emerald-700 truncate w-full xl:w-auto xl:text-right">{parseFloat(brand.inhouseQty || 0).toLocaleString()} kg</span>
+                                                                                                    </div>
+                                                                                                    <div className="flex flex-col xl:flex-row xl:items-end justify-between border-t border-emerald-50 pt-1 gap-0.5 xl:gap-1">
+                                                                                                        <span className="text-[10px] font-bold text-gray-400 uppercase">PKT</span>
+                                                                                                        <span className="text-[12px] sm:text-xs font-bold text-gray-600 truncate w-full xl:w-auto xl:text-right">
+                                                                                                            {(() => {
+                                                                                                                const { whole, remainder } = calculatePktRemainder(brand.inhouseQty, brand.packetSize);
+                                                                                                                return `${whole.toLocaleString()}${remainder > 0 ? ` - ${remainder.toLocaleString()} kg` : ''}`;
+                                                                                                            })()}
+                                                                                                        </span>
+                                                                                                    </div>
+                                                                                                </div>
+                                                                                            </div>
+                                                                                            <div className="space-y-1 min-w-0">
+                                                                                                <p className="text-[10px] font-bold text-blue-600 uppercase tracking-wider truncate">Warehouse Info</p>
+                                                                                                <div className="bg-white p-1.5 sm:p-2 rounded-lg border border-blue-100 h-full flex flex-col justify-center min-w-0">
+                                                                                                    <div className="flex flex-col xl:flex-row xl:items-end justify-between mb-1 gap-0.5 xl:gap-1">
+                                                                                                        <span className="text-[10px] font-bold text-gray-400 uppercase">QTY</span>
+                                                                                                        <span className="text-[11px] sm:text-xs font-black text-blue-700 truncate w-full xl:w-auto xl:text-right">{parseFloat(brand.whQty || 0).toLocaleString()} kg</span>
+                                                                                                    </div>
+                                                                                                    <div className="flex flex-col xl:flex-row xl:items-end justify-between border-t border-blue-50 pt-1 gap-0.5 xl:gap-1">
+                                                                                                        <span className="text-[10px] font-bold text-gray-400 uppercase">PKT</span>
+                                                                                                        <span className="text-[12px] sm:text-xs font-bold text-gray-600 truncate w-full xl:w-auto xl:text-right">
+                                                                                                            {(() => {
+                                                                                                                const { whole, remainder } = calculatePktRemainder(brand.whQty, brand.packetSize);
+                                                                                                                return `${whole.toLocaleString()}${remainder > 0 ? ` - ${remainder.toLocaleString()} kg` : ''}`;
+                                                                                                            })()}
+                                                                                                        </span>
+                                                                                                    </div>
+                                                                                                </div>
+                                                                                            </div>
+                                                                                        </div>
+                                                                                    </div>
+                                                                                ))}
+                                                                            </div>
+                                                                        )}
                                                                     </div>
-                                                                </td>
-                                                            </tr>
-                                                        ))}
-                                                    </React.Fragment>
-                                                ))}
-                                            </tbody>
-                                        </table>
+                                                                );
+                                                            })}
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            );
+                                        })}
                                     </div>
                                 </div>
                             ) : (
@@ -1409,68 +1540,120 @@ const WarehouseManagement = () => {
                             ))}
 
                         {activeTab === 'warehouses' && (
-                            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-                                <div className="overflow-x-auto">
-                                    <table className="w-full text-left border-collapse">
-                                        <thead>
-                                            <tr className="bg-gray-50/50 border-b border-gray-100">
-                                                <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider">WH Name</th>
-                                                <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Manager</th>
-                                                <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Location</th>
-                                                <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Capacity</th>
-                                                <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Stock Status</th>
-                                                <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-right">Actions</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody className="divide-y divide-gray-100">
-                                            {uniqueWarehouses.map((wh, idx) => {
-                                                const productCount = warehouseProductCounts[wh.whName] || 0;
-                                                const isEmpty = productCount === 0;
-                                                return (
-                                                    <tr key={idx} className={`hover:bg-gray-50/30 transition-colors group ${isEmpty ? 'bg-amber-50/20' : ''}`}>
-                                                        <td className="px-6 py-4">
-                                                            <div className="flex items-center gap-2">
-                                                                <HomeIcon className={`w-4 h-4 ${isEmpty ? 'text-amber-500' : 'text-blue-500'}`} />
-                                                                <div className="text-sm font-bold text-gray-900">{wh.whName}</div>
-                                                            </div>
-                                                        </td>
-                                                        <td className="px-6 py-4 text-sm text-gray-600">{wh.manager || '-'}</td>
-                                                        <td className="px-6 py-4 text-sm text-gray-600">{wh.location || '-'}</td>
-                                                        <td className="px-6 py-4 text-sm text-gray-600">{wh.capacity ? `${wh.capacity.toLocaleString()} KG` : '-'}</td>
-                                                        <td className="px-6 py-4">
-                                                            {isEmpty ? (
-                                                                <span className="px-2.5 py-1 bg-amber-100 text-amber-700 rounded-lg text-xs font-bold flex items-center gap-1 w-fit">
-                                                                    <div className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse"></div>
-                                                                    No Product
-                                                                </span>
-                                                            ) : (
-                                                                <span className="px-2.5 py-1 bg-emerald-100 text-emerald-700 rounded-lg text-xs font-bold flex items-center gap-1 w-fit">
-                                                                    <div className="w-1.5 h-1.5 rounded-full bg-emerald-500"></div>
-                                                                    {productCount} Product{productCount > 1 ? 's' : ''}
-                                                                </span>
-                                                            )}
-                                                        </td>
-                                                        <td className="px-6 py-4 text-right">
-                                                            <div className="flex items-center justify-end gap-2">
-                                                                <button
-                                                                    onClick={() => handleEditWarehouse(wh)}
-                                                                    className="p-1.5 text-gray-400 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition-all"
-                                                                >
-                                                                    <EditIcon className="w-4 h-4" />
-                                                                </button>
-                                                                <button
-                                                                    onClick={() => setDeleteConfirm({ show: true, id: wh._id, type: 'warehouse' })}
-                                                                    className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all"
-                                                                >
-                                                                    <TrashIcon className="w-4 h-4" />
-                                                                </button>
-                                                            </div>
-                                                        </td>
-                                                    </tr>
-                                                );
-                                            })}
-                                        </tbody>
-                                    </table>
+                            <div className="space-y-4">
+                                <div className="hidden md:block bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+                                    <div className="overflow-x-auto">
+                                        <table className="w-full text-left border-collapse">
+                                            <thead>
+                                                <tr className="bg-gray-50/50 border-b border-gray-100">
+                                                    <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider">WH Name</th>
+                                                    <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Manager</th>
+                                                    <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Location</th>
+                                                    <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Capacity</th>
+                                                    <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Stock Status</th>
+                                                    <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-right">Actions</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody className="divide-y divide-gray-100">
+                                                {uniqueWarehouses.map((wh, idx) => {
+                                                    const productCount = warehouseProductCounts[wh.whName] || 0;
+                                                    const isEmpty = productCount === 0;
+                                                    return (
+                                                        <tr key={idx} className={`hover:bg-gray-50/30 transition-colors group ${isEmpty ? 'bg-amber-50/20' : ''}`}>
+                                                            <td className="px-6 py-4">
+                                                                <div className="flex items-center gap-2">
+                                                                    <HomeIcon className={`w-4 h-4 ${isEmpty ? 'text-amber-500' : 'text-blue-500'}`} />
+                                                                    <div className="text-sm font-bold text-gray-900">{wh.whName}</div>
+                                                                </div>
+                                                            </td>
+                                                            <td className="px-6 py-4 text-sm text-gray-600">{wh.manager || '-'}</td>
+                                                            <td className="px-6 py-4 text-sm text-gray-600">{wh.location || '-'}</td>
+                                                            <td className="px-6 py-4 text-sm text-gray-600">{wh.capacity ? `${wh.capacity.toLocaleString()} KG` : '-'}</td>
+                                                            <td className="px-6 py-4">
+                                                                {isEmpty ? (
+                                                                    <span className="px-2.5 py-1 bg-amber-100 text-amber-700 rounded-lg text-xs font-bold flex items-center gap-1 w-fit">
+                                                                        <div className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse"></div>
+                                                                        No Product
+                                                                    </span>
+                                                                ) : (
+                                                                    <span className="px-2.5 py-1 bg-emerald-100 text-emerald-700 rounded-lg text-xs font-bold flex items-center gap-1 w-fit">
+                                                                        <div className="w-1.5 h-1.5 rounded-full bg-emerald-500"></div>
+                                                                        {productCount} Product{productCount > 1 ? 's' : ''}
+                                                                    </span>
+                                                                )}
+                                                            </td>
+                                                            <td className="px-6 py-4 text-right">
+                                                                <div className="flex items-center justify-end gap-2">
+                                                                    <button
+                                                                        onClick={() => handleEditWarehouse(wh)}
+                                                                        className="p-1.5 text-gray-400 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition-all"
+                                                                    >
+                                                                        <EditIcon className="w-4 h-4" />
+                                                                    </button>
+                                                                    <button
+                                                                        onClick={() => setDeleteConfirm({ show: true, id: wh._id, type: 'warehouse' })}
+                                                                        className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all"
+                                                                    >
+                                                                        <TrashIcon className="w-4 h-4" />
+                                                                    </button>
+                                                                </div>
+                                                            </td>
+                                                        </tr>
+                                                    );
+                                                })}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+
+                                {/* Mobile View */}
+                                <div className="md:hidden space-y-4">
+                                    {uniqueWarehouses.map((wh, idx) => {
+                                        const productCount = warehouseProductCounts[wh.whName] || 0;
+                                        const isEmpty = productCount === 0;
+                                        return (
+                                            <div key={idx} className={`bg-white border ${isEmpty ? 'border-amber-200' : 'border-gray-200'} rounded-2xl overflow-hidden shadow-sm`}>
+                                                <div className={`px-4 py-3 border-b ${isEmpty ? 'border-amber-100 bg-amber-50/30' : 'border-gray-100 bg-gray-50/50'} flex justify-between items-center`}>
+                                                    <div className="flex items-center gap-2">
+                                                        <HomeIcon className={`w-4 h-4 ${isEmpty ? 'text-amber-500' : 'text-blue-500'}`} />
+                                                        <h4 className="font-black text-gray-900 tracking-tight">{wh.whName}</h4>
+                                                    </div>
+                                                    <div className="flex items-center gap-1">
+                                                        <button onClick={() => handleEditWarehouse(wh)} className="p-1.5 text-gray-400 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition-all"><EditIcon className="w-4 h-4" /></button>
+                                                        <button onClick={() => setDeleteConfirm({ show: true, id: wh._id, type: 'warehouse' })} className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all"><TrashIcon className="w-4 h-4" /></button>
+                                                    </div>
+                                                </div>
+                                                <div className="p-4 space-y-3">
+                                                    <div className="flex justify-between items-center">
+                                                        <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Manager</span>
+                                                        <span className="text-sm font-semibold text-gray-700">{wh.manager || '-'}</span>
+                                                    </div>
+                                                    <div className="flex justify-between items-center">
+                                                        <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Location</span>
+                                                        <span className="text-sm font-semibold text-gray-700">{wh.location || '-'}</span>
+                                                    </div>
+                                                    <div className="flex justify-between items-center">
+                                                        <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Capacity</span>
+                                                        <span className="text-sm font-black text-gray-800">{wh.capacity ? `${wh.capacity.toLocaleString()} KG` : '-'}</span>
+                                                    </div>
+                                                    <div className="pt-3 border-t border-gray-100 flex justify-between items-center">
+                                                        <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Stock Status</span>
+                                                        {isEmpty ? (
+                                                            <span className="px-2.5 py-1 bg-amber-100 text-amber-700 rounded-lg text-xs font-bold flex items-center gap-1">
+                                                                <div className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse"></div>
+                                                                No Product
+                                                            </span>
+                                                        ) : (
+                                                            <span className="px-2.5 py-1 bg-emerald-100 text-emerald-700 rounded-lg text-xs font-bold flex items-center gap-1">
+                                                                <div className="w-1.5 h-1.5 rounded-full bg-emerald-500"></div>
+                                                                {productCount} Product{productCount > 1 ? 's' : ''}
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
                                 </div>
                             </div>
                         )}

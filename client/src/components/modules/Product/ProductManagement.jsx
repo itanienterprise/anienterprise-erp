@@ -148,8 +148,8 @@ const ProductManagement = ({ products, fetchProducts }) => {
                         className="fixed inset-0 bg-black/50 backdrop-blur-sm transition-opacity"
                         onClick={() => { setShowProductForm(false); resetProductForm(); }}
                     />
-                    <div className="bg-white rounded-2xl shadow-xl border border-gray-100 p-4 md:p-6 w-full max-w-2xl transform transition-all relative z-10 animate-scale-in max-h-[92vh] overflow-y-auto mx-auto mt-[4vh] md:mt-0 custom-scrollbar">
-                        <div className="flex items-center justify-between mb-5 md:mb-6">
+                    <div className="bg-white rounded-2xl shadow-xl border border-gray-100 p-4 md:p-6 w-full max-w-5xl transform transition-all relative z-10 animate-scale-in max-h-[92vh] overflow-y-auto mx-auto mt-[4vh] md:mt-0 custom-scrollbar">
+                        <div className="flex items-center justify-between mb-5 md:mb-6 px-4 md:px-6">
                             <h3 className="text-lg md:text-xl font-bold text-gray-800">{editingId ? 'Edit Product' : 'Add New Product'}</h3>
                             <button
                                 onClick={() => { setShowProductForm(false); resetProductForm(); }}
@@ -158,159 +158,168 @@ const ProductManagement = ({ products, fetchProducts }) => {
                                 <XIcon className="w-6 h-6" />
                             </button>
                         </div>
-                        <form onSubmit={handleProductSubmit} className="grid grid-cols-2 md:grid-cols-6 gap-4 md:gap-6">
-                            <div className="col-span-1 md:col-span-3">
-                                <label className="block text-sm font-medium text-gray-700 mb-2">HS Code</label>
-                                <input
-                                    type="text"
-                                    value={productFormData.hsCode}
-                                    onChange={(e) => setProductFormData(prev => ({ ...prev, hsCode: e.target.value }))}
-                                    maxLength={8}
-                                    className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all text-sm"
-                                    placeholder="HS Code"
-                                />
-                            </div>
-                            <div className="col-span-1 md:col-span-3">
-                                <label className="block text-sm font-medium text-gray-700 mb-2">HS Code (IND)</label>
-                                <input
-                                    type="text"
-                                    value={productFormData.hsCodeInd}
-                                    onChange={(e) => setProductFormData(prev => ({ ...prev, hsCodeInd: e.target.value }))}
-                                    maxLength={8}
-                                    className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all text-sm"
-                                    placeholder="HS Code (IND)"
-                                />
-                            </div>
-                            <div className="col-span-2 md:col-span-2">
-                                <label className="block text-sm font-medium text-gray-700 mb-2">Product Name *</label>
-                                <input
-                                    type="text"
-                                    value={productFormData.name}
-                                    onChange={(e) => setProductFormData(prev => ({ ...prev, name: e.target.value }))}
-                                    required
-                                    className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all text-sm"
-                                    placeholder="Product name"
-                                />
-                            </div>
-                            <div className="col-span-2 md:col-span-2">
-                                <label className="block text-sm font-medium text-gray-700 mb-2">Category</label>
-                                <input
-                                    type="text"
-                                    value={productFormData.category}
-                                    onChange={(e) => setProductFormData(prev => ({ ...prev, category: e.target.value }))}
-                                    className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all text-sm"
-                                    placeholder="Category"
-                                />
-                            </div>
-                            <div className="col-span-2 md:col-span-2">
-                                <label className="block text-sm font-medium text-gray-700 mb-2">UOM (Unit)</label>
-                                <select
-                                    value={productFormData.uom}
-                                    onChange={(e) => setProductFormData(prev => ({ ...prev, uom: e.target.value }))}
-                                    className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all text-sm"
-                                >
-                                    <option value="kg">kg</option>
-                                    <option value="lbs">lbs</option>
-                                    <option value="pcs">pcs</option>
-                                    <option value="box">box</option>
-                                    <option value="set">set</option>
-                                    <option value="m">m</option>
-                                </select>
+                        <form onSubmit={handleProductSubmit} className="w-full flex flex-col gap-6">
+                            {/* Row 0: Top Grid Fields */}
+                            <div className="grid grid-cols-2 md:grid-cols-6 gap-4 md:gap-6 w-full">
+                                <div className="col-span-1 md:col-span-3">
+                                    <label className="block text-sm font-medium text-gray-700 mb-2">HS Code</label>
+                                    <input
+                                        type="text"
+                                        value={productFormData.hsCode}
+                                        onChange={(e) => setProductFormData(prev => ({ ...prev, hsCode: e.target.value }))}
+                                        maxLength={8}
+                                        className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all text-sm"
+                                        placeholder="HS Code"
+                                    />
+                                </div>
+                                <div className="col-span-1 md:col-span-3">
+                                    <label className="block text-sm font-medium text-gray-700 mb-2">HS Code (IND)</label>
+                                    <input
+                                        type="text"
+                                        value={productFormData.hsCodeInd}
+                                        onChange={(e) => setProductFormData(prev => ({ ...prev, hsCodeInd: e.target.value }))}
+                                        maxLength={8}
+                                        className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all text-sm"
+                                        placeholder="HS Code (IND)"
+                                    />
+                                </div>
+                                <div className="col-span-2 md:col-span-2">
+                                    <label className="block text-sm font-medium text-gray-700 mb-2">Product Name *</label>
+                                    <input
+                                        type="text"
+                                        value={productFormData.name}
+                                        onChange={(e) => setProductFormData(prev => ({ ...prev, name: e.target.value }))}
+                                        required
+                                        className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all text-sm"
+                                        placeholder="Product name"
+                                    />
+                                </div>
+                                <div className="col-span-2 md:col-span-2">
+                                    <label className="block text-sm font-medium text-gray-700 mb-2">Category</label>
+                                    <input
+                                        type="text"
+                                        value={productFormData.category}
+                                        onChange={(e) => setProductFormData(prev => ({ ...prev, category: e.target.value }))}
+                                        className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all text-sm"
+                                        placeholder="Category"
+                                    />
+                                </div>
+                                <div className="col-span-2 md:col-span-2">
+                                    <label className="block text-sm font-medium text-gray-700 mb-2">UOM (Unit)</label>
+                                    <select
+                                        value={productFormData.uom}
+                                        onChange={(e) => setProductFormData(prev => ({ ...prev, uom: e.target.value }))}
+                                        className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all text-sm"
+                                    >
+                                        <option value="kg">kg</option>
+                                        <option value="lbs">lbs</option>
+                                        <option value="pcs">pcs</option>
+                                        <option value="box">box</option>
+                                        <option value="set">set</option>
+                                        <option value="m">m</option>
+                                    </select>
+                                </div>
                             </div>
 
-                            <div className="col-span-2 md:col-span-6 space-y-4">
-                                <div className="flex items-center justify-between">
-                                    <label className="block text-sm font-bold text-gray-700">Brands &amp; Packaging</label>
-                                    <button
-                                        type="button"
-                                        onClick={handleAddProductBrand}
-                                        className="text-xs font-semibold text-blue-600 hover:text-blue-700 flex items-center gap-1"
-                                    >
-                                        <PlusIcon className="w-3 h-3" /> Add Brand
-                                    </button>
+                            {/* Sequential Footer Stack (Flexbox) - Forces width independently of top grid */}
+                            <div className="flex flex-col gap-6 mt-2 border-t border-gray-100 pt-6 w-full">
+                                {/* Row 1: Brands & Packaging */}
+                                <div className="space-y-3 w-full">
+                                    <div className="flex items-center justify-between pb-1 w-full">
+                                        <label className="block text-sm font-bold text-gray-700">Brands &amp; Packaging</label>
+                                        <button
+                                            type="button"
+                                            onClick={handleAddProductBrand}
+                                            className="text-xs font-semibold text-blue-600 hover:text-blue-700 flex items-center gap-1"
+                                        >
+                                            <PlusIcon className="w-3 h-3" /> Add Brand
+                                        </button>
+                                    </div>
+                                    <div className="space-y-4 max-h-[350px] overflow-y-auto pr-1 custom-scrollbar w-full">
+                                        {productFormData.brands.map((brandEntry, bIndex) => (
+                                            <div key={bIndex} className="flex flex-col md:flex-row gap-4 md:gap-6 items-end relative group w-full pb-2">
+                                                {productFormData.brands.length > 1 && (
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => handleRemoveProductBrand(bIndex)}
+                                                        className="absolute -top-1 -right-1 p-1 bg-white text-gray-400 hover:text-red-500 rounded-lg shadow-sm border border-gray-100 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-all z-20"
+                                                    >
+                                                        <XIcon className="w-3.5 h-3.5" />
+                                                    </button>
+                                                )}
+                                                <div className="w-full md:flex-grow">
+                                                    <label className="block text-[10px] font-bold text-gray-500 uppercase mb-1">Brand Name</label>
+                                                    <input
+                                                        type="text"
+                                                        value={brandEntry.brand}
+                                                        onChange={(e) => handleProductBrandChange(bIndex, 'brand', e.target.value)}
+                                                        className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm outline-none focus:border-blue-500 transition-all bg-white"
+                                                        placeholder="Enter Brand Name"
+                                                    />
+                                                </div>
+                                                <div className="w-full md:w-32">
+                                                    <label className="block text-[10px] font-bold text-gray-500 uppercase mb-1">Size</label>
+                                                    <input
+                                                        type="text"
+                                                        value={brandEntry.packetSize}
+                                                        onChange={(e) => handleProductBrandChange(bIndex, 'packetSize', e.target.value)}
+                                                        className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm outline-none focus:border-blue-500 transition-all bg-white"
+                                                        placeholder="Size"
+                                                    />
+                                                </div>
+                                                <div className="w-full md:w-32">
+                                                    <label className="block text-[10px] font-bold text-gray-500 uppercase mb-1">Price</label>
+                                                    <input
+                                                        type="number"
+                                                        step="0.01"
+                                                        value={brandEntry.purchasedPrice}
+                                                        onChange={(e) => handleProductBrandChange(bIndex, 'purchasedPrice', e.target.value)}
+                                                        className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm outline-none focus:border-blue-500 transition-all bg-white"
+                                                        placeholder="Price"
+                                                    />
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
                                 </div>
-                                <div className="space-y-3 max-h-[300px] md:max-h-[400px] overflow-y-auto pr-1 custom-scrollbar">
-                                    {productFormData.brands.map((brandEntry, bIndex) => (
-                                        <div key={bIndex} className="grid grid-cols-12 gap-2 md:gap-3 items-end p-2.5 md:p-3 bg-gray-50/80 rounded-xl relative group border border-gray-100/50">
-                                            {productFormData.brands.length > 1 && (
-                                                <button
-                                                    type="button"
-                                                    onClick={() => handleRemoveProductBrand(bIndex)}
-                                                    className="absolute -top-2 -right-2 p-1.5 bg-white text-gray-500 hover:text-red-500 rounded-lg shadow-md border border-gray-100 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-all z-20"
-                                                >
-                                                    <XIcon className="w-4 h-4" />
-                                                </button>
+
+                                {/* Row 2: Description */}
+                                <div className="flex flex-col w-full">
+                                    <label className="block text-sm font-medium text-gray-700 mb-2">Description</label>
+                                    <textarea
+                                        value={productFormData.description}
+                                        onChange={(e) => setProductFormData(prev => ({ ...prev, description: e.target.value }))}
+                                        className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all resize-none text-sm min-h-[100px]"
+                                        placeholder="Product description"
+                                    />
+                                </div>
+
+                                {/* Row 3: Action Buttons */}
+                                <div className="flex justify-center md:justify-end pt-4 border-t border-gray-100/50 w-full">
+                                    <div className="flex items-center space-x-3 w-full md:w-auto">
+                                        <button
+                                            type="button"
+                                            onClick={() => { setShowProductForm(false); resetProductForm(); }}
+                                            className="flex-1 md:flex-none px-6 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors text-sm font-medium"
+                                        >
+                                            Cancel
+                                        </button>
+                                        <button
+                                            type="submit"
+                                            disabled={isSubmitting}
+                                            className="flex-1 md:flex-none justify-center px-8 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors shadow-sm disabled:opacity-70 disabled:cursor-not-allowed flex items-center text-sm font-semibold"
+                                        >
+                                            {isSubmitting ? (
+                                                <svg className="animate-spin h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                                </svg>
+                                            ) : (
+                                                <span className="text-center">{editingId ? 'Update Product' : 'Add Product'}</span>
                                             )}
-                                            <div className="col-span-5 md:col-span-5">
-                                                <label className="block text-[9px] md:text-[10px] font-bold text-gray-500 uppercase mb-0.5 md:mb-1">Brand Name</label>
-                                                <input
-                                                    type="text"
-                                                    value={brandEntry.brand}
-                                                    onChange={(e) => handleProductBrandChange(bIndex, 'brand', e.target.value)}
-                                                    className="w-full px-2 md:px-3 py-1.5 md:py-2 border border-gray-200 rounded-lg text-xs md:text-sm outline-none focus:border-blue-500 transition-all bg-white"
-                                                    placeholder="Brand"
-                                                />
-                                            </div>
-                                            <div className="col-span-3 md:col-span-3">
-                                                <label className="block text-[9px] md:text-[10px] font-bold text-gray-500 uppercase mb-0.5 md:mb-1">Size</label>
-                                                <input
-                                                    type="text"
-                                                    value={brandEntry.packetSize}
-                                                    onChange={(e) => handleProductBrandChange(bIndex, 'packetSize', e.target.value)}
-                                                    className="w-full px-2 md:px-3 py-1.5 md:py-2 border border-gray-200 rounded-lg text-xs md:text-sm outline-none focus:border-blue-500 transition-all bg-white"
-                                                    placeholder="Size"
-                                                />
-                                            </div>
-                                            <div className="col-span-4 md:col-span-4">
-                                                <label className="block text-[9px] md:text-[10px] font-bold text-gray-500 uppercase mb-0.5 md:mb-1">Price</label>
-                                                <input
-                                                    type="number"
-                                                    step="0.01"
-                                                    value={brandEntry.purchasedPrice}
-                                                    onChange={(e) => handleProductBrandChange(bIndex, 'purchasedPrice', e.target.value)}
-                                                    className="w-full px-2 md:px-3 py-1.5 md:py-2 border border-gray-200 rounded-lg text-xs md:text-sm outline-none focus:border-blue-500 transition-all bg-white"
-                                                    placeholder="0.00"
-                                                />
-                                            </div>
-                                        </div>
-                                    ))}
+                                        </button>
+                                    </div>
                                 </div>
-                            </div>
-                            <div className="col-span-2 md:col-span-6">
-                                <label className="block text-sm font-medium text-gray-700 mb-2">Description</label>
-                                <textarea
-                                    value={productFormData.description}
-                                    onChange={(e) => setProductFormData(prev => ({ ...prev, description: e.target.value }))}
-                                    rows="2"
-                                    className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all resize-none text-sm"
-                                    placeholder="Product description"
-                                />
-                            </div>
-                            <div className="col-span-2 md:col-span-6 flex justify-center md:justify-end space-x-3 pt-4 border-t border-gray-100">
-                                <button
-                                    type="button"
-                                    onClick={() => { setShowProductForm(false); resetProductForm(); }}
-                                    className="hidden md:block px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors text-sm"
-                                >
-                                    Cancel
-                                </button>
-                                <button
-                                    type="submit"
-                                    disabled={isSubmitting}
-                                    className="w-full md:w-auto justify-center px-8 py-2.5 md:py-2 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl hover:from-blue-700 hover:to-indigo-700 transition-colors shadow-sm disabled:opacity-70 disabled:cursor-not-allowed flex items-center text-sm font-semibold"
-                                >
-                                    {isSubmitting ? (
-                                        <>
-                                            <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                                                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                                            </svg>
-                                            Saving...
-                                        </>
-                                    ) : (
-                                        editingId ? 'Update Product' : 'Add Product'
-                                    )}
-                                </button>
                             </div>
                         </form>
                     </div>

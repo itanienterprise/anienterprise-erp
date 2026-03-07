@@ -33,7 +33,7 @@ const Importer = ({
         address: '',
         contactPerson: '',
         email: '',
-        phone: '+88',
+        phone: '+880',
         licenseNo: '',
         status: 'Active'
     });
@@ -66,13 +66,14 @@ const Importer = ({
         const { name, value } = e.target;
 
         if (name === 'phone') {
-            // Enforce +88 prefix and 14 characters limit
-            if (!value.startsWith('+88')) {
-                return; // Prevent removing +88
+            let value = e.target.value;
+            if (!value.startsWith('+880')) {
+                value = '+880' + value.replace(/^\+880?/, '');
             }
-            if (value.length > 14) {
-                return; // Limit to 14 characters
+            if (value.length <= 14) {
+                setFormData(prev => ({ ...prev, [name]: value }));
             }
+            return;
         }
 
         setFormData(prev => ({
@@ -132,7 +133,7 @@ const Importer = ({
             address: '',
             contactPerson: '',
             email: '',
-            phone: '+88',
+            phone: '+880',
             licenseNo: '',
             status: 'Active'
         });
@@ -146,7 +147,7 @@ const Importer = ({
             address: importer.address || '',
             contactPerson: importer.contactPerson || '',
             email: importer.email || '',
-            phone: importer.phone || '+88',
+            phone: importer.phone || '+880',
             licenseNo: importer.licenseNo || '',
             status: importer.status || 'Active'
         });
