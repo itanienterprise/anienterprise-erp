@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import axios from 'axios';
 import {
-    SearchIcon, FunnelIcon, XIcon, BarChartIcon, EditIcon, TrashIcon, BoxIcon, ChevronDownIcon, PlusIcon
+    SearchIcon, FunnelIcon, XIcon, BarChartIcon, EditIcon, TrashIcon, BoxIcon, ChevronDownIcon, PlusIcon, EyeIcon, CheckIcon
 } from '../../Icons';
 import { formatDate, API_BASE_URL } from '../../../utils/helpers';
 import { encryptData, decryptData } from '../../../utils/encryption';
@@ -9,6 +9,7 @@ import CustomDatePicker from '../../shared/CustomDatePicker';
 import './LCReceive.css';
 
 function LCReceive({
+    currentUser,
     stockRecords,
     fetchStockRecords,
     importers,
@@ -41,7 +42,8 @@ function LCReceive({
     lcReceiveRecords,
     lcReceiveSummary,
     fetchProducts,
-    salesRecords = []
+    salesRecords = [],
+    addNotification
 }) {
     const [activeDropdown, setActiveDropdown] = useState(null);
     const [highlightedIndex, setHighlightedIndex] = useState(-1);
@@ -51,11 +53,27 @@ function LCReceive({
     const [validationErrors, setValidationErrors] = useState([]);
     const [showWhSelectDropdown, setShowWhSelectDropdown] = useState(false);
     const [expandedCard, setExpandedCard] = useState(null);
+    const [viewData, setViewData] = useState(null);
+    const [isRequestedOnly, setIsRequestedOnly] = useState(false);
 
     const productRefs = useRef([]);
     const brandRefs = useRef({});
     const portRef = useRef(null);
     const importerRef = useRef(null);
+    const canApprove = useMemo(() => {
+        if (!currentUser) return false;
+        if (currentUser.username === 'admin') return true;
+        const role = (currentUser.role || '').toLowerCase();
+        return ['admin', 'incharge', 'sales manager'].includes(role);
+    }, [currentUser]);
+
+    // Only the system admin account or employees with the Admin role can edit/delete accepted entries
+    const canEditDelete = useMemo(() => {
+        if (!currentUser) return false;
+        if (currentUser.username === 'admin') return true;
+        const role = (currentUser.role || '').toLowerCase();
+        return role === 'admin';
+    }, [currentUser]);
     const exporterRef = useRef(null);
     const whSelectRef = useRef(null);
 
@@ -263,7 +281,7 @@ function LCReceive({
             billOfEntry: '',
             totalLcTruck: 0,
             totalLcQuantity: '',
-            status: 'In Stock',
+            status: 'Requested',
             warehouse: '',
             productEntries: [{
                 isMultiBrand: true,
@@ -595,6 +613,8 @@ function LCReceive({
                             totalLcQuantity: stockFormData.totalLcQuantity,
                             status: stockFormData.status,
                             warehouse: stockFormData.warehouse,
+                            requestedBy: stockFormData.requestedBy || (currentUser ? (currentUser.name || currentUser.username || '') : ''),
+                            requestedByUsername: stockFormData.requestedByUsername || (currentUser ? currentUser.username : ''),
                             productName: product.productName,
                             truckNo: product.truckNo,
                             brand: brandEntry.brand,
@@ -648,6 +668,8 @@ function LCReceive({
                             totalLcQuantity: stockFormData.totalLcQuantity,
                             status: stockFormData.status,
                             warehouse: stockFormData.warehouse,
+                            requestedBy: stockFormData.requestedBy || (currentUser ? (currentUser.name || currentUser.username || '') : ''),
+                            requestedByUsername: stockFormData.requestedByUsername || (currentUser ? currentUser.username : ''),
                             productName: product.productName,
                             truckNo: product.truckNo,
                             brand: brandEntry.brand,
@@ -671,6 +693,91 @@ function LCReceive({
                 );
 
                 await Promise.all(createPromises);
+            }
+
+            if (addNotification && !editingId) {
+                const now = new Date();
+                const day = String(now.getDate()).padStart(2, '0');
+                const month = String(now.getMonth() + 1).padStart(2, '0');
+                const year = now.getFullYear();
+                const dateStr = `${day}/${month}/${year}`;
+                const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                const employeeName = currentUser?.name || currentUser?.username || 'An employee';
+
+                await addNotification(
+                    'New LC Received',
+                    `${dateStr} | ${timeStr} | ${employeeName} has requested new lc receive entry (${stockFormData.lcNo})`
+                );
+            } else if (addNotification && editingId && (stockFormData.status || '').toLowerCase().includes('requested')) {
+                const now = new Date();
+                const day = String(now.getDate()).padStart(2, '0');
+                const month = String(now.getMonth() + 1).padStart(2, '0');
+                const year = now.getFullYear();
+                const dateStr = `${day}/${month}/${year}`;
+                const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                const employeeName = currentUser?.name || currentUser?.username || 'An employee';
+
+                // Identify what changed
+                const originalRecord = lcReceiveRecords.find(r => r._id === editingId || (r.allIds && r.allIds.includes(editingId)));
+                const changes = [];
+                if (originalRecord) {
+                    if (originalRecord.date !== stockFormData.date) changes.push('Date');
+                    if (originalRecord.lcNo !== stockFormData.lcNo) changes.push('LC No');
+                    if (originalRecord.port !== stockFormData.port) changes.push('Port');
+                    if (originalRecord.importer !== stockFormData.importer) changes.push('Importer');
+                    if (originalRecord.exporter !== stockFormData.exporter) changes.push('Exporter');
+                    if (originalRecord.warehouse !== stockFormData.warehouse) changes.push('Warehouse');
+                    if (originalRecord.status !== stockFormData.status) changes.push('Status');
+
+                    // Check for product/brand related changes (Price, Packet, Qty)
+                    const originalEntries = originalRecord.entries || [originalRecord];
+                    const currentEntries = [];
+                    stockFormData.productEntries.forEach(p => {
+                        p.brandEntries.forEach(b => {
+                            currentEntries.push({ ...p, ...b });
+                        });
+                    });
+
+                    let priceChanged = false;
+                    let packetChanged = false;
+                    let quantityChanged = false;
+                    let productStructureChanged = false;
+
+                    if (originalEntries.length !== currentEntries.length) {
+                        productStructureChanged = true;
+                    } else {
+                        for (let i = 0; i < currentEntries.length; i++) {
+                            const cur = currentEntries[i];
+                            const orig = originalEntries[i];
+                            if (parseFloat(cur.purchasedPrice) !== parseFloat(orig.purchasedPrice)) priceChanged = true;
+                            if (parseFloat(cur.packet) !== parseFloat(orig.packet)) packetChanged = true;
+                            if (parseFloat(cur.quantity) !== parseFloat(orig.quantity)) quantityChanged = true;
+                            if (cur.productName !== orig.productName || cur.brand !== orig.brand) productStructureChanged = true;
+                        }
+                    }
+
+                    if (priceChanged) changes.push('Price');
+                    if (packetChanged) changes.push('Packet');
+                    if (quantityChanged) changes.push('Quantity');
+                    if (productStructureChanged) changes.push('Products/Brands');
+                }
+
+                const changeText = changes.length > 0 ? ` (Changes: ${changes.join(', ')})` : '';
+
+                // Recipients: Admins, Managers, and the Original Requester
+                const targetRoles = ['admin', 'incharge', 'sales manager'];
+                const targetUsers = [];
+                if (stockFormData.requestedByUsername) targetUsers.push(stockFormData.requestedByUsername);
+                // Explicitly include 'admin' username to be sure
+                if (!targetUsers.includes('admin')) targetUsers.push('admin');
+
+                // Send to requester + admins/managers
+                await addNotification(
+                    'LC Receive Entry Updated',
+                    `${dateStr} | ${timeStr} | ${employeeName} has edited the requested LC receive entry (${stockFormData.lcNo})${changeText}`,
+                    targetRoles,
+                    targetUsers
+                );
             }
 
             setSubmitStatus('success');
@@ -762,6 +869,8 @@ function LCReceive({
                 totalLcQuantity: record.totalLcQuantity,
                 status: record.status,
                 warehouse: record.warehouse || '',
+                requestedBy: record.entries?.[0]?.requestedBy || '',
+                requestedByUsername: record.entries?.[0]?.requestedByUsername || '',
                 productEntries: formProductEntries,
                 originalIds: record.allIds
             });
@@ -782,6 +891,8 @@ function LCReceive({
                 totalLcQuantity: record.totalLcQuantity,
                 status: record.status,
                 warehouse: record.warehouse || '',
+                requestedBy: record.requestedBy || '',
+                requestedByUsername: record.requestedByUsername || '',
                 originalIds: record.allIds || [record._id],
                 productEntries: [{
                     isMultiBrand: false,
@@ -804,6 +915,70 @@ function LCReceive({
             });
         }
         setShowStockForm(true);
+    };
+
+    const handleStatusUpdate = async (record, newStatus) => {
+        try {
+            setIsSubmitting(true);
+            const ids = record.allIds || record.ids || (record._id ? [record._id] : []);
+
+            const promises = ids.map(id => {
+                const originalRecord = stockRecords.find(r => r._id === id);
+                if (!originalRecord) return null;
+
+                const { _id, createdAt, __v, ...rest } = originalRecord;
+                const actionBy = currentUser ? (currentUser.name || currentUser.username || '') : '';
+                const updatedData = {
+                    ...rest,
+                    status: newStatus,
+                    ...(newStatus === 'In Stock' ? { acceptedBy: actionBy } : {}),
+                    ...(newStatus === 'Rejected' ? { rejectedBy: actionBy } : {}),
+                };
+                return axios.put(`${API_BASE_URL}/api/stock/${id}`, { data: encryptData(updatedData) });
+            }).filter(Boolean);
+
+            await Promise.all(promises);
+
+            // Send notification to the original requester
+            if (addNotification && record.entries && record.entries[0]) {
+                const firstEntry = record.entries[0];
+                const requesterUsername = firstEntry.requestedByUsername;
+
+                if (requesterUsername) {
+                    const now = new Date();
+                    const day = String(now.getDate()).padStart(2, '0');
+                    const month = String(now.getMonth() + 1).padStart(2, '0');
+                    const year = now.getFullYear();
+                    const dateStr = `${day}/${month}/${year}`;
+                    const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                    const adminName = currentUser?.name || currentUser?.username || 'Admin';
+
+                    const statusLabel = newStatus === 'In Stock' ? 'Accepted' : newStatus;
+                    const actionLabel = newStatus === 'In Stock' ? 'accepted' : 'rejected';
+                    const requesterName = firstEntry.requestedBy || firstEntry.requestedByUsername || 'an employee';
+
+                    // Notify Admins, Managers, and the Original Requester
+                    const targetRoles = ['admin', 'incharge', 'sales manager'];
+                    const targetUsers = [requesterUsername];
+                    if (!targetUsers.includes('admin')) targetUsers.push('admin');
+
+                    await addNotification(
+                        `LC Receive ${statusLabel}`,
+                        `${dateStr} | ${timeStr} | ${adminName} has ${actionLabel} the LC receive entry (${firstEntry.lcNo}) requested by ${requesterName}`,
+                        targetRoles,
+                        targetUsers
+                    );
+                }
+            }
+
+            if (fetchStockRecords) fetchStockRecords();
+            fetchWarehouses();
+        } catch (error) {
+            console.error(`Error updating status to ${newStatus}:`, error);
+            alert(`Failed to update status to ${newStatus}`);
+        } finally {
+            setIsSubmitting(false);
+        }
     };
 
     const getFilteredProducts = (input) => {
@@ -831,7 +1006,9 @@ function LCReceive({
 
         // 2. Get brands from existing stock records for this product only
         stockRecords.forEach(r => {
-            if (r.productName === productName && r.brand) allBrands.add(r.brand);
+            if (r.productName === productName && r.brand && (r.status || '').toLowerCase() !== 'requested') {
+                allBrands.add(r.brand);
+            }
         });
 
         const brandsArr = Array.from(allBrands).sort();
@@ -999,18 +1176,336 @@ function LCReceive({
         return options.filter(opt => opt.toLowerCase().includes(search.toLowerCase()));
     };
 
-    const toggleSelection = (id) => {
-        const newSelection = new Set(selectedItems);
-        if (newSelection.has(id)) {
-            newSelection.delete(id);
-        } else {
-            newSelection.add(id);
-        }
-        setSelectedItems(newSelection);
-        if (newSelection.size === 0) {
-            setIsSelectionMode(false);
-        }
+    const ViewDetailsModal = ({ data, onClose }) => {
+        if (!data) return null;
+
+        const uniqueEntriesMap = data.entries.reduce((acc, item) => {
+            const key = `${item.productName}-${item.brand}-${item.truckNo}-${item.unit}`;
+            if (!acc[key]) {
+                acc[key] = { ...item, quantity: 0, sweepedQuantity: 0, inHouseQuantity: 0 };
+            }
+            acc[key].quantity += (parseFloat(item.quantity) || 0);
+            acc[key].sweepedQuantity += (parseFloat(item.sweepedQuantity) || 0);
+            acc[key].inHouseQuantity += (parseFloat(item.inHouseQuantity) || 0);
+            return acc;
+        }, {});
+        const uniqueEntries = Object.values(uniqueEntriesMap);
+
+        return (
+            <div className="fixed inset-0 z-[2000] flex items-center justify-center p-4">
+                <div className="absolute inset-0 bg-gray-900/60 backdrop-blur-sm" onClick={onClose}></div>
+                <div className="relative bg-white border border-gray-100 rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden animate-in zoom-in duration-300">
+                    <div className="flex items-center justify-between px-6 py-4 border-b border-gray-50 bg-gray-50/50">
+                        <div>
+                            <h3 className="text-lg font-bold text-gray-900">LC Receive Details</h3>
+                            <p className="text-xs text-gray-500 font-medium">Grouped Record • {formatDate(data.date)}</p>
+                        </div>
+                        <button onClick={onClose} className="p-2 text-gray-400 hover:text-gray-600 rounded-full hover:bg-white transition-all">
+                            <XIcon className="w-5 h-5" />
+                        </button>
+                    </div>
+
+                    <div className="overflow-y-auto max-h-[70vh] p-6 space-y-6">
+                        {/* Core Info */}
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                            <div className="space-y-1">
+                                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">LC No</span>
+                                <p className="text-sm font-bold text-gray-800">{data.lcNo || 'N/A'}</p>
+                            </div>
+                            <div className="space-y-1">
+                                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Port</span>
+                                <p className="text-sm font-bold text-blue-600">{data.port || 'N/A'}</p>
+                            </div>
+                            <div className="space-y-1">
+                                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Importer</span>
+                                <p className="text-sm font-medium text-gray-700 truncate">{data.importer || 'N/A'}</p>
+                            </div>
+                            <div className="space-y-1">
+                                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Exporter</span>
+                                <p className="text-sm font-medium text-gray-700 truncate">{data.exporter || 'N/A'}</p>
+                            </div>
+                        </div>
+
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 pt-4 border-t border-gray-50">
+                            <div className="space-y-1">
+                                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">IND CNF</span>
+                                <p className="text-sm text-gray-700 font-medium">{data.indianCnF || '-'}</p>
+                            </div>
+                            <div className="space-y-1">
+                                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">IND Cost</span>
+                                <p className="text-sm text-gray-700 font-bold">{!isNaN(parseFloat(data.indCnFCost)) ? `৳${parseFloat(data.indCnFCost).toLocaleString()}` : '-'}</p>
+                            </div>
+                            <div className="space-y-1">
+                                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">BD CNF</span>
+                                <p className="text-sm text-gray-700 font-medium">{data.bdCnF || '-'}</p>
+                            </div>
+                            <div className="space-y-1">
+                                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">BD Cost</span>
+                                <p className="text-sm text-gray-700 font-bold">{!isNaN(parseFloat(data.bdCnFCost)) ? `৳${parseFloat(data.bdCnFCost).toLocaleString()}` : '-'}</p>
+                            </div>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-4 pt-4 border-t border-gray-50">
+                            <div className="space-y-1">
+                                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Bill Of Entry</span>
+                                <p className="text-sm text-gray-700 font-bold">{data.billOfEntry || '-'}</p>
+                            </div>
+                            <div className="space-y-1">
+                                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Total Trucks</span>
+                                <p className="text-sm text-amber-600 font-black">{data.totalLcTruck}</p>
+                            </div>
+                        </div>
+
+                        {/* Product Table */}
+                        <div className="space-y-3 pt-4 border-t border-gray-50">
+                            <h4 className="text-xs font-black text-gray-400 uppercase tracking-widest flex items-center gap-2">
+                                <BoxIcon className="w-3.5 h-3.5" />
+                                Product Summary
+                            </h4>
+
+                            {/* Desktop table — hidden on mobile */}
+                            <div className="hidden sm:block bg-gray-50 rounded-xl border border-gray-100 overflow-hidden">
+                                <table className="w-full text-left border-collapse">
+                                    <thead>
+                                        <tr className="bg-gray-100/50">
+                                            <th className="px-4 py-2 text-[9px] font-black text-gray-500 uppercase tracking-tighter">Product</th>
+                                            <th className="px-4 py-2 text-[9px] font-black text-gray-500 uppercase tracking-tighter">Brand</th>
+                                            <th className="px-4 py-2 text-[9px] font-black text-gray-500 uppercase tracking-tighter text-center">Truck</th>
+                                            <th className="px-4 py-2 text-[9px] font-black text-gray-500 uppercase tracking-tighter text-right">Arrival Qty</th>
+                                            <th className="px-4 py-2 text-[9px] font-black text-gray-500 uppercase tracking-tighter text-right text-red-500">Short</th>
+                                            <th className="px-4 py-2 text-[9px] font-black text-gray-500 uppercase tracking-tighter text-right text-blue-600">In Qty</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-gray-100">
+                                        {(() => {
+                                            // Build rowspan rows: product span + truck span within each product group
+                                            const rows = [];
+                                            let i = 0;
+                                            while (i < uniqueEntries.length) {
+                                                const product = uniqueEntries[i].productName;
+                                                // Count how many consecutive rows share this product
+                                                let productSpan = 1;
+                                                while (i + productSpan < uniqueEntries.length && uniqueEntries[i + productSpan].productName === product) productSpan++;
+
+                                                // Within the product group, sub-group by truckNo
+                                                let j = 0;
+                                                while (j < productSpan) {
+                                                    const truck = uniqueEntries[i + j].truckNo;
+                                                    let truckSpan = 1;
+                                                    while (j + truckSpan < productSpan && uniqueEntries[i + j + truckSpan].truckNo === truck) truckSpan++;
+                                                    for (let k = 0; k < truckSpan; k++) {
+                                                        rows.push({
+                                                            item: uniqueEntries[i + j + k],
+                                                            isProductFirst: j === 0 && k === 0,
+                                                            productSpan,
+                                                            isTruckFirst: k === 0,
+                                                            truckSpan,
+                                                        });
+                                                    }
+                                                    j += truckSpan;
+                                                }
+                                                i += productSpan;
+                                            }
+                                            return rows.map(({ item, isProductFirst, productSpan, isTruckFirst, truckSpan }, idx) => (
+                                                <tr key={idx} className="hover:bg-white transition-colors">
+                                                    {isProductFirst && (
+                                                        <td rowSpan={productSpan} className="px-4 py-2 text-xs font-bold text-gray-800 align-middle border-r border-gray-100">
+                                                            {item.productName}
+                                                        </td>
+                                                    )}
+                                                    <td className="px-4 py-2 text-xs text-purple-700 font-semibold">{item.brand || '-'}</td>
+                                                    {isTruckFirst && (
+                                                        <td rowSpan={truckSpan} className="px-4 py-2 text-xs text-gray-600 text-center font-medium align-middle border-l border-gray-100">
+                                                            {item.truckNo}
+                                                        </td>
+                                                    )}
+                                                    <td className="px-4 py-2 text-xs text-gray-900 text-right font-bold">{Math.round(item.quantity).toLocaleString()} kg</td>
+                                                    <td className="px-4 py-2 text-xs text-red-500 text-right font-bold">{Math.round(item.sweepedQuantity).toLocaleString()} kg</td>
+                                                    <td className="px-4 py-2 text-xs text-blue-600 text-right font-black">{Math.round(item.inHouseQuantity).toLocaleString()} kg</td>
+                                                </tr>
+                                            ));
+                                        })()}
+                                    </tbody>
+                                    <tfoot>
+                                        <tr className="bg-white/80 border-t border-gray-200">
+                                            <td colSpan="3" className="px-4 py-2 text-[10px] font-black text-gray-400 uppercase text-right">Grand Totals</td>
+                                            <td className="px-4 py-2 text-xs text-gray-900 text-right font-black">{Math.round(data.totalQuantity).toLocaleString()} kg</td>
+                                            <td className="px-4 py-2 text-xs text-red-600 text-right font-black">{Math.round(data.entries.reduce((sum, e) => sum + (parseFloat(e.sweepedQuantity) || 0), 0)).toLocaleString()} kg</td>
+                                            <td className="px-4 py-2 text-xs text-blue-700 text-right font-black">{Math.round(data.entries.reduce((sum, e) => sum + (parseFloat(e.inHouseQuantity) || 0), 0)).toLocaleString()} kg</td>
+                                        </tr>
+                                    </tfoot>
+                                </table>
+                            </div>
+
+                            {/* Mobile card layout — hidden on desktop */}
+                            <div className="block sm:hidden space-y-3">
+                                {(() => {
+                                    // Group by product, then sub-group by truckNo within each product
+                                    const groups = [];
+                                    let i = 0;
+                                    while (i < uniqueEntries.length) {
+                                        const product = uniqueEntries[i].productName;
+                                        const truckGroups = [];
+                                        while (i < uniqueEntries.length && uniqueEntries[i].productName === product) {
+                                            const truck = uniqueEntries[i].truckNo;
+                                            const brands = [];
+                                            while (i < uniqueEntries.length && uniqueEntries[i].productName === product && uniqueEntries[i].truckNo === truck) {
+                                                brands.push(uniqueEntries[i]);
+                                                i++;
+                                            }
+                                            truckGroups.push({ truck, brands });
+                                        }
+                                        groups.push({ product, truckGroups });
+                                    }
+                                    const multipleTrucks = (group) => group.truckGroups.length > 1;
+                                    return groups.map((group, gIdx) => (
+                                        <div key={gIdx} className="bg-gray-50 rounded-xl border border-gray-100 overflow-hidden">
+                                            {/* Product name header */}
+                                            <div className="px-3 py-2 bg-gray-100/70 border-b border-gray-200 flex items-center justify-between">
+                                                <p className="text-xs font-black text-gray-800">{group.product}</p>
+                                                {/* Show single truck badge in header if only one truck */}
+                                                {!multipleTrucks(group) && group.truckGroups[0]?.truck && (
+                                                    <span className="text-[10px] font-bold text-gray-500 bg-gray-200 rounded-md px-2 py-0.5">Truck {group.truckGroups[0].truck}</span>
+                                                )}
+                                            </div>
+                                            {/* Truck sub-groups */}
+                                            <div className="divide-y divide-gray-200">
+                                                {group.truckGroups.map((tg, tIdx) => (
+                                                    <div key={tIdx}>
+                                                        {/* Sub-truck header only if multiple trucks */}
+                                                        {multipleTrucks(group) && tg.truck && (
+                                                            <div className="px-3 py-1.5 bg-gray-50 border-b border-gray-100 flex items-center gap-2">
+                                                                <span className="text-[10px] font-bold text-gray-500 bg-gray-200 rounded-md px-2 py-0.5">Truck {tg.truck}</span>
+                                                            </div>
+                                                        )}
+                                                        {/* Brand rows */}
+                                                        <div className="divide-y divide-gray-100">
+                                                            {tg.brands.map((item, idx) => (
+                                                                <div key={idx} className="p-3 space-y-2">
+                                                                    {item.brand && <p className="text-xs text-purple-700 font-semibold">{item.brand}</p>}
+                                                                    <div className="grid grid-cols-3 gap-2 pt-1 border-t border-gray-100">
+                                                                        <div className="text-center">
+                                                                            <p className="text-[9px] font-black text-gray-400 uppercase tracking-wider mb-0.5">Arrival</p>
+                                                                            <p className="text-xs font-bold text-gray-800">{Math.round(item.quantity).toLocaleString()} kg</p>
+                                                                        </div>
+                                                                        <div className="text-center">
+                                                                            <p className="text-[9px] font-black text-red-400 uppercase tracking-wider mb-0.5">Short</p>
+                                                                            <p className="text-xs font-bold text-red-500">{Math.round(item.sweepedQuantity).toLocaleString()} kg</p>
+                                                                        </div>
+                                                                        <div className="text-center">
+                                                                            <p className="text-[9px] font-black text-blue-500 uppercase tracking-wider mb-0.5">In Qty</p>
+                                                                            <p className="text-xs font-black text-blue-600">{Math.round(item.inHouseQuantity).toLocaleString()} kg</p>
+                                                                        </div>
+                                                                    </div>
+                                                                </div>
+                                                            ))}
+                                                        </div>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    ));
+                                })()}
+                                {/* Mobile Grand Totals */}
+                                <div className="bg-white rounded-xl border border-gray-200 p-3">
+                                    <p className="text-[9px] font-black text-gray-400 uppercase tracking-wider mb-2">Grand Totals</p>
+                                    <div className="grid grid-cols-3 gap-2">
+                                        <div className="text-center">
+                                            <p className="text-[9px] font-black text-gray-400 uppercase tracking-wider mb-0.5">Arrival</p>
+                                            <p className="text-xs font-black text-gray-900">{Math.round(data.totalQuantity).toLocaleString()} kg</p>
+                                        </div>
+                                        <div className="text-center">
+                                            <p className="text-[9px] font-black text-red-400 uppercase tracking-wider mb-0.5">Short</p>
+                                            <p className="text-xs font-black text-red-600">{Math.round(data.entries.reduce((sum, e) => sum + (parseFloat(e.sweepedQuantity) || 0), 0)).toLocaleString()} kg</p>
+                                        </div>
+                                        <div className="text-center">
+                                            <p className="text-[9px] font-black text-blue-500 uppercase tracking-wider mb-0.5">In Qty</p>
+                                            <p className="text-xs font-black text-blue-700">{Math.round(data.entries.reduce((sum, e) => sum + (parseFloat(e.inHouseQuantity) || 0), 0)).toLocaleString()} kg</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Requested By / Accepted By / Rejected By */}
+                        {(data.entries[0]?.requestedBy || data.entries[0]?.acceptedBy || data.entries[0]?.rejectedBy) && (
+                            <div className="flex flex-wrap gap-3 pt-4 border-t border-gray-50">
+                                {data.entries[0]?.requestedBy && (
+                                    <div className="space-y-1">
+                                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Requested By</span>
+                                        <p className="text-sm font-semibold text-gray-700">{data.entries[0].requestedBy}</p>
+                                    </div>
+                                )}
+                                {data.entries[0]?.acceptedBy && (
+                                    <div className="space-y-1">
+                                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Accepted By</span>
+                                        <p className="text-sm font-semibold text-emerald-600">{data.entries[0].acceptedBy}</p>
+                                    </div>
+                                )}
+                                {data.entries[0]?.rejectedBy && (
+                                    <div className="space-y-1">
+                                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Rejected By</span>
+                                        <p className="text-sm font-semibold text-red-500">{data.entries[0].rejectedBy}</p>
+                                    </div>
+                                )}
+                            </div>
+                        )}
+
+                        {/* Status/Warehouse Info */}
+                        <div className="flex flex-wrap gap-3 pt-4 border-t border-gray-50">
+                            <div className="px-3 py-1.5 bg-blue-50 text-blue-700 rounded-lg border border-blue-100 flex items-center gap-2">
+                                <span className="w-1.5 h-1.5 rounded-full bg-blue-500"></span>
+                                <span className="text-[10px] font-bold uppercase tracking-wider">Status: {data.entries[0]?.status || 'In Stock'}</span>
+                            </div>
+                            <div className="px-3 py-1.5 bg-gray-50 text-gray-700 rounded-lg border border-gray-100 flex items-center gap-2">
+                                <span className="w-1.5 h-1.5 rounded-full bg-gray-400"></span>
+                                <span className="text-[10px] font-bold uppercase tracking-wider">Warehouse: {data.entries[0]?.warehouse || 'N/A'}</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="p-4 border-t border-gray-50 bg-gray-50/30 flex justify-end">
+                        <button
+                            onClick={onClose}
+                            className="px-6 py-2 bg-gray-900 text-white text-sm font-bold rounded-xl shadow-lg hover:bg-black transition-all active:scale-95"
+                        >
+                            Done
+                        </button>
+                    </div>
+                </div>
+            </div>
+        );
     };
+
+    const filteredRecords = useMemo(() => {
+        if (isRequestedOnly) {
+            return lcReceiveRecords.filter(item => (item.status || '').toLowerCase().includes('requested'));
+        }
+        return lcReceiveRecords.filter(item => !(item.status || '').toLowerCase().includes('requested'));
+    }, [lcReceiveRecords, isRequestedOnly]);
+
+    const requestedCount = useMemo(() => {
+        const requested = lcReceiveRecords.filter(item => (item.status || '').toLowerCase().includes('requested'));
+        return new Set(requested.map(item => `${item.date || ''}-${item.lcNo || ''}-${item.port || ''}-${item.indianCnF || ''}-${item.bdCnF || ''}`)).size;
+    }, [lcReceiveRecords]);
+
+    const memoizedSummary = useMemo(() => {
+        const totalPackets = filteredRecords.reduce((sum, item) => sum + (parseFloat(item.packet) || 0), 0);
+        const totalQuantity = filteredRecords.reduce((sum, item) => sum + (parseFloat(item.quantity) || 0), 0);
+
+        const uniqueTrucksMap = filteredRecords.reduce((acc, item) => {
+            const key = `${item.date}-${item.lcNo}-${item.productName}-${item.truckNo}`;
+            if (!acc[key]) {
+                acc[key] = parseFloat(item.truckNo) || 0;
+            }
+            return acc;
+        }, {});
+        const totalTrucks = Object.values(uniqueTrucksMap).reduce((sum, val) => sum + val, 0);
+
+        const unit = filteredRecords[0]?.unit || 'kg';
+
+        return { totalPackets, totalQuantity, totalTrucks, unit };
+    }, [filteredRecords]);
 
     return (
         <div className="space-y-6">
@@ -1021,17 +1516,32 @@ function LCReceive({
                     </div>
 
                     {/* Center Aligned Search Bar */}
-                    <div className="flex-1 w-full max-w-none md:max-w-md mx-auto relative group">
-                        <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
-                            <SearchIcon className="h-4 w-4 text-gray-400 group-focus-within:text-blue-500 transition-colors" />
+                    <div className="flex-1 w-full max-w-none md:max-w-md mx-auto flex flex-col items-center gap-2">
+                        <div className="w-full relative group">
+                            <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
+                                <SearchIcon className="h-4 w-4 text-gray-400 group-focus-within:text-blue-500 transition-colors" />
+                            </div>
+                            <input
+                                type="text"
+                                placeholder="Search by LC, Port, Importer, Truck..."
+                                value={lcSearchQuery}
+                                onChange={(e) => setLcSearchQuery(e.target.value)}
+                                className="block w-full pl-10 pr-4 py-2 bg-white/50 border border-gray-200 rounded-xl text-[13px] placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 focus:bg-white transition-all outline-none"
+                            />
                         </div>
-                        <input
-                            type="text"
-                            placeholder="Search by LC, Port, Importer, Truck..."
-                            value={lcSearchQuery}
-                            onChange={(e) => setLcSearchQuery(e.target.value)}
-                            className="block w-full pl-10 pr-4 py-2 bg-white/50 border border-gray-200 rounded-xl text-[13px] placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 focus:bg-white transition-all outline-none"
-                        />
+                        <div className="flex items-center gap-2">
+                            <button
+                                onClick={() => setIsRequestedOnly(!isRequestedOnly)}
+                                className={`relative px-4 py-1.5 rounded-full text-xs font-bold transition-all border ${isRequestedOnly ? 'bg-blue-600 border-blue-600 text-white shadow-md' : 'bg-white border-gray-200 text-gray-600 hover:border-blue-300 hover:text-blue-600'}`}
+                            >
+                                Requested
+                                {requestedCount > 0 && (
+                                    <span className="absolute -top-1.5 -right-1.5 flex h-4 min-w-[16px] items-center justify-center px-1 rounded-full bg-red-500 text-[10px] font-bold text-white shadow-sm animate-pulse border-2 border-white">
+                                        {requestedCount}
+                                    </span>
+                                )}
+                            </button>
+                        </div>
                     </div>
 
                     <div className="w-full md:w-auto flex items-center gap-2">
@@ -1398,16 +1908,16 @@ function LCReceive({
                     <div className="flex flex-wrap md:flex-nowrap gap-2 md:gap-4">
                         <div className="order-1 flex-1 min-w-[calc(50%-4px)] md:min-w-0 bg-white border border-gray-100 p-2.5 md:p-4 rounded-xl shadow-sm transition-all hover:shadow-md">
                             <div className="text-[9px] md:text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-0.5 md:mb-1">Total Packet</div>
-                            <div className="text-base md:text-xl font-bold text-gray-900">{lcReceiveSummary.totalPackets}</div>
+                            <div className="text-base md:text-xl font-bold text-gray-900">{memoizedSummary.totalPackets}</div>
                         </div>
                         <div className="order-2 flex-1 min-w-[calc(50%-4px)] md:min-w-0 bg-emerald-50/50 border border-emerald-100 p-2.5 md:p-4 rounded-xl shadow-sm transition-all hover:shadow-md">
                             <div className="text-[9px] md:text-[11px] font-bold text-emerald-600 uppercase tracking-wider mb-0.5 md:mb-1">Total Qty</div>
-                            <div className="text-base md:text-xl font-bold text-emerald-700 truncate">{Math.round(lcReceiveSummary.totalQuantity)} {lcReceiveSummary.unit}</div>
+                            <div className="text-base md:text-xl font-bold text-emerald-700 truncate">{Math.round(memoizedSummary.totalQuantity)} {memoizedSummary.unit}</div>
                         </div>
                         <div className="order-3 w-full md:w-auto md:flex-1 bg-blue-50/50 border border-blue-100 p-2.5 md:p-4 rounded-xl shadow-sm transition-all hover:shadow-md">
                             <div className="text-[9px] md:text-[11px] font-bold text-blue-600 uppercase tracking-wider mb-0.5 md:mb-1">Truck</div>
                             <div className="text-base md:text-xl font-bold text-blue-700">
-                                {lcReceiveSummary.totalTrucks}
+                                {memoizedSummary.totalTrucks}
                             </div>
                         </div>
                     </div>
@@ -2323,7 +2833,7 @@ function LCReceive({
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-gray-100">
-                                    {lcReceiveRecords.length === 0 ? (
+                                    {filteredRecords.length === 0 ? (
                                         <tr>
                                             <td colSpan="14" className="px-6 py-12 text-center text-gray-400 bg-white/50">
                                                 <BoxIcon className="w-12 h-12 mx-auto mb-3 opacity-20" />
@@ -2337,7 +2847,7 @@ function LCReceive({
                                         // IMPORTANT: The original code Groups by Date+LC+Port.
                                         // I will simplify for now to render row-by-row or recreate the reduce logic:
 
-                                        Object.values(lcReceiveRecords.reduce((acc, item) => {
+                                        Object.values(filteredRecords.reduce((acc, item) => {
                                             // Lines 2753-2818 in App.jsx
                                             const groupedKey = `${item.date}-${item.lcNo}-${item.port}-${item.indianCnF}-${item.bdCnF}-${item.importer}-${item.exporter}`;
 
@@ -2442,17 +2952,53 @@ function LCReceive({
                                                     </td>
                                                     <td className="px-6 py-4 text-right">
                                                         <div className="flex items-center justify-end space-x-3">
-                                                            <button onClick={(e) => { e.stopPropagation(); handleEditInternal('stock', entry); }} className="text-gray-400 hover:text-blue-600 transition-colors">
-                                                                <EditIcon className="w-5 h-5" />
+                                                            <button onClick={(e) => { e.stopPropagation(); setViewData(entry); }} className="text-gray-400 hover:text-blue-600 transition-colors" title="View Details">
+                                                                <EyeIcon className="w-5 h-5" />
                                                             </button>
-                                                            <button onClick={(e) => {
-                                                                e.stopPropagation();
-                                                                const ids = entry.allIds || entry.ids;
-                                                                setSelectedItems(new Set(ids));
-                                                                onDelete('stock', null, true, entry);
-                                                            }} className="text-gray-400 hover:text-red-600 transition-colors">
-                                                                <TrashIcon className="w-5 h-5" />
-                                                            </button>
+
+                                                            {entry.entries[0]?.status === 'Requested' ? (
+                                                                <>
+                                                                    <button onClick={(e) => { e.stopPropagation(); handleEditInternal('stock', entry); }} className="text-gray-400 hover:text-blue-600 transition-colors" title="Edit">
+                                                                        <EditIcon className="w-5 h-5" />
+                                                                    </button>
+                                                                    {canApprove && (
+                                                                        <>
+                                                                            <button
+                                                                                onClick={(e) => { e.stopPropagation(); handleStatusUpdate(entry, 'In Stock'); }}
+                                                                                className="text-gray-400 hover:text-emerald-600 transition-colors"
+                                                                                title="Accept"
+                                                                            >
+                                                                                <CheckIcon className="w-5 h-5" />
+                                                                            </button>
+                                                                            <button
+                                                                                onClick={(e) => { e.stopPropagation(); handleStatusUpdate(entry, 'Rejected'); }}
+                                                                                className="text-gray-400 hover:text-red-600 transition-colors"
+                                                                                title="Reject"
+                                                                            >
+                                                                                <XIcon className="w-5 h-5" />
+                                                                            </button>
+                                                                        </>
+                                                                    )}
+                                                                </>
+                                                            ) : (
+                                                                <>
+                                                                    {canEditDelete && (
+                                                                        <>
+                                                                            <button onClick={(e) => { e.stopPropagation(); handleEditInternal('stock', entry); }} className="text-gray-400 hover:text-blue-600 transition-colors" title="Edit">
+                                                                                <EditIcon className="w-5 h-5" />
+                                                                            </button>
+                                                                            <button onClick={(e) => {
+                                                                                e.stopPropagation();
+                                                                                const ids = entry.allIds || entry.ids;
+                                                                                setSelectedItems(new Set(ids));
+                                                                                onDelete('stock', null, true, entry);
+                                                                            }} className="text-gray-400 hover:text-red-600 transition-colors" title="Delete">
+                                                                                <TrashIcon className="w-5 h-5" />
+                                                                            </button>
+                                                                        </>
+                                                                    )}
+                                                                </>
+                                                            )}
                                                         </div>
                                                     </td>
                                                 </tr>
@@ -2465,13 +3011,13 @@ function LCReceive({
 
                         {/* Mobile List View */}
                         <div className="md:hidden divide-y divide-gray-100">
-                            {lcReceiveRecords.length === 0 ? (
+                            {filteredRecords.length === 0 ? (
                                 <div className="px-6 py-12 text-center text-gray-400 bg-white/50">
                                     <BoxIcon className="w-12 h-12 mx-auto mb-3 opacity-20" />
                                     <p>No LC receive records found</p>
                                 </div>
                             ) : (
-                                Object.values(lcReceiveRecords.reduce((acc, item) => {
+                                Object.values(filteredRecords.reduce((acc, item) => {
                                     const dateStr = formatDate(item.date);
                                     const groupedKey = `${dateStr}-${item.lcNo}-${item.port}-${item.importer}-${item.billOfEntry}-${item.indianCnF}-${item.bdCnF}`;
 
@@ -2552,22 +3098,68 @@ function LCReceive({
                                                     {isExpanded && (
                                                         <>
                                                             <button
-                                                                onClick={(e) => { e.stopPropagation(); handleEditInternal('stock', entry); }}
+                                                                onClick={(e) => { e.stopPropagation(); setViewData(entry); }}
                                                                 className="p-2 text-blue-600 bg-blue-50/50 rounded-lg transition-colors hover:bg-blue-100"
+                                                                title="View Details"
                                                             >
-                                                                <EditIcon className="w-4 h-4" />
+                                                                <EyeIcon className="w-4 h-4" />
                                                             </button>
-                                                            <button
-                                                                onClick={(e) => {
-                                                                    e.stopPropagation();
-                                                                    const ids = entry.allIds || entry.entries.map(e => e._id);
-                                                                    setSelectedItems(new Set(ids));
-                                                                    onDelete('stock', null, true, entry);
-                                                                }}
-                                                                className="p-2 text-red-600 bg-red-50/50 rounded-lg transition-colors hover:bg-red-100"
-                                                            >
-                                                                <TrashIcon className="w-4 h-4" />
-                                                            </button>
+
+                                                            {entry.entries[0]?.status === 'Requested' ? (
+                                                                <>
+                                                                    <button
+                                                                        onClick={(e) => { e.stopPropagation(); handleEditInternal('stock', entry); }}
+                                                                        className="p-2 text-blue-600 bg-blue-50/50 rounded-lg transition-colors hover:bg-blue-100"
+                                                                        title="Edit"
+                                                                    >
+                                                                        <EditIcon className="w-4 h-4" />
+                                                                    </button>
+                                                                    {canApprove && (
+                                                                        <>
+                                                                            <button
+                                                                                onClick={(e) => { e.stopPropagation(); handleStatusUpdate(entry, 'In Stock'); }}
+                                                                                className="p-2 text-emerald-600 bg-emerald-50/50 rounded-lg transition-colors hover:bg-emerald-100"
+                                                                                title="Accept"
+                                                                            >
+                                                                                <CheckIcon className="w-4 h-4" />
+                                                                            </button>
+                                                                            <button
+                                                                                onClick={(e) => { e.stopPropagation(); handleStatusUpdate(entry, 'Rejected'); }}
+                                                                                className="p-2 text-red-600 bg-red-50/50 rounded-lg transition-colors hover:bg-red-100"
+                                                                                title="Reject"
+                                                                            >
+                                                                                <XIcon className="w-4 h-4" />
+                                                                            </button>
+                                                                        </>
+                                                                    )}
+                                                                </>
+                                                            ) : (
+                                                                <>
+                                                                    {canEditDelete && (
+                                                                        <>
+                                                                            <button
+                                                                                onClick={(e) => { e.stopPropagation(); handleEditInternal('stock', entry); }}
+                                                                                className="p-2 text-blue-600 bg-blue-50/50 rounded-lg transition-colors hover:bg-blue-100"
+                                                                                title="Edit"
+                                                                            >
+                                                                                <EditIcon className="w-4 h-4" />
+                                                                            </button>
+                                                                            <button
+                                                                                onClick={(e) => {
+                                                                                    e.stopPropagation();
+                                                                                    const ids = entry.allIds || entry.entries.map(e => e._id);
+                                                                                    setSelectedItems(new Set(ids));
+                                                                                    onDelete('stock', null, true, entry);
+                                                                                }}
+                                                                                className="p-2 text-red-600 bg-red-50/50 rounded-lg transition-colors hover:bg-red-100"
+                                                                                title="Delete"
+                                                                            >
+                                                                                <TrashIcon className="w-4 h-4" />
+                                                                            </button>
+                                                                        </>
+                                                                    )}
+                                                                </>
+                                                            )}
                                                         </>
                                                     )}
                                                     <div className={`p-1 transition-transform duration-300 ${isExpanded ? 'rotate-180' : ''}`}>
@@ -2642,6 +3234,7 @@ function LCReceive({
                     </div>
                 )
             }
+            {viewData && <ViewDetailsModal data={viewData} onClose={() => setViewData(null)} />}
         </div >
     );
 }

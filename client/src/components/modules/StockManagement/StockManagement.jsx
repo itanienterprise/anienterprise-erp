@@ -79,9 +79,9 @@ const StockManagement = ({
     // Dropdown & Selection State
     const [activeDropdown, setActiveDropdown] = useState(null);
     const [highlightedIndex, setHighlightedIndex] = useState(-1);
-    const [filterDropdownOpen, setFilterDropdownOpen] = useState({ lcNo: false, port: false, importer: false, brand: false, product: false, category: false });
+    const [filterDropdownOpen, setFilterDropdownOpen] = useState({ lcNo: false, port: false, importer: false, brand: false, productName: false, category: false });
     const [filterSearchInputs, setFilterSearchInputs] = useState({ lcNoSearch: '', portSearch: '', importerSearch: '', brandSearch: '', productSearch: '', categorySearch: '' });
-    const initialFilterDropdownState = { lcNo: false, port: false, importer: false, brand: false, product: false, productName: false, category: false };
+    const initialFilterDropdownState = { lcNo: false, port: false, importer: false, brand: false, productName: false, category: false };
 
     // Table Selection & Sorting
     const [selectedItems, setSelectedItems] = useState(new Set());
@@ -1203,7 +1203,7 @@ const StockManagement = ({
                 if (filterDropdownOpen.lcNo && stockLcNoFilterRef.current && !stockLcNoFilterRef.current.contains(event.target)) setFilterDropdownOpen(prev => ({ ...prev, lcNo: false }));
                 if (filterDropdownOpen.port && stockPortFilterRef.current && !stockPortFilterRef.current.contains(event.target)) setFilterDropdownOpen(prev => ({ ...prev, port: false }));
                 if (filterDropdownOpen.importer && stockImporterFilterRef.current && !stockImporterFilterRef.current.contains(event.target)) setFilterDropdownOpen(prev => ({ ...prev, importer: false }));
-                if (filterDropdownOpen.product && stockProductFilterRef.current && !stockProductFilterRef.current.contains(event.target)) setFilterDropdownOpen(prev => ({ ...prev, product: false }));
+                if (filterDropdownOpen.productName && stockProductFilterRef.current && !stockProductFilterRef.current.contains(event.target)) setFilterDropdownOpen(prev => ({ ...prev, productName: false }));
                 if (filterDropdownOpen.brand && stockBrandFilterRef.current && !stockBrandFilterRef.current.contains(event.target)) setFilterDropdownOpen(prev => ({ ...prev, brand: false }));
             }
 
@@ -1987,7 +1987,7 @@ const StockManagement = ({
                                                         })()}
                                                     </div>
 
-                                                    <div className="space-y-1.5 relative">
+                                                    <div className="space-y-1.5 relative" ref={stockProductFilterRef}>
                                                         <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider pl-1">Product Name</label>
                                                         <div className="relative">
                                                             <input
@@ -1999,8 +1999,7 @@ const StockManagement = ({
                                                                     setStockFilters({ ...stockFilters, productName: val });
                                                                     setFilterDropdownOpen({ ...initialFilterDropdownState, productName: true });
                                                                 }}
-                                                                onClick={(e) => {
-                                                                    e.stopPropagation();
+                                                                onClick={() => {
                                                                     setFilterDropdownOpen({ ...initialFilterDropdownState, productName: !filterDropdownOpen.productName });
                                                                 }}
                                                                 placeholder="Search Product..."
@@ -2009,8 +2008,7 @@ const StockManagement = ({
                                                             <div className="absolute right-3 top-1/2 -translate-y-1/2 flex gap-1">
                                                                 {stockFilters.productName ? (
                                                                     <button
-                                                                        onClick={(e) => {
-                                                                            e.stopPropagation();
+                                                                        onClick={() => {
                                                                             setStockFilters({ ...stockFilters, productName: '' });
                                                                             setFilterSearchInputs({ ...filterSearchInputs, productSearch: '' });
                                                                             setFilterDropdownOpen(initialFilterDropdownState);
@@ -2045,7 +2043,7 @@ const StockManagement = ({
                                                         })()}
                                                     </div>
 
-                                                    <div className="space-y-1.5 relative">
+                                                    <div className="space-y-1.5 relative" ref={stockBrandFilterRef}>
                                                         <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider pl-1">Brand</label>
                                                         <div className="relative">
                                                             <input
@@ -2057,8 +2055,7 @@ const StockManagement = ({
                                                                     setStockFilters({ ...stockFilters, brand: '' });
                                                                     setFilterDropdownOpen({ ...initialFilterDropdownState, brand: true });
                                                                 }}
-                                                                onClick={(e) => {
-                                                                    e.stopPropagation();
+                                                                onClick={() => {
                                                                     setFilterDropdownOpen({ ...initialFilterDropdownState, brand: !filterDropdownOpen.brand });
                                                                 }}
                                                                 placeholder="Search Brand..."
@@ -2068,8 +2065,7 @@ const StockManagement = ({
                                                             <div className="absolute right-3 top-1/2 -translate-y-1/2 flex gap-1">
                                                                 {stockFilters.brand ? (
                                                                     <button
-                                                                        onClick={(e) => {
-                                                                            e.stopPropagation();
+                                                                        onClick={() => {
                                                                             setStockFilters({ ...stockFilters, brand: '' });
                                                                             setFilterSearchInputs({ ...filterSearchInputs, brandSearch: '' });
                                                                             setFilterDropdownOpen(initialFilterDropdownState);
@@ -3048,7 +3044,7 @@ const StockManagement = ({
 
             {
                 viewRecord && (
-                    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+                    <div className="fixed inset-0 z-[2000] flex items-center justify-center p-4">
                         <div className="absolute inset-0 bg-gray-900/60 backdrop-blur-sm"></div>
                         <div className="relative bg-white/95 backdrop-blur-2xl border border-white/50 rounded-3xl shadow-2xl max-w-[95vw] w-full animate-in zoom-in duration-300 flex flex-col max-h-[90vh]">
                             {/* Modal Header */}
@@ -3112,7 +3108,7 @@ const StockManagement = ({
 
                                         {/* Floating Filter Panel */}
                                         {showHistoryFilterPanel && (
-                                            <div ref={historyFilterRef} className="fixed inset-x-4 top-24 lg:absolute lg:inset-auto lg:right-0 lg:mt-3 w-auto lg:w-[420px] bg-white/95 backdrop-blur-2xl border border-gray-100 rounded-2xl shadow-2xl z-[60] p-5 animate-in fade-in zoom-in duration-200 overflow-y-auto max-h-[70vh]">
+                                            <div ref={historyFilterRef} className="fixed inset-x-4 top-24 lg:absolute lg:inset-auto lg:right-0 lg:mt-3 w-auto lg:w-[420px] bg-white/95 backdrop-blur-2xl border border-gray-100 rounded-2xl shadow-2xl z-[60] p-5 animate-in fade-in zoom-in duration-200 overflow-y-auto lg:overflow-visible max-h-[70vh]">
                                                 <div className="flex items-center justify-between mb-4 pb-2 border-b border-gray-50">
                                                     <h4 className="font-bold text-gray-900">Advanced Filters</h4>
                                                     <button
@@ -3159,16 +3155,16 @@ const StockManagement = ({
                                                                     type="text"
                                                                     readOnly
                                                                     value={historyFilters.lcNo}
-                                                                    onClick={(e) => { e.stopPropagation(); setFilterDropdownOpen({ ...initialFilterDropdownState, lcNo: !filterDropdownOpen.lcNo }); }}
+                                                                    onClick={() => { setFilterDropdownOpen({ ...initialFilterDropdownState, lcNo: !filterDropdownOpen.lcNo }); }}
                                                                     placeholder="Select LC No..."
                                                                     className={`w-full px-4 py-2 bg-white border border-gray-100 rounded-xl text-sm focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all shadow-sm cursor-pointer ${historyFilters.lcNo ? 'text-gray-900 font-medium' : 'text-gray-500'}`}
                                                                 />
                                                                 <ChevronDownIcon className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
                                                                 {filterDropdownOpen.lcNo && (
                                                                     <div className="absolute z-[70] mt-1 w-full bg-white border border-gray-100 rounded-xl shadow-xl max-h-48 overflow-y-auto py-1">
-                                                                        <button type="button" onClick={(e) => { e.stopPropagation(); setHistoryFilters({ ...historyFilters, lcNo: '' }); setFilterDropdownOpen(initialFilterDropdownState); }} className="w-full px-4 py-2 text-left text-sm text-gray-500 hover:bg-gray-50 font-medium border-b border-gray-50">All LCs</button>
+                                                                        <button type="button" onClick={() => { setHistoryFilters({ ...historyFilters, lcNo: '' }); setFilterDropdownOpen(initialFilterDropdownState); }} className="w-full px-4 py-2 text-left text-sm text-gray-500 hover:bg-gray-50 font-medium border-b border-gray-50">All LCs</button>
                                                                         {historyOptions.lcNos.map(lc => (
-                                                                            <button key={lc} type="button" onClick={(e) => { e.stopPropagation(); setHistoryFilters({ ...historyFilters, lcNo: lc }); setFilterDropdownOpen(initialFilterDropdownState); }} className={`w-full px-4 py-2 text-left text-sm hover:bg-blue-50 transition-colors ${historyFilters.lcNo === lc ? 'bg-blue-50 text-blue-600 font-medium' : 'text-gray-600'}`}>{lc}</button>
+                                                                            <button key={lc} type="button" onClick={() => { setHistoryFilters({ ...historyFilters, lcNo: lc }); setFilterDropdownOpen(initialFilterDropdownState); }} className={`w-full px-4 py-2 text-left text-sm hover:bg-blue-50 transition-colors ${historyFilters.lcNo === lc ? 'bg-blue-50 text-blue-600 font-medium' : 'text-gray-600'}`}>{lc}</button>
                                                                         ))}
                                                                     </div>
                                                                 )}
@@ -3183,16 +3179,16 @@ const StockManagement = ({
                                                                     type="text"
                                                                     readOnly
                                                                     value={historyFilters.port}
-                                                                    onClick={(e) => { e.stopPropagation(); setFilterDropdownOpen({ ...initialFilterDropdownState, port: !filterDropdownOpen.port }); }}
+                                                                    onClick={() => { setFilterDropdownOpen({ ...initialFilterDropdownState, port: !filterDropdownOpen.port }); }}
                                                                     placeholder="Select Port..."
                                                                     className={`w-full px-4 py-2 bg-white border border-gray-100 rounded-xl text-sm focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all shadow-sm cursor-pointer ${historyFilters.port ? 'text-gray-900 font-medium' : 'text-gray-500'}`}
                                                                 />
                                                                 <ChevronDownIcon className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
                                                                 {filterDropdownOpen.port && (
                                                                     <div className="absolute z-[70] mt-1 w-full bg-white border border-gray-100 rounded-xl shadow-xl max-h-48 overflow-y-auto py-1">
-                                                                        <button type="button" onClick={(e) => { e.stopPropagation(); setHistoryFilters({ ...historyFilters, port: '' }); setFilterDropdownOpen(initialFilterDropdownState); }} className="w-full px-4 py-2 text-left text-sm text-gray-500 hover:bg-gray-50 font-medium border-b border-gray-50">All Ports</button>
+                                                                        <button type="button" onClick={() => { setHistoryFilters({ ...historyFilters, port: '' }); setFilterDropdownOpen(initialFilterDropdownState); }} className="w-full px-4 py-2 text-left text-sm text-gray-500 hover:bg-gray-50 font-medium border-b border-gray-50">All Ports</button>
                                                                         {historyOptions.ports.map(port => (
-                                                                            <button key={port} type="button" onClick={(e) => { e.stopPropagation(); setHistoryFilters({ ...historyFilters, port: port }); setFilterDropdownOpen(initialFilterDropdownState); }} className={`w-full px-4 py-2 text-left text-sm hover:bg-blue-50 transition-colors ${historyFilters.port === port ? 'bg-blue-50 text-blue-600 font-medium' : 'text-gray-600'}`}>{port}</button>
+                                                                            <button key={port} type="button" onClick={() => { setHistoryFilters({ ...historyFilters, port: port }); setFilterDropdownOpen(initialFilterDropdownState); }} className={`w-full px-4 py-2 text-left text-sm hover:bg-blue-50 transition-colors ${historyFilters.port === port ? 'bg-blue-50 text-blue-600 font-medium' : 'text-gray-600'}`}>{port}</button>
                                                                         ))}
                                                                     </div>
                                                                 )}
@@ -3208,16 +3204,16 @@ const StockManagement = ({
                                                                 type="text"
                                                                 readOnly
                                                                 value={historyFilters.brand}
-                                                                onClick={(e) => { e.stopPropagation(); setFilterDropdownOpen({ ...initialFilterDropdownState, brand: !filterDropdownOpen.brand }); }}
+                                                                onClick={() => { setFilterDropdownOpen({ ...initialFilterDropdownState, brand: !filterDropdownOpen.brand }); }}
                                                                 placeholder="Select Brand..."
                                                                 className={`w-full px-4 py-2 bg-white border border-gray-100 rounded-xl text-sm focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all shadow-sm cursor-pointer ${historyFilters.brand ? 'text-gray-900 font-medium' : 'text-gray-500'}`}
                                                             />
                                                             <ChevronDownIcon className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
                                                             {filterDropdownOpen.brand && (
                                                                 <div className="absolute z-[70] mt-1 w-full bg-white border border-gray-100 rounded-xl shadow-xl max-h-48 overflow-y-auto py-1">
-                                                                    <button type="button" onClick={(e) => { e.stopPropagation(); setHistoryFilters({ ...historyFilters, brand: '' }); setFilterDropdownOpen(initialFilterDropdownState); }} className="w-full px-4 py-2 text-left text-sm text-gray-500 hover:bg-gray-50 font-medium border-b border-gray-50">All Brands</button>
+                                                                    <button type="button" onClick={() => { setHistoryFilters({ ...historyFilters, brand: '' }); setFilterDropdownOpen(initialFilterDropdownState); }} className="w-full px-4 py-2 text-left text-sm text-gray-500 hover:bg-gray-50 font-medium border-b border-gray-50">All Brands</button>
                                                                     {historyOptions.brands.map(brand => (
-                                                                        <button key={brand} type="button" onClick={(e) => { e.stopPropagation(); setHistoryFilters({ ...historyFilters, brand: brand }); setFilterDropdownOpen(initialFilterDropdownState); }} className={`w-full px-4 py-2 text-left text-sm hover:bg-blue-50 transition-colors ${historyFilters.brand === brand ? 'bg-blue-50 text-blue-600 font-medium' : 'text-gray-600'}`}>{brand}</button>
+                                                                        <button key={brand} type="button" onClick={() => { setHistoryFilters({ ...historyFilters, brand: brand }); setFilterDropdownOpen(initialFilterDropdownState); }} className={`w-full px-4 py-2 text-left text-sm hover:bg-blue-50 transition-colors ${historyFilters.brand === brand ? 'bg-blue-50 text-blue-600 font-medium' : 'text-gray-600'}`}>{brand}</button>
                                                                     ))}
                                                                 </div>
                                                             )}
@@ -3306,15 +3302,15 @@ const StockManagement = ({
 
                                     return (
                                         <div className="space-y-6">
-                                            <div className="grid grid-cols-2 md:grid-cols-5 gap-3 sm:gap-4">
+                                            <div className="grid grid-cols-2 md:flex md:flex-row gap-3 sm:gap-4 w-full">
                                                 {[
                                                     { label: 'TOTAL PKT', value: tPkts.toLocaleString(), bgColor: 'bg-white', borderColor: 'border-gray-200', textColor: 'text-gray-900', labelColor: 'text-gray-400' },
                                                     { label: 'TOTAL QTY', value: `${Math.round(tQty).toLocaleString()} ${unit}`, bgColor: 'bg-emerald-50/10', borderColor: 'border-emerald-100', textColor: 'text-emerald-700', labelColor: 'text-emerald-600' },
                                                     { label: 'INHOUSE PKT', value: tIHPkt.toLocaleString(), bgColor: 'bg-amber-50/10', borderColor: 'border-amber-100', textColor: 'text-amber-700', labelColor: 'text-amber-600' },
                                                     { label: 'INHOUSE QTY', value: `${Math.round(tIHQty).toLocaleString()} ${unit}`, bgColor: 'bg-blue-50/10', borderColor: 'border-blue-100', textColor: 'text-blue-700', labelColor: 'text-blue-600' },
-                                                    { label: 'SHORTAGE', value: `${Math.round(tShort).toLocaleString()} ${unit}`, bgColor: 'bg-rose-50/10', borderColor: 'border-rose-100', textColor: 'text-rose-700', labelColor: 'text-rose-600', span: 'col-span-2 md:col-span-1' },
+                                                    { label: 'SHORTAGE', value: `${Math.round(tShort).toLocaleString()} ${unit}`, bgColor: 'bg-rose-50/10', borderColor: 'border-rose-100', textColor: 'text-rose-700', labelColor: 'text-rose-600', span: 'col-span-2 md:col-auto' },
                                                 ].map((card, i) => (
-                                                    <div key={i} className={`bg-white border ${card.bgColor} ${card.borderColor} p-3 sm:p-4 rounded-xl shadow-sm transition-all hover:shadow-md ${card.span || ''}`}>
+                                                    <div key={i} className={`bg-white border ${card.bgColor} ${card.borderColor} p-3 sm:p-4 rounded-xl shadow-sm transition-all hover:shadow-md ${card.span || ''} md:flex-1 min-w-[120px]`}>
                                                         <div className={`text-[10px] sm:text-[11px] font-bold ${card.labelColor} uppercase tracking-wider mb-0.5 sm:mb-1`}>{card.label}</div>
                                                         <div className={`text-sm sm:text-xl font-bold ${card.textColor}`}>{card.value}</div>
                                                     </div>

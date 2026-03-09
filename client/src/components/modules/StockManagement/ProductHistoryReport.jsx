@@ -142,292 +142,202 @@ const ProductHistoryReport = ({
     };
 
     return (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[100] flex items-center justify-center p-0 md:p-4 print:p-0 print:bg-white print:backdrop-none">
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[9999] flex items-center justify-center p-0 md:p-4 print:p-0 print:bg-white print:backdrop-none">
             <div className="bg-white w-full max-w-5xl h-full md:max-h-[90vh] overflow-hidden md:rounded-3xl shadow-2xl flex flex-col print:max-h-none print:shadow-none print:rounded-none print:w-full print:h-auto">
                 {/* Modal Header/Toolbar */}
-                <div className="flex flex-col md:flex-row items-center justify-between px-4 md:px-8 py-3 md:py-4 border-b border-gray-100 print:hidden gap-3">
-                    <div className="flex items-center gap-3 w-full md:w-1/4">
-                        <div className="p-2 bg-blue-50 rounded-xl shrink-0">
-                            <FileTextIcon className="w-5 h-5 text-blue-600" />
+                <div className="flex flex-col px-4 md:px-8 py-3 md:py-4 border-b border-gray-100 print:hidden gap-4 flex-shrink-0">
+                    {/* Row 1: Title and Action Buttons */}
+                    <div className="flex flex-row items-center justify-between w-full">
+                        <div className="flex items-center gap-2 md:gap-3 flex-shrink-0">
+                            <div className="p-2 bg-blue-50 rounded-xl shrink-0">
+                                <FileTextIcon className="w-5 h-5 text-blue-600" />
+                            </div>
+                            <div className="min-w-0">
+                                <h3 className="text-lg font-bold text-gray-800 truncate">Product Report</h3>
+                                <p className="text-[10px] text-gray-500 font-medium uppercase tracking-wider truncate">{productName}</p>
+                            </div>
                         </div>
-                        <div className="min-w-0">
-                            <h3 className="text-sm font-bold text-gray-800 truncate">Product Report</h3>
-                            <p className="text-[10px] text-gray-500 font-medium uppercase tracking-wider truncate">{productName}</p>
-                        </div>
-                        <div className="md:hidden ml-auto flex items-center gap-2">
+
+                        <div className="flex items-center gap-2 flex-shrink-0">
+                            <div className="relative">
+                                <button
+                                    ref={filterButtonRef}
+                                    onClick={() => setShowFilterPanel(!showFilterPanel)}
+                                    className={`flex items-center justify-center sm:gap-2 w-9 h-9 sm:w-auto sm:h-10 sm:px-4 rounded-xl transition-all border ${showFilterPanel || isFilterApplied ? 'bg-blue-600 border-blue-600 text-white shadow-lg shadow-blue-500/30' : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'}`}
+                                    title="Filter"
+                                >
+                                    <FunnelIcon className={`w-4 h-4 ${showFilterPanel || isFilterApplied ? 'text-white' : 'text-gray-400'}`} />
+                                    <span className="hidden sm:block text-sm font-medium">Filter</span>
+                                    {isFilterApplied && !showFilterPanel && (
+                                        <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-orange-400 rounded-full border-2 border-white" />
+                                    )}
+                                </button>
+
+                                {/* Mobile Filter Overlay Backdrop */}
+                                {showFilterPanel && (
+                                    <div className="fixed inset-0 bg-black/20 backdrop-blur-[2px] z-[105] md:hidden" onClick={() => setShowFilterPanel(false)}></div>
+                                )}
+
+                                {showFilterPanel && (
+                                    <div ref={filterPanelRef} className="fixed inset-x-4 top-24 md:absolute md:inset-auto md:right-0 md:mt-3 w-auto md:w-[420px] bg-white/95 backdrop-blur-2xl border border-gray-100 rounded-2xl shadow-2xl z-[110] p-5 animate-in fade-in zoom-in duration-200 overflow-y-auto md:overflow-visible max-h-[70vh]">
+                                        <div className="flex items-center justify-between mb-4 pb-2 border-b border-gray-50">
+                                            <h4 className="font-bold text-gray-900">Advanced Filters</h4>
+                                            <button
+                                                onClick={() => {
+                                                    setModalFilters({ startDate: '', endDate: '', party: '', brand: '' });
+                                                    setDropdownOpen({ party: false, brand: false });
+                                                }}
+                                                className="text-[11px] font-bold text-blue-600 hover:text-blue-700 uppercase tracking-wider"
+                                            >
+                                                Reset All
+                                            </button>
+                                        </div>
+
+                                        <div className="space-y-4">
+                                            {/* Date Range */}
+                                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                                <CustomDatePicker
+                                                    label="FROM DATE"
+                                                    value={modalFilters.startDate}
+                                                    onChange={(e) => setModalFilters({ ...modalFilters, startDate: e.target.value })}
+                                                    placeholder="Select start date"
+                                                    name="startDate"
+                                                    compact={true}
+                                                    fullWidth={true}
+                                                />
+                                                <CustomDatePicker
+                                                    label="TO DATE"
+                                                    value={modalFilters.endDate}
+                                                    onChange={(e) => setModalFilters({ ...modalFilters, endDate: e.target.value })}
+                                                    placeholder="Select end date"
+                                                    name="endDate"
+                                                    compact={true}
+                                                    fullWidth={true}
+                                                />
+                                            </div>
+
+                                            {/* Party and Brand */}
+                                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                                {/* Party Dropdown */}
+                                                <div ref={partyDropdownRef} className="space-y-1.5 relative">
+                                                    <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider pl-1">Party</label>
+                                                    <div className="relative">
+                                                        <input
+                                                            type="text"
+                                                            value={dropdownOpen.party ? dropdownSearch.party : modalFilters.party}
+                                                            onFocus={() => {
+                                                                setDropdownOpen({ party: true, brand: false });
+                                                                setDropdownSearch(s => ({ ...s, party: '' }));
+                                                            }}
+                                                            onChange={e => setDropdownSearch(s => ({ ...s, party: e.target.value }))}
+                                                            placeholder={modalFilters.party || 'Search Party...'}
+                                                            className={`w-full px-4 py-2 bg-white border border-gray-100 rounded-xl text-sm focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all shadow-sm ${modalFilters.party && !dropdownOpen.party ? 'text-gray-900 font-medium' : 'text-gray-500'}`}
+                                                        />
+                                                        <ChevronDownIcon className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+                                                        {dropdownOpen.party && (
+                                                            <div className="absolute z-[120] mt-1 w-full bg-white border border-gray-100 rounded-xl shadow-xl max-h-48 overflow-y-auto py-1">
+                                                                <button type="button" onClick={() => { setModalFilters({ ...modalFilters, party: '' }); setDropdownOpen({ party: false, brand: false }); setDropdownSearch(s => ({ ...s, party: '' })); }} className="w-full px-4 py-2 text-left text-sm text-gray-500 hover:bg-gray-50 font-medium border-b border-gray-50">All Parties</button>
+                                                                {partyOptions.filter(p => p.toLowerCase().includes(dropdownSearch.party.toLowerCase())).map(p => (
+                                                                    <button key={p} type="button" onClick={() => { setModalFilters({ ...modalFilters, party: p }); setDropdownOpen({ party: false, brand: false }); setDropdownSearch(s => ({ ...s, party: '' })); }} className={`w-full px-4 py-2 text-left text-sm hover:bg-blue-50 transition-colors ${modalFilters.party === p ? 'bg-blue-50 text-blue-600 font-medium' : 'text-gray-600'}`}>{p}</button>
+                                                                ))}
+                                                                {partyOptions.filter(p => p.toLowerCase().includes(dropdownSearch.party.toLowerCase())).length === 0 && (
+                                                                    <p className="px-4 py-3 text-sm text-gray-400 italic">No results found</p>
+                                                                )}
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                </div>
+
+                                                {/* Brand Dropdown */}
+                                                <div ref={brandDropdownRef} className="space-y-1.5 relative">
+                                                    <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider pl-1">Brand</label>
+                                                    <div className="relative">
+                                                        <input
+                                                            type="text"
+                                                            value={dropdownOpen.brand ? dropdownSearch.brand : modalFilters.brand}
+                                                            onFocus={() => {
+                                                                setDropdownOpen({ party: false, brand: true });
+                                                                setDropdownSearch(s => ({ ...s, brand: '' }));
+                                                            }}
+                                                            onChange={e => setDropdownSearch(s => ({ ...s, brand: e.target.value }))}
+                                                            placeholder={modalFilters.brand || 'Search Brand...'}
+                                                            className={`w-full px-4 py-2 bg-white border border-gray-100 rounded-xl text-sm focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all shadow-sm ${modalFilters.brand && !dropdownOpen.brand ? 'text-gray-900 font-medium' : 'text-gray-500'}`}
+                                                        />
+                                                        <ChevronDownIcon className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+                                                        {dropdownOpen.brand && (
+                                                            <div className="absolute z-[120] mt-1 w-full bg-white border border-gray-100 rounded-xl shadow-xl max-h-48 overflow-y-auto py-1">
+                                                                <button type="button" onClick={() => { setModalFilters({ ...modalFilters, brand: '' }); setDropdownOpen({ party: false, brand: false }); setDropdownSearch(s => ({ ...s, brand: '' })); }} className="w-full px-4 py-2 text-left text-sm text-gray-500 hover:bg-gray-50 font-medium border-b border-gray-50">All Brands</button>
+                                                                {brandOptions.filter(b => b.toLowerCase().includes(dropdownSearch.brand.toLowerCase())).map(b => (
+                                                                    <button key={b} type="button" onClick={() => { setModalFilters({ ...modalFilters, brand: b }); setDropdownOpen({ party: false, brand: false }); setDropdownSearch(s => ({ ...s, brand: '' })); }} className={`w-full px-4 py-2 text-left text-sm hover:bg-blue-50 transition-colors ${modalFilters.brand === b ? 'bg-blue-50 text-blue-600 font-medium' : 'text-gray-600'}`}>{b}</button>
+                                                                ))}
+                                                                {brandOptions.filter(b => b.toLowerCase().includes(dropdownSearch.brand.toLowerCase())).length === 0 && (
+                                                                    <p className="px-4 py-3 text-sm text-gray-400 italic">No results found</p>
+                                                                )}
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            <button
+                                                onClick={() => setShowFilterPanel(false)}
+                                                className="w-full py-2 bg-gray-900 text-white rounded-xl text-sm font-medium hover:bg-gray-800 transition-all mt-2"
+                                            >
+                                                Apply Filters
+                                            </button>
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+
                             <button
                                 onClick={handlePrint}
-                                className="p-2 bg-blue-50 text-blue-600 rounded-lg"
+                                className="flex items-center justify-center w-9 h-9 sm:w-auto sm:h-10 sm:px-4 bg-blue-50 border border-blue-100 text-blue-600 rounded-xl hover:bg-blue-100 transition-all shadow-sm"
+                                title="Print Report"
                             >
-                                <PrinterIcon className="w-5 h-5" />
+                                <PrinterIcon className="w-4 h-4" />
+                                <span className="hidden sm:block text-sm font-medium ml-2">Print</span>
                             </button>
-                            <button onClick={onClose} className="p-2 text-gray-400">
-                                <XIcon className="w-6 h-6" />
+                            <button onClick={onClose} className="w-9 h-9 flex items-center justify-center hover:bg-gray-100 rounded-full transition-colors">
+                                <XIcon className="w-6 h-6 text-gray-400" />
                             </button>
                         </div>
                     </div>
 
-                    {/* Tabs in Center */}
-                    <div className="flex items-center gap-1 md:gap-2 p-1 bg-gray-50 rounded-xl border border-gray-100 w-full md:w-auto overflow-x-auto no-scrollbar">
-                        <button
-                            onClick={() => setActiveTab('purchase')}
-                            className={`flex-1 md:flex-none px-3 md:px-6 py-1.5 rounded-lg text-[10px] md:text-xs font-bold transition-all whitespace-nowrap ${activeTab === 'purchase'
-                                ? 'bg-white text-blue-600 shadow-sm border border-gray-100'
-                                : 'text-gray-400 hover:text-gray-600'
-                                }`}
-                        >
-                            Purchase
-                        </button>
-                        <button
-                            onClick={() => setActiveTab('sale')}
-                            className={`flex-1 md:flex-none px-3 md:px-6 py-1.5 rounded-lg text-[10px] md:text-xs font-bold transition-all whitespace-nowrap ${activeTab === 'sale'
-                                ? 'bg-white text-blue-600 shadow-sm border border-gray-100'
-                                : 'text-gray-400 hover:text-gray-600'
-                                }`}
-                        >
-                            Sale
-                        </button>
-                        <button
-                            onClick={() => setActiveTab('total')}
-                            className={`flex-1 md:flex-none px-3 md:px-6 py-1.5 rounded-lg text-[10px] md:text-xs font-bold transition-all whitespace-nowrap ${activeTab === 'total'
-                                ? 'bg-white text-blue-600 shadow-sm border border-gray-100'
-                                : 'text-gray-400 hover:text-gray-600'
-                                }`}
-                        >
-                            Total
-                        </button>
-                    </div>
-
-                    <div className="hidden md:flex items-center justify-end gap-3 w-1/4">
-                        <div className="relative">
+                    {/* Row 2: Navigation Tabs */}
+                    <div className="flex flex-row items-center justify-center w-full">
+                        <div className="flex items-center gap-1 md:gap-2 p-1 bg-gray-50 rounded-xl border border-gray-100 flex-shrink-0">
                             <button
-                                ref={filterButtonRef}
-                                onClick={() => setShowFilterPanel(!showFilterPanel)}
-                                className={`p-2.5 rounded-xl transition-all shadow-sm flex items-center justify-center group relative ${showFilterPanel || isFilterApplied ? 'bg-blue-600 text-white' : 'bg-blue-50 text-blue-600 hover:bg-blue-100'}`}
-                                title="Filter"
+                                onClick={() => setActiveTab('purchase')}
+                                className={`px-3 md:px-6 py-1.5 rounded-lg text-[10px] md:text-xs font-bold transition-all whitespace-nowrap ${activeTab === 'purchase'
+                                    ? 'bg-white text-blue-600 shadow-sm border border-gray-100'
+                                    : 'text-gray-400 hover:text-gray-600'
+                                    }`}
                             >
-                                <FunnelIcon className="w-6 h-6 group-hover:scale-110 transition-transform" />
-                                {isFilterApplied && !showFilterPanel && (
-                                    <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-orange-400 rounded-full border-2 border-white" />
-                                )}
+                                Purchase
                             </button>
-
-                            {showFilterPanel && (
-                                <div ref={filterPanelRef} className="absolute right-0 mt-3 w-[320px] md:w-[380px] bg-white border border-gray-100 rounded-2xl shadow-2xl z-[110] p-5 animate-in fade-in zoom-in duration-200">
-                                    <div className="flex items-center justify-between mb-4 pb-2 border-b border-gray-50">
-                                        <h4 className="font-bold text-gray-900">Advanced Filters</h4>
-                                        <button
-                                            onClick={() => {
-                                                setModalFilters({ startDate: '', endDate: '', party: '', brand: '' });
-                                                setDropdownOpen({ party: false, brand: false });
-                                            }}
-                                            className="text-[11px] font-bold text-blue-600 hover:text-blue-700 uppercase tracking-wider"
-                                        >
-                                            Reset All
-                                        </button>
-                                    </div>
-
-                                    <div className="space-y-4">
-                                        {/* Date Range */}
-                                        <div className="grid grid-cols-2 gap-3">
-                                            <CustomDatePicker
-                                                label="FROM DATE"
-                                                value={modalFilters.startDate}
-                                                onChange={(e) => setModalFilters({ ...modalFilters, startDate: e.target.value })}
-                                                placeholder="Select start date"
-                                                name="startDate"
-                                                compact={true}
-                                                fullWidth={true}
-                                            />
-                                            <CustomDatePicker
-                                                label="TO DATE"
-                                                value={modalFilters.endDate}
-                                                onChange={(e) => setModalFilters({ ...modalFilters, endDate: e.target.value })}
-                                                placeholder="Select end date"
-                                                name="endDate"
-                                                compact={true}
-                                                fullWidth={true}
-                                            />
-                                        </div>
-
-                                        {/* Party and Brand */}
-                                        <div className="grid grid-cols-2 gap-3">
-                                            {/* Party Dropdown */}
-                                            <div ref={partyDropdownRef} className="space-y-1.5 relative">
-                                                <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider pl-1">Party</label>
-                                                <div className="relative">
-                                                    <input
-                                                        type="text"
-                                                        value={dropdownOpen.party ? dropdownSearch.party : modalFilters.party}
-                                                        onFocus={() => {
-                                                            setDropdownOpen({ party: true, brand: false });
-                                                            setDropdownSearch(s => ({ ...s, party: '' }));
-                                                        }}
-                                                        onChange={e => setDropdownSearch(s => ({ ...s, party: e.target.value }))}
-                                                        placeholder={modalFilters.party || 'Search Party...'}
-                                                        className={`w-full px-4 py-2 bg-white border border-gray-100 rounded-xl text-sm focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all shadow-sm ${modalFilters.party && !dropdownOpen.party ? 'text-gray-900 font-medium' : 'text-gray-500'}`}
-                                                    />
-                                                    <ChevronDownIcon className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
-                                                    {dropdownOpen.party && (
-                                                        <div className="absolute z-[120] mt-1 w-full bg-white border border-gray-100 rounded-xl shadow-xl max-h-48 overflow-y-auto py-1">
-                                                            <button type="button" onClick={() => { setModalFilters({ ...modalFilters, party: '' }); setDropdownOpen({ party: false, brand: false }); setDropdownSearch(s => ({ ...s, party: '' })); }} className="w-full px-4 py-2 text-left text-sm text-gray-500 hover:bg-gray-50 font-medium border-b border-gray-50">All Parties</button>
-                                                            {partyOptions.filter(p => p.toLowerCase().includes(dropdownSearch.party.toLowerCase())).map(p => (
-                                                                <button key={p} type="button" onClick={() => { setModalFilters({ ...modalFilters, party: p }); setDropdownOpen({ party: false, brand: false }); setDropdownSearch(s => ({ ...s, party: '' })); }} className={`w-full px-4 py-2 text-left text-sm hover:bg-blue-50 transition-colors ${modalFilters.party === p ? 'bg-blue-50 text-blue-600 font-medium' : 'text-gray-600'}`}>{p}</button>
-                                                            ))}
-                                                            {partyOptions.filter(p => p.toLowerCase().includes(dropdownSearch.party.toLowerCase())).length === 0 && (
-                                                                <p className="px-4 py-3 text-sm text-gray-400 italic">No results found</p>
-                                                            )}
-                                                        </div>
-                                                    )}
-                                                </div>
-                                            </div>
-
-                                            {/* Brand Dropdown */}
-                                            <div ref={brandDropdownRef} className="space-y-1.5 relative">
-                                                <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider pl-1">Brand</label>
-                                                <div className="relative">
-                                                    <input
-                                                        type="text"
-                                                        value={dropdownOpen.brand ? dropdownSearch.brand : modalFilters.brand}
-                                                        onFocus={() => {
-                                                            setDropdownOpen({ party: false, brand: true });
-                                                            setDropdownSearch(s => ({ ...s, brand: '' }));
-                                                        }}
-                                                        onChange={e => setDropdownSearch(s => ({ ...s, brand: e.target.value }))}
-                                                        placeholder={modalFilters.brand || 'Search Brand...'}
-                                                        className={`w-full px-4 py-2 bg-white border border-gray-100 rounded-xl text-sm focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all shadow-sm ${modalFilters.brand && !dropdownOpen.brand ? 'text-gray-900 font-medium' : 'text-gray-500'}`}
-                                                    />
-                                                    <ChevronDownIcon className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
-                                                    {dropdownOpen.brand && (
-                                                        <div className="absolute z-[120] mt-1 w-full bg-white border border-gray-100 rounded-xl shadow-xl max-h-48 overflow-y-auto py-1">
-                                                            <button type="button" onClick={() => { setModalFilters({ ...modalFilters, brand: '' }); setDropdownOpen({ party: false, brand: false }); setDropdownSearch(s => ({ ...s, brand: '' })); }} className="w-full px-4 py-2 text-left text-sm text-gray-500 hover:bg-gray-50 font-medium border-b border-gray-50">All Brands</button>
-                                                            {brandOptions.filter(b => b.toLowerCase().includes(dropdownSearch.brand.toLowerCase())).map(b => (
-                                                                <button key={b} type="button" onClick={() => { setModalFilters({ ...modalFilters, brand: b }); setDropdownOpen({ party: false, brand: false }); setDropdownSearch(s => ({ ...s, brand: '' })); }} className={`w-full px-4 py-2 text-left text-sm hover:bg-blue-50 transition-colors ${modalFilters.brand === b ? 'bg-blue-50 text-blue-600 font-medium' : 'text-gray-600'}`}>{b}</button>
-                                                            ))}
-                                                            {brandOptions.filter(b => b.toLowerCase().includes(dropdownSearch.brand.toLowerCase())).length === 0 && (
-                                                                <p className="px-4 py-3 text-sm text-gray-400 italic">No results found</p>
-                                                            )}
-                                                        </div>
-                                                    )}
-                                                </div>
-                                            </div>
-                                        </div>
-
-                                        <button
-                                            onClick={() => setShowFilterPanel(false)}
-                                            className="w-full py-2 bg-gray-900 text-white rounded-xl text-sm font-medium hover:bg-gray-800 transition-all mt-2"
-                                        >
-                                            Apply Filters
-                                        </button>
-                                    </div>
-                                </div>
-                            )}
-                        </div>
-
-                        <button
-                            onClick={handlePrint}
-                            className="p-2.5 bg-blue-50 text-blue-600 hover:bg-blue-100 rounded-xl transition-all shadow-sm flex items-center justify-center group"
-                            title="Print Report"
-                        >
-                            <PrinterIcon className="w-6 h-6 group-hover:scale-110 transition-transform" />
-                        </button>
-                        <button onClick={onClose} className="p-2.5 hover:bg-gray-100 rounded-xl transition-colors">
-                            <XIcon className="w-6 h-6 text-gray-500" />
-                        </button>
-                    </div>
-
-                    {/* Mobile specific toolbar buttons when header is stacked */}
-                    <div className="md:hidden flex items-center gap-2 w-full">
-                        <div className="relative flex-1">
                             <button
-                                onClick={() => setShowFilterPanel(!showFilterPanel)}
-                                className={`w-full py-2 px-4 rounded-xl transition-all shadow-sm flex items-center justify-center gap-2 font-bold text-xs ${showFilterPanel || isFilterApplied ? 'bg-blue-600 text-white' : 'bg-blue-50 text-blue-600'}`}
+                                onClick={() => setActiveTab('sale')}
+                                className={`px-3 md:px-6 py-1.5 rounded-lg text-[10px] md:text-xs font-bold transition-all whitespace-nowrap ${activeTab === 'sale'
+                                    ? 'bg-white text-blue-600 shadow-sm border border-gray-100'
+                                    : 'text-gray-400 hover:text-gray-600'
+                                    }`}
                             >
-                                <FunnelIcon className="w-4 h-4" />
-                                {isFilterApplied ? 'Filters Applied' : 'Filters'}
+                                Sale
                             </button>
-                            {showFilterPanel && (
-                                <div ref={filterPanelRef} className="fixed left-4 right-4 top-40 bg-white border border-gray-100 rounded-2xl shadow-2xl z-[150] p-5 animate-in fade-in zoom-in duration-200">
-                                    <div className="flex items-center justify-between mb-4 pb-2 border-b border-gray-50">
-                                        <h4 className="font-bold text-gray-900 text-sm">Advanced Filters</h4>
-                                        <button
-                                            onClick={() => {
-                                                setModalFilters({ startDate: '', endDate: '', party: '', brand: '' });
-                                                setDropdownOpen({ party: false, brand: false });
-                                            }}
-                                            className="text-[10px] font-bold text-blue-600 hover:text-blue-700 uppercase tracking-wider"
-                                        >
-                                            Reset
-                                        </button>
-                                    </div>
-                                    <div className="space-y-4">
-                                        <div className="grid grid-cols-2 gap-2">
-                                            <CustomDatePicker
-                                                label="FROM"
-                                                value={modalFilters.startDate}
-                                                onChange={(e) => setModalFilters({ ...modalFilters, startDate: e.target.value })}
-                                                name="startDate"
-                                                compact={true}
-                                                fullWidth={true}
-                                            />
-                                            <CustomDatePicker
-                                                label="TO"
-                                                value={modalFilters.endDate}
-                                                onChange={(e) => setModalFilters({ ...modalFilters, endDate: e.target.value })}
-                                                name="endDate"
-                                                compact={true}
-                                                fullWidth={true}
-                                            />
-                                        </div>
-                                        <div className="grid grid-cols-2 gap-2">
-                                            <div ref={partyDropdownRef} className="space-y-1 relative">
-                                                <label className="text-[9px] font-bold text-gray-400 uppercase tracking-wider">Party</label>
-                                                <div className="relative">
-                                                    <input
-                                                        type="text"
-                                                        value={dropdownOpen.party ? dropdownSearch.party : modalFilters.party}
-                                                        onFocus={() => { setDropdownOpen({ party: true, brand: false }); setDropdownSearch(s => ({ ...s, party: '' })); }}
-                                                        onChange={e => setDropdownSearch(s => ({ ...s, party: e.target.value }))}
-                                                        placeholder="Party..."
-                                                        className="w-full px-2 py-1.5 bg-white border border-gray-100 rounded-lg text-xs"
-                                                    />
-                                                    {dropdownOpen.party && (
-                                                        <div className="absolute z-[160] mt-1 w-full bg-white border border-gray-100 rounded-lg shadow-xl max-h-40 overflow-y-auto py-1">
-                                                            {partyOptions.filter(p => p.toLowerCase().includes(dropdownSearch.party.toLowerCase())).map(p => (
-                                                                <button key={p} type="button" onClick={() => { setModalFilters({ ...modalFilters, party: p }); setDropdownOpen({ party: false, brand: false }); }} className="w-full px-3 py-1.5 text-left text-xs hover:bg-blue-50">{p}</button>
-                                                            ))}
-                                                        </div>
-                                                    )}
-                                                </div>
-                                            </div>
-                                            <div ref={brandDropdownRef} className="space-y-1 relative">
-                                                <label className="text-[9px] font-bold text-gray-400 uppercase tracking-wider">Brand</label>
-                                                <div className="relative">
-                                                    <input
-                                                        type="text"
-                                                        value={dropdownOpen.brand ? dropdownSearch.brand : modalFilters.brand}
-                                                        onFocus={() => { setDropdownOpen({ party: false, brand: true }); setDropdownSearch(s => ({ ...s, brand: '' })); }}
-                                                        onChange={e => setDropdownSearch(s => ({ ...s, brand: e.target.value }))}
-                                                        placeholder="Brand..."
-                                                        className="w-full px-2 py-1.5 bg-white border border-gray-100 rounded-lg text-xs"
-                                                    />
-                                                    {dropdownOpen.brand && (
-                                                        <div className="absolute z-[160] mt-1 w-full bg-white border border-gray-100 rounded-lg shadow-xl max-h-40 overflow-y-auto py-1">
-                                                            {brandOptions.filter(b => b.toLowerCase().includes(dropdownSearch.brand.toLowerCase())).map(b => (
-                                                                <button key={b} type="button" onClick={() => { setModalFilters({ ...modalFilters, brand: b }); setDropdownOpen({ party: false, brand: false }); }} className="w-full px-3 py-1.5 text-left text-xs hover:bg-blue-50">{b}</button>
-                                                            ))}
-                                                        </div>
-                                                    )}
-                                                </div>
-                                            </div>
-                                        </div>
-                                        <button onClick={() => setShowFilterPanel(false)} className="w-full py-2 bg-gray-900 text-white rounded-xl text-xs font-medium">Apply</button>
-                                    </div>
-                                </div>
-                            )}
+                            <button
+                                onClick={() => setActiveTab('total')}
+                                className={`px-3 md:px-6 py-1.5 rounded-lg text-[10px] md:text-xs font-bold transition-all whitespace-nowrap ${activeTab === 'total'
+                                    ? 'bg-white text-blue-600 shadow-sm border border-gray-100'
+                                    : 'text-gray-400 hover:text-gray-600'
+                                    }`}
+                            >
+                                Total
+                            </button>
                         </div>
                     </div>
                 </div>
+
 
                 {/* Printable Content */}
                 <div className="flex-1 overflow-y-auto p-4 md:p-12 print:p-4 print:overflow-visible bg-white">
@@ -815,8 +725,8 @@ const ProductHistoryReport = ({
                         </div>
                     </div>
                 </div>
-            </div>
-        </div>
+            </div >
+        </div >
     );
 };
 

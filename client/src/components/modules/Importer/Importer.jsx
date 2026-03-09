@@ -434,7 +434,7 @@ const Importer = ({
                 </div>
             )}
             {viewData && (
-                <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+                <div className="fixed inset-0 z-[2000] flex items-center justify-center p-4">
                     <div className="absolute inset-0 bg-gray-900/60 backdrop-blur-sm" onClick={() => setViewData(null)}></div>
                     <div className="relative bg-white border border-gray-100 rounded-2xl shadow-2xl max-w-4xl w-full flex flex-col max-h-[90vh] animate-in zoom-in duration-200">
                         {/* Modal Header */}

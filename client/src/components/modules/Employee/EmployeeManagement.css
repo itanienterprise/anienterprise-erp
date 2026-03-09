@@ -14,55 +14,137 @@
     }
 }
 
+/* Form container — matches LC Receive glassmorphism card */
 .employee-form-container {
-    background: rgba(255, 255, 255, 0.8);
-    backdrop-filter: blur(20px);
-    border: 1px solid rgba(255, 255, 255, 0.3);
-    border-radius: 24px;
-    padding: 2rem;
-    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.05);
     position: relative;
-    overflow: hidden;
+    overflow: visible;
+    /* Must be visible so calendar/dropdowns are not clipped */
+    border-radius: 1rem;
+    background: rgba(255, 255, 255, 0.6);
+    backdrop-filter: blur(40px);
+    -webkit-backdrop-filter: blur(40px);
+    border: 1px solid rgba(255, 255, 255, 0.5);
+    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.15);
+    padding: 2rem;
+    transition: all 0.3s;
 }
 
 .employee-form-header {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: 2rem;
+    margin-bottom: 1.5rem;
+    padding-bottom: 1rem;
+    border-bottom: 1px solid rgba(229, 231, 235, 0.5);
+    position: relative;
+    z-index: 10;
 }
 
 .employee-form-title {
-    font-size: 1.5rem;
-    font-weight: 800;
+    font-size: 1.25rem;
+    font-weight: 700;
     color: #1f2937;
-    letter-spacing: -0.025em;
+    letter-spacing: -0.015em;
 }
 
 .employee-form-close {
     padding: 0.5rem;
     color: #9ca3af;
     border-radius: 9999px;
+    border: none;
+    background: none;
+    cursor: pointer;
     transition: all 0.2s;
 }
 
 .employee-form-close:hover {
     background: #f3f4f6;
+    color: #ef4444;
+}
+
+/* Override date-picker input to match LC Receive field style */
+.employee-form-container .date-picker-input {
+    background: rgba(255, 255, 255, 0.5);
+    border: 1px solid rgba(209, 213, 219, 0.6);
+    border-radius: 0.5rem;
+    box-shadow: none;
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+    padding: 0.5rem 3.5rem 0.5rem 1rem;
+    font-size: 0.875rem;
     color: #111827;
 }
 
-/* Custom styles for select inputs to match the theme */
-select {
-    appearance: none;
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%239ca3af'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'%3E%3C/path%3E%3C/svg%3E");
-    background-repeat: no-repeat;
-    background-position: right 1rem center;
-    background-size: 1.25rem;
+.employee-form-container .date-picker-input:focus {
+    box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.25);
+    border-color: #3b82f6;
+    background: rgba(255, 255, 255, 0.8);
 }
 
-/* Custom Table Responsive adjustments */
+.employee-form-container .date-picker-input:hover {
+    border-color: rgba(156, 163, 175, 0.6);
+}
+
+/* Ensure the dropdown renders above other form elements */
+.employee-form-container .date-picker-dropdown {
+    z-index: 200;
+    width: 300px;
+}
+
+/* Force native select arrow away — ChevronDownIcon overlay takes its place */
+.employee-form-container select {
+    -webkit-appearance: none !important;
+    -moz-appearance: none !important;
+    appearance: none !important;
+    background-image: none !important;
+    background: rgba(255, 255, 255, 0.5) !important;
+    border: 1px solid rgba(209, 213, 219, 0.6) !important;
+    border-radius: 0.5rem !important;
+    padding: 0.5rem 2.5rem 0.5rem 1rem !important;
+    font-size: 0.875rem !important;
+    color: #111827 !important;
+    cursor: pointer;
+    outline: none !important;
+    transition: all 0.2s;
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+    width: 100%;
+}
+
+.employee-form-container select:focus {
+    box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.25) !important;
+    border-color: #3b82f6 !important;
+    background: rgba(255, 255, 255, 0.8) !important;
+}
+
+/* Hide spinner on number inputs */
+.employee-form-container input[type="number"] {
+    -moz-appearance: textfield;
+    appearance: textfield;
+}
+
+.employee-form-container input[type="number"]::-webkit-outer-spin-button,
+.employee-form-container input[type="number"]::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+}
+
+/* Mobile adjustments */
 @media (max-width: 768px) {
-    .employee-container {
-        padding: 0 1rem;
+    .employee-form-container {
+        padding: 1.25rem;
+        border-radius: 1.25rem;
+    }
+
+    .employee-form-title {
+        font-size: 1.1rem;
+    }
+
+    .employee-form-header {
+        margin-bottom: 1.25rem;
+    }
+
+    .employee-form-container .date-picker-dropdown {
+        width: 260px;
     }
 }

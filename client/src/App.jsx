@@ -25,19 +25,81 @@ import EmployeeManagement from './components/modules/Employee/EmployeeManagement
 import { calculateStockData } from './utils/stockHelpers';
 import LoginPage from './components/auth/LoginPage';
 import Profile from './components/modules/Profile/Profile';
+import NotificationMenu from './components/modules/Notification/NotificationMenu';
 
 
 function App() {
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [currentUser, setCurrentUser] = useState(null);
+  const [isAuthenticated, setIsAuthenticated] = useState(() => {
+    return localStorage.getItem('isAuthenticated') === 'true';
+  });
+  const [currentUser, setCurrentUser] = useState(() => {
+    try {
+      const saved = localStorage.getItem('currentUser');
+      return saved ? JSON.parse(saved) : null;
+    } catch {
+      return null;
+    }
+  });
   const [isCheckingSession, setIsCheckingSession] = useState(true);
   const [showProfile, setShowProfile] = useState(false);
+  const [showNotifications, setShowNotifications] = useState(false);
+  const [notifications, setNotifications] = useState([]);
+
+  // Fetch notifications from backend
+  const fetchNotifications = async () => {
+    if (!isAuthenticated) return;
+    try {
+      const response = await axios.get(`${API_BASE_URL}/api/notifications`);
+      const decrypted = response.data.map(n => {
+        try {
+          const d = decryptData(n.data);
+          return { ...d, _id: n._id, createdAt: n.createdAt };
+        } catch (e) {
+          console.error('Error decrypting notification:', e);
+          return null;
+        }
+      }).filter(Boolean);
+
+      // Filter based on user role
+      // admin user, admin role, incharge, sales manager
+      const filtered = decrypted.filter(n => {
+        const userRole = (currentUser?.role || '').toLowerCase();
+        const isAdminUser = currentUser?.username === 'admin';
+
+        const isTargetRole = n.targetRoles ? n.targetRoles.some(r => r.toLowerCase() === userRole || (isAdminUser && r.toLowerCase() === 'admin')) : false;
+        const isTargetUser = n.targetUsers ? n.targetUsers.includes(currentUser?.username) : false;
+
+        return (isTargetRole || isTargetUser);
+      }).map(n => ({
+        ...n,
+        isUnread: n.readByUsers ? !n.readByUsers.includes(currentUser?.username) : true
+      }));
+
+      setNotifications(filtered);
+    } catch (err) {
+      console.error('Error fetching notifications:', err);
+    }
+  };
+
+  useEffect(() => {
+    let interval;
+    if (isAuthenticated && currentUser) {
+      fetchNotifications();
+      interval = setInterval(fetchNotifications, 3000); // Poll every 3 seconds for real-time experience
+    }
+    return () => {
+      if (interval) clearInterval(interval);
+    };
+  }, [isAuthenticated, currentUser?.username, currentUser?.role]);
 
   const handleLogin = (user) => {
     setIsAuthenticated(true);
     setCurrentUser(user);
+    setSidebarOpen(false);
     localStorage.setItem('isAuthenticated', 'true');
     localStorage.setItem('currentUser', JSON.stringify(user));
+    setCurrentView('dashboard');
+    localStorage.setItem('currentView', 'dashboard');
   };
 
   const handleLogout = async () => {
@@ -48,10 +110,104 @@ function App() {
     } finally {
       setIsAuthenticated(false);
       setCurrentUser(null);
+      setSidebarOpen(false);
       localStorage.removeItem('currentUser');
       localStorage.setItem('isAuthenticated', 'false');
+      localStorage.removeItem('currentView');
     }
   };
+
+  const handleMarkAllAsRead = async () => {
+    try {
+      // Optimistic update
+      setNotifications(prev => prev.map(n =>
+        n.isUnread
+          ? { ...n, isUnread: false, readByUsers: [...(n.readByUsers || []), currentUser.username] }
+          : n
+      ));
+
+      const promises = notifications.filter(n => n.isUnread).map(n => {
+        const updated = {
+          ...n,
+          readByUsers: [...(n.readByUsers || []), currentUser.username]
+        };
+        const { _id, createdAt, isUnread, ...dataToEncrypt } = updated;
+        return axios.put(`${API_BASE_URL}/api/notifications/${n._id}`, {
+          data: encryptData(dataToEncrypt)
+        });
+      });
+      await Promise.all(promises);
+      // Optional: fetchNotifications(); to sync any other changes
+    } catch (err) {
+      console.error('Error marking all as read:', err);
+      // Revert if error
+      fetchNotifications();
+    }
+  };
+
+  const handleClearAll = async () => {
+    try {
+      // Optimistic update
+      setNotifications([]);
+
+      await axios.delete(`${API_BASE_URL}/api/notifications/clear`);
+    } catch (err) {
+      console.error('Error clearing notifications:', err);
+      // Revert if error
+      fetchNotifications();
+    }
+  };
+
+  const handleMarkAsRead = async (id) => {
+    const notif = notifications.find(n => n._id === id);
+    if (!notif || !notif.isUnread) return;
+
+    try {
+      const updated = {
+        ...notif,
+        readByUsers: [...(notif.readByUsers || []), currentUser.username]
+      };
+
+      // Optimistic update
+      setNotifications(prev => prev.map(n =>
+        n._id === id
+          ? { ...n, isUnread: false, readByUsers: updated.readByUsers }
+          : n
+      ));
+
+      const { _id, createdAt, isUnread, ...dataToEncrypt } = updated;
+      await axios.put(`${API_BASE_URL}/api/notifications/${id}`, {
+        data: encryptData(dataToEncrypt)
+      });
+      // Optional: fetchNotifications();
+    } catch (err) {
+      console.error('Error marking as read:', err);
+      // Revert if error
+      fetchNotifications();
+    }
+  };
+
+  const addNotification = async (title, message, targetRoles = ['admin', 'incharge', 'sales manager'], targetUsers = []) => {
+    try {
+      const newNotif = {
+        title,
+        message,
+        targetRoles,
+        targetUsers, // Added targetUsers for specific employee notifications
+        readByUsers: [],
+        createdBy: currentUser?.username,
+        createdByName: currentUser?.name || currentUser?.username
+      };
+      await axios.post(`${API_BASE_URL}/api/notifications`, {
+        data: encryptData(newNotif)
+      });
+      fetchNotifications();
+    } catch (err) {
+      console.error('Error adding notification:', err);
+    }
+  };
+
+  const unreadCount = notifications.filter(n => n.isUnread).length;
 
   // Check session on mount
   useEffect(() => {
@@ -146,7 +302,9 @@ function App() {
     billOfEntry: '',
     totalLcTruck: '',
     totalLcQuantity: '',
-    status: 'In Stock',
+    status: 'Requested',
+    requestedBy: '',
+    requestedByUsername: '',
     productEntries: [{
       isMultiBrand: true,
       productName: '',
@@ -174,7 +332,8 @@ function App() {
     importer: { key: 'name', direction: 'asc' },
     port: { key: 'name', direction: 'asc' },
     ip: { key: 'openingDate', direction: 'desc' },
-    customer: { key: 'name', direction: 'asc' }
+    customer: { key: 'name', direction: 'asc' },
+    employee: { key: 'employeeId', direction: 'asc' }
   });
 
   const [showLcReport, setShowLcReport] = useState(false);
@@ -822,17 +981,13 @@ function App() {
       case 'lc-entry-section':
         return (
           <LCReceive
+            currentUser={currentUser}
             stockRecords={stockRecords}
+            addNotification={addNotification}
             fetchStockRecords={fetchStockRecords}
             importers={importers}
             ports={ports}
             products={products}
-            lcSearchQuery={lcSearchQuery}
-            setLcSearchQuery={setLcSearchQuery}
-            lcFilters={lcFilters}
-            setLcFilters={setLcFilters}
-            lcReceiveRecords={lcReceiveRecords}
-            lcReceiveSummary={lcReceiveSummary}
             isSelectionMode={isSelectionMode}
             setIsSelectionMode={setIsSelectionMode}
             selectedItems={selectedItems}
@@ -842,6 +997,10 @@ function App() {
             isLongPressTriggered={isLongPressTriggered}
             onDelete={handleDelete}
             setShowLcReport={setShowLcReport}
+            lcSearchQuery={lcSearchQuery}
+            setLcSearchQuery={setLcSearchQuery}
+            lcFilters={lcFilters}
+            setLcFilters={setLcFilters}
             stockFormData={stockFormData}
             setStockFormData={setStockFormData}
             showStockForm={showStockForm}
@@ -852,9 +1011,10 @@ function App() {
             setIsSubmitting={setIsSubmitting}
             submitStatus={submitStatus}
             setSubmitStatus={setSubmitStatus}
-            fetchSales={fetchSales}
-            salesRecords={salesRecords}
+            lcReceiveRecords={lcReceiveRecords}
+            lcReceiveSummary={lcReceiveSummary}
             fetchProducts={fetchProducts}
+            salesRecords={salesRecords}
           />
         );
 
@@ -972,7 +1132,7 @@ function App() {
         );
       case 'warehouse-section':
         return (
-          <WarehouseManagement />
+          <WarehouseManagement currentUser={currentUser} />
         );
       case 'general-sale-section':
         return (
@@ -1042,17 +1202,17 @@ function App() {
   }
 
   return (
-    <div className={`flex h-screen bg-gray-50 font-sans text-gray-900 ${(showLcReport || showStockReport) ? 'is-printing-report' : ''}`}>
+    <div className={`flex h-screen bg-gray-50 font-sans text-gray-900 ${(showLcReport || showStockReport || showProductHistoryReport) ? 'is-printing-report' : ''}`}>
 
       {/* Sidebar Backdrop for mobile */}
       {sidebarOpen && (
         <div
-          className="fixed inset-0 bg-gray-900/50 z-40 md:hidden animate-in fade-in duration-300 no-print"
+          className="fixed inset-0 bg-gray-900/50 z-[1050] md:hidden animate-in fade-in duration-300 no-print"
           onClick={() => setSidebarOpen(false)}
         />
       )}
       {/* Sidebar */}
-      <aside className={`fixed inset-y-0 left-0 z-50 w-64 bg-white text-gray-900 border-r border-gray-200 transform transition-transform duration-300 ease-in-out ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'} md:relative md:translate-x-0 flex flex-col print:hidden`}>
+      <aside className={`fixed inset-y-0 left-0 z-[1100] w-64 bg-white text-gray-900 border-r border-gray-200 transform transition-transform duration-300 ease-in-out ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'} md:relative md:translate-x-0 flex flex-col ${(showLcReport || showStockReport || showProductHistoryReport) ? 'print:hidden' : ''}`}>
         <div className="p-5 border-b border-gray-200 bg-gray-50/50">
           <div className="flex items-center">
             <button
@@ -1202,9 +1362,9 @@ function App() {
       </aside>
 
       {/* Main Content */}
-      <div className={`flex-1 flex flex-col overflow-hidden ${(showLcReport || showStockReport) ? 'print:hidden' : ''}`}>
+      <div className={`flex-1 flex flex-col overflow-hidden ${(showLcReport || showStockReport || showProductHistoryReport) ? 'print:hidden' : ''}`}>
         {/* Header */}
-        <header className="flex items-center justify-between px-6 py-4 bg-white border-b border-gray-200 shadow-sm print:hidden">
+        <header className="relative z-[1000] flex items-center justify-between px-6 py-4 bg-white border-b border-gray-200 shadow-sm print:hidden">
           <div className="flex items-center">
             <button onClick={() => setSidebarOpen(!sidebarOpen)} className="md:hidden p-2 rounded-md text-gray-600 hover:bg-gray-100">
               <MenuIcon className="w-6 h-6" />
@@ -1216,22 +1376,41 @@ function App() {
             </div>
           </div>
           <div className="flex items-center space-x-4">
-            <button className="relative p-2 text-gray-500 hover:bg-gray-100 rounded-full transition-colors">
-              <BellIcon className="w-6 h-6" />
-              <span className="absolute top-1 right-1 w-2.5 h-2.5 bg-red-500 rounded-full border-2 border-white"></span>
-            </button>
+            <div className="relative">
+              <button
+                onClick={() => setShowNotifications(!showNotifications)}
+                className={`relative p-2 rounded-full transition-all duration-300 ${showNotifications ? 'bg-blue-50 text-blue-600 shadow-inner' : 'text-gray-500 hover:bg-gray-100'
+                  }`}
+              >
+                <BellIcon className="w-6 h-6" />
+                {unreadCount > 0 && (
+                  <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 bg-red-500 text-white text-[10px] font-bold rounded-full border-2 border-white flex items-center justify-center shadow-sm animate-in zoom-in duration-200">
+                    {unreadCount}
+                  </span>
+                )}
+              </button>
+
+              <NotificationMenu
+                isOpen={showNotifications}
+                onClose={() => setShowNotifications(false)}
+                notifications={notifications}
+                onMarkAllAsRead={handleMarkAllAsRead}
+                onClearAll={handleClearAll}
+                onMarkAsRead={handleMarkAsRead}
+              />
+            </div>
           </div>
         </header>
 
         {/* Dashboard Content */}
-        <main className={`flex-1 overflow-x-hidden overflow-y-auto bg-gray-50 p-6 ${(showLcReport || showStockReport) ? 'no-print' : ''}`}>
+        <main className={`flex-1 overflow-x-hidden overflow-y-auto bg-gray-50 p-6 ${(showLcReport || showStockReport || showProductHistoryReport) ? 'no-print' : ''}`}>
           {renderContent()}
         </main>
       </div>
 
       {/* Custom Deletion Confirmation Modal */}
       {deleteConfirm.show && (
-        <div className="fixed inset-0 z-[70] flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-[2000] flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-gray-900/60 backdrop-blur-sm" onClick={() => setDeleteConfirm({ show: false, type: '', id: null, isBulk: false })}></div>
           <div className="relative bg-white/80 backdrop-blur-2xl border border-white/50 rounded-2xl shadow-2xl p-8 max-w-md w-full animate-in zoom-in duration-300">
             <div className="flex items-center justify-center w-16 h-16 bg-red-100/50 rounded-full mx-auto mb-6">

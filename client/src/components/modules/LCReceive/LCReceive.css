@@ -1,1 +1,13 @@
-/* Styles moved to LCReceive.jsx as Tailwind utility classes to avoid @apply issues */
+/* LC Receive Module Styles */
+
+/* Print Styles for LCReport */
+@media print {
+    @page {
+        size: landscape;
+        margin: 5mm;
+    }
+
+    body {
+        margin: 0;
+    }
+}

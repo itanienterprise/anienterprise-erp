@@ -65,7 +65,7 @@ const StockReport = ({
     };
 
     return (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4 print:p-0 print:bg-white print:backdrop-none">
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[9999] flex items-center justify-center p-4 print:p-0 print:bg-white print:backdrop-none">
             <div className="bg-white w-full max-w-5xl max-h-[90vh] overflow-visible rounded-3xl shadow-2xl flex flex-col print:max-h-none print:shadow-none print:rounded-none print:w-full print:h-auto">
                 {/* Modal Header/Toolbar (Hidden on Print) */}
                 <div className="flex flex-row items-center justify-between px-4 sm:px-8 py-4 border-b border-gray-100 print:hidden gap-2">
@@ -92,8 +92,8 @@ const StockReport = ({
                             {showFilterPanel && (
                                 <>
                                     {/* Backdrop for mobile */}
-                                    <div className="fixed inset-0 bg-black/20 backdrop-blur-[2px] z-[105] md:hidden" onClick={() => setShowFilterPanel(false)} />
-                                    <div ref={filterPanelRef} className="fixed inset-x-4 top-24 md:absolute md:top-full md:right-0 md:mt-2 w-auto md:w-72 bg-white border border-gray-100 rounded-2xl shadow-[0_20px_50px_rgba(0,0,0,0.15)] z-[110] p-4 flex flex-col max-h-[78vh] animate-in fade-in zoom-in-95 duration-200">
+                                    <div className="fixed inset-0 bg-black/20 backdrop-blur-[2px] z-[2005] md:hidden" onClick={() => setShowFilterPanel(false)} />
+                                    <div ref={filterPanelRef} className="fixed inset-x-4 top-24 md:absolute md:top-full md:right-0 md:mt-2 w-auto md:w-72 bg-white border border-gray-100 rounded-2xl shadow-[0_20px_50px_rgba(0,0,0,0.15)] z-[2010] p-4 flex flex-col max-h-[78vh] animate-in fade-in zoom-in-95 duration-200">
                                         <div className="flex items-center justify-between mb-3 pb-2 border-b border-gray-100 flex-shrink-0">
                                             <h4 className="font-bold text-gray-900 text-sm">Advance Filter</h4>
                                             <button
@@ -154,7 +154,7 @@ const StockReport = ({
                                                         const options = getUniqueOptions('lcNo');
                                                         const filtered = options.filter(lc => lc.toLowerCase().includes(filterSearchInputs.lcNoSearch.toLowerCase()));
                                                         return filtered.length > 0 ? (
-                                                            <div className="absolute z-[120] mt-1 w-full bg-white border border-gray-100 rounded-xl shadow-xl max-h-48 overflow-y-auto py-1">
+                                                            <div className="absolute z-[2020] mt-1 w-full bg-white border border-gray-100 rounded-xl shadow-xl max-h-48 overflow-y-auto py-1">
                                                                 {filtered.map(lc => (
                                                                     <button key={lc} type="button" onClick={() => { setStockFilters({ ...stockFilters, lcNo: lc }); setFilterSearchInputs({ ...filterSearchInputs, lcNoSearch: '' }); setFilterDropdownOpen(initialFilterDropdownState); }} className="w-full px-4 py-2 text-left text-sm hover:bg-blue-50 transition-colors">{lc}</button>
                                                                 ))}

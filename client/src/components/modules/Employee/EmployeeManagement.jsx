@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { EditIcon, TrashIcon, UserIcon, XIcon, SearchIcon, FunnelIcon, ChevronDownIcon, EyeIcon, ShieldIcon } from '../../Icons';
 import { API_BASE_URL, SortIcon, formatDate } from '../../../utils/helpers';
 import { encryptData, decryptData } from '../../../utils/encryption';
+import CustomDatePicker from '../../shared/CustomDatePicker';
 import './EmployeeManagement.css';
 
 const EmployeeManagement = ({
@@ -21,6 +22,7 @@ const EmployeeManagement = ({
     const [showForm, setShowForm] = useState(false);
     const [showFilterPanel, setShowFilterPanel] = useState(false);
     const [generatedPassword, setGeneratedPassword] = useState(null);
+    const [generatedId, setGeneratedId] = useState(null);
     const [filters, setFilters] = useState({ status: 'All Status' });
     const filterButtonRef = useRef(null);
     const filterPanelRef = useRef(null);
@@ -30,6 +32,17 @@ const EmployeeManagement = ({
     const [isLoading, setIsLoading] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
     const [viewData, setViewData] = useState(null);
+    const [expandedCards, setExpandedCards] = useState(new Set());
+    const [openDropdown, setOpenDropdown] = useState(null);
+    const roleDropdownRef = useRef(null);
+    const statusDropdownRef = useRef(null);
+
+    const toggleCardExpansion = (id) => {
+        const newExpanded = new Set(expandedCards);
+        if (newExpanded.has(id)) newExpanded.delete(id);
+        else newExpanded.add(id);
+        setExpandedCards(newExpanded);
+    };
 
     const [formData, setFormData] = useState({
         employeeId: '',
@@ -48,6 +61,20 @@ const EmployeeManagement = ({
         fetchEmployees();
     }, []);
 
+    // Close custom dropdowns on outside click
+    useEffect(() => {
+        const handleClickOutside = (e) => {
+            if (roleDropdownRef.current && !roleDropdownRef.current.contains(e.target)) {
+                setOpenDropdown(prev => prev === 'role' ? null : prev);
+            }
+            if (statusDropdownRef.current && !statusDropdownRef.current.contains(e.target)) {
+                setOpenDropdown(prev => prev === 'status' ? null : prev);
+            }
+        };
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, []);
+
     useEffect(() => {
         const handleClickOutside = (event) => {
             if (showFilterPanel && filterPanelRef.current && !filterPanelRef.current.contains(event.target) && !filterButtonRef.current.contains(event.target)) {
@@ -58,6 +85,7 @@ const EmployeeManagement = ({
         document.addEventListener('mousedown', handleClickOutside);
         return () => document.removeEventListener('mousedown', handleClickOutside);
     }, [showFilterPanel]);
+
 
     const fetchEmployees = async () => {
         setIsLoading(true);
@@ -118,6 +146,12 @@ const EmployeeManagement = ({
                 if (result.plainPassword) {
                     setGeneratedPassword(result.plainPassword);
                 }
+                if (result.data) {
+                    try {
+                        const dec = decryptData(result.data);
+                        if (dec.employeeId) setGeneratedId(dec.employeeId);
+                    } catch (e) { }
+                }
                 setSubmitStatus('success');
                 fetchEmployees();
                 // Removed the setTimeout that closes the form and resets status
@@ -148,6 +182,7 @@ const EmployeeManagement = ({
         });
         setEditingId(null);
         setGeneratedPassword(null);
+        setGeneratedId(null);
     };
 
     const handleEdit = (employee) => {
@@ -230,12 +265,12 @@ const EmployeeManagement = ({
     return (
         <div className="employee-container space-y-6 text-left">
             {!showForm && (
-                <div className="flex items-center justify-between gap-4">
-                    <div className="w-1/4 text-left">
-                        <h2 className="text-2xl font-bold text-gray-800">Employee Management</h2>
+                <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4">
+                    <div className="w-full md:w-1/4 text-left">
+                        <h2 className="text-xl md:text-2xl font-bold text-gray-800">Employee Management</h2>
                     </div>
 
-                    <div className="flex-1 max-w-md mx-auto relative group">
+                    <div className="flex-1 w-full max-w-md mx-auto relative group">
                         <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
                             <SearchIcon className="h-4 w-4 text-gray-400 group-focus-within:text-blue-500 transition-colors" />
                         </div>
@@ -248,13 +283,13 @@ const EmployeeManagement = ({
                         />
                     </div>
 
-                    <div className="w-1/4 flex justify-end gap-3 z-50">
-                        <div className="flex items-center gap-2 relative">
+                    <div className="w-full md:w-1/4 flex items-center justify-between md:justify-end gap-3 z-30">
+                        <div className="flex-1 md:flex-none flex items-center gap-2 relative">
                             {filters.status && (
                                 <button
                                     ref={filterButtonRef}
                                     onClick={() => setShowFilterPanel(!showFilterPanel)}
-                                    className="flex items-center gap-2 px-3 py-1.5 bg-blue-50 text-blue-600 border border-blue-100 rounded-lg text-xs font-bold hover:bg-blue-100 transition-all shadow-sm whitespace-nowrap"
+                                    className="w-full md:w-auto flex items-center justify-center gap-2 px-3 py-1.5 bg-blue-50 text-blue-600 border border-blue-100 rounded-lg text-xs font-bold hover:bg-blue-100 transition-all shadow-sm whitespace-nowrap"
                                 >
                                     <span className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse"></span>
                                     {filters.status}
@@ -305,7 +340,7 @@ const EmployeeManagement = ({
 
                         <button
                             onClick={() => setShowForm(!showForm)}
-                            className="px-4 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-medium rounded-xl shadow-lg shadow-blue-500/30 transition-all transform hover:scale-105 flex items-center"
+                            className="flex-1 md:flex-none justify-center px-4 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-medium rounded-xl shadow-lg shadow-blue-500/30 transition-all transform hover:scale-105 flex items-center"
                         >
                             <span className="mr-2 text-xl">+</span> Add New
                         </button>
@@ -327,11 +362,10 @@ const EmployeeManagement = ({
                             <input
                                 type="text"
                                 name="employeeId"
-                                value={formData.employeeId}
-                                onChange={handleInputChange}
-                                required
-                                placeholder="E-101"
-                                className="w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm"
+                                value={editingId ? formData.employeeId : ''}
+                                readOnly
+                                placeholder="Auto-generated on creation"
+                                className="w-full px-4 py-2 bg-gray-50/50 border border-gray-200/60 rounded-lg focus:outline-none transition-all backdrop-blur-sm opacity-70 cursor-not-allowed"
                             />
                         </div>
                         <div className="space-y-2">
@@ -393,17 +427,14 @@ const EmployeeManagement = ({
                                 className="w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm"
                             />
                         </div>
-                        <div className="space-y-2">
-                            <label className="text-sm font-medium text-gray-700 font-sans">Joining Date</label>
-                            <input
-                                type="date"
-                                name="joiningDate"
-                                value={formData.joiningDate}
-                                onChange={handleInputChange}
-                                required
-                                className="w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm"
-                            />
-                        </div>
+                        <CustomDatePicker
+                            label="Joining Date"
+                            name="joiningDate"
+                            value={formData.joiningDate}
+                            onChange={handleInputChange}
+                            required
+                            compact={true}
+                        />
                         <div className="space-y-2">
                             <label className="text-sm font-medium text-gray-700 font-sans">Salary</label>
                             <input
@@ -417,33 +448,57 @@ const EmployeeManagement = ({
                         </div>
                         <div className="space-y-2">
                             <label className="text-sm font-medium text-gray-700 font-sans">Role</label>
-                            <select
-                                name="role"
-                                value={formData.role}
-                                onChange={handleInputChange}
-                                className="w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm"
-                            >
-                                <option value="Admin">Admin</option>
-                                <option value="Incharge">Incharge</option>
-                                <option value="LC Manager">LC Manager</option>
-                                <option value="Sales Manager">Sales Manager</option>
-                                <option value="Accounts Manager">Accounts Manager</option>
-                                <option value="Border Manager">Border Manager</option>
-                                <option value="Data Entry">Data Entry</option>
-                                <option value="General Staff">General Staff</option>
-                            </select>
+                            <div className="relative" ref={roleDropdownRef}>
+                                <button
+                                    type="button"
+                                    onClick={() => setOpenDropdown(openDropdown === 'role' ? null : 'role')}
+                                    className="w-full px-4 py-2 pr-10 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm text-sm text-gray-800 text-left flex items-center justify-between"
+                                >
+                                    <span>{formData.role}</span>
+                                    <ChevronDownIcon className={`w-4 h-4 text-gray-400 transition-transform duration-200 ${openDropdown === 'role' ? 'rotate-180' : ''}`} />
+                                </button>
+                                {openDropdown === 'role' && (
+                                    <div className="absolute z-[60] w-full mt-1 bg-white border border-gray-100 rounded-xl shadow-xl max-h-48 overflow-y-auto py-1">
+                                        {['Admin', 'Incharge', 'LC Manager', 'Sales Manager', 'Accounts Manager', 'Border Manager', 'Data Entry', 'General Staff'].map(opt => (
+                                            <button
+                                                key={opt}
+                                                type="button"
+                                                onClick={() => { setFormData(p => ({ ...p, role: opt })); setOpenDropdown(null); }}
+                                                className={`w-full px-4 py-2 text-left text-sm transition-colors font-medium ${formData.role === opt ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-blue-50'}`}
+                                            >
+                                                {opt}
+                                            </button>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
                         </div>
                         <div className="space-y-2">
                             <label className="text-sm font-medium text-gray-700 font-sans">Status</label>
-                            <select
-                                name="status"
-                                value={formData.status}
-                                onChange={handleInputChange}
-                                className="w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm"
-                            >
-                                <option value="Active">Active</option>
-                                <option value="Inactive">Inactive</option>
-                            </select>
+                            <div className="relative" ref={statusDropdownRef}>
+                                <button
+                                    type="button"
+                                    onClick={() => setOpenDropdown(openDropdown === 'status' ? null : 'status')}
+                                    className="w-full px-4 py-2 pr-10 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm text-sm text-gray-800 text-left flex items-center justify-between"
+                                >
+                                    <span>{formData.status}</span>
+                                    <ChevronDownIcon className={`w-4 h-4 text-gray-400 transition-transform duration-200 ${openDropdown === 'status' ? 'rotate-180' : ''}`} />
+                                </button>
+                                {openDropdown === 'status' && (
+                                    <div className="absolute z-[60] w-full mt-1 bg-white border border-gray-100 rounded-xl shadow-xl overflow-hidden py-1">
+                                        {['Active', 'Inactive'].map(opt => (
+                                            <button
+                                                key={opt}
+                                                type="button"
+                                                onClick={() => { setFormData(p => ({ ...p, status: opt })); setOpenDropdown(null); }}
+                                                className={`w-full px-4 py-2 text-left text-sm transition-colors font-medium ${formData.status === opt ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-blue-50'}`}
+                                            >
+                                                {opt}
+                                            </button>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
                         </div>
 
                         <div className="col-span-1 md:col-span-2 space-y-4 pt-4">
@@ -462,8 +517,8 @@ const EmployeeManagement = ({
                                             </div>
                                             <div className="space-y-3">
                                                 <div className="flex items-center justify-between p-3 bg-white rounded-xl border border-blue-50">
-                                                    <span className="text-xs text-gray-500 font-medium">Username</span>
-                                                    <span className="text-sm font-bold text-gray-800">{formData.employeeId}</span>
+                                                    <span className="text-xs text-gray-500 font-medium">Username / Employee ID</span>
+                                                    <span className="text-sm font-bold text-gray-800">{generatedId || formData.employeeId}</span>
                                                 </div>
                                                 <div className="flex items-center justify-between p-3 bg-white rounded-xl border border-blue-50">
                                                     <span className="text-xs text-gray-500 font-medium">Password</span>
@@ -529,96 +584,154 @@ const EmployeeManagement = ({
             )}
 
             {!showForm && (
-                <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+                <div className="bg-transparent md:bg-white md:rounded-xl md:shadow-sm md:border md:border-gray-100 overflow-hidden">
                     {isLoading ? (
                         <div className="flex items-center justify-center p-20">
                             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
                         </div>
                     ) : (
-                        <div className="overflow-x-auto text-left">
-                            <table className="w-full text-left">
-                                <thead className="bg-gray-50 border-b border-gray-100">
-                                    <tr>
-                                        {isSelectionMode && <th className="px-6 py-4 w-10"><input type="checkbox" checked={selectedItems.size === employees.length} onChange={toggleSelectAll} className="rounded border-gray-300 text-blue-600 focus:ring-blue-500" /></th>}
-                                        <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors font-sans" onClick={() => requestSort('employeeId')}>
-                                            <div className="flex items-center space-x-1">
-                                                <span>ID</span>
-                                                <SortIcon config={sortConfig.employee} columnKey="employeeId" />
-                                            </div>
-                                        </th>
-                                        <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors font-sans" onClick={() => requestSort('name')}>
-                                            <div className="flex items-center space-x-1">
-                                                <span>Name</span>
-                                                <SortIcon config={sortConfig.employee} columnKey="name" />
-                                            </div>
-                                        </th>
-                                        <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors font-sans" onClick={() => requestSort('department')}>
-                                            <div className="flex items-center space-x-1">
-                                                <span>Department</span>
-                                                <SortIcon config={sortConfig.employee} columnKey="department" />
-                                            </div>
-                                        </th>
-                                        <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors font-sans" onClick={() => requestSort('designation')}>
-                                            <div className="flex items-center space-x-1">
-                                                <span>Designation</span>
-                                                <SortIcon config={sortConfig.employee} columnKey="designation" />
-                                            </div>
-                                        </th>
-                                        <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors font-sans" onClick={() => requestSort('role')}>
-                                            <div className="flex items-center space-x-1">
-                                                <span>Role</span>
-                                                <SortIcon config={sortConfig.employee} columnKey="role" />
-                                            </div>
-                                        </th>
-                                        <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider font-sans">Phone</th>
-                                        <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors font-sans text-right" onClick={() => requestSort('salary')}>
-                                            <div className="flex items-center justify-end space-x-1">
-                                                <span>Salary</span>
-                                                <SortIcon config={sortConfig.employee} columnKey="salary" />
-                                            </div>
-                                        </th>
-                                        <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider text-center font-sans">Actions</th>
-                                    </tr>
-                                </thead>
-                                <tbody className="divide-y divide-gray-50">
-                                    {getFilteredAndSortedData().map(e => (
-                                        <tr
-                                            key={e._id}
-                                            onMouseDown={() => startLongPress(e._id)}
-                                            onMouseUp={endLongPress}
-                                            onClick={() => isSelectionMode && toggleSelection(e._id)}
-                                            className="hover:bg-gray-50/50 transition-colors cursor-pointer"
-                                        >
-                                            {isSelectionMode && <td className="px-6 py-4"><input type="checkbox" checked={selectedItems.has(e._id)} className="rounded border-gray-300 text-blue-600 focus:ring-blue-500" /></td>}
-                                            <td className="px-6 py-4 text-sm text-gray-600 font-sans">{e.employeeId}</td>
-                                            <td className="px-6 py-4 text-sm font-bold text-gray-900 font-sans">{e.name}</td>
-                                            <td className="px-6 py-4 text-sm text-gray-600 font-sans">{e.department}</td>
-                                            <td className="px-6 py-4 text-sm text-gray-600 font-sans">{e.designation}</td>
-                                            <td className="px-6 py-4 text-sm text-gray-600 font-sans">
-                                                <span className="px-2 py-0.5 bg-gray-100 text-gray-600 rounded text-[10px] font-bold uppercase tracking-tight">
-                                                    {e.role}
-                                                </span>
-                                            </td>
-                                            <td className="px-6 py-4 text-sm text-gray-600 font-sans">{e.phone}</td>
-                                            <td className="px-6 py-4 text-sm font-bold text-gray-900 font-sans text-right">{e.salary ? `${parseFloat(e.salary).toLocaleString()} BDT` : '-'}</td>
-                                            <td className="px-6 py-4 text-sm text-gray-600">
-                                                <div className="flex items-center justify-center space-x-2">
-                                                    <button onClick={(event) => { event.stopPropagation(); setViewData(e); }} className="p-1 hover:bg-gray-100 text-gray-400 hover:text-gray-600 rounded transition-colors"><EyeIcon className="w-5 h-5" /></button>
-                                                    <button onClick={(event) => { event.stopPropagation(); handleEdit(e); }} className="p-1 hover:bg-blue-50 text-gray-400 hover:text-blue-600 rounded transition-colors"><EditIcon className="w-5 h-5" /></button>
-                                                    <button onClick={(event) => { event.stopPropagation(); handleDelete(e._id); }} className="p-1 hover:bg-red-50 text-gray-400 hover:text-red-600 rounded transition-colors"><TrashIcon className="w-5 h-5" /></button>
+                        <>
+                            {/* Desktop Table */}
+                            <div className="hidden md:block overflow-x-auto text-left">
+                                <table className="w-full text-left">
+                                    <thead className="bg-gray-50 border-b border-gray-100">
+                                        <tr>
+                                            {isSelectionMode && <th className="px-6 py-4 w-10"><input type="checkbox" checked={selectedItems.size === employees.length} onChange={toggleSelectAll} className="rounded border-gray-300 text-blue-600 focus:ring-blue-500" /></th>}
+                                            <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors font-sans" onClick={() => requestSort('employeeId')}>
+                                                <div className="flex items-center space-x-1">
+                                                    <span>ID</span>
+                                                    <SortIcon config={sortConfig.employee} columnKey="employeeId" />
                                                 </div>
-                                            </td>
+                                            </th>
+                                            <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors font-sans" onClick={() => requestSort('name')}>
+                                                <div className="flex items-center space-x-1">
+                                                    <span>Name</span>
+                                                    <SortIcon config={sortConfig.employee} columnKey="name" />
+                                                </div>
+                                            </th>
+                                            <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors font-sans" onClick={() => requestSort('department')}>
+                                                <div className="flex items-center space-x-1">
+                                                    <span>Department</span>
+                                                    <SortIcon config={sortConfig.employee} columnKey="department" />
+                                                </div>
+                                            </th>
+                                            <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors font-sans" onClick={() => requestSort('designation')}>
+                                                <div className="flex items-center space-x-1">
+                                                    <span>Designation</span>
+                                                    <SortIcon config={sortConfig.employee} columnKey="designation" />
+                                                </div>
+                                            </th>
+                                            <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors font-sans" onClick={() => requestSort('role')}>
+                                                <div className="flex items-center space-x-1">
+                                                    <span>Role</span>
+                                                    <SortIcon config={sortConfig.employee} columnKey="role" />
+                                                </div>
+                                            </th>
+                                            <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider font-sans">Phone</th>
+                                            <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors font-sans text-right" onClick={() => requestSort('salary')}>
+                                                <div className="flex items-center justify-end space-x-1">
+                                                    <span>Salary</span>
+                                                    <SortIcon config={sortConfig.employee} columnKey="salary" />
+                                                </div>
+                                            </th>
+                                            <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider text-center font-sans">Actions</th>
                                         </tr>
-                                    ))}
-                                </tbody>
-                            </table>
-                        </div>
+                                    </thead>
+                                    <tbody className="divide-y divide-gray-50">
+                                        {getFilteredAndSortedData().map(e => (
+                                            <tr
+                                                key={e._id}
+                                                onMouseDown={() => startLongPress(e._id)}
+                                                onMouseUp={endLongPress}
+                                                onClick={() => isSelectionMode && toggleSelection(e._id)}
+                                                className="hover:bg-gray-50/50 transition-colors cursor-pointer"
+                                            >
+                                                {isSelectionMode && <td className="px-6 py-4"><input type="checkbox" checked={selectedItems.has(e._id)} className="rounded border-gray-300 text-blue-600 focus:ring-blue-500" /></td>}
+                                                <td className="px-6 py-4 text-sm text-gray-600 font-sans">{e.employeeId}</td>
+                                                <td className="px-6 py-4 text-sm font-bold text-gray-900 font-sans">{e.name}</td>
+                                                <td className="px-6 py-4 text-sm text-gray-600 font-sans">{e.department}</td>
+                                                <td className="px-6 py-4 text-sm text-gray-600 font-sans">{e.designation}</td>
+                                                <td className="px-6 py-4 text-sm text-gray-600 font-sans">
+                                                    <span className="px-2 py-0.5 bg-gray-100 text-gray-600 rounded text-[10px] font-bold uppercase tracking-tight">
+                                                        {e.role}
+                                                    </span>
+                                                </td>
+                                                <td className="px-6 py-4 text-sm text-gray-600 font-sans">{e.phone}</td>
+                                                <td className="px-6 py-4 text-sm font-bold text-gray-900 font-sans text-right">{e.salary ? `${parseFloat(e.salary).toLocaleString()} BDT` : '-'}</td>
+                                                <td className="px-6 py-4 text-sm text-gray-600">
+                                                    <div className="flex items-center justify-center space-x-2">
+                                                        <button onClick={(event) => { event.stopPropagation(); setViewData(e); }} className="p-1 hover:bg-gray-100 text-gray-400 hover:text-gray-600 rounded transition-colors"><EyeIcon className="w-5 h-5" /></button>
+                                                        <button onClick={(event) => { event.stopPropagation(); handleEdit(e); }} className="p-1 hover:bg-blue-50 text-gray-400 hover:text-blue-600 rounded transition-colors"><EditIcon className="w-5 h-5" /></button>
+                                                        <button onClick={(event) => { event.stopPropagation(); handleDelete(e._id); }} className="p-1 hover:bg-red-50 text-gray-400 hover:text-red-600 rounded transition-colors"><TrashIcon className="w-5 h-5" /></button>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+
+                            {/* Mobile Grid Layout */}
+                            <div className="md:hidden space-y-4">
+                                {getFilteredAndSortedData().map(e => (
+                                    <div
+                                        key={e._id}
+                                        onMouseDown={() => startLongPress(e._id)}
+                                        onMouseUp={endLongPress}
+                                        onClick={() => isSelectionMode ? toggleSelection(e._id) : toggleCardExpansion(e._id)}
+                                        className={`p-5 bg-white rounded-2xl border border-gray-100 shadow-sm transition-all relative overflow-hidden cursor-pointer ${selectedItems.has(e._id) ? 'ring-2 ring-blue-500 border-transparent bg-blue-50/30' : ''}`}
+                                    >
+                                        <div className="flex justify-between items-start mb-3">
+                                            <div className="flex items-center gap-3">
+                                                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white font-bold shadow-md shadow-blue-200">
+                                                    {e.name?.charAt(0)}
+                                                </div>
+                                                <div>
+                                                    <h4 className="font-bold text-gray-900 text-sm">{e.name}</h4>
+                                                    <p className="text-[10px] text-gray-500 font-medium uppercase tracking-wider">{e.employeeId}</p>
+                                                </div>
+                                            </div>
+                                            <div className="flex items-center gap-1">
+                                                <button onClick={(event) => { event.stopPropagation(); setViewData(e); }} className="p-2 hover:bg-gray-100 text-gray-400 hover:text-gray-600 rounded-xl transition-colors"><EyeIcon className="w-4 h-4" /></button>
+                                                <button onClick={(event) => { event.stopPropagation(); handleEdit(e); }} className="p-2 hover:bg-blue-50 text-gray-400 hover:text-blue-600 rounded-xl transition-colors"><EditIcon className="w-4 h-4" /></button>
+                                                <button onClick={(event) => { event.stopPropagation(); handleDelete(e._id); }} className="p-2 hover:bg-red-50 text-gray-400 hover:text-red-600 rounded-xl transition-colors"><TrashIcon className="w-4 h-4" /></button>
+                                            </div>
+                                        </div>
+
+                                        <div className={`grid grid-cols-2 gap-y-3 gap-x-4 overflow-hidden transition-all duration-300 ${expandedCards.has(e._id) ? 'max-h-[500px] opacity-100 mb-2' : 'max-h-0 opacity-0 mb-0'}`}>
+                                            <div>
+                                                <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest mb-0.5">Role</p>
+                                                <p className="text-xs text-gray-700 font-medium">{e.role}</p>
+                                            </div>
+                                            <div>
+                                                <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest mb-0.5">Dept</p>
+                                                <p className="text-xs text-gray-700 font-medium">{e.department}</p>
+                                            </div>
+                                            <div>
+                                                <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest mb-0.5">Designation</p>
+                                                <p className="text-xs text-gray-700 font-medium">{e.designation}</p>
+                                            </div>
+                                            <div>
+                                                <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest mb-0.5">Phone</p>
+                                                <p className="text-xs text-gray-700 font-medium">{e.phone}</p>
+                                            </div>
+                                            <div className="col-span-2 flex items-center gap-2 pt-1 border-t border-gray-50 mt-1">
+                                                <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">Status:</p>
+                                                <div className={`px-2 py-0.5 rounded-lg text-[10px] font-bold uppercase tracking-tight ${e.status === 'Active' ? 'bg-green-100 text-green-700' : 'bg-rose-100 text-rose-700'}`}>
+                                                    {e.status}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        </>
                     )}
                 </div>
             )}
 
             {viewData && (
-                <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+                <div className="fixed inset-0 z-[2000] flex items-center justify-center p-4">
                     <div className="absolute inset-0 bg-gray-900/60 backdrop-blur-sm" onClick={() => setViewData(null)}></div>
                     <div className="relative bg-white border border-gray-100 rounded-2xl shadow-2xl max-w-lg w-full p-8 animate-in zoom-in duration-200">
                         <div className="flex justify-between items-start mb-6">

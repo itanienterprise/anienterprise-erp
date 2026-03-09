@@ -1080,7 +1080,7 @@ const SaleManagement = ({
     const renderViewModal = () => {
         if (!viewData) return null;
         return (
-            <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+            <div className="fixed inset-0 z-[2000] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
                 <div className="bg-white rounded-3xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-y-auto p-8 relative animate-scale-in custom-scrollbar">
                     <button onClick={() => setViewData(null)} className="absolute top-6 right-6 text-gray-400 hover:text-red-500 transition-colors bg-white/50 p-2 rounded-xl border border-gray-100 shadow-sm">
                         <XIcon className="w-5 h-5" />

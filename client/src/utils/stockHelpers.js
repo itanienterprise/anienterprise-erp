@@ -28,6 +28,9 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
     // Expand LC Receive records that have brandEntries into individual brand-level records
     const expandedRecords = [];
     stockRecords.forEach(item => {
+        // Exclude "Requested" items from stock calculations as they are not yet officially in stock
+        if ((item.status || '').toLowerCase().includes('requested')) return;
+
         if (item.brandEntries && item.brandEntries.length > 0) {
             item.brandEntries.forEach(entry => {
                 expandedRecords.push({

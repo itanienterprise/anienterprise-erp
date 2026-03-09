@@ -3,6 +3,7 @@ import { XIcon, PrinterIcon, BarChartIcon, FunnelIcon, SearchIcon, ChevronDownIc
 import { formatDate } from '../../../utils/helpers';
 import { generateLCReceiveReportPDF } from '../../../utils/pdfGenerator';
 import CustomDatePicker from '../../shared/CustomDatePicker';
+import './LCReceive.css';
 
 const LCReport = ({
     isOpen,
@@ -148,13 +149,7 @@ const LCReport = ({
     if (!isOpen) return null;
 
     return (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-gray-900/40 backdrop-blur-sm">
-            <style>{`
-                @media print {
-                    @page { size: landscape; margin: 5mm; }
-                    body { margin: 0; }
-                }
-            `}</style>
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-gray-900/40 backdrop-blur-sm">
             <div className="w-full h-full md:w-[98%] md:h-[94%] bg-white md:rounded-3xl shadow-2xl flex flex-col animate-in fade-in zoom-in duration-300 print:w-full print:h-auto print:shadow-none print:bg-white print:rounded-none">
                 {/* Modal Header - Hidden in Print */}
                 <div className="px-4 md:px-8 py-3 md:py-5 border-b border-gray-100 bg-gray-50/50 flex items-center justify-between print:hidden">
@@ -183,9 +178,9 @@ const LCReport = ({
                             {showFilterPanel && (
                                 <>
                                     {/* Backdrop for mobile */}
-                                    <div className="fixed inset-0 bg-black/20 backdrop-blur-[2px] z-[210] md:hidden" onClick={() => setShowFilterPanel(false)} />
+                                    <div className="fixed inset-0 bg-black/20 backdrop-blur-[2px] z-[9999] md:hidden" onClick={() => setShowFilterPanel(false)} />
 
-                                    <div ref={filterPanelRef} className="fixed inset-x-4 md:inset-x-auto top-24 md:absolute md:top-full md:right-0 md:mt-3 w-auto md:w-[480px] bg-white rounded-2xl shadow-[0_20px_50px_rgba(0,0,0,0.15)] border border-gray-100 p-4 md:p-6 z-[220] animate-in fade-in zoom-in-95 duration-200">
+                                    <div ref={filterPanelRef} className="fixed inset-x-4 md:inset-x-auto top-24 md:absolute md:top-full md:right-0 md:mt-3 w-auto md:w-[480px] bg-white rounded-2xl shadow-[0_20px_50px_rgba(0,0,0,0.15)] border border-gray-100 p-4 md:p-6 z-[9999] animate-in fade-in zoom-in-95 duration-200">
                                         <div className="flex items-center justify-between mb-6">
                                             <h3 className="text-base font-bold text-gray-900">Advance Filter</h3>
                                             <button
@@ -257,7 +252,7 @@ const LCReport = ({
                                                     const lcOptions = [...new Set(stockRecords.map(item => (item.lcNo || '').trim()).filter(Boolean))].sort();
                                                     const filtered = lcOptions.filter(lc => lc.toLowerCase().includes(filterSearchInputs.lcNoSearch.toLowerCase()));
                                                     return filtered.length > 0 ? (
-                                                        <div className="absolute z-[120] mt-1 w-full bg-white border border-gray-200 rounded-xl shadow-lg max-h-48 overflow-y-auto">
+                                                        <div className="absolute z-[9999] mt-1 w-full bg-white border border-gray-100 rounded-xl shadow-xl max-h-48 overflow-y-auto py-1">
                                                             {filtered.map(lc => (
                                                                 <button
                                                                     key={lc}

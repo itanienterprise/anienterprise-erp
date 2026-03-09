@@ -54,6 +54,7 @@ const Warehouse = require('./models/Warehouse');
 const Sale = require('./models/Sale');
 const User = require('./models/User');
 const Employee = require('./models/Employee');
+const Notification = require('./models/Notification');
 const { encryptData, decryptData } = require('./utils/encryption');
 const CryptoJS = require('crypto-js');
 
@@ -434,12 +435,35 @@ app.post('/api/employees', async (req, res) => {
   try {
     const { data } = req.body;
     const decryptedData = decryptData(data);
-    const { employeeId, role } = decryptedData;
+    const { role } = decryptedData;
+    const empRole = role ? role.toLowerCase() : 'staff';
 
-    // Check if user already exists
-    const existingUser = await User.findOne({ username: employeeId });
+    // Auto-generate ID logic
+    const prefix = empRole === 'admin' ? 'A-' : 'E-';
+    const allEmployees = await Employee.find();
+
+    let maxIdNum = 1000;
+    for (const emp of allEmployees) {
+      try {
+        const dec = decryptData(emp.data);
+        if (dec.employeeId && dec.employeeId.startsWith(prefix)) {
+          const numPart = parseInt(dec.employeeId.substring(2));
+          if (!isNaN(numPart) && numPart > maxIdNum) {
+            maxIdNum = numPart;
+          }
+        }
+      } catch (e) {
+        // Suppress individual decryption errors to avoid breaking the entire loop
+      }
+    }
+
+    const newEmployeeId = `${prefix}${maxIdNum + 1}`;
+    decryptedData.employeeId = newEmployeeId;
+
+    // Check if user already exists (just in case)
+    const existingUser = await User.findOne({ username: newEmployeeId });
     if (existingUser) {
-      return res.status(400).json({ message: 'Employee ID already exists as a username' });
+      return res.status(400).json({ message: 'Auto-generated Employee ID already exists as a username' });
     }
 
     // Generate password
@@ -448,9 +472,9 @@ app.post('/api/employees', async (req, res) => {
 
     // Create User record
     const newUser = new User({
-      username: employeeId,
+      username: newEmployeeId,
       password: hashedPassword,
-      role: role ? role.toLowerCase() : 'staff'
+      role: empRole
     });
     await newUser.save();
 
@@ -626,6 +650,45 @@ app.post('/api/auth/change-password', async (req, res) => {
   } catch (err) {
     console.error('Password change error:', err);
     res.status(500).json({ message: 'Server error during password change' });
+  }
+});
+
+// Notification APIs
+app.post('/api/notifications', async (req, res) => {
+  try {
+    const newNotification = new Notification(req.body);
+    const savedNotification = await newNotification.save();
+    res.status(201).json(savedNotification);
+  } catch (err) {
+    res.status(400).json({ message: err.message });
+  }
+});
+
+app.get('/api/notifications', async (req, res) => {
+  try {
+    const notifications = await Notification.find().sort({ createdAt: -1 }).limit(50);
+    res.json(notifications);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+app.delete('/api/notifications/clear', async (req, res) => {
+  try {
+    await Notification.deleteMany({});
+    res.json({ message: 'All notifications cleared' });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+app.put('/api/notifications/:id', async (req, res) => {
+  try {
+    const updated = await Notification.findByIdAndUpdate(req.params.id, req.body, { new: true });
+    if (!updated) return res.status(404).json({ message: 'Notification not found' });
+    res.json(updated);
+  } catch (err) {
+    res.status(400).json({ message: err.message });
   }
 });
 

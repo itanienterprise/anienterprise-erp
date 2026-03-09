@@ -5,8 +5,8 @@ import { ChevronUpIcon, ChevronDownIcon } from '../components/Icons';
 // Set axios defaults for session handling
 axios.defaults.withCredentials = true;
 
-// API Base URL - In production, use empty string to rely on Nginx reverse proxy routing.
-export const API_BASE_URL = import.meta.env.PROD ? '' : `http://${window.location.hostname}:5000`;
+// API Base URL - In development Vite proxies this; in production Nginx proxies this.
+export const API_BASE_URL = '';
 
 // Date Formatting Utilities
 export const formatDate = (dateString) => {

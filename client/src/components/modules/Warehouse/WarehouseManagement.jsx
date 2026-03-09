@@ -25,7 +25,8 @@ import axios from 'axios';
 import { ChevronDownIcon } from '../../Icons';
 import { calculatePktRemainder } from '../../../utils/stockHelpers';
 
-const WarehouseManagement = () => {
+const WarehouseManagement = ({ currentUser }) => {
+    const isAdmin = currentUser?.role?.toLowerCase() === 'admin';
     const [activeTab, setActiveTab] = useState('stock'); // 'stock' or 'warehouses'
     const [showWarehouseForm, setShowWarehouseForm] = useState(false);
     const [warehouseFormData, setWarehouseFormData] = useState({
@@ -134,7 +135,7 @@ const WarehouseManagement = () => {
                 try {
                     return { ...decryptData(item.data), _id: item._id, createdAt: item.createdAt };
                 } catch { return null; }
-            }).filter(Boolean);
+            }).filter(item => item && (item.status || '').toLowerCase() !== 'requested');
 
             stockDataDecrypted.forEach(d => {
                 const key = `${(d.productName || d.product || '').trim().toLowerCase()}|${(d.brand || '').trim().toLowerCase()}`;
@@ -547,6 +548,7 @@ const WarehouseManagement = () => {
             if (warehouseFilterRef.current && !warehouseFilterRef.current.contains(event.target) &&
                 warehouseFilterButtonRef.current && !warehouseFilterButtonRef.current.contains(event.target)) {
                 setShowWarehouseFilterPanel(false);
+                setFilterDropdownOpen(initialFilterDropdownState);
             }
             if (productFilterRef.current && !productFilterRef.current.contains(event.target)) {
                 setFilterDropdownOpen(prev => ({ ...prev, productName: false }));
@@ -596,7 +598,9 @@ const WarehouseManagement = () => {
     };
 
     const getFilteredBrands = (search = '', productName) => {
-        const dataToFilter = productName ? warehouseData.filter(item => (item.productName || item.product) === productName) : warehouseData;
+        // Exclude "Requested" items from brand suggestions
+        const dataToFilter = (productName ? warehouseData.filter(item => (item.productName || item.product) === productName) : warehouseData)
+            .filter(item => (item.status || '').toLowerCase() !== 'requested');
         const options = [...new Set(dataToFilter.map(item => item.brand).filter(Boolean))].sort();
         return options.filter(b => (b || '').toString().toLowerCase().includes((search || '').toString().toLowerCase()));
     };
@@ -838,7 +842,12 @@ const WarehouseManagement = () => {
                         <div className="relative flex-1 md:flex-none">
                             <button
                                 ref={warehouseFilterButtonRef}
-                                onClick={() => setShowWarehouseFilterPanel(!showWarehouseFilterPanel)}
+                                onClick={() => {
+                                    if (showWarehouseFilterPanel) {
+                                        setFilterDropdownOpen(initialFilterDropdownState);
+                                    }
+                                    setShowWarehouseFilterPanel(!showWarehouseFilterPanel);
+                                }}
                                 className={`w-full flex justify-center items-center gap-2 px-4 py-2 rounded-xl transition-all border h-[42px] ${showWarehouseFilterPanel || Object.values(warehouseFilters).some(v => v !== '')
                                     ? 'bg-blue-600 border-blue-600 text-white shadow-lg shadow-blue-500/30'
                                     : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50 hover:border-gray-300 transition-all shadow-sm active:scale-95'
@@ -853,7 +862,7 @@ const WarehouseManagement = () => {
                                     {/* Mobile Backdrop */}
                                     <div className="fixed inset-0 bg-black/20 backdrop-blur-[2px] z-[140] md:hidden" onClick={() => setShowWarehouseFilterPanel(false)} />
 
-                                    <div ref={warehouseFilterRef} className="fixed inset-x-4 top-24 md:absolute md:top-full md:right-0 md:mt-2 w-auto md:w-80 bg-white border border-gray-100 rounded-2xl shadow-[0_20px_50px_rgba(0,0,0,0.15)] z-[150] p-5 animate-in fade-in zoom-in-95 duration-200">
+                                    <div ref={warehouseFilterRef} className="fixed inset-x-4 top-24 md:absolute md:top-full md:left-0 md:mt-2 w-auto md:w-80 bg-white border border-gray-100 rounded-2xl shadow-[0_20px_50px_rgba(0,0,0,0.15)] z-[150] p-5 animate-in fade-in zoom-in-95 duration-200">
                                         <div className="flex items-center justify-between mb-6 pb-2 border-b border-gray-100">
                                             <h4 className="font-bold text-gray-900 tracking-tight">Advance Filter</h4>
                                             <button
@@ -897,7 +906,7 @@ const WarehouseManagement = () => {
                                                             setFilterSearchInputs({ ...filterSearchInputs, categorySearch: val });
                                                             setFilterDropdownOpen({ ...initialFilterDropdownState, category: true });
                                                         }}
-                                                        onFocus={() => setFilterDropdownOpen({ ...initialFilterDropdownState, category: true })}
+                                                        onClick={() => setFilterDropdownOpen({ ...initialFilterDropdownState, category: !filterDropdownOpen.category })}
                                                         placeholder={warehouseFilters.category || "Search Category..."}
                                                         className={`w-full px-4 py-2.5 bg-white border border-gray-100 rounded-xl text-sm focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all shadow-sm hover:border-gray-200 pr-14 ${warehouseFilters.category ? 'placeholder:text-gray-900 placeholder:font-semibold' : 'placeholder:text-gray-300'}`}
                                                     />
@@ -941,7 +950,7 @@ const WarehouseManagement = () => {
                                                             setFilterSearchInputs({ ...filterSearchInputs, warehouseSearch: val });
                                                             setFilterDropdownOpen({ ...initialFilterDropdownState, warehouse: true });
                                                         }}
-                                                        onFocus={() => setFilterDropdownOpen({ ...initialFilterDropdownState, warehouse: true })}
+                                                        onClick={() => setFilterDropdownOpen({ ...initialFilterDropdownState, warehouse: !filterDropdownOpen.warehouse })}
                                                         placeholder={warehouseFilters.warehouse || "Search Warehouse..."}
                                                         className={`w-full px-4 py-2.5 bg-white border border-gray-100 rounded-xl text-sm focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all shadow-sm ${warehouseFilters.warehouse ? 'placeholder:text-gray-900 placeholder:font-semibold' : 'placeholder:text-gray-300'}`}
                                                     />
@@ -984,7 +993,7 @@ const WarehouseManagement = () => {
                                                             setFilterSearchInputs({ ...filterSearchInputs, productSearch: val });
                                                             setFilterDropdownOpen({ ...initialFilterDropdownState, productName: true });
                                                         }}
-                                                        onFocus={() => setFilterDropdownOpen({ ...initialFilterDropdownState, productName: true })}
+                                                        onClick={() => setFilterDropdownOpen({ ...initialFilterDropdownState, productName: !filterDropdownOpen.productName })}
                                                         placeholder={warehouseFilters.productName || "Search Product..."}
                                                         className={`w-full px-4 py-2.5 bg-white border border-gray-100 rounded-xl text-sm focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all shadow-sm ${warehouseFilters.productName ? 'placeholder:text-gray-900 placeholder:font-semibold' : 'placeholder:text-gray-300'}`}
                                                     />
@@ -1035,7 +1044,7 @@ const WarehouseManagement = () => {
                                                                 setFilterSearchInputs({ ...filterSearchInputs, brandSearch: val });
                                                                 setFilterDropdownOpen({ ...initialFilterDropdownState, brand: true });
                                                             }}
-                                                            onFocus={() => setFilterDropdownOpen({ ...initialFilterDropdownState, brand: true })}
+                                                            onClick={() => setFilterDropdownOpen({ ...initialFilterDropdownState, brand: !filterDropdownOpen.brand })}
                                                             placeholder={warehouseFilters.brand || "Search Brand..."}
                                                             className={`w-full px-4 py-2.5 bg-white border border-gray-100 rounded-xl text-sm focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all shadow-sm ${warehouseFilters.brand ? 'placeholder:text-gray-900 placeholder:font-semibold' : 'placeholder:text-gray-300'}`}
                                                         />
@@ -1351,7 +1360,7 @@ const WarehouseManagement = () => {
                                                                 <div className="text-right font-bold text-emerald-800 uppercase">InHouse PKT</div>
                                                                 <div className="text-right font-bold text-blue-800 uppercase">WareHouse QTY</div>
                                                                 <div className="text-right font-bold text-blue-800 uppercase">WareHouse PKT</div>
-                                                                <div className="text-right font-bold text-gray-500">Actions</div>
+                                                                {isAdmin && <div className="text-right font-bold text-gray-500">Actions</div>}
                                                             </div>
                                                         </th>
                                                     </tr>
@@ -1392,10 +1401,12 @@ const WarehouseManagement = () => {
                                                                                             return `${whole.toLocaleString()} - ${remainder.toLocaleString()} kg`;
                                                                                         })()}
                                                                                     </div>
-                                                                                    <div className="flex items-center justify-end gap-2">
-                                                                                        <button onClick={() => handleEditStock(brand)} className="p-1.5 text-gray-400 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition-all"><EditIcon className="w-4 h-4" /></button>
-                                                                                        <button onClick={() => setDeleteConfirm({ show: true, id: brand._id, type: 'stock' })} className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all"><TrashIcon className="w-4 h-4" /></button>
-                                                                                    </div>
+                                                                                    {isAdmin && (
+                                                                                        <div className="flex items-center justify-end gap-2">
+                                                                                            <button onClick={() => handleEditStock(brand)} className="p-1.5 text-gray-400 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition-all"><EditIcon className="w-4 h-4" /></button>
+                                                                                            <button onClick={() => setDeleteConfirm({ show: true, id: brand._id, type: 'stock' })} className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all"><TrashIcon className="w-4 h-4" /></button>
+                                                                                        </div>
+                                                                                    )}
                                                                                 </div>
                                                                             ))}
 
@@ -1457,10 +1468,12 @@ const WarehouseManagement = () => {
                                                                                     <div key={bIdx} className="bg-gray-50 rounded-xl p-3 border border-gray-100">
                                                                                         <div className="flex justify-between items-center pb-2 border-b border-gray-200 mb-3">
                                                                                             <span className="text-sm font-bold text-blue-600">{brand.brand}</span>
-                                                                                            <div className="flex items-center gap-2">
-                                                                                                <button onClick={() => handleEditStock(brand)} className="p-1.5 text-gray-400 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition-all"><EditIcon className="w-4 h-4" /></button>
-                                                                                                <button onClick={() => setDeleteConfirm({ show: true, id: brand._id, type: 'stock' })} className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all"><TrashIcon className="w-4 h-4" /></button>
-                                                                                            </div>
+                                                                                            {isAdmin && (
+                                                                                                <div className="flex items-center gap-2">
+                                                                                                    <button onClick={() => handleEditStock(brand)} className="p-1.5 text-gray-400 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition-all"><EditIcon className="w-4 h-4" /></button>
+                                                                                                    <button onClick={() => setDeleteConfirm({ show: true, id: brand._id, type: 'stock' })} className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all"><TrashIcon className="w-4 h-4" /></button>
+                                                                                                </div>
+                                                                                            )}
                                                                                         </div>
                                                                                         <div className="grid grid-cols-2 gap-x-2 sm:gap-x-4 gap-y-4 w-full">
                                                                                             <div className="space-y-1 min-w-0">
@@ -1524,7 +1537,7 @@ const WarehouseManagement = () => {
                                         <p className="text-gray-500 mt-2 text-center max-w-sm">
                                             {searchQuery ? `We couldn't find any warehouse records matching "${searchQuery}".` : "You haven't added any stock to the warehouse section yet. Start by transferring stock or adding new entries."}
                                         </p>
-                                        {!searchQuery && (
+                                        {!searchQuery && isAdmin && (
                                             <button
                                                 onClick={() => {
                                                     setShowStockForm(true);
@@ -1551,7 +1564,7 @@ const WarehouseManagement = () => {
                                                     <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Location</th>
                                                     <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Capacity</th>
                                                     <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Stock Status</th>
-                                                    <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-right">Actions</th>
+                                                    {isAdmin && <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-right">Actions</th>}
                                                 </tr>
                                             </thead>
                                             <tbody className="divide-y divide-gray-100">
@@ -1582,22 +1595,24 @@ const WarehouseManagement = () => {
                                                                     </span>
                                                                 )}
                                                             </td>
-                                                            <td className="px-6 py-4 text-right">
-                                                                <div className="flex items-center justify-end gap-2">
-                                                                    <button
-                                                                        onClick={() => handleEditWarehouse(wh)}
-                                                                        className="p-1.5 text-gray-400 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition-all"
-                                                                    >
-                                                                        <EditIcon className="w-4 h-4" />
-                                                                    </button>
-                                                                    <button
-                                                                        onClick={() => setDeleteConfirm({ show: true, id: wh._id, type: 'warehouse' })}
-                                                                        className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all"
-                                                                    >
-                                                                        <TrashIcon className="w-4 h-4" />
-                                                                    </button>
-                                                                </div>
-                                                            </td>
+                                                            {isAdmin && (
+                                                                <td className="px-6 py-4 text-right">
+                                                                    <div className="flex items-center justify-end gap-2">
+                                                                        <button
+                                                                            onClick={() => handleEditWarehouse(wh)}
+                                                                            className="p-1.5 text-gray-400 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition-all"
+                                                                        >
+                                                                            <EditIcon className="w-4 h-4" />
+                                                                        </button>
+                                                                        <button
+                                                                            onClick={() => setDeleteConfirm({ show: true, id: wh._id, type: 'warehouse' })}
+                                                                            className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all"
+                                                                        >
+                                                                            <TrashIcon className="w-4 h-4" />
+                                                                        </button>
+                                                                    </div>
+                                                                </td>
+                                                            )}
                                                         </tr>
                                                     );
                                                 })}
@@ -1661,7 +1676,7 @@ const WarehouseManagement = () => {
                 )
             }
             {deleteConfirm.show && (
-                <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+                <div className="fixed inset-0 z-[2000] flex items-center justify-center p-4">
                     <div className="absolute inset-0 bg-gray-900/60 backdrop-blur-sm" onClick={() => setDeleteConfirm({ show: false, id: null, type: 'stock' })}></div>
                     <div className="relative bg-white rounded-3xl shadow-2xl max-w-sm w-full p-8 animate-in zoom-in duration-200">
                         <div className="w-16 h-16 bg-red-50 rounded-2xl flex items-center justify-center mb-6 mx-auto">
