@@ -92,7 +92,7 @@
 
 .date-picker-dropdown {
     position: absolute;
-    z-index: 100;
+    z-index: 120;
     margin-top: 0.5rem;
     background-color: white;
     border: 1px solid #e5e7eb;

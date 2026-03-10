@@ -8,6 +8,307 @@ import { encryptData, decryptData } from '../../../utils/encryption';
 import CustomDatePicker from '../../shared/CustomDatePicker';
 import './LCReceive.css';
 
+const ViewDetailsModal = ({ data, onClose }) => {
+    if (!data) return null;
+
+    const uniqueEntriesMap = data.entries.reduce((acc, item) => {
+        const key = `${item.productName}-${item.brand}-${item.truckNo}-${item.unit}`;
+        if (!acc[key]) {
+            acc[key] = { ...item, quantity: 0, sweepedQuantity: 0, inHouseQuantity: 0 };
+        }
+        acc[key].quantity += (parseFloat(item.quantity) || 0);
+        acc[key].sweepedQuantity += (parseFloat(item.sweepedQuantity) || 0);
+        acc[key].inHouseQuantity += (parseFloat(item.inHouseQuantity) || 0);
+        return acc;
+    }, {});
+    const uniqueEntries = Object.values(uniqueEntriesMap);
+
+    return (
+        <div className="fixed inset-0 z-[2000] flex items-center justify-center p-4">
+            <div className="absolute inset-0 bg-gray-900/60 backdrop-blur-sm" onClick={onClose}></div>
+            <div className="relative bg-white border border-gray-100 rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden animate-in zoom-in duration-300">
+                <div className="flex items-center justify-between px-6 py-4 border-b border-gray-50 bg-gray-50/50">
+                    <div>
+                        <h3 className="text-lg font-bold text-gray-900">LC Receive Details</h3>
+                        <p className="text-xs text-gray-500 font-medium">Grouped Record • {formatDate(data.date)}</p>
+                    </div>
+                    <button onClick={onClose} className="p-2 text-gray-400 hover:text-gray-600 rounded-full hover:bg-white transition-all">
+                        <XIcon className="w-5 h-5" />
+                    </button>
+                </div>
+
+                <div className="overflow-y-auto max-h-[70vh] p-6 space-y-6">
+                    {/* Core Info */}
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                        <div className="space-y-1">
+                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">LC No</span>
+                            <p className="text-sm font-bold text-gray-800">{data.lcNo || 'N/A'}</p>
+                        </div>
+                        <div className="space-y-1">
+                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Port</span>
+                            <p className="text-sm font-bold text-blue-600">{data.port || 'N/A'}</p>
+                        </div>
+                        <div className="space-y-1">
+                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Importer</span>
+                            <p className="text-sm font-medium text-gray-700 truncate">{data.importer || 'N/A'}</p>
+                        </div>
+                        <div className="space-y-1">
+                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Exporter</span>
+                            <p className="text-sm font-medium text-gray-700 truncate">{data.exporter || 'N/A'}</p>
+                        </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 pt-4 border-t border-gray-50">
+                        <div className="space-y-1">
+                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">IND CNF</span>
+                            <p className="text-sm text-gray-700 font-medium">{data.indianCnF || '-'}</p>
+                        </div>
+                        <div className="space-y-1">
+                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">IND Cost</span>
+                            <p className="text-sm text-gray-700 font-bold">{!isNaN(parseFloat(data.indCnFCost)) ? `৳${parseFloat(data.indCnFCost).toLocaleString()}` : '-'}</p>
+                        </div>
+                        <div className="space-y-1">
+                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">BD CNF</span>
+                            <p className="text-sm text-gray-700 font-medium">{data.bdCnF || '-'}</p>
+                        </div>
+                        <div className="space-y-1">
+                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">BD Cost</span>
+                            <p className="text-sm text-gray-700 font-bold">{!isNaN(parseFloat(data.bdCnFCost)) ? `৳${parseFloat(data.bdCnFCost).toLocaleString()}` : '-'}</p>
+                        </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4 pt-4 border-t border-gray-50">
+                        <div className="space-y-1">
+                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Bill Of Entry</span>
+                            <p className="text-sm text-gray-700 font-bold">{data.billOfEntry || '-'}</p>
+                        </div>
+                        <div className="space-y-1">
+                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Total Trucks</span>
+                            <p className="text-sm text-amber-600 font-black">{data.totalLcTruck}</p>
+                        </div>
+                    </div>
+
+                    {/* Product Table */}
+                    <div className="space-y-3 pt-4 border-t border-gray-50">
+                        <h4 className="text-xs font-black text-gray-400 uppercase tracking-widest flex items-center gap-2">
+                            <BoxIcon className="w-3.5 h-3.5" />
+                            Product Summary
+                        </h4>
+
+                        {/* Desktop table — hidden on mobile */}
+                        <div className="hidden sm:block bg-gray-50 rounded-xl border border-gray-100 overflow-hidden">
+                            <table className="w-full text-left border-collapse">
+                                <thead>
+                                    <tr className="bg-gray-100/50">
+                                        <th className="px-4 py-2 text-[9px] font-black text-gray-500 uppercase tracking-tighter">Product</th>
+                                        <th className="px-4 py-2 text-[9px] font-black text-gray-500 uppercase tracking-tighter">Brand</th>
+                                        <th className="px-4 py-2 text-[9px] font-black text-gray-500 uppercase tracking-tighter text-center">Truck</th>
+                                        <th className="px-4 py-2 text-[9px] font-black text-gray-500 uppercase tracking-tighter text-right">Arrival Qty</th>
+                                        <th className="px-4 py-2 text-[9px] font-black text-gray-500 uppercase tracking-tighter text-right text-red-500">Short</th>
+                                        <th className="px-4 py-2 text-[9px] font-black text-gray-500 uppercase tracking-tighter text-right text-blue-600">In Qty</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-gray-100">
+                                    {(() => {
+                                        // Build rowspan rows: product span + truck span within each product group
+                                        const rows = [];
+                                        let i = 0;
+                                        while (i < uniqueEntries.length) {
+                                            const product = uniqueEntries[i].productName;
+                                            // Count how many consecutive rows share this product
+                                            let productSpan = 1;
+                                            while (i + productSpan < uniqueEntries.length && uniqueEntries[i + productSpan].productName === product) productSpan++;
+
+                                            // Within the product group, sub-group by truckNo
+                                            let j = 0;
+                                            while (j < productSpan) {
+                                                const truck = uniqueEntries[i + j].truckNo;
+                                                let truckSpan = 1;
+                                                while (j + truckSpan < productSpan && uniqueEntries[i + j + truckSpan].truckNo === truck) truckSpan++;
+                                                for (let k = 0; k < truckSpan; k++) {
+                                                    rows.push({
+                                                        item: uniqueEntries[i + j + k],
+                                                        isProductFirst: j === 0 && k === 0,
+                                                        productSpan,
+                                                        isTruckFirst: k === 0,
+                                                        truckSpan,
+                                                    });
+                                                }
+                                                j += truckSpan;
+                                            }
+                                            i += productSpan;
+                                        }
+                                        return rows.map(({ item, isProductFirst, productSpan, isTruckFirst, truckSpan }, idx) => (
+                                            <tr key={idx} className="hover:bg-white transition-colors">
+                                                {isProductFirst && (
+                                                    <td rowSpan={productSpan} className="px-4 py-2 text-xs font-bold text-gray-800 align-middle border-r border-gray-100">
+                                                        {item.productName}
+                                                    </td>
+                                                )}
+                                                <td className="px-4 py-2 text-xs text-purple-700 font-semibold">{item.brand || '-'}</td>
+                                                {isTruckFirst && (
+                                                    <td rowSpan={truckSpan} className="px-4 py-2 text-xs text-gray-600 text-center font-medium align-middle border-l border-gray-100">
+                                                        {item.truckNo}
+                                                    </td>
+                                                )}
+                                                <td className="px-4 py-2 text-xs text-gray-900 text-right font-bold">{Math.round(item.quantity).toLocaleString()} kg</td>
+                                                <td className="px-4 py-2 text-xs text-red-500 text-right font-bold">{Math.round(item.sweepedQuantity).toLocaleString()} kg</td>
+                                                <td className="px-4 py-2 text-xs text-blue-600 text-right font-black">{Math.round(item.inHouseQuantity).toLocaleString()} kg</td>
+                                            </tr>
+                                        ));
+                                    })()}
+                                </tbody>
+                                <tfoot>
+                                    <tr className="bg-white/80 border-t border-gray-200">
+                                        <td colSpan="3" className="px-4 py-2 text-[10px] font-black text-gray-400 uppercase text-right">Grand Totals</td>
+                                        <td className="px-4 py-2 text-xs text-gray-900 text-right font-black">{Math.round(data.totalQuantity).toLocaleString()} kg</td>
+                                        <td className="px-4 py-2 text-xs text-red-600 text-right font-black">{Math.round(data.entries.reduce((sum, e) => sum + (parseFloat(e.sweepedQuantity) || 0), 0)).toLocaleString()} kg</td>
+                                        <td className="px-4 py-2 text-xs text-blue-700 text-right font-black">{Math.round(data.entries.reduce((sum, e) => sum + (parseFloat(e.inHouseQuantity) || 0), 0)).toLocaleString()} kg</td>
+                                    </tr>
+                                </tfoot>
+                            </table>
+                        </div>
+
+                        {/* Mobile card layout — hidden on desktop */}
+                        <div className="block sm:hidden space-y-3">
+                            {(() => {
+                                // Group by product, then sub-group by truckNo within each product
+                                const groups = [];
+                                let i = 0;
+                                while (i < uniqueEntries.length) {
+                                    const product = uniqueEntries[i].productName;
+                                    const truckGroups = [];
+                                    while (i < uniqueEntries.length && uniqueEntries[i].productName === product) {
+                                        const truck = uniqueEntries[i].truckNo;
+                                        const brands = [];
+                                        while (i < uniqueEntries.length && uniqueEntries[i].productName === product && uniqueEntries[i].truckNo === truck) {
+                                            brands.push(uniqueEntries[i]);
+                                            i++;
+                                        }
+                                        truckGroups.push({ truck, brands });
+                                    }
+                                    groups.push({ product, truckGroups });
+                                }
+                                const multipleTrucks = (group) => group.truckGroups.length > 1;
+                                return groups.map((group, gIdx) => (
+                                    <div key={gIdx} className="bg-gray-50 rounded-xl border border-gray-100 overflow-hidden">
+                                        {/* Product name header */}
+                                        <div className="px-3 py-2 bg-gray-100/70 border-b border-gray-200 flex items-center justify-between">
+                                            <p className="text-xs font-black text-gray-800">{group.product}</p>
+                                            {/* Show single truck badge in header if only one truck */}
+                                            {!multipleTrucks(group) && group.truckGroups[0]?.truck && (
+                                                <span className="text-[10px] font-bold text-gray-500 bg-gray-200 rounded-md px-2 py-0.5">Truck {group.truckGroups[0].truck}</span>
+                                            )}
+                                        </div>
+                                        {/* Truck sub-groups */}
+                                        <div className="divide-y divide-gray-200">
+                                            {group.truckGroups.map((tg, tIdx) => (
+                                                <div key={tIdx}>
+                                                    {/* Sub-truck header only if multiple trucks */}
+                                                    {multipleTrucks(group) && tg.truck && (
+                                                        <div className="px-3 py-1.5 bg-gray-50 border-b border-gray-100 flex items-center gap-2">
+                                                            <span className="text-[10px] font-bold text-gray-500 bg-gray-200 rounded-md px-2 py-0.5">Truck {tg.truck}</span>
+                                                        </div>
+                                                    )}
+                                                    {/* Brand rows */}
+                                                    <div className="divide-y divide-gray-100">
+                                                        {tg.brands.map((item, idx) => (
+                                                            <div key={idx} className="p-3 space-y-2">
+                                                                {item.brand && <p className="text-xs text-purple-700 font-semibold">{item.brand}</p>}
+                                                                <div className="grid grid-cols-3 gap-2 pt-1 border-t border-gray-100">
+                                                                    <div className="text-center">
+                                                                        <p className="text-[9px] font-black text-gray-400 uppercase tracking-wider mb-0.5">Arrival</p>
+                                                                        <p className="text-xs font-bold text-gray-800">{Math.round(item.quantity).toLocaleString()} kg</p>
+                                                                    </div>
+                                                                    <div className="text-center">
+                                                                        <p className="text-[9px] font-black text-red-400 uppercase tracking-wider mb-0.5">Short</p>
+                                                                        <p className="text-xs font-bold text-red-500">{Math.round(item.sweepedQuantity).toLocaleString()} kg</p>
+                                                                    </div>
+                                                                    <div className="text-center">
+                                                                        <p className="text-[9px] font-black text-blue-500 uppercase tracking-wider mb-0.5">In Qty</p>
+                                                                        <p className="text-xs font-black text-blue-600">{Math.round(item.inHouseQuantity).toLocaleString()} kg</p>
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                ));
+                            })()}
+                            {/* Mobile Grand Totals */}
+                            <div className="bg-white rounded-xl border border-gray-200 p-3">
+                                <p className="text-[9px] font-black text-gray-400 uppercase tracking-wider mb-2">Grand Totals</p>
+                                <div className="grid grid-cols-3 gap-2">
+                                    <div className="text-center">
+                                        <p className="text-[9px] font-black text-gray-400 uppercase tracking-wider mb-0.5">Arrival</p>
+                                        <p className="text-xs font-black text-gray-900">{Math.round(data.totalQuantity).toLocaleString()} kg</p>
+                                    </div>
+                                    <div className="text-center">
+                                        <p className="text-[9px] font-black text-red-400 uppercase tracking-wider mb-0.5">Short</p>
+                                        <p className="text-xs font-black text-red-600">{Math.round(data.entries.reduce((sum, e) => sum + (parseFloat(e.sweepedQuantity) || 0), 0)).toLocaleString()} kg</p>
+                                    </div>
+                                    <div className="text-center">
+                                        <p className="text-[9px] font-black text-blue-500 uppercase tracking-wider mb-0.5">In Qty</p>
+                                        <p className="text-xs font-black text-blue-700">{Math.round(data.entries.reduce((sum, e) => sum + (parseFloat(e.inHouseQuantity) || 0), 0)).toLocaleString()} kg</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Requested By / Accepted By / Rejected By */}
+                    {(data.entries[0]?.requestedBy || data.entries[0]?.acceptedBy || data.entries[0]?.rejectedBy) && (
+                        <div className="flex flex-wrap gap-3 pt-4 border-t border-gray-50">
+                            {data.entries[0]?.requestedBy && (
+                                <div className="space-y-1">
+                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Requested By</span>
+                                    <p className="text-sm font-semibold text-gray-700">{data.entries[0].requestedBy}</p>
+                                </div>
+                            )}
+                            {data.entries[0]?.acceptedBy && (
+                                <div className="space-y-1">
+                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Accepted By</span>
+                                    <p className="text-sm font-semibold text-emerald-600">{data.entries[0].acceptedBy}</p>
+                                </div>
+                            )}
+                            {data.entries[0]?.rejectedBy && (
+                                <div className="space-y-1">
+                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Rejected By</span>
+                                    <p className="text-sm font-semibold text-red-500">{data.entries[0].rejectedBy}</p>
+                                </div>
+                            )}
+                        </div>
+                    )}
+
+                    {/* Status/Warehouse Info */}
+                    <div className="flex flex-wrap gap-3 pt-4 border-t border-gray-50">
+                        <div className="px-3 py-1.5 bg-blue-50 text-blue-700 rounded-lg border border-blue-100 flex items-center gap-2">
+                            <span className="w-1.5 h-1.5 rounded-full bg-blue-500"></span>
+                            <span className="text-[10px] font-bold uppercase tracking-wider">Status: {data.entries[0]?.status || 'In Stock'}</span>
+                        </div>
+                        <div className="px-3 py-1.5 bg-gray-50 text-gray-700 rounded-lg border border-gray-100 flex items-center gap-2">
+                            <span className="w-1.5 h-1.5 rounded-full bg-gray-400"></span>
+                            <span className="text-[10px] font-bold uppercase tracking-wider">Warehouse: {data.entries[0]?.warehouse || 'N/A'}</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div className="p-4 border-t border-gray-50 bg-gray-50/30 flex justify-end">
+                    <button
+                        onClick={onClose}
+                        className="px-6 py-2 bg-gray-900 text-white text-sm font-bold rounded-xl shadow-lg hover:bg-black transition-all active:scale-95"
+                    >
+                        Done
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
+};
+
 function LCReceive({
     currentUser,
     stockRecords,
@@ -1176,306 +1477,6 @@ function LCReceive({
         return options.filter(opt => opt.toLowerCase().includes(search.toLowerCase()));
     };
 
-    const ViewDetailsModal = ({ data, onClose }) => {
-        if (!data) return null;
-
-        const uniqueEntriesMap = data.entries.reduce((acc, item) => {
-            const key = `${item.productName}-${item.brand}-${item.truckNo}-${item.unit}`;
-            if (!acc[key]) {
-                acc[key] = { ...item, quantity: 0, sweepedQuantity: 0, inHouseQuantity: 0 };
-            }
-            acc[key].quantity += (parseFloat(item.quantity) || 0);
-            acc[key].sweepedQuantity += (parseFloat(item.sweepedQuantity) || 0);
-            acc[key].inHouseQuantity += (parseFloat(item.inHouseQuantity) || 0);
-            return acc;
-        }, {});
-        const uniqueEntries = Object.values(uniqueEntriesMap);
-
-        return (
-            <div className="fixed inset-0 z-[2000] flex items-center justify-center p-4">
-                <div className="absolute inset-0 bg-gray-900/60 backdrop-blur-sm" onClick={onClose}></div>
-                <div className="relative bg-white border border-gray-100 rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden animate-in zoom-in duration-300">
-                    <div className="flex items-center justify-between px-6 py-4 border-b border-gray-50 bg-gray-50/50">
-                        <div>
-                            <h3 className="text-lg font-bold text-gray-900">LC Receive Details</h3>
-                            <p className="text-xs text-gray-500 font-medium">Grouped Record • {formatDate(data.date)}</p>
-                        </div>
-                        <button onClick={onClose} className="p-2 text-gray-400 hover:text-gray-600 rounded-full hover:bg-white transition-all">
-                            <XIcon className="w-5 h-5" />
-                        </button>
-                    </div>
-
-                    <div className="overflow-y-auto max-h-[70vh] p-6 space-y-6">
-                        {/* Core Info */}
-                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-                            <div className="space-y-1">
-                                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">LC No</span>
-                                <p className="text-sm font-bold text-gray-800">{data.lcNo || 'N/A'}</p>
-                            </div>
-                            <div className="space-y-1">
-                                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Port</span>
-                                <p className="text-sm font-bold text-blue-600">{data.port || 'N/A'}</p>
-                            </div>
-                            <div className="space-y-1">
-                                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Importer</span>
-                                <p className="text-sm font-medium text-gray-700 truncate">{data.importer || 'N/A'}</p>
-                            </div>
-                            <div className="space-y-1">
-                                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Exporter</span>
-                                <p className="text-sm font-medium text-gray-700 truncate">{data.exporter || 'N/A'}</p>
-                            </div>
-                        </div>
-
-                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 pt-4 border-t border-gray-50">
-                            <div className="space-y-1">
-                                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">IND CNF</span>
-                                <p className="text-sm text-gray-700 font-medium">{data.indianCnF || '-'}</p>
-                            </div>
-                            <div className="space-y-1">
-                                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">IND Cost</span>
-                                <p className="text-sm text-gray-700 font-bold">{!isNaN(parseFloat(data.indCnFCost)) ? `৳${parseFloat(data.indCnFCost).toLocaleString()}` : '-'}</p>
-                            </div>
-                            <div className="space-y-1">
-                                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">BD CNF</span>
-                                <p className="text-sm text-gray-700 font-medium">{data.bdCnF || '-'}</p>
-                            </div>
-                            <div className="space-y-1">
-                                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">BD Cost</span>
-                                <p className="text-sm text-gray-700 font-bold">{!isNaN(parseFloat(data.bdCnFCost)) ? `৳${parseFloat(data.bdCnFCost).toLocaleString()}` : '-'}</p>
-                            </div>
-                        </div>
-
-                        <div className="grid grid-cols-2 gap-4 pt-4 border-t border-gray-50">
-                            <div className="space-y-1">
-                                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Bill Of Entry</span>
-                                <p className="text-sm text-gray-700 font-bold">{data.billOfEntry || '-'}</p>
-                            </div>
-                            <div className="space-y-1">
-                                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Total Trucks</span>
-                                <p className="text-sm text-amber-600 font-black">{data.totalLcTruck}</p>
-                            </div>
-                        </div>
-
-                        {/* Product Table */}
-                        <div className="space-y-3 pt-4 border-t border-gray-50">
-                            <h4 className="text-xs font-black text-gray-400 uppercase tracking-widest flex items-center gap-2">
-                                <BoxIcon className="w-3.5 h-3.5" />
-                                Product Summary
-                            </h4>
-
-                            {/* Desktop table — hidden on mobile */}
-                            <div className="hidden sm:block bg-gray-50 rounded-xl border border-gray-100 overflow-hidden">
-                                <table className="w-full text-left border-collapse">
-                                    <thead>
-                                        <tr className="bg-gray-100/50">
-                                            <th className="px-4 py-2 text-[9px] font-black text-gray-500 uppercase tracking-tighter">Product</th>
-                                            <th className="px-4 py-2 text-[9px] font-black text-gray-500 uppercase tracking-tighter">Brand</th>
-                                            <th className="px-4 py-2 text-[9px] font-black text-gray-500 uppercase tracking-tighter text-center">Truck</th>
-                                            <th className="px-4 py-2 text-[9px] font-black text-gray-500 uppercase tracking-tighter text-right">Arrival Qty</th>
-                                            <th className="px-4 py-2 text-[9px] font-black text-gray-500 uppercase tracking-tighter text-right text-red-500">Short</th>
-                                            <th className="px-4 py-2 text-[9px] font-black text-gray-500 uppercase tracking-tighter text-right text-blue-600">In Qty</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody className="divide-y divide-gray-100">
-                                        {(() => {
-                                            // Build rowspan rows: product span + truck span within each product group
-                                            const rows = [];
-                                            let i = 0;
-                                            while (i < uniqueEntries.length) {
-                                                const product = uniqueEntries[i].productName;
-                                                // Count how many consecutive rows share this product
-                                                let productSpan = 1;
-                                                while (i + productSpan < uniqueEntries.length && uniqueEntries[i + productSpan].productName === product) productSpan++;
-
-                                                // Within the product group, sub-group by truckNo
-                                                let j = 0;
-                                                while (j < productSpan) {
-                                                    const truck = uniqueEntries[i + j].truckNo;
-                                                    let truckSpan = 1;
-                                                    while (j + truckSpan < productSpan && uniqueEntries[i + j + truckSpan].truckNo === truck) truckSpan++;
-                                                    for (let k = 0; k < truckSpan; k++) {
-                                                        rows.push({
-                                                            item: uniqueEntries[i + j + k],
-                                                            isProductFirst: j === 0 && k === 0,
-                                                            productSpan,
-                                                            isTruckFirst: k === 0,
-                                                            truckSpan,
-                                                        });
-                                                    }
-                                                    j += truckSpan;
-                                                }
-                                                i += productSpan;
-                                            }
-                                            return rows.map(({ item, isProductFirst, productSpan, isTruckFirst, truckSpan }, idx) => (
-                                                <tr key={idx} className="hover:bg-white transition-colors">
-                                                    {isProductFirst && (
-                                                        <td rowSpan={productSpan} className="px-4 py-2 text-xs font-bold text-gray-800 align-middle border-r border-gray-100">
-                                                            {item.productName}
-                                                        </td>
-                                                    )}
-                                                    <td className="px-4 py-2 text-xs text-purple-700 font-semibold">{item.brand || '-'}</td>
-                                                    {isTruckFirst && (
-                                                        <td rowSpan={truckSpan} className="px-4 py-2 text-xs text-gray-600 text-center font-medium align-middle border-l border-gray-100">
-                                                            {item.truckNo}
-                                                        </td>
-                                                    )}
-                                                    <td className="px-4 py-2 text-xs text-gray-900 text-right font-bold">{Math.round(item.quantity).toLocaleString()} kg</td>
-                                                    <td className="px-4 py-2 text-xs text-red-500 text-right font-bold">{Math.round(item.sweepedQuantity).toLocaleString()} kg</td>
-                                                    <td className="px-4 py-2 text-xs text-blue-600 text-right font-black">{Math.round(item.inHouseQuantity).toLocaleString()} kg</td>
-                                                </tr>
-                                            ));
-                                        })()}
-                                    </tbody>
-                                    <tfoot>
-                                        <tr className="bg-white/80 border-t border-gray-200">
-                                            <td colSpan="3" className="px-4 py-2 text-[10px] font-black text-gray-400 uppercase text-right">Grand Totals</td>
-                                            <td className="px-4 py-2 text-xs text-gray-900 text-right font-black">{Math.round(data.totalQuantity).toLocaleString()} kg</td>
-                                            <td className="px-4 py-2 text-xs text-red-600 text-right font-black">{Math.round(data.entries.reduce((sum, e) => sum + (parseFloat(e.sweepedQuantity) || 0), 0)).toLocaleString()} kg</td>
-                                            <td className="px-4 py-2 text-xs text-blue-700 text-right font-black">{Math.round(data.entries.reduce((sum, e) => sum + (parseFloat(e.inHouseQuantity) || 0), 0)).toLocaleString()} kg</td>
-                                        </tr>
-                                    </tfoot>
-                                </table>
-                            </div>
-
-                            {/* Mobile card layout — hidden on desktop */}
-                            <div className="block sm:hidden space-y-3">
-                                {(() => {
-                                    // Group by product, then sub-group by truckNo within each product
-                                    const groups = [];
-                                    let i = 0;
-                                    while (i < uniqueEntries.length) {
-                                        const product = uniqueEntries[i].productName;
-                                        const truckGroups = [];
-                                        while (i < uniqueEntries.length && uniqueEntries[i].productName === product) {
-                                            const truck = uniqueEntries[i].truckNo;
-                                            const brands = [];
-                                            while (i < uniqueEntries.length && uniqueEntries[i].productName === product && uniqueEntries[i].truckNo === truck) {
-                                                brands.push(uniqueEntries[i]);
-                                                i++;
-                                            }
-                                            truckGroups.push({ truck, brands });
-                                        }
-                                        groups.push({ product, truckGroups });
-                                    }
-                                    const multipleTrucks = (group) => group.truckGroups.length > 1;
-                                    return groups.map((group, gIdx) => (
-                                        <div key={gIdx} className="bg-gray-50 rounded-xl border border-gray-100 overflow-hidden">
-                                            {/* Product name header */}
-                                            <div className="px-3 py-2 bg-gray-100/70 border-b border-gray-200 flex items-center justify-between">
-                                                <p className="text-xs font-black text-gray-800">{group.product}</p>
-                                                {/* Show single truck badge in header if only one truck */}
-                                                {!multipleTrucks(group) && group.truckGroups[0]?.truck && (
-                                                    <span className="text-[10px] font-bold text-gray-500 bg-gray-200 rounded-md px-2 py-0.5">Truck {group.truckGroups[0].truck}</span>
-                                                )}
-                                            </div>
-                                            {/* Truck sub-groups */}
-                                            <div className="divide-y divide-gray-200">
-                                                {group.truckGroups.map((tg, tIdx) => (
-                                                    <div key={tIdx}>
-                                                        {/* Sub-truck header only if multiple trucks */}
-                                                        {multipleTrucks(group) && tg.truck && (
-                                                            <div className="px-3 py-1.5 bg-gray-50 border-b border-gray-100 flex items-center gap-2">
-                                                                <span className="text-[10px] font-bold text-gray-500 bg-gray-200 rounded-md px-2 py-0.5">Truck {tg.truck}</span>
-                                                            </div>
-                                                        )}
-                                                        {/* Brand rows */}
-                                                        <div className="divide-y divide-gray-100">
-                                                            {tg.brands.map((item, idx) => (
-                                                                <div key={idx} className="p-3 space-y-2">
-                                                                    {item.brand && <p className="text-xs text-purple-700 font-semibold">{item.brand}</p>}
-                                                                    <div className="grid grid-cols-3 gap-2 pt-1 border-t border-gray-100">
-                                                                        <div className="text-center">
-                                                                            <p className="text-[9px] font-black text-gray-400 uppercase tracking-wider mb-0.5">Arrival</p>
-                                                                            <p className="text-xs font-bold text-gray-800">{Math.round(item.quantity).toLocaleString()} kg</p>
-                                                                        </div>
-                                                                        <div className="text-center">
-                                                                            <p className="text-[9px] font-black text-red-400 uppercase tracking-wider mb-0.5">Short</p>
-                                                                            <p className="text-xs font-bold text-red-500">{Math.round(item.sweepedQuantity).toLocaleString()} kg</p>
-                                                                        </div>
-                                                                        <div className="text-center">
-                                                                            <p className="text-[9px] font-black text-blue-500 uppercase tracking-wider mb-0.5">In Qty</p>
-                                                                            <p className="text-xs font-black text-blue-600">{Math.round(item.inHouseQuantity).toLocaleString()} kg</p>
-                                                                        </div>
-                                                                    </div>
-                                                                </div>
-                                                            ))}
-                                                        </div>
-                                                    </div>
-                                                ))}
-                                            </div>
-                                        </div>
-                                    ));
-                                })()}
-                                {/* Mobile Grand Totals */}
-                                <div className="bg-white rounded-xl border border-gray-200 p-3">
-                                    <p className="text-[9px] font-black text-gray-400 uppercase tracking-wider mb-2">Grand Totals</p>
-                                    <div className="grid grid-cols-3 gap-2">
-                                        <div className="text-center">
-                                            <p className="text-[9px] font-black text-gray-400 uppercase tracking-wider mb-0.5">Arrival</p>
-                                            <p className="text-xs font-black text-gray-900">{Math.round(data.totalQuantity).toLocaleString()} kg</p>
-                                        </div>
-                                        <div className="text-center">
-                                            <p className="text-[9px] font-black text-red-400 uppercase tracking-wider mb-0.5">Short</p>
-                                            <p className="text-xs font-black text-red-600">{Math.round(data.entries.reduce((sum, e) => sum + (parseFloat(e.sweepedQuantity) || 0), 0)).toLocaleString()} kg</p>
-                                        </div>
-                                        <div className="text-center">
-                                            <p className="text-[9px] font-black text-blue-500 uppercase tracking-wider mb-0.5">In Qty</p>
-                                            <p className="text-xs font-black text-blue-700">{Math.round(data.entries.reduce((sum, e) => sum + (parseFloat(e.inHouseQuantity) || 0), 0)).toLocaleString()} kg</p>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* Requested By / Accepted By / Rejected By */}
-                        {(data.entries[0]?.requestedBy || data.entries[0]?.acceptedBy || data.entries[0]?.rejectedBy) && (
-                            <div className="flex flex-wrap gap-3 pt-4 border-t border-gray-50">
-                                {data.entries[0]?.requestedBy && (
-                                    <div className="space-y-1">
-                                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Requested By</span>
-                                        <p className="text-sm font-semibold text-gray-700">{data.entries[0].requestedBy}</p>
-                                    </div>
-                                )}
-                                {data.entries[0]?.acceptedBy && (
-                                    <div className="space-y-1">
-                                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Accepted By</span>
-                                        <p className="text-sm font-semibold text-emerald-600">{data.entries[0].acceptedBy}</p>
-                                    </div>
-                                )}
-                                {data.entries[0]?.rejectedBy && (
-                                    <div className="space-y-1">
-                                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Rejected By</span>
-                                        <p className="text-sm font-semibold text-red-500">{data.entries[0].rejectedBy}</p>
-                                    </div>
-                                )}
-                            </div>
-                        )}
-
-                        {/* Status/Warehouse Info */}
-                        <div className="flex flex-wrap gap-3 pt-4 border-t border-gray-50">
-                            <div className="px-3 py-1.5 bg-blue-50 text-blue-700 rounded-lg border border-blue-100 flex items-center gap-2">
-                                <span className="w-1.5 h-1.5 rounded-full bg-blue-500"></span>
-                                <span className="text-[10px] font-bold uppercase tracking-wider">Status: {data.entries[0]?.status || 'In Stock'}</span>
-                            </div>
-                            <div className="px-3 py-1.5 bg-gray-50 text-gray-700 rounded-lg border border-gray-100 flex items-center gap-2">
-                                <span className="w-1.5 h-1.5 rounded-full bg-gray-400"></span>
-                                <span className="text-[10px] font-bold uppercase tracking-wider">Warehouse: {data.entries[0]?.warehouse || 'N/A'}</span>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div className="p-4 border-t border-gray-50 bg-gray-50/30 flex justify-end">
-                        <button
-                            onClick={onClose}
-                            className="px-6 py-2 bg-gray-900 text-white text-sm font-bold rounded-xl shadow-lg hover:bg-black transition-all active:scale-95"
-                        >
-                            Done
-                        </button>
-                    </div>
-                </div>
-            </div>
-        );
-    };
 
     const filteredRecords = useMemo(() => {
         if (isRequestedOnly) {

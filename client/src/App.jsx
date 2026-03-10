@@ -20,6 +20,7 @@ import StockManagement from "./components/modules/StockManagement/StockManagemen
 import StockReport from './components/modules/StockManagement/StockReport';
 import LCReport from './components/modules/LCReceive/LCReport';
 import ProductHistoryReport from './components/modules/StockManagement/ProductHistoryReport';
+import SalesReport from './components/modules/Sale/SalesReport';
 import SaleManagement from './components/modules/Sale/SaleManagement';
 import EmployeeManagement from './components/modules/Employee/EmployeeManagement';
 import { calculateStockData } from './utils/stockHelpers';
@@ -337,6 +338,8 @@ function App() {
   });
 
   const [showLcReport, setShowLcReport] = useState(false);
+  const [showSalesReport, setShowSalesReport] = useState(false);
+  const [saleFilters, setSaleFilters] = useState({ startDate: '', endDate: '', companyName: '', invoiceNo: '' });
   const [products, setProducts] = useState([]);
 
 
@@ -471,7 +474,7 @@ function App() {
       fetchImporters();
     } else if (currentView === 'port-section') {
       fetchPorts();
-    } else if (currentView === 'stock-section' || currentView === 'lc-entry-section') {
+    } else if (currentView === 'stock-section' || currentView === 'lc-entry-section' || currentView === 'general-sale-section' || currentView === 'border-sale-section') {
       fetchStockRecords();
       fetchWarehouses(); // Fetch warehouse data
       fetchSales(); // Fetch sales data
@@ -1146,6 +1149,9 @@ function App() {
             onDeleteConfirm={(data) => handleDelete(data.type, data.id, data.isBulk, data.extraData)}
             startLongPress={startLongPress}
             endLongPress={endLongPress}
+            setShowSalesReport={setShowSalesReport}
+            saleFilters={saleFilters}
+            setSaleFilters={setSaleFilters}
           />
         );
       case 'border-sale-section':
@@ -1160,6 +1166,9 @@ function App() {
             onDeleteConfirm={(data) => handleDelete(data.type, data.id, data.isBulk, data.extraData)}
             startLongPress={startLongPress}
             endLongPress={endLongPress}
+            setShowSalesReport={setShowSalesReport}
+            saleFilters={saleFilters}
+            setSaleFilters={setSaleFilters}
           />
         );
       case 'employee-section':
@@ -1202,7 +1211,7 @@ function App() {
   }
 
   return (
-    <div className={`flex h-screen bg-gray-50 font-sans text-gray-900 ${(showLcReport || showStockReport || showProductHistoryReport) ? 'is-printing-report' : ''}`}>
+    <div className={`flex h-screen bg-gray-50 font-sans text-gray-900 ${(showLcReport || showStockReport || showProductHistoryReport || showSalesReport) ? 'is-printing-report' : ''}`}>
 
       {/* Sidebar Backdrop for mobile */}
       {sidebarOpen && (
@@ -1212,7 +1221,7 @@ function App() {
         />
       )}
       {/* Sidebar */}
-      <aside className={`fixed inset-y-0 left-0 z-[1100] w-64 bg-white text-gray-900 border-r border-gray-200 transform transition-transform duration-300 ease-in-out ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'} md:relative md:translate-x-0 flex flex-col ${(showLcReport || showStockReport || showProductHistoryReport) ? 'print:hidden' : ''}`}>
+      <aside className={`fixed inset-y-0 left-0 z-[1100] w-64 bg-white text-gray-900 border-r border-gray-200 transform transition-transform duration-300 ease-in-out ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'} md:relative md:translate-x-0 flex flex-col ${(showLcReport || showStockReport || showProductHistoryReport || showSalesReport) ? 'print:hidden' : ''}`}>
         <div className="p-5 border-b border-gray-200 bg-gray-50/50">
           <div className="flex items-center">
             <button
@@ -1362,7 +1371,7 @@ function App() {
       </aside>
 
       {/* Main Content */}
-      <div className={`flex-1 flex flex-col overflow-hidden ${(showLcReport || showStockReport || showProductHistoryReport) ? 'print:hidden' : ''}`}>
+      <div className={`flex-1 flex flex-col overflow-hidden ${(showLcReport || showStockReport || showProductHistoryReport || showSalesReport) ? 'print:hidden' : ''}`}>
         {/* Header */}
         <header className="relative z-[1000] flex items-center justify-between px-6 py-4 bg-white border-b border-gray-200 shadow-sm print:hidden">
           <div className="flex items-center">
@@ -1403,7 +1412,7 @@ function App() {
         </header>
 
         {/* Dashboard Content */}
-        <main className={`flex-1 overflow-x-hidden overflow-y-auto bg-gray-50 p-6 ${(showLcReport || showStockReport || showProductHistoryReport) ? 'no-print' : ''}`}>
+        <main className={`flex-1 overflow-x-hidden overflow-y-auto bg-gray-50 p-6 ${(showLcReport || showStockReport || showProductHistoryReport || showSalesReport) ? 'no-print' : ''}`}>
           {renderContent()}
         </main>
       </div>
@@ -1469,6 +1478,16 @@ function App() {
         isOpen={showProductHistoryReport}
         onClose={() => setShowProductHistoryReport(false)}
         reportData={productHistoryReportData}
+      />
+
+      {/* Sales Report Modal */}
+      <SalesReport
+        isOpen={showSalesReport}
+        onClose={() => setShowSalesReport(false)}
+        salesRecords={salesRecords}
+        saleFilters={saleFilters}
+        setSaleFilters={setSaleFilters}
+        saleType={currentView === 'border-sale-section' ? 'Border' : 'General'}
       />
 
       {showProfile && (

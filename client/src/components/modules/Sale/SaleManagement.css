@@ -1,5 +1,8 @@
+@reference "../../../App.css";
+
 .sale-management-container {
     animation: fadeIn 0.5s ease-out;
+    @apply space-y-6;
 }
 
 @keyframes fadeIn {
@@ -18,4 +21,199 @@
 .sale-management-container input[type="number"]::-webkit-outer-spin-button {
     -webkit-appearance: none;
     margin: 0;
+}
+
+/* Header & Navigation */
+.sale-mgmt-header {
+    @apply flex flex-col md:flex-row md:items-center justify-between gap-4;
+}
+
+.sale-mgmt-title {
+    @apply text-xl md:text-2xl font-bold text-gray-800 text-center md:text-left;
+}
+
+.sale-mgmt-search-container {
+    @apply flex-1 w-full md:max-w-md md:mx-auto relative;
+}
+
+.sale-mgmt-search-input {
+    @apply block w-full pl-10 pr-4 py-2 bg-white/50 border border-gray-200 rounded-xl text-[13px] placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 focus:bg-white transition-all outline-none;
+}
+
+/* Header Buttons Sizing & Base Style */
+.sale-mgmt-btn-action {
+    display: flex !important;
+    flex-direction: row !important;
+    align-items: center !important;
+    justify-content: center !important;
+    gap: 8px !important;
+    height: 42px !important;
+    width: 140px !important;
+    border-radius: 12px !important;
+    font-size: 13px !important;
+    font-weight: 700 !important;
+    transition: all 0.2s ease !important;
+    white-space: nowrap !important;
+    cursor: pointer !important;
+    border: 1px solid transparent !important;
+    margin: 0 !important;
+}
+
+.sale-mgmt-btn-white {
+    background-color: #ffffff !important;
+    border: 1px solid #e5e7eb !important;
+    color: #4b5563 !important;
+    box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05) !important;
+}
+
+.sale-mgmt-btn-white:hover {
+    background-color: #f9fafb !important;
+}
+
+.sale-mgmt-btn-blue {
+    background: linear-gradient(to right, #2563eb, #4f46e5) !important;
+    color: #ffffff !important;
+    border: 1px solid transparent !important;
+    box-shadow: 0 10px 15px -3px rgba(59, 130, 246, 0.3), 0 4px 6px -2px rgba(59, 130, 246, 0.05) !important;
+}
+
+.sale-mgmt-btn-blue:hover {
+    background: linear-gradient(to right, #1d4ed8, #4338ca) !important;
+}
+
+.sale-mgmt-btn-action:active {
+    transform: scale(0.95) !important;
+}
+
+.sale-mgmt-btn-add {
+    @apply w-full md:w-auto px-4 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-medium rounded-xl shadow-lg shadow-blue-500/30 transition-all transform hover:scale-105 flex items-center justify-center;
+}
+
+/* Summary Cards */
+.sale-mgmt-summary-grid {
+    @apply grid grid-cols-2 md:grid-cols-4 gap-2 md:gap-4;
+}
+
+.sale-mgmt-card {
+    @apply border p-3 md:p-4 rounded-xl shadow-sm transition-all hover:shadow-md;
+}
+
+.sale-mgmt-card-default {
+    @apply bg-white border-gray-200;
+}
+
+.sale-mgmt-card-emerald {
+    @apply bg-emerald-50/50 border-emerald-100;
+}
+
+.sale-mgmt-card-orange {
+    @apply bg-orange-50/50 border-orange-100;
+}
+
+.sale-mgmt-card-red {
+    @apply bg-red-50/50 border-red-100;
+}
+
+.sale-mgmt-card-label {
+    @apply text-[11px] font-bold uppercase tracking-wider mb-1;
+}
+
+.sale-mgmt-card-value {
+    @apply text-sm sm:text-base md:text-xl font-bold;
+}
+
+/* Form Styling */
+.sale-mgmt-form-container {
+    @apply relative overflow-hidden rounded-2xl bg-white/60 backdrop-blur-xl border border-white/50 shadow-2xl p-4 md:p-8 transition-all duration-300;
+}
+
+.sale-mgmt-form-header {
+    @apply flex items-center justify-between mb-6 border-b border-gray-200/50 pb-4 relative z-10;
+}
+
+.sale-mgmt-form-title {
+    @apply text-lg md:text-xl font-semibold text-gray-800;
+}
+
+.sale-mgmt-input-group {
+    @apply space-y-2;
+}
+
+.sale-mgmt-label {
+    @apply text-xs md:text-sm font-medium text-gray-700;
+}
+
+.sale-mgmt-input {
+    @apply w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm text-sm;
+}
+
+.sale-mgmt-input-readonly {
+    @apply bg-gray-50/50 cursor-not-allowed;
+}
+
+.sale-mgmt-btn-primary {
+    @apply w-full sm:min-w-[150px] px-8 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl font-bold hover:from-blue-700 hover:to-indigo-700 hover:shadow-lg hover:shadow-blue-500/30 transition-all duration-200 text-sm flex items-center justify-center shadow-md disabled:opacity-50 hover:scale-105 whitespace-nowrap;
+}
+
+.sale-mgmt-btn-secondary {
+    @apply w-full sm:w-auto px-8 py-2.5 bg-white text-gray-700 border border-gray-200 rounded-xl font-bold hover:bg-gray-50 transition-all duration-200 text-sm flex items-center justify-center hover:scale-105;
+}
+
+/* Product Section */
+.sale-mgmt-product-card {
+    @apply relative p-4 md:p-6 rounded-3xl bg-white/40 border border-gray-200/50 shadow-sm transition-all hover:shadow-md;
+}
+
+.sale-mgmt-item-label {
+    @apply text-[11px] font-bold text-gray-500 uppercase tracking-wider;
+}
+
+/* Table Design */
+.sale-mgmt-table-container {
+    @apply bg-transparent md:bg-white md:rounded-2xl md:shadow-sm md:border md:border-gray-100 overflow-hidden;
+}
+
+.sale-mgmt-table {
+    @apply w-full text-left;
+}
+
+.sale-mgmt-th {
+    @apply px-3 py-4 whitespace-nowrap bg-gray-50 text-gray-500 text-xs font-bold uppercase tracking-wider;
+}
+
+/* Mobile Cards */
+.sale-mgmt-mobile-card {
+    @apply bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden p-4 space-y-3 relative active:border-blue-200 transition-all;
+}
+
+.sale-mgmt-mobile-header {
+    @apply flex justify-between items-start border-b border-gray-50 pb-2;
+}
+
+.sale-mgmt-mobile-section {
+    @apply bg-gray-50/50 rounded-xl p-3 space-y-2;
+}
+
+.sale-mgmt-mobile-label {
+    @apply text-[10px] font-bold text-gray-400 uppercase tracking-widest leading-none mb-1;
+}
+
+.sale-mgmt-mobile-value {
+    @apply text-sm font-bold text-gray-800;
+}
+
+.sale-mgmt-mobile-money-card {
+    @apply text-center p-2 rounded-lg border;
+}
+
+/* Responsive Table Adjustments */
+@media (max-width: 768px) {
+    .sale-management-container .overflow-x-auto {
+        margin: 0 -1rem;
+        padding: 0 1rem;
+    }
+
+    .sale-management-container table {
+        min-width: 800px;
+    }
 }

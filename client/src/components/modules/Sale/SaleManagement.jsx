@@ -14,7 +14,10 @@ const SaleManagement = ({
     setSelectedItems,
     onDeleteConfirm,
     startLongPress,
-    endLongPress
+    endLongPress,
+    setShowSalesReport,
+    saleFilters,
+    setSaleFilters
 }) => {
     const [showForm, setShowForm] = useState(false);
     const [sales, setSales] = useState([]);
@@ -31,12 +34,50 @@ const SaleManagement = ({
     const [viewData, setViewData] = useState(null);
     const [customerSearch, setCustomerSearch] = useState('');
     const [expandedRows, setExpandedRows] = useState([]);
+    const [showSaleFilterPanel, setShowSaleFilterPanel] = useState(false);
+    const [saleFilterSearch, setSaleFilterSearch] = useState({ companySearch: '', invoiceSearch: '' });
+    const [activeFilterDropdown, setActiveFilterDropdown] = useState(null); // 'from', 'to', 'company', 'invoice'
+    const saleFilterRef = useRef(null);
+    const saleFilterButtonRef = useRef(null);
+    const saleCompanyFilterRef = useRef(null);
+    const saleInvoiceFilterRef = useRef(null);
 
     const toggleRowExpansion = (saleId) => {
         setExpandedRows(prev =>
             prev.includes(saleId) ? prev.filter(id => id !== saleId) : [...prev, saleId]
         );
     };
+
+    const hasActiveFilters = Object.values(saleFilters).some(v => v !== '');
+
+    useEffect(() => {
+        const handleClickOutside = (event) => {
+            if (
+                showSaleFilterPanel &&
+                saleFilterRef.current &&
+                !saleFilterRef.current.contains(event.target) &&
+                saleFilterButtonRef.current &&
+                !saleFilterButtonRef.current.contains(event.target)
+            ) {
+                setShowSaleFilterPanel(false);
+            }
+            if (
+                activeFilterDropdown &&
+                saleFilterRef.current &&
+                !saleFilterRef.current.contains(event.target)
+            ) {
+                // Determine if click was inside any specific filter container
+                const inCompany = saleCompanyFilterRef.current?.contains(event.target);
+                const inInvoice = saleInvoiceFilterRef.current?.contains(event.target);
+
+                if (!inCompany && !inInvoice) {
+                    setActiveFilterDropdown(null);
+                }
+            }
+        };
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, [showSaleFilterPanel, activeFilterDropdown]);
 
     const [formData, setFormData] = useState({
         date: '',
@@ -843,9 +884,9 @@ const SaleManagement = ({
     };
 
     const getFilteredData = () => {
-        if (!searchQuery) return sales;
+        if (!searchQuery) return displayedSales;
         const query = searchQuery.toLowerCase();
-        return sales.filter(s => {
+        return displayedSales.filter(s => {
             const matchesBasic =
                 s.invoiceNo?.toLowerCase().includes(query) ||
                 s.customerName?.toLowerCase().includes(query) ||
@@ -1189,21 +1230,51 @@ const SaleManagement = ({
         );
     };
 
+    // Apply search + advanced filters
+    const displayedSales = sales.filter(sale => {
+        // Text search
+        if (searchQuery) {
+            const q = searchQuery.toLowerCase();
+            const inv = (sale.invoiceNo || '').toLowerCase();
+            const cname = (sale.companyName || sale.customerName || '').toLowerCase();
+            if (!inv.includes(q) && !cname.includes(q)) return false;
+        }
+        // Date range
+        if (saleFilters.startDate && sale.date) {
+            if (sale.date < saleFilters.startDate) return false;
+        }
+        if (saleFilters.endDate && sale.date) {
+            if (sale.date > saleFilters.endDate) return false;
+        }
+        // Company
+        if (saleFilters.companyName) {
+            const c = (sale.companyName || sale.customerName || '').toLowerCase();
+            if (!c.includes(saleFilters.companyName.toLowerCase())) return false;
+        }
+        // Invoice
+        if (saleFilters.invoiceNo) {
+            const inv = (sale.invoiceNo || '').toLowerCase();
+            if (!inv.includes(saleFilters.invoiceNo.toLowerCase())) return false;
+        }
+        return true;
+    });
+
     const stats = {
-        totalSales: sales.reduce((sum, s) => sum + (parseFloat(s.totalAmount) || 0), 0),
-        totalPaid: sales.reduce((sum, s) => sum + (parseFloat(s.paidAmount) || 0), 0),
-        totalDue: sales.reduce((sum, s) => sum + (parseFloat(s.dueAmount) || 0), 0)
+        totalSales: displayedSales.reduce((sum, s) => sum + (parseFloat(s.totalAmount) || 0), 0),
+        totalDiscount: displayedSales.reduce((sum, s) => sum + (parseFloat(s.discount) || 0), 0),
+        totalPaid: displayedSales.reduce((sum, s) => sum + (parseFloat(s.paidAmount) || 0), 0),
+        totalDue: displayedSales.reduce((sum, s) => sum + (parseFloat(s.dueAmount) || 0), 0)
     };
 
     return (
-        <div className="sale-management-container space-y-6">
-            <div className="flex items-center justify-between gap-4">
-                <div className="w-1/4">
-                    <h2 className="text-2xl font-bold text-gray-800">{saleType} Sale Management</h2>
+        <div className="sale-management-container">
+            <div className="sale-mgmt-header">
+                <div className="w-full md:w-auto">
+                    <h2 className="sale-mgmt-title">{saleType} Sale Management</h2>
                 </div>
 
                 {!showForm && (
-                    <div className="flex-1 max-w-md mx-auto relative group">
+                    <div className="sale-mgmt-search-container group">
                         <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
                             <SearchIcon className="h-4 w-4 text-gray-400 group-focus-within:text-blue-500 transition-colors" />
                         </div>
@@ -1212,18 +1283,196 @@ const SaleManagement = ({
                             placeholder="Search invoice, customer..."
                             value={searchQuery}
                             onChange={(e) => setSearchQuery(e.target.value)}
-                            className="block w-full pl-10 pr-4 py-2 bg-white/50 border border-gray-200 rounded-xl text-[13px] placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 focus:bg-white transition-all outline-none"
+                            className="sale-mgmt-search-input"
                         />
                     </div>
                 )}
 
                 {!showForm && (
-                    <div className="w-1/4 flex justify-end gap-3 z-50">
+                    <div className="flex items-center justify-end gap-2 md:gap-3 z-50 flex-nowrap">
+                        {/* Filter Button */}
+                        <div className="relative">
+                            <button
+                                ref={saleFilterButtonRef}
+                                onClick={() => setShowSaleFilterPanel(prev => !prev)}
+                                className={`sale-mgmt-btn-action ${showSaleFilterPanel || hasActiveFilters
+                                    ? 'sale-mgmt-btn-blue'
+                                    : 'sale-mgmt-btn-white'
+                                    }`}
+                            >
+                                <FunnelIcon className="w-5 h-5" />
+                                <span>Filter</span>
+                                {hasActiveFilters && (
+                                    <span className="flex items-center justify-center w-4 h-4 text-[10px] font-black bg-white text-blue-600 rounded-full ml-1">
+                                        {Object.values(saleFilters).filter(v => v !== '').length}
+                                    </span>
+                                )}
+                            </button>
+
+                            {showSaleFilterPanel && (
+                                <>
+                                    {/* Mobile backdrop */}
+                                    <div
+                                        className="md:hidden fixed inset-0 bg-black/20 backdrop-blur-sm z-[55]"
+                                        onClick={() => setShowSaleFilterPanel(false)}
+                                    />
+                                    <div
+                                        ref={saleFilterRef}
+                                        className="fixed inset-x-4 top-24 md:absolute md:inset-auto md:right-0 md:mt-3 md:w-80 bg-white border border-gray-100 rounded-2xl shadow-2xl z-[60] p-5 animate-in fade-in zoom-in duration-200"
+                                    >
+                                        <div className="flex items-center justify-between mb-4 pb-2 border-b border-gray-100">
+                                            <h4 className="font-bold text-gray-900 tracking-tight">Advance Filter</h4>
+                                            <button
+                                                onClick={() => {
+                                                    setSaleFilters({ startDate: '', endDate: '', companyName: '', invoiceNo: '' });
+                                                    setSaleFilterSearch({ companySearch: '', invoiceSearch: '' });
+                                                    setActiveFilterDropdown(null);
+                                                }}
+                                                className="text-[11px] font-bold text-blue-600 hover:text-blue-700 uppercase tracking-widest"
+                                            >
+                                                RESET ALL
+                                            </button>
+                                        </div>
+
+                                        <div className="space-y-4">
+                                            {/* Date Range */}
+                                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                                <CustomDatePicker
+                                                    label="From Date"
+                                                    value={saleFilters.startDate}
+                                                    onChange={(e) => setSaleFilters({ ...saleFilters, startDate: e.target.value })}
+                                                    compact={true}
+                                                    isOpen={activeFilterDropdown === 'from'}
+                                                    onToggle={(val) => setActiveFilterDropdown(val ? 'from' : null)}
+                                                />
+                                                <CustomDatePicker
+                                                    label="To Date"
+                                                    value={saleFilters.endDate}
+                                                    onChange={(e) => setSaleFilters({ ...saleFilters, endDate: e.target.value })}
+                                                    compact={true}
+                                                    rightAlign={true}
+                                                    isOpen={activeFilterDropdown === 'to'}
+                                                    onToggle={(val) => setActiveFilterDropdown(val ? 'to' : null)}
+                                                />
+                                            </div>
+
+                                            {/* Company / Customer Name Filter */}
+                                            <div className="space-y-1.5 relative" ref={saleCompanyFilterRef}>
+                                                <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider pl-1">COMPANY NAME</label>
+                                                <div className="relative">
+                                                    <input
+                                                        type="text"
+                                                        value={saleFilterSearch.companySearch}
+                                                        onChange={(e) => {
+                                                            setSaleFilterSearch({ ...saleFilterSearch, companySearch: e.target.value });
+                                                            setSaleFilters({ ...saleFilters, companyName: e.target.value });
+                                                            setActiveFilterDropdown('company');
+                                                        }}
+                                                        onFocus={() => setActiveFilterDropdown('company')}
+                                                        placeholder={saleFilters.companyName || 'Search company...'}
+                                                        className={`w-full px-4 py-2.5 bg-white border border-gray-100 rounded-xl text-sm focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all shadow-sm hover:border-gray-200 pr-14 ${saleFilters.companyName ? 'placeholder:text-gray-900 placeholder:font-semibold' : 'placeholder:text-gray-300'
+                                                            }`}
+                                                    />
+                                                    <div className="absolute right-3.5 top-1/2 -translate-y-1/2 flex items-center gap-2">
+                                                        {saleFilters.companyName && (
+                                                            <button
+                                                                onClick={() => { setSaleFilters({ ...saleFilters, companyName: '' }); setSaleFilterSearch({ ...saleFilterSearch, companySearch: '' }); setActiveFilterDropdown(null); }}
+                                                                className="text-gray-400 hover:text-gray-600"
+                                                            >
+                                                                <XIcon className="w-4 h-4" />
+                                                            </button>
+                                                        )}
+                                                        <SearchIcon className="w-4 h-4 text-gray-300 pointer-events-none" />
+                                                    </div>
+                                                </div>
+                                                {activeFilterDropdown === 'company' && (() => {
+                                                    const options = [...new Set(sales.map(s => s.companyName || s.customerName).filter(Boolean))].sort();
+                                                    const filtered = options.filter(c => c.toLowerCase().includes((saleFilterSearch.companySearch || '').toLowerCase()));
+                                                    return filtered.length > 0 ? (
+                                                        <div className="absolute z-[120] mt-1 w-full bg-white border border-gray-100 rounded-xl shadow-xl max-h-48 overflow-y-auto py-1">
+                                                            {filtered.map(c => (
+                                                                <button
+                                                                    key={c}
+                                                                    type="button"
+                                                                    onClick={() => { setSaleFilters({ ...saleFilters, companyName: c }); setSaleFilterSearch({ ...saleFilterSearch, companySearch: c }); setActiveFilterDropdown(null); }}
+                                                                    className="w-full px-4 py-2 text-left text-sm hover:bg-blue-50 transition-colors"
+                                                                >
+                                                                    {c}
+                                                                </button>
+                                                            ))}
+                                                        </div>
+                                                    ) : null;
+                                                })()}
+                                            </div>
+
+                                            {/* Invoice No Filter */}
+                                            <div className="space-y-1.5 relative" ref={saleInvoiceFilterRef}>
+                                                <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider pl-1">INVOICE NUMBER</label>
+                                                <div className="relative">
+                                                    <input
+                                                        type="text"
+                                                        value={saleFilterSearch.invoiceSearch}
+                                                        onChange={(e) => {
+                                                            setSaleFilterSearch({ ...saleFilterSearch, invoiceSearch: e.target.value });
+                                                            setSaleFilters({ ...saleFilters, invoiceNo: e.target.value });
+                                                            setActiveFilterDropdown('invoice');
+                                                        }}
+                                                        onFocus={() => setActiveFilterDropdown('invoice')}
+                                                        placeholder={saleFilters.invoiceNo || 'Search invoice...'}
+                                                        className={`w-full px-4 py-2.5 bg-white border border-gray-100 rounded-xl text-sm focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all shadow-sm hover:border-gray-200 pr-14 ${saleFilters.invoiceNo ? 'placeholder:text-gray-900 placeholder:font-semibold' : 'placeholder:text-gray-300'
+                                                            }`}
+                                                    />
+                                                    <div className="absolute right-3.5 top-1/2 -translate-y-1/2 flex items-center gap-2">
+                                                        {saleFilters.invoiceNo && (
+                                                            <button
+                                                                onClick={() => { setSaleFilters({ ...saleFilters, invoiceNo: '' }); setSaleFilterSearch({ ...saleFilterSearch, invoiceSearch: '' }); setActiveFilterDropdown(null); }}
+                                                                className="text-gray-400 hover:text-gray-600"
+                                                            >
+                                                                <XIcon className="w-4 h-4" />
+                                                            </button>
+                                                        )}
+                                                        <SearchIcon className="w-4 h-4 text-gray-300 pointer-events-none" />
+                                                    </div>
+                                                </div>
+                                                {activeFilterDropdown === 'invoice' && (() => {
+                                                    const options = [...new Set(sales.map(s => s.invoiceNo).filter(Boolean))].sort();
+                                                    const filtered = options.filter(inv => inv.toLowerCase().includes((saleFilterSearch.invoiceSearch || '').toLowerCase()));
+                                                    return filtered.length > 0 ? (
+                                                        <div className="absolute z-[120] mt-1 w-full bg-white border border-gray-100 rounded-xl shadow-xl max-h-48 overflow-y-auto py-1">
+                                                            {filtered.map(inv => (
+                                                                <button
+                                                                    key={inv}
+                                                                    type="button"
+                                                                    onClick={() => { setSaleFilters({ ...saleFilters, invoiceNo: inv }); setSaleFilterSearch({ ...saleFilterSearch, invoiceSearch: inv }); setActiveFilterDropdown(null); }}
+                                                                    className="w-full px-4 py-2 text-left text-sm hover:bg-blue-50 transition-colors"
+                                                                >
+                                                                    {inv}
+                                                                </button>
+                                                            ))}
+                                                        </div>
+                                                    ) : null;
+                                                })()}
+                                            </div>
+                                        </div>
+                                    </div>
+                                </>
+                            )}
+                        </div>
+
+                        {/* Report Button */}
+                        <button
+                            onClick={() => setShowSalesReport(true)}
+                            className="sale-mgmt-btn-action sale-mgmt-btn-white"
+                        >
+                            <BarChartIcon className="w-5 h-5" />
+                            <span>Report</span>
+                        </button>
+
                         <button
                             onClick={() => setShowForm(true)}
-                            className="px-4 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-medium rounded-xl shadow-lg shadow-blue-500/30 transition-all transform hover:scale-105 flex items-center"
+                            className="sale-mgmt-btn-action sale-mgmt-btn-blue"
                         >
-                            <span className="mr-2 text-xl">+</span> {saleType === 'Border' ? 'New G.P' : 'Add Sale'}
+                            <span className="flex items-center gap-2"><span className="text-xl leading-none">+</span> {saleType === 'Border' ? 'New G.P' : 'Add Sale'}</span>
                         </button>
                     </div>
                 )}
@@ -1231,29 +1480,33 @@ const SaleManagement = ({
 
             {/* Summary Cards */}
             {!showForm && (
-                <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                    <div className="bg-white border border-gray-200 p-4 rounded-xl shadow-sm transition-all hover:shadow-md">
-                        <div className="text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-1">Total Sales</div>
-                        <div className="text-xl font-bold text-gray-900">৳ {stats.totalSales.toLocaleString()}</div>
+                <div className="sale-mgmt-summary-grid">
+                    <div className="sale-mgmt-card sale-mgmt-card-default">
+                        <div className="sale-mgmt-card-label text-gray-400">Total Sales</div>
+                        <div className="sale-mgmt-card-value text-gray-900">৳ {stats.totalSales.toLocaleString()}</div>
                     </div>
-                    <div className="bg-emerald-50/50 border border-emerald-100 p-4 rounded-xl shadow-sm transition-all hover:shadow-md">
-                        <div className="text-[11px] font-bold text-emerald-600 uppercase tracking-wider mb-1">Total Paid</div>
-                        <div className="text-xl font-bold text-emerald-700">৳ {stats.totalPaid.toLocaleString()}</div>
+                    <div className="sale-mgmt-card sale-mgmt-card-red">
+                        <div className="sale-mgmt-card-label text-red-600">Total Disc.</div>
+                        <div className="sale-mgmt-card-value text-red-700">৳ {stats.totalDiscount.toLocaleString()}</div>
                     </div>
-                    <div className="bg-orange-50/50 border border-orange-100 p-4 rounded-xl shadow-sm transition-all hover:shadow-md">
-                        <div className="text-[11px] font-bold text-orange-600 uppercase tracking-wider mb-1">Total Due</div>
-                        <div className="text-xl font-bold text-orange-700">৳ {stats.totalDue.toLocaleString()}</div>
+                    <div className="sale-mgmt-card sale-mgmt-card-emerald">
+                        <div className="sale-mgmt-card-label text-emerald-600">Total Paid</div>
+                        <div className="sale-mgmt-card-value text-emerald-700">৳ {stats.totalPaid.toLocaleString()}</div>
+                    </div>
+                    <div className="sale-mgmt-card sale-mgmt-card-orange">
+                        <div className="sale-mgmt-card-label text-orange-600">Total Due</div>
+                        <div className="sale-mgmt-card-value text-orange-700">৳ {stats.totalDue.toLocaleString()}</div>
                     </div>
                 </div>
             )}
 
             {showForm && (
-                <div className="relative overflow-hidden rounded-2xl bg-white/60 backdrop-blur-xl border border-white/50 shadow-2xl p-8 transition-all duration-300">
+                <div className="sale-mgmt-form-container">
                     <div className="absolute -top-24 -right-24 w-64 h-64 bg-blue-400/10 rounded-full blur-3xl pointer-events-none"></div>
                     <div className="absolute -bottom-24 -left-24 w-64 h-64 bg-indigo-400/10 rounded-full blur-3xl pointer-events-none"></div>
 
-                    <div className="flex items-center justify-between mb-6 border-b border-gray-200/50 pb-4 relative z-10">
-                        <h3 className="text-xl font-semibold text-gray-800">{editingId ? 'Edit Sale' : (saleType === 'Border' ? 'New Gate Pass Entry' : 'New Sale Entry')}</h3>
+                    <div className="sale-mgmt-form-header">
+                        <h3 className="sale-mgmt-form-title">{editingId ? 'Edit Sale' : (saleType === 'Border' ? 'New Gate Pass Entry' : 'New Sale Entry')}</h3>
                         <button onClick={() => { setShowForm(false); resetForm(); }} className="text-gray-400 hover:text-red-500 transition-colors">
                             <XIcon className="w-6 h-6" />
                         </button>
@@ -1269,17 +1522,17 @@ const SaleManagement = ({
                                 required
                                 compact={true}
                             />
-                            <div className="space-y-2">
-                                <label className="text-sm font-medium text-gray-700">Invoice No</label>
-                                <input type="text" name="invoiceNo" value={formData.invoiceNo} onChange={handleInputChange} placeholder="SALE-001" className="w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm" required />
+                            <div className="sale-mgmt-input-group">
+                                <label className="sale-mgmt-label">Invoice No</label>
+                                <input type="text" name="invoiceNo" value={formData.invoiceNo} onChange={handleInputChange} placeholder="SALE-001" className="sale-mgmt-input" required />
                             </div>
-                            <div className="space-y-2">
-                                <label className="text-sm font-medium text-gray-700">LC No</label>
-                                <input type="text" name="lcNo" value={formData.lcNo} onChange={handleInputChange} placeholder="LC-001" className="w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm" />
+                            <div className="sale-mgmt-input-group">
+                                <label className="sale-mgmt-label">LC No</label>
+                                <input type="text" name="lcNo" value={formData.lcNo} onChange={handleInputChange} placeholder="LC-001" className="sale-mgmt-input" />
                             </div>
                             {/* Company Name Select */}
-                            <div className="space-y-2 relative company-dropdown-container">
-                                <label className="text-sm font-medium text-gray-700">Company Name</label>
+                            <div className="sale-mgmt-input-group relative company-dropdown-container">
+                                <label className="sale-mgmt-label">Company Name</label>
                                 <div className="relative">
                                     <input
                                         type="text"
@@ -1293,7 +1546,7 @@ const SaleManagement = ({
                                         }}
                                         onFocus={() => { setActiveDropdown('companyName'); setHighlightedIndex(-1); }}
                                         onKeyDown={(e) => handleDropdownKeyDown(e, 'companyName', getFilteredCompanies(), handleCompanyNameSelect)}
-                                        className={`w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm pr-14 ${formData.companyName ? 'placeholder:text-gray-900 placeholder:font-semibold' : 'placeholder:text-gray-400'}`}
+                                        className={`sale-mgmt-input pr-14 ${formData.companyName ? 'placeholder:text-gray-900 placeholder:font-semibold' : 'placeholder:text-gray-400'}`}
                                     />
                                     <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-2">
                                         {formData.companyName && (
@@ -1326,31 +1579,31 @@ const SaleManagement = ({
                                     </div>
                                 )}
                             </div>
-                            <div className="space-y-2">
-                                <label className="text-sm font-medium text-gray-700">Customer</label>
-                                <input type="text" name="customerName" value={formData.customerName} readOnly placeholder="Customer" className="w-full px-4 py-2 bg-gray-50/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm cursor-not-allowed" />
+                            <div className="sale-mgmt-input-group">
+                                <label className="sale-mgmt-label">Customer</label>
+                                <input type="text" name="customerName" value={formData.customerName} readOnly placeholder="Customer" className="sale-mgmt-input sale-mgmt-input-readonly" />
                             </div>
-                            <div className="space-y-2">
-                                <label className="text-sm font-medium text-gray-700">Contact</label>
-                                <input type="text" name="contact" value={formData.contact} readOnly placeholder="Contact" className="w-full px-4 py-2 bg-gray-50/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm cursor-not-allowed" />
+                            <div className="sale-mgmt-input-group">
+                                <label className="sale-mgmt-label">Contact</label>
+                                <input type="text" name="contact" value={formData.contact} readOnly placeholder="Contact" className="sale-mgmt-input sale-mgmt-input-readonly" />
                             </div>
                             {saleType === 'Border' && (
                                 <>
-                                    <div className="space-y-2">
-                                        <label className="text-sm font-medium text-gray-700">Importer</label>
-                                        <input type="text" name="importer" value={formData.importer} onChange={handleInputChange} placeholder="Importer" className="w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm" />
+                                    <div className="sale-mgmt-input-group">
+                                        <label className="sale-mgmt-label">Importer</label>
+                                        <input type="text" name="importer" value={formData.importer} onChange={handleInputChange} placeholder="Importer" className="sale-mgmt-input" />
                                     </div>
-                                    <div className="space-y-2">
-                                        <label className="text-sm font-medium text-gray-700">Port</label>
-                                        <input type="text" name="port" value={formData.port} onChange={handleInputChange} placeholder="Port" className="w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm" />
+                                    <div className="sale-mgmt-input-group">
+                                        <label className="sale-mgmt-label">Port</label>
+                                        <input type="text" name="port" value={formData.port} onChange={handleInputChange} placeholder="Port" className="sale-mgmt-input" />
                                     </div>
-                                    <div className="space-y-2">
-                                        <label className="text-sm font-medium text-gray-700">IND CNF</label>
-                                        <input type="text" name="indianCnF" value={formData.indianCnF} onChange={handleInputChange} placeholder="IND CNF" className="w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm" />
+                                    <div className="sale-mgmt-input-group">
+                                        <label className="sale-mgmt-label">IND CNF</label>
+                                        <input type="text" name="indianCnF" value={formData.indianCnF} onChange={handleInputChange} placeholder="IND CNF" className="sale-mgmt-input" />
                                     </div>
-                                    <div className="space-y-2">
-                                        <label className="text-sm font-medium text-gray-700">BD CNF</label>
-                                        <input type="text" name="bdCnf" value={formData.bdCnf} onChange={handleInputChange} placeholder="BD CNF" className="w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm" />
+                                    <div className="sale-mgmt-input-group">
+                                        <label className="sale-mgmt-label">BD CNF</label>
+                                        <input type="text" name="bdCnf" value={formData.bdCnf} onChange={handleInputChange} placeholder="BD CNF" className="sale-mgmt-input" />
                                     </div>
                                 </>
                             )}
@@ -1373,7 +1626,7 @@ const SaleManagement = ({
 
                             <div className="space-y-8">
                                 {formData.items.map((item, index) => (
-                                    <div key={index} className="relative p-6 rounded-3xl bg-white/40 border border-gray-200/50 shadow-sm transition-all hover:shadow-md group/item">
+                                    <div key={index} className="sale-mgmt-product-card group/item">
                                         {/* Remove Product Button */}
                                         {formData.items.length > 1 && (
                                             <button
@@ -1388,7 +1641,7 @@ const SaleManagement = ({
                                         <div className={`${saleType === 'Border' ? 'flex flex-row items-center gap-4' : 'space-y-6'}`}>
                                             {/* Product Selection */}
                                             <div className={`space-y-1.5 relative px-4 product-dropdown-container ${saleType === 'Border' ? 'flex-1' : 'max-w-sm'}`}>
-                                                <label className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">Product</label>
+                                                <label className="sale-mgmt-item-label">Product</label>
                                                 <div className="relative">
                                                     <input
                                                         type="text"
@@ -1406,7 +1659,7 @@ const SaleManagement = ({
                                                             setActiveItemIndex(index);
                                                             setProductSearch(item.productName || '');
                                                         }}
-                                                        className={`w-full px-4 py-2 pr-14 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm ${item.productName ? 'placeholder:text-gray-900 placeholder:font-semibold' : 'placeholder:text-gray-400'}`}
+                                                        className={`sale-mgmt-input pr-14 ${item.productName ? 'placeholder:text-gray-900 placeholder:font-semibold' : 'placeholder:text-gray-400'}`}
                                                     />
                                                     <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-2">
                                                         {item.productName && (
@@ -1452,16 +1705,17 @@ const SaleManagement = ({
                                             {saleType === 'Border' && (
                                                 <div className="flex-[3] space-y-4 pt-1">
                                                     <div className="hidden md:grid grid-cols-5 gap-4 px-4">
-                                                        <div className="text-[10px] font-bold text-gray-400 uppercase tracking-widest text-center">Warehouse</div>
-                                                        <div className="text-[10px] font-bold text-gray-400 uppercase tracking-widest text-center">Qty</div>
-                                                        <div className="text-[10px] font-bold text-gray-400 uppercase tracking-widest text-center">Truck</div>
-                                                        <div className="text-[10px] font-bold text-gray-400 uppercase tracking-widest text-center">Price</div>
-                                                        <div className="text-[10px] font-bold text-gray-400 uppercase tracking-widest text-center">Total</div>
+                                                        <div className="sale-mgmt-item-label text-center">Warehouse</div>
+                                                        <div className="sale-mgmt-item-label text-center">Qty</div>
+                                                        <div className="sale-mgmt-item-label text-center">Truck</div>
+                                                        <div className="sale-mgmt-item-label text-center">Price</div>
+                                                        <div className="sale-mgmt-item-label text-center">Total</div>
                                                     </div>
                                                     {item.brandEntries.map((entry, entryIndex) => (
                                                         <div key={entryIndex} className="grid grid-cols-1 md:grid-cols-5 gap-4 items-center px-4">
                                                             {/* Warehouse Selection */}
                                                             <div className="relative warehouse-dropdown-container">
+                                                                <label className="md:hidden sale-mgmt-item-label mb-1 block">Warehouse</label>
                                                                 <input
                                                                     type="text"
                                                                     placeholder={entry.warehouseName || "Warehouse"}
@@ -1479,7 +1733,7 @@ const SaleManagement = ({
                                                                         setActiveEntryIndex(entryIndex);
                                                                         setWarehouseSearch(entry.warehouseName || '');
                                                                     }}
-                                                                    className={`w-full px-3 py-2 pr-9 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm text-xs ${entry.warehouseName ? 'placeholder:text-gray-900 placeholder:font-semibold' : 'placeholder:text-gray-400'}`}
+                                                                    className={`sale-mgmt-input pr-9 !text-xs ${entry.warehouseName ? 'placeholder:text-gray-900 placeholder:font-semibold' : 'placeholder:text-gray-400'}`}
                                                                 />
                                                                 <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
                                                                     {entry.warehouseName ? (
@@ -1503,17 +1757,23 @@ const SaleManagement = ({
                                                                 )}
                                                             </div>
                                                             <div>
-                                                                <input type="number" name="quantity" value={entry.quantity} onChange={(e) => handleItemInputChange(index, entryIndex, e)} placeholder="0" className="w-full px-2 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm text-[13px] font-black text-gray-900 text-center" />
+                                                                <label className="md:hidden sale-mgmt-item-label mb-1 block text-center">Qty</label>
+                                                                <input type="number" name="quantity" value={entry.quantity} onChange={(e) => handleItemInputChange(index, entryIndex, e)} placeholder="0" className="sale-mgmt-input !px-2 !text-[13px] font-black text-gray-900 text-center" />
                                                             </div>
                                                             <div>
-                                                                <input type="number" name="truck" value={entry.truck || ''} onChange={(e) => handleItemInputChange(index, entryIndex, e)} placeholder="0" className="w-full px-2 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm text-[13px] font-bold text-gray-600 text-center" />
+                                                                <label className="md:hidden sale-mgmt-item-label mb-1 block text-center">Truck</label>
+                                                                <input type="number" name="truck" value={entry.truck || ''} onChange={(e) => handleItemInputChange(index, entryIndex, e)} placeholder="0" className="sale-mgmt-input !px-2 !text-[13px] font-bold text-gray-600 text-center" />
                                                             </div>
                                                             <div>
-                                                                <input type="number" name="unitPrice" value={entry.unitPrice} onChange={(e) => handleItemInputChange(index, entryIndex, e)} placeholder="0" className="w-full px-2 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm text-[13px] font-bold text-gray-600 text-center" />
+                                                                <label className="md:hidden sale-mgmt-item-label mb-1 block text-center">Price</label>
+                                                                <input type="number" name="unitPrice" value={entry.unitPrice} onChange={(e) => handleItemInputChange(index, entryIndex, e)} placeholder="0" className="sale-mgmt-input !px-2 !text-[13px] font-bold text-gray-600 text-center" />
                                                             </div>
                                                             <div className="flex items-center gap-2">
-                                                                <div className="flex-1 h-10 flex items-center justify-center bg-white/50 border border-gray-200/60 rounded-lg backdrop-blur-sm text-[13px] font-black text-blue-600">
-                                                                    {parseFloat(entry.totalAmount || 0).toLocaleString()}
+                                                                <div className="flex-1">
+                                                                    <label className="md:hidden sale-mgmt-item-label mb-1 block text-center">Total</label>
+                                                                    <div className="h-10 flex items-center justify-center bg-white/50 border border-gray-200/60 rounded-lg backdrop-blur-sm text-[13px] font-black text-blue-600">
+                                                                        {parseFloat(entry.totalAmount || 0).toLocaleString()}
+                                                                    </div>
                                                                 </div>
                                                                 <div className="flex flex-row gap-1 items-center justify-center">
                                                                     {entryIndex === item.brandEntries.length - 1 && (
@@ -1534,19 +1794,20 @@ const SaleManagement = ({
                                             <div className="space-y-1">
                                                 {/* Header Row for Brands (Hidden on Mobile) */}
                                                 <div className="hidden md:grid grid-cols-9 gap-4 px-6 py-1 border border-transparent">
-                                                    <div className="col-span-2 text-[10px] font-bold text-gray-400 uppercase tracking-widest text-center text-ellipsis overflow-hidden">Brand</div>
-                                                    <div className="text-[10px] font-bold text-gray-400 uppercase tracking-widest text-center text-ellipsis overflow-hidden">Inhouse</div>
-                                                    <div className="text-[10px] font-bold text-gray-400 uppercase tracking-widest text-center text-ellipsis overflow-hidden">Warehouse</div>
-                                                    <div className="text-[10px] font-bold text-gray-400 uppercase tracking-widest text-center text-ellipsis overflow-hidden">Wh Stock</div>
-                                                    <div className="text-[10px] font-bold text-gray-400 uppercase tracking-widest text-center text-ellipsis overflow-hidden">Qty</div>
-                                                    <div className="text-[10px] font-bold text-gray-400 uppercase tracking-widest text-center text-ellipsis overflow-hidden">Price</div>
-                                                    <div className="col-span-2 text-[10px] font-bold text-gray-400 uppercase tracking-widest text-center text-ellipsis overflow-hidden">Total</div>
+                                                    <div className="col-span-2 sale-mgmt-item-label text-center">Brand</div>
+                                                    <div className="sale-mgmt-item-label text-center">Inhouse</div>
+                                                    <div className="sale-mgmt-item-label text-center">Warehouse</div>
+                                                    <div className="sale-mgmt-item-label text-center">Wh Stock</div>
+                                                    <div className="sale-mgmt-item-label text-center">Qty</div>
+                                                    <div className="sale-mgmt-item-label text-center">Price</div>
+                                                    <div className="col-span-2 sale-mgmt-item-label text-center">Total</div>
                                                 </div>
 
                                                 {item.brandEntries.map((entry, entryIndex) => (
                                                     <div key={entryIndex} className="grid grid-cols-1 md:grid-cols-9 gap-4 items-center px-6 group/entry transition-all hover:bg-gray-50/50 rounded-xl py-1.5 border border-transparent hover:border-gray-100/50 relative">
                                                         {/* Brand Selection */}
                                                         <div className="col-span-2 space-y-1 relative brand-dropdown-container">
+                                                            <label className="md:hidden sale-mgmt-item-label mb-1 block">Brand</label>
                                                             <div className="relative">
                                                                 <input
                                                                     type="text"
@@ -1565,7 +1826,7 @@ const SaleManagement = ({
                                                                         setActiveEntryIndex(entryIndex);
                                                                         setBrandSearch(entry.brandName || '');
                                                                     }}
-                                                                    className={`w-full px-4 py-2 pr-10 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm text-xs ${entry.brandName ? 'placeholder:text-gray-900 placeholder:font-semibold' : 'placeholder:text-gray-400'}`}
+                                                                    className={`sale-mgmt-input pr-10 !text-xs ${entry.brandName ? 'placeholder:text-gray-900 placeholder:font-semibold' : 'placeholder:text-gray-400'}`}
                                                                 />
                                                                 <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
                                                                     {entry.brandName && (
@@ -1606,6 +1867,7 @@ const SaleManagement = ({
 
                                                         {/* Inhouse Qty */}
                                                         <div>
+                                                            <label className="md:hidden sale-mgmt-item-label mb-1 block text-center">Inhouse</label>
                                                             <div className="w-full h-10 flex items-center justify-center bg-white/50 border border-gray-200/60 rounded-lg backdrop-blur-sm text-[13px] font-bold text-gray-900">
                                                                 {entry.inhouseQty || '0'}
                                                             </div>
@@ -1614,6 +1876,7 @@ const SaleManagement = ({
                                                         {/* Warehouse Selection */}
                                                         <div className="">
                                                             <div className="space-y-1 relative warehouse-dropdown-container">
+                                                                <label className="md:hidden sale-mgmt-item-label mb-1 block">Warehouse</label>
                                                                 <div className="relative">
                                                                     <input
                                                                         type="text"
@@ -1632,7 +1895,7 @@ const SaleManagement = ({
                                                                             setActiveEntryIndex(entryIndex);
                                                                             setWarehouseSearch(entry.warehouseName || '');
                                                                         }}
-                                                                        className={`w-full px-4 py-2 pr-10 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm text-xs ${entry.warehouseName ? 'placeholder:text-gray-900 placeholder:font-semibold' : 'placeholder:text-gray-400'}`}
+                                                                        className={`sale-mgmt-input pr-10 !text-xs ${entry.warehouseName ? 'placeholder:text-gray-900 placeholder:font-semibold' : 'placeholder:text-gray-400'}`}
                                                                     />
                                                                     <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
                                                                         {entry.warehouseName && (
@@ -1674,6 +1937,7 @@ const SaleManagement = ({
 
                                                         {/* Wh Stock */}
                                                         <div>
+                                                            <label className="md:hidden text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1 block text-center">Wh Stock</label>
                                                             <div className="w-full h-10 flex items-center justify-center bg-white/50 border border-gray-200/60 rounded-lg backdrop-blur-sm text-[13px] font-bold text-gray-900">
                                                                 {entry.warehouseQty || '0'}
                                                             </div>
@@ -1681,32 +1945,37 @@ const SaleManagement = ({
 
                                                         {/* Quantity */}
                                                         <div>
+                                                            <label className="md:hidden sale-mgmt-item-label mb-1 block text-center">Qty</label>
                                                             <input
                                                                 type="number"
                                                                 name="quantity"
                                                                 value={entry.quantity}
                                                                 onChange={(e) => handleItemInputChange(index, entryIndex, e)}
                                                                 placeholder="0"
-                                                                className="w-full px-2 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm text-[13px] font-black text-gray-900 text-center"
+                                                                className="sale-mgmt-input !px-2 !text-[13px] font-black text-gray-900 text-center"
                                                             />
                                                         </div>
 
                                                         {/* Unit Price */}
                                                         <div>
+                                                            <label className="md:hidden sale-mgmt-item-label mb-1 block text-center">Price</label>
                                                             <input
                                                                 type="number"
                                                                 name="unitPrice"
                                                                 value={entry.unitPrice}
                                                                 onChange={(e) => handleItemInputChange(index, entryIndex, e)}
                                                                 placeholder="0"
-                                                                className="w-full px-2 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm text-[13px] font-bold text-gray-600 text-center"
+                                                                className="sale-mgmt-input !px-2 !text-[13px] font-bold text-gray-600 text-center"
                                                             />
                                                         </div>
 
                                                         {/* Total + Add/Remove */}
                                                         <div className="col-span-2 flex items-center gap-1.5">
-                                                            <div className="flex-1 h-10 flex items-center justify-center bg-white/50 border border-gray-200/60 rounded-lg backdrop-blur-sm text-[13px] font-black text-blue-600">
-                                                                {parseFloat(entry.totalAmount || 0).toLocaleString()}
+                                                            <div className="flex-1">
+                                                                <label className="md:hidden sale-mgmt-item-label mb-1 block text-center">Total</label>
+                                                                <div className="w-full h-10 flex items-center justify-center bg-white/50 border border-gray-200/60 rounded-lg backdrop-blur-sm text-[13px] font-black text-blue-600">
+                                                                    {parseFloat(entry.totalAmount || 0).toLocaleString()}
+                                                                </div>
                                                             </div>
                                                             <div className="flex flex-row items-center gap-0.5 shrink-0">
                                                                 {entryIndex === item.brandEntries.length - 1 && (
@@ -1740,7 +2009,7 @@ const SaleManagement = ({
                             </div>
 
                             {/* Invoice Summary */}
-                            <div className="grid grid-cols-1 md:grid-cols-5 gap-6 col-span-2 pt-4 bg-blue-50/50 p-6 rounded-2xl border border-blue-100/50 mt-4">
+                            <div className="grid grid-cols-2 md:grid-cols-5 gap-6 col-span-2 pt-4 bg-blue-50/50 p-6 rounded-2xl border border-blue-100/50 mt-4 overflow-hidden">
                                 <div className="space-y-2">
                                     <label className="text-sm font-bold text-gray-700">Discount</label>
                                     <div className="relative">
@@ -1778,48 +2047,50 @@ const SaleManagement = ({
                                         ৳ {parseFloat(formData.dueAmount).toLocaleString()}
                                     </div>
                                 </div>
-                                <div className="flex items-center gap-4 justify-end border-t border-gray-100 pt-4 mt-2">
-                                    <div className="flex-1">
+                                <div className="flex flex-col md:flex-row items-center gap-4 justify-end border-t border-gray-100 pt-4 mt-2">
+                                    <div className="flex-1 w-full text-center md:text-left">
                                         {submitStatus === 'success' && (
-                                            <p className="text-green-600 font-medium flex items-center animate-bounce">
+                                            <p className="text-green-600 font-medium flex items-center justify-center md:justify-start animate-bounce">
                                                 <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"></path></svg>
                                                 Sale saved successfully!
                                             </p>
                                         )}
                                         {submitStatus === 'error' && (
-                                            <p className="text-red-600 font-medium flex items-center">
+                                            <p className="text-red-600 font-medium flex items-center justify-center md:justify-start">
                                                 <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path></svg>
                                                 Failed to save sale. Please try again.
                                             </p>
                                         )}
                                     </div>
-                                    <button
-                                        type="button"
-                                        onClick={() => { setShowForm(false); resetForm(); }}
-                                        className="min-w-[150px] px-6 py-2.5 bg-white border border-gray-200 text-gray-700 rounded-xl font-bold hover:bg-gray-50 transition-all text-sm flex justify-center items-center"
-                                    >
-                                        Cancel
-                                    </button>
-                                    <button
-                                        type="submit"
-                                        disabled={isSubmitting}
-                                        className="min-w-[150px] px-8 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl font-bold hover:from-blue-700 hover:to-indigo-700 hover:shadow-lg hover:shadow-blue-500/30 transition-all duration-200 text-sm flex items-center justify-center shadow-md disabled:opacity-50 hover:scale-105 whitespace-nowrap"
-                                    >
-                                        {isSubmitting ? (
-                                            <span className="flex items-center">
-                                                <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                                                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                                                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                                                </svg>
-                                                Processing...
-                                            </span>
-                                        ) : (
-                                            <span className="flex items-center gap-1">
-                                                <span className="text-base">+</span>
-                                                {editingId ? 'Update Sale' : 'Confirm Sale'}
-                                            </span>
-                                        )}
-                                    </button>
+                                    <div className="flex flex-col sm:flex-row gap-3 w-full md:w-auto">
+                                        <button
+                                            type="button"
+                                            onClick={() => { setShowForm(false); resetForm(); }}
+                                            className="sale-mgmt-btn-secondary"
+                                        >
+                                            Cancel
+                                        </button>
+                                        <button
+                                            type="submit"
+                                            disabled={isSubmitting}
+                                            className="sale-mgmt-btn-primary"
+                                        >
+                                            {isSubmitting ? (
+                                                <span className="flex items-center">
+                                                    <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                                    </svg>
+                                                    Processing...
+                                                </span>
+                                            ) : (
+                                                <span className="flex items-center gap-1">
+                                                    <span className="text-base">+</span>
+                                                    {editingId ? 'Update Sale' : 'Confirm Sale'}
+                                                </span>
+                                            )}
+                                        </button>
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -1827,245 +2098,379 @@ const SaleManagement = ({
                 </div >
             )}
 
-            {/* Sales Table */}
-            {
-                !showForm && (
-                    <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-                        <div className="overflow-x-auto">
-                            <table className="w-full text-left">
-                                <thead className="bg-gray-50 text-gray-500 text-xs font-bold uppercase tracking-wider">
-                                    {saleType === 'Border' ? (
-                                        <tr>
-                                            <th className="px-3 py-4 whitespace-nowrap">Date</th>
-                                            <th className="px-3 py-4 whitespace-nowrap">Importer</th>
-                                            <th className="px-3 py-4 whitespace-nowrap">Port</th>
-                                            <th className="px-3 py-4 whitespace-nowrap">IND CNF</th>
-                                            <th className="px-3 py-4 whitespace-nowrap">BD CNF</th>
-                                            <th className="px-3 py-4 whitespace-nowrap">Party Name</th>
-                                            <th className="px-3 py-4 whitespace-nowrap">Product</th>
-                                            <th className="px-3 py-4 whitespace-nowrap text-center">QTY</th>
-                                            <th className="px-3 py-4 whitespace-nowrap">Truck</th>
-                                            <th className="px-3 py-4 whitespace-nowrap text-center">Rate</th>
-                                            <th className="px-3 py-4 whitespace-nowrap text-center">Total Rate</th>
-                                            <th className="px-3 py-4 text-center whitespace-nowrap">Actions</th>
-                                        </tr>
-                                    ) : (
-                                        <tr>
-                                            <th className="px-3 py-4 whitespace-nowrap">Date</th>
-                                            <th className="px-3 py-4 whitespace-nowrap text-center">Invoice</th>
-                                            <th className="px-3 py-4 whitespace-nowrap">Company</th>
-                                            <th className="px-3 py-4 whitespace-nowrap">Customer</th>
-                                            <th className="px-3 py-4 whitespace-nowrap">Product</th>
-                                            <th className="px-3 py-4 whitespace-nowrap">Brand</th>
-                                            <th className="px-3 py-4 whitespace-nowrap text-center">Quantity</th>
-                                            <th className="px-3 py-4 whitespace-nowrap text-center">Rate</th>
-                                            <th className="px-3 py-4 whitespace-nowrap text-center">Discount</th>
-                                            <th className="px-3 py-4 whitespace-nowrap text-center">Total</th>
-                                            <th className="px-3 py-4 whitespace-nowrap text-center">Paid</th>
-                                            <th className="px-3 py-4 whitespace-nowrap text-center">Due</th>
-                                            <th className="px-3 py-4 text-center whitespace-nowrap">Actions</th>
-                                        </tr>
-                                    )}
-                                </thead>
-                                <tbody className="divide-y divide-gray-50">
-                                    {isLoading ? (
-                                        <tr><td colSpan={saleType === 'Border' ? "12" : "13"} className="px-3 py-20 text-center text-gray-400 font-medium">No sales records found</td></tr>
-                                    ) : getFilteredData().map(sale => {
-                                        const isExpanded = expandedRows.includes(sale._id);
-                                        const isMultiple = (sale.items && sale.items.length > 0)
-                                            ? sale.items.flatMap(item => (item.brandEntries || [])).length > 1
-                                            : false;
+            {/* Sales Table & Cards */}
+            {!showForm && (
+                <div className="sale-mgmt-table-container">
+                    {/* Desktop Table View */}
+                    <div className="hidden md:block overflow-x-auto">
+                        <table className="sale-mgmt-table">
+                            <thead>
+                                {saleType === 'Border' ? (
+                                    <tr>
+                                        <th className="sale-mgmt-th">Date</th>
+                                        <th className="sale-mgmt-th">Importer</th>
+                                        <th className="sale-mgmt-th">Port</th>
+                                        <th className="sale-mgmt-th">IND CNF</th>
+                                        <th className="sale-mgmt-th">BD CNF</th>
+                                        <th className="sale-mgmt-th">Party Name</th>
+                                        <th className="sale-mgmt-th">Product</th>
+                                        <th className="sale-mgmt-th text-center">QTY</th>
+                                        <th className="sale-mgmt-th">Truck</th>
+                                        <th className="sale-mgmt-th text-center">Rate</th>
+                                        <th className="sale-mgmt-th text-center">Total Rate</th>
+                                        <th className="sale-mgmt-th text-center">Actions</th>
+                                    </tr>
+                                ) : (
+                                    <tr>
+                                        <th className="sale-mgmt-th">Date</th>
+                                        <th className="sale-mgmt-th text-center">Invoice</th>
+                                        <th className="sale-mgmt-th">Company</th>
+                                        <th className="sale-mgmt-th">Customer</th>
+                                        <th className="sale-mgmt-th">Product</th>
+                                        <th className="sale-mgmt-th">Brand</th>
+                                        <th className="sale-mgmt-th text-center">Quantity</th>
+                                        <th className="sale-mgmt-th text-center">Rate</th>
+                                        <th className="sale-mgmt-th text-center">Discount</th>
+                                        <th className="sale-mgmt-th text-center">Total</th>
+                                        <th className="sale-mgmt-th text-center">Paid</th>
+                                        <th className="sale-mgmt-th text-center">Due</th>
+                                        <th className="sale-mgmt-th text-center">Actions</th>
+                                    </tr>
+                                )}
+                            </thead>
+                            <tbody className="divide-y divide-gray-50">
+                                {isLoading ? (
+                                    <tr><td colSpan={saleType === 'Border' ? "12" : "13"} className="px-3 py-20 text-center text-gray-400 font-medium">No sales records found</td></tr>
+                                ) : getFilteredData().map(sale => {
+                                    const isExpanded = expandedRows.includes(sale._id);
+                                    const isMultiple = (sale.items && sale.items.length > 0)
+                                        ? sale.items.flatMap(item => (item.brandEntries || [])).length > 1
+                                        : false;
 
-                                        const items = sale.items && sale.items.length > 0
-                                            ? sale.items.flatMap(item =>
-                                                (item.brandEntries || []).length > 0
-                                                    ? item.brandEntries.map(be => ({ ...be, productName: item.productName }))
-                                                    : [{ ...item, productName: item.productName }]
-                                            )
-                                            : [{
-                                                productName: sale.productName,
-                                                brand: sale.brand,
-                                                quantity: sale.quantity,
-                                                unitPrice: sale.unitPrice
-                                            }];
+                                    const items = sale.items && sale.items.length > 0
+                                        ? sale.items.flatMap(item =>
+                                            (item.brandEntries || []).length > 0
+                                                ? item.brandEntries.map(be => ({ ...be, productName: item.productName }))
+                                                : [{ ...item, productName: item.productName }]
+                                        )
+                                        : [{
+                                            productName: sale.productName,
+                                            brand: sale.brand,
+                                            quantity: sale.quantity,
+                                            unitPrice: sale.unitPrice
+                                        }];
 
-                                        if (saleType === 'Border') {
-                                            return (
-                                                <tr key={sale._id} className="hover:bg-blue-50/50 transition-all border-b border-gray-50 text-[13px]">
-                                                    <td className="px-3 py-4 whitespace-nowrap text-gray-600">{formatDate(sale.date)}</td>
-                                                    <td className="px-3 py-4 whitespace-nowrap font-semibold text-gray-800">{sale.importer || '-'}</td>
-                                                    <td className="px-3 py-4 whitespace-nowrap font-semibold text-gray-800">{sale.port || '-'}</td>
-                                                    <td className="px-3 py-4 whitespace-nowrap font-semibold text-gray-800">{sale.indianCnF || '-'}</td>
-                                                    <td className="px-3 py-4 whitespace-nowrap font-semibold text-gray-800">{sale.bdCnf || '-'}</td>
-                                                    <td className="px-3 py-4 whitespace-nowrap font-semibold text-gray-800">{sale.companyName || sale.customerName || '-'}</td>
-                                                    <td className="px-3 py-4 whitespace-nowrap">
-                                                        <div className="flex flex-col gap-1">
-                                                            {items.map((it, idx) => (
-                                                                <div key={idx} className="font-bold text-gray-800 border-b border-gray-100 last:border-0 pb-0.5">{it.productName || '-'}</div>
-                                                            ))}
-                                                        </div>
-                                                    </td>
-                                                    <td className="px-3 py-4 whitespace-nowrap text-center">
-                                                        <div className="flex flex-col gap-1">
-                                                            {items.map((it, idx) => (
-                                                                <div key={idx} className="font-semibold text-gray-800 border-b border-gray-100 last:border-0 pb-0.5">{parseFloat(it.quantity || 0).toLocaleString()}</div>
-                                                            ))}
-                                                        </div>
-                                                    </td>
-                                                    <td className="px-3 py-4 whitespace-nowrap text-center text-gray-800">
-                                                        <div className="flex flex-col gap-1">
-                                                            {items.map((it, idx) => (
-                                                                <div key={idx} className="font-semibold text-gray-800 border-b border-gray-100 last:border-0 pb-0.5">
-                                                                    {it.truck || sale.truck || '-'}
-                                                                </div>
-                                                            ))}
-                                                        </div>
-                                                    </td>
-                                                    <td className="px-3 py-4 whitespace-nowrap text-center">
-                                                        <div className="flex flex-col gap-1">
-                                                            {items.map((it, idx) => (
-                                                                <div key={idx} className="font-semibold text-gray-800 border-b border-gray-100 last:border-0 pb-0.5">৳ {parseFloat(it.unitPrice || 0).toLocaleString()}</div>
-                                                            ))}
-                                                        </div>
-                                                    </td>
-                                                    <td className="px-3 py-4 whitespace-nowrap text-center font-black text-gray-900">৳ {parseFloat(sale.totalAmount).toLocaleString()}</td>
-                                                    <td className="px-3 py-4 text-center">
-                                                        <div className="flex items-center justify-center gap-1">
-                                                            <button onClick={() => generateSaleInvoicePDF(sale, customers)} className="p-2 hover:bg-emerald-100 text-emerald-600 rounded-xl transition-all" title="Invoice"><FileTextIcon className="w-4 h-4" /></button>
-                                                            <button onClick={() => handleEdit(sale)} className="p-2 hover:bg-blue-100 text-blue-600 rounded-xl transition-all" title="Edit"><EditIcon className="w-4 h-4" /></button>
-                                                            <button onClick={() => handleDelete(sale)} className="p-2 hover:bg-red-100 text-red-600 rounded-xl transition-all" title="Delete"><TrashIcon className="w-4 h-4" /></button>
-                                                        </div>
-                                                    </td>
-                                                </tr>
-                                            );
-                                        }
-
+                                    if (saleType === 'Border') {
                                         return (
-                                            <tr
-                                                key={sale._id}
-                                                onClick={() => isMultiple && toggleRowExpansion(sale._id)}
-                                                className={`hover:bg-blue-50/50 transition-all group border-b border-gray-50 last:border-0 align-middle ${isMultiple ? 'cursor-pointer' : ''}`}
-                                            >
+                                            <tr key={sale._id} className="hover:bg-blue-50/50 transition-all border-b border-gray-50 text-[13px]">
+                                                <td className="px-3 py-4 whitespace-nowrap text-gray-600">{formatDate(sale.date)}</td>
+                                                <td className="px-3 py-4 whitespace-nowrap font-semibold text-gray-800">{sale.importer || '-'}</td>
+                                                <td className="px-3 py-4 whitespace-nowrap font-semibold text-gray-800">{sale.port || '-'}</td>
+                                                <td className="px-3 py-4 whitespace-nowrap font-semibold text-gray-800">{sale.indianCnF || '-'}</td>
+                                                <td className="px-3 py-4 whitespace-nowrap font-semibold text-gray-800">{sale.bdCnf || '-'}</td>
+                                                <td className="px-3 py-4 whitespace-nowrap font-semibold text-gray-800">{sale.companyName || sale.customerName || '-'}</td>
                                                 <td className="px-3 py-4 whitespace-nowrap">
-                                                    <div className="text-[13px] font-medium text-gray-600">{formatDate(sale.date)}</div>
-                                                </td>
-                                                <td className="px-3 py-4 whitespace-nowrap text-center">
-                                                    <div className="text-[13px] font-semibold text-gray-800">{sale.invoiceNo || '-'}</div>
-                                                </td>
-                                                <td className="px-3 py-4 whitespace-nowrap">
-                                                    <div className="text-[13px] font-semibold text-gray-800">{sale.companyName || '-'}</div>
-                                                </td>
-                                                <td className="px-3 py-4 whitespace-nowrap">
-                                                    <div className="text-[13px] font-semibold text-gray-800">{sale.customerName}</div>
-                                                </td>
-                                                <td className="px-3 py-4 whitespace-nowrap">
-                                                    {isMultiple && !isExpanded ? (
-                                                        <span className="px-1.5 py-0.5 bg-blue-50 text-blue-600 border border-blue-100/50 rounded text-[9px] font-bold uppercase tracking-wider">Multiple</span>
-                                                    ) : (
-                                                        <div className="flex flex-col gap-2">
-                                                            {items.map((it, idx) => (
-                                                                <div key={idx} className={`text-[13px] text-gray-800 font-bold ${idx < items.length - 1 ? 'border-b border-gray-100 pb-1' : ''}`}>
-                                                                    {it.productName || '-'}
-                                                                </div>
-                                                            ))}
-                                                        </div>
-                                                    )}
-                                                </td>
-                                                <td className="px-3 py-4 whitespace-nowrap">
-                                                    {isMultiple && !isExpanded ? (
-                                                        <span className="px-1.5 py-0.5 bg-gray-50 text-gray-500 border border-gray-100 rounded text-[9px] font-bold uppercase tracking-wider">Multiple</span>
-                                                    ) : (
-                                                        <div className="flex flex-col gap-2">
-                                                            {items.map((it, idx) => (
-                                                                <div key={idx} className={`text-[13px] font-semibold text-gray-700 ${idx < items.length - 1 ? 'border-b border-gray-100 pb-1' : ''}`}>
-                                                                    {it.brand || '-'}
-                                                                </div>
-                                                            ))}
-                                                        </div>
-                                                    )}
-                                                </td>
-                                                <td className="px-3 py-4 whitespace-nowrap text-center">
-                                                    {isMultiple && !isExpanded ? (
-                                                        <div className="inline-block px-3 py-1 bg-blue-50 text-blue-700 rounded-lg border border-blue-100/50 text-[13px] font-black">
-                                                            {items.reduce((sum, it) => sum + (parseFloat(it.quantity) || 0), 0).toLocaleString()}
-                                                        </div>
-                                                    ) : (
-                                                        <div className="flex flex-col gap-2">
-                                                            {items.map((it, idx) => (
-                                                                <div key={idx} className={`text-[13px] font-semibold text-gray-800 ${idx < items.length - 1 ? 'border-b border-gray-100 pb-1' : ''}`}>
-                                                                    {parseFloat(it.quantity || 0).toLocaleString()}
-                                                                </div>
-                                                            ))}
-                                                        </div>
-                                                    )}
-                                                </td>
-                                                <td className="px-3 py-4 whitespace-nowrap text-center">
-                                                    {isMultiple && !isExpanded ? (
-                                                        <span className="px-2 py-1 bg-amber-50 text-amber-700 border border-amber-100 rounded text-[10px] font-bold uppercase tracking-wider inline-block">Multiple</span>
-                                                    ) : (
-                                                        <div className="flex flex-col gap-2">
-                                                            {items.map((it, idx) => (
-                                                                <div key={idx} className={`text-[13px] font-semibold text-gray-800 ${idx < items.length - 1 ? 'border-b border-gray-100 pb-1' : ''}`}>
-                                                                    ৳ {parseFloat(it.unitPrice || 0).toLocaleString()}
-                                                                </div>
-                                                            ))}
-                                                        </div>
-                                                    )}
-                                                </td>
-                                                <td className="px-3 py-4 whitespace-nowrap text-center">
-                                                    <div className="text-[13px] font-bold text-red-600">
-                                                        {parseFloat(sale.discount || 0) > 0 ? `-৳ ${parseFloat(sale.discount).toLocaleString()}` : '-'}
+                                                    <div className="flex flex-col gap-1">
+                                                        {items.map((it, idx) => (
+                                                            <div key={idx} className="font-bold text-gray-800 border-b border-gray-100 last:border-0 pb-0.5">{it.productName || '-'}</div>
+                                                        ))}
                                                     </div>
                                                 </td>
                                                 <td className="px-3 py-4 whitespace-nowrap text-center">
-                                                    <div className="text-[13px] font-black text-gray-900">৳ {parseFloat(sale.totalAmount).toLocaleString()}</div>
+                                                    <div className="flex flex-col gap-1">
+                                                        {items.map((it, idx) => (
+                                                            <div key={idx} className="font-semibold text-gray-800 border-b border-gray-100 last:border-0 pb-0.5">{parseFloat(it.quantity || 0).toLocaleString()}</div>
+                                                        ))}
+                                                    </div>
                                                 </td>
-                                                <td className="px-3 py-4 whitespace-nowrap text-center">
-                                                    <div className="px-2 py-1 bg-emerald-50 text-emerald-700 rounded-lg text-xs font-bold inline-block border border-emerald-100/50">
-                                                        ৳ {parseFloat(sale.paidAmount || 0).toLocaleString()}
+                                                <td className="px-3 py-4 whitespace-nowrap text-center text-gray-800">
+                                                    <div className="flex flex-col gap-1">
+                                                        {items.map((it, idx) => (
+                                                            <div key={idx} className="font-semibold text-gray-800 border-b border-gray-100 last:border-0 pb-0.5">
+                                                                {it.truck || sale.truck || '-'}
+                                                            </div>
+                                                        ))}
                                                     </div>
                                                 </td>
                                                 <td className="px-3 py-4 whitespace-nowrap text-center">
-                                                    <div className="px-2 py-1 bg-orange-50 text-orange-700 rounded-lg text-xs font-bold inline-block border border-orange-100/50">
-                                                        ৳ {parseFloat(sale.dueAmount || 0).toLocaleString()}
+                                                    <div className="flex flex-col gap-1">
+                                                        {items.map((it, idx) => (
+                                                            <div key={idx} className="font-semibold text-gray-800 border-b border-gray-100 last:border-0 pb-0.5">৳ {parseFloat(it.unitPrice || 0).toLocaleString()}</div>
+                                                        ))}
                                                     </div>
                                                 </td>
-                                                <td className="px-3 py-4 text-center whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+                                                <td className="px-3 py-4 whitespace-nowrap text-center font-black text-gray-900">৳ {parseFloat(sale.totalAmount).toLocaleString()}</td>
+                                                <td className="px-3 py-4 text-center">
                                                     <div className="flex items-center justify-center gap-1">
-                                                        <button
-                                                            onClick={() => generateSaleInvoicePDF(sale, customers)}
-                                                            className="p-2 hover:bg-emerald-100 text-emerald-600 rounded-xl transition-all hover:scale-110 active:scale-90"
-                                                            title="Generate Invoice/Challan"
-                                                        >
-                                                            <FileTextIcon className="w-4 h-4" />
-                                                        </button>
-                                                        <button
-                                                            onClick={() => handleEdit(sale)}
-                                                            className="p-2 hover:bg-blue-100 text-blue-600 rounded-xl transition-all hover:scale-110 active:scale-90"
-                                                            title="Edit Record"
-                                                        >
-                                                            <EditIcon className="w-4 h-4" />
-                                                        </button>
-                                                        <button
-                                                            onClick={() => handleDelete(sale)}
-                                                            className="p-2 hover:bg-red-100 text-red-600 rounded-xl transition-all hover:scale-110 active:scale-90"
-                                                            title="Delete Record"
-                                                        >
-                                                            <TrashIcon className="w-4 h-4" />
-                                                        </button>
+                                                        <button onClick={() => generateSaleInvoicePDF(sale, customers)} className="p-2 hover:bg-emerald-100 text-emerald-600 rounded-xl transition-all" title="Invoice"><FileTextIcon className="w-4 h-4" /></button>
+                                                        <button onClick={() => handleEdit(sale)} className="p-2 hover:bg-blue-100 text-blue-600 rounded-xl transition-all" title="Edit"><EditIcon className="w-4 h-4" /></button>
+                                                        <button onClick={() => handleDelete(sale)} className="p-2 hover:bg-red-100 text-red-600 rounded-xl transition-all" title="Delete"><TrashIcon className="w-4 h-4" /></button>
                                                     </div>
                                                 </td>
                                             </tr>
                                         );
-                                    })}
-                                </tbody>
-                            </table>
-                        </div>
+                                    }
+
+                                    return (
+                                        <tr
+                                            key={sale._id}
+                                            onClick={() => isMultiple && toggleRowExpansion(sale._id)}
+                                            className={`hover:bg-blue-50/50 transition-all group border-b border-gray-50 last:border-0 align-middle ${isMultiple ? 'cursor-pointer' : ''}`}
+                                        >
+                                            <td className="px-3 py-4 whitespace-nowrap">
+                                                <div className="text-[13px] font-medium text-gray-600">{formatDate(sale.date)}</div>
+                                            </td>
+                                            <td className="px-3 py-4 whitespace-nowrap text-center">
+                                                <div className="text-[13px] font-semibold text-gray-800">{sale.invoiceNo || '-'}</div>
+                                            </td>
+                                            <td className="px-3 py-4 whitespace-nowrap">
+                                                <div className="text-[13px] font-semibold text-gray-800">{sale.companyName || '-'}</div>
+                                            </td>
+                                            <td className="px-3 py-4 whitespace-nowrap">
+                                                <div className="text-[13px] font-semibold text-gray-800">{sale.customerName}</div>
+                                            </td>
+                                            <td className="px-3 py-4 whitespace-nowrap">
+                                                {isMultiple && !isExpanded ? (
+                                                    <span className="px-1.5 py-0.5 bg-blue-50 text-blue-600 border border-blue-100/50 rounded text-[9px] font-bold uppercase tracking-wider">Multiple</span>
+                                                ) : (
+                                                    <div className="flex flex-col gap-2">
+                                                        {items.map((it, idx) => (
+                                                            <div key={idx} className={`text-[13px] text-gray-800 font-bold ${idx < items.length - 1 ? 'border-b border-gray-100 pb-1' : ''}`}>
+                                                                {it.productName || '-'}
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                )}
+                                            </td>
+                                            <td className="px-3 py-4 whitespace-nowrap">
+                                                {isMultiple && !isExpanded ? (
+                                                    <span className="px-1.5 py-0.5 bg-gray-50 text-gray-500 border border-gray-100 rounded text-[9px] font-bold uppercase tracking-wider">Multiple</span>
+                                                ) : (
+                                                    <div className="flex flex-col gap-2">
+                                                        {items.map((it, idx) => (
+                                                            <div key={idx} className={`text-[13px] font-semibold text-gray-700 ${idx < items.length - 1 ? 'border-b border-gray-100 pb-1' : ''}`}>
+                                                                {it.brand || '-'}
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                )}
+                                            </td>
+                                            <td className="px-3 py-4 whitespace-nowrap text-center">
+                                                {isMultiple && !isExpanded ? (
+                                                    <div className="inline-block px-3 py-1 bg-blue-50 text-blue-700 rounded-lg border border-blue-100/50 text-[13px] font-black">
+                                                        {items.reduce((sum, it) => sum + (parseFloat(it.quantity) || 0), 0).toLocaleString()}
+                                                    </div>
+                                                ) : (
+                                                    <div className="flex flex-col gap-2">
+                                                        {items.map((it, idx) => (
+                                                            <div key={idx} className={`text-[13px] font-semibold text-gray-800 ${idx < items.length - 1 ? 'border-b border-gray-100 pb-1' : ''}`}>
+                                                                {parseFloat(it.quantity || 0).toLocaleString()}
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                )}
+                                            </td>
+                                            <td className="px-3 py-4 whitespace-nowrap text-center">
+                                                {isMultiple && !isExpanded ? (
+                                                    <span className="px-2 py-1 bg-amber-50 text-amber-700 border border-amber-100 rounded text-[10px] font-bold uppercase tracking-wider inline-block">Multiple</span>
+                                                ) : (
+                                                    <div className="flex flex-col gap-2">
+                                                        {items.map((it, idx) => (
+                                                            <div key={idx} className={`text-[13px] font-semibold text-gray-800 ${idx < items.length - 1 ? 'border-b border-gray-100 pb-1' : ''}`}>
+                                                                ৳ {parseFloat(it.unitPrice || 0).toLocaleString()}
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                )}
+                                            </td>
+                                            <td className="px-3 py-4 whitespace-nowrap text-center">
+                                                <div className="text-[13px] font-bold text-red-600">
+                                                    {parseFloat(sale.discount || 0) > 0 ? `-৳ ${parseFloat(sale.discount).toLocaleString()}` : '-'}
+                                                </div>
+                                            </td>
+                                            <td className="px-3 py-4 whitespace-nowrap text-center">
+                                                <div className="text-[13px] font-black text-gray-900">৳ {parseFloat(sale.totalAmount).toLocaleString()}</div>
+                                            </td>
+                                            <td className="px-3 py-4 whitespace-nowrap text-center">
+                                                <div className="px-2 py-1 bg-emerald-50 text-emerald-700 rounded-lg text-xs font-bold inline-block border border-emerald-100/50">
+                                                    ৳ {parseFloat(sale.paidAmount || 0).toLocaleString()}
+                                                </div>
+                                            </td>
+                                            <td className="px-3 py-4 whitespace-nowrap text-center">
+                                                <div className="px-2 py-1 bg-orange-50 text-orange-700 rounded-lg text-xs font-bold inline-block border border-orange-100/50">
+                                                    ৳ {parseFloat(sale.dueAmount || 0).toLocaleString()}
+                                                </div>
+                                            </td>
+                                            <td className="px-3 py-4 text-center whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+                                                <div className="flex items-center justify-center gap-1">
+                                                    <button onClick={() => generateSaleInvoicePDF(sale, customers)} className="p-2 hover:bg-emerald-100 text-emerald-600 rounded-xl transition-all" title="Invoice"><FileTextIcon className="w-4 h-4" /></button>
+                                                    <button onClick={() => handleEdit(sale)} className="p-2 hover:bg-blue-100 text-blue-600 rounded-xl transition-all" title="Edit"><EditIcon className="w-4 h-4" /></button>
+                                                    <button onClick={() => handleDelete(sale)} className="p-2 hover:bg-red-100 text-red-600 rounded-xl transition-all" title="Delete"><TrashIcon className="w-4 h-4" /></button>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    );
+                                })}
+                            </tbody>
+                        </table>
                     </div>
-                )
-            }
+
+                    {/* Mobile Card View */}
+                    <div className="md:hidden space-y-4 px-1">
+                        {isLoading ? (
+                            <div className="bg-white p-8 rounded-2xl border border-gray-100 text-center text-gray-400 font-medium shadow-sm">
+                                No sales records found
+                            </div>
+                        ) : getFilteredData().map(sale => {
+                            const isExpanded = expandedRows.includes(sale._id);
+                            const isMultiple = (sale.items && sale.items.length > 0)
+                                ? sale.items.flatMap(item => (item.brandEntries || [])).length > 1
+                                : false;
+
+                            const items = sale.items && sale.items.length > 0
+                                ? sale.items.flatMap(item =>
+                                    (item.brandEntries || []).length > 0
+                                        ? item.brandEntries.map(be => ({ ...be, productName: item.productName }))
+                                        : [{ ...item, productName: item.productName }]
+                                )
+                                : [{
+                                    productName: sale.productName,
+                                    brand: sale.brand,
+                                    quantity: sale.quantity,
+                                    unitPrice: sale.unitPrice
+                                }];
+
+                            return (
+                                <div
+                                    key={sale._id}
+                                    className={`sale-mgmt-mobile-card group cursor-pointer transition-all ${isExpanded ? 'shadow-md ring-1 ring-blue-500/10 p-4' : 'hover:bg-gray-50/30 p-2.5'}`}
+                                    onClick={() => toggleRowExpansion(sale._id)}
+                                >
+                                    {/* Collapsed Single Line View / Expanded Header Row */}
+                                    <div className={`flex items-center justify-between min-w-0 ${isExpanded ? 'border-b border-gray-50 pb-3 mb-4' : ''}`}>
+                                        <div className="flex items-center gap-3 overflow-hidden flex-1 min-w-0">
+                                            {/* Date & Inv */}
+                                            <div className="flex-shrink-0">
+                                                <div className="sale-mgmt-mobile-label">{formatDate(sale.date)}</div>
+                                                <div className={`${!isExpanded ? 'text-[11px]' : 'text-sm'} font-black text-gray-900 truncate`}>{sale.invoiceNo || sale.importer || 'No ID'}</div>
+                                            </div>
+
+                                            {!isExpanded && (
+                                                <>
+                                                    <div className="flex-1 min-w-0 border-l border-gray-100 pl-3">
+                                                        <div className="sale-mgmt-mobile-label">Company</div>
+                                                        <div className="text-[11px] font-bold text-gray-800 truncate">{sale.companyName || sale.port || '-'}</div>
+                                                    </div>
+                                                    <div className="flex-shrink-0 border-l border-gray-100 pl-3 text-right">
+                                                        <div className="sale-mgmt-mobile-label text-blue-600">Total</div>
+                                                        <div className="text-[11px] font-black text-gray-900">৳{parseFloat(sale.totalAmount).toLocaleString()}</div>
+                                                    </div>
+                                                </>
+                                            )}
+                                        </div>
+
+                                        <div className="flex items-center gap-2 ml-2">
+                                            {isExpanded ? (
+                                                <div className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
+                                                    <button onClick={() => generateSaleInvoicePDF(sale, customers)} className="p-2 bg-emerald-50 text-emerald-600 rounded-lg transition-colors hover:bg-emerald-100"><FileTextIcon className="w-4 h-4" /></button>
+                                                    <button onClick={() => handleEdit(sale)} className="p-2 bg-blue-50 text-blue-600 rounded-lg transition-colors hover:bg-blue-100"><EditIcon className="w-4 h-4" /></button>
+                                                    <button onClick={() => handleDelete(sale)} className="p-2 bg-red-50 text-red-600 rounded-lg transition-colors hover:bg-red-100"><TrashIcon className="w-4 h-4" /></button>
+                                                </div>
+                                            ) : (
+                                                <ChevronDownIcon className="w-5 h-5 text-gray-300 opacity-60" />
+                                            )}
+                                        </div>
+                                    </div>
+
+                                    {/* Expanded Only Content */}
+                                    {isExpanded && (
+                                        <>
+                                            {/* Customer/Company Info */}
+                                            <div className="grid grid-cols-2 gap-4 text-xs mb-4">
+                                                <div>
+                                                    <div className="sale-mgmt-mobile-label">Customer</div>
+                                                    <div className="sale-mgmt-mobile-value">{sale.customerName || '-'}</div>
+                                                </div>
+                                                <div className="text-right">
+                                                    <div className="sale-mgmt-mobile-label">Company</div>
+                                                    <div className="sale-mgmt-mobile-value truncate">{sale.companyName || sale.port || '-'}</div>
+                                                </div>
+                                            </div>
+
+                                            {/* Items Section */}
+                                            <div className="sale-mgmt-mobile-section mt-1">
+                                                <div className="flex items-center justify-between">
+                                                    <div className="text-[10px] font-bold text-gray-600 uppercase">Products & Quantities</div>
+                                                    {isMultiple && (
+                                                        <button
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                toggleRowExpansion(sale._id);
+                                                            }}
+                                                            className="text-[10px] font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded hover:bg-blue-100 transition-colors"
+                                                        >
+                                                            Show Less
+                                                        </button>
+                                                    )}
+                                                </div>
+                                                <div className="grid grid-cols-12 gap-1 px-1 pb-1 border-b border-gray-100 mb-1 mt-2">
+                                                    <div className="col-span-3 text-[9px] font-bold text-gray-400 uppercase">Brand</div>
+                                                    <div className="col-span-3 text-[9px] font-bold text-gray-400 uppercase text-right">Qty</div>
+                                                    <div className="col-span-3 text-[9px] font-bold text-gray-400 uppercase text-right">Price</div>
+                                                    <div className="col-span-3 text-[9px] font-bold text-gray-400 uppercase text-right">Total</div>
+                                                </div>
+                                                <div className="space-y-2.5">
+                                                    {items.map((it, idx) => (
+                                                        <div key={idx} className="border-b border-gray-100 last:border-0 pb-2 last:pb-0">
+                                                            <div className="text-[12px] font-black text-gray-800 mb-0.5">{it.productName || '-'}</div>
+                                                            <div className="grid grid-cols-12 gap-1 items-center text-[10px]">
+                                                                <div className="col-span-3 min-w-0">
+                                                                    <span className="text-[10px] font-medium text-gray-500 italic truncate">{it.brand || '-'}</span>
+                                                                </div>
+                                                                <div className="col-span-3 text-right">
+                                                                    <div className="font-bold text-gray-900">{parseFloat(it.quantity || 0).toLocaleString()}</div>
+                                                                </div>
+                                                                <div className="col-span-3 text-right">
+                                                                    <div className="font-medium text-blue-600 truncate">{parseFloat(it.unitPrice || 0).toLocaleString()}</div>
+                                                                </div>
+                                                                <div className="col-span-3 text-right">
+                                                                    <div className="font-black text-gray-900 truncate">৳{(parseFloat(it.quantity || 0) * parseFloat(it.unitPrice || 0)).toLocaleString()}</div>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            </div>
+
+                                            {/* Money Summary */}
+                                            <div className="grid grid-cols-2 gap-2 pt-3 border-t border-gray-50 mt-4">
+                                                <div className="sale-mgmt-mobile-money-card bg-red-50/40 border-red-100/50">
+                                                    <div className="sale-mgmt-mobile-label text-red-600">Discount</div>
+                                                    <div className="text-[14px] font-black text-red-600">৳{parseFloat(sale.discount || 0).toLocaleString()}</div>
+                                                </div>
+                                                <div className="sale-mgmt-mobile-money-card bg-blue-50/40 border-blue-100/50">
+                                                    <div className="sale-mgmt-mobile-label text-blue-600 mb-0">Total</div>
+                                                    <div className="text-[14px] font-black text-gray-900">৳{parseFloat(sale.totalAmount).toLocaleString()}</div>
+                                                </div>
+                                                <div className="sale-mgmt-mobile-money-card bg-emerald-50/40 border-emerald-100/50">
+                                                    <div className="sale-mgmt-mobile-label text-emerald-600">Paid</div>
+                                                    <div className="text-[14px] font-black text-emerald-700">৳{parseFloat(sale.paidAmount || 0).toLocaleString()}</div>
+                                                </div>
+                                                <div className="sale-mgmt-mobile-money-card bg-orange-50/40 border-orange-100/50">
+                                                    <div className="sale-mgmt-mobile-label text-orange-600">Due</div>
+                                                    <div className="text-[14px] font-black text-orange-700">৳{parseFloat(sale.dueAmount || 0).toLocaleString()}</div>
+                                                </div>
+                                            </div>
+                                        </>
+                                    )}
+                                </div>
+                            );
+                        })}
+                    </div>
+                </div>
+            )}
             {viewData && renderViewModal()}
-        </div >
+        </div>
     );
 };
 

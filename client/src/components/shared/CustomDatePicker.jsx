@@ -28,9 +28,25 @@ const CustomDatePicker = ({
     name,
     labelClassName = "text-sm font-medium text-gray-700",
     compact = false,
-    rightAlign = false
+    rightAlign = false,
+    isOpen: externalIsOpen,
+    onToggle: externalOnToggle,
+    onOpen,
+    onClose
 }) => {
-    const [isOpen, setIsOpen] = useState(false);
+    const [internalIsOpen, setInternalIsOpen] = useState(false);
+    const isOpen = externalIsOpen !== undefined ? externalIsOpen : internalIsOpen;
+
+    const setIsOpen = (val) => {
+        if (externalOnToggle) {
+            externalOnToggle(val);
+        } else {
+            setInternalIsOpen(val);
+        }
+        if (val && onOpen) onOpen();
+        if (!val && onClose) onClose();
+    };
+
     const [viewDate, setViewDate] = useState(() => {
         if (value && value.includes('-')) {
             const [y, m] = value.split('-').map(Number);

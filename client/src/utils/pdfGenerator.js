@@ -1638,3 +1638,184 @@ export const generateProductHistoryPDF = (productName, category, activeTab, purc
         alert(`Failed to generate PDF: ${error.message}`);
     }
 };
+
+export const generateSalesReportPDF = (reportData, filters, summary, saleType = 'General') => {
+    try {
+        const doc = new jsPDF({ orientation: 'l', unit: 'mm', format: 'a4' });
+
+        // --- Configuration ---
+        const pageWidth = doc.internal.pageSize.width;
+        const pageHeight = doc.internal.pageSize.height;
+        const margin = 5;
+
+        // --- Header ---
+        doc.setFontSize(22);
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(0);
+        doc.text("M/S ANI ENTERPRISE", pageWidth / 2, 20, { align: 'center' });
+
+        doc.setFontSize(10);
+        doc.setFont('helvetica', 'normal');
+        doc.text("766, H.M Tower, Level-06, Borogola, Bogura-5800, Bangladesh", pageWidth / 2, 26, { align: 'center' });
+        doc.text("+8802588813057, anienterprise051@gmail.com, www.anienterprises.com.bd", pageWidth / 2, 31, { align: 'center' });
+
+        // Separator
+        doc.setDrawColor(0);
+        doc.setLineWidth(0.5);
+        doc.line(margin, 40, pageWidth - margin, 40);
+
+        // Report Title
+        doc.setFillColor(255, 255, 255);
+        doc.setDrawColor(0);
+        doc.rect(pageWidth / 2 - 40, 37, 80, 8, 'FD');
+        doc.setFontSize(12);
+        doc.setFont('helvetica', 'bold');
+        doc.text(`${saleType.toUpperCase()} SALES REPORT`, pageWidth / 2, 42, { align: 'center' });
+
+        // --- Info Row ---
+        let yPos = 55;
+        doc.setFontSize(10);
+
+        // Date Range
+        doc.setFont('helvetica', 'bold');
+        doc.text("Date Range:", margin, yPos);
+        doc.setFont('helvetica', 'normal');
+        doc.text(`${formatDate(filters.startDate) === '-' ? 'Start' : formatDate(filters.startDate)} to ${formatDate(filters.endDate) === '-' ? 'Present' : formatDate(filters.endDate)}`, margin + 25, yPos);
+
+        if (filters.companyName) {
+            yPos += 5;
+            doc.setFont('helvetica', 'bold');
+            doc.text("Customer:", margin, yPos);
+            doc.setFont('helvetica', 'normal');
+            doc.text(filters.companyName, margin + 25, yPos);
+        }
+
+        const dateStr = formatDate(new Date().toISOString().split('T')[0]);
+        doc.text(`Printed on: ${dateStr}`, pageWidth - margin, 55, { align: 'right' });
+
+        // --- Table ---
+        const tableRows = [];
+        let slNum = 1;
+
+        reportData.forEach((sale) => {
+            const items = sale.items || [];
+            // Create a list of all brand entries across all items
+            const flatItems = items.flatMap(item =>
+                (item.brandEntries || []).map(entry => ({
+                    productName: item.productName || item.product || '-',
+                    brand: entry.brandName || entry.brand || '-',
+                    quantity: sale.saleType === 'Border' ? (entry.truck || 0) : (entry.quantity || 0),
+                    price: entry.unitPrice || 0,
+                    total: entry.totalAmount || 0
+                }))
+            );
+
+            // If no items, fallback to sale level
+            if (flatItems.length === 0) {
+                flatItems.push({
+                    productName: sale.productName || '-',
+                    brand: sale.brand || '-',
+                    quantity: sale.quantity || 0,
+                    price: 0,
+                    total: sale.totalAmount || 0
+                });
+            }
+
+            flatItems.forEach((item, idx) => {
+                tableRows.push([
+                    idx === 0 ? (slNum++).toString() : '',
+                    idx === 0 ? formatDate(sale.date) : '',
+                    idx === 0 ? (sale.invoiceNo || '-') : '',
+                    idx === 0 ? (sale.companyName || '-') : '',
+                    item.productName,
+                    item.brand,
+                    parseFloat(item.quantity).toLocaleString(),
+                    (parseFloat(item.price) || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
+                    (parseFloat(item.total) || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
+                    idx === 0 ? (parseFloat(sale.discount || 0)).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '',
+                    idx === 0 ? (parseFloat(sale.paidAmount || 0)).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '',
+                    idx === 0 ? ((parseFloat(sale.totalAmount || 0) - parseFloat(sale.paidAmount || 0))).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : ''
+                ]);
+            });
+        });
+
+        const totalDiscount = reportData.reduce((sum, s) => sum + (parseFloat(s.discount) || 0), 0);
+
+        autoTable(doc, {
+            startY: yPos + 10,
+            head: [['SL', 'Date', 'Invoice', 'Company', 'Product', 'Brand', 'Qty', 'Price', 'Total', 'Disc', 'Paid', 'Due']],
+            body: tableRows,
+            foot: [[
+                { content: 'GRAND TOTAL', colSpan: 6, styles: { halign: 'right', fontStyle: 'bold' } },
+                { content: summary.totalQty.toLocaleString(), styles: { halign: 'right', fontStyle: 'bold' } },
+                { content: '', styles: { halign: 'right', fontStyle: 'bold' } },
+                { content: summary.totalAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }), styles: { halign: 'right', fontStyle: 'bold' } },
+                { content: totalDiscount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }), styles: { halign: 'right', fontStyle: 'bold' } },
+                { content: summary.totalPaid.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }), styles: { halign: 'right', fontStyle: 'bold' } },
+                { content: (summary.totalAmount - summary.totalPaid).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }), styles: { halign: 'right', fontStyle: 'bold' } }
+            ]],
+            theme: 'grid',
+            styles: {
+                fontSize: 9.5,
+                cellPadding: 1,
+                lineColor: [0, 0, 0],
+                lineWidth: 0.1,
+                valign: 'middle',
+                textColor: [0, 0, 0],
+                overflow: 'ellipsize'
+            },
+            headStyles: {
+                fillColor: [240, 240, 240],
+                fontStyle: 'bold',
+                halign: 'center'
+            },
+            footStyles: {
+                fillColor: [240, 240, 240],
+                fontStyle: 'bold'
+            },
+            columnStyles: {
+                0: { cellWidth: 8, halign: 'center' },
+                1: { cellWidth: 20, halign: 'center' },
+                2: { cellWidth: 22, halign: 'center' },
+                3: { cellWidth: 35 },
+                4: { cellWidth: 38 },
+                5: { cellWidth: 45, noWrap: false, overflow: 'linebreak' }, // User wants brand name in one line, butlinebreak if too long? Actually they said "show brand name in one line". I'll use noWrap: true if width is enough.
+                6: { cellWidth: 15, halign: 'right' },
+                7: { cellWidth: 20, halign: 'right' },
+                8: { cellWidth: 22, halign: 'right' },
+                9: { cellWidth: 18, halign: 'right' },
+                10: { cellWidth: 22, halign: 'right' },
+                11: { cellWidth: 22, halign: 'right' }
+            },
+            margin: { left: margin, right: margin }
+        });
+
+        // --- Signatures ---
+        let finalY = doc.lastAutoTable.finalY + 30;
+        if (finalY + 20 > pageHeight) {
+            doc.addPage();
+            finalY = 30;
+        }
+
+        const sigWidth = 45;
+        const sigGap = (pageWidth - (margin * 2) - (sigWidth * 3)) / 2;
+
+        doc.setFontSize(8);
+        doc.setFont('helvetica', 'bold');
+        doc.line(margin, finalY, margin + sigWidth, finalY);
+        doc.text("PREPARED BY", margin + sigWidth / 2, finalY + 5, { align: 'center' });
+
+        doc.line(margin + sigWidth + sigGap, finalY, margin + sigWidth + sigGap + sigWidth, finalY);
+        doc.text("VERIFIED BY", margin + sigWidth + sigGap + sigWidth / 2, finalY + 5, { align: 'center' });
+
+        doc.line(pageWidth - margin - sigWidth, finalY, pageWidth - margin, finalY);
+        doc.text("AUTHORIZED SIGNATURE", pageWidth - margin - sigWidth / 2, finalY + 5, { align: 'center' });
+
+        const pdfOutput = doc.output('blob');
+        const blobURL = URL.createObjectURL(pdfOutput);
+        window.open(blobURL, '_blank');
+    } catch (error) {
+        console.error("Sales PDF Generation Error:", error);
+        alert(`Failed to generate Sales PDF: ${error.message}`);
+    }
+};
