@@ -16,6 +16,7 @@ const SaleManagement = ({
     startLongPress,
     endLongPress,
     setShowSalesReport,
+    setSalesReportData,
     saleFilters,
     setSaleFilters
 }) => {
@@ -26,6 +27,8 @@ const SaleManagement = ({
     const [products, setProducts] = useState([]);
     const [warehouses, setWarehouses] = useState([]);
     const [stockRecords, setStockRecords] = useState([]);
+    const [importersList, setImportersList] = useState([]);
+    const [portsList, setPortsList] = useState([]);
     const [isLoading, setIsLoading] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
     const [editingId, setEditingId] = useState(null);
@@ -104,6 +107,7 @@ const SaleManagement = ({
                 warehouseQty: '',
                 quantity: '',
                 truck: '',
+                uom: 'Truck', // Default UOM
                 unitPrice: '',
                 totalAmount: ''
             }]
@@ -124,6 +128,8 @@ const SaleManagement = ({
         fetchProducts();
         fetchWarehouses();
         fetchStockRecords();
+        fetchImportersList();
+        fetchPortsList();
     }, [saleType]); // Refetch if saleType changes
 
     const fetchSales = async () => {
@@ -219,6 +225,38 @@ const SaleManagement = ({
             }
         } catch (error) {
             console.error('Error fetching stock records:', error);
+        }
+    };
+
+    const fetchImportersList = async () => {
+        try {
+            const response = await fetch(`${API_BASE_URL}/api/importers`);
+            if (response.ok) {
+                const rawData = await response.json();
+                const decryptedRes = rawData.map(record => {
+                    const decrypted = decryptData(record.data);
+                    return { ...decrypted, _id: record._id };
+                });
+                setImportersList(decryptedRes);
+            }
+        } catch (error) {
+            console.error('Error fetching importers:', error);
+        }
+    };
+
+    const fetchPortsList = async () => {
+        try {
+            const response = await fetch(`${API_BASE_URL}/api/ports`);
+            if (response.ok) {
+                const rawData = await response.json();
+                const decryptedRes = rawData.map(record => {
+                    const decrypted = decryptData(record.data);
+                    return { ...decrypted, _id: record._id };
+                });
+                setPortsList(decryptedRes);
+            }
+        } catch (error) {
+            console.error('Error fetching ports:', error);
         }
     };
 
@@ -475,6 +513,7 @@ const SaleManagement = ({
                     warehouseQty: '',
                     quantity: '',
                     truck: '',
+                    uom: 'Truck',
                     unitPrice: '',
                     totalAmount: ''
                 }]
@@ -496,6 +535,7 @@ const SaleManagement = ({
                     warehouseQty: '',
                     quantity: '',
                     truck: '',
+                    uom: 'Truck',
                     unitPrice: '',
                     totalAmount: ''
                 }]
@@ -560,11 +600,19 @@ const SaleManagement = ({
             }
 
             if (prev.saleType === 'Border') {
-                // Border Sale: Total = Truck * Price
-                if (name === 'truck' || name === 'unitPrice') {
+                // Border Sale: Total depends on selected UOM (QTY or Truck)
+                if (name === 'truck' || name === 'quantity' || name === 'unitPrice' || name === 'uom') {
+                    const activeUOM = name === 'uom' ? value : entry.uom;
+                    const qty = parseFloat(name === 'quantity' ? value : entry.quantity) || 0;
                     const truck = parseFloat(name === 'truck' ? value : entry.truck) || 0;
                     const price = parseFloat(name === 'unitPrice' ? value : entry.unitPrice) || 0;
-                    entry.totalAmount = (truck * price).toFixed(2);
+
+                    if (activeUOM === 'QTY') {
+                        entry.totalAmount = (qty * price).toFixed(2);
+                    } else {
+                        // Default to Truck
+                        entry.totalAmount = (truck * price).toFixed(2);
+                    }
                 }
             } else {
                 // General Sale: Total = Quantity * Price
@@ -796,6 +844,7 @@ const SaleManagement = ({
                     warehouseQty: '',
                     quantity: '',
                     truck: '',
+                    uom: 'Truck',
                     unitPrice: '',
                     totalAmount: ''
                 }]
@@ -833,6 +882,7 @@ const SaleManagement = ({
                     warehouseName: sale.warehouseName,
                     warehouseQty: sale.warehouseQty,
                     quantity: sale.quantity,
+                    uom: sale.uom || 'Truck',
                     unitPrice: sale.unitPrice,
                     totalAmount: sale.totalAmount
                 }]
@@ -852,6 +902,7 @@ const SaleManagement = ({
                         warehouseName: item.warehouseName,
                         warehouseQty: item.warehouseQty,
                         quantity: item.quantity,
+                        uom: item.uom || 'Truck',
                         unitPrice: item.unitPrice,
                         totalAmount: item.totalAmount
                     }]
@@ -886,9 +937,36 @@ const SaleManagement = ({
     const getFilteredData = () => {
         if (!searchQuery) return displayedSales;
         const query = searchQuery.toLowerCase();
+
         return displayedSales.filter(s => {
+            if (saleType === 'Border') {
+                const date = (s.date || '').toLowerCase();
+                const lcNo = (s.lcNo || '').toLowerCase();
+                const importer = (s.importer || '').toLowerCase();
+                const port = (s.port || '').toLowerCase();
+                const indCnf = (s.indianCnF || '').toLowerCase();
+                const bdCnf = (s.bdCnf || '').toLowerCase();
+                const party = (s.companyName || s.customerName || '').toLowerCase();
+                const truck = String(s.truck || '').toLowerCase();
+                const total = String(s.totalAmount || '').toLowerCase();
+
+                const itemsMatch = (s.items || []).some(item => {
+                    const pName = (item.productName || item.product || '').toLowerCase();
+                    return pName.includes(query) || (item.brandEntries || []).some(e =>
+                        String(e.quantity || '').includes(query) || String(e.truck || '').includes(query) ||
+                        String(e.unitPrice || '').includes(query) || String(e.totalAmount || '').includes(query)
+                    );
+                });
+
+                return date.includes(query) || lcNo.includes(query) || importer.includes(query) ||
+                    port.includes(query) || indCnf.includes(query) || bdCnf.includes(query) ||
+                    party.includes(query) || truck.includes(query) || total.includes(query) || itemsMatch;
+            }
+
+            // General/Foreign sale search
             const matchesBasic =
                 s.invoiceNo?.toLowerCase().includes(query) ||
+                s.lcNo?.toLowerCase().includes(query) ||
                 s.customerName?.toLowerCase().includes(query) ||
                 s.companyName?.toLowerCase().includes(query) ||
                 s.productName?.toLowerCase().includes(query) ||
@@ -914,6 +992,8 @@ const SaleManagement = ({
     const [productSearch, setProductSearch] = useState('');
     const [brandSearch, setBrandSearch] = useState('');
     const [warehouseSearch, setWarehouseSearch] = useState('');
+    const [importerSearch, setImporterSearch] = useState('');
+    const [portSearch, setPortSearch] = useState('');
 
     // Handle outside clicks for dropdowns
     useEffect(() => {
@@ -930,10 +1010,28 @@ const SaleManagement = ({
             if (activeDropdown === 'warehouse' && !e.target.closest('.warehouse-dropdown-container')) {
                 setActiveDropdown(null);
             }
+            if (activeDropdown === 'importer' && !e.target.closest('.importer-dropdown-container')) {
+                setActiveDropdown(null);
+            }
+            if (activeDropdown === 'port' && !e.target.closest('.port-dropdown-container')) {
+                setActiveDropdown(null);
+            }
         };
         document.addEventListener('mousedown', handleClickOutside);
         return () => document.removeEventListener('mousedown', handleClickOutside);
     }, [activeDropdown]);
+
+    const getFilteredImporters = () => {
+        return importersList
+            .filter(imp => imp.status !== 'Inactive')
+            .filter(imp => (imp.name || '').toLowerCase().includes(importerSearch.toLowerCase()));
+    };
+
+    const getFilteredPorts = () => {
+        return portsList
+            .filter(p => p.status !== 'Inactive')
+            .filter(p => (p.name || '').toLowerCase().includes(portSearch.toLowerCase()));
+    };
 
     const getFilteredCompanies = () => {
         return customers.filter(c =>
@@ -1011,7 +1109,6 @@ const SaleManagement = ({
             customerId: customer._id,
             companyName: customer.companyName || '',
             customerName: customer.customerName || '',
-            lcNo: customer.lcNo || '',
             contact: customer.phone || '',
             previousBalance: previousBalance.toFixed(2)
         }));
@@ -1025,7 +1122,6 @@ const SaleManagement = ({
                 companyName: '',
                 customerId: '',
                 customerName: '',
-                lcNo: '',
                 contact: '',
                 previousBalance: '0.00'
             }));
@@ -1035,6 +1131,28 @@ const SaleManagement = ({
         }
         setCompanyNameSearch('');
         handleCustomerSelect(customer);
+    };
+
+    const handleImporterSelect = (importer) => {
+        if (importer === null) {
+            setFormData(prev => ({ ...prev, importer: '' }));
+            setImporterSearch('');
+        } else {
+            setFormData(prev => ({ ...prev, importer }));
+            setImporterSearch('');
+        }
+        setActiveDropdown(null);
+    };
+
+    const handlePortSelect = (port) => {
+        if (port === null) {
+            setFormData(prev => ({ ...prev, port: '' }));
+            setPortSearch('');
+        } else {
+            setFormData(prev => ({ ...prev, port }));
+            setPortSearch('');
+        }
+        setActiveDropdown(null);
     };
 
     const handleProductSelect = (product) => {
@@ -1235,9 +1353,38 @@ const SaleManagement = ({
         // Text search
         if (searchQuery) {
             const q = searchQuery.toLowerCase();
-            const inv = (sale.invoiceNo || '').toLowerCase();
-            const cname = (sale.companyName || sale.customerName || '').toLowerCase();
-            if (!inv.includes(q) && !cname.includes(q)) return false;
+
+            if (saleType === 'Border') {
+                // Gather searchable flat-text fields
+                const date = (sale.date || '').toLowerCase();
+                const lcNo = (sale.lcNo || '').toLowerCase();
+                const importer = (sale.importer || '').toLowerCase();
+                const port = (sale.port || '').toLowerCase();
+                const indCnf = (sale.indianCnF || '').toLowerCase();
+                const bdCnf = (sale.bdCnf || '').toLowerCase();
+                const party = (sale.companyName || sale.customerName || '').toLowerCase();
+                const truck = String(sale.truck || '').toLowerCase();
+                const total = String(sale.totalAmount || '').toLowerCase();
+
+                // Search inside product names and quantities across items
+                const itemsMatch = (sale.items || []).some(item => {
+                    const pName = (item.productName || item.product || '').toLowerCase();
+                    return pName.includes(q) || (item.brandEntries || []).some(e =>
+                        String(e.quantity || '').includes(q) || String(e.truck || '').includes(q) ||
+                        String(e.unitPrice || '').includes(q) || String(e.totalAmount || '').includes(q)
+                    );
+                });
+
+                const matches = date.includes(q) || lcNo.includes(q) || importer.includes(q) ||
+                    port.includes(q) || indCnf.includes(q) || bdCnf.includes(q) ||
+                    party.includes(q) || truck.includes(q) || total.includes(q) || itemsMatch;
+
+                if (!matches) return false;
+            } else {
+                const inv = (sale.invoiceNo || '').toLowerCase();
+                const cname = (sale.companyName || sale.customerName || '').toLowerCase();
+                if (!inv.includes(q) && !cname.includes(q)) return false;
+            }
         }
         // Date range
         if (saleFilters.startDate && sale.date) {
@@ -1251,9 +1398,9 @@ const SaleManagement = ({
             const c = (sale.companyName || sale.customerName || '').toLowerCase();
             if (!c.includes(saleFilters.companyName.toLowerCase())) return false;
         }
-        // Invoice
+        // Invoice or LC No
         if (saleFilters.invoiceNo) {
-            const inv = (sale.invoiceNo || '').toLowerCase();
+            const inv = ((saleType === 'Border' ? sale.lcNo : sale.invoiceNo) || '').toLowerCase();
             if (!inv.includes(saleFilters.invoiceNo.toLowerCase())) return false;
         }
         return true;
@@ -1407,7 +1554,7 @@ const SaleManagement = ({
 
                                             {/* Invoice No Filter */}
                                             <div className="space-y-1.5 relative" ref={saleInvoiceFilterRef}>
-                                                <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider pl-1">INVOICE NUMBER</label>
+                                                <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider pl-1">{saleType === 'Border' ? 'LC NUMBER' : 'INVOICE NUMBER'}</label>
                                                 <div className="relative">
                                                     <input
                                                         type="text"
@@ -1418,7 +1565,7 @@ const SaleManagement = ({
                                                             setActiveFilterDropdown('invoice');
                                                         }}
                                                         onFocus={() => setActiveFilterDropdown('invoice')}
-                                                        placeholder={saleFilters.invoiceNo || 'Search invoice...'}
+                                                        placeholder={saleFilters.invoiceNo || (saleType === 'Border' ? 'Search LC No...' : 'Search invoice...')}
                                                         className={`w-full px-4 py-2.5 bg-white border border-gray-100 rounded-xl text-sm focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all shadow-sm hover:border-gray-200 pr-14 ${saleFilters.invoiceNo ? 'placeholder:text-gray-900 placeholder:font-semibold' : 'placeholder:text-gray-300'
                                                             }`}
                                                     />
@@ -1435,7 +1582,7 @@ const SaleManagement = ({
                                                     </div>
                                                 </div>
                                                 {activeFilterDropdown === 'invoice' && (() => {
-                                                    const options = [...new Set(sales.map(s => s.invoiceNo).filter(Boolean))].sort();
+                                                    const options = [...new Set(sales.map(s => saleType === 'Border' ? s.lcNo : s.invoiceNo).filter(Boolean))].sort();
                                                     const filtered = options.filter(inv => inv.toLowerCase().includes((saleFilterSearch.invoiceSearch || '').toLowerCase()));
                                                     return filtered.length > 0 ? (
                                                         <div className="absolute z-[120] mt-1 w-full bg-white border border-gray-100 rounded-xl shadow-xl max-h-48 overflow-y-auto py-1">
@@ -1459,9 +1606,11 @@ const SaleManagement = ({
                             )}
                         </div>
 
-                        {/* Report Button */}
                         <button
-                            onClick={() => setShowSalesReport(true)}
+                            onClick={() => {
+                                if (setSalesReportData) setSalesReportData(getFilteredData());
+                                setShowSalesReport(true);
+                            }}
                             className="sale-mgmt-btn-action sale-mgmt-btn-white"
                         >
                             <BarChartIcon className="w-5 h-5" />
@@ -1526,10 +1675,134 @@ const SaleManagement = ({
                                 <label className="sale-mgmt-label">Invoice No</label>
                                 <input type="text" name="invoiceNo" value={formData.invoiceNo} onChange={handleInputChange} placeholder="SALE-001" className="sale-mgmt-input" required />
                             </div>
+
+                            {/* Border Field: Importer */}
+                            {saleType === 'Border' && (
+                                <div className="sale-mgmt-input-group relative importer-dropdown-container">
+                                    <label className="sale-mgmt-label">Importer</label>
+                                    <div className="relative">
+                                        <input
+                                            type="text"
+                                            name="importer"
+                                            placeholder={formData.importer || "Search importer..."}
+                                            value={activeDropdown === 'importer' ? importerSearch : formData.importer}
+                                            onChange={(e) => {
+                                                setImporterSearch(e.target.value);
+                                                setActiveDropdown('importer');
+                                                setHighlightedIndex(-1);
+                                                handleInputChange(e); // allow fallback text input
+                                            }}
+                                            onFocus={() => { setActiveDropdown('importer'); setHighlightedIndex(-1); }}
+                                            onKeyDown={(e) => handleDropdownKeyDown(e, 'importer', getFilteredImporters(), handleImporterSelect)}
+                                            className={`sale-mgmt-input pr-14 ${formData.importer ? 'placeholder:text-gray-900 placeholder:font-semibold' : 'placeholder:text-gray-400'}`}
+                                        />
+                                        <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-2">
+                                            {formData.importer && (
+                                                <button type="button" onClick={() => handleImporterSelect(null)} className="text-gray-400 hover:text-red-500">
+                                                    <XIcon className="w-4 h-4" />
+                                                </button>
+                                            )}
+                                            <button
+                                                type="button"
+                                                onClick={() => setActiveDropdown(activeDropdown === 'importer' ? null : 'importer')}
+                                                className="text-gray-300 hover:text-blue-500 transition-colors"
+                                            >
+                                                <ChevronDownIcon className={`w-4 h-4 transition-transform duration-200 ${activeDropdown === 'importer' ? 'rotate-180' : ''}`} />
+                                            </button>
+                                        </div>
+                                    </div>
+                                    {activeDropdown === 'importer' && getFilteredImporters().length > 0 && (
+                                        <div className="absolute z-[60] w-full mt-1 bg-white border border-gray-100 rounded-xl shadow-xl max-h-48 overflow-y-auto py-1">
+                                            {getFilteredImporters().map((importer, idx) => (
+                                                <button
+                                                    key={importer._id || `imp-${idx}`}
+                                                    type="button"
+                                                    onClick={() => handleImporterSelect(importer.name)}
+                                                    onMouseEnter={() => setHighlightedIndex(idx)}
+                                                    className={`w-full px-4 py-2 text-left text-sm transition-colors font-medium ${formData.importer === importer.name ? 'bg-blue-50 text-blue-700' : highlightedIndex === idx ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-blue-50'}`}
+                                                >
+                                                    {importer.name}
+                                                </button>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+
                             <div className="sale-mgmt-input-group">
                                 <label className="sale-mgmt-label">LC No</label>
                                 <input type="text" name="lcNo" value={formData.lcNo} onChange={handleInputChange} placeholder="LC-001" className="sale-mgmt-input" />
                             </div>
+
+                            {/* Border Field: IND CNF */}
+                            {saleType === 'Border' && (
+                                <div className="sale-mgmt-input-group">
+                                    <label className="sale-mgmt-label">IND CNF</label>
+                                    <input type="text" name="indianCnF" value={formData.indianCnF} onChange={handleInputChange} placeholder="IND CNF" className="sale-mgmt-input" />
+                                </div>
+                            )}
+
+                            {/* Border Field: BD CNF */}
+                            {saleType === 'Border' && (
+                                <div className="sale-mgmt-input-group">
+                                    <label className="sale-mgmt-label">BD CNF</label>
+                                    <input type="text" name="bdCnf" value={formData.bdCnf} onChange={handleInputChange} placeholder="BD CNF" className="sale-mgmt-input" />
+                                </div>
+                            )}
+
+                            {/* Border Field: Port */}
+                            {saleType === 'Border' && (
+                                <div className="sale-mgmt-input-group relative port-dropdown-container">
+                                    <label className="sale-mgmt-label">Port</label>
+                                    <div className="relative">
+                                        <input
+                                            type="text"
+                                            name="port"
+                                            placeholder={formData.port || "Search port..."}
+                                            value={activeDropdown === 'port' ? portSearch : formData.port}
+                                            onChange={(e) => {
+                                                setPortSearch(e.target.value);
+                                                setActiveDropdown('port');
+                                                setHighlightedIndex(-1);
+                                                handleInputChange(e); // allow fallback text input
+                                            }}
+                                            onFocus={() => { setActiveDropdown('port'); setHighlightedIndex(-1); }}
+                                            onKeyDown={(e) => handleDropdownKeyDown(e, 'port', getFilteredPorts(), handlePortSelect)}
+                                            className={`sale-mgmt-input pr-14 ${formData.port ? 'placeholder:text-gray-900 placeholder:font-semibold' : 'placeholder:text-gray-400'}`}
+                                        />
+                                        <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-2">
+                                            {formData.port && (
+                                                <button type="button" onClick={() => handlePortSelect(null)} className="text-gray-400 hover:text-red-500">
+                                                    <XIcon className="w-4 h-4" />
+                                                </button>
+                                            )}
+                                            <button
+                                                type="button"
+                                                onClick={() => setActiveDropdown(activeDropdown === 'port' ? null : 'port')}
+                                                className="text-gray-300 hover:text-blue-500 transition-colors"
+                                            >
+                                                <ChevronDownIcon className={`w-4 h-4 transition-transform duration-200 ${activeDropdown === 'port' ? 'rotate-180' : ''}`} />
+                                            </button>
+                                        </div>
+                                    </div>
+                                    {activeDropdown === 'port' && getFilteredPorts().length > 0 && (
+                                        <div className="absolute z-[60] w-full mt-1 bg-white border border-gray-100 rounded-xl shadow-xl max-h-48 overflow-y-auto py-1">
+                                            {getFilteredPorts().map((port, idx) => (
+                                                <button
+                                                    key={port._id || `port-${idx}`}
+                                                    type="button"
+                                                    onClick={() => handlePortSelect(port.name)}
+                                                    onMouseEnter={() => setHighlightedIndex(idx)}
+                                                    className={`w-full px-4 py-2 text-left text-sm transition-colors font-medium ${formData.port === port.name ? 'bg-blue-50 text-blue-700' : highlightedIndex === idx ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-blue-50'}`}
+                                                >
+                                                    {port.name}
+                                                </button>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+
                             {/* Company Name Select */}
                             <div className="sale-mgmt-input-group relative company-dropdown-container">
                                 <label className="sale-mgmt-label">Company Name</label>
@@ -1587,26 +1860,6 @@ const SaleManagement = ({
                                 <label className="sale-mgmt-label">Contact</label>
                                 <input type="text" name="contact" value={formData.contact} readOnly placeholder="Contact" className="sale-mgmt-input sale-mgmt-input-readonly" />
                             </div>
-                            {saleType === 'Border' && (
-                                <>
-                                    <div className="sale-mgmt-input-group">
-                                        <label className="sale-mgmt-label">Importer</label>
-                                        <input type="text" name="importer" value={formData.importer} onChange={handleInputChange} placeholder="Importer" className="sale-mgmt-input" />
-                                    </div>
-                                    <div className="sale-mgmt-input-group">
-                                        <label className="sale-mgmt-label">Port</label>
-                                        <input type="text" name="port" value={formData.port} onChange={handleInputChange} placeholder="Port" className="sale-mgmt-input" />
-                                    </div>
-                                    <div className="sale-mgmt-input-group">
-                                        <label className="sale-mgmt-label">IND CNF</label>
-                                        <input type="text" name="indianCnF" value={formData.indianCnF} onChange={handleInputChange} placeholder="IND CNF" className="sale-mgmt-input" />
-                                    </div>
-                                    <div className="sale-mgmt-input-group">
-                                        <label className="sale-mgmt-label">BD CNF</label>
-                                        <input type="text" name="bdCnf" value={formData.bdCnf} onChange={handleInputChange} placeholder="BD CNF" className="sale-mgmt-input" />
-                                    </div>
-                                </>
-                            )}
                         </div>
 
                         <div className="col-span-2 space-y-6">
@@ -1705,7 +1958,7 @@ const SaleManagement = ({
                                             {saleType === 'Border' && (
                                                 <div className="flex-[3] space-y-4 pt-1">
                                                     <div className="hidden md:grid grid-cols-5 gap-4 px-4">
-                                                        <div className="sale-mgmt-item-label text-center">Warehouse</div>
+                                                        <div className="sale-mgmt-item-label text-center">UOM</div>
                                                         <div className="sale-mgmt-item-label text-center">Qty</div>
                                                         <div className="sale-mgmt-item-label text-center">Truck</div>
                                                         <div className="sale-mgmt-item-label text-center">Price</div>
@@ -1713,48 +1966,25 @@ const SaleManagement = ({
                                                     </div>
                                                     {item.brandEntries.map((entry, entryIndex) => (
                                                         <div key={entryIndex} className="grid grid-cols-1 md:grid-cols-5 gap-4 items-center px-4">
-                                                            {/* Warehouse Selection */}
-                                                            <div className="relative warehouse-dropdown-container">
-                                                                <label className="md:hidden sale-mgmt-item-label mb-1 block">Warehouse</label>
-                                                                <input
-                                                                    type="text"
-                                                                    placeholder={entry.warehouseName || "Warehouse"}
-                                                                    value={activeDropdown === 'warehouse' && activeItemIndex === index && activeEntryIndex === entryIndex ? warehouseSearch : ''}
-                                                                    onChange={(e) => {
-                                                                        setWarehouseSearch(e.target.value);
-                                                                        setActiveDropdown('warehouse');
-                                                                        setActiveItemIndex(index);
-                                                                        setActiveEntryIndex(entryIndex);
-                                                                        handleItemInputChange(index, entryIndex, { target: { name: 'warehouseName', value: e.target.value } });
-                                                                    }}
-                                                                    onFocus={() => {
-                                                                        setActiveDropdown('warehouse');
-                                                                        setActiveItemIndex(index);
-                                                                        setActiveEntryIndex(entryIndex);
-                                                                        setWarehouseSearch(entry.warehouseName || '');
-                                                                    }}
-                                                                    className={`sale-mgmt-input pr-9 !text-xs ${entry.warehouseName ? 'placeholder:text-gray-900 placeholder:font-semibold' : 'placeholder:text-gray-400'}`}
-                                                                />
-                                                                <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
-                                                                    {entry.warehouseName ? (
-                                                                        <button type="button" onClick={() => { handleWarehouseSelect({ _id: '', whName: '' }); setWarehouseSearch(''); }} className="text-gray-400 hover:text-red-500">
-                                                                            <XIcon className="w-3.5 h-3.5" />
-                                                                        </button>
-                                                                    ) : (
-                                                                        <button type="button" onClick={() => { setActiveDropdown(activeDropdown === 'warehouse' && activeItemIndex === index && activeEntryIndex === entryIndex ? null : 'warehouse'); setActiveItemIndex(index); setActiveEntryIndex(entryIndex); }} className="text-gray-300 hover:text-blue-500 transition-colors">
-                                                                            <ChevronDownIcon className={`w-3.5 h-3.5 transition-transform duration-200 ${activeDropdown === 'warehouse' && activeItemIndex === index && activeEntryIndex === entryIndex ? 'rotate-180' : ''}`} />
-                                                                        </button>
-                                                                    )}
+                                                            {/* UOM Toggle */}
+                                                            <div className="relative">
+                                                                <label className="md:hidden sale-mgmt-item-label mb-1 block">UOM</label>
+                                                                <div className="flex items-center bg-gray-50/50 p-1 rounded-xl border border-gray-100/50 h-10 shadow-inner group/uom">
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={() => handleItemInputChange(index, entryIndex, { target: { name: 'uom', value: 'QTY' } })}
+                                                                        className={`flex-1 h-full flex items-center justify-center rounded-lg text-[10px] font-black transition-all duration-200 ${entry.uom === 'QTY' ? 'bg-white text-blue-600 shadow-md ring-1 ring-black/5' : 'text-gray-400 hover:text-gray-600'}`}
+                                                                    >
+                                                                        QTY
+                                                                    </button>
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={() => handleItemInputChange(index, entryIndex, { target: { name: 'uom', value: 'Truck' } })}
+                                                                        className={`flex-1 h-full flex items-center justify-center rounded-lg text-[10px] font-black transition-all duration-200 ${entry.uom === 'Truck' || !entry.uom ? 'bg-white text-blue-600 shadow-md ring-1 ring-black/5' : 'text-gray-400 hover:text-gray-600'}`}
+                                                                    >
+                                                                        TRUCK
+                                                                    </button>
                                                                 </div>
-                                                                {activeDropdown === 'warehouse' && activeItemIndex === index && activeEntryIndex === entryIndex && getFilteredWarehouses().length > 0 && (
-                                                                    <div className="absolute z-[70] w-full mt-1 bg-white border border-gray-100 rounded-xl shadow-xl max-h-40 overflow-y-auto py-1">
-                                                                        {getFilteredWarehouses().map((w) => (
-                                                                            <button key={w._id} type="button" onClick={() => handleWarehouseSelect(w)} className="w-full px-4 py-2 text-left text-xs hover:bg-blue-50 font-medium text-gray-700">
-                                                                                {w.whName}
-                                                                            </button>
-                                                                        ))}
-                                                                    </div>
-                                                                )}
                                                             </div>
                                                             <div>
                                                                 <label className="md:hidden sale-mgmt-item-label mb-1 block text-center">Qty</label>
@@ -2108,16 +2338,17 @@ const SaleManagement = ({
                                 {saleType === 'Border' ? (
                                     <tr>
                                         <th className="sale-mgmt-th">Date</th>
+                                        <th className="sale-mgmt-th">LC No</th>
                                         <th className="sale-mgmt-th">Importer</th>
-                                        <th className="sale-mgmt-th">Port</th>
-                                        <th className="sale-mgmt-th">IND CNF</th>
-                                        <th className="sale-mgmt-th">BD CNF</th>
-                                        <th className="sale-mgmt-th">Party Name</th>
+                                        <th className="sale-mgmt-th">port</th>
+                                        <th className="sale-mgmt-th">IND cnf</th>
+                                        <th className="sale-mgmt-th">bd cnf</th>
+                                        <th className="sale-mgmt-th">Party</th>
                                         <th className="sale-mgmt-th">Product</th>
                                         <th className="sale-mgmt-th text-center">QTY</th>
                                         <th className="sale-mgmt-th">Truck</th>
-                                        <th className="sale-mgmt-th text-center">Rate</th>
-                                        <th className="sale-mgmt-th text-center">Total Rate</th>
+                                        <th className="sale-mgmt-th text-center">rate</th>
+                                        <th className="sale-mgmt-th text-center">total price</th>
                                         <th className="sale-mgmt-th text-center">Actions</th>
                                     </tr>
                                 ) : (
@@ -2164,6 +2395,7 @@ const SaleManagement = ({
                                         return (
                                             <tr key={sale._id} className="hover:bg-blue-50/50 transition-all border-b border-gray-50 text-[13px]">
                                                 <td className="px-3 py-4 whitespace-nowrap text-gray-600">{formatDate(sale.date)}</td>
+                                                <td className="px-3 py-4 whitespace-nowrap font-semibold text-gray-800">{sale.lcNo || '-'}</td>
                                                 <td className="px-3 py-4 whitespace-nowrap font-semibold text-gray-800">{sale.importer || '-'}</td>
                                                 <td className="px-3 py-4 whitespace-nowrap font-semibold text-gray-800">{sale.port || '-'}</td>
                                                 <td className="px-3 py-4 whitespace-nowrap font-semibold text-gray-800">{sale.indianCnF || '-'}</td>
@@ -2352,7 +2584,7 @@ const SaleManagement = ({
                                             {/* Date & Inv */}
                                             <div className="flex-shrink-0">
                                                 <div className="sale-mgmt-mobile-label">{formatDate(sale.date)}</div>
-                                                <div className={`${!isExpanded ? 'text-[11px]' : 'text-sm'} font-black text-gray-900 truncate`}>{sale.invoiceNo || sale.importer || 'No ID'}</div>
+                                                <div className={`${!isExpanded ? 'text-[11px]' : 'text-sm'} font-black text-gray-900 truncate`}>{saleType === 'Border' ? (sale.lcNo || sale.importer || 'No ID') : (sale.invoiceNo || sale.importer || 'No ID')}</div>
                                             </div>
 
                                             {!isExpanded && (

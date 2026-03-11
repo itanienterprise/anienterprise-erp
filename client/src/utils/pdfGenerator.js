@@ -1698,13 +1698,13 @@ export const generateSalesReportPDF = (reportData, filters, summary, saleType = 
         let slNum = 1;
 
         reportData.forEach((sale) => {
-            const items = sale.items || [];
-            // Create a list of all brand entries across all items
-            const flatItems = items.flatMap(item =>
+            // Create flattened list of all entries across all items
+            const flatItems = (sale.items || []).flatMap(item =>
                 (item.brandEntries || []).map(entry => ({
                     productName: item.productName || item.product || '-',
                     brand: entry.brandName || entry.brand || '-',
-                    quantity: sale.saleType === 'Border' ? (entry.truck || 0) : (entry.quantity || 0),
+                    quantity: entry.quantity || 0,
+                    truck: entry.truck || sale.truck || '-',
                     price: entry.unitPrice || 0,
                     total: entry.totalAmount || 0
                 }))
@@ -1717,46 +1717,95 @@ export const generateSalesReportPDF = (reportData, filters, summary, saleType = 
                     brand: sale.brand || '-',
                     quantity: sale.quantity || 0,
                     price: 0,
-                    total: sale.totalAmount || 0
+                    total: sale.totalAmount || 0,
+                    lcNo: sale.lcNo || '-'
                 });
             }
 
             flatItems.forEach((item, idx) => {
-                tableRows.push([
+                const row = [
                     idx === 0 ? (slNum++).toString() : '',
                     idx === 0 ? formatDate(sale.date) : '',
-                    idx === 0 ? (sale.invoiceNo || '-') : '',
-                    idx === 0 ? (sale.companyName || '-') : '',
-                    item.productName,
-                    item.brand,
-                    parseFloat(item.quantity).toLocaleString(),
-                    (parseFloat(item.price) || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
-                    (parseFloat(item.total) || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
-                    idx === 0 ? (parseFloat(sale.discount || 0)).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '',
-                    idx === 0 ? (parseFloat(sale.paidAmount || 0)).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '',
-                    idx === 0 ? ((parseFloat(sale.totalAmount || 0) - parseFloat(sale.paidAmount || 0))).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : ''
-                ]);
+                    idx === 0 ? (saleType === 'Border' ? (sale.lcNo || '-') : (sale.invoiceNo || '-')) : ''
+                ];
+
+                if (saleType === 'Border') {
+                    row.push(idx === 0 ? (sale.importer || '-') : '');
+                    row.push(idx === 0 ? (sale.port || '-') : '');
+                    row.push(idx === 0 ? (sale.indianCnF || '-') : '');
+                    row.push(idx === 0 ? (sale.bdCnf || '-') : '');
+                    row.push(idx === 0 ? (sale.companyName || sale.customerName || '-') : '');
+                } else {
+                    row.push(idx === 0 ? (sale.companyName || '-') : '');
+                }
+
+                row.push(item.productName);
+
+                if (saleType !== 'Border') {
+                    row.push(item.brand);
+                }
+
+                row.push(parseFloat(item.quantity).toLocaleString());
+
+                if (saleType === 'Border') {
+                    row.push(item.truck || sale.truck || '-');
+                }
+
+                row.push(saleType === 'Border'
+                    ? Math.round(parseFloat(item.price) || 0).toLocaleString()
+                    : (parseFloat(item.price) || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
+                row.push(saleType === 'Border'
+                    ? Math.round(parseFloat(item.total) || 0).toLocaleString()
+                    : (parseFloat(item.total) || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
+
+                if (saleType !== 'Border') {
+                    row.push(idx === 0 ? (parseFloat(sale.discount || 0)).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '');
+                    row.push(idx === 0 ? (parseFloat(sale.paidAmount || 0)).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '');
+                    row.push(idx === 0 ? ((parseFloat(sale.totalAmount || 0) - parseFloat(sale.paidAmount || 0))).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '');
+                }
+
+                tableRows.push(row);
             });
         });
 
+        const totalTrucks = saleType === 'Border' ? reportData.reduce((sum, sale) => {
+            const items = sale.items || [];
+            const truckTotal = items.reduce((iSum, item) => {
+                const brandEntries = item.brandEntries || [];
+                return iSum + brandEntries.reduce((bSum, entry) => bSum + (parseFloat(entry.truck) || 0), 0);
+            }, 0);
+            return sum + (items.length > 0 ? truckTotal : (parseFloat(sale.truck) || 0));
+        }, 0) : 0;
+
         const totalDiscount = reportData.reduce((sum, s) => sum + (parseFloat(s.discount) || 0), 0);
 
-        autoTable(doc, {
-            startY: yPos + 10,
-            head: [['SL', 'Date', 'Invoice', 'Company', 'Product', 'Brand', 'Qty', 'Price', 'Total', 'Disc', 'Paid', 'Due']],
-            body: tableRows,
-            foot: [[
-                { content: 'GRAND TOTAL', colSpan: 6, styles: { halign: 'right', fontStyle: 'bold' } },
-                { content: summary.totalQty.toLocaleString(), styles: { halign: 'right', fontStyle: 'bold' } },
-                { content: '', styles: { halign: 'right', fontStyle: 'bold' } },
-                { content: summary.totalAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }), styles: { halign: 'right', fontStyle: 'bold' } },
+        const headRow = saleType === 'Border'
+            ? [['SL', 'Date', 'LC No', 'Importer', 'Port', 'IND CNF', 'BD CNF', 'Party Name', 'Product', 'Qty', 'Truck', 'Price', 'Total']]
+            : [['SL', 'Date', 'Invoice', 'Company', 'Product', 'Brand', 'Qty', 'Price', 'Total', 'Disc', 'Paid', 'Due']];
+
+        const footRow = [[
+            { content: 'GRAND TOTAL', colSpan: saleType === 'Border' ? 9 : 6, styles: { halign: 'right', fontStyle: 'bold' } },
+            { content: saleType === 'Border' ? '-' : summary.totalQty.toLocaleString(), styles: { halign: 'right', fontStyle: 'bold' } },
+            { content: saleType === 'Border' ? totalTrucks.toLocaleString() : '', styles: { halign: 'center', fontStyle: 'bold' } },
+            ...(saleType === 'Border' ? [
+                { content: '', styles: { halign: 'right', fontStyle: 'bold' } }
+            ] : []),
+            { content: saleType === 'Border' ? Math.round(summary.totalAmount).toLocaleString() : summary.totalAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }), styles: { halign: 'right', fontStyle: 'bold' } },
+            ...(saleType === 'Border' ? [] : [
                 { content: totalDiscount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }), styles: { halign: 'right', fontStyle: 'bold' } },
                 { content: summary.totalPaid.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }), styles: { halign: 'right', fontStyle: 'bold' } },
                 { content: (summary.totalAmount - summary.totalPaid).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }), styles: { halign: 'right', fontStyle: 'bold' } }
-            ]],
+            ])
+        ]];
+
+        autoTable(doc, {
+            startY: yPos + 10,
+            head: headRow,
+            body: tableRows,
+            foot: footRow,
             theme: 'grid',
             styles: {
-                fontSize: 9.5,
+                fontSize: 9,
                 cellPadding: 1,
                 lineColor: [0, 0, 0],
                 lineWidth: 0.1,
@@ -1773,13 +1822,27 @@ export const generateSalesReportPDF = (reportData, filters, summary, saleType = 
                 fillColor: [240, 240, 240],
                 fontStyle: 'bold'
             },
-            columnStyles: {
+            columnStyles: saleType === 'Border' ? {
+                0: { cellWidth: 7, halign: 'center' },     // SL
+                1: { cellWidth: 18, halign: 'center' },    // Date
+                2: { cellWidth: 26, halign: 'center' },    // LC No
+                3: { cellWidth: 36, noWrap: true },        // Importer
+                4: { cellWidth: 22, noWrap: true },        // Port
+                5: { cellWidth: 28, noWrap: true },        // IND CNF
+                6: { cellWidth: 28, noWrap: true },        // BD CNF
+                7: { cellWidth: 34, noWrap: true },        // Party Name
+                8: { cellWidth: 18, overflow: 'linebreak' }, // Product
+                9: { cellWidth: 16, halign: 'right' },     // Qty
+                10: { cellWidth: 14, halign: 'center' },   // Truck
+                11: { cellWidth: 18, halign: 'right' },    // Price
+                12: { cellWidth: 18, halign: 'right' }     // Total
+            } : {
                 0: { cellWidth: 8, halign: 'center' },
                 1: { cellWidth: 20, halign: 'center' },
                 2: { cellWidth: 22, halign: 'center' },
                 3: { cellWidth: 35 },
                 4: { cellWidth: 38 },
-                5: { cellWidth: 45, noWrap: false, overflow: 'linebreak' }, // User wants brand name in one line, butlinebreak if too long? Actually they said "show brand name in one line". I'll use noWrap: true if width is enough.
+                5: { cellWidth: 45, noWrap: false, overflow: 'linebreak' },
                 6: { cellWidth: 15, halign: 'right' },
                 7: { cellWidth: 20, halign: 'right' },
                 8: { cellWidth: 22, halign: 'right' },
@@ -1787,7 +1850,7 @@ export const generateSalesReportPDF = (reportData, filters, summary, saleType = 
                 10: { cellWidth: 22, halign: 'right' },
                 11: { cellWidth: 22, halign: 'right' }
             },
-            margin: { left: margin, right: margin }
+            margin: { left: saleType === 'Border' ? (pageWidth - 285) / 2 : (pageWidth - 280) / 2, right: margin }
         });
 
         // --- Signatures ---

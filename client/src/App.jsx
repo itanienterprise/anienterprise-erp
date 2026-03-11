@@ -339,6 +339,7 @@ function App() {
 
   const [showLcReport, setShowLcReport] = useState(false);
   const [showSalesReport, setShowSalesReport] = useState(false);
+  const [filteredSalesForReport, setFilteredSalesForReport] = useState([]);
   const [saleFilters, setSaleFilters] = useState({ startDate: '', endDate: '', companyName: '', invoiceNo: '' });
   const [products, setProducts] = useState([]);
 
@@ -1150,6 +1151,7 @@ function App() {
             startLongPress={startLongPress}
             endLongPress={endLongPress}
             setShowSalesReport={setShowSalesReport}
+            setSalesReportData={setFilteredSalesForReport}
             saleFilters={saleFilters}
             setSaleFilters={setSaleFilters}
           />
@@ -1167,6 +1169,7 @@ function App() {
             startLongPress={startLongPress}
             endLongPress={endLongPress}
             setShowSalesReport={setShowSalesReport}
+            setSalesReportData={setFilteredSalesForReport}
             saleFilters={saleFilters}
             setSaleFilters={setSaleFilters}
           />
@@ -1484,7 +1487,7 @@ function App() {
       <SalesReport
         isOpen={showSalesReport}
         onClose={() => setShowSalesReport(false)}
-        salesRecords={salesRecords}
+        salesRecords={filteredSalesForReport}
         saleFilters={saleFilters}
         setSaleFilters={setSaleFilters}
         saleType={currentView === 'border-sale-section' ? 'Border' : 'General'}

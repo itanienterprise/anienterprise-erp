@@ -785,7 +785,7 @@ const LCReport = ({
                                         <tr className="bg-gray-100 border-t-2 border-gray-900">
                                             <td colSpan="8" className="px-2 py-2 text-[12px] font-black text-black text-right uppercase tracking-wider border-r border-gray-900">Grand Total</td>
                                             <td className="px-2 py-2 text-[12px] text-right font-black text-black border-r border-gray-900 whitespace-nowrap">
-                                                {lcReceiveSummary.totalPackets}
+                                                {(parseFloat(lcReceiveSummary.totalPackets) || 0).toFixed(2)}
                                             </td>
                                             <td className="px-2 py-2 text-[12px] text-right font-black text-black border-r border-gray-900 whitespace-nowrap">
                                                 {Math.round(lcReceiveSummary.totalQuantity)} {lcReceiveSummary.unit}
@@ -903,7 +903,7 @@ const LCReport = ({
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-6 pt-4 md:pt-6 px-1 md:px-2 print:grid">
                             <div className="border-2 border-gray-100 p-4 md:p-6 rounded-2xl md:rounded-3xl bg-white shadow-sm print:border-gray-200 text-center">
                                 <div className="text-[11px] md:text-[13px] font-bold text-gray-500 md:text-black uppercase tracking-wider mb-1 md:mb-2">Total Packets</div>
-                                <div className="text-xl md:text-2xl font-black text-gray-900 md:text-black">{lcReceiveSummary.totalPackets}</div>
+                                <div className="text-xl md:text-2xl font-black text-gray-900 md:text-black">{(parseFloat(lcReceiveSummary.totalPackets) || 0).toFixed(2)}</div>
                             </div>
                             <div className="border-2 border-gray-100 p-4 md:p-6 rounded-2xl md:rounded-3xl bg-white shadow-sm print:border-gray-200 text-center">
                                 <div className="text-[11px] md:text-[13px] font-bold text-gray-500 md:text-black uppercase tracking-wider mb-1 md:mb-2">Total Quantity</div>

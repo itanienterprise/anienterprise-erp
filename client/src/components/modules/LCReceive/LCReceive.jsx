@@ -1909,7 +1909,7 @@ function LCReceive({
                     <div className="flex flex-wrap md:flex-nowrap gap-2 md:gap-4">
                         <div className="order-1 flex-1 min-w-[calc(50%-4px)] md:min-w-0 bg-white border border-gray-100 p-2.5 md:p-4 rounded-xl shadow-sm transition-all hover:shadow-md">
                             <div className="text-[9px] md:text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-0.5 md:mb-1">Total Packet</div>
-                            <div className="text-base md:text-xl font-bold text-gray-900">{memoizedSummary.totalPackets}</div>
+                            <div className="text-base md:text-xl font-bold text-gray-900">{(parseFloat(memoizedSummary.totalPackets) || 0).toFixed(2)}</div>
                         </div>
                         <div className="order-2 flex-1 min-w-[calc(50%-4px)] md:min-w-0 bg-emerald-50/50 border border-emerald-100 p-2.5 md:p-4 rounded-xl shadow-sm transition-all hover:shadow-md">
                             <div className="text-[9px] md:text-[11px] font-bold text-emerald-600 uppercase tracking-wider mb-0.5 md:mb-1">Total Qty</div>
