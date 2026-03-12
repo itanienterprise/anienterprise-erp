@@ -38,6 +38,7 @@ const CustomDatePicker = ({
     const isOpen = externalIsOpen !== undefined ? externalIsOpen : internalIsOpen;
 
     const setIsOpen = (val) => {
+        if (val === isOpen) return;
         if (externalOnToggle) {
             externalOnToggle(val);
         } else {
@@ -57,6 +58,8 @@ const CustomDatePicker = ({
     const containerRef = useRef(null);
 
     useEffect(() => {
+        if (!isOpen) return;
+
         const handleClickOutside = (event) => {
             if (containerRef.current && !containerRef.current.contains(event.target)) {
                 setIsOpen(false);
@@ -64,7 +67,7 @@ const CustomDatePicker = ({
         };
         document.addEventListener('mousedown', handleClickOutside);
         return () => document.removeEventListener('mousedown', handleClickOutside);
-    }, []);
+    }, [isOpen]);
 
     const months = [
         'January', 'February', 'March', 'April', 'May', 'June',
@@ -105,7 +108,10 @@ const CustomDatePicker = ({
                     type="text"
                     readOnly
                     value={value ? formatDate(value) : ''}
-                    onClick={() => setIsOpen(!isOpen)}
+                    onMouseDown={(e) => {
+                        e.preventDefault();
+                        setIsOpen(!isOpen);
+                    }}
                     placeholder={placeholder || 'Select Date'}
                     required={required}
                     autoComplete="off"
@@ -115,7 +121,8 @@ const CustomDatePicker = ({
                     {value && (
                         <button
                             type="button"
-                            onClick={(e) => {
+                            onMouseDown={(e) => {
+                                e.preventDefault();
                                 e.stopPropagation();
                                 onChange({ target: { name, value: '' } });
                             }}
@@ -131,13 +138,27 @@ const CustomDatePicker = ({
             {isOpen && (
                 <div className={`date-picker-dropdown ${compact ? 'compact' : ''} ${rightAlign ? 'right-align' : ''}`}>
                     <div className="date-picker-header">
-                        <button type="button" onClick={handlePrevMonth} className="date-picker-nav-btn">
+                        <button
+                            type="button"
+                            onMouseDown={(e) => {
+                                e.preventDefault();
+                                handlePrevMonth();
+                            }}
+                            className="date-picker-nav-btn"
+                        >
                             <ChevronLeftIcon className="w-5 h-5" />
                         </button>
                         <div className="date-picker-month-year">
                             {months[viewDate.getMonth()]} {viewDate.getFullYear()}
                         </div>
-                        <button type="button" onClick={handleNextMonth} className="date-picker-nav-btn">
+                        <button
+                            type="button"
+                            onMouseDown={(e) => {
+                                e.preventDefault();
+                                handleNextMonth();
+                            }}
+                            className="date-picker-nav-btn"
+                        >
                             <ChevronRightIcon className="w-5 h-5" />
                         </button>
                     </div>
@@ -168,7 +189,10 @@ const CustomDatePicker = ({
                                 <button
                                     key={d}
                                     type="button"
-                                    onClick={() => handleDateSelect(d)}
+                                    onMouseDown={(e) => {
+                                        e.preventDefault();
+                                        handleDateSelect(d);
+                                    }}
                                     className={`date-picker-day ${isSelected ? 'selected' : ''} ${isToday ? 'today' : ''}`}
                                 >
                                     {d}

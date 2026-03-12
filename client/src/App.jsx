@@ -340,7 +340,7 @@ function App() {
   const [showLcReport, setShowLcReport] = useState(false);
   const [showSalesReport, setShowSalesReport] = useState(false);
   const [filteredSalesForReport, setFilteredSalesForReport] = useState([]);
-  const [saleFilters, setSaleFilters] = useState({ startDate: '', endDate: '', companyName: '', invoiceNo: '' });
+  const [saleFilters, setSaleFilters] = useState({ startDate: '', endDate: '', companyName: '', invoiceNo: '', port: '', productName: '', indCnf: '', bdCnf: '' });
   const [products, setProducts] = useState([]);
 
 

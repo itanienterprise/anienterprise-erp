@@ -16,9 +16,9 @@ const SalesReport = ({
 
     const [showFilterPanel, setShowFilterPanel] = useState(false);
     const [expandedRows, setExpandedRows] = useState([]);
-    const [filterSearchInputs, setFilterSearchInputs] = useState({ companySearch: '', invoiceSearch: '', productSearch: '', brandSearch: '' });
-    const [filterDropdownOpen, setFilterDropdownOpen] = useState({ company: false, invoice: false, product: false, brand: false });
-    const initialFilterDropdownState = { company: false, invoice: false, product: false, brand: false };
+    const [filterSearchInputs, setFilterSearchInputs] = useState({ companySearch: '', invoiceSearch: '', productSearch: '', brandSearch: '', portSearch: '', indCnfSearch: '', bdCnfSearch: '' });
+    const [filterDropdownOpen, setFilterDropdownOpen] = useState({ company: false, invoice: false, product: false, brand: false, port: false, indCnf: false, bdCnf: false, from: false, to: false });
+    const initialFilterDropdownState = { company: false, invoice: false, product: false, brand: false, port: false, indCnf: false, bdCnf: false, from: false, to: false };
 
     const filterButtonRef = useRef(null);
     const filterPanelRef = useRef(null);
@@ -26,6 +26,11 @@ const SalesReport = ({
     const invoiceFilterRef = useRef(null);
     const productFilterRef = useRef(null);
     const brandFilterRef = useRef(null);
+    const portFilterRef = useRef(null);
+    const indCnfFilterRef = useRef(null);
+    const bdCnfFilterRef = useRef(null);
+    const fromDateFilterRef = useRef(null);
+    const toDateFilterRef = useRef(null);
 
     useEffect(() => {
         const handleClickOutside = (event) => {
@@ -36,6 +41,11 @@ const SalesReport = ({
             if (filterDropdownOpen.invoice && invoiceFilterRef.current && !invoiceFilterRef.current.contains(event.target)) setFilterDropdownOpen(prev => ({ ...prev, invoice: false }));
             if (filterDropdownOpen.product && productFilterRef.current && !productFilterRef.current.contains(event.target)) setFilterDropdownOpen(prev => ({ ...prev, product: false }));
             if (filterDropdownOpen.brand && brandFilterRef.current && !brandFilterRef.current.contains(event.target)) setFilterDropdownOpen(prev => ({ ...prev, brand: false }));
+            if (filterDropdownOpen.port && portFilterRef.current && !portFilterRef.current.contains(event.target)) setFilterDropdownOpen(prev => ({ ...prev, port: false }));
+            if (filterDropdownOpen.indCnf && indCnfFilterRef.current && !indCnfFilterRef.current.contains(event.target)) setFilterDropdownOpen(prev => ({ ...prev, indCnf: false }));
+            if (filterDropdownOpen.bdCnf && bdCnfFilterRef.current && !bdCnfFilterRef.current.contains(event.target)) setFilterDropdownOpen(prev => ({ ...prev, bdCnf: false }));
+            if (filterDropdownOpen.from && fromDateFilterRef.current && !fromDateFilterRef.current.contains(event.target)) setFilterDropdownOpen(prev => ({ ...prev, from: false }));
+            if (filterDropdownOpen.to && toDateFilterRef.current && !toDateFilterRef.current.contains(event.target)) setFilterDropdownOpen(prev => ({ ...prev, to: false }));
         };
 
         const handleEscape = (e) => {
@@ -52,6 +62,18 @@ const SalesReport = ({
             document.removeEventListener('keydown', handleEscape);
         };
     }, [showFilterPanel, filterDropdownOpen]);
+
+    // Scroll Lock when Modal or Filter Panel is active
+    useEffect(() => {
+        if (isOpen || showFilterPanel) {
+            document.body.style.overflow = 'hidden';
+        } else {
+            document.body.style.overflow = '';
+        }
+        return () => {
+            document.body.style.overflow = '';
+        };
+    }, [isOpen, showFilterPanel]);
 
     const getUniqueOptions = (key) => {
         if (key === 'productName' || key === 'brandName') {
@@ -82,8 +104,15 @@ const SalesReport = ({
 
         if (start && saleDate < start) return false;
         if (end && saleDate > end) return false;
-        if (saleFilters.companyName && sale.companyName !== saleFilters.companyName) return false;
+        if (saleFilters.companyName && (sale.companyName || sale.customerName) !== saleFilters.companyName) return false;
         if (saleFilters.invoiceNo && sale.invoiceNo !== saleFilters.invoiceNo) return false;
+
+        // Border Specific Filters
+        if (saleType === 'Border') {
+            if (saleFilters.port && sale.port !== saleFilters.port) return false;
+            if (saleFilters.indCnf && sale.indianCnF !== saleFilters.indCnf) return false;
+            if (saleFilters.bdCnf && sale.bdCnf !== saleFilters.bdCnf) return false;
+        }
 
         // Product & Brand Filtering
         if (saleFilters.productName || saleFilters.brandName) {
@@ -162,13 +191,13 @@ const SalesReport = ({
                             {showFilterPanel && (
                                 <>
                                     <div className="fixed inset-0 bg-black/20 backdrop-blur-[2px] z-[2005] md:hidden" onClick={() => setShowFilterPanel(false)} />
-                                    <div ref={filterPanelRef} className="fixed inset-x-4 top-24 md:absolute md:top-full md:right-0 md:mt-2 w-auto md:w-72 bg-white border border-gray-100 rounded-2xl shadow-[0_20px_50px_rgba(0,0,0,0.15)] z-[2010] p-4 flex flex-col animate-in fade-in zoom-in-95 duration-200">
+                                    <div ref={filterPanelRef} className="fixed inset-x-4 top-24 md:absolute md:top-full md:right-0 md:mt-2 w-auto md:w-80 bg-white border border-gray-100 rounded-2xl shadow-[0_20px_50px_rgba(0,0,0,0.15)] z-[2010] p-4 flex flex-col animate-in fade-in zoom-in-95 duration-200 max-h-[calc(90vh-100px)] overflow-y-auto">
                                         <div className="flex items-center justify-between mb-3 pb-2 border-b border-gray-100 flex-shrink-0">
                                             <h4 className="font-bold text-gray-900 text-sm">Advance Filter</h4>
                                             <button
                                                 onClick={() => {
-                                                    setSaleFilters({ startDate: '', endDate: '', companyName: '', invoiceNo: '', productName: '', brandName: '' });
-                                                    setFilterSearchInputs({ companySearch: '', invoiceSearch: '', productSearch: '', brandSearch: '' });
+                                                    setSaleFilters({ startDate: '', endDate: '', companyName: '', invoiceNo: '', productName: '', brandName: '', port: '', indCnf: '', bdCnf: '' });
+                                                    setFilterSearchInputs({ companySearch: '', invoiceSearch: '', productSearch: '', brandSearch: '', portSearch: '', indCnfSearch: '', bdCnfSearch: '' });
                                                     setFilterDropdownOpen(initialFilterDropdownState);
                                                 }}
                                                 className="text-[10px] font-bold text-blue-600 hover:text-blue-700 uppercase tracking-wider"
@@ -179,172 +208,549 @@ const SalesReport = ({
 
                                         <div className="space-y-3 flex-1 pr-0.5">
                                             <div className="space-y-2">
-                                                <CustomDatePicker
-                                                    label="From Date"
-                                                    value={saleFilters.startDate}
-                                                    onChange={(e) => setSaleFilters({ ...saleFilters, startDate: e.target.value })}
-                                                    compact={true}
-                                                />
-                                                <CustomDatePicker
-                                                    label="To Date"
-                                                    value={saleFilters.endDate}
-                                                    onChange={(e) => setSaleFilters({ ...saleFilters, endDate: e.target.value })}
-                                                    compact={true}
-                                                />
+                                                <div ref={fromDateFilterRef}>
+                                                    <CustomDatePicker
+                                                        label="From Date"
+                                                        value={saleFilters.startDate}
+                                                        onChange={(e) => setSaleFilters(prev => ({ ...prev, startDate: e.target.value }))}
+                                                        compact={true}
+                                                        isOpen={filterDropdownOpen.from}
+                                                        onToggle={(val) => setFilterDropdownOpen(prev => ({ ...prev, from: val }))}
+                                                    />
+                                                </div>
+                                                <div ref={toDateFilterRef}>
+                                                    <CustomDatePicker
+                                                        label="To Date"
+                                                        value={saleFilters.endDate}
+                                                        onChange={(e) => setSaleFilters(prev => ({ ...prev, endDate: e.target.value }))}
+                                                        compact={true}
+                                                        isOpen={filterDropdownOpen.to}
+                                                        onToggle={(val) => setFilterDropdownOpen(prev => ({ ...prev, to: val }))}
+                                                    />
+                                                </div>
                                             </div>
 
-                                            {/* Company Selection - General only */}
-                                            {saleType !== 'Border' && (
-                                            <div className="space-y-1.5 relative" ref={companyFilterRef}>
-                                                <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider pl-1">Customer</label>
-                                                <div className="relative">
-                                                    <input
-                                                        type="text"
-                                                        value={filterSearchInputs.companySearch}
-                                                        onChange={(e) => {
-                                                            setFilterSearchInputs({ ...filterSearchInputs, companySearch: e.target.value });
-                                                            setFilterDropdownOpen({ ...initialFilterDropdownState, company: true });
-                                                        }}
-                                                        onFocus={() => setFilterDropdownOpen({ ...initialFilterDropdownState, company: true })}
-                                                        placeholder={saleFilters.companyName || "Search Customer..."}
-                                                        className={`w-full px-4 py-2.5 bg-white border border-gray-100 rounded-xl text-sm focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all shadow-sm hover:border-gray-200 pr-14 ${saleFilters.companyName ? 'placeholder:text-gray-900 placeholder:font-semibold' : 'placeholder:text-gray-300'}`}
-                                                    />
-                                                    <div className="absolute right-3.5 top-1/2 -translate-y-1/2 flex items-center gap-2">
-                                                        {saleFilters.companyName && (
-                                                            <button onClick={() => { setSaleFilters({ ...saleFilters, companyName: '' }); setFilterSearchInputs({ ...filterSearchInputs, companySearch: '' }); setFilterDropdownOpen(initialFilterDropdownState); }} className="text-gray-400 hover:text-gray-600">
-                                                                <XIcon className="w-4 h-4" />
-                                                            </button>
-                                                        )}
-                                                        <SearchIcon className="w-4.5 h-4.5 text-gray-300 pointer-events-none" />
-                                                    </div>
-                                                </div>
-                                                {filterDropdownOpen.company && (() => {
-                                                    const options = getUniqueOptions('companyName');
-                                                    const filtered = options.filter(c => c.toLowerCase().includes(filterSearchInputs.companySearch.toLowerCase()));
-                                                    return filtered.length > 0 ? (
-                                                        <div className="absolute z-[2020] mt-1 w-full bg-white border border-gray-100 rounded-xl shadow-xl max-h-48 overflow-y-auto py-1">
-                                                            {filtered.map(c => (
-                                                                <button key={c} type="button" onClick={() => { setSaleFilters({ ...saleFilters, companyName: c }); setFilterSearchInputs({ ...filterSearchInputs, companySearch: '' }); setFilterDropdownOpen(initialFilterDropdownState); }} className="w-full px-4 py-2 text-left text-sm hover:bg-blue-50 transition-colors">{c}</button>
-                                                            ))}
+                                            {saleType === 'Border' ? (
+                                                <>
+                                                    <div className="grid grid-cols-2 gap-3">
+                                                        {/* Company Selection - Party Name */}
+                                                        <div className="space-y-1.5 relative" ref={companyFilterRef}>
+                                                            <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider pl-1 font-mono">PARTY NAME</label>
+                                                            <div className="relative">
+                                                                <input
+                                                                    type="text"
+                                                                    value={filterSearchInputs.companySearch}
+                                                                    onChange={(e) => {
+                                                                        setFilterSearchInputs({ ...filterSearchInputs, companySearch: e.target.value });
+                                                                        setFilterDropdownOpen({ ...initialFilterDropdownState, company: true });
+                                                                    }}
+                                                                    onFocus={() => setFilterDropdownOpen({ ...initialFilterDropdownState, company: true })}
+                                                                    placeholder={saleFilters.companyName || "Search Party..."}
+                                                                    className={`w-full px-4 py-2.5 bg-white border border-gray-100 rounded-xl text-sm focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all shadow-sm hover:border-gray-200 pr-10 ${saleFilters.companyName ? 'placeholder:text-gray-900 placeholder:font-semibold text-gray-900 font-semibold' : 'placeholder:text-gray-300'}`}
+                                                                />
+                                                                <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1.5">
+                                                                    {saleFilters.companyName && (
+                                                                        <button
+                                                                            type="button"
+                                                                            onClick={() => {
+                                                                                setSaleFilters(prev => ({ ...prev, companyName: '' }));
+                                                                                setFilterSearchInputs(prev => ({ ...prev, companySearch: '' }));
+                                                                                setFilterDropdownOpen(initialFilterDropdownState);
+                                                                            }}
+                                                                            className="text-gray-400 hover:text-gray-600 transition-colors"
+                                                                        >
+                                                                            <XIcon className="w-3.5 h-3.5" />
+                                                                        </button>
+                                                                    )}
+                                                                    <SearchIcon className="w-4 h-4 text-gray-300 pointer-events-none" />
+                                                                </div>
+                                                            </div>
+                                                            {filterDropdownOpen.company && (() => {
+                                                                const options = getUniqueOptions('companyName');
+                                                                const filtered = options.filter(c => c.toLowerCase().includes(filterSearchInputs.companySearch.toLowerCase()));
+                                                                return filtered.length > 0 ? (
+                                                                    <div className="absolute z-[2020] mt-1 w-full bg-white border border-gray-100 rounded-xl shadow-xl max-h-48 overflow-y-auto py-1">
+                                                                        {filtered.map(c => (
+                                                                            <button
+                                                                                key={c}
+                                                                                type="button"
+                                                                                onMouseDown={(e) => {
+                                                                                    e.preventDefault();
+                                                                                    setSaleFilters(prev => ({ ...prev, companyName: c }));
+                                                                                    setFilterSearchInputs(prev => ({ ...prev, companySearch: '' }));
+                                                                                    setFilterDropdownOpen(initialFilterDropdownState);
+                                                                                }}
+                                                                                className="w-full px-4 py-2 text-left text-sm hover:bg-blue-50 transition-colors"
+                                                                            >
+                                                                                {c}
+                                                                            </button>
+                                                                        ))}
+                                                                    </div>
+                                                                ) : null;
+                                                            })()}
                                                         </div>
-                                                    ) : null;
-                                                })()}
-                                            </div>
-                                            )}
 
-                                            {/* Invoice No Selection - General only */}
-                                            {saleType !== 'Border' && (
-                                            <div className="space-y-1.5 relative" ref={invoiceFilterRef}>
-                                                <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider pl-1">Invoice No</label>
-                                                <div className="relative">
-                                                    <input
-                                                        type="text"
-                                                        value={filterSearchInputs.invoiceSearch}
-                                                        onChange={(e) => {
-                                                            setFilterSearchInputs({ ...filterSearchInputs, invoiceSearch: e.target.value });
-                                                            setFilterDropdownOpen({ ...initialFilterDropdownState, invoice: true });
-                                                        }}
-                                                        onFocus={() => setFilterDropdownOpen({ ...initialFilterDropdownState, invoice: true })}
-                                                        placeholder={saleFilters.invoiceNo || "Search Invoice..."}
-                                                        className={`w-full px-4 py-2.5 bg-white border border-gray-100 rounded-xl text-sm focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all shadow-sm hover:border-gray-200 pr-14 ${saleFilters.invoiceNo ? 'placeholder:text-gray-900 placeholder:font-semibold' : 'placeholder:text-gray-300'}`}
-                                                    />
-                                                    <div className="absolute right-3.5 top-1/2 -translate-y-1/2 flex items-center gap-2">
-                                                        {saleFilters.invoiceNo && (
-                                                            <button onClick={() => { setSaleFilters({ ...saleFilters, invoiceNo: '' }); setFilterSearchInputs({ ...filterSearchInputs, invoiceSearch: '' }); setFilterDropdownOpen(initialFilterDropdownState); }} className="text-gray-400 hover:text-gray-600">
-                                                                <XIcon className="w-4 h-4" />
-                                                            </button>
-                                                        )}
-                                                        <SearchIcon className="w-4.5 h-4.5 text-gray-300 pointer-events-none" />
-                                                    </div>
-                                                </div>
-                                                {filterDropdownOpen.invoice && (() => {
-                                                    const options = getUniqueOptions('invoiceNo');
-                                                    const filtered = options.filter(i => i.toLowerCase().includes(filterSearchInputs.invoiceSearch.toLowerCase()));
-                                                    return filtered.length > 0 ? (
-                                                        <div className="absolute z-[2020] mt-1 w-full bg-white border border-gray-100 rounded-xl shadow-xl max-h-48 overflow-y-auto py-1">
-                                                            {filtered.map(i => (
-                                                                <button key={i} type="button" onClick={() => { setSaleFilters({ ...saleFilters, invoiceNo: i }); setFilterSearchInputs({ ...filterSearchInputs, invoiceSearch: '' }); setFilterDropdownOpen(initialFilterDropdownState); }} className="w-full px-4 py-2 text-left text-sm hover:bg-blue-50 transition-colors">{i}</button>
-                                                            ))}
+                                                        {/* Port Filter */}
+                                                        <div className="space-y-1.5 relative" ref={portFilterRef}>
+                                                            <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider pl-1 font-mono">PORT</label>
+                                                            <div className="relative">
+                                                                <input
+                                                                    type="text"
+                                                                    value={filterSearchInputs.portSearch}
+                                                                    onChange={(e) => {
+                                                                        setFilterSearchInputs({ ...filterSearchInputs, portSearch: e.target.value });
+                                                                        setFilterDropdownOpen({ ...initialFilterDropdownState, port: true });
+                                                                    }}
+                                                                    onFocus={() => setFilterDropdownOpen({ ...initialFilterDropdownState, port: true })}
+                                                                    placeholder={saleFilters.port || "Search Port..."}
+                                                                    className={`w-full px-4 py-2.5 bg-white border border-gray-100 rounded-xl text-sm focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all shadow-sm hover:border-gray-200 pr-10 ${saleFilters.port ? 'placeholder:text-gray-900 placeholder:font-semibold text-gray-900 font-semibold' : 'placeholder:text-gray-300'}`}
+                                                                />
+                                                                <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1.5">
+                                                                    {saleFilters.port && (
+                                                                        <button
+                                                                            type="button"
+                                                                            onClick={() => {
+                                                                                setSaleFilters(prev => ({ ...prev, port: '' }));
+                                                                                setFilterSearchInputs(prev => ({ ...prev, portSearch: '' }));
+                                                                                setFilterDropdownOpen(initialFilterDropdownState);
+                                                                            }}
+                                                                            className="text-gray-400 hover:text-gray-600 transition-colors"
+                                                                        >
+                                                                            <XIcon className="w-3.5 h-3.5" />
+                                                                        </button>
+                                                                    )}
+                                                                    <SearchIcon className="w-4 h-4 text-gray-300 pointer-events-none" />
+                                                                </div>
+                                                            </div>
+                                                            {filterDropdownOpen.port && (() => {
+                                                                const options = getUniqueOptions('port');
+                                                                const filtered = options.filter(p => p.toLowerCase().includes(filterSearchInputs.portSearch.toLowerCase()));
+                                                                return filtered.length > 0 ? (
+                                                                    <div className="absolute z-[2020] mt-1 w-full bg-white border border-gray-100 rounded-xl shadow-xl max-h-48 overflow-y-auto py-1">
+                                                                        {filtered.map(p => (
+                                                                            <button
+                                                                                key={p}
+                                                                                type="button"
+                                                                                onMouseDown={(e) => {
+                                                                                    e.preventDefault();
+                                                                                    setSaleFilters(prev => ({ ...prev, port: p }));
+                                                                                    setFilterSearchInputs(prev => ({ ...prev, portSearch: '' }));
+                                                                                    setFilterDropdownOpen(initialFilterDropdownState);
+                                                                                }}
+                                                                                className="w-full px-4 py-2 text-left text-sm hover:bg-blue-50 transition-colors"
+                                                                            >
+                                                                                {p}
+                                                                            </button>
+                                                                        ))}
+                                                                    </div>
+                                                                ) : null;
+                                                            })()}
                                                         </div>
-                                                    ) : null;
-                                                })()}
-                                            </div>
-                                            )}
+                                                    </div>
 
-                                            {/* Product Selection */}
-                                            <div className="space-y-1.5 relative" ref={productFilterRef}>
-                                                <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider pl-1">Product</label>
-                                                <div className="relative">
-                                                    <input
-                                                        type="text"
-                                                        value={filterSearchInputs.productSearch}
-                                                        onChange={(e) => {
-                                                            setFilterSearchInputs({ ...filterSearchInputs, productSearch: e.target.value });
-                                                            setFilterDropdownOpen({ ...initialFilterDropdownState, product: true });
-                                                        }}
-                                                        onFocus={() => setFilterDropdownOpen({ ...initialFilterDropdownState, product: true })}
-                                                        placeholder={saleFilters.productName || "Search Product..."}
-                                                        className={`w-full px-4 py-2.5 bg-white border border-gray-100 rounded-xl text-sm focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all shadow-sm hover:border-gray-200 pr-14 ${saleFilters.productName ? 'placeholder:text-gray-900 placeholder:font-semibold' : 'placeholder:text-gray-300'}`}
-                                                    />
-                                                    <div className="absolute right-3.5 top-1/2 -translate-y-1/2 flex items-center gap-2">
-                                                        {saleFilters.productName && (
-                                                            <button onClick={() => { setSaleFilters({ ...saleFilters, productName: '' }); setFilterSearchInputs({ ...filterSearchInputs, productSearch: '' }); setFilterDropdownOpen(initialFilterDropdownState); }} className="text-gray-400 hover:text-gray-600">
-                                                                <XIcon className="w-4 h-4" />
-                                                            </button>
-                                                        )}
-                                                        <SearchIcon className="w-4.5 h-4.5 text-gray-300 pointer-events-none" />
-                                                    </div>
-                                                </div>
-                                                {filterDropdownOpen.product && (() => {
-                                                    const options = getUniqueOptions('productName');
-                                                    const filtered = options.filter(p => p.toLowerCase().includes(filterSearchInputs.productSearch.toLowerCase()));
-                                                    return filtered.length > 0 ? (
-                                                        <div className="absolute z-[2020] mt-1 w-full bg-white border border-gray-100 rounded-xl shadow-xl max-h-48 overflow-y-auto py-1">
-                                                            {filtered.map(p => (
-                                                                <button key={p} type="button" onClick={() => { setSaleFilters({ ...saleFilters, productName: p }); setFilterSearchInputs({ ...filterSearchInputs, productSearch: '' }); setFilterDropdownOpen(initialFilterDropdownState); }} className="w-full px-4 py-2 text-left text-sm hover:bg-blue-50 transition-colors">{p}</button>
-                                                            ))}
+                                                    <div className="grid grid-cols-2 gap-3">
+                                                        {/* IND CNF Filter */}
+                                                        <div className="space-y-1.5 relative" ref={indCnfFilterRef}>
+                                                            <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider pl-1 font-mono">IND CNF</label>
+                                                            <div className="relative">
+                                                                <input
+                                                                    type="text"
+                                                                    value={filterSearchInputs.indCnfSearch}
+                                                                    onChange={(e) => {
+                                                                        setFilterSearchInputs({ ...filterSearchInputs, indCnfSearch: e.target.value });
+                                                                        setFilterDropdownOpen({ ...initialFilterDropdownState, indCnf: true });
+                                                                    }}
+                                                                    onFocus={() => setFilterDropdownOpen({ ...initialFilterDropdownState, indCnf: true })}
+                                                                    placeholder={saleFilters.indCnf || "Search IND CNF..."}
+                                                                    className={`w-full px-4 py-2.5 bg-white border border-gray-100 rounded-xl text-sm focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all shadow-sm hover:border-gray-200 pr-10 ${saleFilters.indCnf ? 'placeholder:text-gray-900 placeholder:font-semibold text-gray-900 font-semibold' : 'placeholder:text-gray-300'}`}
+                                                                />
+                                                                <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1.5">
+                                                                    {saleFilters.indCnf && (
+                                                                        <button
+                                                                            type="button"
+                                                                            onClick={() => {
+                                                                                setSaleFilters(prev => ({ ...prev, indCnf: '' }));
+                                                                                setFilterSearchInputs(prev => ({ ...prev, indCnfSearch: '' }));
+                                                                                setFilterDropdownOpen(initialFilterDropdownState);
+                                                                            }}
+                                                                            className="text-gray-400 hover:text-gray-600 transition-colors"
+                                                                        >
+                                                                            <XIcon className="w-3.5 h-3.5" />
+                                                                        </button>
+                                                                    )}
+                                                                    <SearchIcon className="w-4 h-4 text-gray-300 pointer-events-none" />
+                                                                </div>
+                                                            </div>
+                                                            {filterDropdownOpen.indCnf && (() => {
+                                                                const options = getUniqueOptions('indianCnF');
+                                                                const filtered = options.filter(ic => ic.toLowerCase().includes(filterSearchInputs.indCnfSearch.toLowerCase()));
+                                                                return filtered.length > 0 ? (
+                                                                    <div className="absolute z-[2020] mt-1 w-full bg-white border border-gray-100 rounded-xl shadow-xl max-h-48 overflow-y-auto py-1">
+                                                                        {filtered.map(ic => (
+                                                                            <button
+                                                                                key={ic}
+                                                                                type="button"
+                                                                                onMouseDown={(e) => {
+                                                                                    e.preventDefault();
+                                                                                    setSaleFilters(prev => ({ ...prev, indCnf: ic }));
+                                                                                    setFilterSearchInputs(prev => ({ ...prev, indCnfSearch: '' }));
+                                                                                    setFilterDropdownOpen(initialFilterDropdownState);
+                                                                                }}
+                                                                                className="w-full px-4 py-2 text-left text-sm hover:bg-blue-50 transition-colors"
+                                                                            >
+                                                                                {ic}
+                                                                            </button>
+                                                                        ))}
+                                                                    </div>
+                                                                ) : null;
+                                                            })()}
                                                         </div>
-                                                    ) : null;
-                                                })()}
-                                            </div>
 
-                                            {/* Brand Selection - General only */}
-                                            {saleType !== 'Border' && (
-                                            <div className="space-y-1.5 relative" ref={brandFilterRef}>
-                                                <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider pl-1">Brand</label>
-                                                <div className="relative">
-                                                    <input
-                                                        type="text"
-                                                        value={filterSearchInputs.brandSearch}
-                                                        onChange={(e) => {
-                                                            setFilterSearchInputs({ ...filterSearchInputs, brandSearch: e.target.value });
-                                                            setFilterDropdownOpen({ ...initialFilterDropdownState, brand: true });
-                                                        }}
-                                                        onFocus={() => setFilterDropdownOpen({ ...initialFilterDropdownState, brand: true })}
-                                                        placeholder={saleFilters.brandName || "Search Brand..."}
-                                                        className={`w-full px-4 py-2.5 bg-white border border-gray-100 rounded-xl text-sm focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all shadow-sm hover:border-gray-200 pr-14 ${saleFilters.brandName ? 'placeholder:text-gray-900 placeholder:font-semibold' : 'placeholder:text-gray-300'}`}
-                                                    />
-                                                    <div className="absolute right-3.5 top-1/2 -translate-y-1/2 flex items-center gap-2">
-                                                        {saleFilters.brandName && (
-                                                            <button onClick={() => { setSaleFilters({ ...saleFilters, brandName: '' }); setFilterSearchInputs({ ...filterSearchInputs, brandSearch: '' }); setFilterDropdownOpen(initialFilterDropdownState); }} className="text-gray-400 hover:text-gray-600">
-                                                                <XIcon className="w-4 h-4" />
-                                                            </button>
-                                                        )}
-                                                        <SearchIcon className="w-4.5 h-4.5 text-gray-300 pointer-events-none" />
-                                                    </div>
-                                                </div>
-                                                {filterDropdownOpen.brand && (() => {
-                                                    const options = getUniqueOptions('brandName');
-                                                    const filtered = options.filter(b => b.toLowerCase().includes(filterSearchInputs.brandSearch.toLowerCase()));
-                                                    return filtered.length > 0 ? (
-                                                        <div className="absolute z-[2020] mt-1 w-full bg-white border border-gray-100 rounded-xl shadow-xl max-h-48 overflow-y-auto py-1">
-                                                            {filtered.map(b => (
-                                                                <button key={b} type="button" onClick={() => { setSaleFilters({ ...saleFilters, brandName: b }); setFilterSearchInputs({ ...filterSearchInputs, brandSearch: '' }); setFilterDropdownOpen(initialFilterDropdownState); }} className="w-full px-4 py-2 text-left text-sm hover:bg-blue-50 transition-colors">{b}</button>
-                                                            ))}
+                                                        {/* BD CNF Filter */}
+                                                        <div className="space-y-1.5 relative" ref={bdCnfFilterRef}>
+                                                            <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider pl-1 font-mono">BD CNF</label>
+                                                            <div className="relative">
+                                                                <input
+                                                                    type="text"
+                                                                    value={filterSearchInputs.bdCnfSearch}
+                                                                    onChange={(e) => {
+                                                                        setFilterSearchInputs({ ...filterSearchInputs, bdCnfSearch: e.target.value });
+                                                                        setFilterDropdownOpen({ ...initialFilterDropdownState, bdCnf: true });
+                                                                    }}
+                                                                    onFocus={() => setFilterDropdownOpen({ ...initialFilterDropdownState, bdCnf: true })}
+                                                                    placeholder={saleFilters.bdCnf || "Search BD CNF..."}
+                                                                    className={`w-full px-4 py-2.5 bg-white border border-gray-100 rounded-xl text-sm focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all shadow-sm hover:border-gray-200 pr-10 ${saleFilters.bdCnf ? 'placeholder:text-gray-900 placeholder:font-semibold text-gray-900 font-semibold' : 'placeholder:text-gray-300'}`}
+                                                                />
+                                                                <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1.5">
+                                                                    {saleFilters.bdCnf && (
+                                                                        <button
+                                                                            type="button"
+                                                                            onClick={() => {
+                                                                                setSaleFilters(prev => ({ ...prev, bdCnf: '' }));
+                                                                                setFilterSearchInputs(prev => ({ ...prev, bdCnfSearch: '' }));
+                                                                                setFilterDropdownOpen(initialFilterDropdownState);
+                                                                            }}
+                                                                            className="text-gray-400 hover:text-gray-600 transition-colors"
+                                                                        >
+                                                                            <XIcon className="w-3.5 h-3.5" />
+                                                                        </button>
+                                                                    )}
+                                                                    <SearchIcon className="w-4 h-4 text-gray-300 pointer-events-none" />
+                                                                </div>
+                                                            </div>
+                                                            {filterDropdownOpen.bdCnf && (() => {
+                                                                const options = getUniqueOptions('bdCnf');
+                                                                const filtered = options.filter(bc => bc.toLowerCase().includes(filterSearchInputs.bdCnfSearch.toLowerCase()));
+                                                                return filtered.length > 0 ? (
+                                                                    <div className="absolute z-[2020] mt-1 w-full bg-white border border-gray-100 rounded-xl shadow-xl max-h-48 overflow-y-auto py-1">
+                                                                        {filtered.map(bc => (
+                                                                            <button
+                                                                                key={bc}
+                                                                                type="button"
+                                                                                onMouseDown={(e) => {
+                                                                                    e.preventDefault();
+                                                                                    setSaleFilters(prev => ({ ...prev, bdCnf: bc }));
+                                                                                    setFilterSearchInputs(prev => ({ ...prev, bdCnfSearch: '' }));
+                                                                                    setFilterDropdownOpen(initialFilterDropdownState);
+                                                                                }}
+                                                                                className="w-full px-4 py-2 text-left text-sm hover:bg-blue-50 transition-colors"
+                                                                            >
+                                                                                {bc}
+                                                                            </button>
+                                                                        ))}
+                                                                    </div>
+                                                                ) : null;
+                                                            })()}
                                                         </div>
-                                                    ) : null;
-                                                })()}
-                                            </div>
+                                                    </div>
+
+                                                    {/* Product Selection */}
+                                                    <div className="space-y-1.5 relative" ref={productFilterRef}>
+                                                        <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider pl-1 font-mono">PRODUCT</label>
+                                                        <div className="relative">
+                                                            <input
+                                                                type="text"
+                                                                value={filterSearchInputs.productSearch}
+                                                                onChange={(e) => {
+                                                                    setFilterSearchInputs({ ...filterSearchInputs, productSearch: e.target.value });
+                                                                    setFilterDropdownOpen({ ...initialFilterDropdownState, product: true });
+                                                                }}
+                                                                onFocus={() => setFilterDropdownOpen({ ...initialFilterDropdownState, product: true })}
+                                                                placeholder={saleFilters.productName || "Search Product..."}
+                                                                className={`w-full px-4 py-2.5 bg-white border border-gray-100 rounded-xl text-sm focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all shadow-sm hover:border-gray-200 pr-10 ${saleFilters.productName ? 'placeholder:text-gray-900 placeholder:font-semibold text-gray-900 font-semibold' : 'placeholder:text-gray-300'}`}
+                                                            />
+                                                            <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1.5">
+                                                                {saleFilters.productName && (
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={() => {
+                                                                            setSaleFilters(prev => ({ ...prev, productName: '' }));
+                                                                            setFilterSearchInputs(prev => ({ ...prev, productSearch: '' }));
+                                                                            setFilterDropdownOpen(initialFilterDropdownState);
+                                                                        }}
+                                                                        className="text-gray-400 hover:text-gray-600 transition-colors"
+                                                                    >
+                                                                        <XIcon className="w-3.5 h-3.5" />
+                                                                    </button>
+                                                                )}
+                                                                <SearchIcon className="w-4 h-4 text-gray-300 pointer-events-none" />
+                                                            </div>
+                                                        </div>
+                                                        {filterDropdownOpen.product && (() => {
+                                                            const options = getUniqueOptions('productName');
+                                                            const filtered = options.filter(p => p.toLowerCase().includes(filterSearchInputs.productSearch.toLowerCase()));
+                                                            return filtered.length > 0 ? (
+                                                                <div className="absolute z-[2020] mt-1 w-full bg-white border border-gray-100 rounded-xl shadow-xl max-h-48 overflow-y-auto py-1">
+                                                                    {filtered.map(p => (
+                                                                        <button
+                                                                            key={p}
+                                                                            type="button"
+                                                                            onMouseDown={(e) => {
+                                                                                e.preventDefault();
+                                                                                setSaleFilters(prev => ({ ...prev, productName: p }));
+                                                                                setFilterSearchInputs(prev => ({ ...prev, productSearch: '' }));
+                                                                                setFilterDropdownOpen(initialFilterDropdownState);
+                                                                            }}
+                                                                            className="w-full px-4 py-2 text-left text-sm hover:bg-blue-50 transition-colors"
+                                                                        >
+                                                                            {p}
+                                                                        </button>
+                                                                    ))}
+                                                                </div>
+                                                            ) : null;
+                                                        })()}
+                                                    </div>
+                                                </>
+                                            ) : (
+                                                <>
+                                                    {/* Company Selection - General */}
+                                                    <div className="space-y-1.5 relative" ref={companyFilterRef}>
+                                                        <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider pl-1 font-mono">CUSTOMER NAME</label>
+                                                        <div className="relative">
+                                                            <input
+                                                                type="text"
+                                                                value={filterSearchInputs.companySearch}
+                                                                onChange={(e) => {
+                                                                    setFilterSearchInputs({ ...filterSearchInputs, companySearch: e.target.value });
+                                                                    setFilterDropdownOpen({ ...initialFilterDropdownState, company: true });
+                                                                }}
+                                                                onFocus={() => setFilterDropdownOpen({ ...initialFilterDropdownState, company: true })}
+                                                                placeholder={saleFilters.companyName || "Search Customer..."}
+                                                                className={`w-full px-4 py-2.5 bg-white border border-gray-100 rounded-xl text-sm focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all shadow-sm hover:border-gray-200 pr-10 ${saleFilters.companyName ? 'placeholder:text-gray-900 placeholder:font-semibold text-gray-900 font-semibold' : 'placeholder:text-gray-300'}`}
+                                                            />
+                                                            <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1.5">
+                                                                {saleFilters.companyName && (
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={() => {
+                                                                            setSaleFilters(prev => ({ ...prev, companyName: '' }));
+                                                                            setFilterSearchInputs(prev => ({ ...prev, companySearch: '' }));
+                                                                            setFilterDropdownOpen(initialFilterDropdownState);
+                                                                        }}
+                                                                        className="text-gray-400 hover:text-gray-600 transition-colors"
+                                                                    >
+                                                                        <XIcon className="w-3.5 h-3.5" />
+                                                                    </button>
+                                                                )}
+                                                                <SearchIcon className="w-4 h-4 text-gray-300 pointer-events-none" />
+                                                            </div>
+                                                        </div>
+                                                        {filterDropdownOpen.company && (() => {
+                                                            const options = getUniqueOptions('companyName');
+                                                            const filtered = options.filter(c => c.toLowerCase().includes(filterSearchInputs.companySearch.toLowerCase()));
+                                                            return filtered.length > 0 ? (
+                                                                <div className="absolute z-[2020] mt-1 w-full bg-white border border-gray-100 rounded-xl shadow-xl max-h-48 overflow-y-auto py-1">
+                                                                    {filtered.map(c => (
+                                                                        <button
+                                                                            key={c}
+                                                                            type="button"
+                                                                            onMouseDown={(e) => {
+                                                                                e.preventDefault();
+                                                                                setSaleFilters(prev => ({ ...prev, companyName: c }));
+                                                                                setFilterSearchInputs(prev => ({ ...prev, companySearch: '' }));
+                                                                                setFilterDropdownOpen(initialFilterDropdownState);
+                                                                            }}
+                                                                            className="w-full px-4 py-2 text-left text-sm hover:bg-blue-50 transition-colors"
+                                                                        >
+                                                                            {c}
+                                                                        </button>
+                                                                    ))}
+                                                                </div>
+                                                            ) : null;
+                                                        })()}
+                                                    </div>
+
+                                                    {/* Invoice No Selection - General only */}
+                                                    <div className="space-y-1.5 relative" ref={invoiceFilterRef}>
+                                                        <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider pl-1 font-mono">INVOICE NO</label>
+                                                        <div className="relative">
+                                                            <input
+                                                                type="text"
+                                                                value={filterSearchInputs.invoiceSearch}
+                                                                onChange={(e) => {
+                                                                    setFilterSearchInputs({ ...filterSearchInputs, invoiceSearch: e.target.value });
+                                                                    setFilterDropdownOpen({ ...initialFilterDropdownState, invoice: true });
+                                                                }}
+                                                                onFocus={() => setFilterDropdownOpen({ ...initialFilterDropdownState, invoice: true })}
+                                                                placeholder={saleFilters.invoiceNo || "Search Invoice..."}
+                                                                className={`w-full px-4 py-2.5 bg-white border border-gray-100 rounded-xl text-sm focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all shadow-sm hover:border-gray-200 pr-10 ${saleFilters.invoiceNo ? 'placeholder:text-gray-900 placeholder:font-semibold text-gray-900 font-semibold' : 'placeholder:text-gray-300'}`}
+                                                            />
+                                                            <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1.5">
+                                                                {saleFilters.invoiceNo && (
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={() => {
+                                                                            setSaleFilters(prev => ({ ...prev, invoiceNo: '' }));
+                                                                            setFilterSearchInputs(prev => ({ ...prev, invoiceSearch: '' }));
+                                                                            setFilterDropdownOpen(initialFilterDropdownState);
+                                                                        }}
+                                                                        className="text-gray-400 hover:text-gray-600 transition-colors"
+                                                                    >
+                                                                        <XIcon className="w-3.5 h-3.5" />
+                                                                    </button>
+                                                                )}
+                                                                <SearchIcon className="w-4 h-4 text-gray-300 pointer-events-none" />
+                                                            </div>
+                                                        </div>
+                                                        {filterDropdownOpen.invoice && (() => {
+                                                            const options = getUniqueOptions('invoiceNo');
+                                                            const filtered = options.filter(i => i.toLowerCase().includes(filterSearchInputs.invoiceSearch.toLowerCase()));
+                                                            return filtered.length > 0 ? (
+                                                                <div className="absolute z-[2020] mt-1 w-full bg-white border border-gray-100 rounded-xl shadow-xl max-h-48 overflow-y-auto py-1">
+                                                                    {filtered.map(i => (
+                                                                        <button
+                                                                            key={i}
+                                                                            type="button"
+                                                                            onMouseDown={(e) => {
+                                                                                e.preventDefault();
+                                                                                setSaleFilters(prev => ({ ...prev, invoiceNo: i }));
+                                                                                setFilterSearchInputs(prev => ({ ...prev, invoiceSearch: '' }));
+                                                                                setFilterDropdownOpen(initialFilterDropdownState);
+                                                                            }}
+                                                                            className="w-full px-4 py-2 text-left text-sm hover:bg-blue-50 transition-colors"
+                                                                        >
+                                                                            {i}
+                                                                        </button>
+                                                                    ))}
+                                                                </div>
+                                                            ) : null;
+                                                        })()}
+                                                    </div>
+
+                                                    {/* Product Selection - General */}
+                                                    <div className="space-y-1.5 relative" ref={productFilterRef}>
+                                                        <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider pl-1 font-mono">PRODUCT</label>
+                                                        <div className="relative">
+                                                            <input
+                                                                type="text"
+                                                                value={filterSearchInputs.productSearch}
+                                                                onChange={(e) => {
+                                                                    setFilterSearchInputs({ ...filterSearchInputs, productSearch: e.target.value });
+                                                                    setFilterDropdownOpen({ ...initialFilterDropdownState, product: true });
+                                                                }}
+                                                                onFocus={() => setFilterDropdownOpen({ ...initialFilterDropdownState, product: true })}
+                                                                placeholder={saleFilters.productName || "Search Product..."}
+                                                                className={`w-full px-4 py-2.5 bg-white border border-gray-100 rounded-xl text-sm focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all shadow-sm hover:border-gray-200 pr-10 ${saleFilters.productName ? 'placeholder:text-gray-900 placeholder:font-semibold text-gray-900 font-semibold' : 'placeholder:text-gray-300'}`}
+                                                            />
+                                                            <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1.5">
+                                                                {saleFilters.productName && (
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={() => {
+                                                                            setSaleFilters(prev => ({ ...prev, productName: '' }));
+                                                                            setFilterSearchInputs(prev => ({ ...prev, productSearch: '' }));
+                                                                            setFilterDropdownOpen(initialFilterDropdownState);
+                                                                        }}
+                                                                        className="text-gray-400 hover:text-gray-600 transition-colors"
+                                                                    >
+                                                                        <XIcon className="w-3.5 h-3.5" />
+                                                                    </button>
+                                                                )}
+                                                                <SearchIcon className="w-4 h-4 text-gray-300 pointer-events-none" />
+                                                            </div>
+                                                        </div>
+                                                        {filterDropdownOpen.product && (() => {
+                                                            const options = getUniqueOptions('productName');
+                                                            const filtered = options.filter(p => p.toLowerCase().includes(filterSearchInputs.productSearch.toLowerCase()));
+                                                            return filtered.length > 0 ? (
+                                                                <div className="absolute z-[2020] mt-1 w-full bg-white border border-gray-100 rounded-xl shadow-xl max-h-48 overflow-y-auto py-1">
+                                                                    {filtered.map(p => (
+                                                                        <button
+                                                                            key={p}
+                                                                            type="button"
+                                                                            onMouseDown={(e) => {
+                                                                                e.preventDefault();
+                                                                                setSaleFilters(prev => ({ ...prev, productName: p }));
+                                                                                setFilterSearchInputs(prev => ({ ...prev, productSearch: '' }));
+                                                                                setFilterDropdownOpen(initialFilterDropdownState);
+                                                                            }}
+                                                                            className="w-full px-4 py-2 text-left text-sm hover:bg-blue-50 transition-colors"
+                                                                        >
+                                                                            {p}
+                                                                        </button>
+                                                                    ))}
+                                                                </div>
+                                                            ) : null;
+                                                        })()}
+                                                    </div>
+
+                                                    {/* Brand Selection - General only */}
+                                                    <div className="space-y-1.5 relative" ref={brandFilterRef}>
+                                                        <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider pl-1 font-mono">BRAND</label>
+                                                        <div className="relative">
+                                                            <input
+                                                                type="text"
+                                                                value={filterSearchInputs.brandSearch}
+                                                                onChange={(e) => {
+                                                                    setFilterSearchInputs({ ...filterSearchInputs, brandSearch: e.target.value });
+                                                                    setFilterDropdownOpen({ ...initialFilterDropdownState, brand: true });
+                                                                }}
+                                                                onFocus={() => setFilterDropdownOpen({ ...initialFilterDropdownState, brand: true })}
+                                                                placeholder={saleFilters.brandName || "Search Brand..."}
+                                                                className={`w-full px-4 py-2.5 bg-white border border-gray-100 rounded-xl text-sm focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all shadow-sm hover:border-gray-200 pr-10 ${saleFilters.brandName ? 'placeholder:text-gray-900 placeholder:font-semibold text-gray-900 font-semibold' : 'placeholder:text-gray-300'}`}
+                                                            />
+                                                            <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1.5">
+                                                                {saleFilters.brandName && (
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={() => {
+                                                                            setSaleFilters(prev => ({ ...prev, brandName: '' }));
+                                                                            setFilterSearchInputs(prev => ({ ...prev, brandSearch: '' }));
+                                                                            setFilterDropdownOpen(initialFilterDropdownState);
+                                                                        }}
+                                                                        className="text-gray-400 hover:text-gray-600 transition-colors"
+                                                                    >
+                                                                        <XIcon className="w-3.5 h-3.5" />
+                                                                    </button>
+                                                                )}
+                                                                <SearchIcon className="w-4 h-4 text-gray-300 pointer-events-none" />
+                                                            </div>
+                                                        </div>
+                                                        {filterDropdownOpen.brand && (() => {
+                                                            const options = getUniqueOptions('brandName');
+                                                            const filtered = options.filter(b => b.toLowerCase().includes(filterSearchInputs.brandSearch.toLowerCase()));
+                                                            return filtered.length > 0 ? (
+                                                                <div className="absolute z-[2020] mt-1 w-full bg-white border border-gray-100 rounded-xl shadow-xl max-h-48 overflow-y-auto py-1">
+                                                                    {filtered.map(b => (
+                                                                        <button
+                                                                            key={b}
+                                                                            type="button"
+                                                                            onMouseDown={(e) => {
+                                                                                e.preventDefault();
+                                                                                setSaleFilters(prev => ({ ...prev, brandName: b }));
+                                                                                setFilterSearchInputs(prev => ({ ...prev, brandSearch: '' }));
+                                                                                setFilterDropdownOpen(initialFilterDropdownState);
+                                                                            }}
+                                                                            className="w-full px-4 py-2 text-left text-sm hover:bg-blue-50 transition-colors"
+                                                                        >
+                                                                            {b}
+                                                                        </button>
+                                                                    ))}
+                                                                </div>
+                                                            ) : null;
+                                                        })()}
+                                                    </div>
+                                                </>
                                             )}
 
                                             <button onClick={() => setShowFilterPanel(false)} className="w-full py-2.5 bg-gray-900 text-white rounded-xl text-xs font-bold hover:bg-gray-800 transition-all mt-3 flex-shrink-0 active:scale-[0.98]">APPLY FILTERS</button>
