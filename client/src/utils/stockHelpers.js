@@ -11,17 +11,29 @@ export const calculatePktRemainder = (totalQty, pktSize) => {
     const size = safeParse(pktSize);
     if (size <= 0) return { whole: 0, remainder: qty };
 
-    // Use a small epsilon to handle floating point precision (e.g. 299999.9999 / 60 should be 5000)
-    const rawPkt = qty / size;
-    const whole = Math.floor(rawPkt + 1e-9);
-    const remainder = Math.max(0, Math.round(qty - (whole * size)));
+    if (qty >= 0) {
+        // Use a small epsilon to handle floating point precision
+        const rawPkt = qty / size;
+        const whole = Math.floor(rawPkt + 1e-9);
+        const remainder = Math.max(0, Math.round(qty - (whole * size)));
 
-    // Final rollover check: if remainder equals or exceeds size due to rounding errors, roll it over
-    if (remainder >= size) {
-        return { whole: whole + 1, remainder: 0 };
+        // Final rollover check
+        if (remainder >= size) {
+            return { whole: whole + 1, remainder: 0 };
+        }
+        return { whole, remainder };
+    } else {
+        // Handle negative quantities (pre-sales) for CROP category
+        const absQty = Math.abs(qty);
+        const rawPkt = absQty / size;
+        const whole = Math.floor(rawPkt + 1e-9);
+        const remainder = Math.max(0, Math.round(absQty - (whole * size)));
+
+        if (remainder >= size) {
+            return { whole: -(whole + 1), remainder: 0 };
+        }
+        return { whole: -whole, remainder: -remainder };
     }
-
-    return { whole, remainder };
 };
 
 export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery = '', warehouseData = [], salesRecords = [], products = []) => {
@@ -226,73 +238,189 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
         return acc;
     }, {});
 
+    // --- SECOND PASS: Identify GENERAL products with sales but NO stock records ---
+    // This ensure they appear in the report even if arrivals haven't been recorded yet.
+    salesRecords.forEach(sale => {
+        if (sale && sale.items && Array.isArray(sale.items)) {
+            sale.items.forEach(saleItem => {
+                const sProdName = (saleItem.productName || '').trim();
+                if (!sProdName) return;
+
+                // Only proceed if it's a GENERAL product
+                const product = products.find(p => (p.name || p.productName || '').trim().toLowerCase() === sProdName.toLowerCase());
+                const category = (product?.category || '').trim().toLowerCase();
+                if (category !== 'general') return;
+
+                // Initialize group if missing
+                if (!groupedStock[sProdName]) {
+                    groupedStock[sProdName] = {
+                        productName: sProdName,
+                        category: product ? product.category : 'General',
+                        quantity: 0,
+                        inHousePacket: 0,
+                        inHouseQuantity: 0,
+                        totalInHousePacket: 0,
+                        totalInHouseQuantity: 0,
+                        salePacket: 0,
+                        saleQuantity: 0,
+                        sweepedPacket: 0,
+                        sweepedQuantity: 0,
+                        unit: saleItem.unit || 'kg',
+                        brands: {},
+                        allIds: []
+                    };
+                }
+
+                const group = groupedStock[sProdName];
+                const brandsInSale = saleItem.brandEntries || [];
+                
+                brandsInSale.forEach(entry => {
+                    const brandKey = (entry.brand || 'No Brand').trim().toLowerCase();
+                    if (!group.brands[brandKey]) {
+                        group.brands[brandKey] = {
+                            brand: entry.brand,
+                            importer: '-',
+                            port: '-',
+                            quantity: 0,
+                            inHousePacket: 0,
+                            inHouseQuantity: 0,
+                            totalInHousePacket: 0,
+                            totalInHouseQuantity: 0,
+                            salePacket: 0,
+                            saleQuantity: 0,
+                            sweepedPacket: 0,
+                            sweepedQuantity: 0,
+                            packetSize: safeParse(saleItem.packetSize || entry.packetSize)
+                        };
+                    }
+
+                    const brandObj = group.brands[brandKey];
+                    // If this brand wasn't resolved in the first pass, we need to resolve it now.
+                    // Important: We only resolve sales for brands that didn't have any stock records.
+                    // If it HAD stock records, it was already resolved in the first pass.
+                    if (!brandObj._salesResolved) {
+                        let dynamicSaleQty = 0;
+                        let dynamicSalePkt = 0;
+                        const targetProd = sProdName.toLowerCase().trim();
+                        const targetBrand = (entry.brand || '').toLowerCase().trim();
+                        const currentPktSize = brandObj.packetSize;
+
+                        // Re-run sales accumulation for this specific product/brand
+                        salesRecords.forEach(s => {
+                            if (s && s.items) {
+                                s.items.forEach(si => {
+                                    if ((si.productName || Si.productName || '').toLowerCase().trim() === targetProd && si.brandEntries) {
+                                        si.brandEntries.forEach(be => {
+                                            const bName = (be.brand || '').toLowerCase().trim();
+                                            if (bName === targetBrand || ((bName === '' || bName === '-') && targetBrand === targetProd)) {
+                                                const sq = safeParse(be.quantity);
+                                                dynamicSaleQty += sq;
+                                                if (currentPktSize > 0) dynamicSalePkt += (sq / currentPktSize);
+                                            }
+                                        });
+                                    }
+                                });
+                            }
+                        });
+
+                         // Also check warehouse recorded sales if any
+                         warehouseData.forEach(whItem => {
+                            if (whItem && (whItem.recordType === 'warehouse' || (whItem.recordType === 'stock' && whItem.whName))) {
+                                const wProd = (whItem.productName || whItem.product || '').toLowerCase().trim();
+                                const wBrand = (whItem.brand || '').toLowerCase().trim();
+                                if (wProd === targetProd && wBrand === targetBrand) {
+                                    dynamicSaleQty += safeParse(whItem.saleQuantity);
+                                    dynamicSalePkt += safeParse(whItem.salePacket);
+                                }
+                            }
+                        });
+
+                        brandObj.salePacket = dynamicSalePkt;
+                        brandObj.saleQuantity = dynamicSaleQty;
+                        brandObj._salesResolved = true;
+
+                        group.salePacket += dynamicSalePkt;
+                        group.saleQuantity += dynamicSaleQty;
+                    }
+                });
+            });
+        }
+    });
+
     const displayRecords = Object.values(groupedStock).map(group => {
+        const isGeneral = (group.category || '').toLowerCase() === 'general';
+        
         const brandList = Object.values(group.brands).map(b => {
             const dynamicInHouseQty = b.totalInHouseQuantity;
             const dynamicInHousePkt = b.totalInHousePacket;
-            // Subtract sales to show REMAINING inhouse stock on the dashboard
+
+            // For GENERAL products, we want to show negative stock if sales exceed arrivals.
+            // For others, we cap at 0 (existing behavior).
+            const inHouseQuantity = isGeneral ? (dynamicInHouseQty - b.saleQuantity) : Math.max(0, dynamicInHouseQty - b.saleQuantity);
+            const inHousePacket = isGeneral ? (dynamicInHousePkt - b.salePacket) : Math.max(0, dynamicInHousePkt - b.salePacket);
+
             return {
                 ...b,
-                inHouseQuantity: Math.max(0, dynamicInHouseQty - b.saleQuantity),
-                inHousePacket: Math.max(0, dynamicInHousePkt - b.salePacket)
+                inHouseQuantity,
+                inHousePacket
             };
+        }).filter(b => {
+            // Show brand if there is physical stock OR if it's a GENERAL product with sales (even if negative stock)
+            if (b.inHouseQuantity > 0) return true;
+            if (isGeneral && b.saleQuantity > 0) return true;
+            return false;
         }).sort((a, b) => (a.brand || '').localeCompare(b.brand || '', undefined, { sensitivity: 'base' }));
 
         const grpInHouseQty = group.totalInHouseQuantity;
         const grpInHousePkt = group.totalInHousePacket;
 
+        const inHouseQuantity = isGeneral ? (grpInHouseQty - group.saleQuantity) : Math.max(0, grpInHouseQty - group.saleQuantity);
+        const inHousePacket = isGeneral ? (grpInHousePkt - group.salePacket) : Math.max(0, grpInHousePkt - group.salePacket);
+
         return {
             ...group,
             brandList,
-            inHouseQuantity: Math.max(0, grpInHouseQty - group.saleQuantity),
-            inHousePacket: Math.max(0, grpInHousePkt - group.salePacket)
+            inHouseQuantity,
+            inHousePacket
         };
-    }).sort((a, b) => (a.productName || '').localeCompare(b.productName || '', undefined, { sensitivity: 'base' }));
+    }).filter(group => group.brandList.length > 0).sort((a, b) => (a.productName || '').localeCompare(b.productName || '', undefined, { sensitivity: 'base' }));
+
+    // --- Summary card calculations ---
+    // We calculate these based on the filtered displayRecords to ensure consistency
+    // across the UI and to prevent pre-sales of one product from distorting totals of others.
+    
+    let totalTotalInHouseQty = 0;
+    let totalSaleQty = 0;
+    let totalInHouseQty = 0;
+    
+    // For packets, we need to track both arrivals and sales
+    let totalTotalInHousePktArrival = 0; // Sum of arrivals
+    let totalTotalInHousePktSale = 0;    // Sum of sales (negative effect in pre-sale logic)
+    let totalSalePkt = 0;               // Sum of actual sales recorded
+    let totalInHousePkt = 0;            // Net balance
+
+    displayRecords.forEach(group => {
+        group.brandList.forEach(brand => {
+            // These should already be filtered to only include positive inHouseQuantity
+            totalTotalInHouseQty += (brand.totalInHouseQuantity || 0);
+            totalSaleQty += (brand.saleQuantity || 0);
+            totalInHouseQty += (brand.inHouseQuantity || 0);
+            
+            totalTotalInHousePktArrival += (brand.totalInHousePacket || 0);
+            totalSalePkt += (brand.salePacket || 0);
+            totalInHousePkt += (brand.inHousePacket || 0);
+        });
+    });
 
     const totalPackets = filteredRecords.reduce((sum, item) => sum + safeParse(item.packet), 0);
     const totalQuantity = filteredRecords.reduce((sum, item) => sum + safeParse(item.quantity), 0);
-
-    // Summary card calculations
-    const totalTotalInHousePkt = filteredRecords.reduce((sum, item) => {
-        const val = item.totalInHousePacket !== undefined ? safeParse(item.totalInHousePacket) : (safeParse(item.packet) - safeParse(item.sweepedPacket));
-        return sum + val;
-    }, 0);
-
-    const totalTotalInHouseQty = filteredRecords.reduce((sum, item) => {
-        if (item.totalInHouseQuantity !== undefined) return sum + safeParse(item.totalInHouseQuantity);
-        const derivedPkt = safeParse(item.packet) - safeParse(item.sweepedPacket);
-        const size = safeParse(item.packetSize);
-        if (size > 0) {
-            return sum + (derivedPkt * size);
-        }
-        // Fallback for zero size
-        return sum + (safeParse(item.quantity) - safeParse(item.sweepedQuantity));
-    }, 0);
-
-    // Calculate Global Sale Totals from the grouped product data to ensure NO double counting
-    let totalSalePkt = Object.values(groupedStock).reduce((sum, group) => sum + safeParse(group.salePacket), 0);
-    let totalSaleQty = Object.values(groupedStock).reduce((sum, group) => sum + safeParse(group.saleQuantity), 0);
-
     const totalShortage = filteredRecords.reduce((sum, item) => sum + safeParse(item.sweepedQuantity), 0);
 
-    // Mathematically derive global current inhouse stock (Total Received - Total Sold)
-    const totalInHousePkt = Math.max(0, totalTotalInHousePkt - totalSalePkt);
-    const totalInHouseQty = Math.max(0, totalTotalInHouseQty - totalSaleQty);
+    const totalInHousePktWhole = Math.floor(displayRecords.reduce((acc, group) => acc + group.brandList.reduce((sum, brand) => sum + calculatePktRemainder(brand.inHouseQuantity, brand.packetSize).whole, 0), 0));
+    const totalInHousePktDecimalKg = displayRecords.reduce((acc, group) => acc + group.brandList.reduce((sum, brand) => sum + calculatePktRemainder(brand.inHouseQuantity, brand.packetSize).remainder, 0), 0);
 
-    const totalInHousePktDetails = displayRecords.reduce((acc, group) => {
+    const totalSalePktDetails = displayRecords.reduce((acc, group) => {
         group.brandList.forEach(brand => {
-            const { whole, remainder } = calculatePktRemainder(brand.inHouseQuantity, brand.packetSize);
-            acc.whole += whole;
-            acc.remainder += remainder;
-        });
-        return acc;
-    }, { whole: 0, remainder: 0 });
-
-    const totalInHousePktWhole = totalInHousePktDetails.whole;
-    const totalInHousePktDecimalKg = totalInHousePktDetails.remainder;
-
-    const totalSalePktDetails = Object.values(groupedStock).reduce((acc, group) => {
-        Object.values(group.brands).forEach(brand => {
             const { whole, remainder } = calculatePktRemainder(brand.saleQuantity, brand.packetSize);
             acc.whole += whole;
             acc.remainder += remainder;
@@ -312,7 +440,7 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
         totalInHousePktWhole,
         totalSalePktWhole,
         totalInHouseQty,
-        totalTotalInHousePkt,
+        totalTotalInHousePkt: totalTotalInHousePktArrival,
         totalTotalInHouseQty,
         totalInHousePktDecimalKg,
         totalSalePkt,

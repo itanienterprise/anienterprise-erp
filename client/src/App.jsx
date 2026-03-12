@@ -318,7 +318,7 @@ function App() {
   const [stockRecords, setStockRecords] = useState([]);
   const [warehouseData, setWarehouseData] = useState([]);
   const [salesRecords, setSalesRecords] = useState([]);
-  const [stockFilters, setStockFilters] = useState({ startDate: '', endDate: '', lcNo: '', port: '', brand: '', importer: '', exporter: '', productName: '', category: 'Crop' });
+  const [stockFilters, setStockFilters] = useState({ startDate: '', endDate: '', lcNo: '', port: '', brand: '', importer: '', exporter: '', productName: '', category: '' });
   const [selectedItems, setSelectedItems] = useState(new Set());
   const [isSelectionMode, setIsSelectionMode] = useState(false);
   const longPressTimer = useRef(null);
@@ -836,8 +836,7 @@ function App() {
         const decryptedStock = (rawData.stockRecords || []).map(d => {
           let rawWh = '';
           try {
-            const dec = decryptData(d.data);
-            rawWh = dec.whName || '';
+            rawWh = dec.whName || dec.warehouse || '';
           } catch { }
 
           if (!rawWh) return null;
@@ -1143,6 +1142,8 @@ function App() {
           <SaleManagement
             key={refreshKey}
             saleType="General"
+            currentUser={currentUser}
+            addNotification={addNotification}
             isSelectionMode={isSelectionMode}
             setIsSelectionMode={setIsSelectionMode}
             selectedItems={selectedItems}
@@ -1161,6 +1162,8 @@ function App() {
           <SaleManagement
             key={refreshKey}
             saleType="Border"
+            currentUser={currentUser}
+            addNotification={addNotification}
             isSelectionMode={isSelectionMode}
             setIsSelectionMode={setIsSelectionMode}
             selectedItems={selectedItems}

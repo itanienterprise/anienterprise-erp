@@ -1512,7 +1512,7 @@ function LCReceive({
         <div className="space-y-6">
             {!showStockForm && (
                 <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                    <div className="w-full md:w-1/4">
+                    <div className="w-full md:w-auto md:shrink-0">
                         <h2 className="text-xl md:text-2xl font-bold text-gray-800 text-center md:text-left">LC Receive Management</h2>
                     </div>
 
@@ -1545,7 +1545,7 @@ function LCReceive({
                         </div>
                     </div>
 
-                    <div className="w-full md:w-auto flex items-center gap-2">
+                    <div className="w-full md:w-auto md:shrink-0 flex items-center gap-2">
                         <div className="relative flex-1 md:flex-none">
                             <button
                                 ref={lcFilterButtonRef}

@@ -2871,7 +2871,7 @@ const StockManagement = ({
                                                             <div className="text-sm text-black bg-blue-50/30 px-2 py-1 rounded-lg text-center">
                                                                 {(() => {
                                                                     const { whole, remainder } = calculatePktRemainder(brand.totalInHouseQuantity, brand.packetSize);
-                                                                    return `${whole.toLocaleString()} - ${remainder.toLocaleString()} kg`;
+                                                                    return `${whole.toLocaleString()} - ${Math.abs(remainder).toLocaleString()} kg`;
                                                                 })()}
                                                             </div>
                                                             <div className="text-sm text-black text-center font-medium">
@@ -2880,7 +2880,7 @@ const StockManagement = ({
                                                             <div className="text-sm text-black bg-orange-50/30 px-2 py-1 rounded-lg text-center font-medium">
                                                                 {(() => {
                                                                     const { whole, remainder } = calculatePktRemainder(brand.saleQuantity, brand.packetSize);
-                                                                    return `${whole.toLocaleString()} - ${remainder.toLocaleString()} kg`;
+                                                                    return `${whole.toLocaleString()} - ${Math.abs(remainder).toLocaleString()} kg`;
                                                                 })()}
                                                             </div>
                                                             <div className="text-sm text-black text-center font-medium">
@@ -2889,15 +2889,15 @@ const StockManagement = ({
                                                             <div className="text-sm text-black bg-green-50/30 px-2 py-1 rounded-lg text-center">
                                                                 {(() => {
                                                                     const { whole, remainder } = calculatePktRemainder(brand.inHouseQuantity, brand.packetSize);
-                                                                    return `${whole.toLocaleString()} - ${remainder.toLocaleString()} kg`;
+                                                                    return `${whole.toLocaleString()} - ${Math.abs(remainder).toLocaleString()} kg`;
                                                                 })()}
                                                             </div>
                                                             <div className="text-sm text-black text-center font-medium">
                                                                 {Math.round(brand.inHouseQuantity).toLocaleString()} {group.unit}
                                                             </div>
                                                             <div className="text-center overflow-hidden">
-                                                                <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold ${brand.inHouseQuantity > 0 ? 'bg-emerald-50 text-emerald-600' : 'bg-red-50 text-red-600'}`}>
-                                                                    {brand.inHouseQuantity > 0 ? 'In Stock' : 'Out of Stock'}
+                                                                <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold ${brand.inHouseQuantity > 0 ? 'bg-emerald-50 text-emerald-600' : brand.inHouseQuantity < 0 ? 'bg-blue-50 text-blue-600' : 'bg-red-50 text-red-600'}`}>
+                                                                    {brand.inHouseQuantity > 0 ? 'In Stock' : brand.inHouseQuantity < 0 ? 'Pre-Sold' : 'Out of Stock'}
                                                                 </span>
                                                             </div>
                                                         </div>
@@ -2910,7 +2910,7 @@ const StockManagement = ({
                                                             {(() => {
                                                                 const pktSize = group.brandList?.[0]?.packetSize || 0;
                                                                 const { whole, remainder } = calculatePktRemainder(group.totalInHouseQuantity, pktSize);
-                                                                return `${whole.toLocaleString()} - ${remainder.toLocaleString()} kg`;
+                                                                return `${whole.toLocaleString()} - ${Math.abs(remainder).toLocaleString()} kg`;
                                                             })()}
                                                         </div>
                                                         <div className="text-sm text-black font-black text-center">
@@ -2920,7 +2920,7 @@ const StockManagement = ({
                                                             {(() => {
                                                                 const pktSize = group.brandList?.[0]?.packetSize || 0;
                                                                 const { whole, remainder } = calculatePktRemainder(group.saleQuantity, pktSize);
-                                                                return `${whole.toLocaleString()} - ${remainder.toLocaleString()} kg`;
+                                                                return `${whole.toLocaleString()} - ${Math.abs(remainder).toLocaleString()} kg`;
                                                             })()}
                                                         </div>
                                                         <div className="text-sm text-black font-black text-center">
@@ -2930,7 +2930,7 @@ const StockManagement = ({
                                                             {(() => {
                                                                 const pktSize = group.brandList?.[0]?.packetSize || 0;
                                                                 const { whole, remainder } = calculatePktRemainder(group.inHouseQuantity, pktSize);
-                                                                return `${whole.toLocaleString()} - ${remainder.toLocaleString()} kg`;
+                                                                return `${whole.toLocaleString()} - ${Math.abs(remainder).toLocaleString()} kg`;
                                                             })()}
                                                         </div>
                                                         <div className="text-sm text-black font-black text-center">

@@ -1,10 +1,17 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { EditIcon, TrashIcon, XIcon, SearchIcon, FunnelIcon, ChevronDownIcon, EyeIcon, ReceiptIcon, BarChartIcon, TrendingUpIcon, DollarSignIcon, FileTextIcon } from '../../Icons';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
+import { EditIcon, TrashIcon, XIcon, SearchIcon, FunnelIcon, ChevronDownIcon, EyeIcon, ReceiptIcon, BarChartIcon, TrendingUpIcon, DollarSignIcon, FileTextIcon, CheckIcon } from '../../Icons';
 import { generateSaleInvoicePDF } from '../../../utils/pdfGenerator';
 import { API_BASE_URL, SortIcon, formatDate } from '../../../utils/helpers';
 import { encryptData, decryptData } from '../../../utils/encryption';
 import CustomDatePicker from '../../shared/CustomDatePicker';
+import axios from 'axios';
 import './SaleManagement.css';
+
+const getSafeString = (val) => {
+    if (!val) return '';
+    if (typeof val === 'object') return val.customerName || val.companyName || val.name || '';
+    return String(val);
+};
 
 const SaleManagement = ({
     saleType,
@@ -18,7 +25,9 @@ const SaleManagement = ({
     setShowSalesReport,
     setSalesReportData,
     saleFilters,
-    setSaleFilters
+    setSaleFilters,
+    currentUser,
+    addNotification
 }) => {
     const [showForm, setShowForm] = useState(false);
     const [sales, setSales] = useState([]);
@@ -40,6 +49,207 @@ const SaleManagement = ({
     const [showSaleFilterPanel, setShowSaleFilterPanel] = useState(false);
     const [saleFilterSearch, setSaleFilterSearch] = useState({ companySearch: '', invoiceSearch: '', portSearch: '', productSearch: '', indCnfSearch: '', bdCnfSearch: '' });
     const [activeFilterDropdown, setActiveFilterDropdown] = useState(null); // 'from', 'to', 'company', 'invoice', 'port', 'product', 'indCnf', 'bdCnf'
+    const [isRequestedOnly, setIsRequestedOnly] = useState(false);
+
+    const canApprove = useMemo(() => {
+        if (!currentUser) return false;
+        if (currentUser.username === 'admin') return true;
+        const role = (currentUser.role || '').toLowerCase();
+        return ['admin', 'incharge', 'sales manager'].includes(role);
+    }, [currentUser]);
+
+    const processSaleEffects = async (saleData, isEditing = false) => {
+        // Resolve Customer ID if missing but name is present
+        let targetCustomerId = saleData.customerId;
+        if (!targetCustomerId && (saleData.companyName || saleData.customerName)) {
+            const matched = customers.find(c =>
+                (c.companyName && saleData.companyName && c.companyName.trim().toLowerCase() === saleData.companyName.trim().toLowerCase()) ||
+                (c.customerName && saleData.customerName && c.customerName.trim().toLowerCase() === saleData.customerName.trim().toLowerCase())
+            );
+            if (matched) targetCustomerId = matched._id;
+        }
+
+        // Update Customer History
+        if (targetCustomerId) {
+            try {
+                const custRes = await fetch(`${API_BASE_URL}/api/customers/${targetCustomerId}`);
+                if (custRes.ok) {
+                    const custRecord = await custRes.json();
+                    const customer = decryptData(custRecord.data);
+
+                    const newSaleEntries = [];
+                    (saleData.items || []).forEach((product, pIdx) => {
+                        (product.brandEntries || []).forEach((entry, eIdx) => {
+                            const isFirstEntry = pIdx === 0 && eIdx === 0;
+                            newSaleEntries.push({
+                                id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+                                date: saleData.date,
+                                invoiceNo: saleData.invoiceNo,
+                                product: product.productName || '',
+                                brand: entry.brand || '',
+                                quantity: entry.quantity || 0,
+                                amount: entry.totalAmount || 0,
+                                paid: isFirstEntry ? (parseFloat(saleData.paidAmount) || 0) : 0,
+                                due: isFirstEntry ? (parseFloat(saleData.dueAmount) || 0) : (entry.totalAmount || 0),
+                                discount: isFirstEntry ? (parseFloat(saleData.discount) || 0) : 0,
+                                warehouse: entry.warehouseName || '',
+                                status: 'Pending'
+                            });
+                        });
+                    });
+
+                    let baseHistory = customer.salesHistory || [];
+                    if (isEditing) {
+                        baseHistory = baseHistory.filter(item => item.invoiceNo !== saleData.invoiceNo);
+                    }
+
+                    const updatedCustomer = {
+                        ...customer,
+                        salesHistory: [...newSaleEntries, ...baseHistory]
+                    };
+
+                    await fetch(`${API_BASE_URL}/api/customers/${targetCustomerId}`, {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ data: encryptData(updatedCustomer) }),
+                    });
+                }
+            } catch (err) {
+                console.error('Error updating customer history:', err);
+            }
+        }
+
+        // Border Sale: Auto-deduct sold Qty from matching warehouse records
+        if (saleData.saleType === 'Border') {
+            try {
+                const whRes = await fetch(`${API_BASE_URL}/api/warehouses`);
+                if (whRes.ok) {
+                    const rawWarehouses = await whRes.json();
+                    const liveWarehouses = rawWarehouses.map(record => ({
+                        ...decryptData(record.data),
+                        _id: record._id
+                    }));
+
+                    const deductions = {};
+                    (saleData.items || []).forEach(product => {
+                        const soldProductName = (product.productName || '').trim().toLowerCase();
+                        (product.brandEntries || []).forEach(entry => {
+                            const soldQty = parseFloat(entry.quantity) || 0;
+                            if (soldQty === 0) return;
+
+                            const matchingWh = liveWarehouses.find(wh => {
+                                const whProduct = (wh.productName || wh.product || '').trim().toLowerCase();
+                                return whProduct === soldProductName;
+                            });
+
+                            if (matchingWh) {
+                                if (!deductions[matchingWh._id]) {
+                                    deductions[matchingWh._id] = { wh: matchingWh, totalDeduct: 0 };
+                                }
+                                deductions[matchingWh._id].totalDeduct += soldQty;
+                            }
+                        });
+                    });
+
+                    await Promise.all(
+                        Object.values(deductions).map(async ({ wh, totalDeduct }) => {
+                            const currentQty = parseFloat(wh.whQty) || 0;
+                            const updatedWh = {
+                                ...wh,
+                                whQty: Math.max(0, currentQty - totalDeduct).toString()
+                            };
+                            await fetch(`${API_BASE_URL}/api/warehouses/${wh._id}`, {
+                                method: 'PUT',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ data: encryptData(updatedWh) }),
+                            });
+                        })
+                    );
+                }
+            } catch (err) {
+                console.error('Error auto-deducting warehouse stock:', err);
+            }
+        }
+    };
+
+    const handleStatusUpdate = async (sale, newStatus) => {
+        console.log(`[handleStatusUpdate] Initiating status update to: ${newStatus} for sale ID:`, sale._id);
+        console.log(`[handleStatusUpdate] Current user:`, currentUser);
+        try {
+            setIsSubmitting(true);
+            const actionBy = currentUser ? (currentUser.name || currentUser.username || '') : '';
+            const { _id, createdAt, ...rest } = sale;
+
+            const updatedData = {
+                ...rest,
+                status: newStatus,
+                ...(newStatus === 'Pending' ? { acceptedBy: actionBy } : {}),
+                ...(newStatus === 'Rejected' ? { rejectedBy: actionBy } : {}),
+            };
+
+            console.log(`[handleStatusUpdate] Sending PUT request with data:`, updatedData);
+            const response = await axios.put(`${API_BASE_URL}/api/sales/${_id}`, { data: encryptData(updatedData) });
+            console.log(`[handleStatusUpdate] Response status:`, response.status);
+
+            if (response.status >= 200 && response.status < 300) {
+                // If accepted, trigger history and stock updates
+                if (newStatus === 'Pending') {
+                    console.log(`[handleStatusUpdate] Status is Pending. Triggering processSaleEffects...`);
+                    try {
+                        await processSaleEffects(sale, false);
+                        console.log(`[handleStatusUpdate] processSaleEffects successful.`);
+                    } catch (err) {
+                        console.error(`[handleStatusUpdate] Error in processSaleEffects:`, err);
+                        alert(`Successfully updated status, but failed to process warehouse/customer effects: ${err.message}`);
+                    }
+                }
+
+                // Send notification
+                if (addNotification) {
+                    console.log(`[handleStatusUpdate] Triggering addNotification...`);
+                    try {
+                        const now = new Date();
+                        const dateStr = formatDate(now);
+                        const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                        const adminName = currentUser?.name || currentUser?.username || 'Admin';
+                        const statusLabel = newStatus === 'Pending' ? 'Accepted' : newStatus;
+                        const actionLabel = newStatus === 'Pending' ? 'accepted' : 'rejected';
+                        const requesterName = sale.requestedBy || sale.requestedByUsername || 'an employee';
+
+                        const targetRoles = ['admin', 'incharge', 'sales manager'];
+                        const targetUsers = [sale.requestedByUsername].filter(Boolean);
+                        if (!targetUsers.includes('admin')) targetUsers.push('admin');
+
+                        await addNotification(
+                            `Sale ${statusLabel}`,
+                            `${dateStr} | ${timeStr} | ${adminName} has ${actionLabel} the Sale entry (${sale.invoiceNo}) requested by ${requesterName}`,
+                            targetRoles,
+                            targetUsers
+                        );
+                        console.log(`[handleStatusUpdate] addNotification successful.`);
+                    } catch (err) {
+                        console.error(`[handleStatusUpdate] Error in addNotification:`, err);
+                    }
+                }
+                
+                console.log(`[handleStatusUpdate] Re-fetching data...`);
+                try { fetchSales(); } catch(e) { console.error('fetchSales error', e); }
+                try { fetchCustomers(); } catch(e) { console.error('fetchCustomers error', e); }
+                try { fetchWarehouses(); } catch(e) { console.error('fetchWarehouses error', e); }
+                try { fetchStockRecords(); } catch(e) { console.error('fetchStockRecords error', e); }
+                console.log(`[handleStatusUpdate] Update successfully finished!`);
+            } else {
+                console.warn(`[handleStatusUpdate] Unexpected response status:`, response.status);
+                alert(`Status update returned unexpected status code: ${response.status}`);
+            }
+        } catch (error) {
+            console.error(`Error updating sale status to ${newStatus}:`, error);
+            alert(`Failed to update status to ${newStatus}. See console for details: ${error.message || 'Unknown error'}`);
+        } finally {
+            setIsSubmitting(false);
+            console.log(`[handleStatusUpdate] Submitting state reset to false.`);
+        }
+    };
     const saleFilterRef = useRef(null);
     const saleFilterButtonRef = useRef(null);
     const saleCompanyFilterRef = useRef(null);
@@ -146,9 +356,11 @@ const SaleManagement = ({
         paidAmount: '0.00',
         dueAmount: '0.00',
         paymentMethod: 'Cash',
-        status: 'Pending',
+        status: 'Requested',
         saleType: saleType, // Initialize with prop value
-        previousBalance: '0.00'
+        previousBalance: '0.00',
+        requestedBy: currentUser?.name || currentUser?.username || '',
+        requestedByUsername: currentUser?.username || ''
     });
 
     useEffect(() => {
@@ -174,10 +386,15 @@ const SaleManagement = ({
 
                 setAllSalesRecords(decryptedSales);
 
-                // Filter by saleType. Match legacy records to 'General'.
+                // Filter by saleType. Match legacy records to 'General' ONLY if they are not legacy Border sales.
                 const filteredSales = decryptedSales.filter(s => {
+                    const isBorderSale = s.saleType === 'Border' || (!s.saleType && !!(s.lcNo || s.port || s.importer));
+                    
                     if (saleType === 'General') {
-                        return s.saleType === 'General' || !s.saleType;
+                        return s.saleType === 'General' || (!s.saleType && !isBorderSale);
+                    }
+                    if (saleType === 'Border') {
+                        return isBorderSale;
                     }
                     return s.saleType === saleType;
                 });
@@ -711,122 +928,8 @@ const SaleManagement = ({
             if (response.ok) {
                 setSubmitStatus('success');
 
-                // Resolve Customer ID if missing but name is present
-                let targetCustomerId = formData.customerId;
-                if (!targetCustomerId && (formData.companyName || formData.customerName)) {
-                    const matched = customers.find(c =>
-                        (c.companyName && formData.companyName && c.companyName.trim().toLowerCase() === formData.companyName.trim().toLowerCase()) ||
-                        (c.customerName && formData.customerName && c.customerName.trim().toLowerCase() === formData.customerName.trim().toLowerCase())
-                    );
-                    if (matched) targetCustomerId = matched._id;
-                }
-
-                // Update Customer History
-                if (targetCustomerId) {
-                    try {
-                        const custRes = await fetch(`${API_BASE_URL}/api/customers/${targetCustomerId}`);
-                        if (custRes.ok) {
-                            const custRecord = await custRes.json();
-                            const customer = decryptData(custRecord.data);
-
-                            const newSaleEntries = [];
-                            formData.items.forEach((product, pIdx) => {
-                                (product.brandEntries || []).forEach((entry, eIdx) => {
-                                    const isFirstEntry = pIdx === 0 && eIdx === 0;
-                                    newSaleEntries.push({
-                                        id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-                                        date: formData.date,
-                                        invoiceNo: formData.invoiceNo,
-                                        product: product.productName || '',
-                                        brand: entry.brand || '',
-                                        quantity: entry.quantity || 0,
-                                        amount: entry.totalAmount || 0,
-                                        paid: isFirstEntry ? (parseFloat(formData.paidAmount) || 0) : 0,
-                                        due: isFirstEntry ? (parseFloat(formData.dueAmount) || 0) : (entry.totalAmount || 0),
-                                        discount: isFirstEntry ? (parseFloat(formData.discount) || 0) : 0,
-                                        warehouse: entry.warehouseName || '',
-                                        status: 'Pending'
-                                    });
-                                });
-                            });
-
-                            let baseHistory = customer.salesHistory || [];
-                            // If editing, remove existing entries for this invoice to prevent duplicates
-                            if (editingId) {
-                                baseHistory = baseHistory.filter(item => item.invoiceNo !== formData.invoiceNo);
-                            }
-
-                            const updatedCustomer = {
-                                ...customer,
-                                salesHistory: [...newSaleEntries, ...baseHistory]
-                            };
-
-                            await fetch(`${API_BASE_URL}/api/customers/${targetCustomerId}`, {
-                                method: 'PUT',
-                                headers: { 'Content-Type': 'application/json' },
-                                body: JSON.stringify({ data: encryptData(updatedCustomer) }),
-                            });
-                        }
-                    } catch (err) {
-                        console.error('Error updating customer history:', err);
-                    }
-                }
-
-                // Border Sale: Auto-deduct sold Qty from matching warehouse records
-                if (formData.saleType === 'Border') {
-                    try {
-                        // Re-fetch latest warehouse data to avoid stale state
-                        const whRes = await fetch(`${API_BASE_URL}/api/warehouses`);
-                        if (whRes.ok) {
-                            const rawWarehouses = await whRes.json();
-                            const liveWarehouses = rawWarehouses.map(record => ({
-                                ...decryptData(record.data),
-                                _id: record._id
-                            }));
-
-                            // Build a map of warehouse updates needed: id -> qty to deduct
-                            const deductions = {}; // { warehouseId: amountToDeduct }
-
-                            formData.items.forEach(product => {
-                                const soldProductName = (product.productName || '').trim().toLowerCase();
-                                (product.brandEntries || []).forEach(entry => {
-                                    const soldQty = parseFloat(entry.quantity) || 0;
-                                    if (soldQty === 0) return;
-
-                                    // Find matching warehouse record by product name
-                                    const matchingWh = liveWarehouses.find(wh => {
-                                        const whProduct = (wh.productName || wh.product || '').trim().toLowerCase();
-                                        return whProduct === soldProductName;
-                                    });
-
-                                    if (matchingWh) {
-                                        if (!deductions[matchingWh._id]) {
-                                            deductions[matchingWh._id] = { wh: matchingWh, totalDeduct: 0 };
-                                        }
-                                        deductions[matchingWh._id].totalDeduct += soldQty;
-                                    }
-                                });
-                            });
-
-                            // Apply deductions and PUT each affected warehouse
-                            await Promise.all(
-                                Object.values(deductions).map(async ({ wh, totalDeduct }) => {
-                                    const currentQty = parseFloat(wh.whQty) || 0;
-                                    const updatedWh = {
-                                        ...wh,
-                                        whQty: Math.max(0, currentQty - totalDeduct).toString()
-                                    };
-                                    await fetch(`${API_BASE_URL}/api/warehouses/${wh._id}`, {
-                                        method: 'PUT',
-                                        headers: { 'Content-Type': 'application/json' },
-                                        body: JSON.stringify({ data: encryptData(updatedWh) }),
-                                    });
-                                })
-                            );
-                        }
-                    } catch (err) {
-                        console.error('Error auto-deducting warehouse stock for Border Sale:', err);
-                    }
+                if (formData.status !== 'Requested') {
+                    await processSaleEffects(formData, !!editingId);
                 }
 
                 setTimeout(() => {
@@ -884,9 +987,11 @@ const SaleManagement = ({
             paidAmount: '0.00',
             dueAmount: '0.00',
             paymentMethod: 'Cash',
-            status: 'Pending',
+            status: 'Requested',
             saleType: saleType,
-            previousBalance: '0.00'
+            previousBalance: '0.00',
+            requestedBy: currentUser?.name || currentUser?.username || '',
+            requestedByUsername: currentUser?.username || ''
         });
         setCustomerSearch('');
         setProductSearch('');
@@ -1215,14 +1320,18 @@ const SaleManagement = ({
 
     const handleBrandSelect = (brand) => {
         if (activeItemIndex === null || activeEntryIndex === null) return;
+
+        // polymorphic: can be a string (from dropdown) or an object (from reset button)
+        const brandNameStr = typeof brand === 'string' ? brand : (brand?.brandName || '');
+
         setFormData(prev => {
             const newItems = [...prev.items];
             const item = { ...newItems[activeItemIndex] };
             const brandEntries = [...item.brandEntries];
             brandEntries[activeEntryIndex] = {
                 ...brandEntries[activeEntryIndex],
-                brand: brand,
-                brandName: brand // Ensure both are set for UI/Stock calculation
+                brand: brandNameStr,
+                brandName: brandNameStr // Ensure both are set for UI/Stock calculation
             };
             item.brandEntries = brandEntries;
             newItems[activeItemIndex] = item;
@@ -1269,108 +1378,137 @@ const SaleManagement = ({
     const renderViewModal = () => {
         if (!viewData) return null;
         return (
-            <div className="fixed inset-0 z-[2000] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
-                <div className="bg-white rounded-3xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-y-auto p-8 relative animate-scale-in custom-scrollbar">
-                    <button onClick={() => setViewData(null)} className="absolute top-6 right-6 text-gray-400 hover:text-red-500 transition-colors bg-white/50 p-2 rounded-xl border border-gray-100 shadow-sm">
-                        <XIcon className="w-5 h-5" />
-                    </button>
-                    <div className="flex items-center gap-4 mb-8">
-                        <div className="p-3 bg-blue-50 text-blue-600 rounded-2xl shadow-sm border border-blue-100">
-                            <ReceiptIcon className="w-8 h-8" />
-                        </div>
-                        <div>
-                            <h2 className="text-2xl font-bold text-gray-900 leading-tight">Sale Invoice Details</h2>
-                            <p className="text-gray-500 font-medium tracking-tight mt-0.5">{viewData.invoiceNo || 'No Invoice Number'}</p>
-                        </div>
-                    </div>
-
-                    <div className="grid grid-cols-2 lg:grid-cols-4 gap-6 mb-10 p-6 bg-gray-50/50 rounded-2xl border border-gray-100/50">
-                        <div className="space-y-1.5">
-                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Transaction Date</span>
-                            <div className="font-bold text-gray-900 flex items-center gap-2">
-                                <div className="w-2 h-2 rounded-full bg-blue-500"></div>
-                                {formatDate(viewData.date)}
+            <div className="fixed inset-0 z-[2000] flex items-center justify-center p-4">
+                <div className="absolute inset-0 bg-gray-900/60 backdrop-blur-sm" onClick={() => setViewData(null)}></div>
+                <div className="relative bg-white border border-gray-100 rounded-2xl shadow-2xl w-full max-w-4xl overflow-hidden animate-in zoom-in duration-300">
+                    <div className="flex items-center justify-between px-6 py-4 border-b border-gray-50 bg-white">
+                        <div className="flex items-center gap-4">
+                            <div className="p-2.5 bg-blue-50 text-blue-600 rounded-xl border border-blue-100">
+                                <ReceiptIcon className="w-6 h-6" />
+                            </div>
+                            <div>
+                                <h3 className="text-xl font-bold text-gray-900 tracking-tight">Sale Invoice Details</h3>
+                                <p className="text-xs text-gray-500 font-medium">{viewData.invoiceNo || 'No Invoice Number'}</p>
                             </div>
                         </div>
-                        <div className="space-y-1.5">
-                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Company Name</span>
-                            <div className="font-bold text-gray-900 truncate" title={viewData.companyName}>{viewData.companyName || '-'}</div>
-                        </div>
-                        <div className="space-y-1.5">
-                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Point of Contact</span>
-                            <div className="font-bold text-gray-900">{viewData.customerName}</div>
-                        </div>
-                        <div className="space-y-1.5">
-                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Payment Status</span>
-                            <div className={`px-2.5 py-1 rounded-lg text-xs font-bold inline-flex items-center gap-1.5 ${parseFloat(viewData.dueAmount) > 0 ? 'bg-amber-50 text-amber-600 border border-amber-100' : 'bg-emerald-50 text-emerald-600 border border-emerald-100'}`}>
-                                <div className={`w-1.5 h-1.5 rounded-full ${parseFloat(viewData.dueAmount) > 0 ? 'bg-amber-500' : 'bg-emerald-500'}`}></div>
-                                {parseFloat(viewData.dueAmount) > 0 ? 'Partial Payment' : 'Paid in Full'}
-                            </div>
-                        </div>
+                        <button onClick={() => setViewData(null)} className="p-2 text-gray-400 hover:text-gray-600 rounded-xl border border-gray-100 hover:bg-gray-50 transition-all shadow-sm">
+                            <XIcon className="w-5 h-5" />
+                        </button>
                     </div>
 
-                    <div className="mb-10 overflow-hidden rounded-2xl border border-gray-100 shadow-sm bg-white">
-                        <table className="w-full text-left border-collapse">
-                            <thead>
-                                <tr className="bg-gray-50/50 border-b border-gray-100">
-                                    <th className="px-6 py-4 text-[10px] font-bold text-gray-400 uppercase tracking-wider">Product Description</th>
-                                    <th className="px-6 py-4 text-[10px] font-bold text-gray-400 uppercase tracking-wider">Brand Information</th>
-                                    <th className="px-6 py-4 text-[10px] font-bold text-gray-400 uppercase tracking-wider text-right">Qty (kg)</th>
-                                    <th className="px-6 py-4 text-[10px] font-bold text-gray-400 uppercase tracking-wider text-right">Unit Price</th>
-                                    <th className="px-6 py-4 text-[10px] font-bold text-gray-400 uppercase tracking-wider text-right">Subtotal</th>
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y divide-gray-50">
-                                {viewData.items?.map((product, pIdx) => (
-                                    <React.Fragment key={pIdx}>
-                                        <tr className="bg-blue-50/10 transition-colors">
-                                            <td className="px-6 py-3.5 font-bold text-blue-800 bg-blue-50/30 flex items-center gap-2" colSpan="5">
-                                                <div className="w-1.5 h-4 bg-blue-600 rounded-full"></div>
-                                                {product.productName}
-                                            </td>
-                                        </tr>
-                                        {product.brandEntries?.map((entry, eIdx) => (
-                                            <tr key={eIdx} className="group hover:bg-gray-50/80 transition-all duration-200">
-                                                <td className="px-6 py-4"></td>
-                                                <td className="px-6 py-4">
-                                                    <div className="flex flex-col gap-0.5">
-                                                        <div className="text-[13px] font-bold text-gray-800">{entry.brand}</div>
-                                                        <div className="text-[10px] font-bold text-blue-500 uppercase flex items-center gap-1">
-                                                            <div className="w-1 h-1 rounded-full bg-blue-400"></div>
-                                                            {entry.warehouseName}
-                                                        </div>
+                    <div className="overflow-y-auto max-h-[70vh] p-6 space-y-6 bg-gray-50/30">
+
+                        <div className="grid grid-cols-2 lg:grid-cols-5 gap-6 p-6 bg-white rounded-2xl border border-gray-100/50 shadow-sm">
+                            <div className="space-y-1">
+                                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Transaction Date</span>
+                                <div className="text-sm font-bold text-gray-900 flex items-center gap-2">
+                                    <div className="w-1.5 h-1.5 rounded-full bg-blue-500"></div>
+                                    {formatDate(viewData.date)}
+                                </div>
+                            </div>
+                            <div className="space-y-1">
+                                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Company Name</span>
+                                <div className="text-sm font-bold text-gray-900 truncate" title={getSafeString(viewData.companyName)}>{getSafeString(viewData.companyName) || '-'}</div>
+                            </div>
+                            <div className="space-y-1">
+                                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Customer</span>
+                                <div className="text-sm font-bold text-gray-900">{getSafeString(viewData.customerName) || '-'}</div>
+                            </div>
+                            <div className="space-y-1">
+                                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Requested By</span>
+                                <div className="text-sm font-bold text-gray-900">{viewData.requestedBy || 'N/A'}</div>
+                            </div>
+                            <div className="space-y-1">
+                                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Status / Payment</span>
+                                <div className="flex flex-col gap-1.5">
+                                    <div className={`px-2 py-0.5 w-fit rounded text-[10px] font-bold uppercase tracking-wider ${
+                                        viewData.status === 'Requested' ? 'bg-amber-50 text-amber-600 border border-amber-100' :
+                                        viewData.status === 'Rejected' ? 'bg-red-50 text-red-600 border border-red-100' :
+                                        'bg-emerald-50 text-emerald-600 border border-emerald-100'
+                                    }`}>
+                                        {viewData.status || 'Completed'}
+                                    </div>
+                                    <div className={`px-2 py-0.5 w-fit rounded text-[10px] font-bold inline-flex items-center gap-1 ${parseFloat(viewData.dueAmount) > 0 ? 'bg-amber-50 text-amber-600 border border-amber-100/50' : 'bg-emerald-50 text-emerald-600 border border-emerald-100/50'}`}>
+                                        <div className={`w-1 h-1 rounded-full ${parseFloat(viewData.dueAmount) > 0 ? 'bg-amber-500' : 'bg-emerald-500'}`}></div>
+                                        {parseFloat(viewData.dueAmount) > 0 ? 'Partial Pay' : 'Paid in Full'}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="bg-white rounded-2xl border border-gray-100/50 overflow-hidden shadow-sm">
+                            <table className="w-full text-left border-collapse">
+                                <thead>
+                                    <tr className="bg-white border-b border-gray-50 group">
+                                        <th className="px-6 py-4 text-[9px] font-black text-gray-400 uppercase tracking-widest w-1/4">Product Description</th>
+                                        <th className="px-6 py-4 text-[9px] font-black text-gray-400 uppercase tracking-widest">Brand Information</th>
+                                        <th className="px-6 py-4 text-[9px] font-black text-gray-400 uppercase tracking-widest text-right">Qty (kg)</th>
+                                        <th className="px-6 py-4 text-[9px] font-black text-gray-400 uppercase tracking-widest text-right">Unit Price</th>
+                                        <th className="px-6 py-4 text-[9px] font-black text-gray-400 uppercase tracking-widest text-right">Subtotal</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-gray-50">
+                                    {viewData.items?.map((product, pIdx) => (
+                                        <React.Fragment key={pIdx}>
+                                            <tr className="bg-white transition-colors">
+                                                <td className="px-6 py-5 align-top border-r border-gray-50/50" rowSpan={product.brandEntries?.length ? product.brandEntries.length + 1 : 1}>
+                                                    <div className="flex items-center gap-2">
+                                                        <div className="w-1.5 h-4 bg-blue-600 rounded-sm"></div>
+                                                        <span className="text-[13px] font-bold text-blue-800">{product.productName}</span>
                                                     </div>
                                                 </td>
-                                                <td className="px-6 py-4 text-right">
-                                                    <div className="text-[13px] font-black text-gray-900">{parseFloat(entry.quantity).toLocaleString()} kg</div>
-                                                </td>
-                                                <td className="px-6 py-4 text-right">
-                                                    <div className="text-[13px] font-semibold text-gray-500">৳{parseFloat(entry.unitPrice || 0).toLocaleString()}</div>
-                                                </td>
-                                                <td className="px-6 py-4 text-right">
-                                                    <div className="text-[14px] font-black text-blue-900 group-hover:scale-105 transition-transform origin-right">৳{parseFloat(entry.totalAmount || 0).toLocaleString()}</div>
-                                                </td>
+                                                {/* If there are no brand entries, render empty columns so layout doesn't break */}
+                                                {!product.brandEntries?.length && (
+                                                    <>
+                                                        <td className="px-6 py-4"></td>
+                                                        <td className="px-6 py-4"></td>
+                                                        <td className="px-6 py-4"></td>
+                                                        <td className="px-6 py-4"></td>
+                                                    </>
+                                                )}
                                             </tr>
-                                        ))}
-                                    </React.Fragment>
-                                ))}
-                            </tbody>
-                        </table>
-                    </div>
+                                            {product.brandEntries?.map((entry, eIdx) => (
+                                                <tr key={eIdx} className="bg-white hover:bg-gray-50/30 transition-all duration-200">
+                                                    <td className="px-6 py-4 align-middle">
+                                                        <div className="flex flex-col gap-0.5">
+                                                            <div className="text-[12px] font-bold text-gray-800">{entry.brand}</div>
+                                                            <div className="text-[9px] font-black text-blue-500 uppercase tracking-wider flex items-center gap-1">
+                                                                <div className="w-1 h-1 rounded-full bg-blue-400"></div>
+                                                                {entry.warehouseName}
+                                                            </div>
+                                                        </div>
+                                                    </td>
+                                                    <td className="px-6 py-4 text-right align-middle">
+                                                        <div className="text-[13px] font-bold text-gray-900">{parseFloat(entry.quantity).toLocaleString()} kg</div>
+                                                    </td>
+                                                    <td className="px-6 py-4 text-right align-middle">
+                                                        <div className="text-[12px] font-bold text-gray-400">৳{parseFloat(entry.unitPrice || 0).toLocaleString()}</div>
+                                                    </td>
+                                                    <td className="px-6 py-4 text-right align-middle">
+                                                        <div className="text-[14px] font-black text-blue-900 group-hover:scale-[1.02] transition-transform origin-right">৳{parseFloat(entry.totalAmount || 0).toLocaleString()}</div>
+                                                    </td>
+                                                </tr>
+                                            ))}
+                                        </React.Fragment>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
 
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-2">
-                        <div className="p-5 bg-orange-50/50 rounded-2xl border border-orange-100/50 group hover:bg-orange-50 transition-colors">
-                            <div className="text-[10px] font-bold text-orange-400 uppercase tracking-wider mb-1">Total Discount</div>
-                            <div className="text-xl font-black text-orange-600 group-hover:scale-105 transition-transform origin-left">৳{parseFloat(viewData.discount || 0).toLocaleString()}</div>
-                        </div>
-                        <div className="p-5 bg-emerald-50/50 rounded-2xl border border-emerald-100/50 group hover:bg-emerald-50 transition-colors">
-                            <div className="text-[10px] font-bold text-emerald-400 uppercase tracking-wider mb-1">Paid Amount</div>
-                            <div className="text-xl font-black text-emerald-600 group-hover:scale-105 transition-transform origin-left">৳{parseFloat(viewData.paidAmount || 0).toLocaleString()}</div>
-                        </div>
-                        <div className="p-5 bg-blue-900 rounded-2xl border border-blue-800 shadow-xl shadow-blue-500/10 group overflow-hidden relative">
-                            <div className="absolute top-0 right-0 w-24 h-24 bg-blue-500/10 rounded-full -mr-12 -mt-12 blur-2xl"></div>
-                            <div className="text-[10px] font-bold text-blue-300 uppercase tracking-wider mb-1 relative z-10">Grand Total Invoice</div>
-                            <div className="text-2xl font-black text-white relative z-10 group-hover:scale-105 transition-transform origin-left">৳{parseFloat(viewData.totalAmount || 0).toLocaleString()}</div>
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-2">
+                            <div className="p-5 bg-orange-50/30 rounded-2xl border border-orange-100/50 group hover:bg-orange-50/50 transition-colors">
+                                <div className="text-[9px] font-black text-orange-400 uppercase tracking-widest mb-1.5">Total Discount</div>
+                                <div className="text-xl font-black text-orange-600 group-hover:scale-[1.02] transition-transform origin-left">৳{parseFloat(viewData.discount || 0).toLocaleString()}</div>
+                            </div>
+                            <div className="p-5 bg-emerald-50/30 rounded-2xl border border-emerald-100/50 group hover:bg-emerald-50/50 transition-colors">
+                                <div className="text-[9px] font-black text-emerald-400 uppercase tracking-widest mb-1.5">Paid Amount</div>
+                                <div className="text-xl font-black text-emerald-500 group-hover:scale-[1.02] transition-transform origin-left">৳{parseFloat(viewData.paidAmount || 0).toLocaleString()}</div>
+                            </div>
+                            <div className="p-5 bg-[#1a368b] rounded-2xl border border-blue-900 shadow-xl shadow-blue-500/10 group overflow-hidden relative">
+                                <div className="absolute top-0 right-0 w-32 h-32 bg-blue-500/20 rounded-full -mr-16 -mt-16 blur-3xl"></div>
+                                <div className="text-[9px] font-black text-blue-200 uppercase tracking-widest mb-1.5 relative z-10">Grand Total Invoice</div>
+                                <div className="text-2xl font-black text-white relative z-10 group-hover:scale-[1.02] transition-transform origin-left tracking-tight">৳{parseFloat(viewData.totalAmount || 0).toLocaleString()}</div>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -1378,8 +1516,18 @@ const SaleManagement = ({
         );
     };
 
+    const requestedCount = useMemo(() => {
+        return sales.filter(s => (s.status || '').toLowerCase().includes('requested')).length;
+    }, [sales]);
+
     // Apply search + advanced filters
     const displayedSales = sales.filter(sale => {
+        const matchesRequestFilter = isRequestedOnly
+            ? (sale.status || '').toLowerCase().includes('requested')
+            : !(sale.status || '').toLowerCase().includes('requested');
+
+        if (!matchesRequestFilter) return false;
+
         // Text search
         if (searchQuery) {
             const q = searchQuery.toLowerCase();
@@ -1473,17 +1621,32 @@ const SaleManagement = ({
                 </div>
 
                 {!showForm && (
-                    <div className="sale-mgmt-search-container group">
-                        <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
-                            <SearchIcon className="h-4 w-4 text-gray-400 group-focus-within:text-blue-500 transition-colors" />
+                    <div className="flex-1 w-full max-w-none md:max-w-md mx-auto flex flex-col items-center gap-2">
+                        <div className="sale-mgmt-search-container group w-full relative">
+                            <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
+                                <SearchIcon className="h-4 w-4 text-gray-400 group-focus-within:text-blue-500 transition-colors" />
+                            </div>
+                            <input
+                                type="text"
+                                placeholder="Search invoice, customer..."
+                                value={searchQuery}
+                                onChange={(e) => setSearchQuery(e.target.value)}
+                                className="sale-mgmt-search-input"
+                            />
                         </div>
-                        <input
-                            type="text"
-                            placeholder="Search invoice, customer..."
-                            value={searchQuery}
-                            onChange={(e) => setSearchQuery(e.target.value)}
-                            className="sale-mgmt-search-input"
-                        />
+                        <div className="flex items-center gap-2">
+                            <button
+                                onClick={() => setIsRequestedOnly(!isRequestedOnly)}
+                                className={`relative px-4 py-1.5 rounded-full text-xs font-bold transition-all border ${isRequestedOnly ? 'bg-blue-600 border-blue-600 text-white shadow-md' : 'bg-white border-gray-200 text-gray-600 hover:border-blue-300 hover:text-blue-600'}`}
+                            >
+                                Requested
+                                {requestedCount > 0 && (
+                                    <span className="absolute -top-1.5 -right-1.5 flex h-4 min-w-[16px] items-center justify-center px-1 rounded-full bg-red-500 text-[10px] font-bold text-white shadow-sm animate-pulse border-2 border-white">
+                                        {requestedCount}
+                                    </span>
+                                )}
+                            </button>
+                        </div>
                     </div>
                 )}
 
@@ -2812,7 +2975,7 @@ const SaleManagement = ({
                             </thead>
                             <tbody className="divide-y divide-gray-50">
                                 {isLoading ? (
-                                    <tr><td colSpan={saleType === 'Border' ? "12" : "13"} className="px-3 py-20 text-center text-gray-400 font-medium">No sales records found</td></tr>
+                                    <tr><td colSpan={saleType === 'Border' ? "12" : "12"} className="px-3 py-20 text-center text-gray-400 font-medium">No sales records found</td></tr>
                                 ) : getFilteredData().map(sale => {
                                     const isExpanded = expandedRows.includes(sale._id);
                                     const isMultiple = (sale.items && sale.items.length > 0)
@@ -2837,11 +3000,11 @@ const SaleManagement = ({
                                             <tr key={sale._id} className="hover:bg-blue-50/50 transition-all border-b border-gray-50 text-[13px]">
                                                 <td className="px-3 py-4 whitespace-nowrap text-gray-600">{formatDate(sale.date)}</td>
                                                 <td className="px-3 py-4 whitespace-nowrap font-semibold text-gray-800">{sale.lcNo || '-'}</td>
-                                                <td className="px-3 py-4 whitespace-nowrap font-semibold text-gray-800">{sale.importer || '-'}</td>
-                                                <td className="px-3 py-4 whitespace-nowrap font-semibold text-gray-800">{sale.port || '-'}</td>
-                                                <td className="px-3 py-4 whitespace-nowrap font-semibold text-gray-800">{sale.indianCnF || '-'}</td>
-                                                <td className="px-3 py-4 whitespace-nowrap font-semibold text-gray-800">{sale.bdCnf || '-'}</td>
-                                                <td className="px-3 py-4 whitespace-nowrap font-semibold text-gray-800">{sale.companyName || sale.customerName || '-'}</td>
+                                                <td className="px-3 py-4 whitespace-nowrap font-semibold text-gray-800">{getSafeString(sale.importer) || '-'}</td>
+                                                <td className="px-3 py-4 whitespace-nowrap font-semibold text-gray-800">{getSafeString(sale.port) || '-'}</td>
+                                                <td className="px-3 py-4 whitespace-nowrap font-semibold text-gray-800">{getSafeString(sale.indianCnF) || '-'}</td>
+                                                <td className="px-3 py-4 whitespace-nowrap font-semibold text-gray-800">{getSafeString(sale.bdCnf) || '-'}</td>
+                                                <td className="px-3 py-4 whitespace-nowrap font-semibold text-gray-800">{getSafeString(sale.companyName) || getSafeString(sale.customerName) || '-'}</td>
                                                 <td className="px-3 py-4 whitespace-nowrap">
                                                     <div className="flex flex-col gap-1">
                                                         {items.map((it, idx) => (
@@ -2873,11 +3036,26 @@ const SaleManagement = ({
                                                     </div>
                                                 </td>
                                                 <td className="px-3 py-4 whitespace-nowrap text-center font-black text-gray-900">৳ {parseFloat(sale.totalAmount).toLocaleString()}</td>
-                                                <td className="px-3 py-4 text-center">
-                                                    <div className="flex items-center justify-center gap-1">
-                                                        <button onClick={() => generateSaleInvoicePDF(sale, customers)} className="p-2 hover:bg-emerald-100 text-emerald-600 rounded-xl transition-all" title="Invoice"><FileTextIcon className="w-4 h-4" /></button>
-                                                        <button onClick={() => handleEdit(sale)} className="p-2 hover:bg-blue-100 text-blue-600 rounded-xl transition-all" title="Edit"><EditIcon className="w-4 h-4" /></button>
-                                                        <button onClick={() => handleDelete(sale)} className="p-2 hover:bg-red-100 text-red-600 rounded-xl transition-all" title="Delete"><TrashIcon className="w-4 h-4" /></button>
+                                                <td className="px-3 py-4 text-center whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+                                                    <div className="flex items-center justify-center gap-1.5">
+                                                        {sale.status === 'Requested' ? (
+                                                            <>
+                                                                <button onClick={(e) => { e.stopPropagation(); setViewData(sale); }} className="text-gray-400 hover:text-blue-600 transition-colors" title="View Details"><EyeIcon className="w-5 h-5" /></button>
+                                                                <button onClick={(e) => { e.stopPropagation(); handleEdit(sale); }} className="text-gray-400 hover:text-blue-600 transition-colors" title="Edit"><EditIcon className="w-5 h-5" /></button>
+                                                                {canApprove && (
+                                                                    <>
+                                                                        <button onClick={(e) => { e.stopPropagation(); handleStatusUpdate(sale, 'Pending'); }} className="text-gray-400 hover:text-emerald-600 transition-colors" title="Accept"><CheckIcon className="w-5 h-5" /></button>
+                                                                        <button onClick={(e) => { e.stopPropagation(); handleStatusUpdate(sale, 'Rejected'); }} className="text-gray-400 hover:text-red-600 transition-colors" title="Reject"><XIcon className="w-5 h-5" /></button>
+                                                                    </>
+                                                                )}
+                                                            </>
+                                                        ) : (
+                                                            <>
+                                                                <button onClick={(e) => { e.stopPropagation(); generateSaleInvoicePDF(sale, customers); }} className="p-2 hover:bg-emerald-100 text-emerald-600 rounded-xl transition-all" title="Invoice"><FileTextIcon className="w-4 h-4" /></button>
+                                                                <button onClick={(e) => { e.stopPropagation(); handleEdit(sale); }} className="p-2 hover:bg-blue-100 text-blue-600 rounded-xl transition-all" title="Edit"><EditIcon className="w-4 h-4" /></button>
+                                                                <button onClick={(e) => { e.stopPropagation(); handleDelete(sale); }} className="p-2 hover:bg-red-100 text-red-600 rounded-xl transition-all" title="Delete"><TrashIcon className="w-4 h-4" /></button>
+                                                            </>
+                                                        )}
                                                     </div>
                                                 </td>
                                             </tr>
@@ -2897,10 +3075,10 @@ const SaleManagement = ({
                                                 <div className="text-[13px] font-semibold text-gray-800">{sale.invoiceNo || '-'}</div>
                                             </td>
                                             <td className="px-3 py-4 whitespace-nowrap">
-                                                <div className="text-[13px] font-semibold text-gray-800">{sale.companyName || '-'}</div>
+                                                <div className="text-[13px] font-semibold text-gray-800">{getSafeString(sale.companyName) || '-'}</div>
                                             </td>
                                             <td className="px-3 py-4 whitespace-nowrap">
-                                                <div className="text-[13px] font-semibold text-gray-800">{sale.customerName}</div>
+                                                <div className="text-[13px] font-semibold text-gray-800">{getSafeString(sale.customerName) || '-'}</div>
                                             </td>
                                             <td className="px-3 py-4 whitespace-nowrap">
                                                 {isMultiple && !isExpanded ? (
@@ -2975,10 +3153,25 @@ const SaleManagement = ({
                                                 </div>
                                             </td>
                                             <td className="px-3 py-4 text-center whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
-                                                <div className="flex items-center justify-center gap-1">
-                                                    <button onClick={() => generateSaleInvoicePDF(sale, customers)} className="p-2 hover:bg-emerald-100 text-emerald-600 rounded-xl transition-all" title="Invoice"><FileTextIcon className="w-4 h-4" /></button>
-                                                    <button onClick={() => handleEdit(sale)} className="p-2 hover:bg-blue-100 text-blue-600 rounded-xl transition-all" title="Edit"><EditIcon className="w-4 h-4" /></button>
-                                                    <button onClick={() => handleDelete(sale)} className="p-2 hover:bg-red-100 text-red-600 rounded-xl transition-all" title="Delete"><TrashIcon className="w-4 h-4" /></button>
+                                                <div className="flex items-center justify-center gap-1.5">
+                                                    {sale.status === 'Requested' ? (
+                                                        <>
+                                                            <button onClick={(e) => { e.stopPropagation(); setViewData(sale); }} className="text-gray-400 hover:text-blue-600 transition-colors" title="View Details"><EyeIcon className="w-5 h-5" /></button>
+                                                            <button onClick={(e) => { e.stopPropagation(); handleEdit(sale); }} className="text-gray-400 hover:text-blue-600 transition-colors" title="Edit"><EditIcon className="w-5 h-5" /></button>
+                                                            {canApprove && (
+                                                                <>
+                                                                    <button onClick={(e) => { e.stopPropagation(); handleStatusUpdate(sale, 'Pending'); }} className="text-gray-400 hover:text-emerald-600 transition-colors" title="Accept"><CheckIcon className="w-5 h-5" /></button>
+                                                                    <button onClick={(e) => { e.stopPropagation(); handleStatusUpdate(sale, 'Rejected'); }} className="text-gray-400 hover:text-red-600 transition-colors" title="Reject"><XIcon className="w-5 h-5" /></button>
+                                                                </>
+                                                            )}
+                                                        </>
+                                                    ) : (
+                                                        <>
+                                                            <button onClick={(e) => { e.stopPropagation(); generateSaleInvoicePDF(sale, customers); }} className="p-2 hover:bg-emerald-100 text-emerald-600 rounded-xl transition-all" title="Invoice"><FileTextIcon className="w-4 h-4" /></button>
+                                                            <button onClick={(e) => { e.stopPropagation(); handleEdit(sale); }} className="p-2 hover:bg-blue-100 text-blue-600 rounded-xl transition-all" title="Edit"><EditIcon className="w-4 h-4" /></button>
+                                                            <button onClick={(e) => { e.stopPropagation(); handleDelete(sale); }} className="p-2 hover:bg-red-100 text-red-600 rounded-xl transition-all" title="Delete"><TrashIcon className="w-4 h-4" /></button>
+                                                        </>
+                                                    )}
                                                 </div>
                                             </td>
                                         </tr>
@@ -3032,7 +3225,7 @@ const SaleManagement = ({
                                                 <>
                                                     <div className="flex-1 min-w-0 border-l border-gray-100 pl-3">
                                                         <div className="sale-mgmt-mobile-label">Company</div>
-                                                        <div className="text-[11px] font-bold text-gray-800 truncate">{sale.companyName || sale.port || '-'}</div>
+                                                        <div className="text-[11px] font-bold text-gray-800 truncate">{getSafeString(sale.companyName) || sale.port || '-'}</div>
                                                     </div>
                                                     <div className="flex-shrink-0 border-l border-gray-100 pl-3 text-right">
                                                         <div className="sale-mgmt-mobile-label text-blue-600">Total</div>
@@ -3045,9 +3238,24 @@ const SaleManagement = ({
                                         <div className="flex items-center gap-2 ml-2">
                                             {isExpanded ? (
                                                 <div className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
-                                                    <button onClick={() => generateSaleInvoicePDF(sale, customers)} className="p-2 bg-emerald-50 text-emerald-600 rounded-lg transition-colors hover:bg-emerald-100"><FileTextIcon className="w-4 h-4" /></button>
-                                                    <button onClick={() => handleEdit(sale)} className="p-2 bg-blue-50 text-blue-600 rounded-lg transition-colors hover:bg-blue-100"><EditIcon className="w-4 h-4" /></button>
-                                                    <button onClick={() => handleDelete(sale)} className="p-2 bg-red-50 text-red-600 rounded-lg transition-colors hover:bg-red-100"><TrashIcon className="w-4 h-4" /></button>
+                                                    {sale.status === 'Requested' ? (
+                                                        <>
+                                                            <button onClick={(e) => { e.stopPropagation(); setViewData(sale); }} className="p-2 text-blue-600 bg-blue-50/50 rounded-lg transition-colors hover:bg-blue-100" title="View Details"><EyeIcon className="w-4 h-4" /></button>
+                                                            <button onClick={(e) => { e.stopPropagation(); handleEdit(sale); }} className="p-2 text-blue-600 bg-blue-50/50 rounded-lg transition-colors hover:bg-blue-100" title="Edit"><EditIcon className="w-4 h-4" /></button>
+                                                            {canApprove && (
+                                                                <>
+                                                                    <button onClick={(e) => { e.stopPropagation(); handleStatusUpdate(sale, 'Pending'); }} className="p-2 text-emerald-600 bg-emerald-50/50 rounded-lg transition-colors hover:bg-emerald-100" title="Accept"><CheckIcon className="w-4 h-4" /></button>
+                                                                    <button onClick={(e) => { e.stopPropagation(); handleStatusUpdate(sale, 'Rejected'); }} className="p-2 text-red-600 bg-red-50/50 rounded-lg transition-colors hover:bg-red-100" title="Reject"><XIcon className="w-4 h-4" /></button>
+                                                                </>
+                                                            )}
+                                                        </>
+                                                    ) : (
+                                                        <>
+                                                            <button onClick={(e) => { e.stopPropagation(); generateSaleInvoicePDF(sale, customers); }} className="p-2 bg-emerald-50 text-emerald-600 rounded-lg transition-colors hover:bg-emerald-100"><FileTextIcon className="w-4 h-4" /></button>
+                                                            <button onClick={(e) => { e.stopPropagation(); handleEdit(sale); }} className="p-2 bg-blue-50 text-blue-600 rounded-lg transition-colors hover:bg-blue-100"><EditIcon className="w-4 h-4" /></button>
+                                                            <button onClick={(e) => { e.stopPropagation(); handleDelete(sale); }} className="p-2 bg-red-50 text-red-600 rounded-lg transition-colors hover:bg-red-100"><TrashIcon className="w-4 h-4" /></button>
+                                                        </>
+                                                    )}
                                                 </div>
                                             ) : (
                                                 <ChevronDownIcon className="w-5 h-5 text-gray-300 opacity-60" />
@@ -3062,13 +3270,19 @@ const SaleManagement = ({
                                             <div className="grid grid-cols-2 gap-4 text-xs mb-4">
                                                 <div>
                                                     <div className="sale-mgmt-mobile-label">Customer</div>
-                                                    <div className="sale-mgmt-mobile-value">{sale.customerName || '-'}</div>
+                                                    <div className="sale-mgmt-mobile-value">{getSafeString(sale.customerName) || '-'}</div>
                                                 </div>
                                                 <div className="text-right">
                                                     <div className="sale-mgmt-mobile-label">Company</div>
-                                                    <div className="sale-mgmt-mobile-value truncate">{sale.companyName || sale.port || '-'}</div>
+                                                    <div className="sale-mgmt-mobile-value truncate">{getSafeString(sale.companyName) || sale.port || '-'}</div>
                                                 </div>
                                             </div>
+                                            {sale.requestedBy && (
+                                                <div className="flex items-center gap-2 mb-4 px-3 py-2 bg-indigo-50/50 rounded-xl border border-indigo-100/50">
+                                                    <div className="text-[10px] font-black text-indigo-400 uppercase tracking-widest">Requested By</div>
+                                                    <div className="text-[12px] font-bold text-indigo-700 ml-1">{sale.requestedBy}</div>
+                                                </div>
+                                            )}
 
                                             {/* Items Section */}
                                             <div className="sale-mgmt-mobile-section mt-1">

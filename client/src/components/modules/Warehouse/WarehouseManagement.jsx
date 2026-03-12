@@ -242,7 +242,7 @@ const WarehouseManagement = ({ currentUser }) => {
         warehouse: '',
         productName: '',
         brand: '',
-        category: 'Crop'
+        category: ''
     });
 
     const [editingWarehouseId, setEditingWarehouseId] = useState(null);
@@ -392,10 +392,46 @@ const WarehouseManagement = ({ currentUser }) => {
             }
         });
 
-        // Ensure no negatives
+        // Ensure no negatives — except for 'GENERAL' category products which allow pre-sales
         Object.keys(brands).forEach(k => {
-            brands[k].inhouseQty = Math.max(0, brands[k].inhouseQty);
-            brands[k].inhousePkt = Math.max(0, brands[k].inhousePkt);
+            const [prodName] = k.split('|');
+            const product = products.find(p => (p.name || p.productName || '').trim().toLowerCase() === prodName);
+            const category = (product?.category || '').trim().toUpperCase();
+
+            if (category !== 'GENERAL') {
+                brands[k].inhouseQty = Math.max(0, brands[k].inhouseQty);
+                brands[k].inhousePkt = Math.max(0, brands[k].inhousePkt);
+            }
+        });
+
+        // --- SECOND PASS: Include sales for 'GENERAL' products that have NO stock records ---
+        salesRecords.forEach(sale => {
+            if (!sale.items || !Array.isArray(sale.items)) return;
+            sale.items.forEach(si => {
+                const prodName = (si.productName || '').trim().toLowerCase();
+                const product = products.find(p => (p.name || p.productName || '').trim().toLowerCase() === prodName);
+                if ((product?.category || '').trim().toUpperCase() !== 'GENERAL') return;
+
+                if (si.brandEntries && Array.isArray(si.brandEntries)) {
+                    si.brandEntries.forEach(be => {
+                        const brandName = (be.brand || '').trim().toLowerCase();
+                        const brandKey = `${prodName}|${brandName}`;
+                        const sQty = parseFloat(be.quantity) || 0;
+
+                        // If it doesn't exist in 'brands', it means there are NO stock records for this brand
+                        if (!brands[brandKey]) {
+                            const pktSize = parseFloat(si.packetSize || be.packetSize) || 0;
+                            brands[brandKey] = {
+                                inhouseQty: -sQty,
+                                inhousePkt: pktSize > 0 ? -(sQty / pktSize) : 0,
+                                whQty: 0,
+                                whPkt: 0,
+                                packetSize: pktSize
+                            };
+                        }
+                    });
+                }
+            });
         });
 
         return brands;
@@ -432,7 +468,11 @@ const WarehouseManagement = ({ currentUser }) => {
             const hasProduct = (item.productName && item.productName !== '-') || (item.product && item.product !== '-');
             const ihQty = parseFloat(item.inhouseQty) || 0;
             const whQty = parseFloat(item.whQty) || 0;
-            return hasProduct && (item.hasLCRecord || !item.hasLCRecord) && (ihQty > 0 || whQty > 0);
+
+            const product = products.find(p => (p.name || p.productName || '').trim().toLowerCase() === ((item.productName || item.product || '').trim().toLowerCase()));
+            const isGeneral = (product?.category || '').trim().toUpperCase() === 'GENERAL';
+
+            return hasProduct && (item.hasLCRecord || !item.hasLCRecord) && (ihQty > 0 || whQty > 0 || (isGeneral && (ihQty < 0 || whQty < 0)));
         });
 
         const uniqueBrands = new Set();
@@ -633,8 +673,11 @@ const WarehouseManagement = ({ currentUser }) => {
             const localIhQty = item.recordType === 'stock' ? (parseFloat(item.inhouseQty || item.inHouseQuantity || 0)) : 0;
             const localWhQty = parseFloat(item.whQty || 0);
 
-            // Show if it has valid LC source OR manually transferred stock AND has either local unallocated stock or physical warehouse stock
-            return (item.hasLCRecord || !item.hasLCRecord) && (localIhQty > 0 || localWhQty > 0);
+            const product = products.find(p => (p.name || p.productName || '').trim().toLowerCase() === ((item.productName || item.product || '').trim().toLowerCase()));
+            const isGeneral = (product?.category || '').trim().toUpperCase() === 'GENERAL';
+
+            // Show if it has valid LC source OR manually transferred stock AND has either local unallocated stock, physical warehouse stock or it is a general category pre-sale
+            return (item.hasLCRecord || !item.hasLCRecord) && (localIhQty !== 0 || localWhQty !== 0 || isGeneral);
         }).forEach(item => {
             const rawWhName = (item.whName || item.warehouse || '').trim();
             if (!rawWhName) return;
@@ -724,13 +767,64 @@ const WarehouseManagement = ({ currentUser }) => {
             }
         });
 
-        // 3. Final cleanup: Ensure no negatives
+        // 3. Final cleanup: Ensure no negatives — except for 'GENERAL' category which allows pre-sales
         Object.values(groups).forEach(wh => {
             Object.values(wh.products).forEach(p => {
+                const product = products.find(prod => (prod.name || prod.productName || '').trim().toLowerCase() === p.productName.toLowerCase());
+                const category = (product?.category || '').trim().toUpperCase();
+
                 Object.values(p.brands).forEach(b => {
-                    b.whQty = Math.max(0, b.whQty);
-                    b.whPkt = Math.max(0, b.whPkt);
+                    if (category !== 'GENERAL') {
+                        b.whQty = Math.max(0, b.whQty);
+                        b.whPkt = Math.max(0, b.whPkt);
+                    }
                 });
+            });
+        });
+
+        // --- SECOND PASS: Include sales for 'GENERAL' products that have NO warehouse stock records yet ---
+        salesRecords.forEach(sale => {
+            if (!sale.items || !Array.isArray(sale.items)) return;
+            sale.items.forEach(si => {
+                const prodName = (si.productName || '').trim().toLowerCase();
+                const product = products.find(p => (p.name || p.productName || '').trim().toLowerCase() === prodName);
+                if ((product?.category || '').trim().toUpperCase() !== 'GENERAL') return;
+
+                if (si.brandEntries && Array.isArray(si.brandEntries)) {
+                    si.brandEntries.forEach(be => {
+                        const whName = (be.warehouseName || 'General / In Stock').trim();
+                        const brandName = (be.brand || '').trim();
+                        const brandKey = `${prodName}|${brandName.toLowerCase()}`;
+                        const sQty = parseFloat(be.quantity) || 0;
+
+                        if (!groups[whName]) {
+                            groups[whName] = {
+                                whName,
+                                manager: '-',
+                                location: '-',
+                                products: {}
+                            };
+                        }
+
+                        if (!groups[whName].products[si.productName]) {
+                            groups[whName].products[si.productName] = { productName: si.productName, brands: {} };
+                        }
+
+                        if (!groups[whName].products[si.productName].brands[brandName]) {
+                            const pktSize = parseFloat(si.packetSize || be.packetSize) || 0;
+                            groups[whName].products[si.productName].brands[brandName] = {
+                                brand: brandName,
+                                productName: si.productName,
+                                inhouseQty: globalBrandTotals[brandKey]?.inhouseQty || 0,
+                                inhousePkt: globalBrandTotals[brandKey]?.inhousePkt || 0,
+                                whQty: -sQty,
+                                whPkt: pktSize > 0 ? -(sQty / pktSize) : 0,
+                                packetSize: pktSize,
+                                recordType: 'pre-sale'
+                            };
+                        }
+                    });
+                }
             });
         });
 

@@ -98,7 +98,7 @@ const StockReport = ({
                                             <h4 className="font-bold text-gray-900 text-sm">Advance Filter</h4>
                                             <button
                                                 onClick={() => {
-                                                    setStockFilters({ startDate: '', endDate: '', lcNo: '', port: '', brand: '', productName: '', category: 'Crop' });
+                                                    setStockFilters({ startDate: '', endDate: '', lcNo: '', port: '', brand: '', productName: '', category: '' });
                                                     setFilterSearchInputs({ lcNoSearch: '', portSearch: '', brandSearch: '', productSearch: '', categorySearch: '' });
                                                     setFilterDropdownOpen(initialFilterDropdownState);
                                                 }}
@@ -408,14 +408,14 @@ const StockReport = ({
                                                     <td className="border-r border-gray-900 px-2 py-0.5 text-[14px] text-right text-gray-900 font-medium align-top whitespace-nowrap">
                                                         {item.brandList.map((ent, i) => {
                                                             const { whole, remainder } = calculatePktRemainder(ent.totalInHouseQuantity, ent.packetSize);
-                                                            return <div key={i} className="leading-tight">{whole}{remainder > 0 ? ` - ${remainder} kg` : ''}</div>;
+                                                            return <div key={i} className="leading-tight">{whole}{remainder !== 0 ? ` - ${Math.abs(remainder)} kg` : ''}</div>;
                                                         })}
                                                         {hasTotal && (
                                                             <div className="mt-0 pt-0.5 border-t border-gray-900 font-bold leading-tight">
                                                                 {(() => {
                                                                     const pktSize = item.brandList[0]?.packetSize || 0;
                                                                     const { whole, remainder } = calculatePktRemainder(item.totalInHouseQuantity, pktSize);
-                                                                    return `${whole}${remainder > 0 ? ` - ${remainder} kg` : ''}`;
+                                                                    return `${whole}${remainder !== 0 ? ` - ${Math.abs(remainder)} kg` : ''}`;
                                                                 })()}
                                                             </div>
                                                         )}
@@ -440,14 +440,14 @@ const StockReport = ({
                                                     <td className="border-r border-gray-900 px-2 py-0.5 text-[14px] text-right text-gray-900 font-medium align-top whitespace-nowrap">
                                                         {item.brandList.map((ent, i) => {
                                                             const { whole, remainder } = calculatePktRemainder(ent.inHouseQuantity, ent.packetSize);
-                                                            return <div key={i} className="leading-tight">{whole}{remainder > 0 ? ` - ${remainder} kg` : ''}</div>;
+                                                            return <div key={i} className="leading-tight">{whole}{remainder !== 0 ? ` - ${Math.abs(remainder)} kg` : ''}</div>;
                                                         })}
                                                         {hasTotal && (
                                                             <div className="mt-0 pt-0.5 border-t border-gray-900 font-bold leading-tight">
                                                                 {(() => {
                                                                     const pktSize = item.brandList[0]?.packetSize || 0;
                                                                     const { whole, remainder } = calculatePktRemainder(item.inHouseQuantity, pktSize);
-                                                                    return `${whole}${remainder > 0 ? ` - ${remainder} kg` : ''}`;
+                                                                    return `${whole}${remainder !== 0 ? ` - ${Math.abs(remainder)} kg` : ''}`;
                                                                 })()}
                                                             </div>
                                                         )}
@@ -471,7 +471,7 @@ const StockReport = ({
                                                 {(() => {
                                                     const totalWhole = stockData.displayRecords.reduce((accWhole, item) => accWhole + item.brandList.reduce((sum, ent) => sum + calculatePktRemainder(ent.totalInHouseQuantity, ent.packetSize).whole, 0), 0);
                                                     const totalRem = stockData.displayRecords.reduce((accRem, item) => accRem + item.brandList.reduce((sum, ent) => sum + calculatePktRemainder(ent.totalInHouseQuantity, ent.packetSize).remainder, 0), 0);
-                                                    return `${totalWhole}${totalRem > 0 ? ` - ${totalRem.toLocaleString()} kg` : ''}`;
+                                                    return `${totalWhole}${totalRem !== 0 ? ` - ${Math.abs(totalRem).toLocaleString()} kg` : ''}`;
                                                 })()}
                                             </td>
                                             <td className="px-2 py-1.5 text-[14px] text-right font-black text-gray-900 border-r border-gray-900">
@@ -487,7 +487,7 @@ const StockReport = ({
                                                 {(() => {
                                                     const totalWhole = stockData.displayRecords.reduce((accWhole, item) => accWhole + item.brandList.reduce((sum, ent) => sum + calculatePktRemainder(ent.inHouseQuantity, ent.packetSize).whole, 0), 0);
                                                     const totalRem = stockData.displayRecords.reduce((accRem, item) => accRem + item.brandList.reduce((sum, ent) => sum + calculatePktRemainder(ent.inHouseQuantity, ent.packetSize).remainder, 0), 0);
-                                                    return `${totalWhole}${totalRem > 0 ? ` - ${totalRem.toLocaleString()} kg` : ''}`;
+                                                    return `${totalWhole}${totalRem !== 0 ? ` - ${Math.abs(totalRem).toLocaleString()} kg` : ''}`;
                                                 })()}
                                             </td>
                                             <td className="px-2 py-1.5 text-[14px] text-right font-black text-gray-900">
@@ -520,7 +520,7 @@ const StockReport = ({
                                                             <p className="text-xs font-bold text-gray-700">
                                                                 {(() => {
                                                                     const { whole, remainder } = calculatePktRemainder(ent.totalInHouseQuantity, ent.packetSize);
-                                                                    return `${whole}${remainder > 0 ? ` - ${remainder} kg` : ''}`;
+                                                                    return `${whole}${remainder !== 0 ? ` - ${Math.abs(remainder)} kg` : ''}`;
                                                                 })()} PKT
                                                             </p>
                                                             <p className="text-sm font-black text-gray-900">{Math.round(ent.totalInHouseQuantity)} kg</p>
@@ -538,7 +538,7 @@ const StockReport = ({
                                                                 <p className="text-xs font-bold text-blue-700">
                                                                     {(() => {
                                                                         const { whole, remainder } = calculatePktRemainder(ent.inHouseQuantity, ent.packetSize);
-                                                                        return `${whole}${remainder > 0 ? ` - ${remainder} kg` : ''}`;
+                                                                        return `${whole}${remainder !== 0 ? ` - ${Math.abs(remainder)} kg` : ''}`;
                                                                     })()} PKT
                                                                 </p>
                                                                 <p className="text-lg font-black text-blue-600">{Math.round(ent.inHouseQuantity)} kg</p>
@@ -601,7 +601,7 @@ const StockReport = ({
                                     PKT: {(() => {
                                         const totalWhole = stockData.displayRecords.reduce((accWhole, item) => accWhole + item.brandList.reduce((sum, ent) => sum + calculatePktRemainder(ent.totalInHouseQuantity, ent.packetSize).whole, 0), 0);
                                         const totalRem = stockData.displayRecords.reduce((accRem, item) => accRem + item.brandList.reduce((sum, ent) => sum + calculatePktRemainder(ent.totalInHouseQuantity, ent.packetSize).remainder, 0), 0);
-                                        return `${totalWhole}${totalRem > 0 ? ` - ${totalRem.toLocaleString()} kg` : ''}`;
+                                        return `${totalWhole}${totalRem !== 0 ? ` - ${Math.abs(totalRem).toLocaleString()} kg` : ''}`;
                                     })()}
                                 </div>
                                 <div className="text-xl sm:text-2xl font-black text-gray-900">
@@ -627,7 +627,7 @@ const StockReport = ({
                                     PKT: {(() => {
                                         const totalWhole = stockData.displayRecords.reduce((accWhole, item) => accWhole + item.brandList.reduce((sum, ent) => sum + calculatePktRemainder(ent.inHouseQuantity, ent.packetSize).whole, 0), 0);
                                         const totalRem = stockData.displayRecords.reduce((accRem, item) => accRem + item.brandList.reduce((sum, ent) => sum + calculatePktRemainder(ent.inHouseQuantity, ent.packetSize).remainder, 0), 0);
-                                        return `${totalWhole}${totalRem > 0 ? ` - ${totalRem.toLocaleString()} kg` : ''}`;
+                                        return `${totalWhole}${totalRem !== 0 ? ` - ${Math.abs(totalRem).toLocaleString()} kg` : ''}`;
                                     })()}
                                 </div>
                                 <div className="text-2xl sm:text-3xl font-black text-blue-600">
