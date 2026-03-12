@@ -1752,10 +1752,10 @@ export const generateSalesReportPDF = (reportData, filters, summary, saleType = 
                 }
 
                 row.push(saleType === 'Border'
-                    ? Math.round(parseFloat(item.price) || 0).toLocaleString()
+                    ? (parseFloat(item.price) || 0).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 })
                     : (parseFloat(item.price) || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
                 row.push(saleType === 'Border'
-                    ? Math.round(parseFloat(item.total) || 0).toLocaleString()
+                    ? (parseFloat(item.total) || 0).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 })
                     : (parseFloat(item.total) || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
 
                 if (saleType !== 'Border') {
@@ -1790,7 +1790,7 @@ export const generateSalesReportPDF = (reportData, filters, summary, saleType = 
             ...(saleType === 'Border' ? [
                 { content: '', styles: { halign: 'right', fontStyle: 'bold' } }
             ] : []),
-            { content: saleType === 'Border' ? Math.round(summary.totalAmount).toLocaleString() : summary.totalAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }), styles: { halign: 'right', fontStyle: 'bold' } },
+            { content: saleType === 'Border' ? summary.totalAmount.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 }) : summary.totalAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }), styles: { halign: 'right', fontStyle: 'bold' } },
             ...(saleType === 'Border' ? [] : [
                 { content: totalDiscount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }), styles: { halign: 'right', fontStyle: 'bold' } },
                 { content: summary.totalPaid.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }), styles: { halign: 'right', fontStyle: 'bold' } },
