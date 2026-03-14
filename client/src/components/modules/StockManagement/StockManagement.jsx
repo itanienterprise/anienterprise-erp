@@ -2896,8 +2896,8 @@ const StockManagement = ({
                                                                 {Math.round(brand.inHouseQuantity).toLocaleString()} {group.unit}
                                                             </div>
                                                             <div className="text-center overflow-hidden">
-                                                                <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold ${brand.inHouseQuantity > 0 ? 'bg-emerald-50 text-emerald-600' : brand.inHouseQuantity < 0 ? 'bg-blue-50 text-blue-600' : 'bg-red-50 text-red-600'}`}>
-                                                                    {brand.inHouseQuantity > 0 ? 'In Stock' : brand.inHouseQuantity < 0 ? 'Pre-Sold' : 'Out of Stock'}
+                                                                <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold ${brand.inHouseQuantity > 0 ? 'bg-emerald-50 text-emerald-600' : brand.isPreSold ? 'bg-blue-50 text-blue-600' : 'bg-red-50 text-red-600'}`}>
+                                                                    {brand.inHouseQuantity > 0 ? 'In Stock' : brand.isPreSold ? 'Pre-Sold' : 'Out of Stock'}
                                                                 </span>
                                                             </div>
                                                         </div>

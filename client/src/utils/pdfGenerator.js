@@ -1298,15 +1298,21 @@ export const generateSaleInvoicePDF = (sale, allCustomers = []) => {
         // Signature 1: PREPARED BY
         doc.line(margin, sigY, margin + sigWidth, sigY);
         doc.setFontSize(8);
+        doc.setFont('helvetica', 'normal');
+        doc.text(sale.requestedBy || sale.requestedByUsername || "-", margin + sigWidth / 2, sigY - 2, { align: 'center' });
         doc.setFont('helvetica', 'bold');
         doc.text("PREPARED BY", margin + sigWidth / 2, sigY + 5, { align: 'center' });
 
         // Signature 2: VERIFIED BY
         doc.line(margin + sigWidth + sigGap, sigY, margin + sigWidth + sigGap + sigWidth, sigY);
+        doc.setFont('helvetica', 'normal');
+        doc.text(sale.acceptedBy || sale.rejectedBy || "-", margin + sigWidth + sigGap + sigWidth / 2, sigY - 2, { align: 'center' });
+        doc.setFont('helvetica', 'bold');
         doc.text("VERIFIED BY", margin + sigWidth + sigGap + sigWidth / 2, sigY + 5, { align: 'center' });
 
         // Signature 3: AUTHORIZED SIGNATURE
         doc.line(pageWidth - margin - sigWidth, sigY, pageWidth - margin, sigY);
+        doc.setFont('helvetica', 'bold');
         doc.text("AUTHORIZED SIGNATURE", pageWidth - margin - sigWidth / 2, sigY + 5, { align: 'center' });
 
         const pdfOutput = doc.output('blob');

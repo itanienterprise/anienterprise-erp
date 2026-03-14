@@ -50,6 +50,14 @@ const SaleManagement = ({
     const [saleFilterSearch, setSaleFilterSearch] = useState({ companySearch: '', invoiceSearch: '', portSearch: '', productSearch: '', indCnfSearch: '', bdCnfSearch: '' });
     const [activeFilterDropdown, setActiveFilterDropdown] = useState(null); // 'from', 'to', 'company', 'invoice', 'port', 'product', 'indCnf', 'bdCnf'
     const [isRequestedOnly, setIsRequestedOnly] = useState(false);
+    const [originalData, setOriginalData] = useState(null);
+
+    const isFullAdmin = useMemo(() => {
+        if (!currentUser) return false;
+        if (currentUser.username === 'admin') return true;
+        const role = (currentUser.role || '').toLowerCase();
+        return role === 'admin';
+    }, [currentUser]);
 
     const canApprove = useMemo(() => {
         if (!currentUser) return false;
@@ -206,7 +214,7 @@ const SaleManagement = ({
 
                 // Send notification
                 if (addNotification) {
-                    console.log(`[handleStatusUpdate] Triggering addNotification...`);
+                    console.log(`[handleStatusUpdate] Target recipients: roles=["admin", "incharge", "sales manager"], users=[${sale.requestedByUsername}]`);
                     try {
                         const now = new Date();
                         const dateStr = formatDate(now);
@@ -215,14 +223,17 @@ const SaleManagement = ({
                         const statusLabel = newStatus === 'Pending' ? 'Accepted' : newStatus;
                         const actionLabel = newStatus === 'Pending' ? 'accepted' : 'rejected';
                         const requesterName = sale.requestedBy || sale.requestedByUsername || 'an employee';
+                        const sType = saleType === 'Border' ? 'Border Sale' : 'General Sale';
 
                         const targetRoles = ['admin', 'incharge', 'sales manager'];
                         const targetUsers = [sale.requestedByUsername].filter(Boolean);
+                        // Explicitly include 'admin' username to be sure they get it regardless of role filter
                         if (!targetUsers.includes('admin')) targetUsers.push('admin');
 
+                        console.log(`[handleStatusUpdate] Calling addNotification for ${sType} ${statusLabel}`);
                         await addNotification(
-                            `Sale ${statusLabel}`,
-                            `${dateStr} | ${timeStr} | ${adminName} has ${actionLabel} the Sale entry (${sale.invoiceNo}) requested by ${requesterName}`,
+                            `${sType} ${statusLabel}`,
+                            `${dateStr} | ${timeStr} | ${adminName} has ${actionLabel} the ${sType.toLowerCase()} entry (${sale.invoiceNo}) requested by ${requesterName}`,
                             targetRoles,
                             targetUsers
                         );
@@ -373,6 +384,44 @@ const SaleManagement = ({
         fetchPortsList();
     }, [saleType]); // Refetch if saleType changes
 
+    // Reset filters when switching between General and Border sales
+    useEffect(() => {
+        if (setSaleFilters) {
+            setSaleFilters({ 
+                startDate: '', 
+                endDate: '', 
+                companyName: '', 
+                invoiceNo: '', 
+                port: '', 
+                productName: '', 
+                indCnf: '', 
+                bdCnf: '' 
+            });
+        }
+        if (setSearchQuery) setSearchQuery('');
+        setIsRequestedOnly(false);
+    }, [saleType, setSaleFilters, setSearchQuery]);
+
+    const generateInvoiceNo = () => {
+        const prefix = saleType === 'Border' ? 'BS' : 'GS';
+        // Extract all numeric parts from invoice numbers starting with the same prefix
+        const numbers = allSalesRecords
+            .filter(s => (s.invoiceNo || '').startsWith(prefix))
+            .map(s => {
+                const match = (s.invoiceNo || '').match(/\d+/);
+                return match ? parseInt(match[0]) : 0;
+            });
+        const nextNum = numbers.length > 0 ? Math.max(...numbers) + 1 : 1;
+        return `${prefix}${nextNum.toString().padStart(4, '0')}`;
+    };
+
+    useEffect(() => {
+        if (showForm && !editingId && !formData.invoiceNo && allSalesRecords.length >= 0) {
+            console.log(`[AutoInvoice] Generating for ${saleType}...`);
+            setFormData(prev => ({ ...prev, invoiceNo: generateInvoiceNo() }));
+        }
+    }, [showForm, editingId, saleType, allSalesRecords]);
+
     const fetchSales = async () => {
         setIsLoading(true);
         try {
@@ -388,15 +437,18 @@ const SaleManagement = ({
 
                 // Filter by saleType. Match legacy records to 'General' ONLY if they are not legacy Border sales.
                 const filteredSales = decryptedSales.filter(s => {
-                    const isBorderSale = s.saleType === 'Border' || (!s.saleType && !!(s.lcNo || s.port || s.importer));
+                    const sTypeLow = (s.saleType || '').toLowerCase().trim();
+                    const isBorder = sTypeLow === 'border' || sTypeLow === 'border sale' || 
+                                   (s.invoiceNo || '').startsWith('BS') ||
+                                   (!s.saleType && !!(s.lcNo || s.port || s.importer));
                     
                     if (saleType === 'General') {
-                        return s.saleType === 'General' || (!s.saleType && !isBorderSale);
+                        return !isBorder && (sTypeLow === 'general' || sTypeLow === 'general sale' || !s.saleType || (s.invoiceNo || '').startsWith('GS'));
                     }
                     if (saleType === 'Border') {
-                        return isBorderSale;
+                        return isBorder;
                     }
-                    return s.saleType === saleType;
+                    return sTypeLow === saleType.toLowerCase();
                 });
 
                 setSales(filteredSales);
@@ -534,6 +586,8 @@ const SaleManagement = ({
                             const recBrand = (record.brand || '').toLowerCase().trim();
                             const targetBrand = (entry.brand || '').toLowerCase().trim();
 
+                            if ((record.status || '').toLowerCase().includes('requested')) return;
+
                             if (recName === targetName && recBrand === targetBrand) {
                                 totalInhouseQty += parseFloat(record.inHouseQuantity) || 0;
                             }
@@ -553,6 +607,8 @@ const SaleManagement = ({
 
                         // Subtract ALL matching sales to get REMAINING stock
                         allSalesRecords.forEach(s => {
+                            const sStatus = (s.status || '').toLowerCase();
+                            if (sStatus !== 'accepted' && sStatus !== 'pending') return;
                             if (s.items) {
                                 s.items.forEach(si => {
                                     const sProdName = (si.productName || '').toLowerCase().trim();
@@ -576,6 +632,7 @@ const SaleManagement = ({
                     } else if (item.productName && !entry.brand) {
                         // Fallback: just product if no brand is selected yet
                         stockRecords.forEach(record => {
+                            if ((record.status || '').toLowerCase().includes('requested')) return;
                             const recName = (record.productName || record.product || '').toLowerCase().trim();
                             const targetName = (item.productName || '').toLowerCase().trim();
                             if (recName === targetName) {
@@ -593,6 +650,8 @@ const SaleManagement = ({
 
                         // Subtract ALL sales for this product
                         allSalesRecords.forEach(s => {
+                            const sStatus = (s.status || '').toLowerCase();
+                            if (sStatus !== 'accepted' && sStatus !== 'pending') return;
                             if (s.items) {
                                 s.items.forEach(si => {
                                     const sProdName = (si.productName || '').toLowerCase().trim();
@@ -639,6 +698,8 @@ const SaleManagement = ({
                             const rBrand = (record.brand || '').toLowerCase().trim();
                             const targetBrand = (entry.brand || '').toLowerCase().trim();
 
+                            if ((record.status || '').toLowerCase().includes('requested')) return;
+
                             if (rName === targetWh && rProd === targetProd && rBrand === targetBrand) {
                                 totalWhQty += parseFloat(record.inHouseQuantity) || 0;
                             }
@@ -646,6 +707,8 @@ const SaleManagement = ({
 
                         // Subtract ALL matching sales for this specific warehouse
                         allSalesRecords.forEach(s => {
+                            const sStatus = (s.status || '').toLowerCase();
+                            if (sStatus !== 'accepted' && sStatus !== 'pending') return;
                             if (s.items) {
                                 s.items.forEach(si => {
                                     const sProdName = (si.productName || '').toLowerCase().trim();
@@ -694,6 +757,8 @@ const SaleManagement = ({
                             const rProd = (record.productName || record.product || '').toLowerCase().trim();
                             const targetProd = (item.productName || '').toLowerCase().trim();
 
+                            if ((record.status || '').toLowerCase().includes('requested')) return;
+
                             if (rName === targetWh && rProd === targetProd) {
                                 totalWhQty += parseFloat(record.inHouseQuantity) || 0;
                             }
@@ -701,6 +766,8 @@ const SaleManagement = ({
 
                         // Subtract ALL matching sales for this warehouse (across all brands)
                         allSalesRecords.forEach(s => {
+                            const sStatus = (s.status || '').toLowerCase();
+                            if (sStatus !== 'accepted' && sStatus !== 'pending') return;
                             if (s.items) {
                                 s.items.forEach(si => {
                                     const sProdName = (si.productName || '').toLowerCase().trim();
@@ -928,6 +995,110 @@ const SaleManagement = ({
             if (response.ok) {
                 setSubmitStatus('success');
 
+                const currentStatus = (formData.status || '').toLowerCase();
+                const isRequested = currentStatus.includes('requested');
+
+                if (addNotification && isRequested) {
+                    const now = new Date();
+                    const dateStr = `${String(now.getDate()).padStart(2, '0')}/${String(now.getMonth() + 1).padStart(2, '0')}/${now.getFullYear()}`;
+                    const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                    const employeeName = currentUser?.name || currentUser?.username || 'An employee';
+                    const sType = saleType === 'Border' ? 'Border Sale' : 'General Sale';
+                    const targetRoles = ['admin', 'incharge', 'sales manager'];
+                    const targetUsers = [formData.requestedByUsername].filter(Boolean);
+                    if (!targetUsers.includes('admin')) targetUsers.push('admin');
+
+                    if (!editingId) {
+                        console.log(`[handleSubmit] Notifying for NEW ${sType} Request`);
+                        await addNotification(
+                            `New ${sType} Requested`,
+                            `${dateStr} | ${timeStr} | ${employeeName} has requested a new ${sType.toLowerCase()} entry (${formData.invoiceNo || 'No Invoice'})`,
+                            targetRoles,
+                            targetUsers
+                        );
+                    } else {
+                        console.log(`[handleSubmit] Notifying for UPDATED ${sType} Request`);
+                        
+                        // Compare for detailed changes
+                        const changedFields = [];
+                        const fieldLabels = {
+                            date: 'Date',
+                            invoiceNo: 'Invoice',
+                            companyName: 'Company',
+                            customerName: 'Customer',
+                            lcNo: 'LC No',
+                            contact: 'Contact',
+                            importer: 'Importer',
+                            port: 'Port',
+                            indianCnF: 'Indian C&F',
+                            bdCnf: 'BD C&F',
+                            truck: 'Truck',
+                            discount: 'Discount',
+                            paidAmount: 'Paid',
+                            creditPeriod: 'Credit Period'
+                        };
+                        
+                        // Compare simple top-level fields
+                        Object.keys(fieldLabels).forEach(field => {
+                            if (originalData && String(formData[field]) !== String(originalData[field])) {
+                                changedFields.push(fieldLabels[field]);
+                            }
+                        });
+
+                        // Granular comparison of items (Price vs QTY)
+                        let qtyChanged = false;
+                        let rateChanged = false;
+
+                        if (originalData && originalData.items) {
+                            formData.items.forEach((item, pIdx) => {
+                                const origItem = originalData.items[pIdx];
+                                if (!origItem) {
+                                    qtyChanged = true; // New item added
+                                    return;
+                                }
+
+                                item.brandEntries.forEach((entry, eIdx) => {
+                                    const origEntry = (origItem.brandEntries || [])[eIdx];
+                                    if (!origEntry) {
+                                        qtyChanged = true;
+                                        return;
+                                    }
+
+                                    if (String(entry.quantity) !== String(origEntry.quantity)) qtyChanged = true;
+                                    if (String(entry.unitPrice) !== String(origEntry.unitPrice)) rateChanged = true;
+                                    if (entry.brand !== origEntry.brand || entry.warehouseName !== origEntry.warehouseName) {
+                                        // If brand/warehouse changed, we just call it a QTY/Product update contextually
+                                        qtyChanged = true;
+                                    }
+                                });
+                            });
+                            
+                            // Check if items were removed
+                            if (formData.items.length < originalData.items.length) qtyChanged = true;
+                        }
+
+                        if (qtyChanged) changedFields.push('QTY');
+                        if (rateChanged) changedFields.push('Price');
+
+                        // Only check derived fields if root cause wasn't items
+                        if (!qtyChanged && !rateChanged) {
+                            if (originalData && formData.totalAmount !== originalData.totalAmount) changedFields.push('Price');
+                            if (originalData && formData.dueAmount !== originalData.dueAmount) changedFields.push('Due');
+                        }
+
+                        const detailMsg = changedFields.length > 0 
+                            ? `\nUpdated fields: ${[...new Set(changedFields)].join(', ')}`
+                            : '';
+
+                        await addNotification(
+                            `${sType} Request Updated`,
+                            `${dateStr} | ${timeStr} | ${employeeName} has updated the requested ${sType.toLowerCase()} entry (${formData.invoiceNo || 'No Invoice'})${detailMsg}`,
+                            targetRoles,
+                            targetUsers
+                        );
+                    }
+                }
+
                 if (formData.status !== 'Requested') {
                     await processSaleEffects(formData, !!editingId);
                 }
@@ -998,6 +1169,7 @@ const SaleManagement = ({
         setCompanyNameSearch('');
         setActiveDropdown(null);
         setEditingId(null);
+        setOriginalData(null);
         setActiveItemIndex(null);
         setActiveEntryIndex(null);
     };
@@ -1045,14 +1217,21 @@ const SaleManagement = ({
             });
         }
 
+        setOriginalData({
+            ...sale,
+            items: JSON.parse(JSON.stringify(initialItems)) // Deep copy
+        });
+
         setFormData({
             ...sale,
             items: initialItems,
+            date: sale.date ? new Date(sale.date).toISOString().split('T')[0] : '',
             discount: sale.discount || '0.00',
             previousBalance: sale.previousBalance || '0.00'
         });
         setEditingId(sale._id);
         setShowForm(true);
+        window.scrollTo({ top: 0, behavior: 'smooth' });
     };
 
     const handleDelete = (sale) => {
@@ -3052,8 +3231,12 @@ const SaleManagement = ({
                                                         ) : (
                                                             <>
                                                                 <button onClick={(e) => { e.stopPropagation(); generateSaleInvoicePDF(sale, customers); }} className="p-2 hover:bg-emerald-100 text-emerald-600 rounded-xl transition-all" title="Invoice"><FileTextIcon className="w-4 h-4" /></button>
-                                                                <button onClick={(e) => { e.stopPropagation(); handleEdit(sale); }} className="p-2 hover:bg-blue-100 text-blue-600 rounded-xl transition-all" title="Edit"><EditIcon className="w-4 h-4" /></button>
-                                                                <button onClick={(e) => { e.stopPropagation(); handleDelete(sale); }} className="p-2 hover:bg-red-100 text-red-600 rounded-xl transition-all" title="Delete"><TrashIcon className="w-4 h-4" /></button>
+                                                                {isFullAdmin && (
+                                                                    <>
+                                                                        <button onClick={(e) => { e.stopPropagation(); handleEdit(sale); }} className="p-2 hover:bg-blue-100 text-blue-600 rounded-xl transition-all" title="Edit"><EditIcon className="w-4 h-4" /></button>
+                                                                        <button onClick={(e) => { e.stopPropagation(); handleDelete(sale); }} className="p-2 hover:bg-red-100 text-red-600 rounded-xl transition-all" title="Delete"><TrashIcon className="w-4 h-4" /></button>
+                                                                    </>
+                                                                )}
                                                             </>
                                                         )}
                                                     </div>
@@ -3168,8 +3351,12 @@ const SaleManagement = ({
                                                     ) : (
                                                         <>
                                                             <button onClick={(e) => { e.stopPropagation(); generateSaleInvoicePDF(sale, customers); }} className="p-2 hover:bg-emerald-100 text-emerald-600 rounded-xl transition-all" title="Invoice"><FileTextIcon className="w-4 h-4" /></button>
-                                                            <button onClick={(e) => { e.stopPropagation(); handleEdit(sale); }} className="p-2 hover:bg-blue-100 text-blue-600 rounded-xl transition-all" title="Edit"><EditIcon className="w-4 h-4" /></button>
-                                                            <button onClick={(e) => { e.stopPropagation(); handleDelete(sale); }} className="p-2 hover:bg-red-100 text-red-600 rounded-xl transition-all" title="Delete"><TrashIcon className="w-4 h-4" /></button>
+                                                            {isFullAdmin && (
+                                                                <>
+                                                                    <button onClick={(e) => { e.stopPropagation(); handleEdit(sale); }} className="p-2 hover:bg-blue-100 text-blue-600 rounded-xl transition-all" title="Edit"><EditIcon className="w-4 h-4" /></button>
+                                                                    <button onClick={(e) => { e.stopPropagation(); handleDelete(sale); }} className="p-2 hover:bg-red-100 text-red-600 rounded-xl transition-all" title="Delete"><TrashIcon className="w-4 h-4" /></button>
+                                                                </>
+                                                            )}
                                                         </>
                                                     )}
                                                 </div>
@@ -3252,8 +3439,12 @@ const SaleManagement = ({
                                                     ) : (
                                                         <>
                                                             <button onClick={(e) => { e.stopPropagation(); generateSaleInvoicePDF(sale, customers); }} className="p-2 bg-emerald-50 text-emerald-600 rounded-lg transition-colors hover:bg-emerald-100"><FileTextIcon className="w-4 h-4" /></button>
-                                                            <button onClick={(e) => { e.stopPropagation(); handleEdit(sale); }} className="p-2 bg-blue-50 text-blue-600 rounded-lg transition-colors hover:bg-blue-100"><EditIcon className="w-4 h-4" /></button>
-                                                            <button onClick={(e) => { e.stopPropagation(); handleDelete(sale); }} className="p-2 bg-red-50 text-red-600 rounded-lg transition-colors hover:bg-red-100"><TrashIcon className="w-4 h-4" /></button>
+                                                            {isFullAdmin && (
+                                                                <>
+                                                                    <button onClick={(e) => { e.stopPropagation(); handleEdit(sale); }} className="p-2 bg-blue-50 text-blue-600 rounded-lg transition-colors hover:bg-blue-100"><EditIcon className="w-4 h-4" /></button>
+                                                                    <button onClick={(e) => { e.stopPropagation(); handleDelete(sale); }} className="p-2 bg-red-50 text-red-600 rounded-lg transition-colors hover:bg-red-100"><TrashIcon className="w-4 h-4" /></button>
+                                                                </>
+                                                            )}
                                                         </>
                                                     )}
                                                 </div>

@@ -355,6 +355,8 @@ const WarehouseManagement = ({ currentUser }) => {
 
         // Subtract sales from Inhouse totals
         salesRecords.forEach(sale => {
+            const sStatus = (sale.status || '').toLowerCase();
+            if (sStatus !== 'accepted' && sStatus !== 'pending') return;
             if (sale.items && Array.isArray(sale.items)) {
                 sale.items.forEach(saleItem => {
                     const prodName = (saleItem.productName || '').trim().toLowerCase();
@@ -392,20 +394,19 @@ const WarehouseManagement = ({ currentUser }) => {
             }
         });
 
-        // Ensure no negatives — except for 'GENERAL' category products which allow pre-sales
+        // Ensure no negatives — all categories represent physical stock
         Object.keys(brands).forEach(k => {
-            const [prodName] = k.split('|');
-            const product = products.find(p => (p.name || p.productName || '').trim().toLowerCase() === prodName);
-            const category = (product?.category || '').trim().toUpperCase();
-
-            if (category !== 'GENERAL') {
-                brands[k].inhouseQty = Math.max(0, brands[k].inhouseQty);
-                brands[k].inhousePkt = Math.max(0, brands[k].inhousePkt);
-            }
+            brands[k].inhouseQty = Math.max(0, brands[k].inhouseQty);
+            brands[k].inhousePkt = Math.max(0, brands[k].inhousePkt);
         });
 
         // --- SECOND PASS: Include sales for 'GENERAL' products that have NO stock records ---
+        // This pass discovery items that exist only in sales.
         salesRecords.forEach(sale => {
+            const sStatus = (sale.status || '').toLowerCase();
+            // Allow Requested for discovery
+            if (sStatus !== 'accepted' && sStatus !== 'pending' && sStatus !== 'requested') return;
+
             if (!sale.items || !Array.isArray(sale.items)) return;
             sale.items.forEach(si => {
                 const prodName = (si.productName || '').trim().toLowerCase();
@@ -416,22 +417,33 @@ const WarehouseManagement = ({ currentUser }) => {
                     si.brandEntries.forEach(be => {
                         const brandName = (be.brand || '').trim().toLowerCase();
                         const brandKey = `${prodName}|${brandName}`;
-                        const sQty = parseFloat(be.quantity) || 0;
 
                         // If it doesn't exist in 'brands', it means there are NO stock records for this brand
                         if (!brands[brandKey]) {
                             const pktSize = parseFloat(si.packetSize || be.packetSize) || 0;
                             brands[brandKey] = {
-                                inhouseQty: -sQty,
-                                inhousePkt: pktSize > 0 ? -(sQty / pktSize) : 0,
+                                inhouseQty: 0,
+                                inhousePkt: 0,
                                 whQty: 0,
                                 whPkt: 0,
-                                packetSize: pktSize
+                                packetSize: pktSize,
+                                isPreSold: false
                             };
                         }
+
+                        // We MUST NOT subtract sales here again if it was already in the brands list in Pass 1.
+                        // The Pass 1 sales loop (lines 357+) already handles subtraction for ALL brands.
+                        // This Second Pass is ONLY for initializing missing brands.
                     });
                 }
             });
+        });
+
+        // Ensure no negatives and set isPreSold flag
+        Object.keys(brands).forEach(k => {
+            brands[k].isPreSold = brands[k].inhouseQty < 0;
+            brands[k].inhouseQty = Math.max(0, brands[k].inhouseQty);
+            brands[k].inhousePkt = Math.max(0, brands[k].inhousePkt);
         });
 
         return brands;
@@ -527,6 +539,8 @@ const WarehouseManagement = ({ currentUser }) => {
         const currentWhNamesLower = new Set([...currentWhNames].map(name => name.toLowerCase().trim()));
 
         salesRecords.forEach(sale => {
+            const sStatus = (sale.status || '').toLowerCase();
+            if (sStatus !== 'accepted' && sStatus !== 'pending') return;
             if (sale.items) {
                 sale.items.forEach(si => {
                     const prodName = (si.productName || '').trim().toLowerCase();
@@ -725,6 +739,8 @@ const WarehouseManagement = ({ currentUser }) => {
 
         // 2. Subtract sales matching this specific warehouse + brand
         salesRecords.forEach(sale => {
+            const sStatus = (sale.status || '').toLowerCase();
+            if (sStatus !== 'accepted' && sStatus !== 'pending') return;
             if (sale.items && Array.isArray(sale.items)) {
                 sale.items.forEach(saleItem => {
                     const prodName = (saleItem.productName || '').trim();
@@ -767,23 +783,22 @@ const WarehouseManagement = ({ currentUser }) => {
             }
         });
 
-        // 3. Final cleanup: Ensure no negatives — except for 'GENERAL' category which allows pre-sales
+        // 3. Final cleanup: Ensure no negatives — all categories represent physical stock
         Object.values(groups).forEach(wh => {
             Object.values(wh.products).forEach(p => {
-                const product = products.find(prod => (prod.name || prod.productName || '').trim().toLowerCase() === p.productName.toLowerCase());
-                const category = (product?.category || '').trim().toUpperCase();
-
                 Object.values(p.brands).forEach(b => {
-                    if (category !== 'GENERAL') {
-                        b.whQty = Math.max(0, b.whQty);
-                        b.whPkt = Math.max(0, b.whPkt);
-                    }
+                    b.whQty = Math.max(0, b.whQty);
+                    b.whPkt = Math.max(0, b.whPkt);
                 });
             });
         });
 
         // --- SECOND PASS: Include sales for 'GENERAL' products that have NO warehouse stock records yet ---
         salesRecords.forEach(sale => {
+            const sStatus = (sale.status || '').toLowerCase();
+            // Allow Requested for discovery
+            if (sStatus !== 'accepted' && sStatus !== 'pending' && sStatus !== 'requested') return;
+
             if (!sale.items || !Array.isArray(sale.items)) return;
             sale.items.forEach(si => {
                 const prodName = (si.productName || '').trim().toLowerCase();
@@ -795,15 +810,19 @@ const WarehouseManagement = ({ currentUser }) => {
                         const whName = (be.warehouseName || 'General / In Stock').trim();
                         const brandName = (be.brand || '').trim();
                         const brandKey = `${prodName}|${brandName.toLowerCase()}`;
-                        const sQty = parseFloat(be.quantity) || 0;
 
                         if (!groups[whName]) {
-                            groups[whName] = {
-                                whName,
-                                manager: '-',
-                                location: '-',
-                                products: {}
-                            };
+                            const baseWh = uniqueWarehouses.find(uw => uw.whName === whName);
+                            if (baseWh) {
+                                groups[whName] = {
+                                    whName: whName,
+                                    manager: baseWh.manager || '-',
+                                    location: baseWh.location || '-',
+                                    products: {}
+                                };
+                            } else {
+                                return;
+                            }
                         }
 
                         if (!groups[whName].products[si.productName]) {
@@ -814,15 +833,18 @@ const WarehouseManagement = ({ currentUser }) => {
                             const pktSize = parseFloat(si.packetSize || be.packetSize) || 0;
                             groups[whName].products[si.productName].brands[brandName] = {
                                 brand: brandName,
-                                productName: si.productName,
                                 inhouseQty: globalBrandTotals[brandKey]?.inhouseQty || 0,
                                 inhousePkt: globalBrandTotals[brandKey]?.inhousePkt || 0,
-                                whQty: -sQty,
-                                whPkt: pktSize > 0 ? -(sQty / pktSize) : 0,
+                                isPreSold: globalBrandTotals[brandKey]?.isPreSold || false,
+                                whQty: 0,
+                                whPkt: 0,
                                 packetSize: pktSize,
-                                recordType: 'pre-sale'
+                                recordType: 'warehouse'
                             };
                         }
+
+                        // Note: Sales subtraction for existing brands was handled in Pass 1.
+                        // Pass 1 loop (lines 736+) already subtracts sales for ANY brand that exists in groups.
                     });
                 }
             });

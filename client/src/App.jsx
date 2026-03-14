@@ -69,12 +69,13 @@ function App() {
 
         const isTargetRole = n.targetRoles ? n.targetRoles.some(r => r.toLowerCase() === userRole || (isAdminUser && r.toLowerCase() === 'admin')) : false;
         const isTargetUser = n.targetUsers ? n.targetUsers.includes(currentUser?.username) : false;
+        const isSelfCreated = n.createdBy === currentUser?.username;
 
-        return (isTargetRole || isTargetUser);
-      }).map(n => ({
+        return (isTargetRole || isTargetUser) && !isSelfCreated;
+    }).map(n => ({
         ...n,
         isUnread: n.readByUsers ? !n.readByUsers.includes(currentUser?.username) : true
-      }));
+    }));
 
       setNotifications(filtered);
     } catch (err) {

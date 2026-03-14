@@ -153,6 +153,8 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
 
             // 1. Accumulate from Sales Records (Direct Sales)
             salesRecords.forEach(sale => {
+                const sStatus = (sale.status || '').toLowerCase();
+                if (sStatus !== 'accepted' && sStatus !== 'pending') return;
                 if (sale && sale.items && Array.isArray(sale.items)) {
                     sale.items.forEach(saleItem => {
                         const sProd = (saleItem.productName || '').toLowerCase().trim();
@@ -241,6 +243,9 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
     // --- SECOND PASS: Identify GENERAL products with sales but NO stock records ---
     // This ensure they appear in the report even if arrivals haven't been recorded yet.
     salesRecords.forEach(sale => {
+        const sStatus = (sale.status || '').toLowerCase();
+        // Allow Requested for discovery, but don't subtract stock yet
+        if (sStatus !== 'accepted' && sStatus !== 'pending' && sStatus !== 'requested') return;
         if (sale && sale.items && Array.isArray(sale.items)) {
             sale.items.forEach(saleItem => {
                 const sProdName = (saleItem.productName || '').trim();
@@ -307,6 +312,10 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
 
                         // Re-run sales accumulation for this specific product/brand
                         salesRecords.forEach(s => {
+                            const sStatus = (s.status || '').toLowerCase();
+                            // ONLY subtract if confirmed (Accepted or Pending)
+                            if (sStatus !== 'accepted' && sStatus !== 'pending') return;
+                            
                             if (s && s.items) {
                                 s.items.forEach(si => {
                                     if ((si.productName || Si.productName || '').toLowerCase().trim() === targetProd && si.brandEntries) {
@@ -349,20 +358,19 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
 
     const displayRecords = Object.values(groupedStock).map(group => {
         const isGeneral = (group.category || '').toLowerCase() === 'general';
-        
-        const brandList = Object.values(group.brands).map(b => {
+                const brandList = Object.values(group.brands).map(b => {
             const dynamicInHouseQty = b.totalInHouseQuantity;
             const dynamicInHousePkt = b.totalInHousePacket;
 
-            // For GENERAL products, we want to show negative stock if sales exceed arrivals.
-            // For others, we cap at 0 (existing behavior).
-            const inHouseQuantity = isGeneral ? (dynamicInHouseQty - b.saleQuantity) : Math.max(0, dynamicInHouseQty - b.saleQuantity);
-            const inHousePacket = isGeneral ? (dynamicInHousePkt - b.salePacket) : Math.max(0, dynamicInHousePkt - b.salePacket);
+            const inHouseQuantity = Math.max(0, dynamicInHouseQty - b.saleQuantity);
+            const inHousePacket = Math.max(0, dynamicInHousePkt - b.salePacket);
+            const isPreSold = (dynamicInHouseQty - b.saleQuantity) < 0;
 
             return {
                 ...b,
                 inHouseQuantity,
-                inHousePacket
+                inHousePacket,
+                isPreSold
             };
         }).filter(b => {
             // Show brand if there is physical stock OR if it's a GENERAL product with sales (even if negative stock)
@@ -374,14 +382,16 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
         const grpInHouseQty = group.totalInHouseQuantity;
         const grpInHousePkt = group.totalInHousePacket;
 
-        const inHouseQuantity = isGeneral ? (grpInHouseQty - group.saleQuantity) : Math.max(0, grpInHouseQty - group.saleQuantity);
-        const inHousePacket = isGeneral ? (grpInHousePkt - group.salePacket) : Math.max(0, grpInHousePkt - group.salePacket);
+        const inHouseQuantity = Math.max(0, grpInHouseQty - group.saleQuantity);
+        const inHousePacket = Math.max(0, grpInHousePkt - group.salePacket);
+        const isPreSold = (grpInHouseQty - group.saleQuantity) < 0;
 
         return {
             ...group,
             brandList,
             inHouseQuantity,
-            inHousePacket
+            inHousePacket,
+            isPreSold
         };
     }).filter(group => group.brandList.length > 0).sort((a, b) => (a.productName || '').localeCompare(b.productName || '', undefined, { sensitivity: 'base' }));
 

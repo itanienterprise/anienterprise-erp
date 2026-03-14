@@ -11,15 +11,20 @@ export const API_BASE_URL = '';
 // Date Formatting Utilities
 export const formatDate = (dateString) => {
     if (!dateString) return '-';
-    const parts = dateString.split('-');
-    if (parts.length === 3) {
+    
+    // If it's a string in YYYY-MM-DD format, handle it directly
+    if (typeof dateString === 'string' && dateString.split('-').length === 3) {
+        const parts = dateString.split('-');
         const day = parts[2].padStart(2, '0');
         const month = parts[1].padStart(2, '0');
         const year = parts[0];
         return `${day}/${month}/${year}`;
     }
-    const date = new Date(dateString);
+    
+    // Otherwise, try to create a Date object and format it
+    const date = dateString instanceof Date ? dateString : new Date(dateString);
     if (isNaN(date.getTime())) return '-';
+    
     const day = String(date.getDate()).padStart(2, '0');
     const month = String(date.getMonth() + 1).padStart(2, '0');
     const year = date.getFullYear();
