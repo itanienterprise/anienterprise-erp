@@ -1473,9 +1473,9 @@ const WarehouseManagement = ({ currentUser }) => {
                                                             <div className="grid grid-cols-6 gap-4">
                                                                 <div className="text-left font-bold text-gray-800">Brand</div>
                                                                 <div className="text-right font-bold text-emerald-800 uppercase">InHouse QTY</div>
-                                                                <div className="text-right font-bold text-emerald-800 uppercase">InHouse PKT</div>
+                                                                <div className="text-right font-bold text-emerald-800 uppercase">InHouse BAG</div>
                                                                 <div className="text-right font-bold text-blue-800 uppercase">WareHouse QTY</div>
-                                                                <div className="text-right font-bold text-blue-800 uppercase">WareHouse PKT</div>
+                                                                <div className="text-right font-bold text-blue-800 uppercase">WareHouse BAG</div>
                                                                 {isAdmin && <div className="text-right font-bold text-gray-500">Actions</div>}
                                                             </div>
                                                         </th>
@@ -1600,7 +1600,7 @@ const WarehouseManagement = ({ currentUser }) => {
                                                                                                         <span className="text-[11px] sm:text-xs font-black text-emerald-700 truncate w-full xl:w-auto xl:text-right">{parseFloat(brand.inhouseQty || 0).toLocaleString()} kg</span>
                                                                                                     </div>
                                                                                                     <div className="flex flex-col xl:flex-row xl:items-end justify-between border-t border-emerald-50 pt-1 gap-0.5 xl:gap-1">
-                                                                                                        <span className="text-[10px] font-bold text-gray-400 uppercase">PKT</span>
+                                                                                                        <span className="text-[10px] font-bold text-gray-400 uppercase">BAG</span>
                                                                                                         <span className="text-[12px] sm:text-xs font-bold text-gray-600 truncate w-full xl:w-auto xl:text-right">
                                                                                                             {(() => {
                                                                                                                 const { whole, remainder } = calculatePktRemainder(brand.inhouseQty, brand.packetSize);
@@ -1618,7 +1618,7 @@ const WarehouseManagement = ({ currentUser }) => {
                                                                                                         <span className="text-[11px] sm:text-xs font-black text-blue-700 truncate w-full xl:w-auto xl:text-right">{parseFloat(brand.whQty || 0).toLocaleString()} kg</span>
                                                                                                     </div>
                                                                                                     <div className="flex flex-col xl:flex-row xl:items-end justify-between border-t border-blue-50 pt-1 gap-0.5 xl:gap-1">
-                                                                                                        <span className="text-[10px] font-bold text-gray-400 uppercase">PKT</span>
+                                                                                                        <span className="text-[10px] font-bold text-gray-400 uppercase">BAG</span>
                                                                                                         <span className="text-[12px] sm:text-xs font-bold text-gray-600 truncate w-full xl:w-auto xl:text-right">
                                                                                                             {(() => {
                                                                                                                 const { whole, remainder } = calculatePktRemainder(brand.whQty, brand.packetSize);

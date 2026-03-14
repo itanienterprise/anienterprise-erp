@@ -468,7 +468,7 @@ const ProductManagement = ({ products, fetchProducts }) => {
                                                     <div className="pt-4 border-t border-gray-100">
                                                         <div className="flex px-1 mb-2">
                                                             <div className="w-[55%] text-[9px] text-gray-400 uppercase font-black tracking-widest pl-2">Brand</div>
-                                                            <div className="w-[20%] text-[9px] text-gray-400 uppercase font-black tracking-widest text-right">Packet</div>
+                                                            <div className="w-[20%] text-[9px] text-gray-400 uppercase font-black tracking-widest text-right">BAG</div>
                                                             <div className="w-[20%] text-[9px] text-gray-400 uppercase font-black tracking-widest text-right">UOM</div>
 
                                                         </div>

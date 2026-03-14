@@ -341,7 +341,8 @@ const WarehouseReport = ({
             // Filter out empty brands and SORT them
             const brandList = Object.values(pGroup.brands)
                 .filter(b => {
-                    const product = products.find(prod => (prod.name || prod.productName || '').trim().toLowerCase() === prodNameLower);
+                    const pnl = pGroup.productName.toLowerCase();
+                    const product = products.find(prod => (prod.name || prod.productName || '').trim().toLowerCase() === pnl);
                     const isGeneral = (product?.category || '').trim().toUpperCase() === 'GENERAL';
                     return b.whQty !== 0 || (whGroup.whName === 'General / In Stock' && b.inhouseQty !== 0) || isGeneral;
                 })
@@ -675,9 +676,9 @@ const WarehouseReport = ({
                                         <th className="border-r border-gray-900 px-2 py-1 text-left text-[12px] font-bold text-gray-900 uppercase tracking-wider w-[15%]">Product Name</th>
                                         <th className="border-r border-gray-900 px-2 py-1 text-left text-[12px] font-bold text-gray-900 uppercase tracking-wider w-[15%]">Brand</th>
                                         <th className="border-r border-gray-900 px-2 py-1 text-right text-[12px] font-bold text-gray-900 uppercase tracking-wider w-[13%]">Inhouse QTY</th>
-                                        <th className="border-r border-gray-900 px-2 py-1 text-right text-[12px] font-bold text-gray-900 uppercase tracking-wider w-[14%]">Inhouse PKT</th>
+                                        <th className="border-r border-gray-900 px-2 py-1 text-right text-[12px] font-bold text-gray-900 uppercase tracking-wider w-[14%]">Inhouse BAG</th>
                                         <th className="border-r border-gray-900 px-2 py-1 text-right text-[12px] font-bold text-gray-900 uppercase tracking-wider w-[15%]">Warehouse QTY</th>
-                                        <th className="px-2 py-1 text-right text-[12px] font-bold text-gray-900 uppercase tracking-wider w-[15%]">Warehouse PKT</th>
+                                        <th className="px-2 py-1 text-right text-[12px] font-bold text-gray-900 uppercase tracking-wider w-[15%]">Warehouse BAG</th>
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-gray-900">
@@ -851,7 +852,7 @@ const WarehouseReport = ({
                                                                                             {(() => {
                                                                                                 const { whole, remainder } = calculatePktRemainder(brandItem.inhouseQty, brandItem.packetSize);
                                                                                                 return `${whole.toLocaleString()}${remainder > 0 ? ` - ${remainder.toLocaleString()} kg` : ''}`;
-                                                                                            })()} PKT
+                                                                                            })()} BAG
                                                                                         </p>
                                                                                         <p className="text-sm font-black text-gray-900">{Math.round(parseFloat(brandItem.inhouseQty) || 0).toLocaleString()} kg</p>
                                                                                     </div>
@@ -861,7 +862,7 @@ const WarehouseReport = ({
                                                                                             {(() => {
                                                                                                 const { whole, remainder } = calculatePktRemainder(brandItem.whQty, brandItem.packetSize);
                                                                                                 return `${whole.toLocaleString()}${remainder > 0 ? ` - ${remainder.toLocaleString()} kg` : ''}`;
-                                                                                            })()} PKT
+                                                                                            })()} BAG
                                                                                         </p>
                                                                                         <p className="text-sm font-black text-gray-900">{Math.round(parseFloat(brandItem.whQty) || 0).toLocaleString()} kg</p>
                                                                                     </div>
@@ -909,14 +910,14 @@ const WarehouseReport = ({
                                             <p className="text-[10px] font-bold text-gray-500 uppercase tracking-wider text-center">Total Inhouse</p>
                                             <p className="text-xl font-black text-emerald-400 text-center">{Math.round(totals.totalInHouseQty).toLocaleString()}<span className="text-[10px] ml-1 text-gray-500 uppercase">kg</span></p>
                                             <p className="text-xs font-bold text-gray-400 text-center">
-                                                {`${totals.totalInHouseWhole.toLocaleString()}${totals.totalInHouseRem > 0 ? ` - ${totals.totalInHouseRem.toLocaleString()} kg` : ''}`} PKT
+                                                {`${totals.totalInHouseWhole.toLocaleString()}${totals.totalInHouseRem > 0 ? ` - ${totals.totalInHouseRem.toLocaleString()} kg` : ''}`} BAG
                                             </p>
                                         </div>
                                         <div className="space-y-1">
                                             <p className="text-[10px] font-bold text-gray-500 uppercase tracking-wider text-center">Total Warehouse</p>
                                             <p className="text-xl font-black text-blue-400 text-center">{Math.round(totals.totalWhQty).toLocaleString()}<span className="text-[10px] ml-1 text-gray-500 uppercase">kg</span></p>
                                             <p className="text-xs font-bold text-gray-400 text-center">
-                                                {`${totals.totalWhWhole.toLocaleString()}${totals.totalWhRem > 0 ? ` - ${totals.totalWhRem.toLocaleString()} kg` : ''}`} PKT
+                                                {`${totals.totalWhWhole.toLocaleString()}${totals.totalWhRem > 0 ? ` - ${totals.totalWhRem.toLocaleString()} kg` : ''}`} BAG
                                             </p>
                                         </div>
                                     </div>
@@ -930,7 +931,7 @@ const WarehouseReport = ({
                             <div className="border border-gray-200 p-3 sm:p-5 rounded-2xl bg-gray-50 shadow-sm print:border-gray-200 flex flex-col justify-center">
                                 <div className="text-[9px] sm:text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-1 sm:mb-3 text-center sm:text-left">Total Inhouse Stock</div>
                                 <div className="text-[10px] sm:text-sm font-bold text-gray-700 mb-1 text-center sm:text-left">
-                                    PKT: <span className="text-xs sm:text-[15px] font-black text-gray-900">{`${totals.totalInHouseWhole.toLocaleString()}${totals.totalInHouseRem > 0 ? ` - ${totals.totalInHouseRem.toLocaleString()} kg` : ''}`}</span>
+                                    BAG: <span className="text-xs sm:text-[15px] font-black text-gray-900">{`${totals.totalInHouseWhole.toLocaleString()}${totals.totalInHouseRem > 0 ? ` - ${totals.totalInHouseRem.toLocaleString()} kg` : ''}`}</span>
                                 </div>
                                 <div className="text-sm sm:text-2xl font-black text-gray-900 text-center sm:text-left">
                                     QTY: {Math.round(totals.totalInHouseQty).toLocaleString()} <span className="text-[9px] sm:text-[11px] font-semibold text-gray-400">kg</span>
@@ -941,7 +942,7 @@ const WarehouseReport = ({
                             <div className="border border-blue-100 p-3 sm:p-5 rounded-2xl bg-blue-50 shadow-sm print:border-gray-200 flex flex-col justify-center">
                                 <div className="text-[9px] sm:text-[11px] font-bold text-blue-500 uppercase tracking-wider mb-1 sm:mb-3 text-center sm:text-left">Warehouse Stock</div>
                                 <div className="text-[10px] sm:text-sm font-bold text-gray-700 mb-1 text-center sm:text-left">
-                                    PKT: <span className="text-xs sm:text-[15px] font-black text-blue-700">{`${totals.totalWhWhole.toLocaleString()}${totals.totalWhRem > 0 ? ` - ${totals.totalWhRem.toLocaleString()} kg` : ''}`}</span>
+                                    BAG: <span className="text-xs sm:text-[15px] font-black text-blue-700">{`${totals.totalWhWhole.toLocaleString()}${totals.totalWhRem > 0 ? ` - ${totals.totalWhRem.toLocaleString()} kg` : ''}`}</span>
                                 </div>
                                 <div className="text-sm sm:text-2xl font-black text-blue-600 text-center sm:text-left">
                                     QTY: {Math.round(totals.totalWhQty).toLocaleString()} <span className="text-[9px] sm:text-[11px] font-semibold text-blue-300">kg</span>

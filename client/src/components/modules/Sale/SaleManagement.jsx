@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { EditIcon, TrashIcon, XIcon, SearchIcon, FunnelIcon, ChevronDownIcon, EyeIcon, ReceiptIcon, BarChartIcon, TrendingUpIcon, DollarSignIcon, FileTextIcon, CheckIcon } from '../../Icons';
+import { EditIcon, TrashIcon, XIcon, SearchIcon, FunnelIcon, ChevronDownIcon, ChevronUpIcon, EyeIcon, ReceiptIcon, BarChartIcon, TrendingUpIcon, DollarSignIcon, FileTextIcon, CheckIcon } from '../../Icons';
 import { generateSaleInvoicePDF } from '../../../utils/pdfGenerator';
 import { API_BASE_URL, SortIcon, formatDate } from '../../../utils/helpers';
 import { encryptData, decryptData } from '../../../utils/encryption';
@@ -51,6 +51,24 @@ const SaleManagement = ({
     const [activeFilterDropdown, setActiveFilterDropdown] = useState(null); // 'from', 'to', 'company', 'invoice', 'port', 'product', 'indCnf', 'bdCnf'
     const [isRequestedOnly, setIsRequestedOnly] = useState(false);
     const [originalData, setOriginalData] = useState(null);
+    const [sortConfig, setSortConfig] = useState({ key: 'date', direction: 'desc' });
+
+    const handleSort = (key) => {
+        let direction = 'desc';
+        if (sortConfig.key === key && sortConfig.direction === 'desc') {
+            direction = 'asc';
+        }
+        setSortConfig({ key, direction });
+    };
+
+    const renderSortIcon = (key) => {
+        if (sortConfig.key !== key) {
+            return <ChevronDownIcon className="w-3 h-3 ml-1 text-gray-300 opacity-0 group-hover:opacity-100 transition-opacity" />;
+        }
+        return sortConfig.direction === 'desc' ?
+            <ChevronDownIcon className="w-3 h-3 ml-1 text-blue-600" /> :
+            <ChevronUpIcon className="w-3 h-3 ml-1 text-blue-600" />;
+    };
 
     const isFullAdmin = useMemo(() => {
         if (!currentUser) return false;
@@ -1249,54 +1267,79 @@ const SaleManagement = ({
     };
 
     const getFilteredData = () => {
-        if (!searchQuery) return displayedSales;
-        const query = searchQuery.toLowerCase();
+        let result = [];
+        if (!searchQuery) {
+            result = displayedSales;
+        } else {
+            const query = searchQuery.toLowerCase();
+            result = displayedSales.filter(s => {
+                if (saleType === 'Border') {
+                    const date = (s.date || '').toLowerCase();
+                    const lcNo = (s.lcNo || '').toLowerCase();
+                    const importer = (s.importer || '').toLowerCase();
+                    const port = (s.port || '').toLowerCase();
+                    const indCnf = (s.indianCnF || '').toLowerCase();
+                    const bdCnf = (s.bdCnf || '').toLowerCase();
+                    const party = (s.companyName || s.customerName || '').toLowerCase();
+                    const truck = String(s.truck || '').toLowerCase();
+                    const total = String(s.totalAmount || '').toLowerCase();
 
-        return displayedSales.filter(s => {
-            if (saleType === 'Border') {
-                const date = (s.date || '').toLowerCase();
-                const lcNo = (s.lcNo || '').toLowerCase();
-                const importer = (s.importer || '').toLowerCase();
-                const port = (s.port || '').toLowerCase();
-                const indCnf = (s.indianCnF || '').toLowerCase();
-                const bdCnf = (s.bdCnf || '').toLowerCase();
-                const party = (s.companyName || s.customerName || '').toLowerCase();
-                const truck = String(s.truck || '').toLowerCase();
-                const total = String(s.totalAmount || '').toLowerCase();
+                    const itemsMatch = (s.items || []).some(item => {
+                        const pName = (item.productName || item.product || '').toLowerCase();
+                        return pName.includes(query) || (item.brandEntries || []).some(e =>
+                            String(e.quantity || '').includes(query) || String(e.truck || '').includes(query) ||
+                            String(e.unitPrice || '').includes(query) || String(e.totalAmount || '').includes(query)
+                        );
+                    });
 
-                const itemsMatch = (s.items || []).some(item => {
-                    const pName = (item.productName || item.product || '').toLowerCase();
-                    return pName.includes(query) || (item.brandEntries || []).some(e =>
-                        String(e.quantity || '').includes(query) || String(e.truck || '').includes(query) ||
-                        String(e.unitPrice || '').includes(query) || String(e.totalAmount || '').includes(query)
+                    return date.includes(query) || lcNo.includes(query) || importer.includes(query) ||
+                        port.includes(query) || indCnf.includes(query) || bdCnf.includes(query) ||
+                        party.includes(query) || truck.includes(query) || total.includes(query) || itemsMatch;
+                }
+
+                const matchesBasic =
+                    s.invoiceNo?.toLowerCase().includes(query) ||
+                    s.lcNo?.toLowerCase().includes(query) ||
+                    s.customerName?.toLowerCase().includes(query) ||
+                    s.companyName?.toLowerCase().includes(query) ||
+                    s.productName?.toLowerCase().includes(query) ||
+                    s.brand?.toLowerCase().includes(query);
+
+                if (matchesBasic) return true;
+
+                if (s.items && Array.isArray(s.items)) {
+                    return s.items.some(item =>
+                        item.productName?.toLowerCase().includes(query) ||
+                        item.brand?.toLowerCase().includes(query)
                     );
-                });
+                }
+                return false;
+            });
+        }
 
-                return date.includes(query) || lcNo.includes(query) || importer.includes(query) ||
-                    port.includes(query) || indCnf.includes(query) || bdCnf.includes(query) ||
-                    party.includes(query) || truck.includes(query) || total.includes(query) || itemsMatch;
+        // Apply Interactive Sort
+        return [...result].sort((a, b) => {
+            const key = sortConfig.key;
+            let valA = a[key] || '';
+            let valB = b[key] || '';
+
+            if (key === 'date') {
+                valA = new Date(valA);
+                valB = new Date(valB);
+            } else if (key === 'party') {
+                valA = (a.companyName || a.customerName || '').toString().toLowerCase();
+                valB = (b.companyName || b.customerName || '').toString().toLowerCase();
+            } else if (['totalAmount', 'discount', 'paidAmount', 'dueAmount'].includes(key)) {
+                valA = parseFloat(valA) || 0;
+                valB = parseFloat(valB) || 0;
+            } else {
+                valA = valA.toString().toLowerCase();
+                valB = valB.toString().toLowerCase();
             }
 
-            // General/Foreign sale search
-            const matchesBasic =
-                s.invoiceNo?.toLowerCase().includes(query) ||
-                s.lcNo?.toLowerCase().includes(query) ||
-                s.customerName?.toLowerCase().includes(query) ||
-                s.companyName?.toLowerCase().includes(query) ||
-                s.productName?.toLowerCase().includes(query) ||
-                s.brand?.toLowerCase().includes(query);
-
-            if (matchesBasic) return true;
-
-            // Search within items array
-            if (s.items && Array.isArray(s.items)) {
-                return s.items.some(item =>
-                    item.productName?.toLowerCase().includes(query) ||
-                    item.brand?.toLowerCase().includes(query)
-                );
-            }
-
-            return false;
+            if (valA < valB) return sortConfig.direction === 'asc' ? -1 : 1;
+            if (valA > valB) return sortConfig.direction === 'asc' ? 1 : -1;
+            return 0;
         });
     };
 
@@ -3120,34 +3163,66 @@ const SaleManagement = ({
                             <thead>
                                 {saleType === 'Border' ? (
                                     <tr>
-                                        <th className="sale-mgmt-th">Date</th>
-                                        <th className="sale-mgmt-th">LC No</th>
-                                        <th className="sale-mgmt-th">Importer</th>
-                                        <th className="sale-mgmt-th">port</th>
-                                        <th className="sale-mgmt-th">IND cnf</th>
-                                        <th className="sale-mgmt-th">bd cnf</th>
-                                        <th className="sale-mgmt-th">Party</th>
+                                        <th className="sale-mgmt-th cursor-pointer group" onClick={() => handleSort('date')}>
+                                            <div className="flex items-center">Date {renderSortIcon('date')}</div>
+                                        </th>
+                                        <th className="sale-mgmt-th cursor-pointer group" onClick={() => handleSort('lcNo')}>
+                                            <div className="flex items-center">LC No {renderSortIcon('lcNo')}</div>
+                                        </th>
+                                        <th className="sale-mgmt-th cursor-pointer group" onClick={() => handleSort('importer')}>
+                                            <div className="flex items-center">Importer {renderSortIcon('importer')}</div>
+                                        </th>
+                                        <th className="sale-mgmt-th cursor-pointer group" onClick={() => handleSort('port')}>
+                                            <div className="flex items-center">port {renderSortIcon('port')}</div>
+                                        </th>
+                                        <th className="sale-mgmt-th cursor-pointer group" onClick={() => handleSort('indianCnF')}>
+                                            <div className="flex items-center">IND cnf {renderSortIcon('indianCnF')}</div>
+                                        </th>
+                                        <th className="sale-mgmt-th cursor-pointer group" onClick={() => handleSort('bdCnf')}>
+                                            <div className="flex items-center">bd cnf {renderSortIcon('bdCnf')}</div>
+                                        </th>
+                                        <th className="sale-mgmt-th cursor-pointer group" onClick={() => handleSort('party')}>
+                                            <div className="flex items-center">Party {renderSortIcon('party')}</div>
+                                        </th>
                                         <th className="sale-mgmt-th">Product</th>
                                         <th className="sale-mgmt-th text-center">QTY</th>
                                         <th className="sale-mgmt-th">Truck</th>
                                         <th className="sale-mgmt-th text-center">rate</th>
-                                        <th className="sale-mgmt-th text-center">total price</th>
+                                        <th className="sale-mgmt-th text-center cursor-pointer group" onClick={() => handleSort('totalAmount')}>
+                                            <div className="flex items-center justify-center">total price {renderSortIcon('totalAmount')}</div>
+                                        </th>
                                         <th className="sale-mgmt-th text-center">Actions</th>
                                     </tr>
                                 ) : (
                                     <tr>
-                                        <th className="sale-mgmt-th">Date</th>
-                                        <th className="sale-mgmt-th text-center">Invoice</th>
-                                        <th className="sale-mgmt-th">Company</th>
-                                        <th className="sale-mgmt-th">Customer</th>
+                                        <th className="sale-mgmt-th cursor-pointer group" onClick={() => handleSort('date')}>
+                                            <div className="flex items-center">Date {renderSortIcon('date')}</div>
+                                        </th>
+                                        <th className="sale-mgmt-th text-center cursor-pointer group" onClick={() => handleSort('invoiceNo')}>
+                                            <div className="flex items-center justify-center">Invoice {renderSortIcon('invoiceNo')}</div>
+                                        </th>
+                                        <th className="sale-mgmt-th cursor-pointer group" onClick={() => handleSort('companyName')}>
+                                            <div className="flex items-center">Company {renderSortIcon('companyName')}</div>
+                                        </th>
+                                        <th className="sale-mgmt-th cursor-pointer group" onClick={() => handleSort('customerName')}>
+                                            <div className="flex items-center">Customer {renderSortIcon('customerName')}</div>
+                                        </th>
                                         <th className="sale-mgmt-th">Product</th>
                                         <th className="sale-mgmt-th">Brand</th>
-                                        <th className="sale-mgmt-th text-center">Quantity</th>
-                                        <th className="sale-mgmt-th text-center">Rate</th>
-                                        <th className="sale-mgmt-th text-center">Discount</th>
-                                        <th className="sale-mgmt-th text-center">Total</th>
-                                        <th className="sale-mgmt-th text-center">Paid</th>
-                                        <th className="sale-mgmt-th text-center">Due</th>
+                                        <th className="sale-mgmt-th text-center font-bold">Quantity</th>
+                                        <th className="sale-mgmt-th text-center font-bold">Rate</th>
+                                        <th className="sale-mgmt-th text-center cursor-pointer group" onClick={() => handleSort('discount')}>
+                                            <div className="flex items-center justify-center">Discount {renderSortIcon('discount')}</div>
+                                        </th>
+                                        <th className="sale-mgmt-th text-center cursor-pointer group" onClick={() => handleSort('totalAmount')}>
+                                            <div className="flex items-center justify-center">Total {renderSortIcon('totalAmount')}</div>
+                                        </th>
+                                        <th className="sale-mgmt-th text-center cursor-pointer group" onClick={() => handleSort('paidAmount')}>
+                                            <div className="flex items-center justify-center">Paid {renderSortIcon('paidAmount')}</div>
+                                        </th>
+                                        <th className="sale-mgmt-th text-center cursor-pointer group" onClick={() => handleSort('dueAmount')}>
+                                            <div className="flex items-center justify-center">Due {renderSortIcon('dueAmount')}</div>
+                                        </th>
                                         <th className="sale-mgmt-th text-center">Actions</th>
                                     </tr>
                                 )}

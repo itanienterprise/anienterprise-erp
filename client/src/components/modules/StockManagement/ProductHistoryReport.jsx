@@ -468,7 +468,7 @@ const ProductHistoryReport = ({
                                                 <th className="border-r border-gray-900 px-2 py-1 text-left text-[11px] font-bold text-gray-900 uppercase tracking-wider w-[15%] whitespace-nowrap">Exporter</th>
                                                 <th className="border-r border-gray-900 px-2 py-1 text-left text-[11px] font-bold text-gray-900 uppercase tracking-wider w-[15%] whitespace-nowrap">Brand</th>
                                                 <th className="border-r border-gray-900 px-2 py-1 text-right text-[11px] font-bold text-gray-900 uppercase tracking-wider w-[12%] whitespace-nowrap">Price</th>
-                                                <th className="border-r border-gray-900 px-2 py-1 text-right text-[11px] font-bold text-gray-900 uppercase tracking-wider w-[10%] whitespace-nowrap">Packet</th>
+                                                <th className="border-r border-gray-900 px-2 py-1 text-right text-[11px] font-bold text-gray-900 uppercase tracking-wider w-[10%] whitespace-nowrap">BAG</th>
                                                 <th className="border-r border-gray-900 px-2 py-1 text-right text-[11px] font-bold text-gray-900 uppercase tracking-wider w-[12%] whitespace-nowrap">LC Quantity</th>
                                                 <th className="border-r border-gray-900 px-2 py-1 text-right text-[11px] font-bold text-gray-900 uppercase tracking-wider w-[12%] whitespace-nowrap">InHouse Qty</th>
                                                 <th className="px-2 py-1 text-right text-[11px] font-bold text-gray-900 uppercase tracking-wider w-[12%] whitespace-nowrap">Short Qty</th>
@@ -523,7 +523,7 @@ const ProductHistoryReport = ({
                                                 <div className="text-gray-500">Exporter</div><div className="font-medium text-gray-800 text-right truncate">{item.itemExporter || '-'}</div>
                                                 <div className="text-gray-500">Brand</div><div className="font-bold text-gray-900 text-right">{item.itemBrand}</div>
                                                 <div className="text-gray-500">Price</div><div className="font-medium text-gray-800 text-right">৳{parseFloat(item.itemPurchasedPrice || 0).toLocaleString()}</div>
-                                                <div className="text-gray-500">Packet</div><div className="font-bold text-gray-900 text-right">{item.itemPacket}</div>
+                                                <div className="text-gray-500">BAG</div><div className="font-bold text-gray-900 text-right">{item.itemPacket}</div>
                                                 <div className="text-gray-500">LC Qty</div><div className="font-bold text-gray-900 text-right">{Math.round(item.itemQty).toLocaleString()} {item.unit}</div>
                                                 <div className="text-blue-500">InHouse</div><div className="font-bold text-blue-600 text-right">{Math.round(item.itemInHouseQty).toLocaleString()} {item.unit}</div>
                                                 {(item.itemShortageQty || 0) > 0 && <><div className="text-rose-500">Shortage</div><div className="font-bold text-rose-600 text-right">{Math.round(item.itemShortageQty).toLocaleString()} {item.unit}</div></>}
@@ -600,7 +600,7 @@ const ProductHistoryReport = ({
                                                         <th className="border-r border-gray-900 px-2 py-1 text-left text-[11px] font-bold text-gray-900 uppercase tracking-wider w-[12%] whitespace-nowrap">Invoice</th>
                                                         <th className="border-r border-gray-900 px-2 py-1 text-left text-[11px] font-bold text-gray-900 uppercase tracking-wider w-[12%] whitespace-nowrap">Company</th>
                                                         <th className="border-r border-gray-900 px-2 py-1 text-left text-[11px] font-bold text-gray-900 uppercase tracking-wider w-[12%] whitespace-nowrap">Brand</th>
-                                                        <th className="border-r border-gray-900 px-2 py-1 text-right text-[11px] font-bold text-gray-900 uppercase tracking-wider w-[10%] whitespace-nowrap">Packet</th>
+                                                        <th className="border-r border-gray-900 px-2 py-1 text-right text-[11px] font-bold text-gray-900 uppercase tracking-wider w-[10%] whitespace-nowrap">BAG</th>
                                                         <th className="border-r border-gray-900 px-2 py-1 text-right text-[11px] font-bold text-gray-900 uppercase tracking-wider w-[12%] whitespace-nowrap">Quantity</th>
                                                         <th className="border-r border-gray-900 px-2 py-1 text-right text-[11px] font-bold text-gray-900 uppercase tracking-wider w-[10%] whitespace-nowrap">Price</th>
                                                         <th className="px-2 py-1 text-right text-[11px] font-bold text-gray-900 uppercase tracking-wider w-[12%] whitespace-nowrap">Total Price</th>
@@ -652,7 +652,7 @@ const ProductHistoryReport = ({
                                                     {sale.itemTruck && <><div className="text-gray-500">Truck</div><div className="font-medium text-gray-800 text-right">{sale.itemTruck}</div></>}
                                                 </>) : (<>
                                                     <div className="text-gray-500">Brand</div><div className="font-medium text-gray-800 text-right">{sale.itemBrand}</div>
-                                                    <div className="text-gray-500">Packet</div><div className="font-medium text-gray-800 text-right">{sale.itemPacket?.toLocaleString()}</div>
+                                                    <div className="text-gray-500">BAG</div><div className="font-medium text-gray-800 text-right">{sale.itemPacket?.toLocaleString()}</div>
                                                 </>)}
                                                 <div className="text-gray-500">Qty</div><div className="font-bold text-gray-900 text-right">{sale.itemQty?.toLocaleString()} kg</div>
                                                 <div className="text-gray-500">Price</div><div className="font-medium text-gray-600 text-right">৳{sale.itemPrice?.toLocaleString()}</div>

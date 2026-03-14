@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import axios from 'axios';
 import {
-    SearchIcon, FunnelIcon, XIcon, BarChartIcon, EditIcon, TrashIcon, BoxIcon, ChevronDownIcon, PlusIcon, EyeIcon, CheckIcon
+    SearchIcon, FunnelIcon, XIcon, BarChartIcon, EditIcon, TrashIcon, BoxIcon, ChevronDownIcon, ChevronUpIcon, PlusIcon, EyeIcon, CheckIcon
 } from '../../Icons';
 import { formatDate, API_BASE_URL } from '../../../utils/helpers';
 import { encryptData, decryptData } from '../../../utils/encryption';
@@ -356,6 +356,24 @@ function LCReceive({
     const [expandedCard, setExpandedCard] = useState(null);
     const [viewData, setViewData] = useState(null);
     const [isRequestedOnly, setIsRequestedOnly] = useState(false);
+    const [sortConfig, setSortConfig] = useState({ key: 'date', direction: 'desc' });
+
+    const handleSort = (key) => {
+        let direction = 'desc';
+        if (sortConfig.key === key && sortConfig.direction === 'desc') {
+            direction = 'asc';
+        }
+        setSortConfig({ key, direction });
+    };
+
+    const renderSortIcon = (key) => {
+        if (sortConfig.key !== key) {
+            return <ChevronDownIcon className="w-3 h-3 ml-1 text-gray-300 opacity-0 group-hover:opacity-100 transition-opacity" />;
+        }
+        return sortConfig.direction === 'desc' ?
+            <ChevronDownIcon className="w-3 h-3 ml-1 text-blue-600" /> :
+            <ChevronUpIcon className="w-3 h-3 ml-1 text-blue-600" />;
+    };
 
     const productRefs = useRef([]);
     const brandRefs = useRef({});
@@ -1479,11 +1497,36 @@ function LCReceive({
 
 
     const filteredRecords = useMemo(() => {
+        let records = [];
         if (isRequestedOnly) {
-            return lcReceiveRecords.filter(item => (item.status || '').toLowerCase().includes('requested'));
+            records = lcReceiveRecords.filter(item => (item.status || '').toLowerCase().includes('requested'));
+        } else {
+            records = lcReceiveRecords.filter(item => !(item.status || '').toLowerCase().includes('requested'));
         }
-        return lcReceiveRecords.filter(item => !(item.status || '').toLowerCase().includes('requested'));
-    }, [lcReceiveRecords, isRequestedOnly]);
+
+        // Apply interactive sorting
+        return [...records].sort((a, b) => {
+            const key = sortConfig.key;
+            let valA = a[key] || '';
+            let valB = b[key] || '';
+
+            // Handle specific keys if needed (e.g. numeric or date)
+            if (key === 'date') {
+                valA = new Date(valA);
+                valB = new Date(valB);
+            } else if (['purchasedPrice', 'packet', 'packetSize', 'quantity', 'sweepedPacket', 'sweepedQuantity', 'inHousePacket', 'inHouseQuantity', 'indCnFCost', 'bdCnFCost', 'totalLcTruck', 'totalLcQuantity'].includes(key)) {
+                valA = parseFloat(valA) || 0;
+                valB = parseFloat(valB) || 0;
+            } else {
+                valA = valA.toString().toLowerCase();
+                valB = valB.toString().toLowerCase();
+            }
+
+            if (valA < valB) return sortConfig.direction === 'asc' ? -1 : 1;
+            if (valA > valB) return sortConfig.direction === 'asc' ? 1 : -1;
+            return 0;
+        });
+    }, [lcReceiveRecords, isRequestedOnly, sortConfig]);
 
     const requestedCount = useMemo(() => {
         const requested = lcReceiveRecords.filter(item => (item.status || '').toLowerCase().includes('requested'));
@@ -1908,7 +1951,7 @@ function LCReceive({
                 !showStockForm && (
                     <div className="flex flex-wrap md:flex-nowrap gap-2 md:gap-4">
                         <div className="order-1 flex-1 min-w-[calc(50%-4px)] md:min-w-0 bg-white border border-gray-100 p-2.5 md:p-4 rounded-xl shadow-sm transition-all hover:shadow-md">
-                            <div className="text-[9px] md:text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-0.5 md:mb-1">Total Packet</div>
+                            <div className="text-[9px] md:text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-0.5 md:mb-1">Total BAG</div>
                             <div className="text-base md:text-xl font-bold text-gray-900">{(parseFloat(memoizedSummary.totalPackets) || 0).toFixed(2)}</div>
                         </div>
                         <div className="order-2 flex-1 min-w-[calc(50%-4px)] md:min-w-0 bg-emerald-50/50 border border-emerald-100 p-2.5 md:p-4 rounded-xl shadow-sm transition-all hover:shadow-md">
@@ -2260,7 +2303,7 @@ function LCReceive({
                                                             />
                                                         </div>
                                                         <div className="col-span-1 md:col-span-2 space-y-1.5">
-                                                            <label className="text-sm font-medium text-gray-700 text-center block w-full">Packet</label>
+                                                            <label className="text-sm font-medium text-gray-700 text-center block w-full">BAG</label>
                                                             <input
                                                                 type="text"
                                                                 value={product.brandEntries[0].packet && parseFloat(product.brandEntries[0].packet) !== 0 ? product.brandEntries[0].packet : ''}
@@ -2412,7 +2455,7 @@ function LCReceive({
                                                             <div className="flex-1 grid grid-cols-6 gap-2">
                                                                 <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">BRAND</div>
                                                                 <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">PRICE</div>
-                                                                <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">PACKET</div>
+                                                                <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">BAG</div>
                                                                 <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">SIZE</div>
                                                                 <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">QTY</div>
                                                                 <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">UNIT</div>
@@ -2522,9 +2565,9 @@ function LCReceive({
                                                                                 />
                                                                             </div>
                                                                             <div className="space-y-1 md:space-y-0 relative col-span-1">
-                                                                                <label className="md:hidden text-[10px] font-bold text-gray-400 uppercase mb-1">Packet</label>
+                                                                                <label className="md:hidden text-[10px] font-bold text-gray-400 uppercase mb-1">BAG</label>
                                                                                 <input
-                                                                                    type="number" value={entry.packet && parseFloat(entry.packet) !== 0 ? entry.packet : ''} placeholder="Packet" onChange={(e) => handleBrandEntryChange(pIndex, bIndex, 'packet', e.target.value)}
+                                                                                    type="number" value={entry.packet && parseFloat(entry.packet) !== 0 ? entry.packet : ''} placeholder="BAG" onChange={(e) => handleBrandEntryChange(pIndex, bIndex, 'packet', e.target.value)}
                                                                                     className="w-full h-9 px-2 text-sm bg-white border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-all [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                                                                                 />
                                                                             </div>
@@ -2576,9 +2619,9 @@ function LCReceive({
                                                                     {/* Combined line for Sweeped and InHouse fields */}
                                                                     <div className="space-y-3 md:space-y-0 md:grid md:grid-cols-2 lg:grid-cols-4 md:gap-3">
                                                                         <div className="flex flex-col gap-1.5 md:flex-row md:items-center md:gap-2">
-                                                                            <label className="text-[10px] font-bold text-gray-400 uppercase md:min-w-[60px]">SWP. PKT</label>
+                                                                            <label className="text-[10px] font-bold text-gray-400 uppercase md:min-w-[60px]">SWP. BAG</label>
                                                                             <input
-                                                                                type="number" value={entry.sweepedPacket && parseFloat(entry.sweepedPacket) !== 0 ? entry.sweepedPacket : ''} placeholder="Packet" onChange={(e) => handleBrandEntryChange(pIndex, bIndex, 'sweepedPacket', e.target.value)}
+                                                                                type="number" value={entry.sweepedPacket && parseFloat(entry.sweepedPacket) !== 0 ? entry.sweepedPacket : ''} placeholder="BAG" onChange={(e) => handleBrandEntryChange(pIndex, bIndex, 'sweepedPacket', e.target.value)}
                                                                                 className="w-full h-9 md:h-8 px-2 text-xs bg-white/70 border border-gray-200 rounded-md focus:ring-2 focus:ring-blue-500 outline-none transition-all [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                                                                             />
                                                                         </div>
@@ -2592,9 +2635,9 @@ function LCReceive({
                                                                             />
                                                                         </div>
                                                                         <div className="flex flex-col gap-1.5 md:flex-row md:items-center md:gap-2">
-                                                                            <label className="text-[10px] font-bold text-gray-400 uppercase md:min-w-[60px]">INHOUSE PKT</label>
+                                                                            <label className="text-[10px] font-bold text-gray-400 uppercase md:min-w-[60px]">INHOUSE BAG</label>
                                                                             <input
-                                                                                type="text" value={entry.inHousePacket} readOnly placeholder="Packet"
+                                                                                type="text" value={entry.inHousePacket} readOnly placeholder="BAG"
                                                                                 className="w-full h-9 md:h-8 px-2 text-xs bg-gray-50/80 border border-gray-200 rounded-md text-gray-600 font-medium outline-none cursor-default"
                                                                             />
                                                                         </div>
@@ -2706,7 +2749,7 @@ function LCReceive({
                                                         <tr>
                                                             <th className="px-6 py-3 text-[10px] font-bold text-blue-400 uppercase tracking-wider">Product</th>
                                                             <th className="px-6 py-3 text-[10px] font-bold text-blue-400 uppercase tracking-wider">Brand</th>
-                                                            <th className="px-6 py-3 text-[10px] font-bold text-blue-400 uppercase tracking-wider text-right">WAREHOUSE PACKET</th>
+                                                            <th className="px-6 py-3 text-[10px] font-bold text-blue-400 uppercase tracking-wider text-right">WAREHOUSE BAG</th>
                                                             <th className="px-6 py-3 text-[10px] font-bold text-blue-400 uppercase tracking-wider text-right">WAREHOUSE QUANTITY</th>
                                                         </tr>
                                                     </thead>
@@ -2817,19 +2860,123 @@ function LCReceive({
                                                 />
                                             </th>
                                         )}
-                                        <th className="px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Date</th>
-                                        <th className="px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">LC No</th>
-                                        <th className="px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Importer</th>
-                                        <th className="px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Exporter</th>
-                                        <th className="px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Port</th>
-                                        <th className="px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Ind CNF</th>
-                                        <th className="px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Cost</th>
-                                        <th className="px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">BD CNF</th>
-                                        <th className="px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Cost</th>
-                                        <th className="px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Bill Entry</th>
-                                        <th className="px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Product</th>
-                                        <th className="px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Truck</th>
-                                        <th className="px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Quantity</th>
+                                        <th
+                                            className="px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase tracking-wider cursor-pointer group hover:bg-gray-100/50 transition-colors"
+                                            onClick={() => handleSort('date')}
+                                        >
+                                            <div className="flex items-center">
+                                                Date
+                                                {renderSortIcon('date')}
+                                            </div>
+                                        </th>
+                                        <th
+                                            className="px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase tracking-wider cursor-pointer group hover:bg-gray-100/50 transition-colors"
+                                            onClick={() => handleSort('lcNo')}
+                                        >
+                                            <div className="flex items-center">
+                                                LC No
+                                                {renderSortIcon('lcNo')}
+                                            </div>
+                                        </th>
+                                        <th
+                                            className="px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase tracking-wider cursor-pointer group hover:bg-gray-100/50 transition-colors"
+                                            onClick={() => handleSort('importer')}
+                                        >
+                                            <div className="flex items-center">
+                                                Importer
+                                                {renderSortIcon('importer')}
+                                            </div>
+                                        </th>
+                                        <th
+                                            className="px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase tracking-wider cursor-pointer group hover:bg-gray-100/50 transition-colors"
+                                            onClick={() => handleSort('exporter')}
+                                        >
+                                            <div className="flex items-center">
+                                                Exporter
+                                                {renderSortIcon('exporter')}
+                                            </div>
+                                        </th>
+                                        <th
+                                            className="px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase tracking-wider cursor-pointer group hover:bg-gray-100/50 transition-colors"
+                                            onClick={() => handleSort('port')}
+                                        >
+                                            <div className="flex items-center">
+                                                Port
+                                                {renderSortIcon('port')}
+                                            </div>
+                                        </th>
+                                        <th
+                                            className="px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase tracking-wider cursor-pointer group hover:bg-gray-100/50 transition-colors"
+                                            onClick={() => handleSort('indianCnF')}
+                                        >
+                                            <div className="flex items-center">
+                                                Ind CNF
+                                                {renderSortIcon('indianCnF')}
+                                            </div>
+                                        </th>
+                                        <th
+                                            className="px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase tracking-wider cursor-pointer group hover:bg-gray-100/50 transition-colors"
+                                            onClick={() => handleSort('indCnFCost')}
+                                        >
+                                            <div className="flex items-center">
+                                                Cost
+                                                {renderSortIcon('indCnFCost')}
+                                            </div>
+                                        </th>
+                                        <th
+                                            className="px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase tracking-wider cursor-pointer group hover:bg-gray-100/50 transition-colors"
+                                            onClick={() => handleSort('bdCnF')}
+                                        >
+                                            <div className="flex items-center">
+                                                BD CNF
+                                                {renderSortIcon('bdCnF')}
+                                            </div>
+                                        </th>
+                                        <th
+                                            className="px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase tracking-wider cursor-pointer group hover:bg-gray-100/50 transition-colors"
+                                            onClick={() => handleSort('bdCnFCost')}
+                                        >
+                                            <div className="flex items-center">
+                                                Cost
+                                                {renderSortIcon('bdCnFCost')}
+                                            </div>
+                                        </th>
+                                        <th
+                                            className="px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase tracking-wider cursor-pointer group hover:bg-gray-100/50 transition-colors"
+                                            onClick={() => handleSort('billOfEntry')}
+                                        >
+                                            <div className="flex items-center">
+                                                Bill Entry
+                                                {renderSortIcon('billOfEntry')}
+                                            </div>
+                                        </th>
+                                        <th
+                                            className="px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase tracking-wider cursor-pointer group hover:bg-gray-100/50 transition-colors"
+                                            onClick={() => handleSort('productName')}
+                                        >
+                                            <div className="flex items-center">
+                                                Product
+                                                {renderSortIcon('productName')}
+                                            </div>
+                                        </th>
+                                        <th
+                                            className="px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase tracking-wider cursor-pointer group hover:bg-gray-100/50 transition-colors"
+                                            onClick={() => handleSort('totalLcTruck')}
+                                        >
+                                            <div className="flex items-center">
+                                                Truck
+                                                {renderSortIcon('totalLcTruck')}
+                                            </div>
+                                        </th>
+                                        <th
+                                            className="px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase tracking-wider cursor-pointer group hover:bg-gray-100/50 transition-colors"
+                                            onClick={() => handleSort('totalLcQuantity')}
+                                        >
+                                            <div className="flex items-center">
+                                                Quantity
+                                                {renderSortIcon('totalLcQuantity')}
+                                            </div>
+                                        </th>
                                         <th className="px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase tracking-wider text-right">Actions</th>
                                     </tr>
                                 </thead>

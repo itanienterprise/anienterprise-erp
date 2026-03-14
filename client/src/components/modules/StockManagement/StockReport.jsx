@@ -17,6 +17,7 @@ const StockReport = ({
     if (!isOpen) return null;
 
     const [showFilterPanel, setShowFilterPanel] = useState(false);
+    const [reportType, setReportType] = useState('short'); // 'short' or 'detailed'
     const [filterSearchInputs, setFilterSearchInputs] = useState({ lcNoSearch: '', portSearch: '', brandSearch: '', productSearch: '', categorySearch: '' });
     const [filterDropdownOpen, setFilterDropdownOpen] = useState({ lcNo: false, port: false, brand: false, product: false, category: false });
     const initialFilterDropdownState = { lcNo: false, port: false, brand: false, product: false, category: false };
@@ -76,6 +77,22 @@ const StockReport = ({
                         <h3 className="text-base sm:text-xl font-black text-gray-800 truncate leading-none">Stock Report</h3>
                     </div>
                     <div className="flex items-center justify-end gap-1.5 sm:gap-3 flex-shrink-0">
+                        <div className="relative group no-print">
+                            <select
+                                value={reportType}
+                                onChange={(e) => setReportType(e.target.value)}
+                                className="appearance-none bg-white border border-gray-200 text-gray-700 py-2.5 pl-4 pr-10 rounded-xl text-sm font-bold focus:outline-none focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 transition-all cursor-pointer hover:border-gray-300"
+                            >
+                                <option value="short">Short Report</option>
+                                <option value="detailed">Details Report</option>
+                            </select>
+                            <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3 text-gray-400">
+                                <svg className="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20">
+                                    <path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z" />
+                                </svg>
+                            </div>
+                        </div>
+
                         <div className="relative flex items-center">
                             <button
                                 ref={filterButtonRef}
@@ -340,7 +357,7 @@ const StockReport = ({
                                 </>
                             )}
                         </div>
-                        <button onClick={() => generateStockReportPDF(stockData, stockFilters)} className="w-9 h-9 sm:w-10 sm:h-10 flex items-center justify-center bg-blue-600 hover:bg-blue-700 text-white rounded-lg sm:rounded-xl shadow-lg shadow-blue-500/30 transition-all no-print">
+                        <button onClick={() => generateStockReportPDF(stockData, stockFilters, reportType)} className="w-9 h-9 sm:w-10 sm:h-10 flex items-center justify-center bg-blue-600 hover:bg-blue-700 text-white rounded-lg sm:rounded-xl shadow-lg shadow-blue-500/30 transition-all no-print">
                             <PrinterIcon className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
                         </button>
                         <button onClick={onClose} className="w-9 h-9 sm:w-10 sm:h-10 flex items-center justify-center hover:bg-gray-100 rounded-lg sm:rounded-xl transition-colors no-print"><XIcon className="w-4 h-4 sm:w-6 sm:h-6 text-gray-500" /></button>
@@ -375,15 +392,28 @@ const StockReport = ({
                             <table className="w-full border-collapse">
                                 <thead>
                                     <tr className="bg-gray-50 border-b border-gray-900">
-                                        <th className="border-r border-gray-900 px-2 py-1 text-left text-[13px] font-bold text-gray-900 uppercase tracking-wider w-[4%] text-center">SL</th>
-                                        <th className="border-r border-gray-900 px-2 py-1 text-left text-[13px] font-bold text-gray-900 uppercase tracking-wider w-[12%]">Product<br />Name</th>
-                                        <th className="border-r border-gray-900 px-2 py-1 text-left text-[13px] font-bold text-gray-900 uppercase tracking-wider w-[18%]">Brand</th>
-                                        <th className="border-r border-gray-900 px-2 py-1 text-right text-[13px] font-bold text-gray-900 uppercase tracking-wider w-[12%] whitespace-nowrap">Total Inhouse<br />PKT</th>
-                                        <th className="border-r border-gray-900 px-2 py-1 text-right text-[13px] font-bold text-gray-900 uppercase tracking-wider w-[13%] whitespace-nowrap">Total Inhouse<br />QTY</th>
-                                        <th className="border-r border-gray-900 px-2 py-1 text-right text-[13px] font-bold text-gray-900 uppercase tracking-wider w-[8%] whitespace-nowrap">Sale<br />PKT</th>
-                                        <th className="border-r border-gray-900 px-2 py-1 text-right text-[13px] font-bold text-gray-900 uppercase tracking-wider w-[8%] whitespace-nowrap">Sale<br />QTY</th>
-                                        <th className="border-r border-gray-900 px-2 py-1 text-right text-[13px] font-bold text-gray-900 uppercase tracking-wider w-[13%] whitespace-nowrap">Inhouse<br />PKT</th>
-                                        <th className="border-r border-gray-900 px-2 py-1 text-right text-[13px] font-bold text-gray-900 uppercase tracking-wider w-[12%] whitespace-nowrap">Inhouse<br />QTY</th>
+                                        <th className="border-r border-gray-900 px-2 py-1 text-left text-[13px] font-bold text-gray-900 uppercase tracking-wider w-[4%] text-center" rowSpan={2}>SL</th>
+                                        <th className="border-r border-gray-900 px-2 py-1 text-left text-[13px] font-bold text-gray-900 uppercase tracking-wider w-[12%]" rowSpan={2}>Product<br />Name</th>
+                                        <th className="border-r border-gray-900 px-2 py-1 text-left text-[13px] font-bold text-gray-900 uppercase tracking-wider w-[18%]" rowSpan={2}>Brand</th>
+                                        {reportType === 'detailed' && (
+                                            <>
+                                                <th className="border-r border-gray-900 px-1 py-1 text-center text-[11px] font-bold text-gray-900 uppercase tracking-wider" colSpan={2}>Total Inhouse</th>
+                                                <th className="border-r border-gray-900 px-1 py-1 text-center text-[11px] font-bold text-gray-900 uppercase tracking-wider" colSpan={2}>Sale</th>
+                                            </>
+                                        )}
+                                        <th className="px-1 py-1 text-center text-[11px] font-bold text-gray-900 uppercase tracking-wider border-b border-gray-900" colSpan={2}>Inhouse Stock</th>
+                                    </tr>
+                                    <tr className="bg-gray-50 border-b border-gray-900">
+                                        {reportType === 'detailed' && (
+                                            <>
+                                                <th className="border-r border-gray-900 px-2 py-1 text-right text-[12px] font-bold text-gray-900 uppercase tracking-wider w-[10%]">BAG</th>
+                                                <th className="border-r border-gray-900 px-2 py-1 text-right text-[12px] font-bold text-gray-900 uppercase tracking-wider w-[10%]">QTY</th>
+                                                <th className="border-r border-gray-900 px-2 py-1 text-right text-[12px] font-bold text-gray-900 uppercase tracking-wider w-[8%]">BAG</th>
+                                                <th className="border-r border-gray-900 px-2 py-1 text-right text-[12px] font-bold text-gray-900 uppercase tracking-wider w-[8%]">QTY</th>
+                                            </>
+                                        )}
+                                        <th className="border-r border-gray-900 px-2 py-1 text-right text-[12px] font-bold text-gray-900 uppercase tracking-wider w-[10%]">BAG</th>
+                                        <th className="px-2 py-1 text-right text-[12px] font-bold text-gray-900 uppercase tracking-wider w-[10%]">QTY</th>
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-gray-900">
@@ -404,39 +434,40 @@ const StockReport = ({
                                                         ))}
                                                         {hasTotal && <div className="mt-0 pt-0.5 border-t border-transparent leading-tight font-bold">&nbsp;</div>}
                                                     </td>
-                                                    {/* Total Inhouse Column */}
-                                                    <td className="border-r border-gray-900 px-2 py-0.5 text-[14px] text-right text-gray-900 font-medium align-top whitespace-nowrap">
-                                                        {item.brandList.map((ent, i) => {
-                                                            const { whole, remainder } = calculatePktRemainder(ent.totalInHouseQuantity, ent.packetSize);
-                                                            return <div key={i} className="leading-tight">{whole}{remainder !== 0 ? ` - ${Math.abs(remainder)} kg` : ''}</div>;
-                                                        })}
-                                                        {hasTotal && (
-                                                            <div className="mt-0 pt-0.5 border-t border-gray-900 font-bold leading-tight">
-                                                                {(() => {
-                                                                    const pktSize = item.brandList[0]?.packetSize || 0;
-                                                                    const { whole, remainder } = calculatePktRemainder(item.totalInHouseQuantity, pktSize);
-                                                                    return `${whole}${remainder !== 0 ? ` - ${Math.abs(remainder)} kg` : ''}`;
-                                                                })()}
-                                                            </div>
-                                                        )}
-                                                    </td>
-                                                    <td className="border-r border-gray-900 px-2 py-0.5 text-[14px] text-right text-gray-900 font-bold align-top whitespace-nowrap">
-                                                        {item.brandList.map((ent, i) => <div key={i} className="leading-tight">{Math.round(ent.totalInHouseQuantity)}</div>)}
-                                                        {hasTotal && <div className="mt-0 pt-0.5 border-t border-gray-900 font-black leading-tight">{Math.round(item.totalInHouseQuantity)}</div>}
-                                                    </td>
-                                                    {/* Sales Column */}
-                                                    <td className="border-r border-gray-900 px-2 py-0.5 text-[14px] text-right text-gray-900 font-medium align-top whitespace-nowrap">
-                                                        {item.brandList.map((ent, i) => {
-                                                            const sPkt = parseFloat(ent.salePacket) || 0;
-                                                            return <div key={i} className="leading-tight">{Number.isInteger(sPkt) ? sPkt : sPkt.toFixed(2)}</div>;
-                                                        })}
-                                                        {hasTotal && <div className="mt-0 pt-0.5 border-t border-gray-900 font-bold leading-tight text-right">{Number.isInteger(item.salePacket) ? item.salePacket : item.salePacket.toFixed(2)}</div>}
-                                                    </td>
-                                                    <td className="border-r border-gray-900 px-2 py-0.5 text-[14px] text-right text-gray-900 font-bold align-top whitespace-nowrap">
-                                                        {item.brandList.map((ent, i) => <div key={i} className="leading-tight">{Math.round(ent.saleQuantity)}</div>)}
-                                                        {hasTotal && <div className="mt-0 pt-0.5 border-t border-gray-900 font-black leading-tight">{Math.round(item.saleQuantity)}</div>}
-                                                    </td>
-                                                    {/* Inhouse Remaining Column */}
+                                                    {reportType === 'detailed' && (
+                                                        <>
+                                                            <td className="border-r border-gray-900 px-2 py-0.5 text-[14px] text-right text-gray-900 font-medium align-top whitespace-nowrap">
+                                                                {item.brandList.map((ent, i) => {
+                                                                    const { whole, remainder } = calculatePktRemainder(ent.totalInHouseQuantity, ent.packetSize);
+                                                                    return <div key={i} className="leading-tight">{whole}{remainder !== 0 ? ` - ${Math.abs(remainder)} kg` : ''}</div>;
+                                                                })}
+                                                                {hasTotal && (
+                                                                    <div className="mt-0 pt-0.5 border-t border-gray-900 font-bold leading-tight">
+                                                                        {(() => {
+                                                                            const pktSize = item.brandList[0]?.packetSize || 0;
+                                                                            const { whole, remainder } = calculatePktRemainder(item.totalInHouseQuantity, pktSize);
+                                                                            return `${whole}${remainder !== 0 ? ` - ${Math.abs(remainder)} kg` : ''}`;
+                                                                        })()}
+                                                                    </div>
+                                                                )}
+                                                            </td>
+                                                            <td className="border-r border-gray-900 px-2 py-0.5 text-[14px] text-right text-gray-900 font-bold align-top whitespace-nowrap">
+                                                                {item.brandList.map((ent, i) => <div key={i} className="leading-tight">{Math.round(ent.totalInHouseQuantity)}</div>)}
+                                                                {hasTotal && <div className="mt-0 pt-0.5 border-t border-gray-900 font-black leading-tight">{Math.round(item.totalInHouseQuantity)}</div>}
+                                                            </td>
+                                                            <td className="border-r border-gray-900 px-2 py-0.5 text-[14px] text-right text-gray-900 font-medium align-top whitespace-nowrap">
+                                                                {item.brandList.map((ent, i) => {
+                                                                    const sPkt = parseFloat(ent.salePacket) || 0;
+                                                                    return <div key={i} className="leading-tight">{Number.isInteger(sPkt) ? sPkt : sPkt.toFixed(2)}</div>;
+                                                                })}
+                                                                {hasTotal && <div className="mt-0 pt-0.5 border-t border-gray-900 font-bold leading-tight text-right">{Number.isInteger(item.salePacket) ? item.salePacket : item.salePacket.toFixed(2)}</div>}
+                                                            </td>
+                                                            <td className="border-r border-gray-900 px-2 py-0.5 text-[14px] text-right text-gray-900 font-bold align-top whitespace-nowrap">
+                                                                {item.brandList.map((ent, i) => <div key={i} className="leading-tight">{Math.round(ent.saleQuantity)}</div>)}
+                                                                {hasTotal && <div className="mt-0 pt-0.5 border-t border-gray-900 font-black leading-tight">{Math.round(item.saleQuantity)}</div>}
+                                                            </td>
+                                                        </>
+                                                    )}
                                                     <td className="border-r border-gray-900 px-2 py-0.5 text-[14px] text-right text-gray-900 font-medium align-top whitespace-nowrap">
                                                         {item.brandList.map((ent, i) => {
                                                             const { whole, remainder } = calculatePktRemainder(ent.inHouseQuantity, ent.packetSize);
@@ -467,22 +498,26 @@ const StockReport = ({
                                     <tfoot>
                                         <tr className="bg-gray-100 border-t-2 border-gray-900">
                                             <td colSpan="3" className="px-2 py-1.5 text-[14px] font-black text-gray-900 text-right uppercase tracking-wider border-r border-gray-900">Grand Total</td>
-                                            <td className="px-2 py-1.5 text-[14px] text-right font-black text-gray-900 border-r border-gray-900">
-                                                {(() => {
-                                                    const totalWhole = stockData.displayRecords.reduce((accWhole, item) => accWhole + item.brandList.reduce((sum, ent) => sum + calculatePktRemainder(ent.totalInHouseQuantity, ent.packetSize).whole, 0), 0);
-                                                    const totalRem = stockData.displayRecords.reduce((accRem, item) => accRem + item.brandList.reduce((sum, ent) => sum + calculatePktRemainder(ent.totalInHouseQuantity, ent.packetSize).remainder, 0), 0);
-                                                    return `${totalWhole}${totalRem !== 0 ? ` - ${Math.abs(totalRem).toLocaleString()} kg` : ''}`;
-                                                })()}
-                                            </td>
-                                            <td className="px-2 py-1.5 text-[14px] text-right font-black text-gray-900 border-r border-gray-900">
-                                                {Math.round(stockData.totalTotalInHouseQty)}
-                                            </td>
-                                            <td className="px-2 py-1.5 text-[14px] text-right font-black text-gray-900 border-r border-gray-900">
-                                                {Number.isInteger(stockData.totalSalePkt) ? stockData.totalSalePkt : stockData.totalSalePkt.toFixed(2)}
-                                            </td>
-                                            <td className="px-2 py-1.5 text-[14px] text-right font-black text-gray-900 border-r border-gray-900">
-                                                {Math.round(stockData.totalSaleQty)}
-                                            </td>
+                                            {reportType === 'detailed' && (
+                                                <>
+                                                    <td className="px-2 py-1.5 text-[14px] text-right font-black text-gray-900 border-r border-gray-900">
+                                                        {(() => {
+                                                            const totalWhole = stockData.displayRecords.reduce((accWhole, item) => accWhole + item.brandList.reduce((sum, ent) => sum + calculatePktRemainder(ent.totalInHouseQuantity, ent.packetSize).whole, 0), 0);
+                                                            const totalRem = stockData.displayRecords.reduce((accRem, item) => accRem + item.brandList.reduce((sum, ent) => sum + calculatePktRemainder(ent.totalInHouseQuantity, ent.packetSize).remainder, 0), 0);
+                                                            return `${totalWhole}${totalRem !== 0 ? ` - ${Math.abs(totalRem).toLocaleString()} kg` : ''}`;
+                                                        })()}
+                                                    </td>
+                                                    <td className="px-2 py-1.5 text-[14px] text-right font-black text-gray-900 border-r border-gray-900">
+                                                        {Math.round(stockData.totalTotalInHouseQty)}
+                                                    </td>
+                                                    <td className="px-2 py-1.5 text-[14px] text-right font-black text-gray-900 border-r border-gray-900">
+                                                        {Number.isInteger(stockData.totalSalePkt) ? stockData.totalSalePkt : stockData.totalSalePkt.toFixed(2)}
+                                                    </td>
+                                                    <td className="px-2 py-1.5 text-[14px] text-right font-black text-gray-900 border-r border-gray-900">
+                                                        {Math.round(stockData.totalSaleQty)}
+                                                    </td>
+                                                </>
+                                            )}
                                             <td className="px-2 py-1.5 text-[14px] text-right font-black text-gray-900 border-r border-gray-900">
                                                 {(() => {
                                                     const totalWhole = stockData.displayRecords.reduce((accWhole, item) => accWhole + item.brandList.reduce((sum, ent) => sum + calculatePktRemainder(ent.inHouseQuantity, ent.packetSize).whole, 0), 0);
@@ -521,14 +556,14 @@ const StockReport = ({
                                                                 {(() => {
                                                                     const { whole, remainder } = calculatePktRemainder(ent.totalInHouseQuantity, ent.packetSize);
                                                                     return `${whole}${remainder !== 0 ? ` - ${Math.abs(remainder)} kg` : ''}`;
-                                                                })()} PKT
+                                                                })()} BAG
                                                             </p>
                                                             <p className="text-sm font-black text-gray-900">{Math.round(ent.totalInHouseQuantity)} kg</p>
                                                         </div>
                                                         <div className="space-y-0.5 text-right">
                                                             <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Sale</p>
                                                             <p className="text-xs font-bold text-gray-700">
-                                                                {Number.isInteger(parseFloat(ent.salePacket)) ? parseFloat(ent.salePacket) : parseFloat(ent.salePacket).toFixed(2)} PKT
+                                                                {Number.isInteger(parseFloat(ent.salePacket)) ? parseFloat(ent.salePacket) : parseFloat(ent.salePacket).toFixed(2)} BAG
                                                             </p>
                                                             <p className="text-sm font-black text-gray-900">{Math.round(ent.saleQuantity)} kg</p>
                                                         </div>
@@ -539,7 +574,7 @@ const StockReport = ({
                                                                     {(() => {
                                                                         const { whole, remainder } = calculatePktRemainder(ent.inHouseQuantity, ent.packetSize);
                                                                         return `${whole}${remainder !== 0 ? ` - ${Math.abs(remainder)} kg` : ''}`;
-                                                                    })()} PKT
+                                                                    })()} BAG
                                                                 </p>
                                                                 <p className="text-lg font-black text-blue-600">{Math.round(ent.inHouseQuantity)} kg</p>
                                                             </div>
@@ -598,7 +633,7 @@ const StockReport = ({
                             <div className="border border-gray-200 p-4 sm:p-5 rounded-2xl bg-gray-50 shadow-sm print:border-gray-200">
                                 <div className="text-[10px] sm:text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-2 sm:mb-3">Total Inhouse Stock</div>
                                 <div className="text-xs sm:text-sm font-bold text-gray-700 mb-1">
-                                    PKT: {(() => {
+                                    BAG: {(() => {
                                         const totalWhole = stockData.displayRecords.reduce((accWhole, item) => accWhole + item.brandList.reduce((sum, ent) => sum + calculatePktRemainder(ent.totalInHouseQuantity, ent.packetSize).whole, 0), 0);
                                         const totalRem = stockData.displayRecords.reduce((accRem, item) => accRem + item.brandList.reduce((sum, ent) => sum + calculatePktRemainder(ent.totalInHouseQuantity, ent.packetSize).remainder, 0), 0);
                                         return `${totalWhole}${totalRem !== 0 ? ` - ${Math.abs(totalRem).toLocaleString()} kg` : ''}`;
@@ -613,7 +648,7 @@ const StockReport = ({
                             <div className="border border-gray-200 p-4 sm:p-5 rounded-2xl bg-gray-50 shadow-sm print:border-gray-200">
                                 <div className="text-[10px] sm:text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-2 sm:mb-3">Total Sale</div>
                                 <div className="text-xs sm:text-sm font-bold text-gray-700 mb-1">
-                                    PKT: {Number.isInteger(stockData.totalSalePkt) ? stockData.totalSalePkt : stockData.totalSalePkt.toFixed(2)}
+                                    BAG: {Number.isInteger(stockData.totalSalePkt) ? stockData.totalSalePkt : stockData.totalSalePkt.toFixed(2)}
                                 </div>
                                 <div className="text-xl sm:text-2xl font-black text-gray-900">
                                     QTY: {Math.round(stockData.totalSaleQty)} <span className="text-xs sm:text-sm font-bold">{stockData.unit}</span>
@@ -624,7 +659,7 @@ const StockReport = ({
                             <div className="border border-gray-200 p-4 sm:p-5 rounded-2xl bg-white shadow-sm print:border-gray-200">
                                 <div className="text-[10px] sm:text-[11px] font-bold text-blue-500 uppercase tracking-wider mb-2 sm:mb-3">Current Inhouse</div>
                                 <div className="text-xs sm:text-sm font-bold text-gray-700 mb-1">
-                                    PKT: {(() => {
+                                    BAG: {(() => {
                                         const totalWhole = stockData.displayRecords.reduce((accWhole, item) => accWhole + item.brandList.reduce((sum, ent) => sum + calculatePktRemainder(ent.inHouseQuantity, ent.packetSize).whole, 0), 0);
                                         const totalRem = stockData.displayRecords.reduce((accRem, item) => accRem + item.brandList.reduce((sum, ent) => sum + calculatePktRemainder(ent.inHouseQuantity, ent.packetSize).remainder, 0), 0);
                                         return `${totalWhole}${totalRem !== 0 ? ` - ${Math.abs(totalRem).toLocaleString()} kg` : ''}`;

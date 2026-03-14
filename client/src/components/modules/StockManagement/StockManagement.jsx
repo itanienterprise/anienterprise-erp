@@ -2130,11 +2130,11 @@ const StockManagement = ({
                     {/* Summary Cards */}
                     <div className="flex flex-wrap md:flex-nowrap gap-3 md:gap-4 mb-4 md:mb-0">
                         {[
-                            { label: 'TOTAL PACKET', value: Math.round(totalPackets).toLocaleString(), bgColor: 'bg-blue-50/50', borderColor: 'border-blue-100', textColor: 'text-blue-700', labelColor: 'text-blue-600' },
+                            { label: 'TOTAL BAG', value: Math.round(totalPackets).toLocaleString(), bgColor: 'bg-blue-50/50', borderColor: 'border-blue-100', textColor: 'text-blue-700', labelColor: 'text-blue-600' },
                             { label: 'TOTAL QUANTITY', value: `${Math.round(totalQuantity).toLocaleString()} ${unit}`, bgColor: 'bg-blue-50/50', borderColor: 'border-blue-100', textColor: 'text-blue-700', labelColor: 'text-blue-600' },
-                            { label: 'TOTAL SALE PKT', value: `${(totalSalePktWhole || 0).toLocaleString()} - ${(totalSalePktDecimalKg || 0).toLocaleString()} kg`, bgColor: 'bg-orange-50/50', borderColor: 'border-orange-100', textColor: 'text-orange-700', labelColor: 'text-orange-600' },
+                            { label: 'TOTAL SALE BAG', value: `${(totalSalePktWhole || 0).toLocaleString()} - ${(totalSalePktDecimalKg || 0).toLocaleString()} kg`, bgColor: 'bg-orange-50/50', borderColor: 'border-orange-100', textColor: 'text-orange-700', labelColor: 'text-orange-600' },
                             { label: 'TOTAL SALE QTY', value: `${Math.round(totalSaleQty).toLocaleString()} ${unit}`, bgColor: 'bg-orange-50/50', borderColor: 'border-orange-100', textColor: 'text-orange-700', labelColor: 'text-orange-600' },
-                            { label: 'INHOUSE PKT', value: `${(totalInHousePktWhole || 0).toLocaleString()} - ${Math.round(totalInHousePktDecimalKg || 0).toLocaleString()} kg`, bgColor: 'bg-emerald-50/50', borderColor: 'border-emerald-100', textColor: 'text-emerald-700', labelColor: 'text-emerald-600' },
+                            { label: 'INHOUSE BAG', value: `${(totalInHousePktWhole || 0).toLocaleString()} - ${Math.round(totalInHousePktDecimalKg || 0).toLocaleString()} kg`, bgColor: 'bg-emerald-50/50', borderColor: 'border-emerald-100', textColor: 'text-emerald-700', labelColor: 'text-emerald-600' },
                             { label: 'INHOUSE QTY', value: `${Math.round(totalInHouseQty).toLocaleString()} ${unit}`, bgColor: 'bg-emerald-50/50', borderColor: 'border-emerald-100', textColor: 'text-emerald-700', labelColor: 'text-emerald-600' },
                             { label: 'SHORTAGE', value: `${Math.round(totalShortage).toLocaleString()} ${unit}`, bgColor: 'bg-rose-50/50', borderColor: 'border-rose-100', textColor: 'text-rose-700', labelColor: 'text-rose-600' },
                         ].map((card, i) => (
@@ -2436,11 +2436,11 @@ const StockManagement = ({
                                             <div className="hidden lg:grid grid-cols-8 gap-4 px-3 mb-1 pr-[88px]">
                                                 <div className="col-span-2 text-xs font-bold text-gray-400 uppercase tracking-wider">Brand</div>
                                                 <div className="text-xs font-bold text-gray-400 uppercase tracking-wider text-center">InHouse QTY</div>
-                                                <div className="text-xs font-bold text-gray-400 uppercase tracking-wider text-center">InHouse PKT</div>
+                                                <div className="text-xs font-bold text-gray-400 uppercase tracking-wider text-center">InHouse BAG</div>
                                                 <div className="text-xs font-bold text-gray-400 uppercase tracking-wider text-center">WareHouse QTY</div>
-                                                <div className="text-xs font-bold text-gray-400 uppercase tracking-wider text-center">WareHouse PKT</div>
+                                                <div className="text-xs font-bold text-gray-400 uppercase tracking-wider text-center">WareHouse BAG</div>
                                                 <div className="text-xs font-bold text-gray-400 uppercase tracking-wider text-center">Transfer QTY</div>
-                                                <div className="text-xs font-bold text-gray-400 uppercase tracking-wider text-center">Transfer PKT</div>
+                                                <div className="text-xs font-bold text-gray-400 uppercase tracking-wider text-center">Transfer BAG</div>
                                             </div>
 
                                             {product.brandEntries.map((brandEntry, bIndex) => (
@@ -2503,7 +2503,7 @@ const StockManagement = ({
                                                                 />
                                                             </div>
                                                             <div>
-                                                                <label className="block lg:hidden text-xs font-bold text-gray-500 mb-1">InHouse PKT</label>
+                                                                <label className="block lg:hidden text-xs font-bold text-gray-500 mb-1">InHouse BAG</label>
                                                                 <input
                                                                     type="number"
                                                                     name="inhousePkt"
@@ -2529,7 +2529,7 @@ const StockManagement = ({
                                                                 />
                                                             </div>
                                                             <div>
-                                                                <label className="block lg:hidden text-xs font-bold text-gray-500 mb-1">Warehouse PKT</label>
+                                                                <label className="block lg:hidden text-xs font-bold text-gray-500 mb-1">Warehouse BAG</label>
                                                                 <input
                                                                     type="number"
                                                                     name="whPkt"
@@ -2554,7 +2554,7 @@ const StockManagement = ({
                                                                 />
                                                             </div>
                                                             <div>
-                                                                <label className="block lg:hidden text-xs font-bold text-indigo-500 mb-1">Transfer PKT</label>
+                                                                <label className="block lg:hidden text-xs font-bold text-indigo-500 mb-1">Transfer BAG</label>
                                                                 <input
                                                                     type="number"
                                                                     name="transferPkt"
@@ -2763,13 +2763,13 @@ const StockManagement = ({
                                                 <div className="flex flex-col gap-2 w-full mt-1">
                                                     <div className="grid grid-cols-3 gap-1 md:gap-2 w-full">
                                                         <div className="bg-blue-50 text-blue-700 py-1.5 rounded-md text-[10px] sm:text-xs font-bold border border-blue-100 flex items-center justify-center text-center whitespace-nowrap px-1">
-                                                            TOT: {Math.round(group.totalInHousePacket).toLocaleString()} PKT
+                                                            TOT: {Math.round(group.totalInHousePacket).toLocaleString()} BAG
                                                         </div>
                                                         <div className="bg-orange-50 text-orange-700 py-1.5 rounded-md text-[10px] sm:text-xs font-bold border border-orange-100 flex items-center justify-center text-center whitespace-nowrap px-1">
-                                                            SALE: {Math.round(group.salePacket || 0).toLocaleString()} PKT
+                                                            SALE: {Math.round(group.salePacket || 0).toLocaleString()} BAG
                                                         </div>
                                                         <div className="bg-emerald-50 text-emerald-700 py-1.5 rounded-md text-[10px] sm:text-xs font-bold border border-emerald-100 flex items-center justify-center text-center whitespace-nowrap px-1">
-                                                            IN: {Math.round(group.inHousePacket).toLocaleString()} PKT
+                                                            IN: {Math.round(group.inHousePacket).toLocaleString()} BAG
                                                         </div>
                                                     </div>
                                                     <div className="grid grid-cols-3 gap-1 md:gap-2 w-full">
@@ -2798,13 +2798,13 @@ const StockManagement = ({
                                                             <div className="flex flex-col gap-1.5">
                                                                 <div className="grid grid-cols-3 gap-1">
                                                                     <div className="bg-blue-50 text-blue-700 py-0.5 rounded text-[9px] sm:text-[10px] font-bold border border-blue-100 flex items-center justify-center text-center whitespace-nowrap px-0.5">
-                                                                        TOT: {Math.round(brand.totalInHousePacket).toLocaleString()} PKT
+                                                                        TOT: {Math.round(brand.totalInHousePacket).toLocaleString()} BAG
                                                                     </div>
                                                                     <div className="bg-orange-50 text-orange-700 py-0.5 rounded text-[9px] sm:text-[10px] font-bold border border-orange-100 flex items-center justify-center text-center whitespace-nowrap px-0.5">
-                                                                        SALE: {Math.round(brand.salePacket || 0).toLocaleString()} PKT
+                                                                        SALE: {Math.round(brand.salePacket || 0).toLocaleString()} BAG
                                                                     </div>
                                                                     <div className="bg-emerald-50 text-emerald-700 py-0.5 rounded text-[9px] sm:text-[10px] font-bold border border-emerald-100 flex items-center justify-center text-center whitespace-nowrap px-0.5">
-                                                                        IN: {Math.round(brand.inHousePacket).toLocaleString()} PKT
+                                                                        IN: {Math.round(brand.inHousePacket).toLocaleString()} BAG
                                                                     </div>
                                                                 </div>
                                                                 <div className="grid grid-cols-3 gap-1">
@@ -2840,11 +2840,11 @@ const StockManagement = ({
                                     <th colSpan="8" className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider">
                                         <div className="grid grid-cols-[2.5fr_1.2fr_1.2fr_1.2fr_1.2fr_1.2fr_1.2fr_1fr] gap-4 whitespace-nowrap min-w-[1000px]">
                                             <div className="text-left text-gray-900 pr-2">Brand</div>
-                                            <div className="text-center text-blue-800">Total Inhouse PKT</div>
+                                            <div className="text-center text-blue-800">Total Inhouse BAG</div>
                                             <div className="text-center text-blue-800">Total Inhouse QTY</div>
-                                            <div className="text-center text-orange-800">Sale PKT</div>
+                                            <div className="text-center text-orange-800">Sale BAG</div>
                                             <div className="text-center text-orange-800">Sale QTY</div>
-                                            <div className="text-center text-green-800">Inhouse PKT</div>
+                                            <div className="text-center text-green-800">Inhouse BAG</div>
                                             <div className="text-center text-green-800">Inhouse QTY</div>
                                             <div className="text-center text-gray-500">Status</div>
                                         </div>
@@ -3304,9 +3304,9 @@ const StockManagement = ({
                                         <div className="space-y-6">
                                             <div className="grid grid-cols-2 md:flex md:flex-row gap-3 sm:gap-4 w-full">
                                                 {[
-                                                    { label: 'TOTAL PKT', value: tPkts.toLocaleString(), bgColor: 'bg-white', borderColor: 'border-gray-200', textColor: 'text-gray-900', labelColor: 'text-gray-400' },
+                                                    { label: 'TOTAL BAG', value: tPkts.toLocaleString(), bgColor: 'bg-white', borderColor: 'border-gray-200', textColor: 'text-gray-900', labelColor: 'text-gray-400' },
                                                     { label: 'TOTAL QTY', value: `${Math.round(tQty).toLocaleString()} ${unit}`, bgColor: 'bg-emerald-50/10', borderColor: 'border-emerald-100', textColor: 'text-emerald-700', labelColor: 'text-emerald-600' },
-                                                    { label: 'INHOUSE PKT', value: tIHPkt.toLocaleString(), bgColor: 'bg-amber-50/10', borderColor: 'border-amber-100', textColor: 'text-amber-700', labelColor: 'text-amber-600' },
+                                                    { label: 'INHOUSE BAG', value: tIHPkt.toLocaleString(), bgColor: 'bg-amber-50/10', borderColor: 'border-amber-100', textColor: 'text-amber-700', labelColor: 'text-amber-600' },
                                                     { label: 'INHOUSE QTY', value: `${Math.round(tIHQty).toLocaleString()} ${unit}`, bgColor: 'bg-blue-50/10', borderColor: 'border-blue-100', textColor: 'text-blue-700', labelColor: 'text-blue-600' },
                                                     { label: 'SHORTAGE', value: `${Math.round(tShort).toLocaleString()} ${unit}`, bgColor: 'bg-rose-50/10', borderColor: 'border-rose-100', textColor: 'text-rose-700', labelColor: 'text-rose-600', span: 'col-span-2 md:col-auto' },
                                                 ].map((card, i) => (
@@ -3339,7 +3339,7 @@ const StockManagement = ({
                                                                 </th>
                                                                 <th className="px-3 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Brand</th>
                                                                 <th className="px-3 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Purchase Price</th>
-                                                                <th className="px-3 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Packet</th>
+                                                                <th className="px-3 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">BAG</th>
                                                                 <th className="px-3 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Quantity</th>
                                                                 <th className="px-3 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">InHouse Pkt</th>
                                                                 <th className="px-3 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">InHouse Qty</th>
@@ -3449,7 +3449,7 @@ const StockManagement = ({
                                                                             {!isExpanded && (
                                                                                 <div className="flex flex-col items-end mr-1">
                                                                                     <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Total Pkt</span>
-                                                                                    <span className="text-sm font-bold text-gray-900">{item.totalPacket || 0} PKT</span>
+                                                                                    <span className="text-sm font-bold text-gray-900">{item.totalPacket || 0} BAG</span>
                                                                                 </div>
                                                                             )}
                                                                             <div className={`p-1 rounded-full transition-colors ${isExpanded ? 'bg-blue-50 text-blue-500' : 'text-gray-400'}`}>
@@ -3494,7 +3494,7 @@ const StockManagement = ({
                                                                                             <div className="flex flex-col bg-white p-2 rounded-lg border border-gray-100">
                                                                                                 <span className="text-[10px] font-bold text-blue-400 uppercase tracking-wider">InHouse</span>
                                                                                                 <div className="flex flex-col gap-1">
-                                                                                                    <span className="text-xs font-bold text-blue-600">{entry.inHousePacket} PKT</span>
+                                                                                                    <span className="text-xs font-bold text-blue-600">{entry.inHousePacket} BAG</span>
                                                                                                     <span className="text-xs font-bold text-blue-500">{Math.round(parseFloat(entry.inHouseQuantity || 0)).toLocaleString()} {entry.unit}</span>
                                                                                                 </div>
                                                                                             </div>
@@ -3548,7 +3548,7 @@ const StockManagement = ({
                                                                 <th className="px-3 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider">Invoice No</th>
                                                                 <th className="px-3 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider">Company Name</th>
                                                                 <th className="px-3 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider">{isFruitHistory ? "Customer Name" : "Brand"}</th>
-                                                                <th className={`px-3 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider ${!isFruitHistory ? 'text-right' : ''}`}>{isFruitHistory ? "Phone" : "Packet"}</th>
+                                                                <th className={`px-3 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider ${!isFruitHistory ? 'text-right' : ''}`}>{isFruitHistory ? "Phone" : "BAG"}</th>
                                                                 <th className="px-3 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider text-right">Quantity</th>
                                                                 {isFruitHistory && <th className="px-3 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider text-right">Truck</th>}
                                                                 <th className="px-3 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider text-right">Price</th>
@@ -3658,8 +3658,8 @@ const StockManagement = ({
                                                                                     <div className="text-sm font-bold text-blue-600 truncate">{isFruitHistory ? (sale.customerName || '-') : sale.itemBrand}</div>
                                                                                 </div>
                                                                                 <div className="text-right">
-                                                                                    <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-0.5">{isFruitHistory ? "Phone" : "Packet"}</div>
-                                                                                    <div className="text-sm font-bold text-gray-900 truncate">{isFruitHistory ? (sale.contact || '-') : `${sale.itemPacket.toLocaleString()} PKT`}</div>
+                                                                                    <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-0.5">{isFruitHistory ? "Phone" : "BAG"}</div>
+                                                                                    <div className="text-sm font-bold text-gray-900 truncate">{isFruitHistory ? (sale.contact || '-') : `${sale.itemPacket.toLocaleString()} BAG`}</div>
                                                                                 </div>
                                                                             </div>
 

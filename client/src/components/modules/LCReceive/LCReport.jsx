@@ -107,8 +107,8 @@ const LCReport = ({
     };
 
     const getIHPkt = (item) => {
-        if (item.inHousePacket !== undefined && item.inHousePacket !== '') return parseFloat(item.inHousePacket) || 0;
-        return (parseFloat(item.packet) || 0) - (parseFloat(item.sweepedPacket) || 0);
+        if (item.inHouseBAG !== undefined && item.inHouseBAG !== '') return parseFloat(item.inHouseBAG) || 0;
+        return (parseFloat(item.packet) || 0) - (parseFloat(item.sweepedBAG) || 0);
     };
 
     const getIHQty = (item) => {
@@ -682,11 +682,11 @@ const LCReport = ({
                                         <th className="border-r border-gray-900 px-1 py-1 text-center text-[12px] font-bold text-black uppercase tracking-tight" style={{ width: '4.8%' }}>Truck</th>
                                         <th className="border-r border-gray-900 px-1 py-1 text-center text-[12px] font-bold text-black uppercase tracking-tight" style={{ width: '8.2%' }}>Product</th>
                                         <th className="border-r border-gray-900 px-1 py-1 text-left text-[12px] font-bold text-black uppercase tracking-tight" style={{ width: '16.5%' }}>Brand</th>
-                                        <th className="border-r border-gray-900 px-1 py-1 text-right text-[12px] font-bold text-black uppercase tracking-tight" style={{ width: '6.8%' }}>Packet</th>
+                                        <th className="border-r border-gray-900 px-1 py-1 text-right text-[12px] font-bold text-black uppercase tracking-tight" style={{ width: '6.8%' }}>BAG</th>
                                         <th className="border-r border-gray-900 px-1 py-1 text-right text-[12px] font-bold text-black uppercase tracking-tight" style={{ width: '6.8%' }}>QTY</th>
                                         <th className="border-r border-gray-900 px-1 py-1 text-right text-[12px] font-bold text-black uppercase tracking-tight" style={{ width: '5.2%' }}>Short</th>
                                         <th className="border-r border-gray-900 px-1 py-1 text-right text-[12px] font-bold text-black uppercase tracking-tight" style={{ width: '6.8%' }}>IH Qty</th>
-                                        <th className="border-r border-gray-900 px-1 py-1 text-right text-[12px] font-bold text-black uppercase tracking-tight" style={{ width: '5.2%' }}>IH PKT</th>
+                                        <th className="border-r border-gray-900 px-1 py-1 text-right text-[12px] font-bold text-black uppercase tracking-tight" style={{ width: '5.2%' }}>IH BAG</th>
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-gray-400">
@@ -785,7 +785,7 @@ const LCReport = ({
                                         <tr className="bg-gray-100 border-t-2 border-gray-900">
                                             <td colSpan="8" className="px-2 py-2 text-[12px] font-black text-black text-right uppercase tracking-wider border-r border-gray-900">Grand Total</td>
                                             <td className="px-2 py-2 text-[12px] text-right font-black text-black border-r border-gray-900 whitespace-nowrap">
-                                                {(parseFloat(lcReceiveSummary.totalPackets) || 0).toFixed(2)}
+                                                {(parseFloat(lcReceiveSummary.totalBAGs) || 0).toFixed(2)}
                                             </td>
                                             <td className="px-2 py-2 text-[12px] text-right font-black text-black border-r border-gray-900 whitespace-nowrap">
                                                 {Math.round(lcReceiveSummary.totalQuantity)} {lcReceiveSummary.unit}
@@ -866,7 +866,7 @@ const LCReport = ({
                                                                         </div>
                                                                         <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-[10px]">
                                                                             <div className="flex justify-between border-r border-gray-50 pr-2">
-                                                                                <span className="text-gray-400 font-bold uppercase tracking-tighter">Packet</span>
+                                                                                <span className="text-gray-400 font-bold uppercase tracking-tighter">BAG</span>
                                                                                 <span className="text-gray-900 font-semibold">{item.packet || '0'}</span>
                                                                             </div>
                                                                             <div className="flex justify-between pl-2">
@@ -902,8 +902,8 @@ const LCReport = ({
                         {/* Summary Info Cards for Print */}
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-6 pt-4 md:pt-6 px-1 md:px-2 print:grid">
                             <div className="border-2 border-gray-100 p-4 md:p-6 rounded-2xl md:rounded-3xl bg-white shadow-sm print:border-gray-200 text-center">
-                                <div className="text-[11px] md:text-[13px] font-bold text-gray-500 md:text-black uppercase tracking-wider mb-1 md:mb-2">Total Packets</div>
-                                <div className="text-xl md:text-2xl font-black text-gray-900 md:text-black">{(parseFloat(lcReceiveSummary.totalPackets) || 0).toFixed(2)}</div>
+                                <div className="text-[11px] md:text-[13px] font-bold text-gray-500 md:text-black uppercase tracking-wider mb-1 md:mb-2">Total BAGs</div>
+                                <div className="text-xl md:text-2xl font-black text-gray-900 md:text-black">{(parseFloat(lcReceiveSummary.totalBAGs) || 0).toFixed(2)}</div>
                             </div>
                             <div className="border-2 border-gray-100 p-4 md:p-6 rounded-2xl md:rounded-3xl bg-white shadow-sm print:border-gray-200 text-center">
                                 <div className="text-[11px] md:text-[13px] font-bold text-gray-500 md:text-black uppercase tracking-wider mb-1 md:mb-2">Total Quantity</div>

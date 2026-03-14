@@ -256,6 +256,23 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
                 const category = (product?.category || '').trim().toLowerCase();
                 if (category !== 'general') return;
 
+                // --- APPLY FILTRATION TO SECOND PASS ---
+                // 1. Product Name Filter
+                if (stockFilters.productName && sProdName.toLowerCase() !== stockFilters.productName.toLowerCase()) return;
+                
+                // 2. Category Filter
+                if (stockFilters.category && category !== stockFilters.category.toLowerCase()) return;
+
+                // 3. Search Query Filter
+                if (stockSearchQuery) {
+                    const q = stockSearchQuery.toLowerCase();
+                    const group = groupedStock[sProdName]; // Check if we already have it from pass 1
+                    const hasMatch = sProdName.toLowerCase().includes(q) || 
+                                     (saleItem.brandEntries || []).some(be => (be.brand || '').toLowerCase().includes(q));
+                    
+                    if (!hasMatch) return;
+                }
+
                 // Initialize group if missing
                 if (!groupedStock[sProdName]) {
                     groupedStock[sProdName] = {
