@@ -55,6 +55,7 @@ const Sale = require('./models/Sale');
 const User = require('./models/User');
 const Employee = require('./models/Employee');
 const Notification = require('./models/Notification');
+const Bank = require('./models/Bank');
 const { encryptData, decryptData } = require('./utils/encryption');
 const CryptoJS = require('crypto-js');
 
@@ -414,6 +415,46 @@ app.get('/api/sales', async (req, res) => {
   try {
     const sales = await Sale.find().sort({ createdAt: -1 });
     res.json(sales);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// Bank APIs
+app.post('/api/banks', async (req, res) => {
+  try {
+    const newBank = new Bank(req.body);
+    const savedBank = await newBank.save();
+    res.status(201).json(savedBank);
+  } catch (err) {
+    res.status(400).json({ message: err.message });
+  }
+});
+
+app.delete('/api/banks/:id', async (req, res) => {
+  try {
+    const deletedBank = await Bank.findByIdAndDelete(req.params.id);
+    if (!deletedBank) return res.status(404).json({ message: 'Bank not found' });
+    res.json({ message: 'Bank deleted' });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+app.put('/api/banks/:id', async (req, res) => {
+  try {
+    const updatedBank = await Bank.findByIdAndUpdate(req.params.id, req.body, { new: true });
+    if (!updatedBank) return res.status(404).json({ message: 'Bank not found' });
+    res.json(updatedBank);
+  } catch (err) {
+    res.status(400).json({ message: err.message });
+  }
+});
+
+app.get('/api/banks', async (req, res) => {
+  try {
+    const banks = await Bank.find().sort({ createdAt: -1 });
+    res.json(banks);
   } catch (err) {
     res.status(500).json({ message: err.message });
   }

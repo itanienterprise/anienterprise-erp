@@ -23,6 +23,8 @@ import ProductHistoryReport from './components/modules/StockManagement/ProductHi
 import SalesReport from './components/modules/Sale/SalesReport';
 import SaleManagement from './components/modules/Sale/SaleManagement';
 import EmployeeManagement from './components/modules/Employee/EmployeeManagement';
+import PaymentCollection from './components/modules/PaymentCollection/PaymentCollection';
+import Bank from './components/modules/Bank/Bank';
 import { calculateStockData } from './utils/stockHelpers';
 import LoginPage from './components/auth/LoginPage';
 import Profile from './components/modules/Profile/Profile';
@@ -282,6 +284,11 @@ function App() {
   const [hrmsDropdownOpen, setHrmsDropdownOpen] = useState(() => {
     const initialView = localStorage.getItem('currentView') || 'dashboard';
     return initialView === 'employee-section';
+  });
+
+  const [crmDropdownOpen, setCrmDropdownOpen] = useState(() => {
+    const initialView = localStorage.getItem('currentView') || 'dashboard';
+    return initialView === 'customer-section';
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitStatus, setSubmitStatus] = useState(null);
@@ -579,7 +586,8 @@ function App() {
               type === 'product' ? 'products' :
                 type === 'employees' ? 'employees' :
                   type === 'customer' ? 'customers' :
-                    'stock';
+                    type === 'bank' ? 'banks' :
+                      'stock';
 
 
     try {
@@ -1059,6 +1067,12 @@ function App() {
             isLongPressTriggered={isLongPressTriggered}
           />
         );
+      case 'bank-section':
+        return (
+          <Bank 
+            onDeleteConfirm={(data) => handleDelete(data.type, data.id, data.isBulk, data.extraData)}
+          />
+        );
       case 'port-section':
         return (
           <Port
@@ -1133,6 +1147,10 @@ function App() {
             endLongPress={endLongPress}
             isLongPressTriggered={isLongPressTriggered}
           />
+        );
+      case 'payment-collection-section':
+        return (
+          <PaymentCollection />
         );
       case 'warehouse-section':
         return (
@@ -1263,27 +1281,6 @@ function App() {
             <HomeIcon className="w-5 h-5 mr-3" />
             <span className="font-medium">Dashboard</span>
           </button>
-          <button onClick={() => { setCurrentView('customer-section'); setSidebarOpen(false); }} className={`w-full flex items-center px-4 py-3 rounded-lg transition-all ${currentView === 'customer-section' ? 'bg-blue-50 text-blue-600 shadow-sm' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'}`}>
-            <UsersIcon className="w-5 h-5 mr-3" />
-            <span className="font-medium">Customer</span>
-          </button>
-          <button onClick={() => { setCurrentView('importer-section'); setSidebarOpen(false); }} className={`w-full flex items-center px-4 py-3 rounded-lg transition-all ${currentView === 'importer-section' ? 'bg-blue-50 text-blue-600 shadow-sm' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'}`}>
-            <UserIcon className="w-5 h-5 mr-3" />
-            <span className="font-medium">Importer</span>
-          </button>
-          <button onClick={() => { setCurrentView('port-section'); setSidebarOpen(false); }} className={`w-full flex items-center px-4 py-3 rounded-lg transition-all ${currentView === 'port-section' ? 'bg-blue-50 text-blue-600 shadow-sm' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'}`}>
-            <AnchorIcon className="w-5 h-5 mr-3" />
-            <span className="font-medium">Port</span>
-          </button>
-          <button onClick={() => { setCurrentView('ip-section'); setSidebarOpen(false); }} className={`w-full flex items-center px-4 py-3 rounded-lg transition-all ${currentView === 'ip-section' ? 'bg-blue-50 text-blue-600 shadow-sm' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'}`}>
-            <BoxIcon className="w-5 h-5 mr-3" />
-            <span className="font-medium">IP</span>
-          </button>
-          <button onClick={() => { setCurrentView('lc-entry-section'); setSidebarOpen(false); }} className={`w-full flex items-center px-4 py-3 rounded-lg transition-all ${currentView === 'lc-entry-section' ? 'bg-blue-50 text-blue-600 shadow-sm' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'}`}>
-            <DollarSignIcon className="w-5 h-5 mr-3" />
-            <span className="font-medium">LC Receive</span>
-          </button>
-
           <div>
             <button
               onClick={() => setHrmsDropdownOpen(!hrmsDropdownOpen)}
@@ -1307,36 +1304,28 @@ function App() {
               </div>
             </div>
           </div>
-          <div>
-            <button
-              onClick={() => setSaleDropdownOpen(!saleDropdownOpen)}
-              className={`w-full flex items-center justify-between px-4 py-3 rounded-lg transition-all ${currentView.includes('sale-section') ? 'bg-blue-50 text-blue-600 shadow-sm' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'}`}
-            >
-              <div className="flex items-center">
-                <ReceiptIcon className="w-5 h-5 mr-3" />
-                <span className="font-medium">Sale</span>
-              </div>
-              <ChevronDownIcon className={`w-4 h-4 transition-transform duration-200 ${saleDropdownOpen ? 'transform rotate-180' : ''}`} />
-            </button>
-            <div className={`overflow-hidden transition-all duration-300 ease-in-out ${saleDropdownOpen ? 'max-h-48 opacity-100 mt-1' : 'max-h-0 opacity-0'}`}>
-              <div className="pl-9 pr-2 space-y-1">
-                <button
-                  onClick={() => { setCurrentView('general-sale-section'); setSidebarOpen(false); }}
-                  className={`w-full flex flex-row items-center py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'general-sale-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'}`}
-                >
-                  <DollarSignIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
-                  <span>General Sale</span>
-                </button>
-                <button
-                  onClick={() => { setCurrentView('border-sale-section'); setSidebarOpen(false); }}
-                  className={`w-full flex flex-row items-center py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'border-sale-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'}`}
-                >
-                  <TrendingUpIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
-                  <span>Border Sale</span>
-                </button>
-              </div>
-            </div>
-          </div>
+
+          <button onClick={() => { setCurrentView('importer-section'); setSidebarOpen(false); }} className={`w-full flex items-center px-4 py-3 rounded-lg transition-all ${currentView === 'importer-section' ? 'bg-blue-50 text-blue-600 shadow-sm' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'}`}>
+            <UserIcon className="w-5 h-5 mr-3" />
+            <span className="font-medium">Importer</span>
+          </button>
+          <button onClick={() => { setCurrentView('bank-section'); setSidebarOpen(false); }} className={`w-full flex items-center px-4 py-3 rounded-lg transition-all ${currentView === 'bank-section' ? 'bg-blue-50 text-blue-600 shadow-sm' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'}`}>
+            <DollarSignIcon className="w-5 h-5 mr-3" />
+            <span className="font-medium">Bank</span>
+          </button>
+          <button onClick={() => { setCurrentView('port-section'); setSidebarOpen(false); }} className={`w-full flex items-center px-4 py-3 rounded-lg transition-all ${currentView === 'port-section' ? 'bg-blue-50 text-blue-600 shadow-sm' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'}`}>
+            <AnchorIcon className="w-5 h-5 mr-3" />
+            <span className="font-medium">Port</span>
+          </button>
+          <button onClick={() => { setCurrentView('ip-section'); setSidebarOpen(false); }} className={`w-full flex items-center px-4 py-3 rounded-lg transition-all ${currentView === 'ip-section' ? 'bg-blue-50 text-blue-600 shadow-sm' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'}`}>
+            <BoxIcon className="w-5 h-5 mr-3" />
+            <span className="font-medium">IP</span>
+          </button>
+          <button onClick={() => { setCurrentView('lc-entry-section'); setSidebarOpen(false); }} className={`w-full flex items-center px-4 py-3 rounded-lg transition-all ${currentView === 'lc-entry-section' ? 'bg-blue-50 text-blue-600 shadow-sm' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'}`}>
+            <DollarSignIcon className="w-5 h-5 mr-3" />
+            <span className="font-medium">LC Receive</span>
+          </button>
+
           <div>
             <button
               onClick={() => setStockDropdownOpen(!stockDropdownOpen)}
@@ -1374,6 +1363,68 @@ function App() {
               </div>
             </div>
           </div>
+
+          <div>
+            <button
+              onClick={() => setCrmDropdownOpen(!crmDropdownOpen)}
+              className={`w-full flex items-center justify-between px-4 py-3 rounded-lg transition-all ${currentView === 'customer-section' || currentView === 'payment-collection-section' ? 'bg-blue-50 text-blue-600 shadow-sm' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'}`}
+            >
+              <div className="flex items-center">
+                <UsersIcon className="w-5 h-5 mr-3" />
+                <span className="font-medium">CRM</span>
+              </div>
+              <ChevronDownIcon className={`w-4 h-4 transition-transform duration-200 ${crmDropdownOpen ? 'transform rotate-180' : ''}`} />
+            </button>
+            {crmDropdownOpen && (
+              <div className="pl-9 pr-2 space-y-1 mt-1 transition-all duration-300">
+                <button
+                  onClick={() => { setCurrentView('customer-section'); setSidebarOpen(false); }}
+                  className={`w-full flex flex-row items-center py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'customer-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'}`}
+                >
+                  <UsersIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
+                  <span>Customer</span>
+                </button>
+                <button
+                  onClick={() => { setCurrentView('payment-collection-section'); setSidebarOpen(false); }}
+                  className={`w-full flex flex-row items-center py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'payment-collection-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'}`}
+                >
+                  <DollarSignIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
+                  <span>Payment Collection</span>
+                </button>
+              </div>
+            )}
+          </div>
+          <div>
+            <button
+              onClick={() => setSaleDropdownOpen(!saleDropdownOpen)}
+              className={`w-full flex items-center justify-between px-4 py-3 rounded-lg transition-all ${currentView.includes('sale-section') ? 'bg-blue-50 text-blue-600 shadow-sm' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'}`}
+            >
+              <div className="flex items-center">
+                <ReceiptIcon className="w-5 h-5 mr-3" />
+                <span className="font-medium">Sale</span>
+              </div>
+              <ChevronDownIcon className={`w-4 h-4 transition-transform duration-200 ${saleDropdownOpen ? 'transform rotate-180' : ''}`} />
+            </button>
+            <div className={`overflow-hidden transition-all duration-300 ease-in-out ${saleDropdownOpen ? 'max-h-48 opacity-100 mt-1' : 'max-h-0 opacity-0'}`}>
+              <div className="pl-9 pr-2 space-y-1">
+                <button
+                  onClick={() => { setCurrentView('general-sale-section'); setSidebarOpen(false); }}
+                  className={`w-full flex flex-row items-center py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'general-sale-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'}`}
+                >
+                  <DollarSignIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
+                  <span>General Sale</span>
+                </button>
+                <button
+                  onClick={() => { setCurrentView('border-sale-section'); setSidebarOpen(false); }}
+                  className={`w-full flex flex-row items-center py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'border-sale-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'}`}
+                >
+                  <TrendingUpIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
+                  <span>Border Sale</span>
+                </button>
+              </div>
+            </div>
+          </div>
+
         </nav>
       </aside>
 

@@ -111,14 +111,20 @@ const SaleManagement = ({
                                 id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
                                 date: saleData.date,
                                 invoiceNo: saleData.invoiceNo,
+                                lcNo: saleData.lcNo || '',
                                 product: product.productName || '',
                                 brand: entry.brand || '',
                                 quantity: entry.quantity || 0,
+                                rate: entry.unitPrice || 0,
+                                truck: entry.truck || '',
                                 amount: entry.totalAmount || 0,
                                 paid: isFirstEntry ? (parseFloat(saleData.paidAmount) || 0) : 0,
                                 due: isFirstEntry ? (parseFloat(saleData.dueAmount) || 0) : (entry.totalAmount || 0),
                                 discount: isFirstEntry ? (parseFloat(saleData.discount) || 0) : 0,
                                 warehouse: entry.warehouseName || '',
+                                requestedBy: saleData.requestedBy || '',
+                                requestedByUsername: saleData.requestedByUsername || '',
+                                acceptedBy: saleData.acceptedBy || '',
                                 status: 'Pending'
                             });
                         });
@@ -222,7 +228,7 @@ const SaleManagement = ({
                 if (newStatus === 'Pending') {
                     console.log(`[handleStatusUpdate] Status is Pending. Triggering processSaleEffects...`);
                     try {
-                        await processSaleEffects(sale, false);
+                        await processSaleEffects(updatedData, false);
                         console.log(`[handleStatusUpdate] processSaleEffects successful.`);
                     } catch (err) {
                         console.error(`[handleStatusUpdate] Error in processSaleEffects:`, err);

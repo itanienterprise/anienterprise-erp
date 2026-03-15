@@ -1135,7 +1135,9 @@ export const generateSaleInvoicePDF = (sale, allCustomers = []) => {
         doc.setFont('helvetica', 'bold');
         doc.text("Customer ID :", leftColX, infoY);
         doc.setFont('helvetica', 'normal');
-        doc.text(sale.customerId ? sale.customerId.slice(-5).toUpperCase() : "-", leftColX + 32, infoY);
+        // Prioritize the human-readable customerId from the customer object if found
+        const displayCustId = customer?.customerId || (sale.customerId ? sale.customerId.slice(-5).toUpperCase() : "-");
+        doc.text(displayCustId, leftColX + 32, infoY);
 
         infoY += 5;
         doc.setFont('helvetica', 'bold');
@@ -1181,25 +1183,33 @@ export const generateSaleInvoicePDF = (sale, allCustomers = []) => {
 
         const prepareRow = (sl, prod, brand, qty, rate, total) => {
             const quantity = parseFloat(qty) || 0;
+            const productName = (prod || '').toString().toUpperCase();
+            const brandName = (brand || '').toString().toUpperCase();
+            
+            // Fallback: Calculate rate if it's missing or zero
+            let displayRate = parseFloat(rate) || 0;
+            if (displayRate === 0 && quantity > 0) {
+                displayRate = (parseFloat(total) || 0) / quantity;
+            }
 
             return [
                 sl,
-                prod.toUpperCase(),
-                brand.toUpperCase(),
+                productName,
+                brandName,
                 quantity.toLocaleString(),
-                parseFloat(rate).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
+                displayRate.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
                 parseFloat(total).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
             ];
         };
 
-        if (items.length === 0 && sale.productId) {
+        if (items.length === 0 && (sale.productId || sale.productName || sale.product)) {
             tableRows.push(prepareRow(
                 1,
-                sale.productName,
-                sale.brand,
+                sale.productName || sale.product || '-',
+                sale.brand || '-',
                 sale.quantity,
-                sale.unitPrice,
-                sale.totalAmount
+                sale.unitPrice || sale.rate,
+                sale.totalAmount || sale.amount
             ));
         } else {
             let sl = 1;
@@ -1209,21 +1219,21 @@ export const generateSaleInvoicePDF = (sale, allCustomers = []) => {
                     bEntries.forEach((brand) => {
                         tableRows.push(prepareRow(
                             sl++,
-                            item.productName,
-                            brand.brand,
+                            item.productName || item.product || '-',
+                            brand.brand || '-',
                             brand.quantity,
-                            brand.unitPrice,
-                            brand.totalAmount
+                            brand.unitPrice || brand.rate || 0,
+                            brand.totalAmount || brand.amount || 0
                         ));
                     });
                 } else {
                     tableRows.push(prepareRow(
                         sl++,
-                        item.productName,
-                        item.brand,
+                        item.productName || item.product || '-',
+                        item.brand || '-',
                         item.quantity,
-                        item.unitPrice,
-                        item.totalAmount
+                        item.unitPrice || item.rate || 0,
+                        item.totalAmount || item.amount || 0
                     ));
                 }
             });

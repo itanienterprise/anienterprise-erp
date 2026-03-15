@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { EditIcon, TrashIcon, UserIcon, XIcon, SearchIcon, FunnelIcon, ChevronDownIcon, EyeIcon, BoxIcon } from '../../Icons';
+import { EditIcon, TrashIcon, UserIcon, XIcon, SearchIcon, FunnelIcon, ChevronDownIcon, ChevronUpIcon, EyeIcon, BoxIcon, FileTextIcon } from '../../Icons';
 import { API_BASE_URL, SortIcon, formatDate } from '../../../utils/helpers';
+import { generateSaleInvoicePDF } from '../../../utils/pdfGenerator';
 import { encryptData, decryptData } from '../../../utils/encryption';
 import CustomDatePicker from '../../shared/CustomDatePicker';
 import './Customer.css';
@@ -50,6 +51,7 @@ const Customer = ({
     const historyFilterButtonRef = useRef(null);
 
     const [showPaymentForm, setShowPaymentForm] = useState(false);
+    const [expandedRows, setExpandedRows] = useState([]);
     const [paymentFormData, setPaymentFormData] = useState({
         date: new Date().toISOString().split('T')[0],
         method: 'Bank',
@@ -784,7 +786,7 @@ const Customer = ({
                 viewData && (
                     <div className="fixed inset-0 z-[2000] flex items-center justify-center p-4">
                         <div className="absolute inset-0 bg-gray-900/60 backdrop-blur-sm"></div>
-                        <div className="relative bg-white border border-gray-100 rounded-2xl shadow-2xl max-w-4xl w-full flex flex-col max-h-[90vh] animate-in zoom-in duration-200">
+                        <div className="relative bg-white border border-gray-100 rounded-2xl shadow-2xl max-w-[1400px] w-full flex flex-col max-h-[90vh] animate-in zoom-in duration-200">
                             {/* Modal Header */}
                             <div className="px-8 py-6 border-b border-gray-100 flex items-center justify-between bg-white sticky top-0 z-10 rounded-t-2xl">
                                 <div className="flex-1">
@@ -1215,44 +1217,218 @@ const Customer = ({
                                         <div className="bg-gray-50 rounded-xl border border-gray-200 overflow-hidden">
                                             <table className="w-full text-left text-sm">
                                                 <thead className="bg-white border-b border-gray-200">
-                                                    <tr>
-                                                        <th className="px-4 py-3 font-semibold text-gray-600">Date</th>
-                                                        <th className="px-4 py-3 font-semibold text-gray-600">LC No</th>
-                                                        <th className="px-4 py-3 font-semibold text-gray-600">Product</th>
-                                                        <th className="px-4 py-3 font-semibold text-gray-600">Truck</th>
-                                                        <th className="px-4 py-3 font-semibold text-gray-600 text-right">Qty</th>
-                                                        <th className="px-4 py-3 font-semibold text-gray-600 text-right">Amount</th>
-                                                        <th className="px-4 py-3 font-semibold text-gray-600 text-right">Paid</th>
-                                                        <th className="px-4 py-3 font-semibold text-gray-600 text-right">Due</th>
-                                                        <th className="px-4 py-3 font-semibold text-gray-600 text-right">Discount</th>
-                                                        <th className="px-4 py-3 font-semibold text-gray-600 text-center">Status</th>
-                                                    </tr>
-                                                </thead>
-                                                <tbody>
-                                                    {filteredSalesHistory && filteredSalesHistory.length > 0 ? (
-                                                        filteredSalesHistory.map((item, index) => (
-                                                            <tr key={index} className="border-b border-gray-100 bg-white hover:bg-gray-50 transition-colors">
-                                                                <td className="px-4 py-3 text-gray-600 font-medium whitespace-nowrap">{formatDate(item.date)}</td>
-                                                                <td className="px-4 py-3 text-gray-600 font-bold uppercase tracking-tight">{item.invoiceNo || '-'}</td>
-                                                                <td className="px-4 py-3 text-gray-600 font-medium">{item.product || '-'}</td>
-                                                                <td className="px-4 py-3 text-gray-500">{item.truck || '-'}</td>
-                                                                <td className="px-4 py-3 text-right font-bold text-gray-900">{parseFloat(item.quantity || 0).toLocaleString()}</td>
-                                                                <td className="px-4 py-3 text-right font-black text-violet-700">৳{parseFloat(item.amount || 0).toLocaleString()}</td>
-                                                                <td className="px-4 py-3 text-right font-bold text-emerald-600">৳{parseFloat(item.paid || 0).toLocaleString()}</td>
-                                                                <td className="px-4 py-3 text-right font-bold text-orange-600">৳{parseFloat(item.due || 0).toLocaleString()}</td>
-                                                                <td className="px-4 py-3 text-right font-bold text-pink-600">৳{parseFloat(item.discount || 0).toLocaleString()}</td>
-                                                                <td className="px-4 py-3 text-center">
-                                                                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider ${item.status === 'Completed' ? 'bg-emerald-100 text-emerald-700' :
-                                                                        item.status === 'Pending' ? 'bg-orange-100 text-orange-700' : 'bg-gray-100 text-gray-600'
-                                                                        }`}>
-                                                                        {item.status || 'Pending'}
-                                                                    </span>
-                                                                </td>
-                                                            </tr>
-                                                        ))
+                                                    {viewData.customerType === 'Party Customer' ? (
+                                                        <tr>
+                                                            <th className="px-4 py-3 font-semibold text-gray-600">Date</th>
+                                                            <th className="px-4 py-3 font-semibold text-gray-600">LC No</th>
+                                                            <th className="px-4 py-3 font-semibold text-gray-600">Product</th>
+                                                            <th className="px-4 py-3 font-semibold text-gray-600 text-right">Qty</th>
+                                                            <th className="px-4 py-3 font-semibold text-gray-600">Truck</th>
+                                                            <th className="px-4 py-3 font-semibold text-gray-600 text-right">Rate</th>
+                                                            <th className="px-4 py-3 font-semibold text-gray-600 text-right">Amount</th>
+                                                            <th className="px-4 py-3 font-semibold text-gray-600 text-right">Discount</th>
+                                                            <th className="px-4 py-3 font-semibold text-gray-600 text-center">Action</th>
+                                                            <th className="px-4 py-3 font-semibold text-gray-600 text-center">Status</th>
+                                                        </tr>
                                                     ) : (
                                                         <tr>
-                                                            <td colSpan="10" className="px-4 py-12 text-center text-gray-400">
+                                                            <th className="px-4 py-3 font-semibold text-gray-600">Date</th>
+                                                            <th className="px-4 py-3 font-semibold text-gray-600">Invoice</th>
+                                                            <th className="px-4 py-3 font-semibold text-gray-600">Product</th>
+                                                            <th className="px-4 py-3 font-semibold text-gray-600">Brand</th>
+                                                                <th className="px-4 py-3 font-semibold text-gray-600 text-right">Qty</th>
+                                                                <th className="px-4 py-3 font-semibold text-gray-600 text-right">Rate</th>
+                                                                <th className="px-4 py-3 font-semibold text-gray-600 text-right">Amount</th>
+                                                                <th className="px-4 py-3 font-semibold text-gray-600 text-right">Discount</th>
+                                                                <th className="px-4 py-3 font-semibold text-gray-600 text-center">Action</th>
+                                                                <th className="px-4 py-3 font-semibold text-gray-600 text-center">Status</th>
+                                                            </tr>
+                                                        )}
+                                                    </thead>
+                                                    <tbody>
+                                                        {filteredSalesHistory && filteredSalesHistory.length > 0 ? (
+                                                            Object.entries(
+                                                                filteredSalesHistory.reduce((groups, item) => {
+                                                                    const invoice = item.invoiceNo || 'Unknown';
+                                                                    if (!groups[invoice]) {
+                                                                        groups[invoice] = {
+                                                                            invoiceNo: invoice,
+                                                                            lcNo: item.lcNo || '',
+                                                                            date: item.date,
+                                                                            status: item.status,
+                                                                            items: [],
+                                                                            totalAmount: 0,
+                                                                            totalDiscount: 0,
+                                                                            totalQty: 0,
+                                                                            trucks: new Set()
+                                                                        };
+                                                                    }
+                                                                    groups[invoice].items.push(item);
+                                                                    groups[invoice].totalAmount += parseFloat(item.amount || 0);
+                                                                    groups[invoice].totalDiscount += parseFloat(item.discount || 0);
+                                                                    groups[invoice].totalQty += parseFloat(item.quantity || 0);
+                                                                    if (item.lcNo && !groups[invoice].lcNo) groups[invoice].lcNo = item.lcNo;
+                                                                    if (item.truck) groups[invoice].trucks.add(item.truck);
+                                                                    return groups;
+                                                                }, {})
+                                                            ).map(([invoiceNo, group], index) => {
+                                                                const isExpanded = expandedRows.includes(invoiceNo);
+                                                                const isMulti = group.items.length > 1;
+                                                                const toggleRow = () => {
+                                                                    if (!isMulti) return;
+                                                                    if (isExpanded) {
+                                                                        setExpandedRows(expandedRows.filter(id => id !== invoiceNo));
+                                                                    } else {
+                                                                        setExpandedRows([...expandedRows, invoiceNo]);
+                                                                    }
+                                                                };
+                                                                const isParty = viewData?.customerType?.toLowerCase().includes('party');
+                                                                const colSpan = isParty ? "10" : "10";
+
+                                                                return (
+                                                                    <React.Fragment key={index}>
+                                                                        {/* Summary/Single Row */}
+                                                                        <tr 
+                                                                            onClick={toggleRow} 
+                                                                            className={`border-b border-gray-100 bg-white transition-colors ${isMulti ? 'hover:bg-blue-50/50 cursor-pointer group' : ''} ${isExpanded ? 'bg-blue-50/30' : ''}`}
+                                                                        >
+                                                                            <td className="px-4 py-4 text-gray-600 font-medium whitespace-nowrap">
+                                                                                <div className="flex items-center gap-2">
+                                                                                    {isMulti ? (
+                                                                                        isExpanded ? <ChevronUpIcon className="w-4 h-4 text-blue-500" /> : <ChevronDownIcon className="w-4 h-4 text-gray-400 group-hover:text-blue-500" />
+                                                                                    ) : (
+                                                                                        <div className="w-4" /> // Spacer instead of chevron
+                                                                                    )}
+                                                                                    {formatDate(group.date)}
+                                                                                </div>
+                                                                            </td>
+                                                                            <td className="px-4 py-4 text-gray-900 font-bold uppercase tracking-tight">
+                                                                                {isParty ? (group.lcNo || group.invoiceNo) : (group.invoiceNo)}
+                                                                            </td>
+                                                                            <td className="px-4 py-4">
+                                                                                {isMulti ? (
+                                                                                    <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold bg-gray-100 text-gray-700 uppercase tracking-wider">
+                                                                                        Multiple
+                                                                                    </span>
+                                                                                ) : (
+                                                                                    <span className="text-gray-900 font-medium">{group.items[0]?.product || '-'}</span>
+                                                                                )}
+                                                                            </td>
+                                                                            {/* Column 4: Qty (Party) or Brand (General) */}
+                                                                            {isParty ? (
+                                                                                <td className="px-4 py-4 text-right font-bold text-gray-900">{group.totalQty.toLocaleString()}</td>
+                                                                            ) : (
+                                                                                <td className="px-4 py-4">
+                                                                                    {isMulti ? (
+                                                                                        <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold bg-gray-100 text-gray-700 uppercase tracking-wider">
+                                                                                            Multiple
+                                                                                        </span>
+                                                                                    ) : (
+                                                                                        <span className="text-gray-600 font-medium">{group.items[0]?.brand || '-'}</span>
+                                                                                    )}
+                                                                                </td>
+                                                                            )}
+                                                                            {/* Column 5: Truck (Party) or Qty (General) */}
+                                                                            {isParty ? (
+                                                                                <td className="px-4 py-4 text-center text-gray-900 font-bold">
+                                                                                    {isMulti ? (group.trucks.size > 0 ? group.trucks.size : '-') : (group.items[0]?.truck || '-')}
+                                                                                </td>
+                                                                            ) : (
+                                                                                <td className="px-4 py-4 text-right font-bold text-gray-900">{group.totalQty.toLocaleString()}</td>
+                                                                            )}
+                                                                            {/* Column 6: Rate */}
+                                                                            <td className="px-4 py-4 text-right font-bold text-gray-500">
+                                                                                {isMulti ? '-' : (group.items[0]?.rate ? `৳${parseFloat(group.items[0].rate).toLocaleString()}` : (group.totalQty > 0 ? `৳${(group.totalAmount / group.totalQty).toFixed(2)}` : '-'))}
+                                                                            </td>
+                                                                            <td className="px-4 py-4 text-right font-black text-violet-700">৳{group.totalAmount.toLocaleString()}</td>
+                                                                            <td className="px-4 py-4 text-right font-bold text-pink-600">৳{group.totalDiscount.toLocaleString()}</td>
+                                                                            <td className="px-4 py-4 text-center">
+                                                                                <button 
+                                                                                    onClick={(e) => { 
+                                                                                        e.stopPropagation();
+                                                                                        // Reconstruct a sale object for the PDF generator
+                                                                                        const firstItem = group.items[0];
+                                                                                        const saleObject = {
+                                                                                            ...firstItem,
+                                                                                            date: group.date,
+                                                                                            invoiceNo: group.invoiceNo,
+                                                                                            customerId: viewData?._id,
+                                                                                            customerName: viewData?.customerName,
+                                                                                            companyName: viewData?.companyName,
+                                                                                            address: viewData?.address,
+                                                                                            contact: viewData?.phone,
+                                                                                            customerType: viewData?.customerType,
+                                                                                            items: group.items,
+                                                                                            totalAmount: group.totalAmount,
+                                                                                            discount: group.totalDiscount,
+                                                                                            paidAmount: group.items.reduce((sum, item) => sum + (parseFloat(item.paid) || 0), 0),
+                                                                                            lcNo: group.lcNo,
+                                                                                            requestedBy: firstItem.requestedBy,
+                                                                                            requestedByUsername: firstItem.requestedByUsername,
+                                                                                            acceptedBy: firstItem.acceptedBy
+                                                                                        };
+                                                                                        generateSaleInvoicePDF(saleObject, customers);
+                                                                                    }} 
+                                                                                    className="p-1.5 hover:bg-emerald-50 text-emerald-600 rounded-lg transition-colors border border-transparent hover:border-emerald-100"
+                                                                                    title="View Invoice"
+                                                                                >
+                                                                                    <FileTextIcon className="w-4 h-4" />
+                                                                                </button>
+                                                                            </td>
+                                                                            <td className="px-4 py-4 text-center">
+                                                                                <span className={`px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider ${group.status === 'Completed' ? 'bg-emerald-100 text-emerald-700' :
+                                                                                    group.status === 'Pending' ? 'bg-orange-100 text-orange-700' : 'bg-gray-100 text-gray-600'
+                                                                                    }`}>
+                                                                                    {group.status || 'Pending'}
+                                                                                </span>
+                                                                            </td>
+                                                                        </tr>
+
+                                                                        {/* Expanded Detail Rows */}
+                                                                        {isExpanded && group.items.map((item, idx) => {
+                                                                            const rate = parseFloat(item.quantity) > 0 ? (parseFloat(item.amount || 0) / parseFloat(item.quantity)).toFixed(2) : '0.00';
+                                                                            return (
+                                                                                <tr key={`${invoiceNo}-detail-${idx}`} className="bg-gray-50/50 border-b border-gray-100 last:border-b-2 last:border-gray-200">
+                                                                                    <td className="px-4 py-2 border-l-[3px] border-l-blue-400"></td>
+                                                                                    <td className="px-4 py-2 text-gray-400">
+                                                                                        <div className="flex items-center ml-2">
+                                                                                            <div className="w-2 h-2 rounded-full border border-gray-300 mr-2"></div>
+                                                                                            <span className="text-xs">Item {idx + 1}</span>
+                                                                                        </div>
+                                                                                    </td>
+                                                                                    <td className="px-4 py-2 text-gray-700 font-medium">{item.product || '-'}</td>
+                                                                                    
+                                                                                    {/* Column 4: Qty (Party) or Brand (General) */}
+                                                                                    {isParty ? (
+                                                                                        <td className="px-4 py-2 text-right font-semibold text-gray-700">{parseFloat(item.quantity || 0).toLocaleString()}</td>
+                                                                                    ) : (
+                                                                                        <td className="px-4 py-2 text-gray-600">{item.brand && item.brand !== '-' ? item.brand : "-"}</td>
+                                                                                    )}
+                                                                                    
+                                                                                    {/* Column 5: Truck (Party) or Qty (General) */}
+                                                                                    {isParty ? (
+                                                                                        <td className="px-4 py-2 text-gray-500 text-center">{item.truck || '-'}</td>
+                                                                                    ) : (
+                                                                                        <td className="px-4 py-2 text-right font-semibold text-gray-700">{parseFloat(item.quantity || 0).toLocaleString()}</td>
+                                                                                    )}
+                                                                                    
+                                                                                    {/* Column 6: Rate */}
+                                                                                    <td className="px-4 py-2 text-right font-medium text-gray-600">
+                                                                                        {item.rate ? `৳${parseFloat(item.rate).toLocaleString()}` : `৳${(parseFloat(item.amount || 0) / parseFloat(item.quantity || 1)).toFixed(2)}`}
+                                                                                    </td>
+                                                                                    <td className="px-4 py-2 text-right font-bold text-violet-600">৳{parseFloat(item.amount || 0).toLocaleString()}</td>
+                                                                                    <td className="px-4 py-2 text-right font-medium text-pink-500">৳{parseFloat(item.discount || 0).toLocaleString()}</td>
+                                                                                    <td className="px-4 py-2 text-center"></td>
+                                                                                    <td className="px-4 py-2 text-center text-gray-400 text-xs">{item.status}</td>
+                                                                                </tr>
+                                                                            );
+                                                                        })}
+                                                                    </React.Fragment>
+                                                                );
+                                                            })
+                                                        ) : (
+                                                            <tr>
+                                                                <td colSpan="10" className="px-4 py-12 text-center text-gray-400">
                                                                 <div className="flex flex-col items-center space-y-2">
                                                                     <BoxIcon className="w-10 h-10 opacity-10" />
                                                                     <p className="text-sm font-medium">No sales transactions found</p>
