@@ -801,7 +801,7 @@ const SalesReport = ({
                                             <>
                                                 <th className="border-r border-gray-900 px-0.5 py-1.5 text-center text-[12px] font-bold text-gray-900 uppercase whitespace-nowrap">Importer</th>
                                                 <th className="border-r border-gray-900 px-0.5 py-1.5 text-center text-[12px] font-bold text-gray-900 uppercase whitespace-nowrap">Port</th>
-                                                <th className="border-r border-gray-900 px-0.5 py-1.5 text-left text-[12px] font-bold text-gray-900 uppercase whitespace-nowrap">IND CNF</th>
+                                                <th className="border-r border-gray-900 px-0.5 py-1.5 text-center text-[12px] font-bold text-gray-900 uppercase whitespace-nowrap">IND CNF</th>
                                                 <th className="border-r border-gray-900 px-0.5 py-1.5 text-center text-[12px] font-bold text-gray-900 uppercase whitespace-nowrap">BD CNF</th>
                                                 <th className="border-r border-gray-900 px-1 py-1.5 text-left text-[12px] font-bold text-gray-900 uppercase whitespace-nowrap">Party Name</th>
                                             </>

@@ -1862,10 +1862,10 @@ export const generateSalesReportPDF = (reportData, filters, summary, saleType = 
                 0: { cellWidth: 7, halign: 'center' },     // SL
                 1: { cellWidth: 18, halign: 'center' },    // Date
                 2: { cellWidth: 26, halign: 'center' },    // LC No
-                3: { cellWidth: 36, noWrap: true },        // Importer
+                3: { cellWidth: 32, noWrap: true },        // Importer
                 4: { cellWidth: 22, noWrap: true },        // Port
-                5: { cellWidth: 28, noWrap: true },        // IND CNF
-                6: { cellWidth: 28, noWrap: true },        // BD CNF
+                5: { cellWidth: 30, noWrap: true },        // IND CNF
+                6: { cellWidth: 32, noWrap: true },        // BD CNF
                 7: { cellWidth: 34, noWrap: true },        // Party Name
                 8: { cellWidth: 18, overflow: 'linebreak' }, // Product
                 9: { cellWidth: 16, halign: 'right' },     // Qty
@@ -1923,7 +1923,7 @@ export const generateSalesReportPDF = (reportData, filters, summary, saleType = 
 export const generateCustomerReportPDF = (customers, typeFilter, grandTotalDue, dateStr) => {
     try {
         const doc = new jsPDF();
-        
+
         const computeDue = (customer) => {
             const salesHistory = customer.salesHistory || [];
             const paymentHistory = customer.paymentHistory || [];
@@ -1997,7 +1997,7 @@ export const generateCustomerReportPDF = (customers, typeFilter, grandTotalDue, 
                 `Tk ${due.toLocaleString('en-BD', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
             ]);
         });
-        
+
         // Add Grand Total
         tableRows.push([
             { content: 'GRAND TOTAL DUE', colSpan: 5, styles: { halign: 'right', fontStyle: 'bold', fillColor: [240, 240, 240] } },

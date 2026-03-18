@@ -2840,12 +2840,12 @@ const StockManagement = ({
                                     <th colSpan="8" className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider">
                                         <div className="grid grid-cols-[2.5fr_1.2fr_1.2fr_1.2fr_1.2fr_1.2fr_1.2fr_1fr] gap-4 whitespace-nowrap min-w-[1000px]">
                                             <div className="text-left text-gray-900 pr-2">Brand</div>
-                                            <div className="text-center text-blue-800">Total Inhouse BAG</div>
-                                            <div className="text-center text-blue-800">Total Inhouse QTY</div>
+                                            <div className="text-center text-blue-800">LC RECEIVE BAG</div>
+                                            <div className="text-center text-blue-800">LC RECEIVE QTY</div>
                                             <div className="text-center text-orange-800">Sale BAG</div>
                                             <div className="text-center text-orange-800">Sale QTY</div>
-                                            <div className="text-center text-green-800">Inhouse BAG</div>
-                                            <div className="text-center text-green-800">Inhouse QTY</div>
+                                            <div className="text-center text-green-800">STOCK BAG</div>
+                                            <div className="text-center text-green-800">STOCK QTY</div>
                                             <div className="text-center text-gray-500">Status</div>
                                         </div>
                                     </th>
