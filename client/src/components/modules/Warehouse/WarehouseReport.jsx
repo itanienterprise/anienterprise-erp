@@ -274,12 +274,16 @@ const WarehouseReport = ({
 
     // 4. Subtract warehouse-specific sales from whQty
     Object.values(groupedData).forEach(whGroup => {
-        Object.values(whGroup.products).forEach(pGroup => {
-            Object.values(pGroup.brands).forEach(brandItem => {
-                const whKey = whGroup.whName.toLowerCase();
-                const prodNameLower = pGroup.productName.toLowerCase();
-                const brandNameLower = brandItem.brand.toLowerCase();
+        const whKey = whGroup.whName.toLowerCase();
 
+        // 4a. Apply sales to existing products and brands
+        Object.values(whGroup.products).forEach(pGroup => {
+            const prodNameLower = pGroup.productName.toLowerCase();
+            const product = products.find(prod => (prod.name || prod.productName || '').trim().toLowerCase() === prodNameLower);
+            const isGeneral = (product?.category || '').trim().toUpperCase() === 'GENERAL';
+
+            Object.values(pGroup.brands).forEach(brandItem => {
+                const brandNameLower = brandItem.brand.toLowerCase();
                 const exactBrandKey = `${prodNameLower}|${brandNameLower}`;
                 let saleData = salesMapByWh[whKey]?.[exactBrandKey];
 
@@ -293,52 +297,56 @@ const WarehouseReport = ({
                     const sQty = saleData.qty;
                     const size = brandItem.packetSize || 0;
 
-                    const product = products.find(prod => (prod.name || prod.productName || '').trim().toLowerCase() === prodNameLower);
-                    const category = (product?.category || '').trim().toUpperCase();
-
-                    if (category === 'GENERAL') {
+                    if (isGeneral) {
                         brandItem.whQty -= sQty;
                         if (size > 0) brandItem.whPkt -= (sQty / size);
                     } else {
                         brandItem.whQty = Math.max(0, brandItem.whQty - sQty);
                         if (size > 0) brandItem.whPkt = Math.max(0, brandItem.whPkt - (sQty / size));
                     }
+
+                    // Mark as processed so we don't add it again later
+                    saleData.processed = true;
                 }
             });
+        });
 
-            // --- SECOND PASS: Include sales for 'GENERAL' products that have NO warehouse stock records yet ---
-            const whKey = whGroup.whName.toLowerCase();
-            Object.keys(salesMapByWh[whKey] || {}).forEach(brandKey => {
-                const [prodNameLower, brandNameLower] = brandKey.split('|');
-                const product = products.find(p => (p.name || p.productName || '').trim().toLowerCase() === prodNameLower);
+        // 4b. SECOND PASS: Include NO-WAREHOUSE stock sales for 'GENERAL' products
+        Object.keys(salesMapByWh[whKey] || {}).forEach(brandKey => {
+            const saleData = salesMapByWh[whKey][brandKey];
+            if (saleData.processed) return; // Skip if already subtracted
 
-                if ((product?.category || '').trim().toUpperCase() === 'GENERAL') {
-                    // Find actual product name from products array to preserve casing
-                    const actualProdName = product.name || product.productName || prodNameLower;
-                    const actualBrandName = brandNameLower === '-' ? '' : brandNameLower;
+            const [prodNameLower, brandNameLower] = brandKey.split('|');
+            const product = products.find(p => (p.name || p.productName || '').trim().toLowerCase() === prodNameLower);
 
-                    if (!whGroup.products[actualProdName]) {
-                        whGroup.products[actualProdName] = { productName: actualProdName, brands: {} };
-                    }
+            if ((product?.category || '').trim().toUpperCase() === 'GENERAL') {
+                const actualProdName = product.name || product.productName || prodNameLower;
+                const actualBrandName = (brandNameLower === '-' || brandNameLower === '') ? '' : brandNameLower;
 
-                    if (!whGroup.products[actualProdName].brands[actualBrandName]) {
-                        const saleData = salesMapByWh[whKey][brandKey];
-                        const sQty = saleData.qty;
-                        const pktSize = globalStockMap[brandKey]?.pktSize || 0;
-
-                        whGroup.products[actualProdName].brands[actualBrandName] = {
-                            brand: actualBrandName,
-                            inhouseQty: globalStockMap[brandKey]?.inhouseQty || 0,
-                            inhousePkt: globalStockMap[brandKey]?.inhousePkt || 0,
-                            whQty: -sQty,
-                            whPkt: pktSize > 0 ? -(sQty / pktSize) : 0,
-                            packetSize: pktSize
-                        };
-                    }
+                if (!whGroup.products[actualProdName]) {
+                    whGroup.products[actualProdName] = { productName: actualProdName, brands: {} };
                 }
-            });
 
-            // Filter out empty brands and SORT them
+                // Only add if it doesn't already exist from warehouse stock
+                if (!whGroup.products[actualProdName].brands[actualBrandName]) {
+                    const sQty = saleData.qty;
+                    const pktSize = globalStockMap[brandKey]?.pktSize || 0;
+
+                    whGroup.products[actualProdName].brands[actualBrandName] = {
+                        brand: actualBrandName,
+                        inhouseQty: globalStockMap[brandKey]?.inhouseQty || 0,
+                        inhousePkt: globalStockMap[brandKey]?.inhousePkt || 0,
+                        whQty: -sQty,
+                        whPkt: pktSize > 0 ? -(sQty / pktSize) : 0,
+                        packetSize: pktSize
+                    };
+                }
+                saleData.processed = true;
+            }
+        });
+
+        // 4c. Filter out empty brands and SORT them
+        Object.values(whGroup.products).forEach(pGroup => {
             const brandList = Object.values(pGroup.brands)
                 .filter(b => {
                     const pnl = pGroup.productName.toLowerCase();
@@ -349,6 +357,7 @@ const WarehouseReport = ({
                 .sort((a, b) => (a.brand || '').localeCompare(b.brand || '', undefined, { sensitivity: 'base' }));
             pGroup.brands = brandList;
         });
+
         // Filter out empty products
         whGroup.products = Object.values(whGroup.products).filter(p => p.brands.length > 0);
     });

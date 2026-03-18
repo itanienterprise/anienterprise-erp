@@ -19,6 +19,8 @@ const SaleManagement = ({
     setIsSelectionMode,
     selectedItems,
     setSelectedItems,
+    toggleSelection,
+    isLongPressTriggered,
     onDeleteConfirm,
     startLongPress,
     endLongPress,
@@ -52,6 +54,113 @@ const SaleManagement = ({
     const [isRequestedOnly, setIsRequestedOnly] = useState(false);
     const [originalData, setOriginalData] = useState(null);
     const [sortConfig, setSortConfig] = useState({ key: 'date', direction: 'desc' });
+
+    const [showBulkRateModal, setShowBulkRateModal] = useState(false);
+    const [bulkRate, setBulkRate] = useState('');
+
+    const handleBulkRateUpdate = async () => {
+        if (!bulkRate || isNaN(parseFloat(bulkRate))) {
+            alert('Please enter a valid rate');
+            return;
+        }
+
+        setIsSubmitting(true);
+        try {
+            const selectedIds = Array.from(selectedItems);
+            const updates = selectedIds.map(async (id) => {
+                const sale = allSalesRecords.find(s => s._id === id);
+                if (!sale) return;
+
+                const newRate = parseFloat(bulkRate);
+
+                // Update items
+                const updatedItems = (sale.items || []).map(item => {
+                    const updatedBrandEntries = (item.brandEntries || []).map(be => {
+                        const activeUOM = be.uom || item.uom || sale.uom || 'Truck';
+                        const qty = parseFloat(be.quantity || item.quantity || sale.quantity) || 0;
+                        const truckCount = parseFloat(be.truck || item.truck || sale.truck) || 0;
+                        const price = newRate;
+
+                        let entryTotal = 0;
+                        if (activeUOM === 'QTY') {
+                            entryTotal = qty * price;
+                        } else {
+                            entryTotal = truckCount * price;
+                        }
+                        return { ...be, unitPrice: price, totalAmount: entryTotal.toFixed(2) };
+                    });
+
+                    // Calculate item total amount from brand entries OR item quantity
+                    let itemTotalAmount = 0;
+                    if (updatedBrandEntries.length > 0) {
+                        itemTotalAmount = updatedBrandEntries.reduce((sum, be) => sum + (parseFloat(be.totalAmount) || 0), 0);
+                    } else {
+                        const activeItemUOM = item.uom || sale.uom || 'Truck';
+                        const itemQty = parseFloat(item.quantity || sale.quantity) || 0;
+                        const itemTruck = parseFloat(item.truck || sale.truck) || 0;
+                        const itemPrice = newRate;
+
+                        if (activeItemUOM === 'QTY') {
+                            itemTotalAmount = itemQty * itemPrice;
+                        } else {
+                            itemTotalAmount = itemTruck * itemPrice;
+                        }
+                    }
+
+                    return {
+                        ...item,
+                        brandEntries: updatedBrandEntries,
+                        unitPrice: newRate,
+                        totalAmount: itemTotalAmount.toFixed(2)
+                    };
+                });
+
+                // If no items (old format)
+                let updatedSale = { ...sale };
+                if (updatedItems.length > 0) {
+                    updatedSale.items = updatedItems;
+                    updatedSale.totalAmount = updatedItems.reduce((sum, item) => sum + (parseFloat(item.totalAmount) || 0), 0).toFixed(2);
+                } else {
+                    const activeSaleUOM = sale.uom || 'Truck';
+                    const saleQty = parseFloat(sale.quantity) || 0;
+                    const saleTruck = parseFloat(sale.truck) || 0;
+                    const salePrice = newRate;
+
+                    let saleTotal = 0;
+                    if (activeSaleUOM === 'QTY') {
+                        saleTotal = saleQty * salePrice;
+                    } else {
+                        saleTotal = saleTruck * salePrice;
+                    }
+
+                    updatedSale.unitPrice = newRate;
+                    updatedSale.totalAmount = saleTotal.toFixed(2);
+                }
+
+                // Update due amount
+                updatedSale.dueAmount = Math.max(0, (parseFloat(updatedSale.totalAmount) || 0) - (parseFloat(updatedSale.discount) || 0) - (parseFloat(updatedSale.paidAmount) || 0));
+
+                const { _id, createdAt, ...dataToEncrypt } = updatedSale;
+
+                return axios.put(`${API_BASE_URL}/api/sales/${id}`, {
+                    data: encryptData(dataToEncrypt)
+                });
+            });
+
+            await Promise.all(updates);
+            addNotification('Bulk Update Success', `Updated rate for ${selectedIds.length} sales`);
+            fetchSales();
+            setSelectedItems(new Set());
+            setIsSelectionMode(false);
+            setShowBulkRateModal(false);
+            setBulkRate('');
+        } catch (err) {
+            console.error('Bulk update error:', err);
+            alert('Failed to update sales in bulk');
+        } finally {
+            setIsSubmitting(false);
+        }
+    };
 
     const handleSort = (key) => {
         let direction = 'desc';
@@ -266,12 +375,12 @@ const SaleManagement = ({
                         console.error(`[handleStatusUpdate] Error in addNotification:`, err);
                     }
                 }
-                
+
                 console.log(`[handleStatusUpdate] Re-fetching data...`);
-                try { fetchSales(); } catch(e) { console.error('fetchSales error', e); }
-                try { fetchCustomers(); } catch(e) { console.error('fetchCustomers error', e); }
-                try { fetchWarehouses(); } catch(e) { console.error('fetchWarehouses error', e); }
-                try { fetchStockRecords(); } catch(e) { console.error('fetchStockRecords error', e); }
+                try { fetchSales(); } catch (e) { console.error('fetchSales error', e); }
+                try { fetchCustomers(); } catch (e) { console.error('fetchCustomers error', e); }
+                try { fetchWarehouses(); } catch (e) { console.error('fetchWarehouses error', e); }
+                try { fetchStockRecords(); } catch (e) { console.error('fetchStockRecords error', e); }
                 console.log(`[handleStatusUpdate] Update successfully finished!`);
             } else {
                 console.warn(`[handleStatusUpdate] Unexpected response status:`, response.status);
@@ -306,6 +415,13 @@ const SaleManagement = ({
 
     useEffect(() => {
         const handleClickOutside = (event) => {
+            // Check if the click is on an element that is still in the document
+            // If the element is detached (e.g., a selection item that just got removed),
+            // don't close the panel.
+            if (event.target && !document.body.contains(event.target)) {
+                return;
+            }
+
             if (
                 showSaleFilterPanel &&
                 saleFilterRef.current &&
@@ -411,15 +527,15 @@ const SaleManagement = ({
     // Reset filters when switching between General and Border sales
     useEffect(() => {
         if (setSaleFilters) {
-            setSaleFilters({ 
-                startDate: '', 
-                endDate: '', 
-                companyName: '', 
-                invoiceNo: '', 
-                port: '', 
-                productName: '', 
-                indCnf: '', 
-                bdCnf: '' 
+            setSaleFilters({
+                startDate: '',
+                endDate: '',
+                companyName: '',
+                invoiceNo: '',
+                port: '',
+                productName: '',
+                indCnf: '',
+                bdCnf: ''
             });
         }
         if (setSearchQuery) setSearchQuery('');
@@ -462,10 +578,10 @@ const SaleManagement = ({
                 // Filter by saleType. Match legacy records to 'General' ONLY if they are not legacy Border sales.
                 const filteredSales = decryptedSales.filter(s => {
                     const sTypeLow = (s.saleType || '').toLowerCase().trim();
-                    const isBorder = sTypeLow === 'border' || sTypeLow === 'border sale' || 
-                                   (s.invoiceNo || '').startsWith('BS') ||
-                                   (!s.saleType && !!(s.lcNo || s.port || s.importer));
-                    
+                    const isBorder = sTypeLow === 'border' || sTypeLow === 'border sale' ||
+                        (s.invoiceNo || '').startsWith('BS') ||
+                        (!s.saleType && !!(s.lcNo || s.port || s.importer));
+
                     if (saleType === 'General') {
                         return !isBorder && (sTypeLow === 'general' || sTypeLow === 'general sale' || !s.saleType || (s.invoiceNo || '').startsWith('GS'));
                     }
@@ -1042,7 +1158,7 @@ const SaleManagement = ({
                         );
                     } else {
                         console.log(`[handleSubmit] Notifying for UPDATED ${sType} Request`);
-                        
+
                         // Compare for detailed changes
                         const changedFields = [];
                         const fieldLabels = {
@@ -1061,7 +1177,7 @@ const SaleManagement = ({
                             paidAmount: 'Paid',
                             creditPeriod: 'Credit Period'
                         };
-                        
+
                         // Compare simple top-level fields
                         Object.keys(fieldLabels).forEach(field => {
                             if (originalData && String(formData[field]) !== String(originalData[field])) {
@@ -1096,7 +1212,7 @@ const SaleManagement = ({
                                     }
                                 });
                             });
-                            
+
                             // Check if items were removed
                             if (formData.items.length < originalData.items.length) qtyChanged = true;
                         }
@@ -1110,7 +1226,7 @@ const SaleManagement = ({
                             if (originalData && formData.dueAmount !== originalData.dueAmount) changedFields.push('Due');
                         }
 
-                        const detailMsg = changedFields.length > 0 
+                        const detailMsg = changedFields.length > 0
                             ? `\nUpdated fields: ${[...new Set(changedFields)].join(', ')}`
                             : '';
 
@@ -1649,11 +1765,10 @@ const SaleManagement = ({
                             <div className="space-y-1">
                                 <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Status / Payment</span>
                                 <div className="flex flex-col gap-1.5">
-                                    <div className={`px-2 py-0.5 w-fit rounded text-[10px] font-bold uppercase tracking-wider ${
-                                        viewData.status === 'Requested' ? 'bg-amber-50 text-amber-600 border border-amber-100' :
-                                        viewData.status === 'Rejected' ? 'bg-red-50 text-red-600 border border-red-100' :
-                                        'bg-emerald-50 text-emerald-600 border border-emerald-100'
-                                    }`}>
+                                    <div className={`px-2 py-0.5 w-fit rounded text-[10px] font-bold uppercase tracking-wider ${viewData.status === 'Requested' ? 'bg-amber-50 text-amber-600 border border-amber-100' :
+                                            viewData.status === 'Rejected' ? 'bg-red-50 text-red-600 border border-red-100' :
+                                                'bg-emerald-50 text-emerald-600 border border-emerald-100'
+                                        }`}>
                                         {viewData.status || 'Completed'}
                                     </div>
                                     <div className={`px-2 py-0.5 w-fit rounded text-[10px] font-bold inline-flex items-center gap-1 ${parseFloat(viewData.dueAmount) > 0 ? 'bg-amber-50 text-amber-600 border border-amber-100/50' : 'bg-emerald-50 text-emerald-600 border border-emerald-100/50'}`}>
@@ -1903,42 +2018,29 @@ const SaleManagement = ({
                                 <>
                                     {/* Mobile backdrop */}
                                     <div
-                                        className="md:hidden fixed inset-0 bg-black/20 backdrop-blur-sm z-[55]"
+                                        className="md:hidden fixed inset-0 bg-black/20 backdrop-blur-2xl z-[55]"
                                         onClick={() => setShowSaleFilterPanel(false)}
                                     />
-                                    <div
-                                        ref={saleFilterRef}
-                                        className="fixed inset-x-4 top-24 md:absolute md:inset-auto md:right-0 md:mt-3 md:w-80 bg-white border border-gray-100 rounded-2xl shadow-2xl z-[60] p-5 animate-in fade-in zoom-in duration-200 max-h-[calc(100vh-120px)] overflow-y-auto"
-                                    >
-                                        <div className="flex items-center justify-between mb-4 pb-2 border-b border-gray-100">
-                                            <h4 className="font-bold text-gray-900 tracking-tight">Advance Filter</h4>
-                                            <div className="flex items-center gap-3">
-                                                <button
-                                                    onMouseDown={(e) => {
-                                                        e.preventDefault();
-                                                        setSaleFilters({ startDate: '', endDate: '', companyName: '', invoiceNo: '', port: '', productName: '', indCnf: '', bdCnf: '' });
-                                                        setSaleFilterSearch({ companySearch: '', invoiceSearch: '', portSearch: '', productSearch: '', indCnfSearch: '', bdCnfSearch: '' });
-                                                        setActiveFilterDropdown(null);
-                                                    }}
-                                                    className="text-[11px] font-bold text-blue-600 hover:text-blue-700 uppercase tracking-widest"
-                                                >
-                                                    RESET ALL
-                                                </button>
-                                                <button
-                                                    onMouseDown={(e) => {
-                                                        e.preventDefault();
-                                                        setShowSaleFilterPanel(false);
-                                                    }}
-                                                    className="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-full transition-colors"
-                                                >
-                                                    <XIcon className="w-4 h-4" />
-                                                </button>
-                                            </div>
+                                    <div ref={saleFilterRef} className="fixed inset-x-4 top-24 md:absolute md:inset-auto md:right-0 md:mt-3 w-auto md:w-[450px] bg-white/95 backdrop-blur-2xl border border-gray-100 rounded-2xl shadow-2xl z-[60] p-4 md:p-6 animate-in fade-in zoom-in duration-200">
+                                        {/* Filter Header */}
+                                        <div className="flex items-center justify-between mb-6 pb-2 border-b border-gray-50">
+                                            <h4 className="font-extrabold text-gray-900 text-lg">Advance Filter</h4>
+                                            <button
+                                                onMouseDown={(e) => {
+                                                    e.preventDefault();
+                                                    setSaleFilters({ startDate: '', endDate: '', companyName: '', invoiceNo: '', port: '', productName: '', indCnf: '', bdCnf: '' });
+                                                    setSaleFilterSearch({ companySearch: '', invoiceSearch: '', portSearch: '', productSearch: '', indCnfSearch: '', bdCnfSearch: '' });
+                                                    setActiveFilterDropdown(null);
+                                                }}
+                                                className="text-[11px] font-bold text-blue-600 hover:text-blue-700 uppercase tracking-widest transition-colors"
+                                            >
+                                                RESET ALL
+                                            </button>
                                         </div>
 
-                                        <div className="space-y-4">
-                                            {/* Date Range */}
-                                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                        <div className="space-y-5">
+                                            {/* Date Range Row */}
+                                            <div className="grid grid-cols-2 gap-4">
                                                 <div ref={saleFromDateFilterRef}>
                                                     <CustomDatePicker
                                                         label="From Date"
@@ -1962,14 +2064,124 @@ const SaleManagement = ({
                                                 </div>
                                             </div>
 
-                                            {/* Filter logic for Border vs General */}
-                                            {saleType === 'Border' ? (
-                                                <>
-                                                    {/* Party Name and Port in one line for Border */}
-                                                    <div className="grid grid-cols-2 gap-3">
-                                                        {/* Company / Customer Name Filter (Party Name) */}
+                                            {/* Type Specific and Product Filters */}
+                                            <div className="space-y-5">
+                                                {saleType === 'Border' ? (
+                                                    <>
+                                                        <div className="grid grid-cols-2 gap-4">
+                                                            {/* Party Name Filter */}
+                                                            <div className="space-y-1.5 relative" ref={saleCompanyFilterRef}>
+                                                                <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider pl-1">PARTY NAME</label>
+                                                                <div className="relative">
+                                                                    <input
+                                                                        type="text"
+                                                                        value={saleFilterSearch.companySearch}
+                                                                        onChange={(e) => {
+                                                                            setSaleFilterSearch(prev => ({ ...prev, companySearch: e.target.value }));
+                                                                            setSaleFilters(prev => ({ ...prev, companyName: e.target.value }));
+                                                                            setActiveFilterDropdown('company');
+                                                                        }}
+                                                                        onFocus={() => setActiveFilterDropdown('company')}
+                                                                        placeholder={saleFilters.companyName || 'Search party...'}
+                                                                        className={`w-full px-4 py-2 bg-white border border-gray-100 rounded-xl text-sm focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all shadow-sm hover:border-gray-200 pr-14 ${saleFilters.companyName ? 'placeholder:text-gray-900 placeholder:font-semibold' : 'placeholder:text-gray-300'}`}
+                                                                    />
+                                                                    <div className="absolute right-3.5 top-1/2 -translate-y-1/2 flex items-center gap-2">
+                                                                        {saleFilters.companyName && (
+                                                                            <button onMouseDown={(e) => { e.preventDefault(); setSaleFilters(prev => ({ ...prev, companyName: '' })); setSaleFilterSearch(prev => ({ ...prev, companySearch: '' })); setActiveFilterDropdown(null); }} className="text-gray-400 hover:text-gray-600 transition-colors">
+                                                                                <XIcon className="w-4 h-4" />
+                                                                            </button>
+                                                                        )}
+                                                                        <SearchIcon className="w-4 h-4 text-gray-300 pointer-events-none" />
+                                                                    </div>
+                                                                </div>
+                                                                {activeFilterDropdown === 'company' && (() => {
+                                                                    const options = [...new Set(sales.map(s => s.companyName || s.customerName).filter(Boolean))].sort();
+                                                                    const filtered = options.filter(name => name.toLowerCase().includes((saleFilterSearch.companySearch || '').toLowerCase()));
+                                                                    return filtered.length > 0 ? (
+                                                                        <div className="absolute z-[120] mt-1 w-full bg-white border border-gray-100 rounded-xl shadow-xl max-h-48 overflow-y-auto py-1">
+                                                                            {filtered.map(name => (
+                                                                                <button key={name} type="button" onMouseDown={(e) => { e.preventDefault(); setSaleFilters(prev => ({ ...prev, companyName: name })); setSaleFilterSearch(prev => ({ ...prev, companySearch: name })); setActiveFilterDropdown(null); }} className="w-full px-4 py-2 text-left text-sm hover:bg-blue-50 transition-colors font-medium text-gray-700">
+                                                                                    {name}
+                                                                                </button>
+                                                                            ))}
+                                                                        </div>
+                                                                    ) : null;
+                                                                })()}
+                                                            </div>
+
+                                                            {/* Entry Port Filter */}
+                                                            <div className="space-y-1.5 relative" ref={salePortFilterRef}>
+                                                                <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider pl-1">ENTRY PORT</label>
+                                                                <div className="relative">
+                                                                    <input
+                                                                        type="text"
+                                                                        value={saleFilterSearch.portSearch}
+                                                                        onChange={(e) => {
+                                                                            setSaleFilterSearch(prev => ({ ...prev, portSearch: e.target.value }));
+                                                                            setSaleFilters(prev => ({ ...prev, port: e.target.value }));
+                                                                            setActiveFilterDropdown('port');
+                                                                        }}
+                                                                        onFocus={() => setActiveFilterDropdown('port')}
+                                                                        placeholder={saleFilters.port || 'Search port...'}
+                                                                        className={`w-full px-4 py-2 bg-white border border-gray-100 rounded-xl text-sm focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all shadow-sm hover:border-gray-200 pr-14 ${saleFilters.port ? 'placeholder:text-gray-900 placeholder:font-semibold' : 'placeholder:text-gray-300'}`}
+                                                                    />
+                                                                    <div className="absolute right-3.5 top-1/2 -translate-y-1/2 flex items-center gap-2">
+                                                                        {saleFilters.port && (
+                                                                            <button onMouseDown={(e) => { e.preventDefault(); setSaleFilters(prev => ({ ...prev, port: '' })); setSaleFilterSearch(prev => ({ ...prev, portSearch: '' })); setActiveFilterDropdown(null); }} className="text-gray-400 hover:text-gray-600 transition-colors">
+                                                                                <XIcon className="w-4 h-4" />
+                                                                            </button>
+                                                                        )}
+                                                                        <SearchIcon className="w-4 h-4 text-gray-300 pointer-events-none" />
+                                                                    </div>
+                                                                </div>
+                                                                {activeFilterDropdown === 'port' && (() => {
+                                                                    const options = [...new Set(sales.map(s => s.port).filter(Boolean))].sort();
+                                                                    const filtered = options.filter(port => port.toLowerCase().includes((saleFilterSearch.portSearch || '').toLowerCase()));
+                                                                    return filtered.length > 0 ? (
+                                                                        <div className="absolute z-[120] mt-1 w-full bg-white border border-gray-100 rounded-xl shadow-xl max-h-48 overflow-y-auto py-1">
+                                                                            {filtered.map(port => (
+                                                                                <button key={port} type="button" onMouseDown={(e) => { e.preventDefault(); setSaleFilters(prev => ({ ...prev, port: port })); setSaleFilterSearch(prev => ({ ...prev, portSearch: port })); setActiveFilterDropdown(null); }} className="w-full px-4 py-2 text-left text-sm hover:bg-blue-50 transition-colors font-medium text-gray-700">
+                                                                                    {port}
+                                                                                </button>
+                                                                            ))}
+                                                                        </div>
+                                                                    ) : null;
+                                                                })()}
+                                                            </div>
+                                                        </div>
+
+                                                        <div className="grid grid-cols-2 gap-4">
+                                                            {/* Indian CNF Filter */}
+                                                            <div className="space-y-1.5 relative" ref={saleIndCnfFilterRef}>
+                                                                <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider pl-1">INDIAN CNF</label>
+                                                                <input
+                                                                    type="text"
+                                                                    value={saleFilterSearch.indCnfSearch}
+                                                                    onChange={(e) => { setSaleFilterSearch(prev => ({ ...prev, indCnfSearch: e.target.value })); setSaleFilters(prev => ({ ...prev, indCnf: e.target.value })); setActiveFilterDropdown('indCnf'); }}
+                                                                    onFocus={() => setActiveFilterDropdown('indCnf')}
+                                                                    placeholder={saleFilters.indCnf || 'India...'}
+                                                                    className={`w-full px-4 py-2 bg-white border border-gray-100 rounded-xl text-sm focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all shadow-sm hover:border-gray-200 ${saleFilters.indCnf ? 'placeholder:text-gray-900 placeholder:font-semibold' : 'placeholder:text-gray-300'}`}
+                                                                />
+                                                            </div>
+                                                            {/* BD CNF Filter */}
+                                                            <div className="space-y-1.5 relative" ref={saleBdCnfFilterRef}>
+                                                                <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider pl-1">BD CNF</label>
+                                                                <input
+                                                                    type="text"
+                                                                    value={saleFilterSearch.bdCnfSearch}
+                                                                    onChange={(e) => { setSaleFilterSearch(prev => ({ ...prev, bdCnfSearch: e.target.value })); setSaleFilters(prev => ({ ...prev, bdCnf: e.target.value })); setActiveFilterDropdown('bdCnf'); }}
+                                                                    onFocus={() => setActiveFilterDropdown('bdCnf')}
+                                                                    placeholder={saleFilters.bdCnf || 'BD...'}
+                                                                    className={`w-full px-4 py-2 bg-white border border-gray-100 rounded-xl text-sm focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all shadow-sm hover:border-gray-200 ${saleFilters.bdCnf ? 'placeholder:text-gray-900 placeholder:font-semibold' : 'placeholder:text-gray-300'}`}
+                                                                />
+                                                            </div>
+                                                        </div>
+                                                    </>
+                                                ) : (
+                                                    <div className="grid grid-cols-2 gap-4">
+                                                        {/* Company Filter (General) */}
                                                         <div className="space-y-1.5 relative" ref={saleCompanyFilterRef}>
-                                                            <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider pl-1">PARTY NAME</label>
+                                                            <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider pl-1">COMPANY NAME</label>
                                                             <div className="relative">
                                                                 <input
                                                                     type="text"
@@ -1980,19 +2192,12 @@ const SaleManagement = ({
                                                                         setActiveFilterDropdown('company');
                                                                     }}
                                                                     onFocus={() => setActiveFilterDropdown('company')}
-                                                                    placeholder={saleFilters.companyName || 'Search party...'}
-                                                                    className={`w-full px-4 py-2.5 bg-white border border-gray-100 rounded-xl text-sm focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all shadow-sm hover:border-gray-200 pr-14 ${saleFilters.companyName ? 'placeholder:text-gray-900 placeholder:font-semibold' : 'placeholder:text-gray-300'}`}
+                                                                    placeholder={saleFilters.companyName || 'Search company...'}
+                                                                    className={`w-full px-4 py-2 bg-white border border-gray-100 rounded-xl text-sm focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all shadow-sm hover:border-gray-200 pr-14 ${saleFilters.companyName ? 'placeholder:text-gray-900 placeholder:font-semibold' : 'placeholder:text-gray-300'}`}
                                                                 />
                                                                 <div className="absolute right-3.5 top-1/2 -translate-y-1/2 flex items-center gap-2">
                                                                     {saleFilters.companyName && (
-                                                                        <button
-                                                                            onClick={() => {
-                                                                                setSaleFilters(prev => ({ ...prev, companyName: '' }));
-                                                                                setSaleFilterSearch(prev => ({ ...prev, companySearch: '' }));
-                                                                                setActiveFilterDropdown(null);
-                                                                            }}
-                                                                            className="text-gray-400 hover:text-gray-600"
-                                                                        >
+                                                                        <button onMouseDown={(e) => { e.preventDefault(); setSaleFilters(prev => ({ ...prev, companyName: '' })); setSaleFilterSearch(prev => ({ ...prev, companySearch: '' })); setActiveFilterDropdown(null); }} className="text-gray-400 hover:text-gray-600 transition-colors">
                                                                             <XIcon className="w-4 h-4" />
                                                                         </button>
                                                                     )}
@@ -2005,17 +2210,7 @@ const SaleManagement = ({
                                                                 return filtered.length > 0 ? (
                                                                     <div className="absolute z-[120] mt-1 w-full bg-white border border-gray-100 rounded-xl shadow-xl max-h-48 overflow-y-auto py-1">
                                                                         {filtered.map(c => (
-                                                                            <button
-                                                                                key={c}
-                                                                                type="button"
-                                                                                onMouseDown={(e) => {
-                                                                                    e.preventDefault();
-                                                                                    setSaleFilters(prev => ({ ...prev, companyName: c }));
-                                                                                    setSaleFilterSearch(prev => ({ ...prev, companySearch: c }));
-                                                                                    setActiveFilterDropdown(null);
-                                                                                }}
-                                                                                className="w-full px-4 py-2 text-left text-sm hover:bg-blue-50 transition-colors"
-                                                                            >
+                                                                            <button key={c} type="button" onMouseDown={(e) => { e.preventDefault(); setSaleFilters(prev => ({ ...prev, companyName: c })); setSaleFilterSearch(prev => ({ ...prev, companySearch: c })); setActiveFilterDropdown(null); }} className="w-full px-4 py-2 text-left text-sm hover:bg-blue-50 transition-colors font-medium text-gray-700">
                                                                                 {c}
                                                                             </button>
                                                                         ))}
@@ -2024,56 +2219,39 @@ const SaleManagement = ({
                                                             })()}
                                                         </div>
 
-                                                        {/* Port Filter */}
-                                                        <div className="space-y-1.5 relative" ref={salePortFilterRef}>
-                                                            <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider pl-1">PORT</label>
+                                                        {/* Invoice Filter (General) */}
+                                                        <div className="space-y-1.5 relative" ref={saleInvoiceFilterRef}>
+                                                            <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider pl-1">INVOICE NUMBER</label>
                                                             <div className="relative">
                                                                 <input
                                                                     type="text"
-                                                                    value={saleFilterSearch.portSearch}
+                                                                    value={saleFilterSearch.invoiceSearch}
                                                                     onChange={(e) => {
-                                                                        setSaleFilterSearch(prev => ({ ...prev, portSearch: e.target.value }));
-                                                                        setSaleFilters(prev => ({ ...prev, port: e.target.value }));
-                                                                        setActiveFilterDropdown('port');
+                                                                        setSaleFilterSearch(prev => ({ ...prev, invoiceSearch: e.target.value }));
+                                                                        setSaleFilters(prev => ({ ...prev, invoiceNo: e.target.value }));
+                                                                        setActiveFilterDropdown('invoice');
                                                                     }}
-                                                                    onFocus={() => setActiveFilterDropdown('port')}
-                                                                    placeholder={saleFilters.port || 'Search port...'}
-                                                                    className={`w-full px-4 py-2.5 bg-white border border-gray-100 rounded-xl text-sm focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all shadow-sm hover:border-gray-200 pr-14 ${saleFilters.port ? 'placeholder:text-gray-900 placeholder:font-semibold' : 'placeholder:text-gray-300'}`}
+                                                                    onFocus={() => setActiveFilterDropdown('invoice')}
+                                                                    placeholder={saleFilters.invoiceNo || 'Search invoice...'}
+                                                                    className={`w-full px-4 py-2 bg-white border border-gray-100 rounded-xl text-sm focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all shadow-sm hover:border-gray-200 pr-14 ${saleFilters.invoiceNo ? 'placeholder:text-gray-900 placeholder:font-semibold' : 'placeholder:text-gray-300'}`}
                                                                 />
                                                                 <div className="absolute right-3.5 top-1/2 -translate-y-1/2 flex items-center gap-2">
-                                                                    {saleFilters.port && (
-                                                                        <button
-                                                                            onClick={() => {
-                                                                                setSaleFilters(prev => ({ ...prev, port: '' }));
-                                                                                setSaleFilterSearch(prev => ({ ...prev, portSearch: '' }));
-                                                                                setActiveFilterDropdown(null);
-                                                                            }}
-                                                                            className="text-gray-400 hover:text-gray-600"
-                                                                        >
+                                                                    {saleFilters.invoiceNo && (
+                                                                        <button onMouseDown={(e) => { e.preventDefault(); setSaleFilters(prev => ({ ...prev, invoiceNo: '' })); setSaleFilterSearch(prev => ({ ...prev, invoiceSearch: '' })); setActiveFilterDropdown(null); }} className="text-gray-400 hover:text-gray-600 transition-colors">
                                                                             <XIcon className="w-4 h-4" />
                                                                         </button>
                                                                     )}
                                                                     <SearchIcon className="w-4 h-4 text-gray-300 pointer-events-none" />
                                                                 </div>
                                                             </div>
-                                                            {activeFilterDropdown === 'port' && (() => {
-                                                                const options = [...new Set(sales.map(s => s.port).filter(Boolean))].sort();
-                                                                const filtered = options.filter(p => p.toLowerCase().includes((saleFilterSearch.portSearch || '').toLowerCase()));
+                                                            {activeFilterDropdown === 'invoice' && (() => {
+                                                                const options = [...new Set(sales.map(s => s.invoiceNo).filter(Boolean))].sort();
+                                                                const filtered = options.filter(inv => inv.toLowerCase().includes((saleFilterSearch.invoiceSearch || '').toLowerCase()));
                                                                 return filtered.length > 0 ? (
                                                                     <div className="absolute z-[120] mt-1 w-full bg-white border border-gray-100 rounded-xl shadow-xl max-h-48 overflow-y-auto py-1">
-                                                                        {filtered.map(p => (
-                                                                            <button
-                                                                                key={p}
-                                                                                type="button"
-                                                                                onMouseDown={(e) => {
-                                                                                    e.preventDefault();
-                                                                                    setSaleFilters(prev => ({ ...prev, port: p }));
-                                                                                    setSaleFilterSearch(prev => ({ ...prev, portSearch: p }));
-                                                                                    setActiveFilterDropdown(null);
-                                                                                }}
-                                                                                className="w-full px-4 py-2 text-left text-sm hover:bg-blue-50 transition-colors"
-                                                                            >
-                                                                                {p}
+                                                                        {filtered.map(inv => (
+                                                                            <button key={inv} type="button" onMouseDown={(e) => { e.preventDefault(); setSaleFilters(prev => ({ ...prev, invoiceNo: inv })); setSaleFilterSearch(prev => ({ ...prev, invoiceSearch: inv })); setActiveFilterDropdown(null); }} className="w-full px-4 py-2 text-left text-sm hover:bg-blue-50 transition-colors font-medium text-gray-700">
+                                                                                {inv}
                                                                             </button>
                                                                         ))}
                                                                     </div>
@@ -2081,357 +2259,49 @@ const SaleManagement = ({
                                                             })()}
                                                         </div>
                                                     </div>
+                                                )}
 
-                                                    {/* Product Filter */}
-                                                    <div className="space-y-1.5 relative" ref={saleProductFilterRef}>
-                                                        <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider pl-1">PRODUCT</label>
-                                                        <div className="relative">
-                                                            <input
-                                                                type="text"
-                                                                value={saleFilterSearch.productSearch}
-                                                                onChange={(e) => {
-                                                                    setSaleFilterSearch(prev => ({ ...prev, productSearch: e.target.value }));
-                                                                    setSaleFilters(prev => ({ ...prev, productName: e.target.value }));
-                                                                    setActiveFilterDropdown('product');
-                                                                }}
-                                                                onFocus={() => setActiveFilterDropdown('product')}
-                                                                placeholder={saleFilters.productName || 'Search product...'}
-                                                                className={`w-full px-4 py-2.5 bg-white border border-gray-100 rounded-xl text-sm focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all shadow-sm hover:border-gray-200 pr-14 ${saleFilters.productName ? 'placeholder:text-gray-900 placeholder:font-semibold' : 'placeholder:text-gray-300'}`}
-                                                            />
-                                                            <div className="absolute right-3.5 top-1/2 -translate-y-1/2 flex items-center gap-2">
-                                                                {saleFilters.productName && (
-                                                                    <button
-                                                                        onClick={() => {
-                                                                            setSaleFilters(prev => ({ ...prev, productName: '' }));
-                                                                            setSaleFilterSearch(prev => ({ ...prev, productSearch: '' }));
-                                                                            setActiveFilterDropdown(null);
-                                                                        }}
-                                                                        className="text-gray-400 hover:text-gray-600"
-                                                                    >
-                                                                        <XIcon className="w-4 h-4" />
+                                                {/* Common Product Filter */}
+                                                <div className="space-y-1.5 relative" ref={saleProductFilterRef}>
+                                                    <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider pl-1">PRODUCT NAME</label>
+                                                    <div className="relative">
+                                                        <input
+                                                            type="text"
+                                                            value={saleFilterSearch.productSearch}
+                                                            onChange={(e) => {
+                                                                setSaleFilterSearch(prev => ({ ...prev, productSearch: e.target.value }));
+                                                                setSaleFilters(prev => ({ ...prev, productName: e.target.value }));
+                                                                setActiveFilterDropdown('product');
+                                                            }}
+                                                            onFocus={() => setActiveFilterDropdown('product')}
+                                                            placeholder={saleFilters.productName || 'Search product...'}
+                                                            className={`w-full px-4 py-2 bg-white border border-gray-100 rounded-xl text-sm focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all shadow-sm hover:border-gray-200 pr-14 ${saleFilters.productName ? 'placeholder:text-gray-900 placeholder:font-semibold' : 'placeholder:text-gray-300'}`}
+                                                        />
+                                                        <div className="absolute right-3.5 top-1/2 -translate-y-1/2 flex items-center gap-2">
+                                                            {saleFilters.productName && (
+                                                                <button onMouseDown={(e) => { e.preventDefault(); setSaleFilters(prev => ({ ...prev, productName: '' })); setSaleFilterSearch(prev => ({ ...prev, productSearch: '' })); setActiveFilterDropdown(null); }} className="text-gray-400 hover:text-gray-600 transition-colors">
+                                                                    <XIcon className="w-4 h-4" />
+                                                                </button>
+                                                            )}
+                                                            <SearchIcon className="w-4 h-4 text-gray-300 pointer-events-none" />
+                                                        </div>
+                                                    </div>
+                                                    {activeFilterDropdown === 'product' && (() => {
+                                                        const allProds = sales.flatMap(s => (s.items || []).map(i => i.productName || i.product)).filter(Boolean);
+                                                        const options = [...new Set(allProds)].sort();
+                                                        const filtered = options.filter(p => p.toLowerCase().includes((saleFilterSearch.productSearch || '').toLowerCase()));
+                                                        return filtered.length > 0 ? (
+                                                            <div className="absolute z-[120] mt-1 w-full bg-white border border-gray-100 rounded-xl shadow-xl max-h-48 overflow-y-auto py-1">
+                                                                {filtered.map(p => (
+                                                                    <button key={p} type="button" onMouseDown={(e) => { e.preventDefault(); setSaleFilters(prev => ({ ...prev, productName: p })); setSaleFilterSearch(prev => ({ ...prev, productSearch: p })); setActiveFilterDropdown(null); }} className="w-full px-4 py-2 text-left text-sm hover:bg-blue-50 transition-colors font-medium text-gray-700">
+                                                                        {p}
                                                                     </button>
-                                                                )}
-                                                                <SearchIcon className="w-4 h-4 text-gray-300 pointer-events-none" />
+                                                                ))}
                                                             </div>
-                                                        </div>
-                                                        {activeFilterDropdown === 'product' && (() => {
-                                                            const allProds = sales.flatMap(s => (s.items || []).map(i => i.productName || i.product)).filter(Boolean);
-                                                            const options = [...new Set(allProds)].sort();
-                                                            const filtered = options.filter(p => p.toLowerCase().includes((saleFilterSearch.productSearch || '').toLowerCase()));
-                                                            return filtered.length > 0 ? (
-                                                                <div className="absolute z-[120] mt-1 w-full bg-white border border-gray-100 rounded-xl shadow-xl max-h-48 overflow-y-auto py-1">
-                                                                    {filtered.map(p => (
-                                                                        <button
-                                                                            key={p}
-                                                                            type="button"
-                                                                            onMouseDown={(e) => {
-                                                                                e.preventDefault();
-                                                                                setSaleFilters(prev => ({ ...prev, productName: p }));
-                                                                                setSaleFilterSearch(prev => ({ ...prev, productSearch: p }));
-                                                                                setActiveFilterDropdown(null);
-                                                                            }}
-                                                                            className="w-full px-4 py-2 text-left text-sm hover:bg-blue-50 transition-colors"
-                                                                        >
-                                                                            {p}
-                                                                        </button>
-                                                                    ))}
-                                                                </div>
-                                                            ) : null;
-                                                        })()}
-                                                    </div>
-
-                                                    {/* IND CNF and BD CNF in one line for Border */}
-                                                    <div className="grid grid-cols-2 gap-3">
-                                                        {/* IND CNF Filter */}
-                                                        <div className="space-y-1.5 relative" ref={saleIndCnfFilterRef}>
-                                                            <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider pl-1">IND CNF</label>
-                                                            <div className="relative">
-                                                                <input
-                                                                    type="text"
-                                                                    value={saleFilterSearch.indCnfSearch}
-                                                                    onChange={(e) => {
-                                                                        setSaleFilterSearch(prev => ({ ...prev, indCnfSearch: e.target.value }));
-                                                                        setSaleFilters(prev => ({ ...prev, indCnf: e.target.value }));
-                                                                        setActiveFilterDropdown('indCnf');
-                                                                    }}
-                                                                    onFocus={() => setActiveFilterDropdown('indCnf')}
-                                                                    placeholder={saleFilters.indCnf || 'Search IND CNF...'}
-                                                                    className={`w-full px-4 py-2.5 bg-white border border-gray-100 rounded-xl text-sm focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all shadow-sm hover:border-gray-200 pr-14 ${saleFilters.indCnf ? 'placeholder:text-gray-900 placeholder:font-semibold' : 'placeholder:text-gray-300'}`}
-                                                                />
-                                                                <div className="absolute right-3.5 top-1/2 -translate-y-1/2 flex items-center gap-2">
-                                                                    {saleFilters.indCnf && (
-                                                                        <button
-                                                                            onClick={() => {
-                                                                                setSaleFilters(prev => ({ ...prev, indCnf: '' }));
-                                                                                setSaleFilterSearch(prev => ({ ...prev, indCnfSearch: '' }));
-                                                                                setActiveFilterDropdown(null);
-                                                                            }}
-                                                                            className="text-gray-400 hover:text-gray-600"
-                                                                        >
-                                                                            <XIcon className="w-4 h-4" />
-                                                                        </button>
-                                                                    )}
-                                                                    <SearchIcon className="w-4 h-4 text-gray-300 pointer-events-none" />
-                                                                </div>
-                                                            </div>
-                                                            {activeFilterDropdown === 'indCnf' && (() => {
-                                                                const options = [...new Set(sales.map(s => s.indianCnF).filter(Boolean))].sort();
-                                                                const filtered = options.filter(ic => ic.toLowerCase().includes((saleFilterSearch.indCnfSearch || '').toLowerCase()));
-                                                                return filtered.length > 0 ? (
-                                                                    <div className="absolute z-[120] mt-1 w-full bg-white border border-gray-100 rounded-xl shadow-xl max-h-48 overflow-y-auto py-1">
-                                                                        {filtered.map(ic => (
-                                                                            <button
-                                                                                key={ic}
-                                                                                type="button"
-                                                                                onMouseDown={(e) => {
-                                                                                    e.preventDefault();
-                                                                                    setSaleFilters(prev => ({ ...prev, indCnf: ic }));
-                                                                                    setSaleFilterSearch(prev => ({ ...prev, indCnfSearch: ic }));
-                                                                                    setActiveFilterDropdown(null);
-                                                                                }}
-                                                                                className="w-full px-4 py-2 text-left text-sm hover:bg-blue-50 transition-colors"
-                                                                            >
-                                                                                {ic}
-                                                                            </button>
-                                                                        ))}
-                                                                    </div>
-                                                                ) : null;
-                                                            })()}
-                                                        </div>
-
-                                                        {/* BD CNF Filter */}
-                                                        <div className="space-y-1.5 relative" ref={saleBdCnfFilterRef}>
-                                                            <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider pl-1">BD CNF</label>
-                                                            <div className="relative">
-                                                                <input
-                                                                    type="text"
-                                                                    value={saleFilterSearch.bdCnfSearch}
-                                                                    onChange={(e) => {
-                                                                        setSaleFilterSearch(prev => ({ ...prev, bdCnfSearch: e.target.value }));
-                                                                        setSaleFilters(prev => ({ ...prev, bdCnf: e.target.value }));
-                                                                        setActiveFilterDropdown('bdCnf');
-                                                                    }}
-                                                                    onFocus={() => setActiveFilterDropdown('bdCnf')}
-                                                                    placeholder={saleFilters.bdCnf || 'Search BD CNF...'}
-                                                                    className={`w-full px-4 py-2.5 bg-white border border-gray-100 rounded-xl text-sm focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all shadow-sm hover:border-gray-200 pr-14 ${saleFilters.bdCnf ? 'placeholder:text-gray-900 placeholder:font-semibold' : 'placeholder:text-gray-300'}`}
-                                                                />
-                                                                <div className="absolute right-3.5 top-1/2 -translate-y-1/2 flex items-center gap-2">
-                                                                    {saleFilters.bdCnf && (
-                                                                        <button
-                                                                            onClick={() => {
-                                                                                setSaleFilters(prev => ({ ...prev, bdCnf: '' }));
-                                                                                setSaleFilterSearch(prev => ({ ...prev, bdCnfSearch: '' }));
-                                                                                setActiveFilterDropdown(null);
-                                                                            }}
-                                                                            className="text-gray-400 hover:text-gray-600"
-                                                                        >
-                                                                            <XIcon className="w-4 h-4" />
-                                                                        </button>
-                                                                    )}
-                                                                    <SearchIcon className="w-4 h-4 text-gray-300 pointer-events-none" />
-                                                                </div>
-                                                            </div>
-                                                            {activeFilterDropdown === 'bdCnf' && (() => {
-                                                                const options = [...new Set(sales.map(s => s.bdCnf).filter(Boolean))].sort();
-                                                                const filtered = options.filter(bc => bc.toLowerCase().includes((saleFilterSearch.bdCnfSearch || '').toLowerCase()));
-                                                                return filtered.length > 0 ? (
-                                                                    <div className="absolute z-[120] mt-1 w-full bg-white border border-gray-100 rounded-xl shadow-xl max-h-48 overflow-y-auto py-1">
-                                                                        {filtered.map(bc => (
-                                                                            <button
-                                                                                key={bc}
-                                                                                type="button"
-                                                                                onMouseDown={(e) => {
-                                                                                    e.preventDefault();
-                                                                                    setSaleFilters(prev => ({ ...prev, bdCnf: bc }));
-                                                                                    setSaleFilterSearch(prev => ({ ...prev, bdCnfSearch: bc }));
-                                                                                    setActiveFilterDropdown(null);
-                                                                                }}
-                                                                                className="w-full px-4 py-2 text-left text-sm hover:bg-blue-50 transition-colors"
-                                                                            >
-                                                                                {bc}
-                                                                            </button>
-                                                                        ))}
-                                                                    </div>
-                                                                ) : null;
-                                                            })()}
-                                                        </div>
-                                                    </div>
-                                                </>
-                                            ) : (
-                                                <>
-                                                    {/* Company / Customer Name Filter for General */}
-                                                    <div className="space-y-1.5 relative" ref={saleCompanyFilterRef}>
-                                                        <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider pl-1">COMPANY NAME</label>
-                                                        <div className="relative">
-                                                            <input
-                                                                type="text"
-                                                                value={saleFilterSearch.companySearch}
-                                                                onChange={(e) => {
-                                                                    setSaleFilterSearch(prev => ({ ...prev, companySearch: e.target.value }));
-                                                                    setSaleFilters(prev => ({ ...prev, companyName: e.target.value }));
-                                                                    setActiveFilterDropdown('company');
-                                                                }}
-                                                                onFocus={() => setActiveFilterDropdown('company')}
-                                                                placeholder={saleFilters.companyName || 'Search company...'}
-                                                                className={`w-full px-4 py-2.5 bg-white border border-gray-100 rounded-xl text-sm focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all shadow-sm hover:border-gray-200 pr-14 ${saleFilters.companyName ? 'placeholder:text-gray-900 placeholder:font-semibold' : 'placeholder:text-gray-300'}`}
-                                                            />
-                                                            <div className="absolute right-3.5 top-1/2 -translate-y-1/2 flex items-center gap-2">
-                                                                {saleFilters.companyName && (
-                                                                    <button
-                                                                        onClick={() => {
-                                                                            setSaleFilters(prev => ({ ...prev, companyName: '' }));
-                                                                            setSaleFilterSearch(prev => ({ ...prev, companySearch: '' }));
-                                                                            setActiveFilterDropdown(null);
-                                                                        }}
-                                                                        className="text-gray-400 hover:text-gray-600"
-                                                                    >
-                                                                        <XIcon className="w-4 h-4" />
-                                                                    </button>
-                                                                )}
-                                                                <SearchIcon className="w-4 h-4 text-gray-300 pointer-events-none" />
-                                                            </div>
-                                                        </div>
-                                                        {activeFilterDropdown === 'company' && (() => {
-                                                            const options = [...new Set(sales.map(s => s.companyName || s.customerName).filter(Boolean))].sort();
-                                                            const filtered = options.filter(c => c.toLowerCase().includes((saleFilterSearch.companySearch || '').toLowerCase()));
-                                                            return filtered.length > 0 ? (
-                                                                <div className="absolute z-[120] mt-1 w-full bg-white border border-gray-100 rounded-xl shadow-xl max-h-48 overflow-y-auto py-1">
-                                                                    {filtered.map(c => (
-                                                                        <button
-                                                                            key={c}
-                                                                            type="button"
-                                                                            onMouseDown={(e) => {
-                                                                                e.preventDefault();
-                                                                                setSaleFilters(prev => ({ ...prev, companyName: c }));
-                                                                                setSaleFilterSearch(prev => ({ ...prev, companySearch: c }));
-                                                                                setActiveFilterDropdown(null);
-                                                                            }}
-                                                                            className="w-full px-4 py-2 text-left text-sm hover:bg-blue-50 transition-colors"
-                                                                        >
-                                                                            {c}
-                                                                        </button>
-                                                                    ))}
-                                                                </div>
-                                                            ) : null;
-                                                        })()}
-                                                    </div>
-
-                                                    {/* Invoice No Filter for General */}
-                                                    <div className="space-y-1.5 relative" ref={saleInvoiceFilterRef}>
-                                                        <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider pl-1">INVOICE NUMBER</label>
-                                                        <div className="relative">
-                                                            <input
-                                                                type="text"
-                                                                value={saleFilterSearch.invoiceSearch}
-                                                                onChange={(e) => {
-                                                                    setSaleFilterSearch(prev => ({ ...prev, invoiceSearch: e.target.value }));
-                                                                    setSaleFilters(prev => ({ ...prev, invoiceNo: e.target.value }));
-                                                                    setActiveFilterDropdown('invoice');
-                                                                }}
-                                                                onFocus={() => setActiveFilterDropdown('invoice')}
-                                                                placeholder={saleFilters.invoiceNo || 'Search invoice...'}
-                                                                className={`w-full px-4 py-2.5 bg-white border border-gray-100 rounded-xl text-sm focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all shadow-sm hover:border-gray-200 pr-14 ${saleFilters.invoiceNo ? 'placeholder:text-gray-900 placeholder:font-semibold' : 'placeholder:text-gray-300'}`}
-                                                            />
-                                                            <div className="absolute right-3.5 top-1/2 -translate-y-1/2 flex items-center gap-2">
-                                                                {saleFilters.invoiceNo && (
-                                                                    <button
-                                                                        onClick={() => {
-                                                                            setSaleFilters(prev => ({ ...prev, invoiceNo: '' }));
-                                                                            setSaleFilterSearch(prev => ({ ...prev, invoiceSearch: '' }));
-                                                                            setActiveFilterDropdown(null);
-                                                                        }}
-                                                                        className="text-gray-400 hover:text-gray-600"
-                                                                    >
-                                                                        <XIcon className="w-4 h-4" />
-                                                                    </button>
-                                                                )}
-                                                                <SearchIcon className="w-4 h-4 text-gray-300 pointer-events-none" />
-                                                            </div>
-                                                        </div>
-                                                        {activeFilterDropdown === 'invoice' && (() => {
-                                                            const options = [...new Set(sales.map(s => s.invoiceNo).filter(Boolean))].sort();
-                                                            const filtered = options.filter(inv => inv.toLowerCase().includes((saleFilterSearch.invoiceSearch || '').toLowerCase()));
-                                                            return filtered.length > 0 ? (
-                                                                <div className="absolute z-[120] mt-1 w-full bg-white border border-gray-100 rounded-xl shadow-xl max-h-48 overflow-y-auto py-1">
-                                                                    {filtered.map(inv => (
-                                                                        <button
-                                                                            key={inv}
-                                                                            type="button"
-                                                                            onMouseDown={(e) => {
-                                                                                e.preventDefault();
-                                                                                setSaleFilters(prev => ({ ...prev, invoiceNo: inv }));
-                                                                                setSaleFilterSearch(prev => ({ ...prev, invoiceSearch: inv }));
-                                                                                setActiveFilterDropdown(null);
-                                                                            }}
-                                                                            className="w-full px-4 py-2 text-left text-sm hover:bg-blue-50 transition-colors"
-                                                                        >
-                                                                            {inv}
-                                                                        </button>
-                                                                    ))}
-                                                                </div>
-                                                            ) : null;
-                                                        })()}
-                                                    </div>
-
-                                                    {/* Product Filter for General */}
-                                                    <div className="space-y-1.5 relative" ref={saleProductFilterRef}>
-                                                        <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider pl-1">PRODUCT</label>
-                                                        <div className="relative">
-                                                            <input
-                                                                type="text"
-                                                                value={saleFilterSearch.productSearch}
-                                                                onChange={(e) => {
-                                                                    setSaleFilterSearch(prev => ({ ...prev, productSearch: e.target.value }));
-                                                                    setSaleFilters(prev => ({ ...prev, productName: e.target.value }));
-                                                                    setActiveFilterDropdown('product');
-                                                                }}
-                                                                onFocus={() => setActiveFilterDropdown('product')}
-                                                                placeholder={saleFilters.productName || 'Search product...'}
-                                                                className={`w-full px-4 py-2.5 bg-white border border-gray-100 rounded-xl text-sm focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all shadow-sm hover:border-gray-200 pr-14 ${saleFilters.productName ? 'placeholder:text-gray-900 placeholder:font-semibold' : 'placeholder:text-gray-300'}`}
-                                                            />
-                                                            <div className="absolute right-3.5 top-1/2 -translate-y-1/2 flex items-center gap-2">
-                                                                {saleFilters.productName && (
-                                                                    <button
-                                                                        onClick={() => {
-                                                                            setSaleFilters(prev => ({ ...prev, productName: '' }));
-                                                                            setSaleFilterSearch(prev => ({ ...prev, productSearch: '' }));
-                                                                            setActiveFilterDropdown(null);
-                                                                        }}
-                                                                        className="text-gray-400 hover:text-gray-600"
-                                                                    >
-                                                                        <XIcon className="w-4 h-4" />
-                                                                    </button>
-                                                                )}
-                                                                <SearchIcon className="w-4 h-4 text-gray-300 pointer-events-none" />
-                                                            </div>
-                                                        </div>
-                                                        {activeFilterDropdown === 'product' && (() => {
-                                                            const allProds = sales.flatMap(s => (s.items || []).map(i => i.productName || i.product)).filter(Boolean);
-                                                            const options = [...new Set(allProds)].sort();
-                                                            const filtered = options.filter(p => p.toLowerCase().includes((saleFilterSearch.productSearch || '').toLowerCase()));
-                                                            return filtered.length > 0 ? (
-                                                                <div className="absolute z-[120] mt-1 w-full bg-white border border-gray-100 rounded-xl shadow-xl max-h-48 overflow-y-auto py-1">
-                                                                    {filtered.map(p => (
-                                                                        <button
-                                                                            key={p}
-                                                                            type="button"
-                                                                            onMouseDown={(e) => {
-                                                                                e.preventDefault();
-                                                                                setSaleFilters(prev => ({ ...prev, productName: p }));
-                                                                                setSaleFilterSearch(prev => ({ ...prev, productSearch: p }));
-                                                                                setActiveFilterDropdown(null);
-                                                                            }}
-                                                                            className="w-full px-4 py-2 text-left text-sm hover:bg-blue-50 transition-colors"
-                                                                        >
-                                                                            {p}
-                                                                        </button>
-                                                                    ))}
-                                                                </div>
-                                                            ) : null;
-                                                        })()}
-                                                    </div>
-                                                </>
-                                            )}
+                                                        ) : null;
+                                                    })()}
+                                                </div>
+                                            </div>
                                         </div>
                                     </div>
                                 </>
@@ -3160,6 +3030,39 @@ const SaleManagement = ({
                 </div >
             )}
 
+            {/* Bulk Actions Bar */}
+            {isSelectionMode && saleType === 'Border' && selectedItems.size > 0 && (
+                <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[60] animate-in fade-in slide-in-from-bottom-4 duration-300">
+                    <div className="bg-white/40 backdrop-blur-2xl border border-white/60 shadow-[0_8px_32px_0_rgba(31,38,135,0.15)] ring-1 ring-white/20 px-4 py-2 rounded-full flex items-center gap-4 overflow-hidden">
+                        <div className="absolute inset-0 bg-gradient-to-tr from-blue-50/20 to-white/5 pointer-events-none"></div>
+                        <div className="flex items-center gap-2.5 pr-4 border-r border-slate-900/10 relative z-10">
+                            <div className="w-7 h-7 rounded-full bg-blue-600 shadow-md flex items-center justify-center font-black text-[11px] text-white border border-white/20">
+                                {selectedItems.size}
+                            </div>
+                            <span className="text-[11px] font-black text-slate-800 tracking-tight">Items Selected</span>
+                        </div>
+                        <div className="flex items-center gap-2 relative z-10">
+                            <button
+                                onClick={() => setShowBulkRateModal(true)}
+                                className="px-4 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-full text-[11px] font-black transition-all active:scale-95 flex items-center gap-2 shadow-sm group"
+                            >
+                                <EditIcon className="w-3.5 h-3.5 group-hover:rotate-12 transition-transform" />
+                                Edit Rate
+                            </button>
+                            <button
+                                onClick={() => {
+                                    setSelectedItems(new Set());
+                                    setIsSelectionMode(false);
+                                }}
+                                className="px-4 py-1.5 bg-slate-900/10 hover:bg-slate-900/20 text-slate-800 rounded-full text-[11px] font-black transition-all active:scale-95 border border-white/20"
+                            >
+                                Cancel
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
             {/* Sales Table & Cards */}
             {!showForm && (
                 <div className="sale-mgmt-table-container">
@@ -3169,6 +3072,24 @@ const SaleManagement = ({
                             <thead>
                                 {saleType === 'Border' ? (
                                     <tr>
+                                        <th className="sale-mgmt-th text-center">
+                                            {isSelectionMode ? (
+                                                <input
+                                                    type="checkbox"
+                                                    checked={selectedItems.size === getFilteredData().length && getFilteredData().length > 0}
+                                                    onChange={() => {
+                                                        const data = getFilteredData();
+                                                        if (selectedItems.size === data.length) {
+                                                            setSelectedItems(new Set());
+                                                            setIsSelectionMode(false);
+                                                        } else {
+                                                            setSelectedItems(new Set(data.map(s => s._id)));
+                                                        }
+                                                    }}
+                                                    className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                                                />
+                                            ) : '#'}
+                                        </th>
                                         <th className="sale-mgmt-th cursor-pointer group" onClick={() => handleSort('date')}>
                                             <div className="flex items-center">Date {renderSortIcon('date')}</div>
                                         </th>
@@ -3236,7 +3157,7 @@ const SaleManagement = ({
                             <tbody className="divide-y divide-gray-50">
                                 {isLoading ? (
                                     <tr><td colSpan={saleType === 'Border' ? "12" : "12"} className="px-3 py-20 text-center text-gray-400 font-medium">No sales records found</td></tr>
-                                ) : getFilteredData().map(sale => {
+                                ) : getFilteredData().map((sale, index) => {
                                     const isExpanded = expandedRows.includes(sale._id);
                                     const isMultiple = (sale.items && sale.items.length > 0)
                                         ? sale.items.flatMap(item => (item.brandEntries || [])).length > 1
@@ -3257,7 +3178,31 @@ const SaleManagement = ({
 
                                     if (saleType === 'Border') {
                                         return (
-                                            <tr key={sale._id} className="hover:bg-blue-50/50 transition-all border-b border-gray-50 text-[13px]">
+                                            <tr
+                                                key={sale._id}
+                                                onMouseDown={() => startLongPress(sale._id)}
+                                                onMouseUp={endLongPress}
+                                                onMouseLeave={endLongPress}
+                                                onTouchStart={() => startLongPress(sale._id)}
+                                                onTouchEnd={endLongPress}
+                                                onClick={() => {
+                                                    if (isLongPressTriggered && isLongPressTriggered.current) return;
+                                                    isSelectionMode && toggleSelection(sale._id);
+                                                }}
+                                                className={`hover:bg-blue-50/50 transition-all border-b border-gray-50 text-[13px] ${selectedItems.has(sale._id) ? 'bg-blue-50' : ''}`}
+                                            >
+                                                <td className="px-3 py-4 text-center" onClick={(e) => e.stopPropagation()}>
+                                                    {isSelectionMode ? (
+                                                        <input
+                                                            type="checkbox"
+                                                            checked={selectedItems.has(sale._id)}
+                                                            onChange={() => toggleSelection(sale._id)}
+                                                            className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                                                        />
+                                                    ) : (
+                                                        <span className="text-gray-400 font-medium">{index + 1}</span>
+                                                    )}
+                                                </td>
                                                 <td className="px-3 py-4 whitespace-nowrap text-gray-600">{formatDate(sale.date)}</td>
                                                 <td className="px-3 py-4 whitespace-nowrap font-semibold text-gray-800">{sale.lcNo || '-'}</td>
                                                 <td className="px-3 py-4 whitespace-nowrap font-semibold text-gray-800">{getSafeString(sale.importer) || '-'}</td>
@@ -3455,7 +3400,7 @@ const SaleManagement = ({
                             <div className="bg-white p-8 rounded-2xl border border-gray-100 text-center text-gray-400 font-medium shadow-sm">
                                 No sales records found
                             </div>
-                        ) : getFilteredData().map(sale => {
+                        ) : getFilteredData().map((sale, index) => {
                             const isExpanded = expandedRows.includes(sale._id);
                             const isMultiple = (sale.items && sale.items.length > 0)
                                 ? sale.items.flatMap(item => (item.brandEntries || [])).length > 1
@@ -3477,12 +3422,30 @@ const SaleManagement = ({
                             return (
                                 <div
                                     key={sale._id}
-                                    className={`sale-mgmt-mobile-card group cursor-pointer transition-all ${isExpanded ? 'shadow-md ring-1 ring-blue-500/10 p-4' : 'hover:bg-gray-50/30 p-2.5'}`}
-                                    onClick={() => toggleRowExpansion(sale._id)}
+                                    onMouseDown={() => saleType === 'Border' && startLongPress(sale._id)}
+                                    onMouseUp={endLongPress}
+                                    onMouseLeave={endLongPress}
+                                    onTouchStart={() => saleType === 'Border' && startLongPress(sale._id)}
+                                    onTouchEnd={endLongPress}
+                                    className={`sale-mgmt-mobile-card group cursor-pointer transition-all ${isExpanded ? 'shadow-md ring-1 ring-blue-500/10 p-4' : 'hover:bg-gray-50/30 p-2.5'} ${selectedItems.has(sale._id) ? 'bg-blue-50 ring-1 ring-blue-500/30' : ''}`}
+                                    onClick={() => {
+                                        if (isLongPressTriggered && isLongPressTriggered.current) return;
+                                        isSelectionMode && saleType === 'Border' ? toggleSelection(sale._id) : toggleRowExpansion(sale._id);
+                                    }}
                                 >
                                     {/* Collapsed Single Line View / Expanded Header Row */}
                                     <div className={`flex items-center justify-between min-w-0 ${isExpanded ? 'border-b border-gray-50 pb-3 mb-4' : ''}`}>
                                         <div className="flex items-center gap-3 overflow-hidden flex-1 min-w-0">
+                                            {isSelectionMode && saleType === 'Border' && (
+                                                <div className="flex-shrink-0 pr-1" onClick={(e) => e.stopPropagation()}>
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={selectedItems.has(sale._id)}
+                                                        onChange={() => toggleSelection(sale._id)}
+                                                        className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                                                    />
+                                                </div>
+                                            )}
                                             {/* Date & Inv */}
                                             <div className="flex-shrink-0">
                                                 <div className="sale-mgmt-mobile-label">{formatDate(sale.date)}</div>
@@ -3629,6 +3592,57 @@ const SaleManagement = ({
                 </div>
             )}
             {viewData && renderViewModal()}
+
+            {/* Bulk Rate Edit Modal */}
+            {showBulkRateModal && (
+                <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+                    <div className="absolute inset-0 bg-gray-900/60 backdrop-blur-sm" onClick={() => setShowBulkRateModal(false)}></div>
+                    <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden animate-in zoom-in-95 duration-200">
+                        <div className="p-6 border-b border-gray-100 flex items-center justify-between">
+                            <h3 className="text-xl font-bold text-gray-900">Edit Rate</h3>
+                            <button onClick={() => setShowBulkRateModal(false)} className="p-2 hover:bg-gray-100 rounded-xl transition-colors text-gray-400">
+                                <XIcon className="w-5 h-5" />
+                            </button>
+                        </div>
+                        <div className="p-6 space-y-4">
+                            <div className="p-4 bg-blue-50 border border-blue-100 rounded-xl">
+                                <p className="text-sm text-blue-700 font-medium">
+                                    Updating rate for <span className="font-bold">{selectedItems.size}</span> selected border sales.
+                                </p>
+                            </div>
+                            <div className="space-y-2">
+                                <label className="text-sm font-bold text-gray-700">New Rate (৳)</label>
+                                <div className="relative">
+                                    <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 font-bold">৳</span>
+                                    <input
+                                        type="number"
+                                        value={bulkRate}
+                                        onChange={(e) => setBulkRate(e.target.value)}
+                                        className="w-full pl-10 pr-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all font-bold text-gray-900"
+                                        placeholder="0.00"
+                                        autoFocus
+                                    />
+                                </div>
+                            </div>
+                        </div>
+                        <div className="p-6 bg-gray-50 border-t border-gray-100 flex gap-3">
+                            <button
+                                onClick={() => setShowBulkRateModal(false)}
+                                className="flex-1 px-4 py-2.5 bg-white border border-gray-200 text-gray-600 rounded-xl font-bold hover:bg-gray-100 transition-all active:scale-95"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                onClick={handleBulkRateUpdate}
+                                disabled={isSubmitting || !bulkRate}
+                                className="flex-1 px-4 py-2.5 bg-blue-600 text-white rounded-xl font-bold hover:bg-blue-500 transition-all active:scale-95 disabled:opacity-50 disabled:active:scale-100"
+                            >
+                                {isSubmitting ? 'Updating...' : 'Update Rate'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };

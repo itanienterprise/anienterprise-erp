@@ -341,7 +341,7 @@ function App() {
     importer: { key: 'name', direction: 'asc' },
     port: { key: 'name', direction: 'asc' },
     ip: { key: 'openingDate', direction: 'desc' },
-    customer: { key: 'name', direction: 'asc' },
+    customer: { key: 'customerId', direction: 'asc' },
     employee: { key: 'employeeId', direction: 'asc' }
   });
 
@@ -498,6 +498,11 @@ function App() {
 
 
   const toggleSelection = (id) => {
+    // Only admin user or admin employee can use selection mode
+    const isAdminUser = currentUser?.username === 'admin';
+    const isAdminRole = (currentUser?.role || '').toLowerCase() === 'admin';
+    if (!isAdminUser && !isAdminRole) return;
+
     const newSelection = new Set(selectedItems);
     if (newSelection.has(id)) {
       newSelection.delete(id);
@@ -516,6 +521,11 @@ function App() {
   // Click-outside detection for stock report filter panel
 
   const toggleSelectAll = (items) => {
+    // Only admin user or admin employee can use selection mode
+    const isAdminUser = currentUser?.username === 'admin';
+    const isAdminRole = (currentUser?.role || '').toLowerCase() === 'admin';
+    if (!isAdminUser && !isAdminRole) return;
+
     if (selectedItems.size === items.length) {
       setSelectedItems(new Set());
       setIsSelectionMode(false);
@@ -526,6 +536,11 @@ function App() {
   };
 
   const startLongPress = (id) => {
+    // Only admin user or admin employee can use selection mode
+    const isAdminUser = currentUser?.username === 'admin';
+    const isAdminRole = (currentUser?.role || '').toLowerCase() === 'admin';
+    if (!isAdminUser && !isAdminRole) return;
+
     isLongPressTriggered.current = false;
     longPressTimer.current = setTimeout(() => {
       isLongPressTriggered.current = true;
@@ -1134,6 +1149,7 @@ function App() {
         return (
           <Customer
             key={refreshKey}
+            currentUser={currentUser}
             isSelectionMode={isSelectionMode}
             setIsSelectionMode={setIsSelectionMode}
             selectedItems={selectedItems}
@@ -1172,6 +1188,8 @@ function App() {
             endLongPress={endLongPress}
             setShowSalesReport={setShowSalesReport}
             setSalesReportData={setFilteredSalesForReport}
+            toggleSelection={toggleSelection}
+            isLongPressTriggered={isLongPressTriggered}
             saleFilters={saleFilters}
             setSaleFilters={setSaleFilters}
           />
@@ -1192,6 +1210,8 @@ function App() {
             endLongPress={endLongPress}
             setShowSalesReport={setShowSalesReport}
             setSalesReportData={setFilteredSalesForReport}
+            toggleSelection={toggleSelection}
+            isLongPressTriggered={isLongPressTriggered}
             saleFilters={saleFilters}
             setSaleFilters={setSaleFilters}
           />

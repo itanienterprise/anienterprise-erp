@@ -14,9 +14,7 @@ const Bank = ({ onDeleteConfirm }) => {
     const [editingId, setEditingId] = useState(null);
     const [formData, setFormData] = useState({
         bankName: '',
-        branch: '',
-        accountName: '',
-        accountNo: '',
+        branches: [{ branch: '', accountName: '', accountNo: '' }],
         status: 'Active'
     });
 
@@ -46,6 +44,27 @@ const Bank = ({ onDeleteConfirm }) => {
     const handleInputChange = (e) => {
         const { name, value } = e.target;
         setFormData(prev => ({ ...prev, [name]: value }));
+    };
+
+    const handleBranchChange = (index, e) => {
+        const { name, value } = e.target;
+        const updatedBranches = [...formData.branches];
+        updatedBranches[index] = { ...updatedBranches[index], [name]: value };
+        setFormData(prev => ({ ...prev, branches: updatedBranches }));
+    };
+
+    const addBranchRow = () => {
+        setFormData(prev => ({
+            ...prev,
+            branches: [...prev.branches, { branch: '', accountName: '', accountNo: '' }]
+        }));
+    };
+
+    const removeBranchRow = (index) => {
+        if (formData.branches.length > 1) {
+            const updatedBranches = formData.branches.filter((_, i) => i !== index);
+            setFormData(prev => ({ ...prev, branches: updatedBranches }));
+        }
     };
 
     const handleSubmit = async (e) => {
@@ -87,9 +106,7 @@ const Bank = ({ onDeleteConfirm }) => {
     const resetForm = () => {
         setFormData({
             bankName: '',
-            branch: '',
-            accountName: '',
-            accountNo: '',
+            branches: [{ branch: '', accountName: '', accountNo: '' }],
             status: 'Active'
         });
         setEditingId(null);
@@ -97,11 +114,18 @@ const Bank = ({ onDeleteConfirm }) => {
     };
 
     const handleEdit = (bank) => {
+        // Handle backwards compatibility for banks saved with old structure
+        const branches = bank.branches || [
+            {
+                branch: bank.branch || '',
+                accountName: bank.accountName || '',
+                accountNo: bank.accountNo || ''
+            }
+        ];
+
         setFormData({
             bankName: bank.bankName || '',
-            branch: bank.branch || '',
-            accountName: bank.accountName || '',
-            accountNo: bank.accountNo || '',
+            branches: branches,
             status: bank.status || 'Active'
         });
         setEditingId(bank._id);
@@ -167,7 +191,7 @@ const Bank = ({ onDeleteConfirm }) => {
                     </div>
 
                     <form onSubmit={handleSubmit} autoComplete="off" className="grid grid-cols-1 md:grid-cols-2 gap-6 relative z-10">
-                        <div className="space-y-2">
+                        <div className="col-span-1 md:col-span-2 space-y-2">
                             <label className="text-sm font-medium text-gray-700">Bank Name</label>
                             <input
                                 type="text"
@@ -177,47 +201,76 @@ const Bank = ({ onDeleteConfirm }) => {
                                 required
                                 placeholder="Enter Bank Name"
                                 autoComplete="off"
-                                className="w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm shadow-sm"
+                                className="w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm shadow-sm"
                             />
                         </div>
-                        <div className="space-y-2">
-                            <label className="text-sm font-medium text-gray-700">Branch</label>
-                            <input
-                                type="text"
-                                name="branch"
-                                value={formData.branch}
-                                onChange={handleInputChange}
-                                required
-                                placeholder="Enter Branch Name"
-                                autoComplete="off"
-                                className="w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm shadow-sm"
-                            />
-                        </div>
-                        <div className="space-y-2">
-                            <label className="text-sm font-medium text-gray-700">Account Name</label>
-                            <input
-                                type="text"
-                                name="accountName"
-                                value={formData.accountName}
-                                onChange={handleInputChange}
-                                required
-                                placeholder="Enter Account Name"
-                                autoComplete="off"
-                                className="w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm shadow-sm"
-                            />
-                        </div>
-                        <div className="space-y-2">
-                            <label className="text-sm font-medium text-gray-700">Account No</label>
-                            <input
-                                type="text"
-                                name="accountNo"
-                                value={formData.accountNo}
-                                onChange={handleInputChange}
-                                required
-                                placeholder="Enter Account Number"
-                                autoComplete="off"
-                                className="w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm shadow-sm"
-                            />
+
+                        <div className="col-span-1 md:col-span-2 space-y-4">
+                            <div className="flex items-center justify-between">
+                                <label className="text-sm font-bold text-gray-400 uppercase tracking-wider">Branch Details</label>
+                                <button
+                                    type="button"
+                                    onClick={addBranchRow}
+                                    className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 text-blue-600 rounded-lg text-xs font-bold hover:bg-blue-100 transition-all border border-blue-100"
+                                >
+                                    <PlusIcon className="w-3.5 h-3.5" />
+                                    Add Branch
+                                </button>
+                            </div>
+
+                            <div className="space-y-3">
+                                {formData.branches.map((branch, index) => (
+                                    <div key={index} className="grid grid-cols-1 md:grid-cols-3 gap-4 p-4 bg-gray-50/50 rounded-2xl border border-gray-100 relative group/row">
+                                        <div className="space-y-1.5">
+                                            <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider ml-1">Branch</label>
+                                            <input
+                                                type="text"
+                                                name="branch"
+                                                value={branch.branch}
+                                                onChange={(e) => handleBranchChange(index, e)}
+                                                required
+                                                placeholder="Branch Name"
+                                                className="w-full px-4 py-2 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all text-sm"
+                                            />
+                                        </div>
+                                        <div className="space-y-1.5">
+                                            <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider ml-1">Account Name</label>
+                                            <input
+                                                type="text"
+                                                name="accountName"
+                                                value={branch.accountName}
+                                                onChange={(e) => handleBranchChange(index, e)}
+                                                required
+                                                placeholder="Account Name"
+                                                className="w-full px-4 py-2 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all text-sm"
+                                            />
+                                        </div>
+                                        <div className="space-y-1.5 relative">
+                                            <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider ml-1">Account No</label>
+                                            <div className="flex gap-2">
+                                                <input
+                                                    type="text"
+                                                    name="accountNo"
+                                                    value={branch.accountNo}
+                                                    onChange={(e) => handleBranchChange(index, e)}
+                                                    required
+                                                    placeholder="Account Number"
+                                                    className="w-full px-4 py-2 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all text-sm"
+                                                />
+                                                {formData.branches.length > 1 && (
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => removeBranchRow(index)}
+                                                        className="p-2 text-gray-400 hover:text-rose-500 hover:bg-rose-50 rounded-xl transition-all border border-transparent hover:border-rose-100"
+                                                    >
+                                                        <TrashIcon className="w-4 h-4" />
+                                                    </button>
+                                                )}
+                                            </div>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
                         </div>
 
                         <div className="col-span-1 md:col-span-2 flex items-center justify-between pt-4 mt-4 border-t border-gray-100">
@@ -277,30 +330,44 @@ const Bank = ({ onDeleteConfirm }) => {
                                 {isLoading ? (
                                     Array(5).fill(0).map((_, i) => (
                                         <tr key={i} className="animate-pulse">
-                                            <td colSpan="4" className="px-6 py-4"><div className="h-4 bg-gray-100 rounded w-full"></div></td>
+                                            <td colSpan="5" className="px-6 py-4"><div className="h-4 bg-gray-100 rounded w-full"></div></td>
                                         </tr>
                                     ))
                                 ) : banks.length > 0 ? (
-                                    banks.filter(bank => 
-                                        (bank.bankName || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
-                                        (bank.accountNo || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
-                                        (bank.accountName || '').toLowerCase().includes(searchQuery.toLowerCase())
-                                    ).map((bank) => (
-                                        <tr key={bank._id} className="hover:bg-gray-50/50 transition-colors group">
-                                            <td className="px-6 py-4 text-[13px] font-medium text-gray-600">{bank.bankName}</td>
-                                            <td className="px-6 py-4 text-[13px] font-medium text-gray-600">{bank.branch}</td>
-                                            <td className="px-6 py-4 text-[13px] font-medium text-gray-600">{bank.accountName}</td>
-                                            <td className="px-6 py-4 text-[13px] font-medium text-gray-600">{bank.accountNo}</td>
+                                    banks.flatMap(bank => {
+                                        // Handle backwards compatibility for single-branch records
+                                        const branches = bank.branches || [{
+                                            branch: bank.branch,
+                                            accountName: bank.accountName,
+                                            accountNo: bank.accountNo
+                                        }];
+                                        
+                                        return branches.map((branch, idx) => ({
+                                            ...bank,
+                                            ...branch,
+                                            uniqueRowKey: `${bank._id}-${idx}`
+                                        }));
+                                    }).filter(item => 
+                                        (item.bankName || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+                                        (item.accountNo || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+                                        (item.accountName || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+                                        (item.branch || '').toLowerCase().includes(searchQuery.toLowerCase())
+                                    ).map((item) => (
+                                        <tr key={item.uniqueRowKey} className="hover:bg-gray-50/50 transition-colors group">
+                                            <td className="px-6 py-4 text-[13px] font-medium text-gray-600">{item.bankName}</td>
+                                            <td className="px-6 py-4 text-[13px] font-medium text-gray-600">{item.branch}</td>
+                                            <td className="px-6 py-4 text-[13px] font-medium text-gray-600">{item.accountName}</td>
+                                            <td className="px-6 py-4 text-[13px] font-medium text-gray-600">{item.accountNo}</td>
                                             <td className="px-6 py-4">
                                                 <div className="flex justify-center items-center gap-2">
                                                     <button 
-                                                        onClick={() => handleEdit(bank)}
+                                                        onClick={() => handleEdit(item)}
                                                         className="p-1.5 hover:bg-blue-50 text-gray-400 hover:text-blue-600 rounded-lg transition-all"
                                                     >
                                                         <EditIcon className="w-4 h-4" />
                                                     </button>
                                                     <button 
-                                                        onClick={() => handleDelete(bank._id)}
+                                                        onClick={() => handleDelete(item._id)}
                                                         className="p-1.5 hover:bg-red-50 text-gray-400 hover:text-red-500 rounded-lg transition-all"
                                                     >
                                                         <TrashIcon className="w-4 h-4" />

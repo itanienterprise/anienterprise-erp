@@ -936,7 +936,6 @@ const WarehouseManagement = ({ currentUser }) => {
             <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4">
                 <div className="w-full md:w-1/4">
                     <h2 className="text-xl md:text-2xl font-bold text-gray-800 text-center md:text-left">Ware House Management</h2>
-                    <p className="text-sm text-gray-500 mt-1 text-center md:text-left hidden md:block">Manage and track warehouse specific stock and locations</p>
                 </div>
                 {!showWarehouseForm && (
                     <div className="w-full md:flex-1 max-w-none md:max-w-md mx-auto relative group">

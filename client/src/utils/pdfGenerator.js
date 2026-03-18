@@ -917,9 +917,9 @@ export const generateWarehouseReportPDF = (displayGroups, filters, totals) => {
             },
             columnStyles: {
                 0: { cellWidth: 8, halign: 'center' },   // SL
-                1: { cellWidth: 28 },                     // Warehouse
+                1: { cellWidth: 22 },                     // Warehouse
                 2: { cellWidth: 26 },                     // Product Name
-                3: { cellWidth: 34 },                     // Brand (reduced from 44)
+                3: { cellWidth: 40 },                     // Brand (reduced from 44)
                 4: { cellWidth: 26, halign: 'right' },    // Inhouse Qty
                 5: { cellWidth: 26, halign: 'right' },    // Inhouse Pkt (increased from 20)
                 6: { cellWidth: 27, halign: 'right' },    // Warehouse Qty
@@ -1185,7 +1185,7 @@ export const generateSaleInvoicePDF = (sale, allCustomers = []) => {
             const quantity = parseFloat(qty) || 0;
             const productName = (prod || '').toString().toUpperCase();
             const brandName = (brand || '').toString().toUpperCase();
-            
+
             // Fallback: Calculate rate if it's missing or zero
             let displayRate = parseFloat(rate) || 0;
             if (displayRate === 0 && quantity > 0) {
@@ -1916,5 +1916,149 @@ export const generateSalesReportPDF = (reportData, filters, summary, saleType = 
     } catch (error) {
         console.error("Sales PDF Generation Error:", error);
         alert(`Failed to generate Sales PDF: ${error.message}`);
+    }
+};
+
+
+export const generateCustomerReportPDF = (customers, typeFilter, grandTotalDue, dateStr) => {
+    try {
+        const doc = new jsPDF();
+        
+        const computeDue = (customer) => {
+            const salesHistory = customer.salesHistory || [];
+            const paymentHistory = customer.paymentHistory || [];
+
+            const totalAmount = salesHistory.reduce((s, i) => s + (parseFloat(i.amount) || 0), 0);
+            const totalPaid = salesHistory.reduce((s, i) => s + (parseFloat(i.paid) || 0), 0);
+            const totalDiscount = salesHistory.reduce((s, i) => s + (parseFloat(i.discount) || 0), 0);
+            const totalHistoryPaid = paymentHistory.reduce((s, i) => s + (parseFloat(i.amount) || 0), 0);
+
+            return Math.max(0, totalAmount - totalPaid - totalDiscount - totalHistoryPaid);
+        };
+
+        const pageWidth = doc.internal.pageSize.width;
+        const pageHeight = doc.internal.pageSize.height;
+        const margin = 10;
+
+        // --- Header ---
+        doc.setFontSize(22);
+        doc.setFont('helvetica', 'bold');
+        doc.text("M/S ANI ENTERPRISE", pageWidth / 2, 20, { align: 'center' });
+
+        doc.setFontSize(10);
+        doc.setFont('helvetica', 'normal');
+        doc.setTextColor(0);
+        doc.text("766, H.M Tower, Level-06, Borogola, Bogura-5800, Bangladesh", pageWidth / 2, 26, { align: 'center' });
+        doc.text("+8802588813057, anienterprise051@gmail.com, www.anienterprises.com.bd", pageWidth / 2, 31, { align: 'center' });
+
+        // Separator
+        doc.setDrawColor(0);
+        doc.setLineWidth(0.5);
+        doc.line(margin, 40, pageWidth - margin, 40);
+
+        // Report Title
+        doc.setFillColor(255, 255, 255);
+        doc.setDrawColor(0);
+        doc.rect(pageWidth / 2 - 40, 37, 80, 8, 'FD');
+        doc.setFontSize(12);
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(0);
+        doc.text("CUSTOMER DUE REPORT", pageWidth / 2, 42, { align: 'center' });
+
+        // --- Info Row ---
+        let yPos = 55;
+        doc.setFontSize(10);
+
+        if (typeFilter && typeFilter !== 'All Customer') {
+            doc.setFont('helvetica', 'bold');
+            doc.text("Customer Type:", margin, yPos);
+            doc.setFont('helvetica', 'normal');
+            doc.text(typeFilter, margin + 30, yPos);
+            yPos += 5;
+        }
+
+        doc.setFont('helvetica', 'bold');
+        doc.text("Total Records:", margin, yPos);
+        doc.setFont('helvetica', 'normal');
+        doc.text(customers.length.toString(), margin + 30, yPos);
+
+        doc.text(`Printed on: ${dateStr}`, pageWidth - margin, 55, { align: 'right' });
+
+        // --- Table ---
+        const tableRows = [];
+        customers.forEach((c, idx) => {
+            const due = computeDue(c);
+            tableRows.push([
+                idx + 1,
+                c.customerId || '-',
+                c.companyName || '-',
+                c.customerName || '-',
+                c.phone || '-',
+                `Tk ${due.toLocaleString('en-BD', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+            ]);
+        });
+        
+        // Add Grand Total
+        tableRows.push([
+            { content: 'GRAND TOTAL DUE', colSpan: 5, styles: { halign: 'right', fontStyle: 'bold', fillColor: [240, 240, 240] } },
+            { content: `Tk ${grandTotalDue.toLocaleString('en-BD', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, styles: { halign: 'right', fontStyle: 'bold', fillColor: [240, 240, 240], textColor: [220, 38, 38] } }
+        ]);
+
+        autoTable(doc, {
+            startY: yPos + 10,
+            head: [['SL', 'ID', 'Company', 'Customer', 'Phone', 'Total Balance']],
+            body: tableRows,
+            theme: 'grid',
+            styles: {
+                fontSize: 9,
+                cellPadding: 2,
+                lineColor: [0, 0, 0],
+                lineWidth: 0.1,
+                textColor: [0, 0, 0]
+            },
+            headStyles: {
+                fillColor: [245, 245, 245],
+                fontStyle: 'bold',
+                halign: 'center'
+            },
+            columnStyles: {
+                0: { cellWidth: 10, halign: 'center' }, // SL
+                1: { cellWidth: 20 },                   // ID
+                2: { cellWidth: 45 },                   // Company
+                3: { cellWidth: 45 },                   // Customer
+                4: { cellWidth: 35 },                   // Phone
+                5: { cellWidth: 35, halign: 'right' }   // Total Balance
+            },
+            margin: { left: margin, right: margin }
+        });
+
+        // --- Signatures ---
+        let finalY = doc.lastAutoTable.finalY + 30;
+        if (finalY + 20 > pageHeight) {
+            doc.addPage();
+            finalY = 30;
+        }
+
+        const sigWidth = 45;
+        const sigGap = (pageWidth - (margin * 2) - (sigWidth * 3)) / 2;
+
+        doc.setFontSize(8);
+        doc.setFont('helvetica', 'bold');
+        doc.line(margin, finalY, margin + sigWidth, finalY);
+        doc.text("PREPARED BY", margin + sigWidth / 2, finalY + 5, { align: 'center' });
+
+        doc.line(margin + sigWidth + sigGap, finalY, margin + sigWidth + sigGap + sigWidth, finalY);
+        doc.text("VERIFIED BY", margin + sigWidth + sigGap + sigWidth / 2, finalY + 5, { align: 'center' });
+
+        doc.line(pageWidth - margin - sigWidth, finalY, pageWidth - margin, finalY);
+        doc.text("AUTHORIZED SIGNATURE", pageWidth - margin - sigWidth / 2, finalY + 5, { align: 'center' });
+
+        const pdfOutput = doc.output('blob');
+        const blobURL = URL.createObjectURL(pdfOutput);
+        window.open(blobURL, '_blank');
+
+    } catch (error) {
+        console.error("Customer Report PDF Generation Error:", error);
+        alert(`Failed to generate Customer Report PDF: ${error.message}`);
     }
 };
