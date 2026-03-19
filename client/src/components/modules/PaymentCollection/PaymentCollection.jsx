@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { SearchIcon, FunnelIcon, DollarSignIcon, EyeIcon, PlusIcon, XIcon, ChevronDownIcon, TrashIcon } from '../../Icons';
+import { SearchIcon, FunnelIcon, DollarSignIcon, EyeIcon, PlusIcon, XIcon, ChevronDownIcon, TrashIcon, EditIcon, UserIcon } from '../../Icons';
 import { API_BASE_URL, formatDate, SortIcon } from '../../../utils/helpers';
 import { decryptData, encryptData } from '../../../utils/encryption';
 import CustomDatePicker from '../../shared/CustomDatePicker';
@@ -11,6 +11,20 @@ const PaymentCollection = () => {
     const [isLoading, setIsLoading] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
     const [sortConfig, setSortConfig] = useState({ key: 'date', direction: 'desc' });
+    const [currentUser] = useState(() => {
+        try {
+            const saved = localStorage.getItem('currentUser');
+            return saved ? JSON.parse(saved) : null;
+        } catch {
+            return null;
+        }
+    });
+
+    const isAdmin = currentUser?.username === 'admin' || (currentUser?.role || '').toLowerCase() === 'admin';
+
+    // Edit States
+    const [isEditMode, setIsEditMode] = useState(false);
+    const [editingPayment, setEditingPayment] = useState(null);
 
     // New States
     const [showAddModal, setShowAddModal] = useState(false);
@@ -182,6 +196,29 @@ const PaymentCollection = () => {
         }
     };
 
+    const handleEditInitiation = (payment) => {
+        setIsEditMode(true);
+        setEditingPayment(payment);
+        setNewPayment({
+            customerId: payment.customerId,
+            date: payment.date,
+            items: [{
+                id: payment.id,
+                method: payment.method,
+                bankName: payment.bankName || '',
+                accountNo: payment.accountNo || '',
+                branch: payment.branch || '',
+                receiveBy: payment.receiveBy || '',
+                place: payment.place || '',
+                amount: payment.amount.toString()
+            }],
+            status: payment.status || 'Completed',
+            reference: payment.reference || ''
+        });
+        setCustomerSearchQuery('');
+        setShowAddModal(true);
+    };
+
     const handleAddCollection = async (e) => {
         e.preventDefault();
         const totalAmountValue = newPayment.items.reduce((sum, item) => sum + (parseFloat(item.amount) || 0), 0);
@@ -245,6 +282,66 @@ const PaymentCollection = () => {
         }
     };
 
+    const handleUpdateCollection = async (e) => {
+        e.preventDefault();
+        const item = newPayment.items[0];
+        if (!newPayment.customerId || (parseFloat(item.amount) || 0) <= 0) return;
+
+        setIsSubmitting(true);
+        setSubmitStatus(null);
+        try {
+            const response = await fetch(`${API_BASE_URL}/api/customers/${newPayment.customerId}`);
+            if (!response.ok) throw new Error('Failed to fetch customer');
+
+            const record = await response.json();
+            const customer = decryptData(record.data);
+
+            const updatedHistory = (customer.paymentHistory || []).map(p => {
+                if (p.id === editingPayment.id) {
+                    return {
+                        ...p,
+                        date: newPayment.date,
+                        method: item.method,
+                        bankName: item.bankName,
+                        accountNo: item.accountNo,
+                        branch: item.branch,
+                        amount: parseFloat(item.amount),
+                        receiveBy: item.receiveBy,
+                        place: item.place,
+                        reference: newPayment.reference,
+                        status: newPayment.status
+                    };
+                }
+                return p;
+            });
+
+            const updatedCustomer = { ...customer, paymentHistory: updatedHistory };
+
+            const saveResponse = await fetch(`${API_BASE_URL}/api/customers/${newPayment.customerId}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ data: encryptData(updatedCustomer) }),
+            });
+
+            if (saveResponse.ok) {
+                setSubmitStatus('success');
+                fetchPayments();
+                setTimeout(() => {
+                    setShowAddModal(false);
+                    setSubmitStatus(null);
+                    resetNewPayment();
+                }, 1500);
+            } else {
+                setSubmitStatus('error');
+            }
+        } catch (error) {
+            console.error('Error updating collection:', error);
+            setSubmitStatus('error');
+        } finally {
+            setIsSubmitting(false);
+        }
+    };
+
     const resetNewPayment = () => {
         setNewPayment({
             customerId: '',
@@ -263,6 +360,8 @@ const PaymentCollection = () => {
             reference: ''
         });
         setCustomerSearchQuery('');
+        setIsEditMode(false);
+        setEditingPayment(null);
     };
 
     const handleSort = (key) => {
@@ -357,14 +456,23 @@ const PaymentCollection = () => {
                                     <th className="px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase tracking-wider hover:bg-gray-100/50 transition-colors">Branch</th>
                                     <th className="px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase tracking-wider hover:bg-gray-100/50 transition-colors">Account Number</th>
                                     <th className="px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase tracking-wider text-right">Amount</th>
-                                    <th className="px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase tracking-wider text-right">Actions</th>
+                                    {isAdmin && (
+                                        <th className="px-6 py-4 text-center text-xs font-bold text-gray-500 uppercase tracking-wider hover:bg-gray-100/50 transition-colors">Actions</th>
+                                    )}
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-100">
                                 {isLoading ? (
                                     Array(5).fill(0).map((_, i) => (
                                         <tr key={i} className="animate-pulse">
-                                            <td colSpan="8" className="px-6 py-4"><div className="h-4 bg-gray-100 rounded w-full"></div></td>
+                                            <td colSpan={isAdmin ? 8 : 7} className="px-6 py-12 text-center">
+                                                <div className="flex flex-col items-center gap-2">
+                                                    <div className="w-12 h-12 bg-blue-50 rounded-full flex items-center justify-center">
+                                                        <DollarSignIcon className="w-6 h-6 text-blue-500" />
+                                                    </div>
+                                                    <p className="text-gray-500 font-medium">Loading transaction history...</p>
+                                                </div>
+                                            </td>
                                         </tr>
                                     ))
                                 ) : filteredPayments.length > 0 ? (
@@ -380,25 +488,40 @@ const PaymentCollection = () => {
                                                 {payment.method === 'Cash' ? (payment.place || '—') : (payment.branch || '—')}
                                             </td>
                                             <td className="px-6 py-4 text-sm text-gray-600 font-mono">{payment.accountNo || '—'}</td>
-                                            <td className="px-6 py-4 text-sm font-bold text-blue-600 text-right">৳{parseFloat(payment.amount || 0).toLocaleString()}</td>
-                                            <td className="px-6 py-4 text-right">
-                                                <div className="flex items-center justify-end">
-                                                    <button
-                                                        onClick={() => handleDeletePayment(payment)}
-                                                        className="text-gray-400 hover:text-red-500 transition-colors"
-                                                        title="Delete"
-                                                    >
-                                                        <TrashIcon className="w-4 h-4" />
-                                                    </button>
-                                                </div>
+                                            <td className="px-6 py-4 text-sm font-bold text-blue-600 text-right">
+                                                ৳{(payment.amount || 0).toLocaleString()}
                                             </td>
+                                            {isAdmin && (
+                                                <td className="px-6 py-4">
+                                                    <div className="flex items-center justify-center gap-2">
+                                                        <button
+                                                            onClick={() => handleEditInitiation(payment)}
+                                                            className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                                                            title="Edit Payment"
+                                                        >
+                                                            <EditIcon className="w-4 h-4" />
+                                                        </button>
+                                                        <button
+                                                            onClick={() => handleDeletePayment(payment)}
+                                                            className="p-1.5 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                                                            title="Delete Payment"
+                                                        >
+                                                            <TrashIcon className="w-4 h-4" />
+                                                        </button>
+                                                    </div>
+                                                </td>
+                                            )}
                                         </tr>
                                     ))
                                 ) : (
                                     <tr>
-                                        <td colSpan="8" className="px-6 py-12 text-center text-gray-400 bg-white/50">
-                                            <DollarSignIcon className="w-12 h-12 mx-auto mb-3 opacity-20" />
-                                            <p>No payments found</p>
+                                        <td colSpan={isAdmin ? 8 : 7} className="px-6 py-12 text-center">
+                                            <div className="flex flex-col items-center gap-2">
+                                                <div className="w-12 h-12 bg-gray-50 rounded-full flex items-center justify-center">
+                                                    <SearchIcon className="w-6 h-6 text-gray-400" />
+                                                </div>
+                                                <p className="text-gray-500 font-medium">No payments found</p>
+                                            </div>
                                         </td>
                                     </tr>
                                 )}
@@ -415,7 +538,7 @@ const PaymentCollection = () => {
 
                     <div className="payment-form-header">
                         <div>
-                            <h3 className="payment-form-title">New Collection Entry</h3>
+                            <h3 className="payment-form-title">{isEditMode ? 'Update Collection Entry' : 'New Collection Entry'}</h3>
                             <p className="text-xs text-gray-500 font-medium italic">Record a payment from a customer or party</p>
                         </div>
                         <button
@@ -429,7 +552,7 @@ const PaymentCollection = () => {
                         </button>
                     </div>
 
-                    <form onSubmit={handleAddCollection} className="grid grid-cols-1 md:grid-cols-2 gap-6 relative z-10">
+                    <form onSubmit={isEditMode ? handleUpdateCollection : handleAddCollection} className="grid grid-cols-1 md:grid-cols-2 gap-6 relative z-10">
                         <div className="md:col-span-2 grid grid-cols-1 md:grid-cols-4 gap-6 items-end">
                             {/* Row 1: Date, Customer, Total Balance, Total Collection */}
                             <div className="space-y-2">
@@ -452,27 +575,30 @@ const PaymentCollection = () => {
                                         placeholder={newPayment.customerId ? rawCustomers.find(c => c._id === newPayment.customerId)?.companyName || 'Search customer...' : "Search by Company, Name or ID..."}
                                         value={customerSearchQuery}
                                         onChange={(e) => {
-                                            setCustomerSearchQuery(e.target.value);
-                                            setActiveDropdown('customer');
+                                            if (!isEditMode) {
+                                                setCustomerSearchQuery(e.target.value);
+                                                setActiveDropdown('customer');
+                                            }
                                         }}
-                                        onFocus={() => setActiveDropdown('customer')}
-                                        className="payment-form-input pl-10"
+                                        onFocus={() => !isEditMode && setActiveDropdown('customer')}
+                                        className={`payment-form-input pl-10 ${isEditMode ? 'bg-gray-50 cursor-not-allowed opacity-75' : ''}`}
                                         autoComplete="off"
+                                        readOnly={isEditMode}
                                     />
                                     <div className="absolute inset-y-0 right-0 pr-3.5 flex items-center">
-                                        {newPayment.customerId ? (
+                                        {newPayment.customerId && !isEditMode ? (
                                             <span
                                                 role="button"
                                                 onClick={(e) => { e.stopPropagation(); setNewPayment(prev => ({ ...prev, customerId: '' })); setCustomerSearchQuery(''); setActiveDropdown(null); }}
                                                 className="text-gray-400 hover:text-red-500 transition-colors cursor-pointer text-lg leading-none"
                                             >×</span>
                                         ) : (
-                                            <ChevronDownIcon className={`w-4 h-4 text-gray-400 transition-transform duration-200 ${activeDropdown === 'customer' ? 'rotate-180' : ''}`} />
+                                            !isEditMode && <ChevronDownIcon className={`w-4 h-4 text-gray-400 transition-transform duration-200 ${activeDropdown === 'customer' ? 'rotate-180' : ''}`} />
                                         )}
                                     </div>
                                 </div>
 
-                                {activeDropdown === 'customer' && (
+                                {activeDropdown === 'customer' && !isEditMode && (
                                     <div className="absolute z-[130] left-0 right-0 mt-2 bg-white border border-gray-100 rounded-xl shadow-2xl max-h-60 overflow-y-auto py-2 animate-in slide-in-from-top-2 duration-200">
                                         {rawCustomers
                                             .filter(c =>
@@ -557,18 +683,20 @@ const PaymentCollection = () => {
                         {/* Dynamic Payment Items List */}
                         <div className="md:col-span-2 space-y-4 mt-6">
                             <div className="flex justify-end">
-                                <button
-                                    type="button"
-                                    onClick={addPaymentItem}
-                                    className="flex items-center gap-2 px-4 py-2 bg-blue-50 text-blue-600 rounded-xl font-bold text-[10px] hover:bg-blue-100 transition-all group border border-blue-100/50 uppercase tracking-widest"
-                                >
-                                    <PlusIcon className="w-4 h-4 group-hover:rotate-90 transition-transform duration-300" />
-                                    <span>Add More Method</span>
-                                </button>
+                                {!isEditMode && (
+                                    <button
+                                        type="button"
+                                        onClick={addPaymentItem}
+                                        className="flex items-center gap-2 px-4 py-2 bg-blue-50 text-blue-600 rounded-xl font-bold text-[10px] hover:bg-blue-100 transition-all group border border-blue-100/50 uppercase tracking-widest"
+                                    >
+                                        <PlusIcon className="w-4 h-4 group-hover:rotate-90 transition-transform duration-300" />
+                                        <span>Add More Method</span>
+                                    </button>
+                                )}
                             </div>
                             {newPayment.items.map((item, index) => (
                                 <div key={item.id} className="relative p-7 bg-blue-50/10 rounded-3xl border border-blue-100/20 space-y-6 animate-in slide-in-from-top-4 duration-300 group/item">
-                                    {newPayment.items.length > 1 && (
+                                    {newPayment.items.length > 1 && !isEditMode && (
                                         <button
                                             type="button"
                                             onClick={() => removePaymentItem(item.id)}

@@ -191,7 +191,7 @@ const SalesReport = ({
                             {showFilterPanel && (
                                 <>
                                     <div className="fixed inset-0 bg-black/20 backdrop-blur-[2px] z-[2005] md:hidden" onClick={() => setShowFilterPanel(false)} />
-                                    <div ref={filterPanelRef} className="fixed inset-x-4 top-24 md:absolute md:top-full md:right-0 md:mt-2 w-auto md:w-80 bg-white border border-gray-100 rounded-2xl shadow-[0_20px_50px_rgba(0,0,0,0.15)] z-[2010] p-4 flex flex-col animate-in fade-in zoom-in-95 duration-200 max-h-[calc(90vh-100px)] overflow-y-auto">
+                                    <div ref={filterPanelRef} className="fixed inset-x-4 top-24 md:absolute md:top-full md:right-0 md:mt-2 w-auto md:w-80 bg-white border border-gray-100 rounded-2xl shadow-[0_20px_50px_rgba(0,0,0,0.15)] z-[2010] p-4 flex flex-col animate-in fade-in zoom-in-95 duration-200 overflow-visible">
                                         <div className="flex items-center justify-between mb-3 pb-2 border-b border-gray-100 flex-shrink-0">
                                             <h4 className="font-bold text-gray-900 text-sm">Advance Filter</h4>
                                             <button
@@ -234,7 +234,7 @@ const SalesReport = ({
                                                 <>
                                                     <div className="grid grid-cols-2 gap-3">
                                                         {/* Company Selection - Party Name */}
-                                                        <div className="space-y-1.5 relative" ref={companyFilterRef}>
+                                                        <div className={`space-y-1.5 relative ${filterDropdownOpen.company ? 'z-50' : 'z-10'}`} ref={companyFilterRef}>
                                                             <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider pl-1 font-mono">PARTY NAME</label>
                                                             <div className="relative">
                                                                 <input
@@ -242,6 +242,7 @@ const SalesReport = ({
                                                                     value={filterSearchInputs.companySearch}
                                                                     onChange={(e) => {
                                                                         setFilterSearchInputs({ ...filterSearchInputs, companySearch: e.target.value });
+                                                                        setSaleFilters(prev => ({ ...prev, companyName: e.target.value }));
                                                                         setFilterDropdownOpen({ ...initialFilterDropdownState, company: true });
                                                                     }}
                                                                     onFocus={() => setFilterDropdownOpen({ ...initialFilterDropdownState, company: true })}
@@ -291,7 +292,7 @@ const SalesReport = ({
                                                         </div>
 
                                                         {/* Port Filter */}
-                                                        <div className="space-y-1.5 relative" ref={portFilterRef}>
+                                                        <div className={`space-y-1.5 relative ${filterDropdownOpen.port ? 'z-50' : 'z-10'}`} ref={portFilterRef}>
                                                             <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider pl-1 font-mono">PORT</label>
                                                             <div className="relative">
                                                                 <input
@@ -299,6 +300,7 @@ const SalesReport = ({
                                                                     value={filterSearchInputs.portSearch}
                                                                     onChange={(e) => {
                                                                         setFilterSearchInputs({ ...filterSearchInputs, portSearch: e.target.value });
+                                                                        setSaleFilters(prev => ({ ...prev, port: e.target.value }));
                                                                         setFilterDropdownOpen({ ...initialFilterDropdownState, port: true });
                                                                     }}
                                                                     onFocus={() => setFilterDropdownOpen({ ...initialFilterDropdownState, port: true })}
@@ -350,7 +352,7 @@ const SalesReport = ({
 
                                                     <div className="grid grid-cols-2 gap-3">
                                                         {/* IND CNF Filter */}
-                                                        <div className="space-y-1.5 relative" ref={indCnfFilterRef}>
+                                                        <div className={`space-y-1.5 relative ${filterDropdownOpen.indCnf ? 'z-50' : 'z-10'}`} ref={indCnfFilterRef}>
                                                             <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider pl-1 font-mono">IND CNF</label>
                                                             <div className="relative">
                                                                 <input
@@ -358,6 +360,7 @@ const SalesReport = ({
                                                                     value={filterSearchInputs.indCnfSearch}
                                                                     onChange={(e) => {
                                                                         setFilterSearchInputs({ ...filterSearchInputs, indCnfSearch: e.target.value });
+                                                                        setSaleFilters(prev => ({ ...prev, indCnf: e.target.value }));
                                                                         setFilterDropdownOpen({ ...initialFilterDropdownState, indCnf: true });
                                                                     }}
                                                                     onFocus={() => setFilterDropdownOpen({ ...initialFilterDropdownState, indCnf: true })}
@@ -407,7 +410,7 @@ const SalesReport = ({
                                                         </div>
 
                                                         {/* BD CNF Filter */}
-                                                        <div className="space-y-1.5 relative" ref={bdCnfFilterRef}>
+                                                        <div className={`space-y-1.5 relative ${filterDropdownOpen.bdCnf ? 'z-50' : 'z-10'}`} ref={bdCnfFilterRef}>
                                                             <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider pl-1 font-mono">BD CNF</label>
                                                             <div className="relative">
                                                                 <input
@@ -415,6 +418,7 @@ const SalesReport = ({
                                                                     value={filterSearchInputs.bdCnfSearch}
                                                                     onChange={(e) => {
                                                                         setFilterSearchInputs({ ...filterSearchInputs, bdCnfSearch: e.target.value });
+                                                                        setSaleFilters(prev => ({ ...prev, bdCnf: e.target.value }));
                                                                         setFilterDropdownOpen({ ...initialFilterDropdownState, bdCnf: true });
                                                                     }}
                                                                     onFocus={() => setFilterDropdownOpen({ ...initialFilterDropdownState, bdCnf: true })}
@@ -465,7 +469,7 @@ const SalesReport = ({
                                                     </div>
 
                                                     {/* Product Selection */}
-                                                    <div className="space-y-1.5 relative" ref={productFilterRef}>
+                                                    <div className={`space-y-1.5 relative ${filterDropdownOpen.product ? 'z-50' : 'z-10'}`} ref={productFilterRef}>
                                                         <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider pl-1 font-mono">PRODUCT</label>
                                                         <div className="relative">
                                                             <input
@@ -473,6 +477,7 @@ const SalesReport = ({
                                                                 value={filterSearchInputs.productSearch}
                                                                 onChange={(e) => {
                                                                     setFilterSearchInputs({ ...filterSearchInputs, productSearch: e.target.value });
+                                                                    setSaleFilters(prev => ({ ...prev, productName: e.target.value }));
                                                                     setFilterDropdownOpen({ ...initialFilterDropdownState, product: true });
                                                                 }}
                                                                 onFocus={() => setFilterDropdownOpen({ ...initialFilterDropdownState, product: true })}
@@ -524,7 +529,7 @@ const SalesReport = ({
                                             ) : (
                                                 <>
                                                     {/* Company Selection - General */}
-                                                    <div className="space-y-1.5 relative" ref={companyFilterRef}>
+                                                    <div className={`space-y-1.5 relative ${filterDropdownOpen.company ? 'z-50' : 'z-10'}`} ref={companyFilterRef}>
                                                         <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider pl-1 font-mono">CUSTOMER NAME</label>
                                                         <div className="relative">
                                                             <input
@@ -532,6 +537,7 @@ const SalesReport = ({
                                                                 value={filterSearchInputs.companySearch}
                                                                 onChange={(e) => {
                                                                     setFilterSearchInputs({ ...filterSearchInputs, companySearch: e.target.value });
+                                                                    setSaleFilters(prev => ({ ...prev, companyName: e.target.value }));
                                                                     setFilterDropdownOpen({ ...initialFilterDropdownState, company: true });
                                                                 }}
                                                                 onFocus={() => setFilterDropdownOpen({ ...initialFilterDropdownState, company: true })}
@@ -581,7 +587,7 @@ const SalesReport = ({
                                                     </div>
 
                                                     {/* Invoice No Selection - General only */}
-                                                    <div className="space-y-1.5 relative" ref={invoiceFilterRef}>
+                                                    <div className={`space-y-1.5 relative ${filterDropdownOpen.invoice ? 'z-50' : 'z-10'}`} ref={invoiceFilterRef}>
                                                         <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider pl-1 font-mono">INVOICE NO</label>
                                                         <div className="relative">
                                                             <input
@@ -589,6 +595,7 @@ const SalesReport = ({
                                                                 value={filterSearchInputs.invoiceSearch}
                                                                 onChange={(e) => {
                                                                     setFilterSearchInputs({ ...filterSearchInputs, invoiceSearch: e.target.value });
+                                                                    setSaleFilters(prev => ({ ...prev, invoiceNo: e.target.value }));
                                                                     setFilterDropdownOpen({ ...initialFilterDropdownState, invoice: true });
                                                                 }}
                                                                 onFocus={() => setFilterDropdownOpen({ ...initialFilterDropdownState, invoice: true })}
@@ -638,7 +645,7 @@ const SalesReport = ({
                                                     </div>
 
                                                     {/* Product Selection - General */}
-                                                    <div className="space-y-1.5 relative" ref={productFilterRef}>
+                                                    <div className={`space-y-1.5 relative ${filterDropdownOpen.product ? 'z-50' : 'z-10'}`} ref={productFilterRef}>
                                                         <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider pl-1 font-mono">PRODUCT</label>
                                                         <div className="relative">
                                                             <input
@@ -646,6 +653,7 @@ const SalesReport = ({
                                                                 value={filterSearchInputs.productSearch}
                                                                 onChange={(e) => {
                                                                     setFilterSearchInputs({ ...filterSearchInputs, productSearch: e.target.value });
+                                                                    setSaleFilters(prev => ({ ...prev, productName: e.target.value }));
                                                                     setFilterDropdownOpen({ ...initialFilterDropdownState, product: true });
                                                                 }}
                                                                 onFocus={() => setFilterDropdownOpen({ ...initialFilterDropdownState, product: true })}
@@ -695,7 +703,7 @@ const SalesReport = ({
                                                     </div>
 
                                                     {/* Brand Selection - General only */}
-                                                    <div className="space-y-1.5 relative" ref={brandFilterRef}>
+                                                    <div className={`space-y-1.5 relative ${filterDropdownOpen.brand ? 'z-50' : 'z-10'}`} ref={brandFilterRef}>
                                                         <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider pl-1 font-mono">BRAND</label>
                                                         <div className="relative">
                                                             <input
@@ -703,6 +711,7 @@ const SalesReport = ({
                                                                 value={filterSearchInputs.brandSearch}
                                                                 onChange={(e) => {
                                                                     setFilterSearchInputs({ ...filterSearchInputs, brandSearch: e.target.value });
+                                                                    setSaleFilters(prev => ({ ...prev, brandName: e.target.value }));
                                                                     setFilterDropdownOpen({ ...initialFilterDropdownState, brand: true });
                                                                 }}
                                                                 onFocus={() => setFilterDropdownOpen({ ...initialFilterDropdownState, brand: true })}

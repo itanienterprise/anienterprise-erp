@@ -1953,7 +1953,15 @@ const SaleManagement = ({
         totalSales: displayedSales.reduce((sum, s) => sum + (parseFloat(s.totalAmount) || 0), 0),
         totalDiscount: displayedSales.reduce((sum, s) => sum + (parseFloat(s.discount) || 0), 0),
         totalPaid: displayedSales.reduce((sum, s) => sum + (parseFloat(s.paidAmount) || 0), 0),
-        totalDue: displayedSales.reduce((sum, s) => sum + (parseFloat(s.dueAmount) || 0), 0)
+        totalDue: displayedSales.reduce((sum, s) => sum + (parseFloat(s.dueAmount) || 0), 0),
+        totalTrucks: saleType === 'Border' ? displayedSales.reduce((sum, sale) => {
+            const items = sale.items || [];
+            const truckTotal = items.reduce((iSum, item) => {
+                const brandEntries = item.brandEntries || [];
+                return iSum + brandEntries.reduce((bSum, entry) => bSum + (parseFloat(entry.truck) || 0), 0);
+            }, 0);
+            return sum + (items.length > 0 ? truckTotal : (parseFloat(sale.truck) || 0));
+        }, 0) : 0
     };
 
     return (
@@ -2154,26 +2162,80 @@ const SaleManagement = ({
                                                             {/* Indian CNF Filter */}
                                                             <div className="space-y-1.5 relative" ref={saleIndCnfFilterRef}>
                                                                 <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider pl-1">INDIAN CNF</label>
-                                                                <input
-                                                                    type="text"
-                                                                    value={saleFilterSearch.indCnfSearch}
-                                                                    onChange={(e) => { setSaleFilterSearch(prev => ({ ...prev, indCnfSearch: e.target.value })); setSaleFilters(prev => ({ ...prev, indCnf: e.target.value })); setActiveFilterDropdown('indCnf'); }}
-                                                                    onFocus={() => setActiveFilterDropdown('indCnf')}
-                                                                    placeholder={saleFilters.indCnf || 'India...'}
-                                                                    className={`w-full px-4 py-2 bg-white border border-gray-100 rounded-xl text-sm focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all shadow-sm hover:border-gray-200 ${saleFilters.indCnf ? 'placeholder:text-gray-900 placeholder:font-semibold' : 'placeholder:text-gray-300'}`}
-                                                                />
+                                                                <div className="relative">
+                                                                    <input
+                                                                        type="text"
+                                                                        value={saleFilterSearch.indCnfSearch}
+                                                                        onChange={(e) => {
+                                                                            setSaleFilterSearch(prev => ({ ...prev, indCnfSearch: e.target.value }));
+                                                                            setSaleFilters(prev => ({ ...prev, indCnf: e.target.value }));
+                                                                            setActiveFilterDropdown('indCnf');
+                                                                        }}
+                                                                        onFocus={() => setActiveFilterDropdown('indCnf')}
+                                                                        placeholder={saleFilters.indCnf || 'India...'}
+                                                                        className={`w-full px-4 py-2 bg-white border border-gray-100 rounded-xl text-sm focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all shadow-sm hover:border-gray-200 pr-14 ${saleFilters.indCnf ? 'placeholder:text-gray-900 placeholder:font-semibold' : 'placeholder:text-gray-300'}`}
+                                                                    />
+                                                                    <div className="absolute right-3.5 top-1/2 -translate-y-1/2 flex items-center gap-2">
+                                                                        {saleFilters.indCnf && (
+                                                                            <button onMouseDown={(e) => { e.preventDefault(); setSaleFilters(prev => ({ ...prev, indCnf: '' })); setSaleFilterSearch(prev => ({ ...prev, indCnfSearch: '' })); setActiveFilterDropdown(null); }} className="text-gray-400 hover:text-gray-600 transition-colors">
+                                                                                <XIcon className="w-4 h-4" />
+                                                                            </button>
+                                                                        )}
+                                                                        <SearchIcon className="w-4 h-4 text-gray-300 pointer-events-none" />
+                                                                    </div>
+                                                                </div>
+                                                                {activeFilterDropdown === 'indCnf' && (() => {
+                                                                    const options = [...new Set(sales.map(s => s.indianCnF).filter(Boolean))].sort();
+                                                                    const filtered = options.filter(name => name.toLowerCase().includes((saleFilterSearch.indCnfSearch || '').toLowerCase()));
+                                                                    return filtered.length > 0 ? (
+                                                                        <div className="absolute z-[120] mt-1 w-full bg-white border border-gray-100 rounded-xl shadow-xl max-h-48 overflow-y-auto py-1">
+                                                                            {filtered.map(name => (
+                                                                                <button key={name} type="button" onMouseDown={(e) => { e.preventDefault(); setSaleFilters(prev => ({ ...prev, indCnf: name })); setSaleFilterSearch(prev => ({ ...prev, indCnfSearch: name })); setActiveFilterDropdown(null); }} className="w-full px-4 py-2 text-left text-sm hover:bg-blue-50 transition-colors font-medium text-gray-700">
+                                                                                    {name}
+                                                                                </button>
+                                                                            ))}
+                                                                        </div>
+                                                                    ) : null;
+                                                                })()}
                                                             </div>
                                                             {/* BD CNF Filter */}
                                                             <div className="space-y-1.5 relative" ref={saleBdCnfFilterRef}>
                                                                 <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider pl-1">BD CNF</label>
-                                                                <input
-                                                                    type="text"
-                                                                    value={saleFilterSearch.bdCnfSearch}
-                                                                    onChange={(e) => { setSaleFilterSearch(prev => ({ ...prev, bdCnfSearch: e.target.value })); setSaleFilters(prev => ({ ...prev, bdCnf: e.target.value })); setActiveFilterDropdown('bdCnf'); }}
-                                                                    onFocus={() => setActiveFilterDropdown('bdCnf')}
-                                                                    placeholder={saleFilters.bdCnf || 'BD...'}
-                                                                    className={`w-full px-4 py-2 bg-white border border-gray-100 rounded-xl text-sm focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all shadow-sm hover:border-gray-200 ${saleFilters.bdCnf ? 'placeholder:text-gray-900 placeholder:font-semibold' : 'placeholder:text-gray-300'}`}
-                                                                />
+                                                                <div className="relative">
+                                                                    <input
+                                                                        type="text"
+                                                                        value={saleFilterSearch.bdCnfSearch}
+                                                                        onChange={(e) => {
+                                                                            setSaleFilterSearch(prev => ({ ...prev, bdCnfSearch: e.target.value }));
+                                                                            setSaleFilters(prev => ({ ...prev, bdCnf: e.target.value }));
+                                                                            setActiveFilterDropdown('bdCnf');
+                                                                        }}
+                                                                        onFocus={() => setActiveFilterDropdown('bdCnf')}
+                                                                        placeholder={saleFilters.bdCnf || 'BD...'}
+                                                                        className={`w-full px-4 py-2 bg-white border border-gray-100 rounded-xl text-sm focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all shadow-sm hover:border-gray-200 pr-14 ${saleFilters.bdCnf ? 'placeholder:text-gray-900 placeholder:font-semibold' : 'placeholder:text-gray-300'}`}
+                                                                    />
+                                                                    <div className="absolute right-3.5 top-1/2 -translate-y-1/2 flex items-center gap-2">
+                                                                        {saleFilters.bdCnf && (
+                                                                            <button onMouseDown={(e) => { e.preventDefault(); setSaleFilters(prev => ({ ...prev, bdCnf: '' })); setSaleFilterSearch(prev => ({ ...prev, bdCnfSearch: '' })); setActiveFilterDropdown(null); }} className="text-gray-400 hover:text-gray-600 transition-colors">
+                                                                                <XIcon className="w-4 h-4" />
+                                                                            </button>
+                                                                        )}
+                                                                        <SearchIcon className="w-4 h-4 text-gray-300 pointer-events-none" />
+                                                                    </div>
+                                                                </div>
+                                                                {activeFilterDropdown === 'bdCnf' && (() => {
+                                                                    const options = [...new Set(sales.map(s => s.bdCnf).filter(Boolean))].sort();
+                                                                    const filtered = options.filter(name => name.toLowerCase().includes((saleFilterSearch.bdCnfSearch || '').toLowerCase()));
+                                                                    return filtered.length > 0 ? (
+                                                                        <div className="absolute z-[120] mt-1 w-full bg-white border border-gray-100 rounded-xl shadow-xl max-h-48 overflow-y-auto py-1">
+                                                                            {filtered.map(name => (
+                                                                                <button key={name} type="button" onMouseDown={(e) => { e.preventDefault(); setSaleFilters(prev => ({ ...prev, bdCnf: name })); setSaleFilterSearch(prev => ({ ...prev, bdCnfSearch: name })); setActiveFilterDropdown(null); }} className="w-full px-4 py-2 text-left text-sm hover:bg-blue-50 transition-colors font-medium text-gray-700">
+                                                                                    {name}
+                                                                                </button>
+                                                                            ))}
+                                                                        </div>
+                                                                    ) : null;
+                                                                })()}
                                                             </div>
                                                         </div>
                                                     </>
@@ -2331,7 +2393,13 @@ const SaleManagement = ({
 
             {/* Summary Cards */}
             {!showForm && (
-                <div className="sale-mgmt-summary-grid">
+                <div className={`sale-mgmt-summary-grid ${saleType === 'Border' ? 'md:!grid-cols-5' : ''}`}>
+                    {saleType === 'Border' && (
+                        <div className="sale-mgmt-card bg-blue-50/50 border-blue-100">
+                            <div className="sale-mgmt-card-label text-blue-500">Total Truck</div>
+                            <div className="sale-mgmt-card-value text-blue-700">{stats.totalTrucks.toLocaleString()}</div>
+                        </div>
+                    )}
                     <div className="sale-mgmt-card sale-mgmt-card-default">
                         <div className="sale-mgmt-card-label text-gray-400">Total Sales</div>
                         <div className="sale-mgmt-card-value text-gray-900">৳ {stats.totalSales.toLocaleString()}</div>

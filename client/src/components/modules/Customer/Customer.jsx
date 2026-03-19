@@ -790,7 +790,9 @@ const Customer = ({
                                 <div className="px-8 py-6 border-b border-gray-100 flex items-center justify-between bg-white sticky top-0 z-10 rounded-t-2xl">
                                     <div className="flex-1">
                                         <h2 className="text-xl font-bold text-gray-900">{viewData.companyName}</h2>
-                                        <p className="text-sm font-medium text-gray-600 mt-1">{viewData.customerName}</p>
+                                        {viewData.customerName && viewData.customerName !== viewData.companyName && (
+                                            <p className="text-sm font-medium text-gray-600 mt-1">{viewData.customerName}</p>
+                                        )}
                                         <p className="text-xs text-gray-500 mt-1">ID: {viewData.customerId}</p>
                                         <p className="text-xs text-gray-400 mt-0.5">{viewData.customerType}</p>
                                     </div>
@@ -1457,12 +1459,10 @@ const Customer = ({
                                                     <thead className="bg-white border-b border-gray-200">
                                                         <tr>
                                                             <th className="px-4 py-3 font-semibold text-gray-600">Date</th>
-                                                            <th className="px-4 py-3 font-semibold text-gray-600">LC No</th>
                                                             <th className="px-4 py-3 font-semibold text-gray-600">Payment<br />Method</th>
                                                             <th className="px-4 py-3 font-semibold text-gray-600">Bank Name <br />Mobile Banking</th>
                                                             <th className="px-4 py-3 font-semibold text-gray-600">Branch</th>
                                                             <th className="px-4 py-3 font-semibold text-gray-600">Account No</th>
-                                                            <th className="px-4 py-3 font-semibold text-gray-600">Transaction ID</th>
                                                             <th className="px-4 py-3 font-semibold text-gray-600 text-right">Amount</th>
                                                             <th className="px-4 py-3 font-semibold text-gray-600 text-center">Status</th>
                                                         </tr>
@@ -1472,21 +1472,18 @@ const Customer = ({
                                                             viewData.paymentHistory.map((payment, index) => (
                                                                 <tr key={payment.id || index} className="border-b border-gray-100 bg-white hover:bg-gray-50 transition-colors">
                                                                     <td className="px-4 py-3 text-gray-600">{formatDate(payment.date)}</td>
-                                                                    <td className="px-4 py-3 text-gray-600 font-medium">{payment.lcNo || '-'}</td>
                                                                     <td className="px-4 py-3 font-medium text-gray-900">{payment.method}</td>
                                                                     <td className="px-4 py-3 text-gray-600">
                                                                         <span className="font-semibold text-xs">
-                                                                            {payment.method === 'Bank' ? payment.bankName : (payment.method === 'Mobile Banking' ? payment.mobileType : 'Cash')}
+                                                                            {payment.method === 'Cash' ? (payment.receiveBy || '—') : (payment.bankName || '—')}
                                                                         </span>
                                                                     </td>
                                                                     <td className="px-4 py-3 text-gray-600 text-xs">
-                                                                        {payment.method === 'Bank' ? payment.branch : '-'}
+                                                                        {payment.method === 'Cash' ? (payment.place || '—') : 
+                                                                         (payment.method === 'Mobile Banking' ? '—' : (payment.branch || '—'))}
                                                                     </td>
                                                                     <td className="px-4 py-3 text-gray-600 text-xs">
                                                                         {payment.accountNo || '-'}
-                                                                    </td>
-                                                                    <td className="px-4 py-3 text-gray-600 text-xs">
-                                                                        {payment.transactionId || '-'}
                                                                     </td>
                                                                     <td className="px-4 py-3 text-right font-bold text-gray-900">
                                                                         <div className="flex flex-col items-end">

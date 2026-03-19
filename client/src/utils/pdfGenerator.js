@@ -1963,7 +1963,7 @@ export const generateCustomerReportPDF = (customers, typeFilter, grandTotalDue, 
         doc.setFontSize(12);
         doc.setFont('helvetica', 'bold');
         doc.setTextColor(0);
-        doc.text("CUSTOMER DUE REPORT", pageWidth / 2, 42, { align: 'center' });
+        doc.text("CUSTOMER BALANCE REPORT", pageWidth / 2, 42, { align: 'center' });
 
         // --- Info Row ---
         let yPos = 55;

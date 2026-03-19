@@ -113,7 +113,7 @@ const CustomerReport = ({ isOpen, onClose, customers = [] }) => {
                         {/* Title */}
                         <div className="flex justify-center -mt-6">
                             <div className="bg-white border-2 border-gray-900 px-12 py-1.5 inline-block">
-                                <h2 className="text-xl font-bold text-gray-900 tracking-wide uppercase">Customer Due Report</h2>
+                                <h2 className="text-xl font-bold text-gray-900 tracking-wide uppercase">Customer Balance Report</h2>
                             </div>
                         </div>
 
