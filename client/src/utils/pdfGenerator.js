@@ -2216,3 +2216,219 @@ export const generatePaymentCollectionReportPDF = (payments, filters, dateStr) =
         alert(`Failed to generate Payment Collection Report PDF: ${error.message}`);
     }
 };
+
+export const generateCustomerHistoryPDF = (customer, historyData, summary, filters, activeTab) => {
+    try {
+        const isSales = activeTab === 'sales';
+        // Match the orientation and margin of other reports
+        const doc = new jsPDF({ orientation: 'p', unit: 'mm', format: 'a4' });
+        const pageWidth = doc.internal.pageSize.width;
+        const pageHeight = doc.internal.pageSize.height;
+        const margin = 5; // Standard margin in other reports
+
+        // --- Header (Matching generateSalesReportPDF) ---
+        doc.setFontSize(22);
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(0);
+        doc.text("M/S ANI ENTERPRISE", pageWidth / 2, 20, { align: 'center' });
+
+        doc.setFontSize(10);
+        doc.setFont('helvetica', 'normal');
+        doc.text("766, H.M Tower, Level-06, Borogola, Bogura-5800, Bangladesh", pageWidth / 2, 26, { align: 'center' });
+        doc.text("+8802588813057, anienterprise051@gmail.com, www.anienterprises.com.bd", pageWidth / 2, 31, { align: 'center' });
+
+        // Separator
+        doc.setDrawColor(0);
+        doc.setLineWidth(0.5);
+        doc.line(margin, 40, pageWidth - margin, 40);
+
+        // Report Title
+        doc.setFillColor(255, 255, 255);
+        doc.setDrawColor(0);
+        doc.rect(pageWidth / 2 - 50, 37, 100, 8, 'FD');
+        doc.setFontSize(12);
+        doc.setFont('helvetica', 'bold');
+        const reportTitle = isSales ? "CUSTOMER SALES HISTORY" : "CUSTOMER PAYMENT HISTORY";
+        doc.text(reportTitle, pageWidth / 2, 42, { align: 'center' });
+
+        // --- Info Row ---
+        let yPos = 55;
+        doc.setFontSize(10);
+        doc.setFont('helvetica', 'bold');
+        doc.text("Company:", margin, yPos);
+        doc.setFont('helvetica', 'normal');
+        doc.text(customer.companyName || '-', margin + 25, yPos);
+
+        if (customer.customerName && customer.customerName !== customer.companyName) {
+            yPos += 5;
+            doc.setFont('helvetica', 'bold');
+            doc.text("Customer:", margin, yPos);
+            doc.setFont('helvetica', 'normal');
+            doc.text(customer.customerName, margin + 25, yPos);
+        }
+
+        yPos += 5;
+        doc.setFont('helvetica', 'bold');
+        doc.text("Contact:", margin, yPos);
+        doc.setFont('helvetica', 'normal');
+        doc.text(customer.phone || '-', margin + 25, yPos);
+
+        if (filters.startDate || filters.endDate) {
+            yPos += 5;
+            doc.setFont('helvetica', 'bold');
+            doc.text("Date Range:", margin, yPos);
+            doc.setFont('helvetica', 'normal');
+            const start = filters.startDate ? formatDate(filters.startDate) : 'Start';
+            const end = filters.endDate ? formatDate(filters.endDate) : 'Present';
+            doc.text(`${start} to ${end}`, margin + 25, yPos);
+        }
+
+        const dateStr = formatDate(new Date().toISOString().split('T')[0]);
+        doc.text(`Printed on: ${dateStr}`, pageWidth - margin, 55, { align: 'right' });
+
+        // --- Table ---
+        const tableRows = [];
+        const customerType = (customer.customerType || '').toLowerCase();
+        const isParty = customerType.includes('party');
+
+        if (isSales) {
+            let totalQty = 0, totalAmt = 0, totalDisc = 0, totalTrucksCount = 0;
+            historyData.forEach((item, idx) => {
+                const qty = parseFloat(item.quantity || 0);
+                const amt = parseFloat(item.amount || 0);
+                const disc = parseFloat(item.discount || 0);
+                const trucksCount = parseFloat(item.truck || 0);
+                totalQty += qty;
+                totalAmt += amt;
+                totalDisc += disc;
+                if (!isNaN(trucksCount)) totalTrucksCount += trucksCount;
+
+                const row = [
+                    idx + 1,
+                    formatDate(item.date),
+                    item.lcNo || item.invoiceNo || '-',
+                    item.product || '-',
+                ];
+
+                if (isParty) {
+                    row.push(item.truck || '-');
+                } else {
+                    row.push(item.brand || '-');
+                }
+
+                row.push(
+                    qty.toLocaleString(),
+                    `${parseFloat(item.rate || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}`,
+                    `${amt.toLocaleString(undefined, { minimumFractionDigits: 2 })}`,
+                    `${disc.toLocaleString(undefined, { minimumFractionDigits: 2 })}`
+                );
+
+                tableRows.push(row);
+            });
+
+            // Add Grand Total row
+            tableRows.push([
+                { content: 'GRAND TOTAL', colSpan: 4, styles: { halign: 'right', fontStyle: 'bold', fillColor: [240, 240, 240] } },
+                { content: isParty ? totalTrucksCount.toLocaleString() : '', styles: { halign: 'center', fontStyle: 'bold', fillColor: [240, 240, 240] } },
+                { content: totalQty.toLocaleString(), styles: { halign: 'right', fontStyle: 'bold', fillColor: [240, 240, 240] } },
+                { content: '', styles: { fillColor: [240, 240, 240] } },
+                { content: totalAmt.toLocaleString(undefined, { minimumFractionDigits: 2 }), styles: { halign: 'right', fontStyle: 'bold', fillColor: [240, 240, 240] } },
+                { content: totalDisc.toLocaleString(undefined, { minimumFractionDigits: 2 }), styles: { halign: 'right', fontStyle: 'bold', fillColor: [240, 240, 240] } }
+            ]);
+
+            const headers = isParty
+                ? [['SL', 'Date', 'LC No', 'Product', 'Truck', 'Qty', 'Rate', 'Amount', 'Disc']]
+                : [['SL', 'Date', 'Invoice No', 'Product', 'Brand', 'Qty', 'Rate', 'Amount', 'Disc']];
+
+            autoTable(doc, {
+                startY: yPos + 10,
+                head: headers,
+                body: tableRows,
+                theme: 'grid',
+                styles: { fontSize: 8.5, cellPadding: 2, lineColor: [0, 0, 0], lineWidth: 0.1, textColor: [0, 0, 0] },
+                headStyles: { fillColor: [245, 245, 245], fontStyle: 'bold', halign: 'center' },
+                columnStyles: {
+                    0: { halign: 'center', cellWidth: 10 },
+                    1: { cellWidth: 20 },
+                    2: { cellWidth: 25 },
+                    3: { cellWidth: 35 },
+                    4: { cellWidth: 25 },
+                    5: { halign: 'right', cellWidth: 20 },
+                    6: { halign: 'right', cellWidth: 20 },
+                    7: { halign: 'right', cellWidth: 25 },
+                    8: { halign: 'right', cellWidth: 20 }
+                },
+                margin: { left: margin, right: margin }
+            });
+        } else {
+            let totalCollectedAmt = 0;
+            historyData.forEach((item, idx) => {
+                const amt = parseFloat(item.amount || 0);
+                totalCollectedAmt += amt;
+                tableRows.push([
+                    idx + 1,
+                    formatDate(item.date),
+                    item.method || '-',
+                    item.method === 'Cash' ? (item.receiveBy || '-') : (item.bankName || item.mobileType || '-'),
+                    item.method === 'Cash' ? (item.place || '-') : (item.branch || '-'),
+                    item.accountNo || '-',
+                    `${amt.toLocaleString(undefined, { minimumFractionDigits: 2 })}`
+                ]);
+            });
+
+            // Add Grand Total row for Payment
+            tableRows.push([
+                { content: 'GRAND TOTAL', colSpan: 6, styles: { halign: 'right', fontStyle: 'bold', fillColor: [240, 240, 240] } },
+                { content: totalCollectedAmt.toLocaleString(undefined, { minimumFractionDigits: 2 }), styles: { halign: 'right', fontStyle: 'bold', fillColor: [240, 240, 240] } }
+            ]);
+
+            autoTable(doc, {
+                startY: yPos + 10,
+                head: [['SL', 'Date', 'Method', 'Bank / Receiver', 'Branch / Place', 'Acc No / Ref', 'Amount']],
+                body: tableRows,
+                theme: 'grid',
+                styles: { fontSize: 8.5, cellPadding: 2, lineColor: [0, 0, 0], lineWidth: 0.1, textColor: [0, 0, 0] },
+                headStyles: { fillColor: [245, 245, 245], fontStyle: 'bold', halign: 'center' },
+                columnStyles: {
+                    0: { halign: 'center', cellWidth: 10 },
+                    1: { cellWidth: 25 },
+                    2: { cellWidth: 30 },
+                    3: { cellWidth: 45 },
+                    4: { cellWidth: 35 },
+                    5: { cellWidth: 30 },
+                    6: { halign: 'right', cellWidth: 25 }
+                },
+                margin: { left: margin, right: margin }
+            });
+        }
+
+        // --- Signatures ---
+        yPos = doc.lastAutoTable.finalY + 30;
+        if (yPos + 40 > pageHeight) {
+            doc.addPage();
+            yPos = 30;
+        }
+
+        const sigWidth = 45;
+        const sigGap = (pageWidth - (margin * 2) - (sigWidth * 3)) / 2;
+
+        doc.setFontSize(9);
+        doc.setFont('helvetica', 'bold');
+        doc.line(margin, yPos, margin + sigWidth, yPos);
+        doc.text("PREPARED BY", margin + sigWidth / 2, yPos + 5, { align: 'center' });
+
+        doc.line(margin + sigWidth + sigGap, yPos, margin + sigWidth + sigGap + sigWidth, yPos);
+        doc.text("VERIFIED BY", margin + sigWidth + sigGap + (sigWidth / 2), yPos + 5, { align: 'center' });
+
+        doc.line(pageWidth - margin - sigWidth, yPos, pageWidth - margin, yPos);
+        doc.text("AUTHORIZED SIGNATURE", pageWidth - margin - (sigWidth / 2), yPos + 5, { align: 'center' });
+
+        const pdfOutput = doc.output('blob');
+        const blobURL = URL.createObjectURL(pdfOutput);
+        window.open(blobURL, '_blank');
+
+    } catch (error) {
+        console.error("Customer History PDF Error:", error);
+        alert(`Failed to generate PDF: ${error.message}`);
+    }
+};

@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { EditIcon, TrashIcon, UserIcon, XIcon, SearchIcon, FunnelIcon, ChevronDownIcon, ChevronUpIcon, EyeIcon, BoxIcon, FileTextIcon, BarChartIcon } from '../../Icons';
+import { EditIcon, TrashIcon, UserIcon, XIcon, SearchIcon, FunnelIcon, ChevronDownIcon, ChevronUpIcon, EyeIcon, BoxIcon, FileTextIcon, BarChartIcon, PrinterIcon } from '../../Icons';
 import { API_BASE_URL, SortIcon, formatDate } from '../../../utils/helpers';
-import { generateSaleInvoicePDF } from '../../../utils/pdfGenerator';
+import { generateSaleInvoicePDF, generateCustomerHistoryPDF } from '../../../utils/pdfGenerator';
 import { encryptData, decryptData } from '../../../utils/encryption';
 import CustomDatePicker from '../../shared/CustomDatePicker';
 import CustomerReport from './CustomerReport';
@@ -438,9 +438,12 @@ const Customer = ({
     // Calculate Filtered History Data
     const filteredSalesHistory = (viewData?.salesHistory || []).filter(item => {
         const matchesSearch = !historySearchQuery ||
-            (item.invoiceNo && item.invoiceNo.toLowerCase().includes(historySearchQuery.toLowerCase())) ||
-            (item.product && item.product.toLowerCase().includes(historySearchQuery.toLowerCase())) ||
-            (item.status && item.status.toLowerCase().includes(historySearchQuery.toLowerCase()));
+            ((item.invoiceNo || '').toLowerCase().includes(historySearchQuery.toLowerCase())) ||
+            ((item.lcNo || '').toLowerCase().includes(historySearchQuery.toLowerCase())) ||
+            ((item.product || '').toLowerCase().includes(historySearchQuery.toLowerCase())) ||
+            ((item.brand || '').toLowerCase().includes(historySearchQuery.toLowerCase())) ||
+            ((item.truck || '').toLowerCase().includes(historySearchQuery.toLowerCase())) ||
+            ((item.status || '').toLowerCase().includes(historySearchQuery.toLowerCase()));
 
         const matchesFilters =
             (!historyFilters.startDate || new Date(item.date) >= new Date(historyFilters.startDate)) &&
@@ -454,6 +457,14 @@ const Customer = ({
     });
 
     const filteredPaymentHistory = (viewData?.paymentHistory || []).filter(item => {
+        const matchesSearch = !historySearchQuery ||
+            ((item.method || '').toLowerCase().includes(historySearchQuery.toLowerCase())) ||
+            ((item.bankName || '').toLowerCase().includes(historySearchQuery.toLowerCase())) ||
+            ((item.mobileType || '').toLowerCase().includes(historySearchQuery.toLowerCase())) ||
+            ((item.accountNo || '').toLowerCase().includes(historySearchQuery.toLowerCase())) ||
+            ((item.branch || '').toLowerCase().includes(historySearchQuery.toLowerCase())) ||
+            ((item.reference || '').toLowerCase().includes(historySearchQuery.toLowerCase()));
+
         const matchesFilters =
             (!historyFilters.startDate || new Date(item.date) >= new Date(historyFilters.startDate)) &&
             (!historyFilters.endDate || new Date(item.date) <= new Date(historyFilters.endDate)) &&
@@ -461,7 +472,8 @@ const Customer = ({
             (!historyFilters.method || item.method === historyFilters.method) &&
             (!historyFilters.bankName || item.bankName === historyFilters.bankName) &&
             (!historyFilters.mobileType || item.mobileType === historyFilters.mobileType);
-        return matchesFilters;
+
+        return matchesSearch && matchesFilters;
     });
 
     // Summary Totals
@@ -842,6 +854,20 @@ const Customer = ({
                                     </div>
 
                                     <div className="flex-1 flex justify-end self-start gap-2 relative">
+                                        <button
+                                            onClick={() => generateCustomerHistoryPDF(
+                                                viewData,
+                                                activeHistoryTab === 'sales' ? filteredSalesHistory : filteredPaymentHistory,
+                                                { totalAmount, totalPaid: totalPaidCalculated, totalDiscount, totalBalance: totalDueCalculated },
+                                                historyFilters,
+                                                activeHistoryTab
+                                            )}
+                                            className="flex items-center gap-2 px-4 py-2 rounded-full border bg-white border-gray-200 text-gray-600 hover:bg-gray-50 hover:border-gray-300 transition-all shadow-sm group"
+                                        >
+                                            <PrinterIcon className="w-4 h-4 text-gray-400 group-hover:text-blue-600 transition-colors" />
+                                            <span className="text-sm font-medium">Print</span>
+                                        </button>
+
                                         <button
                                             ref={historyFilterButtonRef}
                                             onClick={() => setShowHistoryFilterPanel(!showHistoryFilterPanel)}
@@ -1485,8 +1511,8 @@ const Customer = ({
                                                                         </span>
                                                                     </td>
                                                                     <td className="px-4 py-3 text-gray-600 text-xs">
-                                                                        {payment.method === 'Cash' ? (payment.place || '—') : 
-                                                                         (payment.method === 'Mobile Banking' ? '—' : (payment.branch || '—'))}
+                                                                        {payment.method === 'Cash' ? (payment.place || '—') :
+                                                                            (payment.method === 'Mobile Banking' ? '—' : (payment.branch || '—'))}
                                                                     </td>
                                                                     <td className="px-4 py-3 text-gray-600 text-xs">
                                                                         {payment.accountNo || '-'}
