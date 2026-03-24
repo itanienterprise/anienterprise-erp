@@ -64,6 +64,9 @@ const EmployeeManagement = ({
     // Close custom dropdowns on outside click
     useEffect(() => {
         const handleClickOutside = (e) => {
+            if (e.target && !document.body.contains(e.target)) {
+                return;
+            }
             if (roleDropdownRef.current && !roleDropdownRef.current.contains(e.target)) {
                 setOpenDropdown(prev => prev === 'role' ? null : prev);
             }
@@ -77,6 +80,9 @@ const EmployeeManagement = ({
 
     useEffect(() => {
         const handleClickOutside = (event) => {
+            if (event.target && !document.body.contains(event.target)) {
+                return;
+            }
             if (showFilterPanel && filterPanelRef.current && !filterPanelRef.current.contains(event.target) && !filterButtonRef.current.contains(event.target)) {
                 setShowFilterPanel(false);
             }

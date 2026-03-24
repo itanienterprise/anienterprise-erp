@@ -2062,3 +2062,157 @@ export const generateCustomerReportPDF = (customers, typeFilter, grandTotalDue, 
         alert(`Failed to generate Customer Report PDF: ${error.message}`);
     }
 };
+
+export const generatePaymentCollectionReportPDF = (payments, filters, dateStr) => {
+    try {
+        const doc = new jsPDF();
+
+        // Use a format similar to other reports
+        const formatDate = (dateString) => {
+            if (!dateString) return '-';
+            const date = new Date(dateString);
+            return date.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' });
+        };
+
+        const pageWidth = doc.internal.pageSize.width;
+        const pageHeight = doc.internal.pageSize.height;
+        const margin = 10;
+
+        // --- Header ---
+        doc.setFontSize(22);
+        doc.setFont('helvetica', 'bold');
+        doc.text("M/S ANI ENTERPRISE", pageWidth / 2, 20, { align: 'center' });
+
+        doc.setFontSize(10);
+        doc.setFont('helvetica', 'normal');
+        doc.setTextColor(0);
+        doc.text("766, H.M Tower, Level-06, Borogola, Bogura-5800, Bangladesh", pageWidth / 2, 26, { align: 'center' });
+        doc.text("+8802588813057, anienterprise051@gmail.com, www.anienterprises.com.bd", pageWidth / 2, 31, { align: 'center' });
+
+        // Separator
+        doc.setDrawColor(0);
+        doc.setLineWidth(0.5);
+        doc.line(margin, 40, pageWidth - margin, 40);
+
+        // Report Title
+        doc.setFillColor(255, 255, 255);
+        doc.setDrawColor(0);
+        doc.rect(pageWidth / 2 - 45, 37, 90, 8, 'FD');
+        doc.setFontSize(12);
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(0);
+        doc.text("PAYMENT COLLECTION REPORT", pageWidth / 2, 42, { align: 'center' });
+
+        // --- Info Row ---
+        let yPos = 55;
+        doc.setFontSize(10);
+
+        doc.setFont('helvetica', 'bold');
+        doc.text("Total Records:", margin, yPos);
+        doc.setFont('helvetica', 'normal');
+        doc.text((payments.length || 0).toString(), margin + 30, yPos);
+
+        if (filters?.startDate) {
+            yPos += 5;
+            doc.setFont('helvetica', 'bold');
+            doc.text("Start Date:", margin, yPos);
+            doc.setFont('helvetica', 'normal');
+            doc.text(formatDate(filters.startDate), margin + 30, yPos);
+        }
+
+        if (filters?.endDate) {
+            yPos += 5;
+            doc.setFont('helvetica', 'bold');
+            doc.text("End Date:", margin, yPos);
+            doc.setFont('helvetica', 'normal');
+            doc.text(formatDate(filters.endDate), margin + 30, yPos);
+        }
+
+        doc.text(`Printed on: ${dateStr}`, pageWidth - margin, 55, { align: 'right' });
+
+        // --- Table ---
+        const tableRows = [];
+        let grandTotal = 0;
+
+        payments.forEach((p, idx) => {
+            const amount = parseFloat(p.amount) || 0;
+            grandTotal += amount;
+
+            tableRows.push([
+                idx + 1,
+                formatDate(p.date),
+                p.companyName || p.customerName || '-',
+                p.method || '-',
+                p.method === 'Cash' ? (p.receiveBy || '-') : (p.bankName || '-'),
+                p.method === 'Cash' ? (p.place || '-') : (p.branch || '-'),
+                p.accountNo || '-',
+                `Tk ${amount.toLocaleString('en-BD', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+            ]);
+        });
+
+        // Add Grand Total
+        tableRows.push([
+            { content: 'GRAND TOTAL', colSpan: 7, styles: { halign: 'right', fontStyle: 'bold', fillColor: [240, 240, 240] } },
+            { content: `${grandTotal.toLocaleString('en-BD', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, styles: { halign: 'right', fontStyle: 'bold', fillColor: [240, 240, 240], textColor: [37, 99, 235] } }
+        ]);
+
+        autoTable(doc, {
+            startY: yPos + 10,
+            head: [['SL', 'Date', 'Party Name', 'Method', 'Bank/Receiver', 'Branch', 'Account No', 'Amount']],
+            body: tableRows,
+            theme: 'grid',
+            styles: {
+                fontSize: 8.5,
+                cellPadding: 2,
+                lineColor: [0, 0, 0],
+                lineWidth: 0.1,
+                textColor: [0, 0, 0]
+            },
+            headStyles: {
+                fillColor: [245, 245, 245],
+                fontStyle: 'bold',
+                halign: 'center'
+            },
+            columnStyles: {
+                0: { cellWidth: 10, halign: 'center' }, // SL
+                1: { cellWidth: 19 },                   // Date
+                2: { cellWidth: 30 },                   // Partyadd 
+                3: { cellWidth: 24 },                   // Method
+                4: { cellWidth: 36 },                   // Bank
+                5: { cellWidth: 21 },                   // Branch
+                6: { cellWidth: 27 },                   // Acct
+                7: { cellWidth: 25, halign: 'right' }   // Amount
+            },
+            margin: { left: margin, right: margin }
+        });
+
+        // --- Signatures ---
+        let finalY = doc.lastAutoTable.finalY + 30;
+        if (finalY + 20 > pageHeight) {
+            doc.addPage();
+            finalY = 30;
+        }
+
+        const sigWidth = 45;
+        const sigGap = (pageWidth - (margin * 2) - (sigWidth * 3)) / 2;
+
+        doc.setFontSize(8);
+        doc.setFont('helvetica', 'bold');
+        doc.line(margin, finalY, margin + sigWidth, finalY);
+        doc.text("PREPARED BY", margin + sigWidth / 2, finalY + 5, { align: 'center' });
+
+        doc.line(margin + sigWidth + sigGap, finalY, margin + sigWidth + sigGap + sigWidth, finalY);
+        doc.text("VERIFIED BY", margin + sigWidth + sigGap + sigWidth / 2, finalY + 5, { align: 'center' });
+
+        doc.line(pageWidth - margin - sigWidth, finalY, pageWidth - margin, finalY);
+        doc.text("AUTHORIZED SIGNATURE", pageWidth - margin - sigWidth / 2, finalY + 5, { align: 'center' });
+
+        const pdfOutput = doc.output('blob');
+        const blobURL = URL.createObjectURL(pdfOutput);
+        window.open(blobURL, '_blank');
+
+    } catch (error) {
+        console.error("Payment Collection Report PDF Generation Error:", error);
+        alert(`Failed to generate Payment Collection Report PDF: ${error.message}`);
+    }
+};

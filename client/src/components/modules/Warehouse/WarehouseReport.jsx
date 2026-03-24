@@ -55,6 +55,9 @@ const WarehouseReport = ({
 
     useEffect(() => {
         const handleClickOutside = (event) => {
+            if (event.target && !document.body.contains(event.target)) {
+                return;
+            }
             if (showFilterPanel && filterPanelRef.current && !filterPanelRef.current.contains(event.target) && !filterButtonRef.current.contains(event.target)) {
                 setShowFilterPanel(false);
             }

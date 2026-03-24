@@ -587,6 +587,9 @@ const WarehouseManagement = ({ currentUser }) => {
 
     useEffect(() => {
         const handleClickOutside = (event) => {
+            if (event.target && !document.body.contains(event.target)) {
+                return;
+            }
             if (whDropdownRef.current && !whDropdownRef.current.contains(event.target)) {
                 setShowWhDropdown(false);
             }

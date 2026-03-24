@@ -1189,6 +1189,9 @@ const StockManagement = ({
 
     useEffect(() => {
         const handleClickOutside = (event) => {
+            if (event.target && !document.body.contains(event.target)) {
+                return;
+            }
             // Main Stock Filter Panel
             if (showStockFilterPanel && stockFilterRef.current && !stockFilterRef.current.contains(event.target) && !stockFilterButtonRef.current.contains(event.target)) {
                 setShowStockFilterPanel(false);

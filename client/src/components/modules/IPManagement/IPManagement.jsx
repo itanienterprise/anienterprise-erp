@@ -63,6 +63,9 @@ function IPManagement({
 
     useEffect(() => {
         const handleClickOutside = (event) => {
+            if (event.target && !document.body.contains(event.target)) {
+                return;
+            }
             if (ipImporterRef.current && !ipImporterRef.current.contains(event.target) &&
                 ipPortRef.current && !ipPortRef.current.contains(event.target) &&
                 filterPortRef.current && !filterPortRef.current.contains(event.target) &&

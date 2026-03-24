@@ -106,6 +106,9 @@ const Customer = ({
     // Click outside handler for history filter panel
     useEffect(() => {
         const handleClickOutside = (event) => {
+            if (event.target && !document.body.contains(event.target)) {
+                return;
+            }
             if (
                 showHistoryFilterPanel &&
                 historyFilterPanelRef.current &&
@@ -193,6 +196,9 @@ const Customer = ({
 
     useEffect(() => {
         const handleClickOutside = (event) => {
+            if (event.target && !document.body.contains(event.target)) {
+                return;
+            }
             if (showFilterPanel && filterPanelRef.current && !filterPanelRef.current.contains(event.target) && !filterButtonRef.current.contains(event.target)) {
                 setShowFilterPanel(false);
             }

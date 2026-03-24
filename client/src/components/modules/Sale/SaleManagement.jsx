@@ -1477,6 +1477,9 @@ const SaleManagement = ({
     // Handle outside clicks for dropdowns
     useEffect(() => {
         const handleClickOutside = (e) => {
+            if (e.target && !document.body.contains(e.target)) {
+                return;
+            }
             if (activeDropdown === 'companyName' && !e.target.closest('.company-dropdown-container')) {
                 setActiveDropdown(null);
             }

@@ -20,6 +20,9 @@ const ProductHistoryReport = ({
 
     useEffect(() => {
         const handleClickOutside = (e) => {
+            if (e.target && !document.body.contains(e.target)) {
+                return;
+            }
             // Check if click is outside party dropdown
             if (partyDropdownRef.current && !partyDropdownRef.current.contains(e.target)) {
                 setDropdownOpen(d => ({ ...d, party: false }));

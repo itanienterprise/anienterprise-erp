@@ -142,6 +142,7 @@ const CustomDatePicker = ({
                             type="button"
                             onMouseDown={(e) => {
                                 e.preventDefault();
+                                e.stopPropagation();
                                 handlePrevMonth();
                             }}
                             className="date-picker-nav-btn"
@@ -155,6 +156,7 @@ const CustomDatePicker = ({
                             type="button"
                             onMouseDown={(e) => {
                                 e.preventDefault();
+                                e.stopPropagation();
                                 handleNextMonth();
                             }}
                             className="date-picker-nav-btn"
@@ -191,6 +193,7 @@ const CustomDatePicker = ({
                                     type="button"
                                     onMouseDown={(e) => {
                                         e.preventDefault();
+                                        e.stopPropagation();
                                         handleDateSelect(d);
                                     }}
                                     className={`date-picker-day ${isSelected ? 'selected' : ''} ${isToday ? 'today' : ''}`}
