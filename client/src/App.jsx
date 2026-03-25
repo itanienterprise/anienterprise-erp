@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import axios from 'axios';
+import axios from './utils/api';
 import {
   MenuIcon, SearchIcon, HomeIcon, UsersIcon, UserIcon, AnchorIcon,
   BarChartIcon, FunnelIcon, XIcon, DollarSignIcon, ShoppingCartIcon,
@@ -251,14 +251,9 @@ function App() {
       if (currentUser.username === 'admin') {
         setCurrentUser(prev => ({ ...prev, name: 'Administrator' }));
       } else {
-        fetch(`${API_BASE_URL}/api/employees`)
-          .then(res => res.json())
+        api.fetch(`/api/employees`)
           .then(data => {
-            const employees = data.map(record => {
-              const decrypted = decryptData(record.data);
-              return { ...decrypted, _id: record._id };
-            });
-            const currentEmp = employees.find(e => e.employeeId === currentUser.username);
+            const currentEmp = data.find(e => e.employeeId === currentUser.username);
             if (currentEmp) {
               const updatedUser = { ...currentUser, name: currentEmp.name };
               setCurrentUser(updatedUser);
@@ -628,23 +623,16 @@ function App() {
 
         // 2. Cascading Delete for Warehouse Transferred Stock
         if (deletedLcNos.length > 0) {
-          const whResponse = await fetch(`${API_BASE_URL}/api/warehouses`);
-          if (whResponse.ok) {
-            const rawWhData = await whResponse.json();
-            const whRecordsToDelete = rawWhData.filter(record => {
-              try {
-                const decrypted = decryptData(record.data);
-                return deletedLcNos.includes(decrypted.lcNo);
-              } catch (e) {
-                return false;
-              }
-            });
+          const whRes = await axios.get(`${API_BASE_URL}/api/warehouses`);
+          const rawWhData = Array.isArray(whRes.data) ? whRes.data : [];
+          const whRecordsToDelete = rawWhData.filter(record => {
+            return deletedLcNos.includes(record.lcNo);
+          });
 
-            if (whRecordsToDelete.length > 0) {
-              await Promise.all(whRecordsToDelete.map(whRecord =>
-                fetch(`${API_BASE_URL}/api/warehouses/${whRecord._id}`, { method: 'DELETE' })
-              ));
-            }
+          if (whRecordsToDelete.length > 0) {
+            await Promise.all(whRecordsToDelete.map(whRecord =>
+              axios.delete(`${API_BASE_URL}/api/warehouses/${whRecord._id}`)
+            ));
           }
         }
 
@@ -787,15 +775,8 @@ function App() {
   const fetchImporters = async () => {
     setIsLoading(true);
     try {
-      const response = await fetch(`${API_BASE_URL}/api/importers`);
-      if (response.ok) {
-        const rawData = await response.json();
-        const decryptedImporters = rawData.map(record => {
-          const decrypted = decryptData(record.data);
-          return { ...decrypted, _id: record._id, createdAt: record.createdAt };
-        });
-        setImporters(decryptedImporters);
-      }
+      const response = await axios.get(`${API_BASE_URL}/api/importers`);
+      setImporters(Array.isArray(response.data) ? response.data : []);
     } catch (error) {
       console.error('Error fetching importers:', error);
     } finally {
@@ -807,15 +788,8 @@ function App() {
   const fetchPorts = async () => {
     setIsLoading(true);
     try {
-      const response = await fetch(`${API_BASE_URL}/api/ports`);
-      if (response.ok) {
-        const rawData = await response.json();
-        const decryptedPorts = rawData.map(record => {
-          const decrypted = decryptData(record.data);
-          return { ...decrypted, _id: record._id, createdAt: record.createdAt };
-        });
-        setPorts(decryptedPorts);
-      }
+      const response = await axios.get(`${API_BASE_URL}/api/ports`);
+      setPorts(Array.isArray(response.data) ? response.data : []);
     } catch (error) {
       console.error('Error fetching ports:', error);
     } finally {
@@ -827,14 +801,10 @@ function App() {
   const fetchStockRecords = async () => {
     setIsLoading(true);
     try {
-      const response = await fetch(`${API_BASE_URL}/api/stock`);
-      if (response.ok) {
-        const rawData = await response.json();
-        const decryptedRecords = rawData.map(record => {
-          const decrypted = decryptData(record.data);
-          return { ...decrypted, _id: record._id, createdAt: record.createdAt };
-        });
-        setStockRecords(decryptedRecords);
+      const response = await axios.get(`${API_BASE_URL}/api/stock`);
+      // Stock data is now cleanly decrypted by the server/axios layer.
+      if (Array.isArray(response.data)) {
+        setStockRecords(response.data);
       }
     } catch (error) {
       console.error('Error fetching stock:', error);
@@ -845,35 +815,37 @@ function App() {
 
   const fetchWarehouses = async () => {
     try {
-      const response = await fetch(`${API_BASE_URL}/api/warehouses`);
-      if (response.ok) {
-        const rawData = await response.json();
+      const [whRes, stockRes] = await Promise.all([
+        axios.get(`${API_BASE_URL}/api/warehouses`),
+        axios.get(`${API_BASE_URL}/api/stock`)
+      ]);
 
-        // 1. Decrypt Main Warehouse Data
-        const allDecryptedWh = (rawData.warehouses || []).map(item => {
-          try {
-            return { ...decryptData(item.data), _id: item._id, recordType: 'warehouse' };
-          } catch { return null; }
-        }).filter(Boolean);
+      const rawWhData = Array.isArray(whRes.data) ? whRes.data : [];
+      const rawStockData = Array.isArray(stockRes.data) ? stockRes.data : [];
 
-        // 2. Extract Warehouse-Specific Stock from Stock Records
-        const decryptedStock = (rawData.stockRecords || []).map(d => {
-          let rawWh = '';
-          try {
-            rawWh = dec.whName || dec.warehouse || '';
-          } catch { }
+      // 1. Warehouse records are now plain objects from server
+      const allDecryptedWh = rawWhData.map(item => ({
+        ...item, recordType: 'warehouse'
+      }));
+
+      // 2. Extract Warehouse-Specific Stock from Stock Records
+      const decryptedStock = rawStockData.map(item => {
+        try {
+          // item is already the decrypted object
+          const rawWh = item.whName || item.warehouse || '';
 
           if (!rawWh) return null;
 
-          const inhousePkt = d.inhousePkt !== undefined && d.inhousePkt !== null ? d.inhousePkt : 0;
-          const inhouseQty = d.inhouseQty !== undefined && d.inhouseQty !== null ? d.inhouseQty : 0;
-          const whPkt = d.whPkt !== undefined && d.whPkt !== null ? d.whPkt : 0;
-          const whQty = d.whQty !== undefined && d.whQty !== null ? d.whQty : 0;
-          const salePacket = d.salePacket !== undefined && d.salePacket !== null ? d.salePacket : 0;
-          const saleQuantity = d.saleQuantity !== undefined && d.saleQuantity !== null ? d.saleQuantity : 0;
+          const inhousePkt = item.inhousePkt !== undefined && item.inhousePkt !== null ? item.inhousePkt : 0;
+          const inhouseQty = item.inhouseQty !== undefined && item.inhouseQty !== null ? item.inhouseQty : 0;
+          const whPkt = item.whPkt !== undefined && item.whPkt !== null ? item.whPkt : 0;
+          const whQty = item.whQty !== undefined && item.whQty !== null ? item.whQty : 0;
+          const salePacket = item.salePacket !== undefined && item.salePacket !== null ? item.salePacket : 0;
+          const saleQuantity = item.saleQuantity !== undefined && item.saleQuantity !== null ? item.saleQuantity : 0;
 
           return {
-            ...d,
+            ...item,
+            _id: item._id,
             whName: rawWh,
             inhousePkt,
             inhouseQty,
@@ -881,16 +853,16 @@ function App() {
             whQty,
             salePacket,
             saleQuantity,
-            productName: d.productName || d.product,
-            packetSize: d.packetSize || d.size || 0,
+            productName: dec.productName || dec.product,
+            packetSize: dec.packetSize || dec.size || 0,
             recordType: 'stock',
           };
-        }).filter(Boolean);
+        } catch { return null; }
+      }).filter(Boolean);
 
-        // Combine for comprehensive view
-        const combinedData = [...allDecryptedWh, ...decryptedStock];
-        setWarehouseData(combinedData);
-      }
+      // Combine for comprehensive view
+      const combinedData = [...allDecryptedWh, ...decryptedStock];
+      setWarehouseData(combinedData);
     } catch (error) {
       console.error('Error fetching warehouse data:', error);
     }
@@ -900,12 +872,7 @@ function App() {
     try {
       const response = await axios.get(`${API_BASE_URL}/api/sales`);
       if (response.data) {
-        const decryptedSales = response.data.map(item => {
-          try {
-            return { ...decryptData(item.data), _id: item._id };
-          } catch { return null; }
-        }).filter(Boolean);
-        setSalesRecords(decryptedSales);
+        setSalesRecords(Array.isArray(response.data) ? response.data : []);
       }
     } catch (error) {
       console.error('Error fetching sales:', error);
@@ -916,23 +883,20 @@ function App() {
   const fetchProducts = async () => {
     setIsLoading(true);
     try {
-      const response = await fetch(`${API_BASE_URL}/api/products`);
-      if (response.ok) {
-        const rawData = await response.json();
-        const decryptedProducts = rawData.map(record => {
-          const decrypted = decryptData(record.data);
-          // Sort brands within the product alphabetically
-          if (decrypted.brands && Array.isArray(decrypted.brands)) {
-            decrypted.brands.sort((a, b) => (a.brand || '').localeCompare(b.brand || '', undefined, { sensitivity: 'base' }));
-          }
-          return { ...decrypted, _id: record._id, createdAt: record.createdAt };
-        });
+      const response = await axios.get(`${API_BASE_URL}/api/products`);
+      const rawData = Array.isArray(response.data) ? response.data : [];
 
-        // Sort products alphabetically by name
-        decryptedProducts.sort((a, b) => (a.name || '').localeCompare(b.name || '', undefined, { sensitivity: 'base' }));
+      // Sort brands within each product alphabetically
+      rawData.forEach(p => {
+        if (p.brands && Array.isArray(p.brands)) {
+          p.brands.sort((a, b) => (a.brand || '').localeCompare(b.brand || '', undefined, { sensitivity: 'base' }));
+        }
+      });
 
-        setProducts(decryptedProducts);
-      }
+      // Sort products alphabetically by name
+      rawData.sort((a, b) => (a.name || '').localeCompare(b.name || '', undefined, { sensitivity: 'base' }));
+
+      setProducts(rawData);
     } catch (error) {
       console.error('Error fetching products:', error);
     } finally {
@@ -980,16 +944,8 @@ function App() {
   const fetchEmployees = async () => {
     setIsLoading(true);
     try {
-      const response = await fetch(`${API_BASE_URL}/api/employees`);
-      if (response.ok) {
-        const rawData = await response.json();
-        const decryptedEmployees = rawData.map(record => {
-          const decrypted = decryptData(record.data);
-          return { ...decrypted, _id: record._id, createdAt: record.createdAt };
-        });
-        // We don't necessarily need to store employees here if we fetch them in the component,
-        // but it's consistent with how other modules are handled in App.jsx.
-      }
+      await axios.get(`${API_BASE_URL}/api/employees`);
+      // Employees are fetched at the component level, but this keeps the pattern consistent
     } catch (error) {
       console.error('Error fetching employees:', error);
     } finally {

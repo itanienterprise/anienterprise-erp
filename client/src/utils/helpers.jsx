@@ -1,5 +1,5 @@
 import React from 'react';
-import axios from 'axios';
+import axios from './api';
 import { ChevronUpIcon, ChevronDownIcon } from '../components/Icons';
 
 // Set axios defaults for session handling

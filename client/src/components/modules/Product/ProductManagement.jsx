@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { PlusIcon, XIcon, EditIcon, TrashIcon, BoxIcon, ChevronDownIcon } from '../../Icons';
 import { API_BASE_URL } from '../../../utils/helpers';
-import { encryptData } from '../../../utils/encryption';
+import axios from '../../../utils/api';
 import './ProductManagement.css';
 
 const ProductManagement = ({ products, fetchProducts }) => {
@@ -63,25 +63,18 @@ const ProductManagement = ({ products, fetchProducts }) => {
         setIsSubmitting(true);
 
         try {
-            const encryptedPayload = { data: encryptData(productFormData) };
             const url = editingId
                 ? `${API_BASE_URL}/api/products/${editingId}`
                 : `${API_BASE_URL}/api/products`;
-            const method = editingId ? 'PUT' : 'POST';
 
-            const response = await fetch(url, {
-                method,
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(encryptedPayload)
-            });
-
-            if (response.ok) {
-                await fetchProducts();
-                setShowProductForm(false);
-                resetProductForm();
+            if (editingId) {
+                await axios.put(url, productFormData);
             } else {
-                console.error('Failed to save product');
+                await axios.post(url, productFormData);
             }
+            await fetchProducts();
+            setShowProductForm(false);
+            resetProductForm();
         } catch (error) {
             console.error('Error saving product:', error);
         } finally {
@@ -113,15 +106,8 @@ const ProductManagement = ({ products, fetchProducts }) => {
         if (!window.confirm('Are you sure you want to delete this product?')) return;
 
         try {
-            const response = await fetch(`${API_BASE_URL}/api/products/${id}`, {
-                method: 'DELETE'
-            });
-
-            if (response.ok) {
-                await fetchProducts();
-            } else {
-                console.error('Failed to delete product');
-            }
+            await axios.delete(`${API_BASE_URL}/api/products/${id}`);
+            await fetchProducts();
         } catch (error) {
             console.error('Error deleting product:', error);
         }

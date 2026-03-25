@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { EditIcon, TrashIcon, UserIcon, EyeIcon, XIcon, BoxIcon, SearchIcon } from '../../Icons';
 import { API_BASE_URL, SortIcon } from '../../../utils/helpers';
-import { encryptData, decryptData } from '../../../utils/encryption';
+import axios from '../../../utils/api';
 import './Importer.css';
 
 const Importer = ({
@@ -46,15 +46,8 @@ const Importer = ({
     const fetchImporters = async () => {
         setIsLoading(true);
         try {
-            const response = await fetch(`${API_BASE_URL}/api/importers`);
-            if (response.ok) {
-                const rawData = await response.json();
-                const decryptedImporters = rawData.map(record => {
-                    const decrypted = decryptData(record.data);
-                    return { ...decrypted, _id: record._id, createdAt: record.createdAt };
-                });
-                setImporters(decryptedImporters);
-            }
+            const response = await axios.get(`${API_BASE_URL}/api/importers`);
+            setImporters(Array.isArray(response.data) ? response.data : []);
         } catch (error) {
             console.error('Error fetching importers:', error);
         } finally {
@@ -98,27 +91,19 @@ const Importer = ({
             const url = editingId
                 ? `${API_BASE_URL}/api/importers/${editingId}`
                 : `${API_BASE_URL}/api/importers`;
-            const encryptedPayload = { data: encryptData(formData) };
-            const response = await fetch(url, {
-                method: editingId ? 'PUT' : 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify(encryptedPayload),
-            });
-
-            if (response.ok) {
-                setSubmitStatus('success');
-                fetchImporters();
-                setTimeout(() => {
-                    setShowForm(false);
-                    setEditingId(null);
-                    resetForm();
-                    setSubmitStatus(null);
-                }, 2000);
+            if (editingId) {
+                await axios.put(url, formData);
             } else {
-                setSubmitStatus('error');
+                await axios.post(url, formData);
             }
+            setSubmitStatus('success');
+            fetchImporters();
+            setTimeout(() => {
+                setShowForm(false);
+                setEditingId(null);
+                resetForm();
+                setSubmitStatus(null);
+            }, 2000);
         } catch (error) {
             console.error('Error saving importer:', error);
             setSubmitStatus('error');

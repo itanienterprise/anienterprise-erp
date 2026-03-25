@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { SearchIcon, PlusIcon, EditIcon, TrashIcon, UserIcon, XIcon } from '../../Icons';
 import { API_BASE_URL, formatDate } from '../../../utils/helpers';
 import { encryptData, decryptData } from '../../../utils/encryption';
-import axios from 'axios';
+import axios from '../../../utils/api';
 
 const Bank = ({ onDeleteConfirm }) => {
     const [banks, setBanks] = useState([]);
@@ -25,15 +25,8 @@ const Bank = ({ onDeleteConfirm }) => {
     const fetchBanks = async () => {
         setIsLoading(true);
         try {
-            const response = await fetch(`${API_BASE_URL}/api/banks`);
-            if (response.ok) {
-                const rawData = await response.json();
-                const decryptedBanks = rawData.map(record => {
-                    const decrypted = decryptData(record.data);
-                    return { ...decrypted, _id: record._id, createdAt: record.createdAt };
-                });
-                setBanks(decryptedBanks);
-            }
+            const response = await axios.get(`${API_BASE_URL}/api/banks`);
+            setBanks(Array.isArray(response.data) ? response.data : []);
         } catch (error) {
             console.error('Error fetching banks:', error);
         } finally {
@@ -76,25 +69,21 @@ const Bank = ({ onDeleteConfirm }) => {
             const url = editingId
                 ? `${API_BASE_URL}/api/banks/${editingId}`
                 : `${API_BASE_URL}/api/banks`;
-            const encryptedPayload = { data: encryptData(formData) };
-            const response = await fetch(url, {
-                method: editingId ? 'PUT' : 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(encryptedPayload),
-            });
 
-            if (response.ok) {
-                setSubmitStatus('success');
-                fetchBanks();
-                setTimeout(() => {
-                    setShowForm(false);
-                    setEditingId(null);
-                    resetForm();
-                    setSubmitStatus(null);
-                }, 2000);
+            if (editingId) {
+                await axios.put(url, formData);
             } else {
-                setSubmitStatus('error');
+                await axios.post(url, formData);
             }
+
+            setSubmitStatus('success');
+            fetchBanks();
+            setTimeout(() => {
+                setShowForm(false);
+                setEditingId(null);
+                resetForm();
+                setSubmitStatus(null);
+            }, 2000);
         } catch (error) {
             console.error('Error saving bank:', error);
             setSubmitStatus('error');

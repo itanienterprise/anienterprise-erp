@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
-import axios from 'axios';
+import axios from '../../../utils/api';
 import {
     SearchIcon, FunnelIcon, XIcon, BarChartIcon, EditIcon, TrashIcon, BoxIcon, ChevronDownIcon, ChevronUpIcon, PlusIcon, EyeIcon, CheckIcon
 } from '../../Icons';
@@ -408,24 +408,24 @@ function LCReceive({
             const stockData = Array.isArray(stockRes.data) ? stockRes.data : [];
 
             // 1. Calculate Global InHouse Totals from ALL Stock Data
+            // Stock records still have an encrypted .data field
             const globalInHouseMap = {};
             stockData.forEach(item => {
                 try {
-                    const d = decryptData(item.data);
+                    const d = item.data ? decryptData(item.data) : item;
                     const key = `${(d.productName || d.product || '').trim()}_${(d.brand || '').trim()}`;
                     if (!globalInHouseMap[key]) globalInHouseMap[key] = true;
                 } catch { }
             });
 
-            // 2. Decrypt all Warehouse records and check for LC source
+            // 2. Warehouse records are now server-decrypted plain objects
             const allDecryptedWh = whData.map(item => {
-                const decrypted = decryptData(item.data);
-                const key = `${(decrypted.product || decrypted.productName || '').trim()}_${(decrypted.brand || '').trim()}`;
+                // item is already plain data; no need to decrypt
+                const key = `${(item.product || item.productName || '').trim()}_${(item.brand || '').trim()}`;
                 return {
-                    ...decrypted,
-                    productName: decrypted.product,
-                    packetSize: decrypted.packetSize || (decrypted.whQty && decrypted.whPkt ? (parseFloat(decrypted.whQty) / parseFloat(decrypted.whPkt)).toFixed(0) : 0),
-                    _id: item._id,
+                    ...item,
+                    productName: item.product,
+                    packetSize: item.packetSize || (item.whQty && item.whPkt ? (parseFloat(item.whQty) / parseFloat(item.whPkt)).toFixed(0) : 0),
                     hasLCRecord: globalInHouseMap[key] !== undefined
                 };
             }).filter(Boolean);
@@ -448,10 +448,10 @@ function LCReceive({
                 whQty: d.whQty
             }));
 
-            // Decrypt and normalize Stock records
+            // Decrypt and normalize Stock records (stock still has encrypted .data)
             const decryptedStock = stockData.map(item => {
                 try {
-                    const d = decryptData(item.data);
+                    const d = item.data ? decryptData(item.data) : item;
                     const rawWh = (d.warehouse || '').trim();
                     if (!rawWh) return null;
                     return {
@@ -800,11 +800,7 @@ function LCReceive({
             const updatedProductData = { ...product, brands: updatedBrands };
 
             // Remove helper fields before encrypting and sending to backend
-            const { _id, createdAt, ...dataToEncrypt } = updatedProductData;
-
-            await axios.put(`${API_BASE_URL}/api/products/${product._id}`, {
-                data: encryptData(dataToEncrypt)
-            });
+            await axios.put(`${API_BASE_URL}/api/products/${product._id}`, dataToEncrypt);
 
             if (fetchProducts) await fetchProducts();
 
@@ -950,13 +946,11 @@ function LCReceive({
                             totalInHouseQuantity: brandEntry.inHouseQuantity,
                         };
 
-                        const encryptedData = encryptData(recordData);
-
                         if (brandEntry._id) {
                             validIds.add(brandEntry._id);
-                            promises.push(axios.put(`${API_BASE_URL}/api/stock/${brandEntry._id}`, { data: encryptedData }));
+                            promises.push(axios.put(`${API_BASE_URL}/api/stock/${brandEntry._id}`, recordData));
                         } else {
-                            promises.push(axios.post(`${API_BASE_URL}/api/stock`, { data: encryptedData }));
+                            promises.push(axios.post(`${API_BASE_URL}/api/stock`, recordData));
                         }
                     }
                 }

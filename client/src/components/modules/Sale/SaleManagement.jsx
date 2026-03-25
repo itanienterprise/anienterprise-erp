@@ -4,7 +4,7 @@ import { generateSaleInvoicePDF } from '../../../utils/pdfGenerator';
 import { API_BASE_URL, SortIcon, formatDate } from '../../../utils/helpers';
 import { encryptData, decryptData } from '../../../utils/encryption';
 import CustomDatePicker from '../../shared/CustomDatePicker';
-import axios from 'axios';
+import axios from '../../../utils/api';
 import './SaleManagement.css';
 
 const getSafeString = (val) => {
@@ -140,11 +140,11 @@ const SaleManagement = ({
                 // Update due amount
                 updatedSale.dueAmount = Math.max(0, (parseFloat(updatedSale.totalAmount) || 0) - (parseFloat(updatedSale.discount) || 0) - (parseFloat(updatedSale.paidAmount) || 0));
 
-                const { _id, createdAt, ...dataToEncrypt } = updatedSale;
+                const { _id, createdAt, ...dataToSend } = updatedSale;
 
-                return axios.put(`${API_BASE_URL}/api/sales/${id}`, {
-                    data: encryptData(dataToEncrypt)
-                });
+                if (id) {
+                    return axios.put(`${API_BASE_URL}/api/sales/${id}`, dataToSend);
+                }
             });
 
             await Promise.all(updates);
@@ -207,54 +207,47 @@ const SaleManagement = ({
         // Update Customer History
         if (targetCustomerId) {
             try {
-                const custRes = await fetch(`${API_BASE_URL}/api/customers/${targetCustomerId}`);
-                if (custRes.ok) {
-                    const custRecord = await custRes.json();
-                    const customer = decryptData(custRecord.data);
+                const custRes = await axios.get(`${API_BASE_URL}/api/customers/${targetCustomerId}`);
+                const customer = custRes.data;
 
-                    const newSaleEntries = [];
-                    (saleData.items || []).forEach((product, pIdx) => {
-                        (product.brandEntries || []).forEach((entry, eIdx) => {
-                            const isFirstEntry = pIdx === 0 && eIdx === 0;
-                            newSaleEntries.push({
-                                id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-                                date: saleData.date,
-                                invoiceNo: saleData.invoiceNo,
-                                lcNo: saleData.lcNo || '',
-                                product: product.productName || '',
-                                brand: entry.brand || '',
-                                quantity: entry.quantity || 0,
-                                rate: entry.unitPrice || 0,
-                                truck: entry.truck || '',
-                                amount: entry.totalAmount || 0,
-                                paid: isFirstEntry ? (parseFloat(saleData.paidAmount) || 0) : 0,
-                                due: isFirstEntry ? (parseFloat(saleData.dueAmount) || 0) : (entry.totalAmount || 0),
-                                discount: isFirstEntry ? (parseFloat(saleData.discount) || 0) : 0,
-                                warehouse: entry.warehouseName || '',
-                                requestedBy: saleData.requestedBy || '',
-                                requestedByUsername: saleData.requestedByUsername || '',
-                                acceptedBy: saleData.acceptedBy || '',
-                                status: 'Pending'
-                            });
+                const newSaleEntries = [];
+                (saleData.items || []).forEach((product, pIdx) => {
+                    (product.brandEntries || []).forEach((entry, eIdx) => {
+                        const isFirstEntry = pIdx === 0 && eIdx === 0;
+                        newSaleEntries.push({
+                            id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+                            date: saleData.date,
+                            invoiceNo: saleData.invoiceNo,
+                            lcNo: saleData.lcNo || '',
+                            product: product.productName || '',
+                            brand: entry.brand || '',
+                            quantity: entry.quantity || 0,
+                            rate: entry.unitPrice || 0,
+                            truck: entry.truck || '',
+                            amount: entry.totalAmount || 0,
+                            paid: isFirstEntry ? (parseFloat(saleData.paidAmount) || 0) : 0,
+                            due: isFirstEntry ? (parseFloat(saleData.dueAmount) || 0) : (entry.totalAmount || 0),
+                            discount: isFirstEntry ? (parseFloat(saleData.discount) || 0) : 0,
+                            warehouse: entry.warehouseName || '',
+                            requestedBy: saleData.requestedBy || '',
+                            requestedByUsername: saleData.requestedByUsername || '',
+                            acceptedBy: saleData.acceptedBy || '',
+                            status: 'Pending'
                         });
                     });
+                });
 
-                    let baseHistory = customer.salesHistory || [];
-                    if (isEditing) {
-                        baseHistory = baseHistory.filter(item => item.invoiceNo !== saleData.invoiceNo);
-                    }
-
-                    const updatedCustomer = {
-                        ...customer,
-                        salesHistory: [...newSaleEntries, ...baseHistory]
-                    };
-
-                    await fetch(`${API_BASE_URL}/api/customers/${targetCustomerId}`, {
-                        method: 'PUT',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ data: encryptData(updatedCustomer) }),
-                    });
+                let baseHistory = customer.salesHistory || [];
+                if (isEditing) {
+                    baseHistory = baseHistory.filter(item => item.invoiceNo !== saleData.invoiceNo);
                 }
+
+                const updatedCustomer = {
+                    ...customer,
+                    salesHistory: [...newSaleEntries, ...baseHistory]
+                };
+
+                await axios.put(`${API_BASE_URL}/api/customers/${targetCustomerId}`, updatedCustomer);
             } catch (err) {
                 console.error('Error updating customer history:', err);
             }
@@ -263,50 +256,40 @@ const SaleManagement = ({
         // Border Sale: Auto-deduct sold Qty from matching warehouse records
         if (saleData.saleType === 'Border') {
             try {
-                const whRes = await fetch(`${API_BASE_URL}/api/warehouses`);
-                if (whRes.ok) {
-                    const rawWarehouses = await whRes.json();
-                    const liveWarehouses = rawWarehouses.map(record => ({
-                        ...decryptData(record.data),
-                        _id: record._id
-                    }));
+                const whRes = await axios.get(`${API_BASE_URL}/api/warehouses`);
+                const liveWarehouses = Array.isArray(whRes.data) ? whRes.data : [];
 
-                    const deductions = {};
-                    (saleData.items || []).forEach(product => {
-                        const soldProductName = (product.productName || '').trim().toLowerCase();
-                        (product.brandEntries || []).forEach(entry => {
-                            const soldQty = parseFloat(entry.quantity) || 0;
-                            if (soldQty === 0) return;
+                const deductions = {};
+                (saleData.items || []).forEach(product => {
+                    const soldProductName = (product.productName || '').trim().toLowerCase();
+                    (product.brandEntries || []).forEach(entry => {
+                        const soldQty = parseFloat(entry.quantity) || 0;
+                        if (soldQty === 0) return;
 
-                            const matchingWh = liveWarehouses.find(wh => {
-                                const whProduct = (wh.productName || wh.product || '').trim().toLowerCase();
-                                return whProduct === soldProductName;
-                            });
-
-                            if (matchingWh) {
-                                if (!deductions[matchingWh._id]) {
-                                    deductions[matchingWh._id] = { wh: matchingWh, totalDeduct: 0 };
-                                }
-                                deductions[matchingWh._id].totalDeduct += soldQty;
-                            }
+                        const matchingWh = liveWarehouses.find(wh => {
+                            const whProduct = (wh.productName || wh.product || '').trim().toLowerCase();
+                            return whProduct === soldProductName;
                         });
-                    });
 
-                    await Promise.all(
-                        Object.values(deductions).map(async ({ wh, totalDeduct }) => {
-                            const currentQty = parseFloat(wh.whQty) || 0;
-                            const updatedWh = {
-                                ...wh,
-                                whQty: Math.max(0, currentQty - totalDeduct).toString()
-                            };
-                            await fetch(`${API_BASE_URL}/api/warehouses/${wh._id}`, {
-                                method: 'PUT',
-                                headers: { 'Content-Type': 'application/json' },
-                                body: JSON.stringify({ data: encryptData(updatedWh) }),
-                            });
-                        })
-                    );
-                }
+                        if (matchingWh) {
+                            if (!deductions[matchingWh._id]) {
+                                deductions[matchingWh._id] = { wh: matchingWh, totalDeduct: 0 };
+                            }
+                            deductions[matchingWh._id].totalDeduct += soldQty;
+                        }
+                    });
+                });
+
+                await Promise.all(
+                    Object.values(deductions).map(async ({ wh, totalDeduct }) => {
+                        const currentQty = parseFloat(wh.whQty) || 0;
+                        const updatedWh = {
+                            ...wh,
+                            whQty: Math.max(0, currentQty - totalDeduct).toString()
+                        };
+                        await axios.put(`${API_BASE_URL}/api/warehouses/${wh._id}`, updatedWh);
+                    })
+                );
             } catch (err) {
                 console.error('Error auto-deducting warehouse stock:', err);
             }
@@ -329,7 +312,7 @@ const SaleManagement = ({
             };
 
             console.log(`[handleStatusUpdate] Sending PUT request with data:`, updatedData);
-            const response = await axios.put(`${API_BASE_URL}/api/sales/${_id}`, { data: encryptData(updatedData) });
+            const response = await axios.put(`${API_BASE_URL}/api/sales/${_id}`, updatedData);
             console.log(`[handleStatusUpdate] Response status:`, response.status);
 
             if (response.status >= 200 && response.status < 300) {
@@ -565,34 +548,28 @@ const SaleManagement = ({
     const fetchSales = async () => {
         setIsLoading(true);
         try {
-            const response = await fetch(`${API_BASE_URL}/api/sales`);
-            if (response.ok) {
-                const rawData = await response.json();
-                const decryptedSales = rawData.map(record => {
-                    const decrypted = decryptData(record.data);
-                    return { ...decrypted, _id: record._id, createdAt: record.createdAt };
-                }).filter(Boolean);
+            const response = await axios.get(`${API_BASE_URL}/api/sales`);
+            const decryptedSales = Array.isArray(response.data) ? response.data : [];
 
-                setAllSalesRecords(decryptedSales);
+            setAllSalesRecords(decryptedSales);
 
-                // Filter by saleType. Match legacy records to 'General' ONLY if they are not legacy Border sales.
-                const filteredSales = decryptedSales.filter(s => {
-                    const sTypeLow = (s.saleType || '').toLowerCase().trim();
-                    const isBorder = sTypeLow === 'border' || sTypeLow === 'border sale' ||
-                        (s.invoiceNo || '').startsWith('BS') ||
-                        (!s.saleType && !!(s.lcNo || s.port || s.importer));
+            // Filter by saleType
+            const filteredSales = decryptedSales.filter(s => {
+                const sTypeLow = (s.saleType || '').toLowerCase().trim();
+                const isBorder = sTypeLow === 'border' || sTypeLow === 'border sale' ||
+                    (s.invoiceNo || '').startsWith('BS') ||
+                    (!s.saleType && !!(s.lcNo || s.port || s.importer));
 
-                    if (saleType === 'General') {
-                        return !isBorder && (sTypeLow === 'general' || sTypeLow === 'general sale' || !s.saleType || (s.invoiceNo || '').startsWith('GS'));
-                    }
-                    if (saleType === 'Border') {
-                        return isBorder;
-                    }
-                    return sTypeLow === saleType.toLowerCase();
-                });
+                if (saleType === 'General') {
+                    return !isBorder && (sTypeLow === 'general' || sTypeLow === 'general sale' || !s.saleType || (s.invoiceNo || '').startsWith('GS'));
+                }
+                if (saleType === 'Border') {
+                    return isBorder;
+                }
+                return sTypeLow === saleType.toLowerCase();
+            });
 
-                setSales(filteredSales);
-            }
+            setSales(filteredSales);
         } catch (error) {
             console.error('Error fetching sales:', error);
         } finally {
@@ -602,15 +579,8 @@ const SaleManagement = ({
 
     const fetchCustomers = async () => {
         try {
-            const response = await fetch(`${API_BASE_URL}/api/customers`);
-            if (response.ok) {
-                const rawData = await response.json();
-                const decryptedRes = rawData.map(record => {
-                    const decrypted = decryptData(record.data);
-                    return { ...decrypted, _id: record._id };
-                });
-                setCustomers(decryptedRes);
-            }
+            const response = await axios.get(`${API_BASE_URL}/api/customers`);
+            setCustomers(Array.isArray(response.data) ? response.data : []);
         } catch (error) {
             console.error('Error fetching customers:', error);
         }
@@ -618,49 +588,26 @@ const SaleManagement = ({
 
     const fetchProducts = async () => {
         try {
-            const response = await fetch(`${API_BASE_URL}/api/products`);
-            if (response.ok) {
-                const rawData = await response.json();
-                const decryptedRes = rawData.map(record => {
-                    const decrypted = decryptData(record.data);
-                    return { ...decrypted, _id: record._id };
-                });
-                setProducts(decryptedRes);
-            }
+            const response = await axios.get(`${API_BASE_URL}/api/products`);
+            setProducts(Array.isArray(response.data) ? response.data : []);
         } catch (error) {
             console.error('Error fetching products:', error);
         }
     };
     const fetchWarehouses = async () => {
         try {
-            const response = await fetch(`${API_BASE_URL}/api/warehouses`);
-            if (response.ok) {
-                const rawData = await response.json();
-                const decryptedRes = rawData.map(record => {
-                    const decrypted = decryptData(record.data);
-                    return { ...decrypted, _id: record._id };
-                });
-                setWarehouses(decryptedRes);
-            }
+            const response = await axios.get(`${API_BASE_URL}/api/warehouses`);
+            setWarehouses(Array.isArray(response.data) ? response.data : []);
         } catch (error) {
             console.error('Error fetching warehouses:', error);
         }
     };
     const fetchStockRecords = async () => {
         try {
-            const response = await fetch(`${API_BASE_URL}/api/stock`);
-            if (response.ok) {
-                const rawData = await response.json();
-                const decryptedRes = rawData.map(record => {
-                    try {
-                        const decrypted = decryptData(record.data);
-                        return { ...decrypted, _id: record._id };
-                    } catch (err) {
-                        return null;
-                    }
-                }).filter(Boolean);
-                setStockRecords(decryptedRes);
-            }
+            const response = await axios.get(`${API_BASE_URL}/api/stock`);
+            // Stock records are now decrypted server-side or by axios interceptor
+            const decryptedStock = Array.isArray(response.data) ? response.data : [];
+            setStockRecords(decryptedStock);
         } catch (error) {
             console.error('Error fetching stock records:', error);
         }
@@ -668,15 +615,8 @@ const SaleManagement = ({
 
     const fetchImportersList = async () => {
         try {
-            const response = await fetch(`${API_BASE_URL}/api/importers`);
-            if (response.ok) {
-                const rawData = await response.json();
-                const decryptedRes = rawData.map(record => {
-                    const decrypted = decryptData(record.data);
-                    return { ...decrypted, _id: record._id };
-                });
-                setImportersList(decryptedRes);
-            }
+            const response = await axios.get(`${API_BASE_URL}/api/importers`);
+            setImportersList(Array.isArray(response.data) ? response.data : []);
         } catch (error) {
             console.error('Error fetching importers:', error);
         }
@@ -684,15 +624,8 @@ const SaleManagement = ({
 
     const fetchPortsList = async () => {
         try {
-            const response = await fetch(`${API_BASE_URL}/api/ports`);
-            if (response.ok) {
-                const rawData = await response.json();
-                const decryptedRes = rawData.map(record => {
-                    const decrypted = decryptData(record.data);
-                    return { ...decrypted, _id: record._id };
-                });
-                setPortsList(decryptedRes);
-            }
+            const response = await axios.get(`${API_BASE_URL}/api/ports`);
+            setPortsList(Array.isArray(response.data) ? response.data : []);
         } catch (error) {
             console.error('Error fetching ports:', error);
         }
@@ -1125,14 +1058,15 @@ const SaleManagement = ({
         setSubmitStatus(null);
         try {
             const url = editingId ? `${API_BASE_URL}/api/sales/${editingId}` : `${API_BASE_URL}/api/sales`;
-            const encryptedPayload = { data: encryptData(formData) };
-            const response = await fetch(url, {
-                method: editingId ? 'PUT' : 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(encryptedPayload),
-            });
+            
+            let response;
+            if (editingId) {
+                response = await axios.put(url, formData);
+            } else {
+                response = await axios.post(url, formData);
+            }
 
-            if (response.ok) {
+            if (response.status >= 200 && response.status < 300) {
                 setSubmitStatus('success');
 
                 const currentStatus = (formData.status || '').toLowerCase();

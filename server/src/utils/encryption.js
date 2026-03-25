@@ -1,6 +1,6 @@
 const CryptoJS = require('crypto-js');
 
-const SECRET_KEY = 'ani1820';
+const SECRET_KEY = process.env.SECRET_KEY || 'ani1820'; // Fallback for safety, but should be in .env
 
 const encryptData = (data) => {
     if (!data) return data;
@@ -25,4 +25,18 @@ const decryptData = (ciphertext) => {
     }
 };
 
-module.exports = { encryptData, decryptData };
+/**
+ * Verifies an HMAC signature for a payload and timestamp.
+ */
+const verifySignature = (payload, timestamp, signature) => {
+    try {
+        const dataToSign = `${JSON.stringify(payload)}|${timestamp}`;
+        const expectedSignature = CryptoJS.HmacSHA256(dataToSign, SECRET_KEY).toString();
+        return expectedSignature === signature;
+    } catch (error) {
+        console.error('Signature verification error:', error);
+        return false;
+    }
+};
+
+module.exports = { encryptData, decryptData, verifySignature };

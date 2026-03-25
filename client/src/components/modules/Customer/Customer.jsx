@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { EditIcon, TrashIcon, UserIcon, XIcon, SearchIcon, FunnelIcon, ChevronDownIcon, ChevronUpIcon, EyeIcon, BoxIcon, FileTextIcon, BarChartIcon, PrinterIcon } from '../../Icons';
-import { API_BASE_URL, SortIcon, formatDate } from '../../../utils/helpers';
+import { SortIcon, formatDate } from '../../../utils/helpers';
 import { generateSaleInvoicePDF, generateCustomerHistoryPDF } from '../../../utils/pdfGenerator';
-import { encryptData, decryptData } from '../../../utils/encryption';
+import { api } from '../../../utils/api';
 import CustomDatePicker from '../../shared/CustomDatePicker';
 import CustomerReport from './CustomerReport';
 import './Customer.css';
@@ -211,15 +211,8 @@ const Customer = ({
     const fetchCustomers = async () => {
         setIsLoading(true);
         try {
-            const response = await fetch(`${API_BASE_URL}/api/customers`);
-            if (response.ok) {
-                const rawData = await response.json();
-                const decryptedCustomers = rawData.map(record => {
-                    const decrypted = decryptData(record.data);
-                    return { ...decrypted, _id: record._id, createdAt: record.createdAt };
-                });
-                setCustomers(decryptedCustomers);
-            }
+            const decryptedCustomers = await api.get('/api/customers');
+            setCustomers(decryptedCustomers);
         } catch (error) {
             console.error('Error fetching customers:', error);
         } finally {
@@ -256,25 +249,20 @@ const Customer = ({
         setIsSubmitting(true);
         setSubmitStatus(null);
         try {
-            const url = editingId ? `${API_BASE_URL}/api/customers/${editingId}` : `${API_BASE_URL}/api/customers`;
-            const encryptedPayload = { data: encryptData(formData) };
-            const response = await fetch(url, {
-                method: editingId ? 'PUT' : 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(encryptedPayload),
-            });
-            if (response.ok) {
-                setSubmitStatus('success');
-                fetchCustomers();
-                setTimeout(() => {
-                    setShowForm(false);
-                    setEditingId(null);
-                    resetForm();
-                    setSubmitStatus(null);
-                }, 2000);
+            const url = editingId ? `/api/customers/${editingId}` : `/api/customers`;
+            if (editingId) {
+                await api.put(url, formData);
             } else {
-                setSubmitStatus('error');
+                await api.post(url, formData);
             }
+            setSubmitStatus('success');
+            fetchCustomers();
+            setTimeout(() => {
+                setShowForm(false);
+                setEditingId(null);
+                resetForm();
+                setSubmitStatus(null);
+            }, 2000);
         } catch (error) {
             console.error('Error saving customer:', error);
             setSubmitStatus('error');
@@ -295,11 +283,7 @@ const Customer = ({
         setIsSubmitting(true);
         try {
             // Get current customer record
-            const response = await fetch(`${API_BASE_URL}/api/customers/${viewData._id}`);
-            if (!response.ok) throw new Error('Failed to fetch customer');
-
-            const record = await response.json();
-            const customer = decryptData(record.data);
+            const customer = await api.get(`/api/customers/${viewData._id}`);
 
             // Add new payment to history
             const newPayment = {
@@ -313,32 +297,26 @@ const Customer = ({
             };
 
             // Save updated customer
-            const saveResponse = await fetch(`${API_BASE_URL}/api/customers/${viewData._id}`, {
-                method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ data: encryptData(updatedCustomer) }),
-            });
+            await api.put(`/api/customers/${viewData._id}`, updatedCustomer);
 
-            if (saveResponse.ok) {
-                setSubmitStatus('success');
-                fetchCustomers();
-                setViewData({ ...updatedCustomer, _id: viewData._id }); // Update modal view
-                setTimeout(() => {
-                    setShowPaymentForm(false);
-                    setSubmitStatus(null);
-                    setPaymentFormData({
-                        date: new Date().toISOString().split('T')[0],
-                        method: 'Bank',
-                        bankName: '',
-                        mobileType: '',
-                        accountNo: '',
-                        branch: '',
-                        amount: '',
-                        reference: '',
-                        status: 'Completed'
-                    });
-                }, 1500);
-            }
+            setSubmitStatus('success');
+            fetchCustomers();
+            setViewData({ ...updatedCustomer, _id: viewData._id }); // Update modal view
+            setTimeout(() => {
+                setShowPaymentForm(false);
+                setSubmitStatus(null);
+                setPaymentFormData({
+                    date: new Date().toISOString().split('T')[0],
+                    method: 'Bank',
+                    bankName: '',
+                    mobileType: '',
+                    accountNo: '',
+                    branch: '',
+                    amount: '',
+                    reference: '',
+                    status: 'Completed'
+                });
+            }, 1500);
         } catch (error) {
             console.error('Error saving payment:', error);
             setSubmitStatus('error');

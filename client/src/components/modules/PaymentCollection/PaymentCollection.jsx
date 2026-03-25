@@ -3,7 +3,7 @@ import { SearchIcon, FunnelIcon, DollarSignIcon, EyeIcon, PlusIcon, XIcon, Chevr
 import { API_BASE_URL, formatDate, SortIcon } from '../../../utils/helpers';
 import { decryptData, encryptData } from '../../../utils/encryption';
 import CustomDatePicker from '../../shared/CustomDatePicker';
-import axios from 'axios';
+import axios from '../../../utils/api';
 import PaymentCollectionReport from './PaymentCollectionReport';
 import './PaymentCollection.css';
 
@@ -85,21 +85,18 @@ const PaymentCollection = () => {
 
     const fetchBanks = async () => {
         try {
-            const response = await fetch(`${API_BASE_URL}/api/banks`);
-            if (response.ok) {
-                const rawData = await response.json();
-                const decryptedBanks = rawData.map(record => {
-                    const decrypted = decryptData(record.data);
-                    // Handle backwards compatibility for single-branch records
-                    const branches = decrypted.branches || [{
-                        branch: decrypted.branch,
-                        accountName: decrypted.accountName,
-                        accountNo: decrypted.accountNo
-                    }];
-                    return { ...decrypted, branches, _id: record._id };
-                });
-                setBanks(decryptedBanks);
-            }
+            const response = await axios.get(`${API_BASE_URL}/api/banks`);
+            const rawData = Array.isArray(response.data) ? response.data : [];
+            // Handle backwards compatibility for single-branch records
+            const decryptedBanks = rawData.map(bank => {
+                const branches = bank.branches || [{
+                    branch: bank.branch,
+                    accountName: bank.accountName,
+                    accountNo: bank.accountNo
+                }];
+                return { ...bank, branches };
+            });
+            setBanks(decryptedBanks);
         } catch (error) {
             console.error('Error fetching banks:', error);
         }
@@ -191,31 +188,28 @@ const PaymentCollection = () => {
     const fetchPayments = async () => {
         setIsLoading(true);
         try {
-            const response = await fetch(`${API_BASE_URL}/api/customers`);
-            if (response.ok) {
-                const rawData = await response.json();
-                const allPayments = [];
-                const customersList = [];
+            const response = await axios.get(`${API_BASE_URL}/api/customers`);
+            const rawData = Array.isArray(response.data) ? response.data : [];
+            const allPayments = [];
+            const customersList = [];
 
-                rawData.forEach(record => {
-                    const customer = decryptData(record.data);
-                    customersList.push({ ...customer, _id: record._id });
+            rawData.forEach(customer => {
+                customersList.push(customer);
 
-                    const customerHistory = customer.paymentHistory || [];
-                    customerHistory.forEach(payment => {
-                        allPayments.push({
-                            ...payment,
-                            customerId: record._id,
-                            customerName: customer.customerName,
-                            companyName: customer.companyName,
-                            readableCustomerId: customer.customerId
-                        });
+                const customerHistory = customer.paymentHistory || [];
+                customerHistory.forEach(payment => {
+                    allPayments.push({
+                        ...payment,
+                        customerId: customer._id,
+                        customerName: customer.customerName,
+                        companyName: customer.companyName,
+                        readableCustomerId: customer.customerId
                     });
                 });
+            });
 
-                setPayments(allPayments);
-                setRawCustomers(customersList);
-            }
+            setPayments(allPayments);
+            setRawCustomers(customersList);
         } catch (error) {
             console.error('Error fetching payments:', error);
         } finally {
@@ -260,18 +254,12 @@ const PaymentCollection = () => {
     const handleDeletePayment = async (payment) => {
         if (!window.confirm('Are you sure you want to delete this payment record?')) return;
         try {
-            const response = await fetch(`${API_BASE_URL}/api/customers/${payment.customerId}`);
-            if (!response.ok) throw new Error('Failed to fetch customer');
-            const record = await response.json();
-            const customer = decryptData(record.data);
+            const custRes = await axios.get(`${API_BASE_URL}/api/customers/${payment.customerId}`);
+            const customer = custRes.data;
             const updatedHistory = (customer.paymentHistory || []).filter(p => p.id !== payment.id);
             const updatedCustomer = { ...customer, paymentHistory: updatedHistory };
-            const saveResponse = await fetch(`${API_BASE_URL}/api/customers/${payment.customerId}`, {
-                method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ data: encryptData(updatedCustomer) }),
-            });
-            if (saveResponse.ok) fetchPayments();
+            await axios.put(`${API_BASE_URL}/api/customers/${payment.customerId}`, updatedCustomer);
+            fetchPayments();
         } catch (error) {
             console.error('Error deleting payment:', error);
         }
@@ -308,14 +296,9 @@ const PaymentCollection = () => {
         setIsSubmitting(true);
         setSubmitStatus(null);
         try {
-            // Get current customer record
-            const response = await fetch(`${API_BASE_URL}/api/customers/${newPayment.customerId}`);
-            if (!response.ok) throw new Error('Failed to fetch customer');
+            const custRes = await axios.get(`${API_BASE_URL}/api/customers/${newPayment.customerId}`);
+            const customer = custRes.data;
 
-            const record = await response.json();
-            const customer = decryptData(record.data);
-
-            // Add new payments to history
             const paymentEntries = newPayment.items
                 .filter(item => parseFloat(item.amount) > 0)
                 .map(item => ({
@@ -337,24 +320,14 @@ const PaymentCollection = () => {
                 paymentHistory: [...paymentEntries, ...(customer.paymentHistory || [])]
             };
 
-            // Save updated customer
-            const saveResponse = await fetch(`${API_BASE_URL}/api/customers/${newPayment.customerId}`, {
-                method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ data: encryptData(updatedCustomer) }),
-            });
-
-            if (saveResponse.ok) {
-                setSubmitStatus('success');
-                fetchPayments();
-                setTimeout(() => {
-                    setShowAddModal(false);
-                    setSubmitStatus(null);
-                    resetNewPayment();
-                }, 1500);
-            } else {
-                setSubmitStatus('error');
-            }
+            await axios.put(`${API_BASE_URL}/api/customers/${newPayment.customerId}`, updatedCustomer);
+            setSubmitStatus('success');
+            fetchPayments();
+            setTimeout(() => {
+                setShowAddModal(false);
+                setSubmitStatus(null);
+                resetNewPayment();
+            }, 1500);
         } catch (error) {
             console.error('Error saving collection:', error);
             setSubmitStatus('error');
@@ -371,11 +344,8 @@ const PaymentCollection = () => {
         setIsSubmitting(true);
         setSubmitStatus(null);
         try {
-            const response = await fetch(`${API_BASE_URL}/api/customers/${newPayment.customerId}`);
-            if (!response.ok) throw new Error('Failed to fetch customer');
-
-            const record = await response.json();
-            const customer = decryptData(record.data);
+            const custRes = await axios.get(`${API_BASE_URL}/api/customers/${newPayment.customerId}`);
+            const customer = custRes.data;
 
             const updatedHistory = (customer.paymentHistory || []).map(p => {
                 if (p.id === editingPayment.id) {
@@ -397,24 +367,14 @@ const PaymentCollection = () => {
             });
 
             const updatedCustomer = { ...customer, paymentHistory: updatedHistory };
-
-            const saveResponse = await fetch(`${API_BASE_URL}/api/customers/${newPayment.customerId}`, {
-                method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ data: encryptData(updatedCustomer) }),
-            });
-
-            if (saveResponse.ok) {
-                setSubmitStatus('success');
-                fetchPayments();
-                setTimeout(() => {
-                    setShowAddModal(false);
-                    setSubmitStatus(null);
-                    resetNewPayment();
-                }, 1500);
-            } else {
-                setSubmitStatus('error');
-            }
+            await axios.put(`${API_BASE_URL}/api/customers/${newPayment.customerId}`, updatedCustomer);
+            setSubmitStatus('success');
+            fetchPayments();
+            setTimeout(() => {
+                setShowAddModal(false);
+                setSubmitStatus(null);
+                resetNewPayment();
+            }, 1500);
         } catch (error) {
             console.error('Error updating collection:', error);
             setSubmitStatus('error');

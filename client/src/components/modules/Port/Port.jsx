@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { EditIcon, TrashIcon, AnchorIcon } from '../../Icons';
 import { API_BASE_URL, SortIcon } from '../../../utils/helpers';
-import { encryptData, decryptData } from '../../../utils/encryption';
+import axios from '../../../utils/api';
 import './Port.css';
 
 const Port = ({
@@ -38,15 +38,8 @@ const Port = ({
     const fetchPorts = async () => {
         setIsLoading(true);
         try {
-            const response = await fetch(`${API_BASE_URL}/api/ports`);
-            if (response.ok) {
-                const rawData = await response.json();
-                const decryptedPorts = rawData.map(record => {
-                    const decrypted = decryptData(record.data);
-                    return { ...decrypted, _id: record._id, createdAt: record.createdAt };
-                });
-                setPorts(decryptedPorts);
-            }
+            const response = await axios.get(`${API_BASE_URL}/api/ports`);
+            setPorts(Array.isArray(response.data) ? response.data : []);
         } catch (error) {
             console.error('Error fetching ports:', error);
         } finally {
@@ -66,25 +59,19 @@ const Port = ({
 
         try {
             const url = editingId ? `${API_BASE_URL}/api/ports/${editingId}` : `${API_BASE_URL}/api/ports`;
-            const encryptedPayload = { data: encryptData(formData) };
-            const response = await fetch(url, {
-                method: editingId ? 'PUT' : 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(encryptedPayload),
-            });
-
-            if (response.ok) {
-                setSubmitStatus('success');
-                fetchPorts();
-                setTimeout(() => {
-                    setShowForm(false);
-                    setEditingId(null);
-                    resetForm();
-                    setSubmitStatus(null);
-                }, 2000);
+            if (editingId) {
+                await axios.put(url, formData);
             } else {
-                setSubmitStatus('error');
+                await axios.post(url, formData);
             }
+            setSubmitStatus('success');
+            fetchPorts();
+            setTimeout(() => {
+                setShowForm(false);
+                setEditingId(null);
+                resetForm();
+                setSubmitStatus(null);
+            }, 2000);
         } catch (error) {
             console.error('Error saving port:', error);
             setSubmitStatus('error');

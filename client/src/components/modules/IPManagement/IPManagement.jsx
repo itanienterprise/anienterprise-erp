@@ -3,7 +3,7 @@ import {
     FunnelIcon, XIcon, ChevronDownIcon, EditIcon, TrashIcon, BoxIcon
 } from '../../Icons';
 import { API_BASE_URL, formatDate, SortIcon } from '../../../utils/helpers';
-import { encryptData, decryptData } from '../../../utils/encryption';
+import axios from '../../../utils/api';
 import CustomDatePicker from '../../shared/CustomDatePicker';
 import './IPManagement.css';
 
@@ -80,15 +80,8 @@ function IPManagement({
     const fetchIpRecords = async () => {
         setIsLoading(true);
         try {
-            const response = await fetch(`${API_BASE_URL}/api/ip-records`);
-            if (response.ok) {
-                const rawData = await response.json();
-                const decryptedRecords = rawData.map(record => {
-                    const decrypted = decryptData(record.data);
-                    return { ...decrypted, _id: record._id, createdAt: record.createdAt };
-                });
-                setIpRecords(decryptedRecords);
-            }
+            const response = await axios.get(`${API_BASE_URL}/api/ip-records`);
+            setIpRecords(Array.isArray(response.data) ? response.data : []);
         } catch (error) {
             console.error('Error fetching IP records:', error);
         } finally {
@@ -121,28 +114,21 @@ function IPManagement({
         setSubmitStatus(null);
 
         try {
-            const encryptedPayload = { data: encryptData(formData) };
             const url = editingId
                 ? `${API_BASE_URL}/api/ip-records/${editingId}`
                 : `${API_BASE_URL}/api/ip-records`;
-            const method = editingId ? 'PUT' : 'POST';
 
-            const response = await fetch(url, {
-                method,
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(encryptedPayload)
-            });
-
-            if (response.ok) {
-                setSubmitStatus('success');
-                setTimeout(() => {
-                    setShowIpForm(false);
-                    resetIpForm();
-                    fetchIpRecords();
-                }, 1500);
+            if (editingId) {
+                await axios.put(url, formData);
             } else {
-                setSubmitStatus('error');
+                await axios.post(url, formData);
             }
+            setSubmitStatus('success');
+            setTimeout(() => {
+                setShowIpForm(false);
+                resetIpForm();
+                fetchIpRecords();
+            }, 1500);
         } catch (error) {
             console.error('Error saving IP record:', error);
             setSubmitStatus('error');

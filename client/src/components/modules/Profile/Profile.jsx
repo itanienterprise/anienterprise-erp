@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { UserIcon, MailIcon, PhoneIcon, BriefcaseIcon, CalendarIcon, ShieldIcon, XIcon, EditIcon, CheckIcon } from '../../Icons';
 import { API_BASE_URL, formatDate } from '../../../utils/helpers';
-import { encryptData, decryptData } from '../../../utils/encryption';
+import axios from '../../../utils/api';
 import './Profile.css';
 
 const Profile = ({ currentUser, onClose }) => {
@@ -40,13 +40,9 @@ const Profile = ({ currentUser, onClose }) => {
 
     const fetchEmployeeDetails = async (isMounted) => {
         try {
-            const response = await fetch(`${API_BASE_URL}/api/employees`);
-            if (response.ok && isMounted) {
-                const rawData = await response.json();
-                const employees = rawData.map(record => {
-                    const decrypted = decryptData(record.data);
-                    return { ...decrypted, _id: record._id };
-                });
+            const response = await axios.get(`${API_BASE_URL}/api/employees`);
+            if (response.data && isMounted) {
+                const employees = response.data;
 
                 // Find current logged in employee
                 const currentEmp = employees.find(e => e.employeeId === currentUser.username);
@@ -93,13 +89,9 @@ const Profile = ({ currentUser, onClose }) => {
                 email: formData.email
             };
 
-            const response = await fetch(`${API_BASE_URL}/api/employees/${employeeData._id}`, {
-                method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ data: encryptData(updatedEmployee) })
-            });
+            const response = await axios.put(`${API_BASE_URL}/api/employees/${employeeData._id}`, updatedEmployee);
 
-            if (response.ok) {
+            if (response.status >= 200 && response.status < 300) {
                 setEmployeeData(updatedEmployee);
                 setIsEditing(false);
             } else {
@@ -129,27 +121,23 @@ const Profile = ({ currentUser, onClose }) => {
 
         setIsSaving(true);
         try {
-            const response = await fetch(`${API_BASE_URL}/api/auth/change-password`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    username: currentUser.username,
-                    currentPassword: passwordData.currentPassword,
-                    newPassword: passwordData.newPassword
-                })
+            const response = await axios.post(`${API_BASE_URL}/api/auth/change-password`, {
+                username: currentUser.username,
+                currentPassword: passwordData.currentPassword,
+                newPassword: passwordData.newPassword
             });
 
-            const result = await response.json();
-            if (response.ok) {
+            if (response.status >= 200 && response.status < 300) {
                 setPasswordStatus({ type: 'success', message: 'Password changed successfully' });
                 setPasswordData({ currentPassword: '', newPassword: '', confirmPassword: '' });
                 setTimeout(() => setIsChangingPassword(false), 2000);
             } else {
-                setPasswordStatus({ type: 'error', message: result.message || 'Failed to change password' });
+                setPasswordStatus({ type: 'error', message: response.data.message || 'Failed to change password' });
             }
         } catch (error) {
             console.error('Error changing password:', error);
-            setPasswordStatus({ type: 'error', message: 'Server error' });
+            const errorMessage = error.response?.data?.message || 'Server error';
+            setPasswordStatus({ type: 'error', message: errorMessage });
         } finally {
             setIsSaving(false);
         }

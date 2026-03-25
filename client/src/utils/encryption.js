@@ -1,6 +1,6 @@
 import CryptoJS from 'crypto-js';
 
-const SECRET_KEY = 'ani1820';
+const SECRET_KEY = import.meta.env.VITE_SECRET_KEY || 'ani1820'; // Fallback for safety, but should be in .env
 
 export const encryptData = (data) => {
     if (!data) return data;
@@ -21,6 +21,20 @@ export const decryptData = (ciphertext) => {
         return decryptedData;
     } catch (error) {
         console.error('Decryption error:', error);
+        return null;
+    }
+};
+
+/**
+ * Generates an HMAC signature for a payload and timestamp.
+ * This ensures request integrity and prevents tampering in Burp Suite.
+ */
+export const generateSignature = (payload, timestamp) => {
+    try {
+        const dataToSign = `${JSON.stringify(payload)}|${timestamp}`;
+        return CryptoJS.HmacSHA256(dataToSign, SECRET_KEY).toString();
+    } catch (error) {
+        console.error('Signature generation error:', error);
         return null;
     }
 };

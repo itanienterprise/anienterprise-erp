@@ -24,7 +24,7 @@ import { encryptData, decryptData } from '../../../utils/encryption';
 import { API_BASE_URL } from '../../../utils/helpers';
 import { calculateStockData, calculatePktRemainder } from '../../../utils/stockHelpers';
 import { generateStockReportPDF, generateProductHistoryPDF } from '../../../utils/pdfGenerator';
-import axios from 'axios';
+import axios from '../../../utils/api';
 
 const SortIcon = ({ config, columnKey }) => {
     if (!config || config.key !== columnKey) return <ChevronDownIcon className="w-3 h-3 ml-1 text-gray-300 opacity-0 group-hover:opacity-100" />;
@@ -456,7 +456,7 @@ const StockManagement = ({
             const globalInHouseMap = {};
             const stockDataDecrypted = stockDataRes.map(item => {
                 try {
-                    return { ...decryptData(item.data), _id: item._id, createdAt: item.createdAt };
+                    return { ...item, _id: item._id, createdAt: item.createdAt };
                 } catch { return null; }
             }).filter(Boolean);
 
@@ -469,10 +469,10 @@ const StockManagement = ({
                 globalInHouseMap[key].qty += parseFloat(d.inHouseQuantity || d.inhouseQty || 0);
             });
 
-            // 2. Decrypt and normalize Warehouse records
+            // 2. Normalize Warehouse records
             const allDecryptedWh = whData.map(item => {
                 try {
-                    const decrypted = decryptData(item.data);
+                    const decrypted = item;
                     const key = `${(decrypted.product || decrypted.productName || '').trim()}_${(decrypted.brand || '').trim()}`;
                     const globalStats = globalInHouseMap[key] || { pkt: 0, qty: 0 };
 

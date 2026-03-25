@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { EditIcon, TrashIcon, UserIcon, XIcon, SearchIcon, FunnelIcon, ChevronDownIcon, EyeIcon, ShieldIcon } from '../../Icons';
 import { API_BASE_URL, SortIcon, formatDate } from '../../../utils/helpers';
-import { encryptData, decryptData } from '../../../utils/encryption';
+import axios from '../../../utils/api';
 import CustomDatePicker from '../../shared/CustomDatePicker';
 import './EmployeeManagement.css';
 
@@ -96,14 +96,9 @@ const EmployeeManagement = ({
     const fetchEmployees = async () => {
         setIsLoading(true);
         try {
-            const response = await fetch(`${API_BASE_URL}/api/employees`);
-            if (response.ok) {
-                const rawData = await response.json();
-                const decryptedEmployees = rawData.map(record => {
-                    const decrypted = decryptData(record.data);
-                    return { ...decrypted, _id: record._id, createdAt: record.createdAt };
-                });
-                setEmployees(decryptedEmployees);
+            const response = await axios.get(`${API_BASE_URL}/api/employees`);
+            if (response.data) {
+                setEmployees(response.data);
             }
         } catch (error) {
             console.error('Error fetching employees:', error);
@@ -141,22 +136,20 @@ const EmployeeManagement = ({
         setSubmitStatus(null);
         try {
             const url = editingId ? `${API_BASE_URL}/api/employees/${editingId}` : `${API_BASE_URL}/api/employees`;
-            const encryptedPayload = { data: encryptData(formData) };
-            const response = await fetch(url, {
-                method: editingId ? 'PUT' : 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(encryptedPayload),
-            });
-            if (response.ok) {
-                const result = await response.json();
+            let response;
+            if (editingId) {
+                response = await axios.put(url, formData);
+            } else {
+                response = await axios.post(url, formData);
+            }
+
+            if (response.status >= 200 && response.status < 300) {
+                const result = response.data;
                 if (result.plainPassword) {
                     setGeneratedPassword(result.plainPassword);
                 }
-                if (result.data) {
-                    try {
-                        const dec = decryptData(result.data);
-                        if (dec.employeeId) setGeneratedId(dec.employeeId);
-                    } catch (e) { }
+                if (result.employeeId) {
+                    setGeneratedId(result.employeeId);
                 }
                 setSubmitStatus('success');
                 fetchEmployees();

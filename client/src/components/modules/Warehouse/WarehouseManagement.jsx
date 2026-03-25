@@ -21,7 +21,7 @@ import CustomDatePicker from '../../shared/CustomDatePicker';
 import WarehouseReport from './WarehouseReport';
 import { API_BASE_URL } from '../../../utils/helpers';
 import { encryptData, decryptData } from '../../../utils/encryption';
-import axios from 'axios';
+import axios from '../../../utils/api';
 import { ChevronDownIcon } from '../../Icons';
 import { calculatePktRemainder } from '../../../utils/stockHelpers';
 
@@ -100,16 +100,7 @@ const WarehouseManagement = ({ currentUser }) => {
         try {
             const response = await axios.get(`${API_BASE_URL}/api/products`);
             if (response.data) {
-                const decryptedProducts = response.data.map(item => {
-                    try {
-                        const decrypted = decryptData(item.data);
-                        return { ...decrypted, _id: item._id };
-                    } catch (err) {
-                        console.error("Error decrypting product:", err);
-                        return null;
-                    }
-                }).filter(item => item !== null);
-                setProducts(decryptedProducts);
+                setProducts(response.data);
             }
         } catch (error) {
             console.error('Error fetching products:', error);
@@ -133,7 +124,7 @@ const WarehouseManagement = ({ currentUser }) => {
             const globalInHouseMap = {};
             const stockDataDecrypted = stockData.map(item => {
                 try {
-                    return { ...decryptData(item.data), _id: item._id, createdAt: item.createdAt };
+                    return { ...item, _id: item._id, createdAt: item.createdAt };
                 } catch { return null; }
             }).filter(item => item && (item.status || '').toLowerCase() !== 'requested');
 
@@ -147,12 +138,9 @@ const WarehouseManagement = ({ currentUser }) => {
                 globalInHouseMap[key].qty += parseFloat(d.inHouseQuantity || d.inhouseQty || 0);
             });
 
-            // 1.1 Decrypt and store Sales records
+            // 1.1 Store Sales records (already decrypted by axios/server)
             const salesData = Array.isArray(salesRes.data) ? salesRes.data : [];
-            const salesDecrypted = salesData.map(s => {
-                try { return { ...decryptData(s.data), _id: s._id }; } catch { return null; }
-            }).filter(Boolean);
-            setSalesRecords(salesDecrypted);
+            setSalesRecords(salesData);
 
             // Track which unique product names have LC records (only those with positive stock)
             const activeProdKeys = Object.keys(globalInHouseMap).filter(key => globalInHouseMap[key].qty > 0);
@@ -160,10 +148,10 @@ const WarehouseManagement = ({ currentUser }) => {
                 .sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
             setProductsWithLC(uniqueProdsWithLC);
 
-            // 2. Decrypt and normalize Warehouse records
+            // 2. Normalize Warehouse records
             const allDecryptedWh = whData.map(item => {
                 try {
-                    const decrypted = decryptData(item.data);
+                    const decrypted = item;
                     const prodName = (decrypted.product || decrypted.productName || '').trim();
                     const brand = (decrypted.brand || '').trim();
                     const key = `${prodName.toLowerCase()}|${brand.toLowerCase()}`;
@@ -892,25 +880,19 @@ const WarehouseManagement = ({ currentUser }) => {
                 whQty: 0
             };
 
-            const encryptedData = encryptData(newWarehouse);
             let response;
             if (editingWarehouseId) {
-                response = await axios.put(`${API_BASE_URL}/api/warehouses/${editingWarehouseId}`, { data: encryptedData });
+                response = await axios.put(`${API_BASE_URL}/api/warehouses/${editingWarehouseId}`, newWarehouse);
             } else {
-                response = await axios.post(`${API_BASE_URL}/api/warehouses`, { data: encryptedData });
+                response = await axios.post(`${API_BASE_URL}/api/warehouses`, newWarehouse);
             }
 
-            const decryptedResponse = {
-                ...decryptData(response.data.data),
-                _id: response.data._id,
-                createdAt: response.data.createdAt,
-                updatedAt: response.data.updatedAt
-            };
-
+            const responseData = response.data;
+            
             if (editingWarehouseId) {
-                setWarehouseData(prev => prev.map(item => item._id === editingWarehouseId ? decryptedResponse : item));
+                setWarehouseData(prev => prev.map(item => item._id === editingWarehouseId ? responseData : item));
             } else {
-                setWarehouseData(prev => [decryptedResponse, ...prev]);
+                setWarehouseData(prev => [responseData, ...prev]);
             }
             setSubmitStatus('success');
             setTimeout(() => {

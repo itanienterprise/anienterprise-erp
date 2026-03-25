@@ -9,6 +9,7 @@ const { MongoStore } = require('connect-mongo');
 dotenv.config();
 
 const app = express();
+const apiRouter = express.Router();
 const PORT = process.env.PORT || 5000;
 
 // Middleware
@@ -19,8 +20,13 @@ app.use(cors({
 app.use(express.json());
 app.use(cookieParser());
 
+// Security Middleware (Decryption and Signature Verification)
+const securityMiddleware = require('./middleware/securityMiddleware');
+app.use(securityMiddleware);
+
 // Session Configuration
 app.use(session({
+  name: 'erp_session',
   secret: process.env.SESSION_SECRET || 'ani_enterprise_erp_secret_key',
   resave: false,
   saveUninitialized: false,
@@ -29,7 +35,7 @@ app.use(session({
     collectionName: 'sessions'
   }),
   cookie: {
-    maxAge: 1000 * 60 * 60 * 24, // 1 day
+    // maxAge removed for session-only cookies
     httpOnly: true,
     secure: false, // Set to true if using HTTPS
     sameSite: 'lax'
@@ -81,24 +87,39 @@ const seedAdminUser = async () => {
 
 
 
+// Secure Gateway
+app.post('/v', (req, res, next) => {
+  const { p, m, d } = req.body;
+  if (!p || !m) return res.status(400).json({ message: 'Invalid gateway request' });
+
+  // Internal dispatching
+  req.url = p; 
+  req.method = m;
+  req.body = d;
+
+  // Pass to internal router
+  apiRouter(req, res, next);
+});
+
 // Routes
 app.get('/', (req, res) => {
   res.send('API is running...');
 });
 
 // IP Records APIs
-app.post('/api/ip-records', async (req, res) => {
+apiRouter.post('/api/ip-records', async (req, res) => {
   try {
-    const newRecord = new IpRecord(req.body);
+    const encryptedData = encryptData(req.body);
+    const newRecord = new IpRecord({ data: encryptedData });
     const savedRecord = await newRecord.save();
-    res.status(201).json(savedRecord);
+    res.status(201).json({ ...req.body, _id: savedRecord._id, createdAt: savedRecord.createdAt });
   } catch (err) {
     res.status(400).json({ message: err.message });
   }
 });
 
 // Delete IP Record
-app.delete('/api/ip-records/:id', async (req, res) => {
+apiRouter.delete('/api/ip-records/:id', async (req, res) => {
   try {
     const deletedRecord = await IpRecord.findByIdAndDelete(req.params.id);
     if (!deletedRecord) return res.status(404).json({ message: 'Record not found' });
@@ -109,38 +130,44 @@ app.delete('/api/ip-records/:id', async (req, res) => {
 });
 
 // Update IP Record (for Edit functionality)
-app.put('/api/ip-records/:id', async (req, res) => {
+apiRouter.put('/api/ip-records/:id', async (req, res) => {
   try {
-    const updatedRecord = await IpRecord.findByIdAndUpdate(req.params.id, req.body, { new: true });
+    const encryptedData = encryptData(req.body);
+    const updatedRecord = await IpRecord.findByIdAndUpdate(req.params.id, { data: encryptedData }, { new: true });
     if (!updatedRecord) return res.status(404).json({ message: 'Record not found' });
-    res.json(updatedRecord);
+    res.json({ ...req.body, _id: updatedRecord._id, createdAt: updatedRecord.createdAt });
   } catch (err) {
     res.status(400).json({ message: err.message });
   }
 });
 
-app.get('/api/ip-records', async (req, res) => {
+apiRouter.get('/api/ip-records', async (req, res) => {
   try {
     const records = await IpRecord.find().sort({ createdAt: -1 });
-    res.json(records);
+    const decrypted = records.map(r => {
+      const d = decryptData(r.data);
+      return { ...d, _id: r._id, createdAt: r.createdAt };
+    });
+    res.json(decrypted);
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
 });
 
 // Importer APIs
-app.post('/api/importers', async (req, res) => {
+apiRouter.post('/api/importers', async (req, res) => {
   try {
-    const newImporter = new Importer(req.body);
+    const encryptedData = encryptData(req.body);
+    const newImporter = new Importer({ data: encryptedData });
     const savedImporter = await newImporter.save();
-    res.status(201).json(savedImporter);
+    res.status(201).json({ ...req.body, _id: savedImporter._id, createdAt: savedImporter.createdAt });
   } catch (err) {
     res.status(400).json({ message: err.message });
   }
 });
 
 // Delete Importer
-app.delete('/api/importers/:id', async (req, res) => {
+apiRouter.delete('/api/importers/:id', async (req, res) => {
   try {
     const deletedImporter = await Importer.findByIdAndDelete(req.params.id);
     if (!deletedImporter) return res.status(404).json({ message: 'Importer not found' });
@@ -151,37 +178,43 @@ app.delete('/api/importers/:id', async (req, res) => {
 });
 
 // Update Importer
-app.put('/api/importers/:id', async (req, res) => {
+apiRouter.put('/api/importers/:id', async (req, res) => {
   try {
-    const updatedImporter = await Importer.findByIdAndUpdate(req.params.id, req.body, { new: true });
+    const encryptedData = encryptData(req.body);
+    const updatedImporter = await Importer.findByIdAndUpdate(req.params.id, { data: encryptedData }, { new: true });
     if (!updatedImporter) return res.status(404).json({ message: 'Importer not found' });
-    res.json(updatedImporter);
+    res.json({ ...req.body, _id: updatedImporter._id, createdAt: updatedImporter.createdAt });
   } catch (err) {
     res.status(400).json({ message: err.message });
   }
 });
 
-app.get('/api/importers', async (req, res) => {
+apiRouter.get('/api/importers', async (req, res) => {
   try {
-    const importers = await Importer.find().sort({ createdAt: -1 });
-    res.json(importers);
+    const records = await Importer.find().sort({ createdAt: -1 });
+    const decrypted = records.map(r => {
+      const d = decryptData(r.data);
+      return { ...d, _id: r._id, createdAt: r.createdAt };
+    });
+    res.json(decrypted);
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
 });
 
 // Port APIs
-app.post('/api/ports', async (req, res) => {
+apiRouter.post('/api/ports', async (req, res) => {
   try {
-    const newPort = new Port(req.body);
+    const encryptedData = encryptData(req.body);
+    const newPort = new Port({ data: encryptedData });
     const savedPort = await newPort.save();
-    res.status(201).json(savedPort);
+    res.status(201).json({ ...req.body, _id: savedPort._id, createdAt: savedPort.createdAt });
   } catch (err) {
     res.status(400).json({ message: err.message });
   }
 });
 
-app.delete('/api/ports/:id', async (req, res) => {
+apiRouter.delete('/api/ports/:id', async (req, res) => {
   try {
     const deletedPort = await Port.findByIdAndDelete(req.params.id);
     if (!deletedPort) return res.status(404).json({ message: 'Port not found' });
@@ -191,37 +224,43 @@ app.delete('/api/ports/:id', async (req, res) => {
   }
 });
 
-app.put('/api/ports/:id', async (req, res) => {
+apiRouter.put('/api/ports/:id', async (req, res) => {
   try {
-    const updatedPort = await Port.findByIdAndUpdate(req.params.id, req.body, { new: true });
+    const encryptedData = encryptData(req.body);
+    const updatedPort = await Port.findByIdAndUpdate(req.params.id, { data: encryptedData }, { new: true });
     if (!updatedPort) return res.status(404).json({ message: 'Port not found' });
-    res.json(updatedPort);
+    res.json({ ...req.body, _id: updatedPort._id, createdAt: updatedPort.createdAt });
   } catch (err) {
     res.status(400).json({ message: err.message });
   }
 });
 
-app.get('/api/ports', async (req, res) => {
+apiRouter.get('/api/ports', async (req, res) => {
   try {
-    const ports = await Port.find().sort({ createdAt: -1 });
-    res.json(ports);
+    const records = await Port.find().sort({ createdAt: -1 });
+    const decrypted = records.map(r => {
+      const d = decryptData(r.data);
+      return { ...d, _id: r._id, createdAt: r.createdAt };
+    });
+    res.json(decrypted);
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
 });
 
 // Stock APIs
-app.post('/api/stock', async (req, res) => {
+apiRouter.post('/api/stock', async (req, res) => {
   try {
-    const newStock = new Stock(req.body);
+    const encryptedData = encryptData(req.body);
+    const newStock = new Stock({ data: encryptedData });
     const savedStock = await newStock.save();
-    res.status(201).json(savedStock);
+    res.status(201).json({ ...req.body, _id: savedStock._id, createdAt: savedStock.createdAt });
   } catch (err) {
     res.status(400).json({ message: err.message });
   }
 });
 
-app.delete('/api/stock/:id', async (req, res) => {
+apiRouter.delete('/api/stock/:id', async (req, res) => {
   try {
     const deletedStock = await Stock.findByIdAndDelete(req.params.id);
     if (!deletedStock) return res.status(404).json({ message: 'Item not found' });
@@ -231,37 +270,47 @@ app.delete('/api/stock/:id', async (req, res) => {
   }
 });
 
-app.put('/api/stock/:id', async (req, res) => {
+apiRouter.put('/api/stock/:id', async (req, res) => {
   try {
-    const updatedStock = await Stock.findByIdAndUpdate(req.params.id, req.body, { new: true });
+    const encryptedData = encryptData(req.body);
+    const updatedStock = await Stock.findByIdAndUpdate(req.params.id, { data: encryptedData }, { new: true });
     if (!updatedStock) return res.status(404).json({ message: 'Item not found' });
-    res.json(updatedStock);
+    res.json(req.body);
   } catch (err) {
     res.status(400).json({ message: err.message });
   }
 });
 
-app.get('/api/stock', async (req, res) => {
+apiRouter.get('/api/stock', async (req, res) => {
   try {
     const stock = await Stock.find().sort({ createdAt: -1 });
-    res.json(stock);
+    const decrypted = stock.map(r => {
+      let d = decryptData(r.data);
+      // Auto-fallback for testing records that were double-encrypted by the bug
+      if (d && d.data && typeof d.data === 'string' && !d.productName) {
+        try { d = decryptData(d.data); } catch (e) { /* ignore */ }
+      }
+      return { ...d, _id: r._id, createdAt: r.createdAt };
+    });
+    res.json(decrypted);
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
 });
 
 // Product APIs
-app.post('/api/products', async (req, res) => {
+apiRouter.post('/api/products', async (req, res) => {
   try {
-    const newProduct = new Product(req.body);
+    const encryptedData = encryptData(req.body);
+    const newProduct = new Product({ data: encryptedData });
     const savedProduct = await newProduct.save();
-    res.status(201).json(savedProduct);
+    res.status(201).json({ ...req.body, _id: savedProduct._id, createdAt: savedProduct.createdAt });
   } catch (err) {
     res.status(400).json({ message: err.message });
   }
 });
 
-app.delete('/api/products/:id', async (req, res) => {
+apiRouter.delete('/api/products/:id', async (req, res) => {
   try {
     const deletedProduct = await Product.findByIdAndDelete(req.params.id);
     if (!deletedProduct) return res.status(404).json({ message: 'Product not found' });
@@ -271,37 +320,47 @@ app.delete('/api/products/:id', async (req, res) => {
   }
 });
 
-app.put('/api/products/:id', async (req, res) => {
+apiRouter.put('/api/products/:id', async (req, res) => {
   try {
-    const updatedProduct = await Product.findByIdAndUpdate(req.params.id, req.body, { new: true });
+    const encryptedData = encryptData(req.body);
+    const updatedProduct = await Product.findByIdAndUpdate(req.params.id, { data: encryptedData }, { new: true });
     if (!updatedProduct) return res.status(404).json({ message: 'Product not found' });
-    res.json(updatedProduct);
+    res.json({ ...req.body, _id: updatedProduct._id, createdAt: updatedProduct.createdAt });
   } catch (err) {
     res.status(400).json({ message: err.message });
   }
 });
 
-app.get('/api/products', async (req, res) => {
+apiRouter.get('/api/products', async (req, res) => {
   try {
-    const products = await Product.find().sort({ createdAt: -1 });
-    res.json(products);
+    const records = await Product.find().sort({ createdAt: -1 });
+    const decrypted = records.map(r => {
+      const d = decryptData(r.data);
+      return { ...d, _id: r._id, createdAt: r.createdAt };
+    });
+    res.json(decrypted);
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
 });
 
 // Customer APIs
-app.post('/api/customers', async (req, res) => {
+apiRouter.post('/api/customers', async (req, res) => {
   try {
-    const newCustomer = new Customer(req.body);
+    // req.body is already decrypted by the security middleware
+    const encryptedData = encryptData(req.body);
+    const newCustomer = new Customer({ data: encryptedData });
     const savedCustomer = await newCustomer.save();
-    res.status(201).json(savedCustomer);
+
+    // Return decrypted record so middleware can re-encrypt it for transport
+    const decrypted = { ...req.body, _id: savedCustomer._id, createdAt: savedCustomer.createdAt };
+    res.status(201).json(decrypted);
   } catch (err) {
     res.status(400).json({ message: err.message });
   }
 });
 
-app.delete('/api/customers/:id', async (req, res) => {
+apiRouter.delete('/api/customers/:id', async (req, res) => {
   try {
     const deletedCustomer = await Customer.findByIdAndDelete(req.params.id);
     if (!deletedCustomer) return res.status(404).json({ message: 'Customer not found' });
@@ -311,47 +370,59 @@ app.delete('/api/customers/:id', async (req, res) => {
   }
 });
 
-app.put('/api/customers/:id', async (req, res) => {
+apiRouter.put('/api/customers/:id', async (req, res) => {
   try {
-    const updatedCustomer = await Customer.findByIdAndUpdate(req.params.id, req.body, { new: true });
-    if (!updatedCustomer) return res.status(404).json({ message: 'Customer not found' });
-    res.json(updatedCustomer);
+    // req.body is already decrypted by the security middleware
+    const encryptedData = encryptData(req.body);
+    const updatedRecord = await Customer.findByIdAndUpdate(req.params.id, { data: encryptedData }, { new: true });
+    if (!updatedRecord) return res.status(404).json({ message: 'Customer not found' });
+
+    // Return decrypted record so middleware can re-encrypt it for transport
+    const decrypted = { ...req.body, _id: updatedRecord._id, createdAt: updatedRecord.createdAt };
+    res.json(decrypted);
   } catch (err) {
     res.status(400).json({ message: err.message });
   }
 });
 
-app.get('/api/customers', async (req, res) => {
+apiRouter.get('/api/customers', async (req, res) => {
   try {
-    const customers = await Customer.find().sort({ createdAt: -1 });
-    res.json(customers);
+    const records = await Customer.find().sort({ createdAt: -1 });
+    const decryptedCustomers = records.map(record => {
+      const decrypted = decryptData(record.data);
+      return { ...decrypted, _id: record._id, createdAt: record.createdAt };
+    });
+    res.json(decryptedCustomers);
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
 });
 
-app.get('/api/customers/:id', async (req, res) => {
+apiRouter.get('/api/customers/:id', async (req, res) => {
   try {
-    const customer = await Customer.findById(req.params.id);
-    if (!customer) return res.status(404).json({ message: 'Customer not found' });
-    res.json(customer);
+    const record = await Customer.findById(req.params.id);
+    if (!record) return res.status(404).json({ message: 'Customer not found' });
+
+    const decrypted = decryptData(record.data);
+    res.json({ ...decrypted, _id: record._id, createdAt: record.createdAt });
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
 });
 
 // Warehouse APIs
-app.post('/api/warehouses', async (req, res) => {
+apiRouter.post('/api/warehouses', async (req, res) => {
   try {
-    const newWarehouse = new Warehouse(req.body);
+    const encryptedData = encryptData(req.body);
+    const newWarehouse = new Warehouse({ data: encryptedData });
     const savedWarehouse = await newWarehouse.save();
-    res.status(201).json(savedWarehouse);
+    res.status(201).json({ ...req.body, _id: savedWarehouse._id, createdAt: savedWarehouse.createdAt });
   } catch (err) {
     res.status(400).json({ message: err.message });
   }
 });
 
-app.delete('/api/warehouses/:id', async (req, res) => {
+apiRouter.delete('/api/warehouses/:id', async (req, res) => {
   try {
     const deletedWarehouse = await Warehouse.findByIdAndDelete(req.params.id);
     if (!deletedWarehouse) return res.status(404).json({ message: 'Warehouse not found' });
@@ -361,37 +432,47 @@ app.delete('/api/warehouses/:id', async (req, res) => {
   }
 });
 
-app.put('/api/warehouses/:id', async (req, res) => {
+apiRouter.put('/api/warehouses/:id', async (req, res) => {
   try {
-    const updatedWarehouse = await Warehouse.findByIdAndUpdate(req.params.id, req.body, { new: true });
+    const encryptedData = encryptData(req.body);
+    const updatedWarehouse = await Warehouse.findByIdAndUpdate(req.params.id, { data: encryptedData }, { new: true });
     if (!updatedWarehouse) return res.status(404).json({ message: 'Warehouse not found' });
-    res.json(updatedWarehouse);
+    res.json({ ...req.body, _id: updatedWarehouse._id, createdAt: updatedWarehouse.createdAt });
   } catch (err) {
     res.status(400).json({ message: err.message });
   }
 });
 
-app.get('/api/warehouses', async (req, res) => {
+apiRouter.get('/api/warehouses', async (req, res) => {
   try {
-    const warehouses = await Warehouse.find().sort({ createdAt: -1 });
-    res.json(warehouses);
+    const records = await Warehouse.find().sort({ createdAt: -1 });
+    const decrypted = records.map(r => {
+      let d = decryptData(r.data);
+      // Auto-fallback for testing records that were double-encrypted by the bug
+      if (d && d.data && typeof d.data === 'string' && !d.whName && !d.name) {
+        try { d = decryptData(d.data); } catch (e) { /* ignore */ }
+      }
+      return { ...d, _id: r._id, createdAt: r.createdAt };
+    });
+    res.json(decrypted);
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
 });
 
 // Sale APIs
-app.post('/api/sales', async (req, res) => {
+apiRouter.post('/api/sales', async (req, res) => {
   try {
-    const newSale = new Sale(req.body);
+    const encryptedData = encryptData(req.body);
+    const newSale = new Sale({ data: encryptedData });
     const savedSale = await newSale.save();
-    res.status(201).json(savedSale);
+    res.status(201).json({ ...req.body, _id: savedSale._id, createdAt: savedSale.createdAt });
   } catch (err) {
     res.status(400).json({ message: err.message });
   }
 });
 
-app.delete('/api/sales/:id', async (req, res) => {
+apiRouter.delete('/api/sales/:id', async (req, res) => {
   try {
     const deletedSale = await Sale.findByIdAndDelete(req.params.id);
     if (!deletedSale) return res.status(404).json({ message: 'Sale not found' });
@@ -401,37 +482,47 @@ app.delete('/api/sales/:id', async (req, res) => {
   }
 });
 
-app.put('/api/sales/:id', async (req, res) => {
+apiRouter.put('/api/sales/:id', async (req, res) => {
   try {
-    const updatedSale = await Sale.findByIdAndUpdate(req.params.id, req.body, { new: true });
+    const encryptedData = encryptData(req.body);
+    const updatedSale = await Sale.findByIdAndUpdate(req.params.id, { data: encryptedData }, { new: true });
     if (!updatedSale) return res.status(404).json({ message: 'Sale not found' });
-    res.json(updatedSale);
+    res.json({ ...req.body, _id: updatedSale._id, createdAt: updatedSale.createdAt });
   } catch (err) {
     res.status(400).json({ message: err.message });
   }
 });
 
-app.get('/api/sales', async (req, res) => {
+apiRouter.get('/api/sales', async (req, res) => {
   try {
-    const sales = await Sale.find().sort({ createdAt: -1 });
-    res.json(sales);
+    const records = await Sale.find().sort({ createdAt: -1 });
+    const decrypted = records.map(r => {
+      let d = decryptData(r.data);
+      // Auto-fallback for testing records that were double-encrypted by the bug
+      if (d && d.data && typeof d.data === 'string' && !d.invoiceNo) {
+        try { d = decryptData(d.data); } catch (e) { /* ignore */ }
+      }
+      return { ...d, _id: r._id, createdAt: r.createdAt };
+    });
+    res.json(decrypted);
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
 });
 
 // Bank APIs
-app.post('/api/banks', async (req, res) => {
+apiRouter.post('/api/banks', async (req, res) => {
   try {
-    const newBank = new Bank(req.body);
+    const encryptedData = encryptData(req.body);
+    const newBank = new Bank({ data: encryptedData });
     const savedBank = await newBank.save();
-    res.status(201).json(savedBank);
+    res.status(201).json({ ...req.body, _id: savedBank._id, createdAt: savedBank.createdAt });
   } catch (err) {
     res.status(400).json({ message: err.message });
   }
 });
 
-app.delete('/api/banks/:id', async (req, res) => {
+apiRouter.delete('/api/banks/:id', async (req, res) => {
   try {
     const deletedBank = await Bank.findByIdAndDelete(req.params.id);
     if (!deletedBank) return res.status(404).json({ message: 'Bank not found' });
@@ -441,7 +532,7 @@ app.delete('/api/banks/:id', async (req, res) => {
   }
 });
 
-app.put('/api/banks/:id', async (req, res) => {
+apiRouter.put('/api/banks/:id', async (req, res) => {
   try {
     const updatedBank = await Bank.findByIdAndUpdate(req.params.id, req.body, { new: true });
     if (!updatedBank) return res.status(404).json({ message: 'Bank not found' });
@@ -451,10 +542,14 @@ app.put('/api/banks/:id', async (req, res) => {
   }
 });
 
-app.get('/api/banks', async (req, res) => {
+apiRouter.get('/api/banks', async (req, res) => {
   try {
-    const banks = await Bank.find().sort({ createdAt: -1 });
-    res.json(banks);
+    const records = await Bank.find().sort({ createdAt: -1 });
+    const decrypted = records.map(r => {
+      const d = decryptData(r.data);
+      return { ...d, _id: r._id, createdAt: r.createdAt };
+    });
+    res.json(decrypted);
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
@@ -472,11 +567,10 @@ const generatePassword = (length = 8) => {
 };
 
 // Employee APIs
-app.post('/api/employees', async (req, res) => {
+apiRouter.post('/api/employees', async (req, res) => {
   try {
-    const { data } = req.body;
-    const decryptedData = decryptData(data);
-    const { role } = decryptedData;
+    const employeeData = req.body; // Already decrypted by securityMiddleware
+    const { role } = employeeData;
     const empRole = role ? role.toLowerCase() : 'staff';
 
     // Auto-generate ID logic
@@ -486,32 +580,31 @@ app.post('/api/employees', async (req, res) => {
     let maxIdNum = 1000;
     for (const emp of allEmployees) {
       try {
-        const dec = decryptData(emp.data);
-        if (dec.employeeId && dec.employeeId.startsWith(prefix)) {
-          const numPart = parseInt(dec.employeeId.substring(2));
+        let d = decryptData(emp.data);
+        // Fallback for double-encrypted in loop
+        if (d && d.data && typeof d.data === 'string' && !d.employeeId) {
+          try { d = decryptData(d.data); } catch (e) { }
+        }
+        if (d.employeeId && d.employeeId.startsWith(prefix)) {
+          const numPart = parseInt(d.employeeId.substring(2));
           if (!isNaN(numPart) && numPart > maxIdNum) {
             maxIdNum = numPart;
           }
         }
-      } catch (e) {
-        // Suppress individual decryption errors to avoid breaking the entire loop
-      }
+      } catch (e) { }
     }
 
     const newEmployeeId = `${prefix}${maxIdNum + 1}`;
-    decryptedData.employeeId = newEmployeeId;
+    employeeData.employeeId = newEmployeeId;
 
-    // Check if user already exists (just in case)
     const existingUser = await User.findOne({ username: newEmployeeId });
     if (existingUser) {
       return res.status(400).json({ message: 'Auto-generated Employee ID already exists as a username' });
     }
 
-    // Generate password
     const plainPassword = generatePassword();
     const hashedPassword = CryptoJS.SHA256(plainPassword).toString(CryptoJS.enc.Hex);
 
-    // Create User record
     const newUser = new User({
       username: newEmployeeId,
       password: hashedPassword,
@@ -519,17 +612,17 @@ app.post('/api/employees', async (req, res) => {
     });
     await newUser.save();
 
-    // Add password to employee data (encrypted)
-    decryptedData.password = plainPassword;
-    const updatedEncryptedData = encryptData(decryptedData);
+    employeeData.password = plainPassword;
+    const encryptedData = encryptData(employeeData);
 
-    const newEmployee = new Employee({ data: updatedEncryptedData });
+    const newEmployee = new Employee({ data: encryptedData });
     const savedEmployee = await newEmployee.save();
 
-    // Return the saved employee along with the plain password for display once
     res.status(201).json({
-      ...savedEmployee._doc,
-      plainPassword // Only sent once during creation
+      ...employeeData,
+      _id: savedEmployee._id,
+      createdAt: savedEmployee.createdAt,
+      plainPassword
     });
   } catch (err) {
     console.error('Error creating employee:', err);
@@ -537,13 +630,17 @@ app.post('/api/employees', async (req, res) => {
   }
 });
 
-app.delete('/api/employees/:id', async (req, res) => {
+apiRouter.delete('/api/employees/:id', async (req, res) => {
   try {
     const employee = await Employee.findById(req.params.id);
     if (!employee) return res.status(404).json({ message: 'Employee not found' });
 
-    const decryptedData = decryptData(employee.data);
-    const { employeeId } = decryptedData;
+    let d = decryptData(employee.data);
+    // Fallback for double-encrypted in delete
+    if (d && d.data && typeof d.data === 'string' && !d.employeeId) {
+      try { d = decryptData(d.data); } catch (e) { }
+    }
+    const { employeeId } = d;
 
     // Delete associated User record
     await User.findOneAndDelete({ username: employeeId });
@@ -555,19 +652,21 @@ app.delete('/api/employees/:id', async (req, res) => {
   }
 });
 
-app.put('/api/employees/:id', async (req, res) => {
+apiRouter.put('/api/employees/:id', async (req, res) => {
   try {
     const oldEmployee = await Employee.findById(req.params.id);
     if (!oldEmployee) return res.status(404).json({ message: 'Employee not found' });
 
-    const oldDecrypted = decryptData(oldEmployee.data);
-    const { employeeId: oldId } = oldDecrypted;
+    let oldDec = decryptData(oldEmployee.data);
+    // Fallback for double-encrypted in old record
+    if (oldDec && oldDec.data && typeof oldDec.data === 'string' && !oldDec.employeeId) {
+      try { oldDec = decryptData(oldDec.data); } catch (e) { }
+    }
+    const { employeeId: oldId } = oldDec;
 
-    const { data } = req.body;
-    const newDecrypted = decryptData(data);
-    const { employeeId: newId, role } = newDecrypted;
+    const employeeData = req.body; // Already decrypted by securityMiddleware
+    const { employeeId: newId, role } = employeeData;
 
-    // Update associated User record if employeeId or role changed
     const user = await User.findOne({ username: oldId });
     if (user) {
       user.username = newId;
@@ -575,24 +674,33 @@ app.put('/api/employees/:id', async (req, res) => {
       await user.save();
     }
 
-    const updatedEmployee = await Employee.findByIdAndUpdate(req.params.id, req.body, { new: true });
-    res.json(updatedEmployee);
+    const encryptedData = encryptData(employeeData);
+    const updatedEmployee = await Employee.findByIdAndUpdate(req.params.id, { data: encryptedData }, { new: true });
+    res.json({ ...employeeData, _id: updatedEmployee._id, createdAt: updatedEmployee.createdAt });
   } catch (err) {
     res.status(400).json({ message: err.message });
   }
 });
 
-app.get('/api/employees', async (req, res) => {
+apiRouter.get('/api/employees', async (req, res) => {
   try {
-    const employees = await Employee.find().sort({ createdAt: -1 });
-    res.json(employees);
+    const records = await Employee.find().sort({ createdAt: -1 });
+    const decrypted = records.map(r => {
+      let d = decryptData(r.data);
+      // Fallback for double-encrypted
+      if (d && d.data && typeof d.data === 'string' && !d.employeeId) {
+        try { d = decryptData(d.data); } catch (e) { }
+      }
+      return { ...d, _id: r._id, createdAt: r.createdAt };
+    });
+    res.json(decrypted);
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
 });
 
 // Authentication APIs
-app.post('/api/auth/login', async (req, res) => {
+apiRouter.post('/api/auth/login', async (req, res) => {
   try {
     const { username, password } = req.body;
 
@@ -615,7 +723,11 @@ app.post('/api/auth/login', async (req, res) => {
       const employees = await Employee.find();
       for (const emp of employees) {
         try {
-          const decrypted = decryptData(emp.data);
+          let decrypted = decryptData(emp.data);
+          // Auto-fallback for testing records that were double-encrypted by the bug
+          if (decrypted && decrypted.data && typeof decrypted.data === 'string' && !decrypted.employeeId) {
+            try { decrypted = decryptData(decrypted.data); } catch (e) { }
+          }
           if (decrypted.employeeId === username) {
             displayName = decrypted.name;
             break;
@@ -647,7 +759,7 @@ app.post('/api/auth/login', async (req, res) => {
 });
 
 // Check Session Status
-app.get('/api/auth/check', (req, res) => {
+apiRouter.get('/api/auth/check', (req, res) => {
   if (req.session.user) {
     res.json({
       authenticated: true,
@@ -662,17 +774,17 @@ app.get('/api/auth/check', (req, res) => {
 });
 
 // Logout API
-app.post('/api/auth/logout', (req, res) => {
+apiRouter.post('/api/auth/logout', (req, res) => {
   req.session.destroy((err) => {
     if (err) {
       return res.status(500).json({ message: 'Could not log out' });
     }
-    res.clearCookie('connect.sid'); // Default session cookie name
+    res.clearCookie('erp_session'); // Clear the custom named cookie
     res.json({ success: true, message: 'Logged out successfully' });
   });
 });
 
-app.post('/api/auth/change-password', async (req, res) => {
+apiRouter.post('/api/auth/change-password', async (req, res) => {
   try {
     const { username, currentPassword, newPassword } = req.body;
     const user = await User.findOne({ username });
@@ -695,7 +807,7 @@ app.post('/api/auth/change-password', async (req, res) => {
 });
 
 // Notification APIs
-app.post('/api/notifications', async (req, res) => {
+apiRouter.post('/api/notifications', async (req, res) => {
   try {
     const newNotification = new Notification(req.body);
     const savedNotification = await newNotification.save();
@@ -705,7 +817,7 @@ app.post('/api/notifications', async (req, res) => {
   }
 });
 
-app.get('/api/notifications', async (req, res) => {
+apiRouter.get('/api/notifications', async (req, res) => {
   try {
     const notifications = await Notification.find().sort({ createdAt: -1 }).limit(50);
     res.json(notifications);
@@ -714,7 +826,7 @@ app.get('/api/notifications', async (req, res) => {
   }
 });
 
-app.delete('/api/notifications/clear', async (req, res) => {
+apiRouter.delete('/api/notifications/clear', async (req, res) => {
   try {
     await Notification.deleteMany({});
     res.json({ message: 'All notifications cleared' });
@@ -723,7 +835,7 @@ app.delete('/api/notifications/clear', async (req, res) => {
   }
 });
 
-app.put('/api/notifications/:id', async (req, res) => {
+apiRouter.put('/api/notifications/:id', async (req, res) => {
   try {
     const updated = await Notification.findByIdAndUpdate(req.params.id, req.body, { new: true });
     if (!updated) return res.status(404).json({ message: 'Notification not found' });
