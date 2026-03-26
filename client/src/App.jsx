@@ -1407,16 +1407,22 @@ function App() {
       {/* Main Content */}
       <div className={`flex-1 flex flex-col overflow-hidden ${(showLcReport || showStockReport || showProductHistoryReport || showSalesReport) ? 'print:hidden' : ''}`}>
         {/* Header */}
-        <header className="relative z-[1000] flex items-center justify-between px-6 py-4 bg-white border-b border-gray-200 shadow-sm print:hidden">
+        <header className="relative z-[1000] flex items-center justify-between px-4 md:px-6 py-4 bg-white border-b border-gray-200 shadow-sm print:hidden">
           <div className="flex items-center">
             <button onClick={() => setSidebarOpen(!sidebarOpen)} className="md:hidden p-2 rounded-md text-gray-600 hover:bg-gray-100">
               <MenuIcon className="w-6 h-6" />
             </button>
-            <div className="ml-4 md:ml-0">
+            <div className="hidden md:block ml-0">
               <h1 className="text-2xl font-black bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent tracking-tight">
                 ANI Enterprise ERP
               </h1>
             </div>
+          </div>
+          {/* Centered title on mobile only */}
+          <div className="absolute left-0 right-0 flex justify-center pointer-events-none md:hidden">
+            <h1 className="text-xl font-black bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent tracking-tight">
+              ANI Enterprise ERP
+            </h1>
           </div>
           <div className="flex items-center space-x-4">
             <div className="relative">

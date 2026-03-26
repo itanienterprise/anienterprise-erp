@@ -55,6 +55,9 @@ const Customer = ({
 
     const [showPaymentForm, setShowPaymentForm] = useState(false);
     const [expandedRows, setExpandedRows] = useState([]);
+    const [expandedMobileCards, setExpandedMobileCards] = useState(null);
+    const [expandedSalesHistoryCards, setExpandedSalesHistoryCards] = useState(null);
+    const [expandedPaymentHistoryCards, setExpandedPaymentHistoryCards] = useState(null);
     const [paymentFormData, setPaymentFormData] = useState({
         date: new Date().toISOString().split('T')[0],
         method: 'Bank',
@@ -535,8 +538,8 @@ const Customer = ({
                                 <XIcon className="w-6 h-6" />
                             </button>
                         </div>
-                        <form onSubmit={handleSubmit} autoComplete="off" className="grid grid-cols-1 md:grid-cols-2 gap-6 relative z-10">
-                            <div className="space-y-2">
+                        <form onSubmit={handleSubmit} autoComplete="off" className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-6 relative z-10">
+                           <div className="space-y-2">
                                 <label className="text-sm font-medium text-gray-700">ID</label>
                                 <input
                                     type="text"
@@ -588,7 +591,7 @@ const Customer = ({
                                     className="w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm"
                                 />
                             </div>
-                            <div className="col-span-1 md:col-span-2 space-y-2">
+                            <div className="col-span-1 lg:col-span-2 space-y-2">
                                 <label className="text-sm font-medium text-gray-700">Address</label>
                                 <textarea
                                     name="address"
@@ -651,7 +654,7 @@ const Customer = ({
                                     </div>
                                 </div>
                             </div>
-                            <div className="col-span-1 md:col-span-2 customer-form-footer">
+                            <div className="col-span-1 lg:col-span-2 customer-form-footer">
                                 {submitStatus === 'success' && (
                                     <p className="customer-form-success">
                                         <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"></path></svg>
@@ -686,8 +689,9 @@ const Customer = ({
                                     <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
                                 </div>
                             ) : (
-                                <div className="overflow-x-auto">
-                                    <table className="w-full text-left">
+                                <div className="overflow-x-auto min-w-full">
+                                    {/* Desktop Table View */}
+                                    <table className="w-full text-left hidden md:table">
                                         <thead className="bg-gray-50 border-b border-gray-100">
                                             <tr>
                                                 {isSelectionMode && <th className="px-6 py-4 w-10"><input type="checkbox" checked={selectedItems.size === customers.length} onChange={toggleSelectAll} className="rounded border-gray-300 text-blue-600 focus:ring-blue-500" /></th>}
@@ -772,6 +776,100 @@ const Customer = ({
                                             })}
                                         </tbody>
                                     </table>
+
+                                    {/* Mobile Card View */}
+                                    <div className="block md:hidden px-1 py-4 space-y-3">
+                                        {getFilteredAndSortedData().map(c => {
+                                            const custSales = c.salesHistory || [];
+                                            const custPayments = c.paymentHistory || [];
+
+                                            const totalSalesAmount = custSales.reduce((sum, item) => sum + (parseFloat(item.amount) || 0), 0);
+                                            const totalSalesPaid = custSales.reduce((sum, item) => sum + (parseFloat(item.paid) || 0), 0);
+                                            const totalSalesDiscount = custSales.reduce((sum, item) => sum + (parseFloat(item.discount) || 0), 0);
+                                            const totalHistoryPaid = custPayments.reduce((sum, item) => sum + (parseFloat(item.amount) || 0), 0);
+
+                                            const custTotalDue = Math.max(0, totalSalesAmount - totalSalesPaid - totalSalesDiscount - totalHistoryPaid);
+                                            const isExpanded = expandedMobileCards === c._id;
+
+                                            return (
+                                                <div 
+                                                    key={c._id} 
+                                                    className={`mobile-card transition-all duration-300 ${isExpanded ? 'expanded' : 'collapsed'}`}
+                                                    onClick={() => {
+                                                        setExpandedMobileCards(isExpanded ? null : c._id);
+                                                    }}
+                                                >
+                                                    <div className="mobile-card-header">
+                                                        <div className="flex-1 min-w-0 pr-2">
+                                                            <div className="mobile-card-title truncate">{c.companyName}</div>
+                                                            <div className="text-[10px] text-gray-500 truncate">
+                                                                ID: {c.customerId} | {c.customerType}
+                                                            </div>
+                                                        </div>
+                                                        <div className="flex items-center gap-2">
+                                                            <span className={`customer-status-badge ${c.status === 'Active' ? 'active' : 'inactive'} flex items-center justify-center`}>
+                                                                {isExpanded ? (
+                                                                    <span className="shrink-0">{c.status}</span>
+                                                                ) : (
+                                                                    <span className="font-bold">
+                                                                        ৳{custTotalDue.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
+                                                                    </span>
+                                                                )}
+                                                            </span>
+                                                        </div>
+                                                    </div>
+                                                    
+                                                    {isExpanded && (
+                                                        <div className="animate-in slide-in-from-top-2 duration-300">
+                                                            <div className="space-y-2 mt-4">
+                                                                <div className="mobile-card-row">
+                                                                    <span className="mobile-card-label">Customer:</span>
+                                                                    <span className="mobile-card-value">{c.customerName}</span>
+                                                                </div>
+                                                                <div className="mobile-card-row">
+                                                                    <span className="mobile-card-label">Location:</span>
+                                                                    <span className="mobile-card-value">{c.location}</span>
+                                                                </div>
+                                                                <div className="mobile-card-row">
+                                                                    <span className="mobile-card-label">Phone:</span>
+                                                                    <span className="mobile-card-value font-mono">{c.phone}</span>
+                                                                </div>
+                                                                <div className="mobile-card-row">
+                                                                    <span className="mobile-card-label">Balance:</span>
+                                                                    <span className="mobile-card-value text-red-600 font-bold">
+                                                                        ৳{custTotalDue.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                                                    </span>
+                                                                </div>
+                                                            </div>
+
+                                                            <div className="mobile-card-actions">
+                                                                <button 
+                                                                    onClick={(e) => { e.stopPropagation(); setViewData(c); }} 
+                                                                    className="flex items-center justify-center gap-1.5 py-2 bg-gray-50 text-gray-600 rounded-lg text-xs font-bold flex-1"
+                                                                >
+                                                                    <EyeIcon className="w-4 h-4" /> View
+                                                                </button>
+                                                                <button 
+                                                                    onClick={(e) => { e.stopPropagation(); handleEdit(c); }} 
+                                                                    className="flex items-center justify-center gap-1.5 py-2 bg-blue-50 text-blue-600 rounded-lg text-xs font-bold flex-1"
+                                                                >
+                                                                    <EditIcon className="w-4 h-4" /> Edit
+                                                                </button>
+                                                                {isFullAdmin && (
+                                                                    <button 
+                                                                        onClick={(e) => { e.stopPropagation(); handleDelete(c._id); }} 
+                                                                        className="flex items-center justify-center gap-1.5 py-2 bg-red-50 text-red-600 rounded-lg text-xs font-bold px-3"
+                                                                    >
+                                                                        <TrashIcon className="w-4 h-4" />
+                                                                    </button>
+                                                                )}
+                                                            </div>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
                                 </div>
                             )}
                         </div>
@@ -783,8 +881,8 @@ const Customer = ({
                             <div className="absolute inset-0 bg-gray-900/60 backdrop-blur-sm"></div>
                             <div className="relative bg-white border border-gray-100 rounded-2xl shadow-2xl max-w-[1400px] w-full flex flex-col max-h-[90vh] animate-in zoom-in duration-200">
                                 {/* Modal Header */}
-                                <div className="px-8 py-6 border-b border-gray-100 flex items-center justify-between bg-white sticky top-0 z-10 rounded-t-2xl">
-                                    <div className="flex-1">
+                                <div className="relative px-4 py-4 md:px-8 md:py-6 border-b border-gray-100 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 bg-white sticky top-0 z-10 rounded-t-2xl">
+                                    <div className="flex-1 text-left">
                                         <h2 className="text-xl font-bold text-gray-900">{viewData.companyName}</h2>
                                         {viewData.customerName && viewData.customerName !== viewData.companyName && (
                                             <p className="text-sm font-medium text-gray-600 mt-1">{viewData.customerName}</p>
@@ -794,7 +892,7 @@ const Customer = ({
                                     </div>
 
                                     {/* Center Search bar */}
-                                    <div className="flex-1 max-w-sm mx-auto">
+                                    <div className="flex-1 w-full md:max-w-sm md:mx-auto">
                                         <div className="relative group mb-3">
                                             <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
                                                 <SearchIcon className="h-4 w-4 text-gray-400 group-focus-within:text-blue-500 transition-colors" />
@@ -812,7 +910,7 @@ const Customer = ({
                                         <div className="flex gap-1.5 justify-center">
                                             <button
                                                 onClick={() => setActiveHistoryTab('sales')}
-                                                className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-all ${activeHistoryTab === 'sales'
+                                                className={`flex-1 md:flex-none px-3 py-1.5 text-xs font-semibold rounded-lg transition-all ${activeHistoryTab === 'sales'
                                                     ? 'bg-blue-600 text-white shadow-sm'
                                                     : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                                                     }`}
@@ -821,7 +919,7 @@ const Customer = ({
                                             </button>
                                             <button
                                                 onClick={() => setActiveHistoryTab('payment')}
-                                                className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-all ${activeHistoryTab === 'payment'
+                                                className={`flex-1 md:flex-none px-3 py-1.5 text-xs font-semibold rounded-lg transition-all ${activeHistoryTab === 'payment'
                                                     ? 'bg-blue-600 text-white shadow-sm'
                                                     : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                                                     }`}
@@ -831,7 +929,7 @@ const Customer = ({
                                         </div>
                                     </div>
 
-                                    <div className="flex-1 flex justify-end self-start gap-2 relative">
+                                    <div className="w-full md:flex-1 flex md:self-start justify-center md:justify-end gap-2 md:relative">
                                         <button
                                             onClick={() => generateCustomerHistoryPDF(
                                                 viewData,
@@ -840,7 +938,7 @@ const Customer = ({
                                                 historyFilters,
                                                 activeHistoryTab
                                             )}
-                                            className="flex items-center gap-2 px-4 py-2 rounded-full border bg-white border-gray-200 text-gray-600 hover:bg-gray-50 hover:border-gray-300 transition-all shadow-sm group"
+                                            className="flex items-center gap-2 px-3 py-1.5 md:px-4 md:py-2 rounded-full border bg-white border-gray-200 text-gray-600 hover:bg-gray-50 hover:border-gray-300 transition-all shadow-sm group"
                                         >
                                             <PrinterIcon className="w-4 h-4 text-gray-400 group-hover:text-blue-600 transition-colors" />
                                             <span className="text-sm font-medium">Print</span>
@@ -849,17 +947,23 @@ const Customer = ({
                                         <button
                                             ref={historyFilterButtonRef}
                                             onClick={() => setShowHistoryFilterPanel(!showHistoryFilterPanel)}
-                                            className={`flex items-center gap-2 px-4 py-2 rounded-full border transition-all shadow-sm ${showHistoryFilterPanel ? 'bg-blue-50 border-blue-200 text-blue-600' : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50 hover:border-gray-300'}`}
+                                            className={`flex items-center gap-2 px-3 py-1.5 md:px-4 md:py-2 rounded-full border transition-all shadow-sm ${showHistoryFilterPanel ? 'bg-blue-50 border-blue-200 text-blue-600' : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50 hover:border-gray-300'}`}
                                         >
                                             <FunnelIcon className="w-4 h-4" />
                                             <span className="text-sm font-medium">Filter</span>
                                         </button>
 
                                         {showHistoryFilterPanel && (
-                                            <div
-                                                ref={historyFilterPanelRef}
-                                                className="absolute right-0 top-12 w-[320px] bg-white rounded-2xl shadow-2xl border border-gray-100 p-6 z-50 animate-in fade-in zoom-in-95 duration-200"
-                                            >
+                                            <>
+                                                {/* Backdrop for mobile */}
+                                                <div 
+                                                    className="fixed inset-0 bg-gray-900/20 backdrop-blur-[2px] z-[40] md:hidden"
+                                                    onClick={() => setShowHistoryFilterPanel(false)}
+                                                ></div>
+                                                <div
+                                                    ref={historyFilterPanelRef}
+                                                    className="absolute right-0 top-12 w-[320px] sm:w-[320px] max-sm:fixed max-sm:inset-x-0 max-sm:top-1/2 max-sm:-translate-y-1/2 max-sm:mx-4 max-sm:w-auto bg-white rounded-2xl shadow-2xl border border-gray-100 p-5 md:p-6 z-50 animate-in fade-in zoom-in-95 duration-200"
+                                                >
                                                 <div className="flex items-center justify-between mb-6">
                                                     <h4 className="text-lg font-bold text-gray-800">Filter History</h4>
                                                     <button
@@ -881,20 +985,21 @@ const Customer = ({
 
                                                 <div className="space-y-4">
                                                     {/* Date Range */}
-                                                    <div className="grid grid-cols-2 gap-3">
+                                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                                                         <CustomDatePicker
                                                             label="START DATE"
                                                             value={historyFilters.startDate}
                                                             onChange={(e) => setHistoryFilters({ ...historyFilters, startDate: e.target.value })}
                                                             compact={true}
-                                                            labelClassName="text-[11px] font-bold text-gray-400 uppercase tracking-wider"
+                                                            labelClassName="text-[10px] md:text-[11px] font-bold text-gray-400 uppercase tracking-wider"
                                                         />
                                                         <CustomDatePicker
                                                             label="END DATE"
                                                             value={historyFilters.endDate}
                                                             onChange={(e) => setHistoryFilters({ ...historyFilters, endDate: e.target.value })}
                                                             compact={true}
-                                                            labelClassName="text-[11px] font-bold text-gray-400 uppercase tracking-wider"
+                                                            rightAlign={true}
+                                                            labelClassName="text-[10px] md:text-[11px] font-bold text-gray-400 uppercase tracking-wider"
                                                         />
                                                     </div>
 
@@ -1180,53 +1285,55 @@ const Customer = ({
                                                     </button>
                                                 </div>
                                             </div>
-                                        )}
+                                        </>
+                                    )}
 
-                                        <button onClick={() => setViewData(null)} className="p-2 hover:bg-gray-50 text-gray-400 hover:text-gray-600 rounded-full transition-all">
+                                        <button onClick={() => setViewData(null)} className="absolute right-4 top-4 md:static p-2 hover:bg-gray-50 text-gray-400 hover:text-gray-600 rounded-full transition-all">
                                             <XIcon className="w-5 h-5" />
                                         </button>
                                     </div>
                                 </div>
 
-                                <div className="flex-1 overflow-auto p-8">
+                                <div className="flex-1 overflow-auto p-4 md:p-8 pt-6 md:pt-8">
                                     {/* Global Summary Cards */}
-                                    <div className={`grid ${activeHistoryTab === 'sales' ? 'grid-cols-6' : 'grid-cols-4'} gap-3 mb-8`}>
+                                    <div className={`grid ${activeHistoryTab === 'sales' ? 'grid-cols-2 md:grid-cols-6' : 'grid-cols-2 md:grid-cols-4'} gap-2 md:gap-3 mb-4 md:mb-8 summary-grid-mobile`}>
                                         {activeHistoryTab === 'sales' && (
                                             <>
-                                                <div className="bg-blue-50/50 p-4 rounded-2xl border border-blue-100 shadow-sm transition-all hover:shadow-md">
-                                                    <p className="text-[10px] text-blue-500 font-bold uppercase tracking-wider mb-1">Total Truck</p>
-                                                    <p className="text-lg font-black text-blue-700">{totalTruck}</p>
+                                                <div className="bg-blue-50/50 p-3 md:p-4 rounded-2xl border border-blue-100 shadow-sm transition-all hover:shadow-md">
+                                                    <p className="text-[9px] md:text-[10px] text-blue-500 font-bold uppercase tracking-wider mb-1">Total Truck</p>
+                                                    <p className="text-base md:text-lg font-black text-blue-700">{totalTruck}</p>
                                                 </div>
-                                                <div className="bg-emerald-50/50 p-4 rounded-2xl border border-emerald-100 shadow-sm transition-all hover:shadow-md">
-                                                    <p className="text-[10px] text-emerald-500 font-bold uppercase tracking-wider mb-1">Total Quantity</p>
-                                                    <p className="text-lg font-black text-emerald-700">{totalQuantity}</p>
+                                                <div className="bg-emerald-50/50 p-3 md:p-4 rounded-2xl border border-emerald-100 shadow-sm transition-all hover:shadow-md">
+                                                    <p className="text-[9px] md:text-[10px] text-emerald-500 font-bold uppercase tracking-wider mb-1">Total Quantity</p>
+                                                    <p className="text-base md:text-lg font-black text-emerald-700">{totalQuantity}</p>
                                                 </div>
                                             </>
                                         )}
-                                        <div className="bg-violet-50/50 p-4 rounded-2xl border border-violet-100 shadow-sm transition-all hover:shadow-md">
-                                            <p className="text-[10px] text-violet-500 font-bold uppercase tracking-wider mb-1">Total Amount</p>
-                                            <p className="text-lg font-black text-violet-700">৳{totalAmount.toLocaleString()}</p>
+                                        <div className="bg-violet-50/50 p-3 md:p-4 rounded-2xl border border-violet-100 shadow-sm transition-all hover:shadow-md">
+                                            <p className="text-[9px] md:text-[10px] text-violet-500 font-bold uppercase tracking-wider mb-1">Total Amount</p>
+                                            <p className="text-base md:text-lg font-black text-violet-700">৳{totalAmount.toLocaleString()}</p>
                                         </div>
-                                        <div className="bg-teal-50/50 p-4 rounded-2xl border border-teal-100 shadow-sm transition-all hover:shadow-md">
-                                            <p className="text-[10px] text-teal-500 font-bold uppercase tracking-wider mb-1">Total Paid</p>
-                                            <p className="text-lg font-black text-teal-700">৳{totalPaidCalculated.toLocaleString()}</p>
+                                        <div className="bg-teal-50/50 p-3 md:p-4 rounded-2xl border border-teal-100 shadow-sm transition-all hover:shadow-md">
+                                            <p className="text-[9px] md:text-[10px] text-teal-500 font-bold uppercase tracking-wider mb-1">Total Paid</p>
+                                            <p className="text-base md:text-lg font-black text-teal-700">৳{totalPaidCalculated.toLocaleString()}</p>
                                         </div>
-                                        <div className="bg-pink-50/50 p-4 rounded-2xl border border-pink-100 shadow-sm transition-all hover:shadow-md">
-                                            <p className="text-[10px] text-pink-500 font-bold uppercase tracking-wider mb-1">Total Discount</p>
-                                            <p className="text-lg font-black text-pink-700">৳{totalDiscount.toLocaleString()}</p>
+                                        <div className="bg-pink-50/50 p-3 md:p-4 rounded-2xl border border-pink-100 shadow-sm transition-all hover:shadow-md">
+                                            <p className="text-[9px] md:text-[10px] text-pink-500 font-bold uppercase tracking-wider mb-1">Total Discount</p>
+                                            <p className="text-base md:text-lg font-black text-pink-700">৳{totalDiscount.toLocaleString()}</p>
                                         </div>
-                                        <div className="bg-orange-50/50 p-4 rounded-2xl border border-orange-100 shadow-sm transition-all hover:shadow-md">
-                                            <p className="text-[10px] text-orange-500 font-bold uppercase tracking-wider mb-1">Total Balance</p>
-                                            <p className="text-lg font-black text-orange-700">৳{totalDueCalculated.toLocaleString()}</p>
+                                        <div className="bg-orange-50/50 p-3 md:p-4 rounded-2xl border border-orange-100 shadow-sm transition-all hover:shadow-md">
+                                            <p className="text-[9px] md:text-[10px] text-orange-500 font-bold uppercase tracking-wider mb-1">Total Balance</p>
+                                            <p className="text-base md:text-lg font-black text-orange-700">৳{totalDueCalculated.toLocaleString()}</p>
                                         </div>
                                     </div>
 
                                     {/* Sales History Table */}
                                     {activeHistoryTab === 'sales' && (
                                         <>
-                                            <h4 className="text-lg font-bold text-gray-800 mb-4">Sales History</h4>
+                                            <h4 className="text-base md:text-lg font-bold text-gray-800 mb-3 md:mb-4">Sales History</h4>
                                             <div className="bg-gray-50 rounded-xl border border-gray-200 overflow-hidden">
-                                                <table className="w-full text-left text-sm">
+                                                {/* Desktop Sales History Table */}
+                                                <table className="w-full text-left text-sm hidden md:table">
                                                     <thead className="bg-white border-b border-gray-200">
                                                         {viewData.customerType === 'Party Customer' ? (
                                                             <tr>
@@ -1364,95 +1471,179 @@ const Customer = ({
                                                                                         // Reconstruct a sale object for the PDF generator
                                                                                         const firstItem = group.items[0];
                                                                                         const saleObject = {
-                                                                                            ...firstItem,
-                                                                                            date: group.date,
-                                                                                            invoiceNo: group.invoiceNo,
-                                                                                            customerId: viewData?._id,
-                                                                                            customerName: viewData?.customerName,
-                                                                                            companyName: viewData?.companyName,
-                                                                                            address: viewData?.address,
-                                                                                            contact: viewData?.phone,
-                                                                                            customerType: viewData?.customerType,
-                                                                                            items: group.items,
-                                                                                            totalAmount: group.totalAmount,
-                                                                                            discount: group.totalDiscount,
-                                                                                            paidAmount: group.items.reduce((sum, item) => sum + (parseFloat(item.paid) || 0), 0),
-                                                                                            lcNo: group.lcNo,
-                                                                                            requestedBy: firstItem.requestedBy,
-                                                                                            requestedByUsername: firstItem.requestedByUsername,
-                                                                                            acceptedBy: firstItem.acceptedBy
-                                                                                        };
-                                                                                        generateSaleInvoicePDF(saleObject, customers);
-                                                                                    }}
-                                                                                    className="p-1.5 hover:bg-emerald-50 text-emerald-600 rounded-lg transition-colors border border-transparent hover:border-emerald-100"
-                                                                                    title="View Invoice"
-                                                                                >
-                                                                                    <FileTextIcon className="w-4 h-4" />
-                                                                                </button>
-                                                                            </td>
+                                                                                             ...firstItem,
+                                                                                             date: group.date,
+                                                                                             invoiceNo: group.invoiceNo,
+                                                                                             customerId: viewData?._id,
+                                                                                             customerName: viewData?.customerName,
+                                                                                             companyName: viewData?.companyName,
+                                                                                             address: viewData?.address,
+                                                                                             contact: viewData?.phone,
+                                                                                             customerType: viewData?.customerType,
+                                                                                             items: group.items,
+                                                                                             totalAmount: group.totalAmount,
+                                                                                             discount: group.totalDiscount,
+                                                                                             paid: firstItem?.paid || 0,
+                                                                                             status: group.status
+                                                                                         };
+                                                                                         generateSaleInvoicePDF(saleObject);
+                                                                                     }}
+                                                                                     className="p-1.5 hover:bg-gray-100 text-gray-400 hover:text-blue-600 rounded-lg transition-colors"
+                                                                                 >
+                                                                                     <FileTextIcon className="w-4 h-4" />
+                                                                                 </button>
+                                                                             </td>
                                                                             <td className="px-4 py-4 text-center">
-                                                                                <span className={`px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider ${group.status === 'Completed' ? 'bg-emerald-100 text-emerald-700' :
-                                                                                    group.status === 'Pending' ? 'bg-orange-100 text-orange-700' : 'bg-gray-100 text-gray-600'
-                                                                                    }`}>
-                                                                                    {group.status || 'Pending'}
+                                                                                <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${group.status === 'Completed' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
+                                                                                    {group.status}
                                                                                 </span>
                                                                             </td>
                                                                         </tr>
 
-                                                                        {/* Expanded Detail Rows */}
-                                                                        {isExpanded && group.items.map((item, idx) => {
-                                                                            const rate = parseFloat(item.quantity) > 0 ? (parseFloat(item.amount || 0) / parseFloat(item.quantity)).toFixed(2) : '0.00';
-                                                                            return (
-                                                                                <tr key={`${invoiceNo}-detail-${idx}`} className="bg-gray-50/50 border-b border-gray-100 last:border-b-2 last:border-gray-200">
-                                                                                    <td className="px-4 py-2 border-l-[3px] border-l-blue-400"></td>
-                                                                                    <td className="px-4 py-2 text-gray-400">
-                                                                                        <div className="flex items-center ml-2">
-                                                                                            <div className="w-2 h-2 rounded-full border border-gray-300 mr-2"></div>
-                                                                                            <span className="text-xs">Item {idx + 1}</span>
-                                                                                        </div>
-                                                                                    </td>
-                                                                                    <td className="px-4 py-2 text-gray-700 font-medium">{item.product || '-'}</td>
-
-                                                                                    {/* Column 4: Qty (Party) or Brand (General) */}
-                                                                                    {isParty ? (
-                                                                                        <td className="px-4 py-2 text-right font-semibold text-gray-700">{parseFloat(item.quantity || 0).toLocaleString()}</td>
-                                                                                    ) : (
-                                                                                        <td className="px-4 py-2 text-gray-600">{item.brand && item.brand !== '-' ? item.brand : "-"}</td>
-                                                                                    )}
-
-                                                                                    {/* Column 5: Truck (Party) or Qty (General) */}
-                                                                                    {isParty ? (
-                                                                                        <td className="px-4 py-2 text-gray-500 text-center">{item.truck || '-'}</td>
-                                                                                    ) : (
-                                                                                        <td className="px-4 py-2 text-right font-semibold text-gray-700">{parseFloat(item.quantity || 0).toLocaleString()}</td>
-                                                                                    )}
-
-                                                                                    {/* Column 6: Rate */}
-                                                                                    <td className="px-4 py-2 text-right font-medium text-gray-600">
-                                                                                        {item.rate ? `৳${parseFloat(item.rate).toLocaleString()}` : `৳${(parseFloat(item.amount || 0) / parseFloat(item.quantity || 1)).toFixed(2)}`}
-                                                                                    </td>
-                                                                                    <td className="px-4 py-2 text-right font-bold text-violet-600">৳{parseFloat(item.amount || 0).toLocaleString()}</td>
-                                                                                    <td className="px-4 py-2 text-right font-medium text-pink-500">৳{parseFloat(item.discount || 0).toLocaleString()}</td>
-                                                                                    <td className="px-4 py-2 text-center"></td>
-                                                                                    <td className="px-4 py-2 text-center text-gray-400 text-xs">{item.status}</td>
-                                                                                </tr>
-                                                                            );
-                                                                        })}
+                                                                        {/* Detailed Rows */}
+                                                                        {isExpanded && group.items.map((item, idx) => (
+                                                                            <tr key={`${index}-${idx}`} className="bg-blue-50/10 border-b border-gray-50/50">
+                                                                                <td className="px-4 py-3 pl-10 text-xs text-gray-400">-{idx + 1}</td>
+                                                                                <td className="px-4 py-3 text-xs text-gray-500 italic">{item.lcNo || '-'}</td>
+                                                                                <td className="px-4 py-3 text-xs text-gray-900 font-medium">{item.product}</td>
+                                                                                {isParty ? (
+                                                                                    <td className="px-4 py-3 text-right text-xs font-bold text-gray-900">{parseFloat(item.quantity).toLocaleString()}</td>
+                                                                                ) : (
+                                                                                    <td className="px-4 py-3 text-xs text-gray-600">{item.brand || '-'}</td>
+                                                                                )}
+                                                                                {isParty ? (
+                                                                                    <td className="px-4 py-3 text-center text-xs text-gray-900 font-medium">{item.truck || '-'}</td>
+                                                                                ) : (
+                                                                                    <td className="px-4 py-3 text-right text-xs font-bold text-gray-900">{parseFloat(item.quantity).toLocaleString()}</td>
+                                                                                )}
+                                                                                <td className="px-4 py-3 text-right text-xs text-gray-500">৳{parseFloat(item.rate).toLocaleString()}</td>
+                                                                                <td className="px-4 py-3 text-right text-xs font-bold text-violet-600/70">৳{parseFloat(item.amount).toLocaleString()}</td>
+                                                                                <td className="px-4 py-3 text-right text-xs font-bold text-pink-500/70">৳{parseFloat(item.discount || 0).toLocaleString()}</td>
+                                                                                <td className="px-4 py-3"></td>
+                                                                                <td className="px-4 py-3"></td>
+                                                                            </tr>
+                                                                        ))}
                                                                     </React.Fragment>
                                                                 );
                                                             })
                                                         ) : (
                                                             <tr>
-                                                                <td colSpan="10" className="px-4 py-12 text-center text-gray-400">
-                                                                    <div className="flex flex-col items-center space-y-2">
-                                                                        <BoxIcon className="w-10 h-10 opacity-10" />
-                                                                        <p className="text-sm font-medium">No sales transactions found</p>
-                                                                    </div>
-                                                                </td>
+                                                                <td colSpan="10" className="px-4 py-8 text-center text-gray-400 font-medium italic">No sales history found matching filters</td>
                                                             </tr>
                                                         )}
                                                     </tbody>
                                                 </table>
+
+                                                {/* Mobile Sales History Card View */}
+                                                <div className="block md:hidden p-4 space-y-3">
+                                                    {filteredSalesHistory && filteredSalesHistory.length > 0 ? (
+                                                        Object.entries(
+                                                            filteredSalesHistory.reduce((groups, item) => {
+                                                                const invoice = item.invoiceNo || 'Unknown';
+                                                                if (!groups[invoice]) {
+                                                                    groups[invoice] = {
+                                                                        invoiceNo: invoice,
+                                                                        lcNo: item.lcNo || '',
+                                                                        date: item.date,
+                                                                        status: item.status,
+                                                                        items: [],
+                                                                        totalAmount: 0,
+                                                                        totalDiscount: 0,
+                                                                        totalQty: 0,
+                                                                        trucks: new Set()
+                                                                    };
+                                                                }
+                                                                groups[invoice].items.push(item);
+                                                                groups[invoice].totalAmount += parseFloat(item.amount || 0);
+                                                                groups[invoice].totalDiscount += parseFloat(item.discount || 0);
+                                                                groups[invoice].totalQty += parseFloat(item.quantity || 0);
+                                                                if (item.lcNo && !groups[invoice].lcNo) groups[invoice].lcNo = item.lcNo;
+                                                                if (item.truck) groups[invoice].trucks.add(item.truck);
+                                                                return groups;
+                                                            }, {})
+                                                        ).map(([invoiceNo, group], index) => {
+                                                            const isParty = viewData?.customerType?.toLowerCase().includes('party');
+                                                            const isExpanded = expandedSalesHistoryCards === invoiceNo;
+                                                            return (
+                                                                <div 
+                                                                    key={index} 
+                                                                    className={`mobile-card transition-all duration-300 ${isExpanded ? 'expanded' : 'collapsed'}`}
+                                                                    onClick={() => {
+                                                                        setExpandedSalesHistoryCards(isExpanded ? null : invoiceNo);
+                                                                    }}
+                                                                >
+                                                                    <div className="mobile-card-header">
+                                                                        <div>
+                                                                            <div className="text-[10px] font-bold text-blue-600 uppercase tracking-wider">{formatDate(group.date)}</div>
+                                                                            <div className="text-sm font-black text-gray-900">{isParty ? (group.lcNo || group.invoiceNo) : (group.invoiceNo)}</div>
+                                                                        </div>
+                                                                        <div className="flex items-center gap-2">
+                                                                            <span className={`customer-status-badge ${group.status === 'Completed' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
+                                                                                {isExpanded ? (
+                                                                                    <span className="shrink-0">{group.status}</span>
+                                                                                ) : (
+                                                                                    <span className="font-bold">
+                                                                                        ৳{group.totalAmount.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
+                                                                                    </span>
+                                                                                )}
+                                                                            </span>
+                                                                        </div>
+                                                                    </div>
+                                                                    
+                                                                    <div className={`transition-all duration-300 overflow-hidden ${isExpanded ? 'max-h-[800px] opacity-100 mt-3' : 'max-h-0 opacity-0'}`}>
+                                                                        <div className="space-y-1">
+                                                                            <div className="flex justify-between text-xs">
+                                                                                <span className="text-gray-500">Products:</span>
+                                                                                <span className="font-bold text-gray-900">
+                                                                                    {group.items.length > 1 ? `${group.items.length} Items` : group.items[0]?.product}
+                                                                                </span>
+                                                                            </div>
+                                                                            <div className="flex justify-between text-xs">
+                                                                                <span className="text-gray-500">Total Qty:</span>
+                                                                                <span className="font-bold text-gray-900">{group.totalQty.toLocaleString()}</span>
+                                                                            </div>
+                                                                            <div className="flex justify-between text-xs pt-1 border-t border-gray-100 mt-1">
+                                                                                <span className="text-gray-500">Amount:</span>
+                                                                                <span className="font-black text-violet-700">৳{group.totalAmount.toLocaleString()}</span>
+                                                                            </div>
+                                                                        </div>
+
+                                                                        <div className="flex gap-2 mt-3">
+                                                                            <button 
+                                                                                onClick={(e) => {
+                                                                                    e.stopPropagation();
+                                                                                    const firstItem = group.items[0];
+                                                                                    const saleObject = {
+                                                                                        ...firstItem,
+                                                                                        date: group.date,
+                                                                                        invoiceNo: group.invoiceNo,
+                                                                                        customerId: viewData?._id,
+                                                                                        customerName: viewData?.customerName,
+                                                                                        companyName: viewData?.companyName,
+                                                                                        address: viewData?.address,
+                                                                                        contact: viewData?.phone,
+                                                                                        customerType: viewData?.customerType,
+                                                                                        items: group.items,
+                                                                                        totalAmount: group.totalAmount,
+                                                                                        discount: group.totalDiscount,
+                                                                                        paid: firstItem?.paid || 0,
+                                                                                        status: group.status
+                                                                                    };
+                                                                                    generateSaleInvoicePDF(saleObject);
+                                                                                }}
+                                                                                className="flex-1 flex items-center justify-center gap-1.5 py-1.5 bg-white border border-gray-200 text-gray-600 rounded-lg text-[10px] font-bold"
+                                                                            >
+                                                                                <FileTextIcon className="w-3 h-3" /> Print Invoice
+                                                                            </button>
+                                                                        </div>
+                                                                    </div>
+                                                                </div>
+                                                            );
+                                                        })
+                                                    ) : (
+                                                        <div className="py-8 text-center text-xs text-gray-400 font-medium italic">No sales history found matching filters</div>
+                                                    )}
+                                                </div>
                                             </div>
                                         </>
                                     )}
@@ -1460,12 +1651,13 @@ const Customer = ({
                                     {/* Payment History Table */}
                                     {activeHistoryTab === 'payment' && (
                                         <>
-                                            <div className="flex items-center justify-between mb-4">
-                                                <h4 className="text-lg font-bold text-gray-800">Payment History</h4>
+                                            <div className="flex items-center justify-between mb-3 md:mb-4">
+                                                <h4 className="text-base md:text-lg font-bold text-gray-800">Payment History</h4>
                                             </div>
 
                                             <div className="bg-gray-50 rounded-xl border border-gray-200 overflow-hidden">
-                                                <table className="w-full text-left text-sm">
+                                                {/* Desktop Payment History Table */}
+                                                <table className="w-full text-left text-sm hidden md:table">
                                                     <thead className="bg-white border-b border-gray-200">
                                                         <tr>
                                                             <th className="px-4 py-3 font-semibold text-gray-600">Date</th>
@@ -1478,8 +1670,8 @@ const Customer = ({
                                                         </tr>
                                                     </thead>
                                                     <tbody>
-                                                        {viewData.paymentHistory && viewData.paymentHistory.length > 0 ? (
-                                                            viewData.paymentHistory.map((payment, index) => (
+                                                        {filteredPaymentHistory && filteredPaymentHistory.length > 0 ? (
+                                                            filteredPaymentHistory.map((payment, index) => (
                                                                 <tr key={payment.id || index} className="border-b border-gray-100 bg-white hover:bg-gray-50 transition-colors">
                                                                     <td className="px-4 py-3 text-gray-600">{formatDate(payment.date)}</td>
                                                                     <td className="px-4 py-3 font-medium text-gray-900">{payment.method}</td>
@@ -1503,23 +1695,98 @@ const Customer = ({
                                                                     </td>
                                                                     <td className="px-4 py-3 text-center">
                                                                         <span className="px-2 py-0.5 bg-emerald-50 text-emerald-600 rounded text-[10px] font-bold">
-                                                                            {payment.status}
+                                                                            {payment.status || 'Received'}
                                                                         </span>
                                                                     </td>
                                                                 </tr>
                                                             ))
                                                         ) : (
                                                             <tr>
-                                                                <td colSpan="7" className="px-4 py-12 text-center text-gray-400">
-                                                                    <div className="flex flex-col items-center">
-                                                                        <BoxIcon className="w-8 h-8 mb-2 opacity-20" />
-                                                                        <p>No payment history available</p>
-                                                                    </div>
-                                                                </td>
+                                                                <td colSpan="7" className="px-4 py-8 text-center text-gray-400 font-medium italic">No payment history found matching filters</td>
                                                             </tr>
                                                         )}
                                                     </tbody>
                                                 </table>
+
+                                                {/* Mobile Payment History Card View */}
+                                                <div className="block md:hidden p-4 space-y-3">
+                                                    {filteredPaymentHistory && filteredPaymentHistory.length > 0 ? (
+                                                        filteredPaymentHistory.map((payment, index) => {
+                                                            const isExpanded = expandedPaymentHistoryCards === index;
+                                                            return (
+                                                                <div 
+                                                                    key={index} 
+                                                                    className={`mobile-card transition-all duration-300 ${isExpanded ? 'expanded' : 'collapsed'}`}
+                                                                    onClick={() => {
+                                                                        setExpandedPaymentHistoryCards(isExpanded ? null : index);
+                                                                    }}
+                                                                >
+                                                                    <div className="mobile-card-header">
+                                                                        <div>
+                                                                            <div className="text-[10px] font-bold text-blue-600 uppercase tracking-wider">{formatDate(payment.date)}</div>
+                                                                            <div className="text-sm font-black text-gray-900">{payment.method}</div>
+                                                                        </div>
+                                                                        <div className="flex items-center gap-2">
+                                                                            <span className={`customer-status-badge ${payment.status === 'Completed' || payment.status === 'Received' || !payment.status ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
+                                                                                {isExpanded ? (
+                                                                                    <span className="shrink-0">{payment.status || 'Received'}</span>
+                                                                                ) : (
+                                                                                    <span className="font-bold">
+                                                                                        ৳{parseFloat(payment.amount).toLocaleString('en-IN', { maximumFractionDigits: 0 })}
+                                                                                    </span>
+                                                                                )}
+                                                                            </span>
+                                                                        </div>
+                                                                    </div>
+
+                                                                    <div className={`transition-all duration-300 overflow-hidden ${isExpanded ? 'max-h-[500px] opacity-100 mt-3' : 'max-h-0 opacity-0'}`}>
+                                                                        <div className="space-y-1">
+                                                                            {(payment.bankName || payment.receiveBy) && (
+                                                                                <div className="flex justify-between text-xs">
+                                                                                    <span className="text-gray-500">
+                                                                                        {payment.method === 'Cash' ? 'Received By:' : 'Bank/Provider:'}
+                                                                                    </span>
+                                                                                    <span className="font-bold text-gray-900">
+                                                                                        {payment.method === 'Cash' ? payment.receiveBy : payment.bankName}
+                                                                                    </span>
+                                                                                </div>
+                                                                            )}
+                                                                            {payment.method === 'Cash' && payment.place && (
+                                                                                <div className="flex justify-between text-xs">
+                                                                                    <span className="text-gray-500">Place:</span>
+                                                                                    <span className="font-bold text-gray-900">{payment.place}</span>
+                                                                                </div>
+                                                                            )}
+                                                                            {payment.method !== 'Cash' && payment.method !== 'Mobile Banking' && payment.branch && (
+                                                                                <div className="flex justify-between text-xs">
+                                                                                    <span className="text-gray-500">Branch:</span>
+                                                                                    <span className="font-bold text-gray-900">{payment.branch}</span>
+                                                                                </div>
+                                                                            )}
+                                                                            {payment.accountNo && (
+                                                                                <div className="flex justify-between text-xs">
+                                                                                    <span className="text-gray-500">Account No:</span>
+                                                                                    <span className="font-mono text-gray-900">{payment.accountNo}</span>
+                                                                                </div>
+                                                                            )}
+                                                                            <div className="flex justify-between text-xs pt-1 border-t border-gray-100 mt-1">
+                                                                                <span className="text-gray-500">Amount:</span>
+                                                                                <span className="font-black text-emerald-600">৳{parseFloat(payment.amount).toLocaleString()}</span>
+                                                                            </div>
+                                                                            {payment.reference && (
+                                                                                <div className="text-[10px] text-blue-500 italic mt-1">
+                                                                                    Ref: {payment.reference}
+                                                                                </div>
+                                                                            )}
+                                                                        </div>
+                                                                    </div>
+                                                                </div>
+                                                            );
+                                                        })
+                                                    ) : (
+                                                        <div className="py-8 text-center text-xs text-gray-400 font-medium italic">No payment history found</div>
+                                                    )}
+                                                </div>
                                             </div>
                                         </>
                                     )}
