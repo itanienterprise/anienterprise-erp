@@ -3252,8 +3252,8 @@ const StockManagement = ({
                                                                 <th onClick={() => requestSort('history', 'importer')} className="px-3 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-50 transition-colors">
                                                                     <div className="flex items-center">Importer <SortIcon config={sortConfig.history} columnKey="importer" /></div>
                                                                 </th>
-                                                                <th onClick={() => requestSort('history', 'itemExporter')} className="px-3 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-50 transition-colors">
-                                                                    <div className="flex items-center">Exporter <SortIcon config={sortConfig.history} columnKey="itemExporter" /></div>
+                                                                <th onClick={() => requestSort('history', 'exporter')} className="px-3 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-50 transition-colors">
+                                                                    <div className="flex items-center">Exporter <SortIcon config={sortConfig.history} columnKey="exporter" /></div>
                                                                 </th>
                                                                 <th onClick={() => requestSort('history', 'truckNo')} className="px-3 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-50 transition-colors">
                                                                     <div className="flex items-center">Truck <SortIcon config={sortConfig.history} columnKey="truckNo" /></div>
@@ -3279,8 +3279,8 @@ const StockManagement = ({
                                                                         <td className="px-3 py-3 whitespace-nowrap text-sm text-gray-600 font-semibold">{item.lcNo}</td>
                                                                         <td className="px-3 py-3 whitespace-nowrap text-sm text-gray-600">{item.port}</td>
                                                                         <td className="px-3 py-3 whitespace-nowrap text-sm text-gray-600 truncate max-w-[120px]" title={item.importer}>{item.importer}</td>
-                                                                        <td className="px-3 py-3 whitespace-nowrap text-sm text-gray-600 truncate max-w-[120px]" title={item.itemExporter}>{item.itemExporter || '-'}</td>
-                                                                        <td className="px-3 py-3 whitespace-nowrap text-sm text-gray-600">{item.truckNo || '-'}</td>
+                                                                        <td className="px-3 py-3 whitespace-nowrap text-sm text-gray-600 truncate max-w-[120px]" title={item.exporter}>{item.exporter || '-'}</td>
+                                                                        <td className="px-3 py-3 whitespace-nowrap text-sm text-gray-600 font-medium whitespace-nowrap">{item.truckNo || '-'}</td>
                                                                         <td className="px-3 py-3 align-top whitespace-nowrap">
                                                                             <div className="space-y-1">
                                                                                 {item.entries.map((entry, eIdx) => (
@@ -3394,7 +3394,7 @@ const StockManagement = ({
                                                                                 </div>
                                                                                 <div>
                                                                                     <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-0.5">Exporter</div>
-                                                                                    <div className="text-gray-700 font-medium truncate" title={item.itemExporter}>{item.itemExporter || '-'}</div>
+                                                                                    <div className="text-gray-700 font-medium truncate" title={item.exporter}>{item.exporter || '-'}</div>
                                                                                 </div>
                                                                                 <div>
                                                                                     <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-0.5">Truck</div>
