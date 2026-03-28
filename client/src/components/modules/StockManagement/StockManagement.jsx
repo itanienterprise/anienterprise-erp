@@ -146,11 +146,16 @@ const StockManagement = ({
 
     // Expand/Collapse state for mobile cards
     const [expandedProducts, setExpandedProducts] = useState(null);
+    const [expandedBrands, setExpandedBrands] = useState(null);
     const [expandedHistoryId, setExpandedHistoryId] = useState(null);
     const [expandedSaleId, setExpandedSaleId] = useState(null);
 
     const toggleProductExpansion = (productName) => {
         setExpandedProducts(prev => prev === productName ? null : productName);
+    };
+
+    const toggleBrandExpansion = (brandId) => {
+        setExpandedBrands(prev => prev === brandId ? null : brandId);
     };
 
     const toggleHistoryExpansion = (historyId) => {
@@ -2669,10 +2674,15 @@ const StockManagement = ({
                                                     {isExpanded ? <ChevronUpIcon className="w-4 h-4 text-gray-400" /> : <ChevronDownIcon className="w-4 h-4 text-gray-400" />}
                                                 </div>
                                                 {!isExpanded && (
-                                                    <div className="flex items-center gap-2 mt-1">
+                                                    <div className="flex items-center flex-wrap gap-2 mt-1.5">
                                                         <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold ${group.totalInHouseQuantity > 0 ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'}`}>
                                                             {group.totalInHouseQuantity > 0 ? 'In Stock' : 'Out of Stock'}
                                                         </span>
+                                                        {group.totalInHouseQuantity > 0 && (
+                                                            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-gray-100 text-gray-700 border border-gray-200">
+                                                                {Math.round(group.inHousePacket).toLocaleString()} BAG • {Math.round(group.inHouseQuantity).toLocaleString()} {group.unit}
+                                                            </span>
+                                                        )}
                                                     </div>
                                                 )}
                                             </div>
@@ -2716,15 +2726,33 @@ const StockManagement = ({
 
                                                 {/* Brands List Mobile */}
                                                 <div className="space-y-3 pl-2 border-l-2 border-blue-100">
-                                                    {group.brandList.map((brand, bIdx) => (
-                                                        <div key={bIdx} className="bg-gray-50/50 rounded-xl p-3 border border-gray-100 space-y-2">
-                                                            <div className="flex justify-between items-center">
-                                                                <span className="font-bold text-gray-800 text-sm truncate pr-2">{brand.brand || '-'}</span>
-                                                                <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold ${brand.totalInHouseQuantity > 0 ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'}`}>
-                                                                    {brand.totalInHouseQuantity > 0 ? 'In Stock' : 'Out of Stock'}
-                                                                </span>
+                                                    {group.brandList.map((brand, bIdx) => {
+                                                        const brandId = `${group.productName}-${brand.brand}`;
+                                                        const isBrandExpanded = expandedBrands === brandId;
+                                                        return (
+                                                        <div key={bIdx} className="bg-gray-50/50 rounded-xl p-3 border border-gray-100 space-y-2 transition-all">
+                                                            <div className="flex justify-between items-start w-full cursor-pointer select-none" onClick={() => toggleBrandExpansion(brandId)}>
+                                                                <div className="flex flex-col gap-1 flex-1 pr-2">
+                                                                    <div className="flex items-center gap-2">
+                                                                        <span className="font-bold text-gray-800 text-sm truncate">{brand.brand || '-'}</span>
+                                                                        {isBrandExpanded ? <ChevronUpIcon className="w-4 h-4 text-gray-400" /> : <ChevronDownIcon className="w-4 h-4 text-gray-400" />}
+                                                                    </div>
+                                                                    {!isBrandExpanded && (
+                                                                        <div className="flex items-center flex-wrap gap-2 mt-1">
+                                                                            <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold ${brand.totalInHouseQuantity > 0 ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'}`}>
+                                                                                {brand.totalInHouseQuantity > 0 ? 'In Stock' : 'Out of Stock'}
+                                                                            </span>
+                                                                            {brand.totalInHouseQuantity > 0 && (
+                                                                                <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-white text-gray-700 border border-gray-200 shadow-sm">
+                                                                                    {Math.round(brand.inHousePacket).toLocaleString()} BAG • {Math.round(brand.inHouseQuantity).toLocaleString()} {group.unit}
+                                                                                </span>
+                                                                            )}
+                                                                        </div>
+                                                                    )}
+                                                                </div>
                                                             </div>
-                                                            <div className="flex flex-col gap-1.5">
+                                                            {isBrandExpanded && (
+                                                            <div className="flex flex-col gap-1.5 animate-in fade-in slide-in-from-top-2 duration-200 pt-2 border-t border-gray-100">
                                                                 <div className="grid grid-cols-3 gap-1">
                                                                     <div className="bg-blue-50 text-blue-700 py-0.5 rounded text-[9px] sm:text-[10px] font-bold border border-blue-100 flex items-center justify-center text-center whitespace-nowrap px-0.5">
                                                                         TOT: {Math.round(brand.totalInHousePacket).toLocaleString()} BAG
@@ -2748,8 +2776,10 @@ const StockManagement = ({
                                                                     </div>
                                                                 </div>
                                                             </div>
+                                                            )}
                                                         </div>
-                                                    ))}
+                                                        );
+                                                    })}
                                                 </div>
                                             </div>
                                         )}
@@ -2769,12 +2799,12 @@ const StockManagement = ({
                                     <th colSpan="8" className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider">
                                         <div className="grid grid-cols-[2.5fr_1.2fr_1.2fr_1.2fr_1.2fr_1.2fr_1.2fr_1fr] gap-4 whitespace-nowrap min-w-[1000px]">
                                             <div className="text-left text-gray-900 pr-2">Brand</div>
-                                            <div className="text-center text-blue-800">LC RECEIVE BAG</div>
-                                            <div className="text-center text-blue-800">LC RECEIVE QTY</div>
+                                            <div className="text-center text-blue-800">Opening Stock Bag</div>
+                                            <div className="text-center text-blue-800">Opening Stock QTY</div>
                                             <div className="text-center text-orange-800">Sale BAG</div>
                                             <div className="text-center text-orange-800">Sale QTY</div>
-                                            <div className="text-center text-green-800">STOCK BAG</div>
-                                            <div className="text-center text-green-800">STOCK QTY</div>
+                                            <div className="text-center text-green-800">Closing Stock Bag</div>
+                                            <div className="text-center text-green-800">Closing Stock QTY</div>
                                             <div className="text-center text-gray-500">Status</div>
                                         </div>
                                     </th>

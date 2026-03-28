@@ -888,7 +888,7 @@ const WarehouseManagement = ({ currentUser }) => {
             }
 
             const responseData = response.data;
-            
+
             if (editingWarehouseId) {
                 setWarehouseData(prev => prev.map(item => item._id === editingWarehouseId ? responseData : item));
             } else {
@@ -1456,8 +1456,8 @@ const WarehouseManagement = ({ currentUser }) => {
                                                         <th colSpan="6" className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider">
                                                             <div className="grid grid-cols-6 gap-4">
                                                                 <div className="text-left font-bold text-gray-800">Brand</div>
-                                                                <div className="text-right font-bold text-emerald-800 uppercase">InHouse QTY</div>
-                                                                <div className="text-right font-bold text-emerald-800 uppercase">InHouse BAG</div>
+                                                                <div className="text-right font-bold text-emerald-800 uppercase">TOTAL STOCK  QTY</div>
+                                                                <div className="text-right font-bold text-emerald-800 uppercase">TOTAL STOCK BAG</div>
                                                                 <div className="text-right font-bold text-blue-800 uppercase">WareHouse QTY</div>
                                                                 <div className="text-right font-bold text-blue-800 uppercase">WareHouse BAG</div>
                                                                 {isAdmin && <div className="text-right font-bold text-gray-500">Actions</div>}

@@ -400,11 +400,11 @@ const StockReport = ({
                                         <th className="border-r border-gray-900 px-2 py-1 text-left text-[13px] font-bold text-gray-900 uppercase tracking-wider w-[18%]" rowSpan={2}>Brand</th>
                                         {reportType === 'detailed' && (
                                             <>
-                                                <th className="border-r border-gray-900 px-1 py-1 text-center text-[11px] font-bold text-gray-900 uppercase tracking-wider" colSpan={2}>Total Inhouse</th>
+                                                <th className="border-r border-gray-900 px-1 py-1 text-center text-[11px] font-bold text-gray-900 uppercase tracking-wider" colSpan={2}>Opening Stock</th>
                                                 <th className="border-r border-gray-900 px-1 py-1 text-center text-[11px] font-bold text-gray-900 uppercase tracking-wider" colSpan={2}>Sale</th>
                                             </>
                                         )}
-                                        <th className="px-1 py-1 text-center text-[11px] font-bold text-gray-900 uppercase tracking-wider border-b border-gray-900" colSpan={2}>Inhouse Stock</th>
+                                        <th className="px-1 py-1 text-center text-[11px] font-bold text-gray-900 uppercase tracking-wider border-b border-gray-900" colSpan={2}>Closing Stock</th>
                                     </tr>
                                     <tr className="bg-gray-50 border-b border-gray-900">
                                         {reportType === 'detailed' && (
@@ -549,8 +549,8 @@ const StockReport = ({
                                         <div className="p-4 space-y-4">
                                             {item.brandList.map((ent, bIndex) => (
                                                 <div key={bIndex} className="space-y-3 pb-4 last:pb-0 border-b last:border-0 border-gray-50">
-                                                    <div className="flex justify-between items-center">
-                                                        <span className="text-sm font-bold text-blue-600">{ent.brand}</span>
+                                                    <div className="flex justify-center items-center w-full">
+                                                        <span className="text-lg sm:text-xl font-black text-blue-600 text-center">{ent.brand}</span>
                                                     </div>
                                                     <div className="grid grid-cols-2 gap-x-4 gap-y-3">
                                                         <div className="space-y-0.5">
@@ -561,25 +561,27 @@ const StockReport = ({
                                                                     return `${whole}${remainder !== 0 ? ` - ${Math.abs(remainder)} kg` : ''}`;
                                                                 })()} BAG
                                                             </p>
-                                                            <p className="text-sm font-black text-gray-900">{Math.round(ent.totalInHouseQuantity)} kg</p>
+                                                            <p className="text-sm font-black text-gray-900">{Math.round(ent.totalInHouseQuantity).toLocaleString()} kg</p>
                                                         </div>
                                                         <div className="space-y-0.5 text-right">
                                                             <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Sale</p>
                                                             <p className="text-xs font-bold text-gray-700">
                                                                 {Number.isInteger(parseFloat(ent.salePacket)) ? parseFloat(ent.salePacket) : parseFloat(ent.salePacket).toFixed(2)} BAG
                                                             </p>
-                                                            <p className="text-sm font-black text-gray-900">{Math.round(ent.saleQuantity)} kg</p>
+                                                            <p className="text-sm font-black text-gray-900">{Math.round(ent.saleQuantity).toLocaleString()} kg</p>
                                                         </div>
-                                                        <div className="space-y-0.5 col-span-2 pt-1 border-t border-gray-50">
-                                                            <p className="text-[10px] font-bold text-blue-400 uppercase tracking-wider">Remaining Inhouse</p>
-                                                            <div className="flex justify-between items-end">
-                                                                <p className="text-xs font-bold text-blue-700">
+                                                        <div className="col-span-full w-full pt-3 pb-2 border-t border-gray-100 flex flex-col items-center justify-center text-center">
+                                                            <p className="text-[10px] sm:text-xs font-bold text-blue-400 uppercase tracking-[0.1em] mb-1">Remaining Inhouse</p>
+                                                            <div className="flex flex-col items-center justify-center w-full space-y-0.5">
+                                                                <p className="text-lg sm:text-xl font-black text-blue-600 text-center">
                                                                     {(() => {
                                                                         const { whole, remainder } = calculatePktRemainder(ent.inHouseQuantity, ent.packetSize);
                                                                         return `${whole}${remainder !== 0 ? ` - ${Math.abs(remainder)} kg` : ''}`;
-                                                                    })()} BAG
+                                                                })()} BAG
                                                                 </p>
-                                                                <p className="text-lg font-black text-blue-600">{Math.round(ent.inHouseQuantity)} kg</p>
+                                                                <p className="text-lg sm:text-xl font-black text-blue-600 text-center">
+                                                                    {Math.round(ent.inHouseQuantity).toLocaleString()} kg
+                                                                </p>
                                                             </div>
                                                         </div>
                                                     </div>
@@ -591,11 +593,11 @@ const StockReport = ({
                                                     <div className="grid grid-cols-2 gap-4">
                                                         <div>
                                                             <p className="text-[10px] font-bold text-gray-400">Total Inhouse</p>
-                                                            <p className="text-sm font-black text-gray-900">{Math.round(item.totalInHouseQuantity)} kg</p>
+                                                            <p className="text-sm font-black text-gray-900">{Math.round(item.totalInHouseQuantity).toLocaleString()} kg</p>
                                                         </div>
                                                         <div className="text-right">
                                                             <p className="text-[10px] font-bold text-blue-500">Net Stock</p>
-                                                            <p className="text-sm font-black text-blue-600">{Math.round(item.inHouseQuantity)} kg</p>
+                                                            <p className="text-sm font-black text-blue-600">{Math.round(item.inHouseQuantity).toLocaleString()} kg</p>
                                                         </div>
                                                     </div>
                                                 </div>
@@ -616,15 +618,15 @@ const StockReport = ({
                                     <div className="grid grid-cols-2 gap-y-6 gap-x-4">
                                         <div className="space-y-1">
                                             <p className="text-[10px] font-bold text-gray-500 uppercase tracking-wider text-center">Total Inhouse</p>
-                                            <p className="text-xl font-black text-white text-center">{Math.round(stockData.totalTotalInHouseQty)}<span className="text-[10px] ml-1 text-gray-400 uppercase">kg</span></p>
+                                            <p className="text-xl font-black text-white text-center">{Math.round(stockData.totalTotalInHouseQty).toLocaleString()}<span className="text-[10px] ml-1 text-gray-400 uppercase">kg</span></p>
                                         </div>
                                         <div className="space-y-1">
                                             <p className="text-[10px] font-bold text-gray-500 uppercase tracking-wider text-center">Total Sale</p>
-                                            <p className="text-xl font-black text-white text-center">{Math.round(stockData.totalSaleQty)}<span className="text-[10px] ml-1 text-gray-400 uppercase">kg</span></p>
+                                            <p className="text-xl font-black text-white text-center">{Math.round(stockData.totalSaleQty).toLocaleString()}<span className="text-[10px] ml-1 text-gray-400 uppercase">kg</span></p>
                                         </div>
-                                        <div className="col-span-2 pt-4 border-t border-gray-800 flex flex-col items-center">
+                                        <div className="col-span-full pt-4 border-t border-gray-800 flex flex-col items-center">
                                             <p className="text-[10px] font-bold text-blue-400 uppercase tracking-[0.2em] mb-1 text-center">Net Inhouse Stock</p>
-                                            <p className="text-4xl font-black text-blue-500 tracking-tighter text-center">{Math.round(stockData.totalInHouseQty)}<span className="text-sm ml-2 text-blue-400 uppercase">kg</span></p>
+                                            <p className="text-4xl font-black text-blue-500 tracking-tighter text-center">{Math.round(stockData.totalInHouseQty).toLocaleString()}<span className="text-sm ml-2 text-blue-400 uppercase">kg</span></p>
                                         </div>
                                     </div>
                                 </div>

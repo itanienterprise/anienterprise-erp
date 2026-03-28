@@ -48,6 +48,7 @@ const PaymentCollection = () => {
 
     // New States
     const [showAddModal, setShowAddModal] = useState(false);
+    const [expandedMobileCards, setExpandedMobileCards] = useState(null);
     const [rawCustomers, setRawCustomers] = useState([]);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [submitStatus, setSubmitStatus] = useState(null);
@@ -531,7 +532,7 @@ const PaymentCollection = () => {
                                             <div className="space-y-1.5">
                                                 <label className="text-[11px] font-bold text-gray-500 uppercase tracking-wider ml-0.5">End Date</label>
                                                 <div className="relative">
-                                                    <CustomDatePicker value={filters.endDate} onChange={(e) => handleFilterChange('endDate', e.target.value)} compact />
+                                                    <CustomDatePicker value={filters.endDate} onChange={(e) => handleFilterChange('endDate', e.target.value)} compact rightAlign={true} />
                                                 </div>
                                             </div>
                                         </div>
@@ -762,7 +763,7 @@ const PaymentCollection = () => {
                 <div className="bg-white/60 backdrop-blur-xl border border-white/50 rounded-2xl shadow-sm overflow-hidden">
                     {/* Table Header Row */}
                     <div className="overflow-x-auto">
-                        <table className="w-full">
+                        <table className="w-full hidden md:table">
                             <thead className="bg-gray-50/50 border-b border-gray-100">
                                 <tr>
                                     <th className="px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase tracking-wider hover:bg-gray-100/50 transition-colors">Date</th>
@@ -843,6 +844,92 @@ const PaymentCollection = () => {
                                 )}
                             </tbody>
                         </table>
+
+                        {/* Mobile Card View */}
+                        <div className="block md:hidden px-1 py-4 space-y-3">
+                            {isLoading ? (
+                                Array(3).fill(0).map((_, i) => (
+                                    <div key={i} className="animate-pulse bg-white border border-gray-100 rounded-xl p-4 space-y-3">
+                                        <div className="h-4 bg-gray-200 rounded w-1/3"></div>
+                                        <div className="h-6 bg-gray-200 rounded w-full"></div>
+                                        <div className="h-4 bg-gray-200 rounded w-1/2"></div>
+                                    </div>
+                                ))
+                            ) : filteredPayments.length > 0 ? (
+                                filteredPayments.map((payment, index) => {
+                                    const itemId = payment.id || index;
+                                    const isExpanded = expandedMobileCards === itemId;
+                                    return (
+                                        <div 
+                                            key={itemId}
+                                            className={`mobile-card transition-all duration-300 ${isExpanded ? 'expanded' : 'collapsed'}`}
+                                            onClick={() => setExpandedMobileCards(isExpanded ? null : itemId)}
+                                        >
+                                            <div className="mobile-card-header">
+                                                <div className="flex-1 min-w-0 pr-2">
+                                                    <div className="mobile-card-title truncate">{payment.companyName || payment.customerName}</div>
+                                                    <div className="text-[10px] text-gray-500 truncate mt-0.5">
+                                                        {formatDate(payment.date)} | {payment.method || '—'}
+                                                    </div>
+                                                </div>
+                                                <div className="flex flex-col items-end gap-1 shrink-0">
+                                                    <span className="font-bold text-blue-600">
+                                                        ৳{(payment.amount || 0).toLocaleString()}
+                                                    </span>
+                                                </div>
+                                            </div>
+                                            
+                                            {isExpanded && (
+                                                <div className="animate-in slide-in-from-top-2 duration-300">
+                                                    <div className="space-y-2 mt-4 text-sm">
+                                                        <div className="mobile-card-row">
+                                                            <span className="mobile-card-label">Method:</span>
+                                                            <span className="mobile-card-value">{payment.method || '—'}</span>
+                                                        </div>
+                                                        <div className="mobile-card-row">
+                                                            <span className="mobile-card-label">{payment.method === 'Cash' ? 'Receive By' : 'Bank Name'}:</span>
+                                                            <span className="mobile-card-value line-clamp-1">{payment.method === 'Cash' ? (payment.receiveBy || '—') : (payment.bankName || '—')}</span>
+                                                        </div>
+                                                        <div className="mobile-card-row">
+                                                            <span className="mobile-card-label">{payment.method === 'Cash' ? 'Place' : 'Branch'}:</span>
+                                                            <span className="mobile-card-value line-clamp-1">{payment.method === 'Cash' ? (payment.place || '—') : (payment.branch || '—')}</span>
+                                                        </div>
+                                                        <div className="mobile-card-row">
+                                                            <span className="mobile-card-label">Account No:</span>
+                                                            <span className="mobile-card-value font-mono">{payment.accountNo || '—'}</span>
+                                                        </div>
+                                                    </div>
+
+                                                    {isAdmin && (
+                                                        <div className="mobile-card-actions">
+                                                            <button 
+                                                                onClick={(e) => { e.stopPropagation(); handleEditInitiation(payment); }}
+                                                                className="flex items-center justify-center gap-1.5 py-2 bg-blue-50 text-blue-600 rounded-lg text-xs font-bold flex-1 hover:bg-blue-100 transition-colors"
+                                                            >
+                                                                <EditIcon className="w-4 h-4" /> Edit
+                                                            </button>
+                                                            <button 
+                                                                onClick={(e) => { e.stopPropagation(); handleDeletePayment(payment); }}
+                                                                className="flex items-center justify-center gap-1.5 py-2 bg-red-50 text-red-600 rounded-lg text-xs font-bold px-4 hover:bg-red-100 transition-colors"
+                                                            >
+                                                                <TrashIcon className="w-4 h-4" />
+                                                            </button>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            )}
+                                        </div>
+                                    );
+                                })
+                            ) : (
+                                <div className="text-center py-8">
+                                    <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-gray-50 mb-3">
+                                        <SearchIcon className="w-6 h-6 text-gray-400" />
+                                    </div>
+                                    <p className="text-gray-500 font-medium">No payments found</p>
+                                </div>
+                            )}
+                        </div>
                     </div>
                 </div>
             )}

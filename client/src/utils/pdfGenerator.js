@@ -569,8 +569,8 @@ export const generateStockReportPDF = (stockData, filters, reportType = 'short')
 
         // --- Table ---
         const pdfHead = reportType === 'detailed'
-            ? [['SL', 'PRODUCT NAME', 'BRAND', 'TOTAL INHOUSE BAG', 'TOTAL INHOUSE QTY', 'SALE BAG', 'SALE QTY', 'INHOUSE BAG', 'INHOUSE QTY']]
-            : [['SL', 'PRODUCT NAME', 'BRAND', 'INHOUSE BAG', 'INHOUSE QTY']];
+            ? [['SL', 'PRODUCT NAME', 'BRAND', 'Opening Stock BAG', 'Opening Stock QTY', 'SALE BAG', 'SALE QTY', 'Closing Stock BAG', 'Closing Stock QTY']]
+            : [['SL', 'PRODUCT NAME', 'BRAND', 'BAG', 'QUANTITY']];
 
         autoTable(doc, {
             startY: yPos + 10,
@@ -681,7 +681,7 @@ export const generateStockReportPDF = (stockData, filters, reportType = 'short')
             doc.text(qtyStrVal, qtyLineX + qtyLabelWidth, y + 21);
         };
 
-        drawSummaryCard(cardX, finalY, "TOTAL INHOUSE STOCK", grandTotalPktStr, stockData.totalTotalInHouseQty, false);
+        drawSummaryCard(cardX, finalY, "OPENING STOCK", grandTotalPktStr, stockData.totalTotalInHouseQty, false);
         cardX += cardWidth + cardGap;
         drawSummaryCard(cardX, finalY, "TOTAL SALE", totalSalePktStr, stockData.totalSaleQty, false);
         cardX += cardWidth + cardGap;
@@ -897,7 +897,7 @@ export const generateWarehouseReportPDF = (displayGroups, filters, totals) => {
         // --- Table ---
         autoTable(doc, {
             startY: yPos + 10,
-            head: [['SL', 'WAREHOUSE', 'PRODUCT NAME', 'BRAND', 'INHOUSE QTY', 'INHOUSE BAG', 'WAREHOUSE QTY', 'WAREHOUSE BAG']],
+            head: [['SL', 'WAREHOUSE', 'PRODUCT NAME', 'BRAND', 'TOTAL STOCK QTY', 'TOTAL STOCK BAG', 'WAREHOUSE QTY', 'WAREHOUSE BAG']],
             body: tableRows,
             theme: 'plain',
             styles: {
@@ -1007,7 +1007,7 @@ export const generateWarehouseReportPDF = (displayGroups, filters, totals) => {
         };
 
         // Card 1: TOTAL INHOUSE STOCK
-        drawSummaryCard(cardX, finalY, "TOTAL INHOUSE STOCK", (() => {
+        drawSummaryCard(cardX, finalY, "TOTAL STOCK", (() => {
             return `${totals.totalInHouseWhole.toLocaleString()}${totals.totalInHouseRem > 0 ? ` - ${totals.totalInHouseRem.toLocaleString()} kg` : ''}`;
         })(), totals.totalInHouseQty, false);
         cardX += cardWidth + cardGap;
