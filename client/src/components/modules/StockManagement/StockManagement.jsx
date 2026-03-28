@@ -3252,6 +3252,9 @@ const StockManagement = ({
                                                                 <th onClick={() => requestSort('history', 'importer')} className="px-3 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-50 transition-colors">
                                                                     <div className="flex items-center">Importer <SortIcon config={sortConfig.history} columnKey="importer" /></div>
                                                                 </th>
+                                                                <th onClick={() => requestSort('history', 'itemExporter')} className="px-3 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-50 transition-colors">
+                                                                    <div className="flex items-center">Exporter <SortIcon config={sortConfig.history} columnKey="itemExporter" /></div>
+                                                                </th>
                                                                 <th onClick={() => requestSort('history', 'truckNo')} className="px-3 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-50 transition-colors">
                                                                     <div className="flex items-center">Truck <SortIcon config={sortConfig.history} columnKey="truckNo" /></div>
                                                                 </th>
@@ -3262,22 +3265,22 @@ const StockManagement = ({
                                                                 <th className="px-3 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">InHouse Pkt</th>
                                                                 <th className="px-3 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">InHouse Qty</th>
                                                                 <th className="px-3 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider text-rose-600">Shortage</th>
-                                                                <th className="px-3 py-3 text-center text-xs font-bold text-gray-500 uppercase tracking-wider">Actions</th>
                                                             </tr>
                                                         </thead>
                                                         <tbody className="divide-y divide-gray-100">
                                                             {history.length === 0 ? (
                                                                 <tr>
-                                                                    <td colSpan="13" className="px-6 py-12 text-center text-gray-400 font-medium italic">No history records found</td>
+                                                                    <td colSpan="14" className="px-6 py-12 text-center text-gray-400 font-medium italic">No history records found</td>
                                                                 </tr>
                                                             ) : (
                                                                 history.map((item, idx) => (
                                                                     <tr key={item._id || idx} className="hover:bg-gray-50/30 transition-colors group border-b border-gray-50">
-                                                                        <td className="px-3 py-3 whitespace-nowrap text-sm text-gray-600">{item.date}</td>
+                                                                        <td className="px-3 py-3 whitespace-nowrap text-sm text-gray-600">{formatDate(item.date)}</td>
                                                                         <td className="px-3 py-3 whitespace-nowrap text-sm text-gray-600 font-semibold">{item.lcNo}</td>
                                                                         <td className="px-3 py-3 whitespace-nowrap text-sm text-gray-600">{item.port}</td>
                                                                         <td className="px-3 py-3 whitespace-nowrap text-sm text-gray-600 truncate max-w-[120px]" title={item.importer}>{item.importer}</td>
-                                                                        <td className="px-3 py-3 whitespace-nowrap text-sm text-gray-600">{item.itemExporter || '-'}</td>
+                                                                        <td className="px-3 py-3 whitespace-nowrap text-sm text-gray-600 truncate max-w-[120px]" title={item.itemExporter}>{item.itemExporter || '-'}</td>
+                                                                        <td className="px-3 py-3 whitespace-nowrap text-sm text-gray-600">{item.truckNo || '-'}</td>
                                                                         <td className="px-3 py-3 align-top whitespace-nowrap">
                                                                             <div className="space-y-1">
                                                                                 {item.entries.map((entry, eIdx) => (
@@ -3327,10 +3330,7 @@ const StockManagement = ({
                                                                                 ))}
                                                                             </div>
                                                                         </td>
-                                                                        <td className="px-3 py-3 whitespace-nowrap text-right text-sm font-medium">
-                                                                            <div className="flex items-center justify-center gap-2">
-                                                                            </div>
-                                                                        </td>
+
                                                                     </tr>
                                                                 ))
                                                             )}
@@ -3391,6 +3391,14 @@ const StockManagement = ({
                                                                                 <div>
                                                                                     <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-0.5">Importer</div>
                                                                                     <div className="text-gray-700 font-medium truncate" title={item.importer}>{item.importer}</div>
+                                                                                </div>
+                                                                                <div>
+                                                                                    <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-0.5">Exporter</div>
+                                                                                    <div className="text-gray-700 font-medium truncate" title={item.itemExporter}>{item.itemExporter || '-'}</div>
+                                                                                </div>
+                                                                                <div>
+                                                                                    <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-0.5">Truck</div>
+                                                                                    <div className="text-gray-700 font-medium truncate">{item.truckNo || '-'}</div>
                                                                                 </div>
                                                                             </div>
 
