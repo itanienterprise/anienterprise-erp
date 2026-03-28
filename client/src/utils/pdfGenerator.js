@@ -804,7 +804,6 @@ export const generateWarehouseReportPDF = (displayGroups, filters, totals) => {
 
                     // Brand details (Individual row per brand)
                     row.push({ content: (brandItem.brand || '-').toUpperCase(), styles: { valign: 'top' } });
-                    row.push({ content: `${Math.round(parseFloat(brandItem.inhouseQty) || 0).toLocaleString()} kg`, styles: { halign: 'right', valign: 'top' } });
                     row.push({
                         content: (() => {
                             const pkt = parseFloat(brandItem.inhousePkt) || 0;
@@ -816,7 +815,7 @@ export const generateWarehouseReportPDF = (displayGroups, filters, totals) => {
                         })(),
                         styles: { halign: 'right', valign: 'top' }
                     });
-                    row.push({ content: `${Math.round(parseFloat(brandItem.whQty) || 0).toLocaleString()} kg`, styles: { halign: 'right', valign: 'top', fontStyle: 'bold' } });
+                    row.push({ content: `${Math.round(parseFloat(brandItem.inhouseQty) || 0).toLocaleString()} kg`, styles: { halign: 'right', valign: 'top' } });
                     row.push({
                         content: (() => {
                             const pkt = parseFloat(brandItem.whPkt) || 0;
@@ -828,6 +827,7 @@ export const generateWarehouseReportPDF = (displayGroups, filters, totals) => {
                         })(),
                         styles: { halign: 'right', valign: 'top', fontStyle: 'bold' }
                     });
+                    row.push({ content: `${Math.round(parseFloat(brandItem.whQty) || 0).toLocaleString()} kg`, styles: { halign: 'right', valign: 'top', fontStyle: 'bold' } });
 
                     tableRows.push(row);
                 });
@@ -836,10 +836,6 @@ export const generateWarehouseReportPDF = (displayGroups, filters, totals) => {
                 if (hasTotal) {
                     tableRows.push([
                         { content: 'SUB TOTAL', styles: { fontStyle: 'bold', halign: 'right', fillColor: [250, 250, 250] }, colSpan: 1 }, // Spanning Brand col
-                        {
-                            content: `${Math.round(pGroup.brands.reduce((sum, b) => sum + (parseFloat(b.inhouseQty) || 0), 0)).toLocaleString()} kg`,
-                            styles: { halign: 'right', fontStyle: 'bold', fillColor: [250, 250, 250] }
-                        },
                         {
                             content: (() => {
                                 const totalWhole = pGroup.brands.reduce((sum, b) => sum + Math.floor(parseFloat(b.inhousePkt) || 0), 0);
@@ -854,7 +850,7 @@ export const generateWarehouseReportPDF = (displayGroups, filters, totals) => {
                             styles: { halign: 'right', fontStyle: 'bold', fillColor: [250, 250, 250], textColor: [0, 0, 0] }
                         },
                         {
-                            content: `${Math.round(pGroup.brands.reduce((sum, b) => sum + (parseFloat(b.whQty) || 0), 0)).toLocaleString()} kg`,
+                            content: `${Math.round(pGroup.brands.reduce((sum, b) => sum + (parseFloat(b.inhouseQty) || 0), 0)).toLocaleString()} kg`,
                             styles: { halign: 'right', fontStyle: 'bold', fillColor: [250, 250, 250] }
                         },
                         {
@@ -869,6 +865,10 @@ export const generateWarehouseReportPDF = (displayGroups, filters, totals) => {
                                 return `${totalWhole.toLocaleString()}${totalRem > 0 ? ` - ${totalRem.toLocaleString()} kg` : ''}`;
                             })(),
                             styles: { halign: 'right', fontStyle: 'bold', fillColor: [250, 250, 250], textColor: [0, 0, 0] }
+                        },
+                        {
+                            content: `${Math.round(pGroup.brands.reduce((sum, b) => sum + (parseFloat(b.whQty) || 0), 0)).toLocaleString()} kg`,
+                            styles: { halign: 'right', fontStyle: 'bold', fillColor: [250, 250, 250] }
                         }
                     ]);
                 }
@@ -878,26 +878,26 @@ export const generateWarehouseReportPDF = (displayGroups, filters, totals) => {
         // Add Grand Total Row
         tableRows.push([
             { content: 'GRAND TOTAL', styles: { fontStyle: 'bold', halign: 'right', fillColor: [240, 240, 240] }, colSpan: 4 },
-            { content: `${Math.round(totals.totalInHouseQty).toLocaleString()} kg`, styles: { halign: 'right', fontStyle: 'bold', fillColor: [240, 240, 240] } },
             {
                 content: (() => {
                     return `${totals.totalInHouseWhole.toLocaleString()}${totals.totalInHouseRem > 0 ? ` - ${totals.totalInHouseRem.toLocaleString()} kg` : ''}`;
                 })(),
                 styles: { halign: 'right', fontStyle: 'bold', fillColor: [240, 240, 240] }
             },
-            { content: `${Math.round(totals.totalWhQty).toLocaleString()} kg`, styles: { halign: 'right', fontStyle: 'bold', fillColor: [240, 240, 240] } },
+            { content: `${Math.round(totals.totalInHouseQty).toLocaleString()} kg`, styles: { halign: 'right', fontStyle: 'bold', fillColor: [240, 240, 240] } },
             {
                 content: (() => {
                     return `${totals.totalWhWhole.toLocaleString()}${totals.totalWhRem > 0 ? ` - ${totals.totalWhRem.toLocaleString()} kg` : ''}`;
                 })(),
                 styles: { halign: 'right', fontStyle: 'bold', fillColor: [240, 240, 240] }
-            }
+            },
+            { content: `${Math.round(totals.totalWhQty).toLocaleString()} kg`, styles: { halign: 'right', fontStyle: 'bold', fillColor: [240, 240, 240] } }
         ]);
 
         // --- Table ---
         autoTable(doc, {
             startY: yPos + 10,
-            head: [['SL', 'WAREHOUSE', 'PRODUCT NAME', 'BRAND', 'TOTAL STOCK QTY', 'TOTAL STOCK BAG', 'WAREHOUSE QTY', 'WAREHOUSE BAG']],
+            head: [['SL', 'WAREHOUSE', 'PRODUCT NAME', 'BRAND', 'TOTAL STOCK BAG', 'TOTAL STOCK QTY', 'WAREHOUSE BAG', 'WAREHOUSE QTY']],
             body: tableRows,
             theme: 'plain',
             styles: {
@@ -920,10 +920,10 @@ export const generateWarehouseReportPDF = (displayGroups, filters, totals) => {
                 1: { cellWidth: 22 },                     // Warehouse
                 2: { cellWidth: 26 },                     // Product Name
                 3: { cellWidth: 40 },                     // Brand (reduced from 44)
-                4: { cellWidth: 26, halign: 'right' },    // Inhouse Qty
-                5: { cellWidth: 26, halign: 'right' },    // Inhouse Pkt (increased from 20)
-                6: { cellWidth: 27, halign: 'right' },    // Warehouse Qty
-                7: { cellWidth: 27, halign: 'right' }     // Warehouse Pkt
+                4: { cellWidth: 26, halign: 'right' },    // Inhouse Pkt
+                5: { cellWidth: 26, halign: 'right' },    // Inhouse Qty
+                6: { cellWidth: 27, halign: 'right' },    // Warehouse Pkt
+                7: { cellWidth: 27, halign: 'right' }     // Warehouse Qty
             },
             margin: { left: margin, right: margin }
         });

@@ -321,7 +321,11 @@ function App() {
   const [stockRecords, setStockRecords] = useState([]);
   const [warehouseData, setWarehouseData] = useState([]);
   const [salesRecords, setSalesRecords] = useState([]);
-  const [stockFilters, setStockFilters] = useState({ startDate: '', endDate: '', lcNo: '', port: '', brand: '', importer: '', exporter: '', productName: '', category: '' });
+  const [stockFilters, setStockFilters] = useState({ 
+    startDate: new Date().toISOString().split('T')[0], 
+    endDate: new Date().toISOString().split('T')[0], 
+    lcNo: '', port: '', brand: '', importer: '', exporter: '', productName: '', category: '' 
+  });
   const [selectedItems, setSelectedItems] = useState(new Set());
   const [isSelectionMode, setIsSelectionMode] = useState(false);
   const longPressTimer = useRef(null);
@@ -641,6 +645,38 @@ function App() {
       } else {
         if (isBulk) {
           // Bulk delete logic
+          if (type === 'sales') {
+            const salesToDelete = salesRecords.filter(s => selectedItems.has(s._id));
+            const customerSalesMap = {};
+            salesToDelete.forEach(sale => {
+              if (sale.customerId) {
+                if (!customerSalesMap[sale.customerId]) customerSalesMap[sale.customerId] = [];
+                const identifier = sale.invoiceNo || sale.lcNo;
+                if (identifier) customerSalesMap[sale.customerId].push(String(identifier));
+              }
+            });
+
+            await Promise.all(Object.entries(customerSalesMap).map(async ([customerId, identifiers]) => {
+              try {
+                const res = await axios.get(`${API_BASE_URL}/api/customers/${customerId}`);
+                const customer = res.data;
+                if (customer && customer.salesHistory) {
+                  const updatedHistory = customer.salesHistory.filter(h => {
+                    const hInv = h.invoiceNo ? String(h.invoiceNo) : '';
+                    const hLc = h.lcNo ? String(h.lcNo) : '';
+                    return !identifiers.includes(hInv) && !identifiers.includes(hLc);
+                  });
+                  await axios.put(`${API_BASE_URL}/api/customers/${customerId}`, {
+                    ...customer,
+                    salesHistory: updatedHistory
+                  });
+                }
+              } catch (e) {
+                console.error('Bulk sales history cleanup failed:', e);
+              }
+            }));
+          }
+
           await Promise.all(Array.from(selectedItems).map(itemId =>
             fetch(`${API_BASE_URL}/api/${endpoint}/${itemId}`, { method: 'DELETE' })
           ));
@@ -650,21 +686,20 @@ function App() {
           await fetch(`${API_BASE_URL}/api/${endpoint}/${id}`, { method: 'DELETE' });
 
           if (type === 'sales') {
-            if (extraData?.customerId && extraData?.invoiceNo) {
+            if (extraData?.customerId && (extraData?.invoiceNo || extraData?.lcNo)) {
               try {
-                const custRes = await fetch(`${API_BASE_URL}/api/customers/${extraData.customerId}`);
-                if (custRes.ok) {
-                  const custRecord = await custRes.json();
-                  const customer = decryptData(custRecord.data);
-                  if (customer.salesHistory) {
-                    const updatedSalesHistory = customer.salesHistory.filter(s => s.invoiceNo !== extraData.invoiceNo);
-                    const updatedCustomer = { ...customer, salesHistory: updatedSalesHistory };
-                    await fetch(`${API_BASE_URL}/api/customers/${extraData.customerId}`, {
-                      method: 'PUT',
-                      headers: { 'Content-Type': 'application/json' },
-                      body: JSON.stringify({ data: encryptData(updatedCustomer) }),
-                    });
-                  }
+                const res = await axios.get(`${API_BASE_URL}/api/customers/${extraData.customerId}`);
+                const customer = res.data;
+                if (customer && customer.salesHistory) {
+                  const updatedSalesHistory = customer.salesHistory.filter(s => {
+                    const matchInv = extraData.invoiceNo && String(s.invoiceNo) === String(extraData.invoiceNo);
+                    const matchLc = extraData.lcNo && String(s.lcNo) === String(extraData.lcNo);
+                    return !matchInv && !matchLc;
+                  });
+                  await axios.put(`${API_BASE_URL}/api/customers/${extraData.customerId}`, {
+                    ...customer,
+                    salesHistory: updatedSalesHistory
+                  });
                 }
               } catch (err) {
                 console.error('Error removing sale from customer history:', err);

@@ -1939,7 +1939,7 @@ const SaleManagement = ({
                 )}
 
                 {!showForm && (
-                    <div className="flex items-center justify-end gap-2 md:gap-3 z-50 flex-nowrap">
+                    <div className="grid grid-cols-3 md:flex items-center justify-center md:justify-end gap-1.5 md:gap-3 z-50 w-full md:w-auto">
                         {/* Filter Button */}
                         <div className="relative">
                             <button
@@ -3497,9 +3497,7 @@ const SaleManagement = ({
                                                         </>
                                                     )}
                                                 </div>
-                                            ) : (
-                                                <ChevronDownIcon className="w-5 h-5 text-gray-300 opacity-60" />
-                                            )}
+                                            ) : null}
                                         </div>
                                     </div>
 

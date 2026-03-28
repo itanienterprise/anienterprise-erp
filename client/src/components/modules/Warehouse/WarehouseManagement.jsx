@@ -1456,10 +1456,10 @@ const WarehouseManagement = ({ currentUser }) => {
                                                         <th colSpan="6" className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider">
                                                             <div className="grid grid-cols-6 gap-4">
                                                                 <div className="text-left font-bold text-gray-800">Brand</div>
-                                                                <div className="text-right font-bold text-emerald-800 uppercase">TOTAL STOCK  QTY</div>
                                                                 <div className="text-right font-bold text-emerald-800 uppercase">TOTAL STOCK BAG</div>
-                                                                <div className="text-right font-bold text-blue-800 uppercase">WareHouse QTY</div>
+                                                                <div className="text-right font-bold text-emerald-800 uppercase">TOTAL STOCK QTY</div>
                                                                 <div className="text-right font-bold text-blue-800 uppercase">WareHouse BAG</div>
+                                                                <div className="text-right font-bold text-blue-800 uppercase">WareHouse QTY</div>
                                                                 {isAdmin && <div className="text-right font-bold text-gray-500">Actions</div>}
                                                             </div>
                                                         </th>
@@ -1484,22 +1484,22 @@ const WarehouseManagement = ({ currentUser }) => {
                                                                                 <div key={bIdx} className="grid grid-cols-6 gap-4 items-center">
                                                                                     <div className="text-sm text-gray-600 font-medium">{brand.brand}</div>
                                                                                     <div className="text-sm text-black text-right font-bold">
-                                                                                        {parseFloat(brand.inhouseQty || 0).toLocaleString()} kg
-                                                                                    </div>
-                                                                                    <div className="text-sm text-black text-right font-bold">
                                                                                         {(() => {
                                                                                             const { whole, remainder } = calculatePktRemainder(brand.inhouseQty, brand.packetSize);
                                                                                             return `${whole.toLocaleString()} - ${remainder.toLocaleString()} kg`;
                                                                                         })()}
                                                                                     </div>
                                                                                     <div className="text-sm text-black text-right font-bold">
-                                                                                        {parseFloat(brand.whQty || 0).toLocaleString()} kg
+                                                                                        {parseFloat(brand.inhouseQty || 0).toLocaleString()} kg
                                                                                     </div>
                                                                                     <div className="text-sm text-black text-right font-bold">
                                                                                         {(() => {
                                                                                             const { whole, remainder } = calculatePktRemainder(brand.whQty, brand.packetSize);
                                                                                             return `${whole.toLocaleString()} - ${remainder.toLocaleString()} kg`;
                                                                                         })()}
+                                                                                    </div>
+                                                                                    <div className="text-sm text-black text-right font-bold">
+                                                                                        {parseFloat(brand.whQty || 0).toLocaleString()} kg
                                                                                     </div>
                                                                                     {isAdmin && (
                                                                                         <div className="flex items-center justify-end gap-2">
@@ -1538,7 +1538,7 @@ const WarehouseManagement = ({ currentUser }) => {
                                                                     {whGroup.products.reduce((total, p) => total + p.brands.length, 0)} Items
                                                                 </span>
                                                             )}
-                                                            {isExpanded ? <ChevronUpIcon className="w-5 h-5 text-gray-400" /> : <ChevronDownIcon className="w-5 h-5 text-gray-400" />}
+
                                                         </div>
                                                     </div>
                                                     {isExpanded && (
@@ -1558,7 +1558,7 @@ const WarehouseManagement = ({ currentUser }) => {
                                                                                         {prodGroup.brands.length} {prodGroup.brands.length > 1 ? 'Brands' : 'Brand'}
                                                                                     </span>
                                                                                 )}
-                                                                                {isProdExpanded ? <ChevronUpIcon className="w-4 h-4 text-gray-400" /> : <ChevronDownIcon className="w-4 h-4 text-gray-400" />}
+
                                                                             </div>
                                                                         </div>
 
@@ -1580,10 +1580,6 @@ const WarehouseManagement = ({ currentUser }) => {
                                                                                                 <p className="text-[10px] font-bold text-emerald-600 uppercase tracking-wider truncate">InHouse Info</p>
                                                                                                 <div className="bg-white p-1.5 sm:p-2 rounded-lg border border-emerald-100 h-full flex flex-col justify-center min-w-0">
                                                                                                     <div className="flex flex-col xl:flex-row xl:items-end justify-between mb-1 gap-0.5 xl:gap-1">
-                                                                                                        <span className="text-[10px] font-bold text-gray-400 uppercase">QTY</span>
-                                                                                                        <span className="text-[11px] sm:text-xs font-black text-emerald-700 truncate w-full xl:w-auto xl:text-right">{parseFloat(brand.inhouseQty || 0).toLocaleString()} kg</span>
-                                                                                                    </div>
-                                                                                                    <div className="flex flex-col xl:flex-row xl:items-end justify-between border-t border-emerald-50 pt-1 gap-0.5 xl:gap-1">
                                                                                                         <span className="text-[10px] font-bold text-gray-400 uppercase">BAG</span>
                                                                                                         <span className="text-[12px] sm:text-xs font-bold text-gray-600 truncate w-full xl:w-auto xl:text-right">
                                                                                                             {(() => {
@@ -1592,16 +1588,16 @@ const WarehouseManagement = ({ currentUser }) => {
                                                                                                             })()}
                                                                                                         </span>
                                                                                                     </div>
+                                                                                                    <div className="flex flex-col xl:flex-row xl:items-end justify-between border-t border-emerald-50 pt-1 gap-0.5 xl:gap-1">
+                                                                                                        <span className="text-[10px] font-bold text-gray-400 uppercase">QTY</span>
+                                                                                                        <span className="text-[11px] sm:text-xs font-black text-emerald-700 truncate w-full xl:w-auto xl:text-right">{parseFloat(brand.inhouseQty || 0).toLocaleString()} kg</span>
+                                                                                                    </div>
                                                                                                 </div>
                                                                                             </div>
                                                                                             <div className="space-y-1 min-w-0">
                                                                                                 <p className="text-[10px] font-bold text-blue-600 uppercase tracking-wider truncate">Warehouse Info</p>
                                                                                                 <div className="bg-white p-1.5 sm:p-2 rounded-lg border border-blue-100 h-full flex flex-col justify-center min-w-0">
                                                                                                     <div className="flex flex-col xl:flex-row xl:items-end justify-between mb-1 gap-0.5 xl:gap-1">
-                                                                                                        <span className="text-[10px] font-bold text-gray-400 uppercase">QTY</span>
-                                                                                                        <span className="text-[11px] sm:text-xs font-black text-blue-700 truncate w-full xl:w-auto xl:text-right">{parseFloat(brand.whQty || 0).toLocaleString()} kg</span>
-                                                                                                    </div>
-                                                                                                    <div className="flex flex-col xl:flex-row xl:items-end justify-between border-t border-blue-50 pt-1 gap-0.5 xl:gap-1">
                                                                                                         <span className="text-[10px] font-bold text-gray-400 uppercase">BAG</span>
                                                                                                         <span className="text-[12px] sm:text-xs font-bold text-gray-600 truncate w-full xl:w-auto xl:text-right">
                                                                                                             {(() => {
@@ -1609,6 +1605,10 @@ const WarehouseManagement = ({ currentUser }) => {
                                                                                                                 return `${whole.toLocaleString()}${remainder > 0 ? ` - ${remainder.toLocaleString()} kg` : ''}`;
                                                                                                             })()}
                                                                                                         </span>
+                                                                                                    </div>
+                                                                                                    <div className="flex flex-col xl:flex-row xl:items-end justify-between border-t border-blue-50 pt-1 gap-0.5 xl:gap-1">
+                                                                                                        <span className="text-[10px] font-bold text-gray-400 uppercase">QTY</span>
+                                                                                                        <span className="text-[11px] sm:text-xs font-black text-blue-700 truncate w-full xl:w-auto xl:text-right">{parseFloat(brand.whQty || 0).toLocaleString()} kg</span>
                                                                                                     </div>
                                                                                                 </div>
                                                                                             </div>

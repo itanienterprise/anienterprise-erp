@@ -53,6 +53,8 @@ const PaymentCollection = () => {
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [submitStatus, setSubmitStatus] = useState(null);
     const [activeDropdown, setActiveDropdown] = useState(null);
+    const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+    const [paymentToDelete, setPaymentToDelete] = useState(null);
     const [customerSearchQuery, setCustomerSearchQuery] = useState('');
     const [banks, setBanks] = useState([]);
     const [bankSearchQuery, setBankSearchQuery] = useState('');
@@ -252,17 +254,35 @@ const PaymentCollection = () => {
         }));
     };
 
-    const handleDeletePayment = async (payment) => {
-        if (!window.confirm('Are you sure you want to delete this payment record?')) return;
+    const handleDeletePayment = (payment) => {
+        setPaymentToDelete(payment);
+        setShowDeleteConfirm(true);
+    };
+
+    const confirmDelete = async () => {
+        if (!paymentToDelete) return;
+        
+        setIsSubmitting(true);
         try {
-            const custRes = await axios.get(`${API_BASE_URL}/api/customers/${payment.customerId}`);
+            const custRes = await axios.get(`${API_BASE_URL}/api/customers/${paymentToDelete.customerId}`);
             const customer = custRes.data;
-            const updatedHistory = (customer.paymentHistory || []).filter(p => p.id !== payment.id);
+            const updatedHistory = (customer.paymentHistory || []).filter(p => p.id !== paymentToDelete.id);
             const updatedCustomer = { ...customer, paymentHistory: updatedHistory };
-            await axios.put(`${API_BASE_URL}/api/customers/${payment.customerId}`, updatedCustomer);
-            fetchPayments();
+            await axios.put(`${API_BASE_URL}/api/customers/${paymentToDelete.customerId}`, updatedCustomer);
+            
+            // Show success briefly
+            setSubmitStatus('success');
+            setTimeout(() => {
+                setShowDeleteConfirm(false);
+                setPaymentToDelete(null);
+                setSubmitStatus(null);
+                fetchPayments();
+            }, 1000);
         } catch (error) {
             console.error('Error deleting payment:', error);
+            setSubmitStatus('error');
+        } finally {
+            setIsSubmitting(false);
         }
     };
 
@@ -1420,6 +1440,75 @@ const PaymentCollection = () => {
                 onClose={() => setShowReport(false)}
                 payments={filteredPayments}
             />
+
+            {/* Premium Delete Confirmation Modal */}
+            {showDeleteConfirm && (
+                <div className="fixed inset-0 z-[2000] flex items-center justify-center p-4">
+                    {/* Backdrop */}
+                    <div 
+                        className="absolute inset-0 bg-slate-900/60 backdrop-blur-md animate-in fade-in duration-300"
+                        onClick={() => !isSubmitting && setShowDeleteConfirm(false)}
+                    ></div>
+                    
+                    {/* Modal Card */}
+                    <div className="relative bg-white/90 backdrop-blur-2xl border border-white/50 rounded-3xl shadow-2xl p-8 max-w-md w-full animate-in zoom-in slide-in-from-bottom-8 duration-500">
+                        {/* Status Icon */}
+                        <div className={`flex items-center justify-center w-20 h-20 rounded-full mx-auto mb-6 transition-all duration-500 ${
+                            submitStatus === 'success' ? 'bg-emerald-100 text-emerald-600' : 
+                            submitStatus === 'error' ? 'bg-red-100 text-red-600' : 'bg-red-50 text-red-500'
+                        }`}>
+                            {submitStatus === 'success' ? (
+                                <CheckIcon className="w-10 h-10 animate-in zoom-in duration-300" />
+                            ) : (
+                                <TrashIcon className={`w-10 h-10 ${!isSubmitting && !submitStatus ? 'animate-bounce' : ''}`} />
+                            )}
+                        </div>
+
+                        <h3 className="text-2xl font-black text-gray-900 text-center mb-3 tracking-tight">
+                            {submitStatus === 'success' ? 'Deleted Successfully' : 'Delete Record?'}
+                        </h3>
+                        
+                        <p className="text-gray-500 text-center mb-8 leading-relaxed font-medium">
+                            {submitStatus === 'success' 
+                                ? 'The payment record has been removed from the system.' 
+                                : `Are you sure you want to delete the payment of ৳${paymentToDelete?.amount?.toLocaleString()} from ${paymentToDelete?.companyName || paymentToDelete?.customerName}? This action cannot be undone.`
+                            }
+                        </p>
+
+                        {!submitStatus && (
+                            <div className="flex gap-4">
+                                <button
+                                    onClick={() => setShowDeleteConfirm(false)}
+                                    disabled={isSubmitting}
+                                    className="flex-1 px-6 py-3.5 bg-gray-100 hover:bg-gray-200 text-gray-600 font-bold rounded-2xl transition-all active:scale-95 disabled:opacity-50"
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    onClick={confirmDelete}
+                                    disabled={isSubmitting}
+                                    className="flex-1 px-6 py-3.5 bg-gradient-to-r from-red-500 to-rose-600 hover:from-red-600 hover:to-rose-700 text-white font-bold rounded-2xl shadow-lg shadow-red-500/25 transition-all active:scale-95 disabled:opacity-50 flex items-center justify-center gap-2"
+                                >
+                                    {isSubmitting ? (
+                                        <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                                    ) : (
+                                        'Confirm'
+                                    )}
+                                </button>
+                            </div>
+                        )}
+                        
+                        {submitStatus === 'error' && (
+                            <button
+                                onClick={() => setSubmitStatus(null)}
+                                className="w-full px-6 py-3.5 bg-red-600 text-white font-bold rounded-2xl transition-all"
+                            >
+                                Try Again
+                            </button>
+                        )}
+                    </div>
+                </div>
+            )}
         </div>
     );
 };

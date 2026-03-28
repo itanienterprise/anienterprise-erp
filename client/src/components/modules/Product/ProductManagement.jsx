@@ -420,9 +420,7 @@ const ProductManagement = ({ products, fetchProducts }) => {
                                                         </button>
                                                     </>
                                                 )}
-                                                <div className={`p-1 transition-transform duration-300 ${isExpanded ? 'rotate-180' : ''}`}>
-                                                    <ChevronDownIcon className="w-4 h-4 text-gray-400" />
-                                                </div>
+
                                             </div>
                                         </div>
 
