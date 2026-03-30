@@ -97,58 +97,6 @@ const Customer = ({
         mobileType: false
     };
     const [historyFilterDropdownOpen, setHistoryFilterDropdownOpen] = useState(initialHistoryFilterDropdownState);
-    const [isSyncing, setIsSyncing] = useState(false);
-
-    const handleSyncHistory = async (customerId) => {
-        if (!window.confirm('This will verify all sales history entries against the database and remove orphaned records. Continue?')) return;
-        
-        setIsSyncing(true);
-        try {
-            // 1. Fetch all sales (fully decrypted by axios)
-            const salesRes = await api.get(`${API_BASE_URL}/api/sales`);
-            const allSales = salesRes; // api.get already returns data
-            
-            // Generate set of valid identifiers for matching
-            const validInvoices = new Set(allSales.map(s => s.invoiceNo ? String(s.invoiceNo) : null).filter(Boolean));
-            const validLcNos = new Set(allSales.map(s => s.lcNo ? String(s.lcNo) : null).filter(Boolean));
-
-            // 2. Fetch current customer
-            const customer = await api.get(`${API_BASE_URL}/api/customers/${customerId}`);
-
-            if (customer && customer.salesHistory) {
-                const originalCount = customer.salesHistory.length;
-                const updatedHistory = customer.salesHistory.filter(h => {
-                    const hInv = h.invoiceNo ? String(h.invoiceNo) : null;
-                    const hLc = h.lcNo ? String(h.lcNo) : null;
-                    // Keep if either invoiceNo or lcNo exists in valid sets
-                    const isValid = (hInv && validInvoices.has(hInv)) || (hLc && validLcNos.has(hLc));
-                    return isValid;
-                });
-
-                if (updatedHistory.length !== originalCount) {
-                    await api.put(`${API_BASE_URL}/api/customers/${customerId}`, {
-                        ...customer,
-                        salesHistory: updatedHistory
-                    });
-                    
-                    // Refresh local UI states
-                    setCustomers(prev => prev.map(c => c._id === customerId ? { ...c, salesHistory: updatedHistory } : c));
-                    if (viewData && viewData._id === customerId) {
-                        setViewData({ ...viewData, salesHistory: updatedHistory });
-                    }
-                    
-                    alert(`Sync complete! Removed ${originalCount - updatedHistory.length} orphaned records.`);
-                } else {
-                    alert('Sales history is already in sync.');
-                }
-            }
-        } catch (err) {
-            console.error('History sync failed:', err);
-            alert('Failed to sync history. Please check console.');
-        } finally {
-            setIsSyncing(false);
-        }
-    };
 
     // Filter Refs
     const lcNoFilterRef = useRef(null);
@@ -1384,19 +1332,6 @@ const Customer = ({
                                         <>
                                             <div className="flex items-center gap-4 mb-3 md:mb-4">
                                                 <h4 className="text-base md:text-lg font-bold text-gray-800">Sales History</h4>
-                                                <button
-                                                    onClick={() => handleSyncHistory(viewData._id)}
-                                                    disabled={isSyncing}
-                                                    className={`flex items-center gap-2 px-3 py-1.5 text-xs font-semibold rounded-lg transition-all duration-200 
-                                                        ${isSyncing 
-                                                            ? 'bg-gray-100 text-gray-400 cursor-not-allowed' 
-                                                            : 'bg-blue-50 text-blue-600 hover:bg-blue-100'
-                                                        }`}
-                                                    title="Verify and clean up sales history"
-                                                >
-                                                    <RefreshIcon className={`w-3.5 h-3.5 ${isSyncing ? 'animate-spin' : ''}`} />
-                                                    {isSyncing ? 'Syncing...' : 'Sync History'}
-                                                </button>
                                             </div>
                                             <div className="bg-gray-50 rounded-xl border border-gray-200 overflow-hidden">
                                                 {/* Desktop Sales History Table */}
