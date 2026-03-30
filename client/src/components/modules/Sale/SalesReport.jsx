@@ -351,9 +351,9 @@ const SalesReport = ({
                                                     </div>
 
                                                     <div className="grid grid-cols-2 gap-3">
-                                                        {/* IND CNF Filter */}
+                                                        {/* IND C&F Filter */}
                                                         <div className={`space-y-1.5 relative ${filterDropdownOpen.indCnf ? 'z-50' : 'z-10'}`} ref={indCnfFilterRef}>
-                                                            <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider pl-1 font-mono">IND CNF</label>
+                                                            <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider pl-1 font-mono">IND C&F</label>
                                                             <div className="relative">
                                                                 <input
                                                                     type="text"
@@ -364,7 +364,7 @@ const SalesReport = ({
                                                                         setFilterDropdownOpen({ ...initialFilterDropdownState, indCnf: true });
                                                                     }}
                                                                     onFocus={() => setFilterDropdownOpen({ ...initialFilterDropdownState, indCnf: true })}
-                                                                    placeholder={saleFilters.indCnf || "Search IND CNF..."}
+                                                                    placeholder={saleFilters.indCnf || "Search IND C&F..."}
                                                                     className={`w-full px-4 py-2.5 bg-white border border-gray-100 rounded-xl text-sm focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all shadow-sm hover:border-gray-200 pr-10 ${saleFilters.indCnf ? 'placeholder:text-gray-900 placeholder:font-semibold text-gray-900 font-semibold' : 'placeholder:text-gray-300'}`}
                                                                 />
                                                                 <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1.5">
@@ -409,9 +409,9 @@ const SalesReport = ({
                                                             })()}
                                                         </div>
 
-                                                        {/* BD CNF Filter */}
+                                                        {/* BD C&F Filter */}
                                                         <div className={`space-y-1.5 relative ${filterDropdownOpen.bdCnf ? 'z-50' : 'z-10'}`} ref={bdCnfFilterRef}>
-                                                            <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider pl-1 font-mono">BD CNF</label>
+                                                            <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider pl-1 font-mono">BD C&F</label>
                                                             <div className="relative">
                                                                 <input
                                                                     type="text"
@@ -422,7 +422,7 @@ const SalesReport = ({
                                                                         setFilterDropdownOpen({ ...initialFilterDropdownState, bdCnf: true });
                                                                     }}
                                                                     onFocus={() => setFilterDropdownOpen({ ...initialFilterDropdownState, bdCnf: true })}
-                                                                    placeholder={saleFilters.bdCnf || "Search BD CNF..."}
+                                                                    placeholder={saleFilters.bdCnf || "Search BD C&F..."}
                                                                     className={`w-full px-4 py-2.5 bg-white border border-gray-100 rounded-xl text-sm focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all shadow-sm hover:border-gray-200 pr-10 ${saleFilters.bdCnf ? 'placeholder:text-gray-900 placeholder:font-semibold text-gray-900 font-semibold' : 'placeholder:text-gray-300'}`}
                                                                 />
                                                                 <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1.5">
@@ -810,8 +810,8 @@ const SalesReport = ({
                                             <>
                                                 <th className="border-r border-gray-900 px-0.5 py-1.5 text-center text-[12px] font-bold text-gray-900 uppercase whitespace-nowrap">Importer</th>
                                                 <th className="border-r border-gray-900 px-0.5 py-1.5 text-center text-[12px] font-bold text-gray-900 uppercase whitespace-nowrap">Port</th>
-                                                <th className="border-r border-gray-900 px-0.5 py-1.5 text-center text-[12px] font-bold text-gray-900 uppercase whitespace-nowrap">IND CNF</th>
-                                                <th className="border-r border-gray-900 px-0.5 py-1.5 text-center text-[12px] font-bold text-gray-900 uppercase whitespace-nowrap">BD CNF</th>
+                                                <th className="border-r border-gray-900 px-0.5 py-1.5 text-center text-[12px] font-bold text-gray-900 uppercase whitespace-nowrap">IND C&F</th>
+                                                <th className="border-r border-gray-900 px-0.5 py-1.5 text-center text-[12px] font-bold text-gray-900 uppercase whitespace-nowrap">BD C&F</th>
                                                 <th className="border-r border-gray-900 px-1 py-1.5 text-left text-[12px] font-bold text-gray-900 uppercase whitespace-nowrap">Party Name</th>
                                             </>
                                         ) : (

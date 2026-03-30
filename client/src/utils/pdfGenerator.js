@@ -1816,7 +1816,7 @@ export const generateSalesReportPDF = (reportData, filters, summary, saleType = 
         const totalDiscount = reportData.reduce((sum, s) => sum + (parseFloat(s.discount) || 0), 0);
 
         const headRow = saleType === 'Border'
-            ? [['SL', 'Date', 'LC No', 'Importer', 'Port', 'IND CNF', 'BD CNF', 'Party Name', 'Product', 'Qty', 'Truck', 'Price', 'Total']]
+            ? [['SL', 'Date', 'LC No', 'Importer', 'Port', 'IND C&F', 'BD C&F', 'Party Name', 'Product', 'Qty', 'Truck', 'Price', 'Total']]
             : [['SL', 'Date', 'Invoice', 'Company', 'Product', 'Brand', 'Qty', 'Price', 'Total', 'Disc', 'Paid', 'Due']];
 
         const footRow = [[
@@ -1864,8 +1864,8 @@ export const generateSalesReportPDF = (reportData, filters, summary, saleType = 
                 2: { cellWidth: 26, halign: 'center' },    // LC No
                 3: { cellWidth: 32, noWrap: true },        // Importer
                 4: { cellWidth: 22, noWrap: true },        // Port
-                5: { cellWidth: 30, noWrap: true },        // IND CNF
-                6: { cellWidth: 32, noWrap: true },        // BD CNF
+                5: { cellWidth: 30, noWrap: true },        // IND C&F
+                6: { cellWidth: 32, noWrap: true },        // BD C&F
                 7: { cellWidth: 34, noWrap: true },        // Party Name
                 8: { cellWidth: 18, overflow: 'linebreak' }, // Product
                 9: { cellWidth: 16, halign: 'right' },     // Qty

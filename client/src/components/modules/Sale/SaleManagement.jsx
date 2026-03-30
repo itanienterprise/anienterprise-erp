@@ -38,6 +38,7 @@ const SaleManagement = ({
     const [products, setProducts] = useState([]);
     const [warehouses, setWarehouses] = useState([]);
     const [stockRecords, setStockRecords] = useState([]);
+    const [exportersList, setExportersList] = useState([]);
     const [importersList, setImportersList] = useState([]);
     const [portsList, setPortsList] = useState([]);
     const [isLoading, setIsLoading] = useState(false);
@@ -192,6 +193,21 @@ const SaleManagement = ({
         const role = (currentUser.role || '').toLowerCase();
         return ['admin', 'incharge', 'sales manager'].includes(role);
     }, [currentUser]);
+
+    const fetchExporters = async () => {
+        try {
+            const response = await axios.get(`${API_BASE_URL}/api/exporters`);
+            setExportersList(Array.isArray(response.data) ? response.data : []);
+        } catch (error) {
+            console.error('Error fetching exporters:', error);
+        }
+    };
+
+    useEffect(() => {
+        if (saleType === 'Border') {
+            fetchExporters();
+        }
+    }, [saleType]);
 
     const processSaleEffects = async (saleData, isEditing = false) => {
         // Resolve Customer ID if missing but name is present
@@ -1209,6 +1225,7 @@ const SaleManagement = ({
             port: '',
             indianCnF: '',
             bdCnf: '',
+            exporter: '',
             truck: '',
             items: [{
                 productId: '',
@@ -1873,12 +1890,12 @@ const SaleManagement = ({
             );
             if (!hasProduct) return false;
         }
-        // IND CNF
+        // IND C&F
         if (saleFilters.indCnf) {
             const ic = (sale.indianCnF || '').toLowerCase();
             if (!ic.includes(saleFilters.indCnf.toLowerCase())) return false;
         }
-        // BD CNF
+        // BD C&F
         if (saleFilters.bdCnf) {
             const bc = (sale.bdCnf || '').toLowerCase();
             if (!bc.includes(saleFilters.bdCnf.toLowerCase())) return false;
@@ -2096,9 +2113,9 @@ const SaleManagement = ({
                                                         </div>
 
                                                         <div className="grid grid-cols-2 gap-4">
-                                                            {/* Indian CNF Filter */}
+                                                            {/* Indian C&F Filter */}
                                                             <div className="space-y-1.5 relative" ref={saleIndCnfFilterRef}>
-                                                                <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider pl-1">INDIAN CNF</label>
+                                                                <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider pl-1">INDIAN C&F</label>
                                                                 <div className="relative">
                                                                     <input
                                                                         type="text"
@@ -2135,9 +2152,9 @@ const SaleManagement = ({
                                                                     ) : null;
                                                                 })()}
                                                             </div>
-                                                            {/* BD CNF Filter */}
+                                                            {/* BD C&F Filter */}
                                                             <div className="space-y-1.5 relative" ref={saleBdCnfFilterRef}>
-                                                                <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider pl-1">BD CNF</label>
+                                                                <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider pl-1">BD C&F</label>
                                                                 <div className="relative">
                                                                     <input
                                                                         type="text"
@@ -2441,19 +2458,42 @@ const SaleManagement = ({
                                 <input type="text" name="lcNo" value={formData.lcNo} onChange={handleInputChange} placeholder="LC-001" className="sale-mgmt-input" />
                             </div>
 
-                            {/* Border Field: IND CNF */}
+                            {/* Border Field: Exporter */}
                             {saleType === 'Border' && (
-                                <div className="sale-mgmt-input-group">
-                                    <label className="sale-mgmt-label">IND CNF</label>
-                                    <input type="text" name="indianCnF" value={formData.indianCnF} onChange={handleInputChange} placeholder="IND CNF" className="sale-mgmt-input" />
+                                <div className="sale-mgmt-input-group relative exporter-dropdown-container">
+                                    <label className="sale-mgmt-label">Exporter</label>
+                                    <div className="relative">
+                                        <select
+                                            name="exporter"
+                                            value={formData.exporter || ''}
+                                            onChange={handleInputChange}
+                                            className="sale-mgmt-input appearance-none bg-white pr-10"
+                                        >
+                                            <option value="">Select Exporter</option>
+                                            {exportersList.map(exp => (
+                                                <option key={exp._id} value={exp.name}>{exp.name}</option>
+                                            ))}
+                                        </select>
+                                        <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-gray-400">
+                                            <ChevronDownIcon className="w-4 h-4" />
+                                        </div>
+                                    </div>
                                 </div>
                             )}
 
-                            {/* Border Field: BD CNF */}
+                            {/* Border Field: IND C&F */}
                             {saleType === 'Border' && (
                                 <div className="sale-mgmt-input-group">
-                                    <label className="sale-mgmt-label">BD CNF</label>
-                                    <input type="text" name="bdCnf" value={formData.bdCnf} onChange={handleInputChange} placeholder="BD CNF" className="sale-mgmt-input" />
+                                    <label className="sale-mgmt-label">IND C&F</label>
+                                    <input type="text" name="indianCnF" value={formData.indianCnF} onChange={handleInputChange} placeholder="IND C&F" className="sale-mgmt-input" />
+                                </div>
+                            )}
+
+                            {/* Border Field: BD C&F */}
+                            {saleType === 'Border' && (
+                                <div className="sale-mgmt-input-group">
+                                    <label className="sale-mgmt-label">BD C&F</label>
+                                    <input type="text" name="bdCnf" value={formData.bdCnf} onChange={handleInputChange} placeholder="BD C&F" className="sale-mgmt-input" />
                                 </div>
                             )}
 
@@ -3108,10 +3148,10 @@ const SaleManagement = ({
                                             <div className="flex items-center">port {renderSortIcon('port')}</div>
                                         </th>
                                         <th className="sale-mgmt-th cursor-pointer group" onClick={() => handleSort('indianCnF')}>
-                                            <div className="flex items-center">IND cnf {renderSortIcon('indianCnF')}</div>
+                                            <div className="flex items-center">IND C&F {renderSortIcon('indianCnF')}</div>
                                         </th>
                                         <th className="sale-mgmt-th cursor-pointer group" onClick={() => handleSort('bdCnf')}>
-                                            <div className="flex items-center">bd cnf {renderSortIcon('bdCnf')}</div>
+                                            <div className="flex items-center">BD C&F {renderSortIcon('bdCnf')}</div>
                                         </th>
                                         <th className="sale-mgmt-th cursor-pointer group" onClick={() => handleSort('party')}>
                                             <div className="flex items-center">Party {renderSortIcon('party')}</div>

@@ -62,6 +62,7 @@ const User = require('./models/User');
 const Employee = require('./models/Employee');
 const Notification = require('./models/Notification');
 const Bank = require('./models/Bank');
+const Exporter = require('./models/Exporter');
 const { encryptData, decryptData } = require('./utils/encryption');
 const CryptoJS = require('crypto-js');
 
@@ -192,6 +193,54 @@ apiRouter.put('/api/importers/:id', async (req, res) => {
 apiRouter.get('/api/importers', async (req, res) => {
   try {
     const records = await Importer.find().sort({ createdAt: -1 });
+    const decrypted = records.map(r => {
+      const d = decryptData(r.data);
+      return { ...d, _id: r._id, createdAt: r.createdAt };
+    });
+    res.json(decrypted);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// Exporter APIs
+apiRouter.post('/api/exporters', async (req, res) => {
+  try {
+    const encryptedData = encryptData(req.body);
+    const newExporter = new Exporter({ data: encryptedData });
+    const savedExporter = await newExporter.save();
+    res.status(201).json({ ...req.body, _id: savedExporter._id, createdAt: savedExporter.createdAt });
+  } catch (err) {
+    res.status(400).json({ message: err.message });
+  }
+});
+
+// Delete Exporter
+apiRouter.delete('/api/exporters/:id', async (req, res) => {
+  try {
+    const deletedExporter = await Exporter.findByIdAndDelete(req.params.id);
+    if (!deletedExporter) return res.status(404).json({ message: 'Exporter not found' });
+    res.json({ message: 'Exporter deleted' });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// Update Exporter
+apiRouter.put('/api/exporters/:id', async (req, res) => {
+  try {
+    const encryptedData = encryptData(req.body);
+    const updatedExporter = await Exporter.findByIdAndUpdate(req.params.id, { data: encryptedData }, { new: true });
+    if (!updatedExporter) return res.status(404).json({ message: 'Exporter not found' });
+    res.json({ ...req.body, _id: updatedExporter._id, createdAt: updatedExporter.createdAt });
+  } catch (err) {
+    res.status(400).json({ message: err.message });
+  }
+});
+
+apiRouter.get('/api/exporters', async (req, res) => {
+  try {
+    const records = await Exporter.find().sort({ createdAt: -1 });
     const decrypted = records.map(r => {
       const d = decryptData(r.data);
       return { ...d, _id: r._id, createdAt: r.createdAt };

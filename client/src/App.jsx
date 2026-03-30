@@ -10,6 +10,7 @@ import { encryptData, decryptData } from './utils/encryption';
 import { API_BASE_URL, formatDate, parseDate, SortIcon } from './utils/helpers';
 import CustomDatePicker from './components/shared/CustomDatePicker';
 import Importer from './components/modules/Importer/Importer';
+import Exporter from './components/modules/Exporter/Exporter';
 import Port from './components/modules/Port/Port';
 import IPManagement from './components/modules/IPManagement/IPManagement';
 import ProductManagement from './components/modules/Product/ProductManagement';
@@ -74,10 +75,10 @@ function App() {
         const isSelfCreated = n.createdBy === currentUser?.username;
 
         return (isTargetRole || isTargetUser) && !isSelfCreated;
-    }).map(n => ({
+      }).map(n => ({
         ...n,
         isUnread: n.readByUsers ? !n.readByUsers.includes(currentUser?.username) : true
-    }));
+      }));
 
       setNotifications(filtered);
     } catch (err) {
@@ -281,6 +282,11 @@ function App() {
     return initialView === 'employee-section';
   });
 
+  const [importerDropdownOpen, setImporterDropdownOpen] = useState(() => {
+    const initialView = localStorage.getItem('currentView') || 'dashboard';
+    return initialView === 'importer-section' || initialView === 'exporter-section';
+  });
+
   const [crmDropdownOpen, setCrmDropdownOpen] = useState(() => {
     const initialView = localStorage.getItem('currentView') || 'dashboard';
     return initialView === 'customer-section';
@@ -288,6 +294,7 @@ function App() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitStatus, setSubmitStatus] = useState(null);
   const [importers, setImporters] = useState([]);
+  const [exporters, setExporters] = useState([]);
   const [ports, setPorts] = useState([]);
   const [showStockForm, setShowStockForm] = useState(false);
   const [showStockReport, setShowStockReport] = useState(false);
@@ -321,10 +328,10 @@ function App() {
   const [stockRecords, setStockRecords] = useState([]);
   const [warehouseData, setWarehouseData] = useState([]);
   const [salesRecords, setSalesRecords] = useState([]);
-  const [stockFilters, setStockFilters] = useState({ 
-    startDate: new Date().toISOString().split('T')[0], 
-    endDate: new Date().toISOString().split('T')[0], 
-    lcNo: '', port: '', brand: '', importer: '', exporter: '', productName: '', category: '' 
+  const [stockFilters, setStockFilters] = useState({
+    startDate: new Date().toISOString().split('T')[0],
+    endDate: new Date().toISOString().split('T')[0],
+    lcNo: '', port: '', brand: '', importer: '', exporter: '', productName: '', category: ''
   });
   const [selectedItems, setSelectedItems] = useState(new Set());
   const [isSelectionMode, setIsSelectionMode] = useState(false);
@@ -477,9 +484,12 @@ function App() {
     // Close all forms when changing sections
     if (currentView === 'ip-section' || currentView === 'customer-section') {
       fetchImporters(); // Fetch importers to populate the dropdown
+      fetchExporters();
       fetchPorts(); // Fetch ports to populate the dropdown
     } else if (currentView === 'importer-section') {
       fetchImporters();
+    } else if (currentView === 'exporter-section') {
+      fetchExporters();
     } else if (currentView === 'port-section') {
       fetchPorts();
     } else if (currentView === 'stock-section' || currentView === 'lc-entry-section' || currentView === 'general-sale-section' || currentView === 'border-sale-section') {
@@ -488,6 +498,7 @@ function App() {
       fetchSales(); // Fetch sales data
       fetchPorts(); // Fetch ports to populate the dropdown
       fetchImporters(); // Fetch importers to populate the dropdown
+      fetchExporters(); // Fetch exporters to populate the dropdown
       fetchProducts(); // Fetch products to populate the dropdown
     } else if (currentView === 'products-section') {
       fetchProducts();
@@ -596,12 +607,13 @@ function App() {
       type === 'sales' ? 'sales' :
         type === 'ip' ? 'ip-records' :
           type === 'importer' ? 'importers' :
-            type === 'port' ? 'ports' :
-              type === 'product' ? 'products' :
-                type === 'employees' ? 'employees' :
-                  type === 'customer' ? 'customers' :
-                    type === 'bank' ? 'banks' :
-                      'stock';
+            type === 'exporter' ? 'exporters' :
+              type === 'port' ? 'ports' :
+                type === 'product' ? 'products' :
+                  type === 'employees' ? 'employees' :
+                    type === 'customer' ? 'customers' :
+                      type === 'bank' ? 'banks' :
+                        'stock';
 
 
     try {
@@ -710,6 +722,7 @@ function App() {
 
         if (type === 'ip') fetchIpRecords();
         else if (type === 'importer') fetchImporters();
+        else if (type === 'exporter') fetchExporters();
         else if (type === 'port') fetchPorts();
         else if (type === 'product') fetchProducts();
         else if (type === 'stock') fetchStockRecords();
@@ -814,6 +827,18 @@ function App() {
       setImporters(Array.isArray(response.data) ? response.data : []);
     } catch (error) {
       console.error('Error fetching importers:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const fetchExporters = async () => {
+    setIsLoading(true);
+    try {
+      const response = await axios.get(`${API_BASE_URL}/api/exporters`);
+      setExporters(Array.isArray(response.data) ? response.data : []);
+    } catch (error) {
+      console.error('Error fetching exporters:', error);
     } finally {
       setIsLoading(false);
     }
@@ -1004,6 +1029,7 @@ function App() {
             addNotification={addNotification}
             fetchStockRecords={fetchStockRecords}
             importers={importers}
+            exporters={exporters}
             ports={ports}
             products={products}
             isSelectionMode={isSelectionMode}
@@ -1073,9 +1099,26 @@ function App() {
             isLongPressTriggered={isLongPressTriggered}
           />
         );
+      case 'exporter-section':
+        return (
+          <Exporter
+            isSelectionMode={isSelectionMode}
+            setIsSelectionMode={setIsSelectionMode}
+            selectedItems={selectedItems}
+            setSelectedItems={setSelectedItems}
+            editingId={editingId}
+            setEditingId={setEditingId}
+            sortConfig={sortConfig}
+            setSortConfig={setSortConfig}
+            onDeleteConfirm={setDeleteConfirm}
+            startLongPress={startLongPress}
+            endLongPress={endLongPress}
+            isLongPressTriggered={isLongPressTriggered}
+          />
+        );
       case 'bank-section':
         return (
-          <Bank 
+          <Bank
             onDeleteConfirm={(data) => handleDelete(data.type, data.id, data.isBulk, data.extraData)}
           />
         );
@@ -1316,10 +1359,36 @@ function App() {
             </div>
           </div>
 
-          <button onClick={() => { setCurrentView('importer-section'); setSidebarOpen(false); }} className={`w-full flex items-center px-4 py-3 rounded-lg transition-all ${currentView === 'importer-section' ? 'bg-blue-50 text-blue-600 shadow-sm' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'}`}>
-            <UserIcon className="w-5 h-5 mr-3" />
-            <span className="font-medium">Importer</span>
-          </button>
+          <div>
+            <button
+              onClick={() => setImporterDropdownOpen(!importerDropdownOpen)}
+              className={`w-full flex items-center justify-between px-4 py-3 rounded-lg transition-all ${currentView === 'importer-section' || currentView === 'exporter-section' ? 'bg-blue-50 text-blue-600 shadow-sm' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'}`}
+            >
+              <div className="flex items-center">
+                <UserIcon className="w-5 h-5 mr-3" />
+                <span className="font-medium">Importer/Exporter</span>
+              </div>
+              <ChevronDownIcon className={`w-4 h-4 transition-transform duration-200 ${importerDropdownOpen ? 'transform rotate-180' : ''}`} />
+            </button>
+            <div className={`overflow-hidden transition-all duration-300 ease-in-out ${importerDropdownOpen ? 'max-h-48 opacity-100 mt-1' : 'max-h-0 opacity-0'}`}>
+              <div className="pl-9 pr-2 space-y-1">
+                <button
+                  onClick={() => { setCurrentView('importer-section'); setSidebarOpen(false); }}
+                  className={`w-full flex flex-row items-center py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'importer-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'}`}
+                >
+                  <UserIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
+                  <span>Importer</span>
+                </button>
+                <button
+                  onClick={() => { setCurrentView('exporter-section'); setSidebarOpen(false); }}
+                  className={`w-full flex flex-row items-center py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'exporter-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'}`}
+                >
+                  <UserIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
+                  <span>Exporter</span>
+                </button>
+              </div>
+            </div>
+          </div>
           <button onClick={() => { setCurrentView('bank-section'); setSidebarOpen(false); }} className={`w-full flex items-center px-4 py-3 rounded-lg transition-all ${currentView === 'bank-section' ? 'bg-blue-50 text-blue-600 shadow-sm' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'}`}>
             <DollarSignIcon className="w-5 h-5 mr-3" />
             <span className="font-medium">Bank</span>

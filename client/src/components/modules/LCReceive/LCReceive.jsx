@@ -60,7 +60,7 @@ const ViewDetailsModal = ({ data, onClose }) => {
 
                     <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 pt-4 border-t border-gray-50">
                         <div className="space-y-1">
-                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">IND CNF</span>
+                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">IND C&F</span>
                             <p className="text-sm text-gray-700 font-medium">{data.indianCnF || '-'}</p>
                         </div>
                         <div className="space-y-1">
@@ -68,7 +68,7 @@ const ViewDetailsModal = ({ data, onClose }) => {
                             <p className="text-sm text-gray-700 font-bold">{!isNaN(parseFloat(data.indCnFCost)) ? `৳${parseFloat(data.indCnFCost).toLocaleString()}` : '-'}</p>
                         </div>
                         <div className="space-y-1">
-                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">BD CNF</span>
+                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">BD C&F</span>
                             <p className="text-sm text-gray-700 font-medium">{data.bdCnF || '-'}</p>
                         </div>
                         <div className="space-y-1">
@@ -314,6 +314,7 @@ function LCReceive({
     stockRecords,
     fetchStockRecords,
     importers,
+    exporters = [],
     ports,
     products,
     brands,
@@ -1442,6 +1443,7 @@ function LCReceive({
             const refs = [
                 portRef,
                 importerRef,
+                exporterRef,
                 ...Object.values(productRefs.current).map(r => ({ current: r })),
                 ...Object.values(brandRefs.current).map(r => ({ current: r }))
             ];
@@ -1796,11 +1798,11 @@ function LCReceive({
                                             </div>
                                         </div>
 
-                                        {/* CNF Row */}
+                                        {/* C&F Row */}
                                         <div className="grid grid-cols-2 gap-4">
-                                            {/* IND CNF Filter */}
+                                            {/* IND C&F Filter */}
                                             <div className="space-y-1.5 relative" ref={indCnfFilterRef}>
-                                                <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">IND CNF</label>
+                                                <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">IND C&F</label>
                                                 <div className="relative">
                                                     <input
                                                         type="text"
@@ -1834,9 +1836,9 @@ function LCReceive({
                                                 })()}
                                             </div>
 
-                                            {/* BD CNF Filter */}
+                                            {/* BD C&F Filter */}
                                             <div className="space-y-1.5 relative" ref={bdCnfFilterRef}>
-                                                <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">BD CNF</label>
+                                                <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">BD C&F</label>
                                                 <div className="relative">
                                                     <input
                                                         type="text"
@@ -2081,6 +2083,7 @@ function LCReceive({
                                             value={stockFormData.exporter}
                                             onChange={(e) => { handleStockInputChange(e); setActiveDropdown('lcr-exporter'); setHighlightedIndex(-1); }}
                                             onFocus={() => { setActiveDropdown('lcr-exporter'); setHighlightedIndex(-1); }}
+                                            onKeyDown={(e) => handleDropdownKeyDown(e, 'lcr-exporter', handleStockDropdownSelect, 'exporter', exporters.filter(exp => exp.status === 'Active' && (!stockFormData.exporter || exporters.some(x => x.name === stockFormData.exporter) || exp.name.toLowerCase().includes(stockFormData.exporter.toLowerCase()))))}
                                             placeholder="Search exporter..."
                                             autoComplete="off"
                                             className={`w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm pr-14 ${stockFormData.exporter ? 'placeholder:text-gray-900 placeholder:font-semibold' : 'placeholder:text-gray-400'}`}
@@ -2094,33 +2097,48 @@ function LCReceive({
                                             <SearchIcon className="w-4 h-4 text-gray-300 pointer-events-none" />
                                         </div>
                                     </div>
+                                    {activeDropdown === 'lcr-exporter' && (
+                                        <div className="absolute z-[60] w-full mt-1 bg-white border border-gray-100 rounded-xl shadow-xl max-h-48 overflow-y-auto py-1">
+                                            {exporters.filter(exp => exp.status === 'Active' && (!stockFormData.exporter || exporters.some(x => x.name === stockFormData.exporter) || exp.name.toLowerCase().includes(stockFormData.exporter.toLowerCase()))).map((exp, idx) => (
+                                                <button
+                                                    key={exp._id}
+                                                    type="button"
+                                                    onClick={() => handleStockDropdownSelect('exporter', exp.name)}
+                                                    onMouseEnter={() => setHighlightedIndex(idx)}
+                                                    className={`w-full px-4 py-2 text-left text-sm transition-colors font-medium ${stockFormData.exporter === exp.name ? 'bg-blue-50 text-blue-700' : highlightedIndex === idx ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-blue-50'}`}
+                                                >
+                                                    {exp.name}
+                                                </button>
+                                            ))}
+                                        </div>
+                                    )}
                                 </div>
                             </div>
 
                             <div className="col-span-1 md:col-span-2 grid grid-cols-1 md:grid-cols-5 gap-6">
                                 <div className="space-y-2">
-                                    <label className="text-sm font-medium text-gray-700">IND CNF</label>
+                                    <label className="text-sm font-medium text-gray-700">IND C&F</label>
                                     <input
                                         type="text" name="indianCnF" value={stockFormData.indianCnF} onChange={handleStockInputChange}
-                                        placeholder="IND CNF" autoComplete="off" className="w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm"
+                                        placeholder="IND C&F" autoComplete="off" className="w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm"
                                     />
                                 </div>
                                 <div className="space-y-2">
-                                    <label className="text-sm font-medium text-gray-700">IND CNF Cost</label>
+                                    <label className="text-sm font-medium text-gray-700">IND C&F Cost</label>
                                     <input
                                         type="number" name="indCnFCost" value={stockFormData.indCnFCost} onChange={handleStockInputChange}
                                         placeholder="0.00" autoComplete="off" className="w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                                     />
                                 </div>
                                 <div className="space-y-2">
-                                    <label className="text-sm font-medium text-gray-700">BD CNF</label>
+                                    <label className="text-sm font-medium text-gray-700">BD C&F</label>
                                     <input
                                         type="text" name="bdCnF" value={stockFormData.bdCnF} onChange={handleStockInputChange}
-                                        placeholder="BD CNF" autoComplete="off" className="w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm"
+                                        placeholder="BD C&F" autoComplete="off" className="w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm"
                                     />
                                 </div>
                                 <div className="space-y-2">
-                                    <label className="text-sm font-medium text-gray-700">BD CNF Cost</label>
+                                    <label className="text-sm font-medium text-gray-700">BD C&F Cost</label>
                                     <input
                                         type="number" name="bdCnFCost" value={stockFormData.bdCnFCost} onChange={handleStockInputChange}
                                         placeholder="0.00" autoComplete="off" className="w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
@@ -2904,7 +2922,7 @@ function LCReceive({
                                             onClick={() => handleSort('indianCnF')}
                                         >
                                             <div className="flex items-center">
-                                                Ind CNF
+                                                Ind C&F
                                                 {renderSortIcon('indianCnF')}
                                             </div>
                                         </th>
@@ -2922,7 +2940,7 @@ function LCReceive({
                                             onClick={() => handleSort('bdCnF')}
                                         >
                                             <div className="flex items-center">
-                                                BD CNF
+                                                BD C&F
                                                 {renderSortIcon('bdCnF')}
                                             </div>
                                         </th>
@@ -3321,11 +3339,11 @@ function LCReceive({
                                                         </div>
 
                                                         <div className="col-span-1">
-                                                            <span className="block text-gray-400 uppercase font-black tracking-widest text-[9px] mb-0.5">IND CNF</span>
+                                                            <span className="block text-gray-400 uppercase font-black tracking-widest text-[9px] mb-0.5">IND C&F</span>
                                                             <div className="text-gray-700 text-xs font-semibold truncate">{entry.indianCnF || "-"}</div>
                                                         </div>
                                                         <div className="col-span-1 text-right">
-                                                            <span className="block text-gray-400 uppercase font-black tracking-widest text-[9px] mb-0.5">BD CNF</span>
+                                                            <span className="block text-gray-400 uppercase font-black tracking-widest text-[9px] mb-0.5">BD C&F</span>
                                                             <div className="text-gray-700 text-xs font-semibold truncate">{entry.bdCnF || "-"}</div>
                                                         </div>
 

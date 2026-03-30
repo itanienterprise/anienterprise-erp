@@ -440,9 +440,9 @@ const LCReport = ({
                                                 })()}
                                             </div>
 
-                                            {/* IND CNF Filter */}
+                                            {/* IND C&F Filter */}
                                             <div className="space-y-1.5 relative" ref={reportLcIndCnfFilterRef}>
-                                                <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">IND CNF</label>
+                                                <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">IND C&F</label>
                                                 <div className="relative">
                                                     <input
                                                         type="text"
@@ -493,9 +493,9 @@ const LCReport = ({
                                                 })()}
                                             </div>
 
-                                            {/* BD CNF Filter */}
+                                            {/* BD C&F Filter */}
                                             <div className="space-y-1.5 relative" ref={reportLcBdCnfFilterRef}>
-                                                <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">BD CNF</label>
+                                                <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">BD C&F</label>
                                                 <div className="relative">
                                                     <input
                                                         type="text"
