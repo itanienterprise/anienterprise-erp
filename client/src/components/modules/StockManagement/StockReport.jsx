@@ -463,7 +463,7 @@ const StockReport = ({
                                                                     const sPkt = parseFloat(ent.salePacket) || 0;
                                                                     return <div key={i} className="leading-tight">{Number.isInteger(sPkt) ? sPkt : sPkt.toFixed(2)}</div>;
                                                                 })}
-                                                                {hasTotal && <div className="mt-0 pt-0.5 border-t border-gray-900 font-bold leading-tight text-right">{Number.isInteger(item.salePacket) ? item.salePacket : item.salePacket.toFixed(2)}</div>}
+                                                                {hasTotal && <div className="mt-0 pt-0.5 border-t border-gray-900 font-bold leading-tight text-right">{Number.isInteger(item.salePacket) ? item.salePacket : (item.salePacket || 0).toFixed(2)}</div>}
                                                             </td>
                                                             <td className="border-r border-gray-900 px-2 py-0.5 text-[14px] text-right text-gray-900 font-bold align-top whitespace-nowrap">
                                                                 {item.brandList.map((ent, i) => <div key={i} className="leading-tight">{Math.round(ent.saleQuantity)}</div>)}
@@ -514,7 +514,7 @@ const StockReport = ({
                                                         {Math.round(stockData.totalTotalInHouseQty)}
                                                     </td>
                                                     <td className="px-2 py-1.5 text-[14px] text-right font-black text-gray-900 border-r border-gray-900">
-                                                        {Number.isInteger(stockData.totalSalePkt) ? stockData.totalSalePkt : stockData.totalSalePkt.toFixed(2)}
+                                                        {Number.isInteger(stockData.totalSalePkt) ? stockData.totalSalePkt : (stockData.totalSalePkt || 0).toFixed(2)}
                                                     </td>
                                                     <td className="px-2 py-1.5 text-[14px] text-right font-black text-gray-900 border-r border-gray-900">
                                                         {Math.round(stockData.totalSaleQty)}
@@ -566,7 +566,7 @@ const StockReport = ({
                                                         <div className="space-y-0.5 text-right">
                                                             <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Sale</p>
                                                             <p className="text-xs font-bold text-gray-700">
-                                                                {Number.isInteger(parseFloat(ent.salePacket)) ? parseFloat(ent.salePacket) : parseFloat(ent.salePacket).toFixed(2)} BAG
+                                                                {Number.isInteger(parseFloat(ent.salePacket)) ? parseFloat(ent.salePacket) : (parseFloat(ent.salePacket) || 0).toFixed(2)} BAG
                                                             </p>
                                                             <p className="text-sm font-black text-gray-900">{Math.round(ent.saleQuantity).toLocaleString()} kg</p>
                                                         </div>
@@ -653,7 +653,7 @@ const StockReport = ({
                             <div className="border border-gray-200 p-4 sm:p-5 rounded-2xl bg-gray-50 shadow-sm print:border-gray-200">
                                 <div className="text-[10px] sm:text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-2 sm:mb-3">Total Sale</div>
                                 <div className="text-xs sm:text-sm font-bold text-gray-700 mb-1">
-                                    BAG: {Number.isInteger(stockData.totalSalePkt) ? stockData.totalSalePkt : stockData.totalSalePkt.toFixed(2)}
+                                    BAG: {Number.isInteger(stockData.totalSalePkt) ? stockData.totalSalePkt : (stockData.totalSalePkt || 0).toFixed(2)}
                                 </div>
                                 <div className="text-xl sm:text-2xl font-black text-gray-900">
                                     QTY: {Math.round(stockData.totalSaleQty)} <span className="text-xs sm:text-sm font-bold">{stockData.unit}</span>

@@ -120,8 +120,8 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
                 openingQuantity: 0,
                 periodArrivalPacket: 0,
                 periodArrivalQuantity: 0,
-                periodSalePacket: 0,
-                periodSaleQuantity: 0,
+                salePacket: 0,
+                saleQuantity: 0,
                 sweepedPacket: 0,
                 sweepedQuantity: 0,
                 unit: item.unit,
@@ -225,10 +225,8 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
             brandObj.periodSalePacket = currentSalePkt;
             brandObj._salesResolved = true;
 
-            acc[key].openingQuantity -= beforeSaleQty;
-            acc[key].openingPacket -= beforeSalePkt;
-            acc[key].periodSaleQuantity += currentSaleQty;
-            acc[key].periodSalePacket += currentSalePkt;
+            acc[key].saleQuantity += currentSaleQty;
+            acc[key].salePacket += currentSalePkt;
         }
 
         const qty = safeParse(item.quantity);
@@ -301,8 +299,8 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
                         openingQuantity: 0,
                         periodArrivalPacket: 0,
                         periodArrivalQuantity: 0,
-                        periodSalePacket: 0,
-                        periodSaleQuantity: 0,
+                        saleQuantity: 0,
+                        salePacket: 0,
                         sweepedPacket: 0,
                         sweepedQuantity: 0,
                         unit: saleItem.unit || 'kg',
@@ -366,8 +364,8 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
 
                         group.openingQuantity -= beforeSaleQty;
                         group.openingPacket -= beforeSalePkt;
-                        group.periodSaleQuantity += currentSaleQty;
-                        group.periodSalePacket += currentSalePkt;
+                        group.saleQuantity += currentSaleQty;
+                        group.salePacket += currentSalePkt;
                     }
                 });
             });
@@ -419,8 +417,8 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
             openingPacket: brandList.reduce((sum, b) => sum + (b.openingPacket || 0), 0),
             inHouseQuantity: closingQuantity,
             inHousePacket: brandList.reduce((sum, b) => sum + (b.inHousePacket || 0), 0),
-            periodSaleQuantity: brandList.reduce((sum, b) => sum + (b.periodSaleQuantity || 0), 0),
-            periodSalePacket: brandList.reduce((sum, b) => sum + (b.periodSalePacket || 0), 0),
+            saleQuantity: brandList.reduce((sum, b) => sum + (b.saleQuantity || 0), 0),
+            salePacket: brandList.reduce((sum, b) => sum + (b.salePacket || 0), 0),
             totalInHouseQuantity: reportOpeningQty,
             isPreSold: closingQuantity < 0
         };
