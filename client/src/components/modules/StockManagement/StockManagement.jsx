@@ -2750,8 +2750,8 @@ const StockManagement = ({
                                                     <div className="bg-orange-50 text-orange-700 p-2 rounded-xl border border-orange-100 flex flex-col items-center justify-center">
                                                         <span className="text-[11px] font-bold opacity-70 mb-1.5 uppercase tracking-tighter">SALE</span>
                                                         <div className="flex flex-col items-center leading-none gap-1.5">
-                                                            <span className="text-[12.5px] font-black">{Math.round(group.periodSalePacket).toLocaleString()} <span className="text-[9px] opacity-60 font-bold">BAG</span></span>
-                                                            <span className="text-[12.5px] font-bold opacity-80">{Math.round(group.periodSaleQuantity).toLocaleString()} <span className="text-[9px] opacity-60">{group.unit}</span></span>
+                                                            <span className="text-[12.5px] font-black">{Math.round(group.salePacket).toLocaleString()} <span className="text-[9px] opacity-60 font-bold">BAG</span></span>
+                                                            <span className="text-[12.5px] font-bold opacity-80">{Math.round(group.saleQuantity).toLocaleString()} <span className="text-[9px] opacity-60">{group.unit}</span></span>
                                                         </div>
                                                     </div>
                                                     <div className="bg-emerald-50 text-emerald-700 p-2 rounded-xl border border-emerald-100 flex flex-col items-center justify-center underline decoration-emerald-200/50 underline-offset-[5px]">
@@ -2801,8 +2801,8 @@ const StockManagement = ({
                                                                 <div className="bg-orange-50/50 text-orange-700 py-1.5 rounded-xl border border-orange-100 flex flex-col items-center">
                                                                     <span className="text-[9px] font-bold opacity-60 mb-0.5 uppercase tracking-tighter">SALE</span>
                                                                     <div className="flex flex-col items-center leading-none gap-1">
-                                                                        <span className="text-[11px] font-bold">{Math.round(brand.periodSalePacket).toLocaleString()} <span className="text-[8.5px]">B</span></span>
-                                                                        <span className="text-[11px] font-medium opacity-80">{Math.round(brand.periodSaleQuantity).toLocaleString()} <span className="text-[8.5px]">kg</span></span>
+                                                                        <span className="text-[11px] font-bold">{Math.round(brand.salePacket).toLocaleString()} <span className="text-[8.5px]">B</span></span>
+                                                                        <span className="text-[11px] font-medium opacity-80">{Math.round(brand.saleQuantity).toLocaleString()} <span className="text-[8.5px]">kg</span></span>
                                                                     </div>
                                                                 </div>
                                                                 <div className="bg-emerald-50/50 text-emerald-700 py-1.5 rounded-xl border border-emerald-100 flex flex-col items-center">
@@ -2879,12 +2879,12 @@ const StockManagement = ({
                                                             {/* Sale Stock */}
                                                             <div className="text-sm text-orange-800 bg-orange-50/50 px-2 py-1 rounded-lg text-center font-bold">
                                                                 {(() => {
-                                                                    const { whole, remainder } = calculatePktRemainder(brand.periodSaleQuantity, brand.packetSize);
+                                                                    const { whole, remainder } = calculatePktRemainder(brand.saleQuantity, brand.packetSize);
                                                                     return `${whole.toLocaleString()} - ${Math.abs(remainder).toLocaleString()} kg`;
                                                                 })()}
                                                             </div>
                                                             <div className="text-sm text-orange-900 text-center font-medium">
-                                                                {Math.round(brand.periodSaleQuantity || 0).toLocaleString()}
+                                                                {Math.round(brand.saleQuantity || 0).toLocaleString()}
                                                             </div>
 
                                                             {/* Closing Stock */}
@@ -2924,12 +2924,12 @@ const StockManagement = ({
                                                         <div className="text-sm text-orange-900 font-black text-center">
                                                             {(() => {
                                                                 const pktSize = group.brandList?.[0]?.packetSize || 0;
-                                                                const { whole, remainder } = calculatePktRemainder(group.periodSaleQuantity, pktSize);
+                                                                const { whole, remainder } = calculatePktRemainder(group.saleQuantity, pktSize);
                                                                 return `${whole.toLocaleString()} - ${Math.abs(remainder).toLocaleString()} kg`;
                                                             })()}
                                                         </div>
                                                         <div className="text-sm text-orange-900 font-black text-center">
-                                                            {Math.round(group.periodSaleQuantity).toLocaleString()}
+                                                            {Math.round(group.saleQuantity).toLocaleString()}
                                                         </div>
                                                         {/* Total Closing */}
                                                         <div className="text-sm text-green-900 font-black text-center underline decoration-green-200">

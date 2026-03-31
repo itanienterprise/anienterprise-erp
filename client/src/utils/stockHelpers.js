@@ -140,8 +140,8 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
                 openingQuantity: 0,
                 periodArrivalPacket: 0,
                 periodArrivalQuantity: 0,
-                periodSalePacket: 0,
-                periodSaleQuantity: 0,
+                salePacket: 0,
+                saleQuantity: 0,
                 sweepedPacket: 0,
                 sweepedQuantity: 0,
                 packetSize: safeParse(item.packetSize)
@@ -221,10 +221,12 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
 
             brandObj.openingQuantity -= beforeSaleQty;
             brandObj.openingPacket -= beforeSalePkt;
-            brandObj.periodSaleQuantity = currentSaleQty;
-            brandObj.periodSalePacket = currentSalePkt;
+            brandObj.saleQuantity = currentSaleQty;
+            brandObj.salePacket = currentSalePkt;
             brandObj._salesResolved = true;
 
+            acc[key].openingQuantity -= beforeSaleQty;
+            acc[key].openingPacket -= beforeSalePkt;
             acc[key].saleQuantity += currentSaleQty;
             acc[key].salePacket += currentSalePkt;
         }
@@ -319,7 +321,7 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
                             port: '-',
                             openingPacket: 0, openingQuantity: 0,
                             periodArrivalPacket: 0, periodArrivalQuantity: 0,
-                            periodSalePacket: 0, periodSaleQuantity: 0,
+                            salePacket: 0, saleQuantity: 0,
                             sweepedPacket: 0, sweepedQuantity: 0,
                             packetSize: safeParse(saleItem.packetSize || entry.packetSize)
                         };
@@ -358,8 +360,8 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
 
                         brandObj.openingQuantity -= beforeSaleQty;
                         brandObj.openingPacket -= beforeSalePkt;
-                        brandObj.periodSaleQuantity = currentSaleQty;
-                        brandObj.periodSalePacket = currentSalePkt;
+                        brandObj.saleQuantity = currentSaleQty;
+                        brandObj.salePacket = currentSalePkt;
                         brandObj._salesResolved = true;
 
                         group.openingQuantity -= beforeSaleQty;
@@ -380,8 +382,8 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
             const reportOpeningQty = trueOpeningQty + b.periodArrivalQuantity;
             const reportOpeningPkt = trueOpeningPkt + b.periodArrivalPacket;
             
-            const closingQuantity = reportOpeningQty - b.periodSaleQuantity;
-            const closingPacket = reportOpeningPkt - b.periodSalePacket;
+            const closingQuantity = reportOpeningQty - b.saleQuantity;
+            const closingPacket = reportOpeningPkt - b.salePacket;
             const isPreSold = closingQuantity < 0;
 
             return {
@@ -394,19 +396,19 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
                 inHousePacket: closingPacket,
                 totalInHouseQuantity: reportOpeningQty,
                 totalInHousePacket: reportOpeningPkt,
-                saleQuantity: b.periodSaleQuantity,
-                salePacket: b.periodSalePacket,
+                saleQuantity: b.saleQuantity,
+                salePacket: b.salePacket,
                 isPreSold
             };
         }).filter(b => {
-            if (b.inHouseQuantity !== 0 || b.openingQuantity !== 0 || b.periodSaleQuantity !== 0) return true;
-            if (isGeneral && b.periodSaleQuantity > 0) return true;
+            if (b.inHouseQuantity !== 0 || b.openingQuantity !== 0 || b.saleQuantity !== 0) return true;
+            if (isGeneral && b.saleQuantity > 0) return true;
             return false;
         }).sort((a, b) => (a.brand || '').localeCompare(b.brand || '', undefined, { sensitivity: 'base' }));
 
         const trueOpeningQty = group.openingQuantity;
         const reportOpeningQty = trueOpeningQty + group.periodArrivalQuantity;
-        const closingQuantity = reportOpeningQty - group.periodSaleQuantity;
+        const closingQuantity = reportOpeningQty - group.saleQuantity;
 
         return {
             ...group,
@@ -439,12 +441,12 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
         group.brandList.forEach(brand => {
             totalOpeningQty += (brand.trueOpeningQuantity || 0);
             totalArrivalQty += (brand.periodArrivalQuantity || 0);
-            totalSaleQty += (brand.periodSaleQuantity || 0);
+            totalSaleQty += (brand.saleQuantity || 0);
             totalInHouseQty += (brand.inHouseQuantity || 0);
             
             totalOpeningPkt += (brand.trueOpeningPacket || 0);
             totalArrivalPkt += (brand.periodArrivalPacket || 0);
-            totalSalePkt += (brand.periodSalePacket || 0);
+            totalSalePkt += (brand.salePacket || 0);
             totalInHousePkt += (brand.inHousePacket || 0);
         });
     });
@@ -467,7 +469,7 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
 
     const totalSalePktDetails = displayRecords.reduce((acc, group) => {
         group.brandList.forEach(brand => {
-            const { whole, remainder } = calculatePktRemainder(brand.periodSaleQuantity, brand.packetSize);
+            const { whole, remainder } = calculatePktRemainder(brand.saleQuantity, brand.packetSize);
             acc.whole += whole;
             acc.remainder += remainder;
         });
