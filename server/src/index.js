@@ -731,6 +731,42 @@ apiRouter.put('/api/employees/:id', async (req, res) => {
   }
 });
 
+apiRouter.post('/api/employees/:id/reset-password', async (req, res) => {
+  try {
+    const userSession = req.session.user;
+    if (!userSession) return res.status(401).json({ message: 'Unauthorized' });
+
+    const isAdminUser = userSession.username === 'admin';
+    const isAdminRole = (userSession.role || '').toLowerCase() === 'admin';
+    if (!isAdminUser && !isAdminRole) {
+      return res.status(403).json({ message: 'Forbidden: Only admins can reset passwords' });
+    }
+
+    const employee = await Employee.findById(req.params.id);
+    if (!employee) return res.status(404).json({ message: 'Employee not found' });
+
+    let d = decryptData(employee.data);
+    if (d && d.data && typeof d.data === 'string' && !d.employeeId) {
+      try { d = decryptData(d.data); } catch (e) { }
+    }
+    const { employeeId } = d;
+
+    const user = await User.findOne({ username: employeeId });
+    if (!user) return res.status(404).json({ message: 'User account not found' });
+
+    const newPassword = generatePassword();
+    const hashedPassword = CryptoJS.SHA256(newPassword).toString(CryptoJS.enc.Hex);
+
+    user.password = hashedPassword;
+    await user.save();
+
+    res.json({ success: true, newPassword });
+  } catch (err) {
+    console.error('Password reset error:', err);
+    res.status(500).json({ message: 'Server error during password reset' });
+  }
+});
+
 apiRouter.get('/api/employees', async (req, res) => {
   try {
     const records = await Employee.find().sort({ createdAt: -1 });

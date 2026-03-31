@@ -578,8 +578,8 @@ export const generateStockReportPDF = (stockData, filters, reportType = 'short')
             body: tableRows,
             theme: 'plain',
             styles: {
-                fontSize: 8,
-                cellPadding: 1.2,
+                fontSize: reportType === 'detailed' ? 8 : 8.7,
+                cellPadding: reportType === 'detailed' ? 1.2 : 1.3,
                 lineColor: [0, 0, 0],
                 lineWidth: 0.1,
                 textColor: [0, 0, 0],
@@ -2220,6 +2220,9 @@ export const generatePaymentCollectionReportPDF = (payments, filters, dateStr) =
 export const generateCustomerHistoryPDF = (customer, historyData, summary, filters, activeTab) => {
     try {
         const isSales = activeTab === 'sales';
+        const isAll = activeTab === 'all';
+        const isPayment = activeTab === 'payment';
+
         // Match the orientation and margin of other reports
         const doc = new jsPDF({ orientation: 'p', unit: 'mm', format: 'a4' });
         const pageWidth = doc.internal.pageSize.width;
@@ -2248,7 +2251,10 @@ export const generateCustomerHistoryPDF = (customer, historyData, summary, filte
         doc.rect(pageWidth / 2 - 50, 37, 100, 8, 'FD');
         doc.setFontSize(12);
         doc.setFont('helvetica', 'bold');
-        const reportTitle = isSales ? "CUSTOMER SALES HISTORY" : "CUSTOMER PAYMENT HISTORY";
+        let reportTitle = "";
+        if (isSales) reportTitle = "CUSTOMER SALES HISTORY";
+        else if (isPayment) reportTitle = "CUSTOMER PAYMENT HISTORY";
+        else if (isAll) reportTitle = "CUSTOMER ALL TRANSACTION HISTORY";
         doc.text(reportTitle, pageWidth / 2, 42, { align: 'center' });
 
         // --- Info Row ---
@@ -2291,7 +2297,81 @@ export const generateCustomerHistoryPDF = (customer, historyData, summary, filte
         const customerType = (customer.customerType || '').toLowerCase();
         const isParty = customerType.includes('party');
 
-        if (isSales) {
+        if (isAll) {
+            let grandQty = 0;
+            let grandAmt = 0;
+            let grandPaid = 0;
+            let grandTrucks = 0;
+
+            // Sort for ascending order (chronological) in PDF
+            const chronoHistory = [...historyData].sort((a, b) => new Date(a.date) - new Date(b.date));
+            let lastBalance = chronoHistory.length > 0 ? chronoHistory[chronoHistory.length - 1].runningBalance : 0;
+
+            chronoHistory.forEach((item, idx) => {
+                const qty = item.type === 'sale' ? parseFloat(item.quantity || 0) : 0;
+                const amt = item.type === 'sale' ? parseFloat(item.amount || 0) : 0;
+                const paid = item.type === 'sale' ? parseFloat(item.paid || 0) : parseFloat(item.amount || 0);
+                const runningBal = parseFloat(item.runningBalance || 0);
+                const trucks = parseFloat(item.truck || 0) || 0;
+
+                grandQty += qty;
+                grandAmt += amt;
+                grandPaid += paid;
+                grandTrucks += trucks;
+
+                const details = item.type === 'payment'
+                    ? `${item.method === 'Cash' ? (item.receiveBy || item.method) : (item.bankName || item.mobileType || item.method)}${item.method && (item.bankName || item.receiveBy || item.mobileType) ? ` (${item.method})` : ''}${item.reference ? ` [Ref: ${item.reference}]` : ''}`
+                    : '-';
+
+                const row = [
+                    idx + 1,
+                    formatDate(item.date),
+                    item.invoiceNo || item.lcNo || '-',
+                    item.product || '-',
+                    item.truck || '-',
+                    qty > 0 ? qty.toLocaleString() : '-',
+                    item.type === 'sale' ? `${parseFloat(item.rate || 0).toLocaleString(undefined, { maximumFractionDigits: 0 })}` : '-',
+                    amt > 0 ? `${amt.toLocaleString(undefined, { maximumFractionDigits: 0 })}` : '-',
+                    details,
+                    paid > 0 ? `${paid.toLocaleString(undefined, { maximumFractionDigits: 0 })}` : '-',
+                    `${runningBal.toLocaleString(undefined, { maximumFractionDigits: 0 })}`
+                ];
+                tableRows.push(row);
+            });
+
+            autoTable(doc, {
+                startY: yPos + 10,
+                head: [['SL', 'Date', 'LC No', 'Product', 'Truck', 'Qty', 'Rate', 'Amount', 'Payment Details', 'Paid', 'Balance']],
+                body: tableRows,
+                foot: [[
+                    { content: 'GRAND TOTAL', colSpan: 4, styles: { halign: 'right', fontStyle: 'bold', fillColor: [240, 240, 240] } },
+                    { content: grandTrucks.toLocaleString(), styles: { halign: 'center', fontStyle: 'bold', fillColor: [240, 240, 240] } },
+                    { content: grandQty.toLocaleString(), styles: { halign: 'right', fontStyle: 'bold', fillColor: [240, 240, 240] } },
+                    { content: '', styles: { fillColor: [240, 240, 240] } },
+                    { content: grandAmt.toLocaleString(undefined, { maximumFractionDigits: 0 }), styles: { halign: 'right', fontStyle: 'bold', fillColor: [240, 240, 240] } },
+                    { content: '', styles: { fillColor: [240, 240, 240] } },
+                    { content: grandPaid.toLocaleString(undefined, { maximumFractionDigits: 0 }), styles: { halign: 'right', fontStyle: 'bold', fillColor: [240, 240, 240] } },
+                    { content: lastBalance.toLocaleString(undefined, { maximumFractionDigits: 0 }), styles: { halign: 'right', fontStyle: 'bold', fillColor: [240, 240, 240] } }
+                ]],
+                theme: 'grid',
+                styles: { fontSize: 8.5, cellPadding: 1.5, lineColor: [0, 0, 0], lineWidth: 0.1, textColor: [0, 0, 0], valign: 'middle' },
+                headStyles: { fillColor: [245, 245, 245], fontStyle: 'bold', halign: 'center' },
+                columnStyles: {
+                    0: { halign: 'center', cellWidth: 7 },
+                    1: { cellWidth: 18, halign: 'center' },
+                    2: { cellWidth: 20 },
+                    3: { cellWidth: 25 },
+                    4: { cellWidth: 15, halign: 'center' },
+                    5: { halign: 'right', cellWidth: 15 },
+                    6: { halign: 'right', cellWidth: 15 },
+                    7: { halign: 'right', cellWidth: 20 },
+                    8: { cellWidth: 25 },
+                    9: { halign: 'right', cellWidth: 20 },
+                    10: { halign: 'right', cellWidth: 20 }
+                },
+                margin: { left: margin, right: margin }
+            });
+        } else if (isSales) {
             let totalQty = 0, totalAmt = 0, totalDisc = 0, totalTrucksCount = 0;
             historyData.forEach((item, idx) => {
                 const qty = parseFloat(item.quantity || 0);

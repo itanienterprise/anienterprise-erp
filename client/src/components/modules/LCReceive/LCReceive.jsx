@@ -611,6 +611,7 @@ function LCReceive({
             }]
         });
         setEditingId(null);
+        setWhSearchQuery('');
     };
 
     const recalculateEntry = (entry, isQuantityDriven = false) => {
@@ -1182,12 +1183,19 @@ function LCReceive({
                 totalLcTruck: record.totalLcTruck,
                 totalLcQuantity: record.totalLcQuantity,
                 status: record.status,
-                warehouse: record.warehouse || '',
+                warehouse: record.warehouse || record.entries?.[0]?.warehouse || '',
                 requestedBy: record.entries?.[0]?.requestedBy || '',
                 requestedByUsername: record.entries?.[0]?.requestedByUsername || '',
                 productEntries: formProductEntries,
                 originalIds: record.allIds
             });
+
+            // Set the search query for the warehouse search box so it's not visually empty
+            if (record.warehouse || record.entries?.[0]?.warehouse) {
+                setWhSearchQuery(record.warehouse || record.entries?.[0]?.warehouse);
+            } else {
+                setWhSearchQuery('');
+            }
 
         } else {
             setStockFormData({
@@ -1227,6 +1235,8 @@ function LCReceive({
                     }]
                 }]
             });
+            // Set the search query for the warehouse search box
+            setWhSearchQuery(record.warehouse || '');
         }
         setShowStockForm(true);
     };
@@ -3024,6 +3034,7 @@ function LCReceive({
                                                     importer: item.importer,
                                                     exporter: item.exporter,
                                                     billOfEntry: item.billOfEntry,
+                                                    warehouse: item.warehouse || '',
                                                     totalLcTruck: 0,
                                                     totalQuantity: 0,
                                                     truckEntries: new Set(),
@@ -3195,7 +3206,7 @@ function LCReceive({
                                             bdCnFCost: item.bdCnFCost,
                                             billOfEntry: item.billOfEntry,
                                             status: item.status,
-                                            warehouse: item.warehouse,
+                                            warehouse: item.warehouse || '',
                                             totalQuantity: 0,
                                             totalLcQuantity: 0,
                                             totalShort: 0,

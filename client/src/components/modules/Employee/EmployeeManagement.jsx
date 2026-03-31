@@ -36,6 +36,14 @@ const EmployeeManagement = ({
     const [openDropdown, setOpenDropdown] = useState(null);
     const roleDropdownRef = useRef(null);
     const statusDropdownRef = useRef(null);
+    const [resettingPassword, setResettingPassword] = useState(false);
+    const [resetPasswordValue, setResetPasswordValue] = useState(null);
+    const [showConfirmReset, setShowConfirmReset] = useState(false);
+
+    const currentUser = JSON.parse(localStorage.getItem('currentUser') || '{}');
+    const isAdminUser = currentUser?.username === 'admin';
+    const isAdminRole = (currentUser?.role || '').toLowerCase() === 'admin';
+    const isAdmin = isAdminUser || isAdminRole;
 
     const toggleCardExpansion = (id) => {
         const newExpanded = new Set(expandedCards);
@@ -203,6 +211,23 @@ const EmployeeManagement = ({
 
     const handleDelete = (id) => {
         onDeleteConfirm({ show: true, type: 'employees', id, isBulk: false });
+    };
+
+    const handleResetPassword = async (id) => {
+        setResettingPassword(true);
+        try {
+            const response = await axios.post(`${API_BASE_URL}/api/employees/${id}/reset-password`);
+            if (response.data && response.data.newPassword) {
+                setResetPasswordValue(response.data.newPassword);
+                setShowConfirmReset(false);
+            }
+        } catch (error) {
+            console.error('Error resetting password:', error);
+            alert('Failed to reset password. Employee may not have an active user account.');
+            setShowConfirmReset(false);
+        } finally {
+            setResettingPassword(false);
+        }
     };
 
     const toggleSelection = (id) => {
@@ -731,14 +756,14 @@ const EmployeeManagement = ({
 
             {viewData && (
                 <div className="fixed inset-0 z-[2000] flex items-center justify-center p-4">
-                    <div className="absolute inset-0 bg-gray-900/60 backdrop-blur-sm" onClick={() => setViewData(null)}></div>
+                    <div className="absolute inset-0 bg-gray-900/60 backdrop-blur-sm" onClick={() => { setViewData(null); setResetPasswordValue(null); setShowConfirmReset(false); }}></div>
                     <div className="relative bg-white border border-gray-100 rounded-2xl shadow-2xl max-w-lg w-full p-8 animate-in zoom-in duration-200">
                         <div className="flex justify-between items-start mb-6">
                             <div>
                                 <h2 className="text-2xl font-bold text-gray-900 font-sans">{viewData.name}</h2>
                                 <p className="text-blue-600 font-semibold font-sans">{viewData.designation}</p>
                             </div>
-                            <button onClick={() => setViewData(null)} className="p-2 hover:bg-gray-100 rounded-full transition-colors">
+                            <button onClick={() => { setViewData(null); setResetPasswordValue(null); setShowConfirmReset(false); }} className="p-2 hover:bg-gray-100 rounded-full transition-colors">
                                 <XIcon className="w-6 h-6 text-gray-400" />
                             </button>
                         </div>
@@ -760,6 +785,51 @@ const EmployeeManagement = ({
                                 <div><p className="text-xs text-gray-400 uppercase font-bold tracking-wider">Joining Date</p><p className="text-sm text-gray-700">{formatDate(viewData.joiningDate)}</p></div>
                                 <div><p className="text-xs text-gray-400 uppercase font-bold tracking-wider">Salary</p><p className="text-sm text-gray-700">{viewData.salary ? `${viewData.salary} BDT` : 'N/A'}</p></div>
                             </div>
+                            
+                            {isAdmin && (
+                                <div className="border-t border-gray-100 pt-4 mt-2 flex flex-col gap-2">
+                                    <div className="flex items-center justify-between">
+                                        <div>
+                                            <p className="text-xs text-gray-500 font-medium">Account Security</p>
+                                            <p className="text-[10px] text-gray-400">Generate a new password for this employee.</p>
+                                        </div>
+                                        {resetPasswordValue ? (
+                                            <div className="flex flex-col items-end w-1/2">
+                                                <div className="flex items-center gap-2">
+                                                    <span className="text-xs font-bold text-emerald-600">New Password:</span>
+                                                    <span className="text-sm font-mono bg-emerald-50 text-emerald-700 px-3 py-1 rounded-md border border-emerald-100">{resetPasswordValue}</span>
+                                                </div>
+                                                <span className="text-[9px] text-gray-400 mt-1 italic text-right">Please copy and share this with the employee.</span>
+                                            </div>
+                                        ) : showConfirmReset ? (
+                                            <div className="flex items-center gap-2 animate-in slide-in-from-right-4 duration-200">
+                                                <p className="text-xs text-rose-600 font-bold mr-2">Are you sure?</p>
+                                                <button 
+                                                    onClick={() => setShowConfirmReset(false)}
+                                                    disabled={resettingPassword}
+                                                    className="px-3 py-2 text-gray-500 hover:bg-gray-100 hover:text-gray-700 text-xs font-bold rounded-lg transition-colors border border-gray-200 disabled:opacity-50"
+                                                >
+                                                    Cancel
+                                                </button>
+                                                <button 
+                                                    onClick={() => handleResetPassword(viewData._id)}
+                                                    disabled={resettingPassword}
+                                                    className="px-4 py-2 bg-rose-600 text-white hover:bg-rose-700 text-xs font-bold rounded-lg shadow-sm shadow-rose-500/30 transition-all disabled:opacity-50 flex items-center gap-2"
+                                                >
+                                                    {resettingPassword ? 'Resetting...' : 'Yes, Reset'}
+                                                </button>
+                                            </div>
+                                        ) : (
+                                            <button 
+                                                onClick={() => setShowConfirmReset(true)}
+                                                className="px-4 py-2 bg-red-50 text-red-600 hover:bg-red-100 hover:text-red-700 text-xs font-bold rounded-lg transition-colors border border-red-100 flex items-center gap-2 hover:shadow-sm"
+                                            >
+                                                Reset Password
+                                            </button>
+                                        )}
+                                    </div>
+                                </div>
+                            )}
                         </div>
                     </div>
                 </div>
