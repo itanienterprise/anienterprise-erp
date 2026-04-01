@@ -1984,6 +1984,29 @@ export const generateCustomerReportPDF = (customers, typeFilter, grandTotalDue, 
 
         doc.text(`Printed on: ${dateStr}`, pageWidth - margin, 55, { align: 'right' });
 
+        const getLastTransDay = (customer) => {
+            const payments = customer.paymentHistory || [];
+            if (payments.length === 0) return '-';
+
+            const latestPayment = payments.reduce((latest, current) => {
+                return new Date(current.date) > new Date(latest.date) ? current : latest;
+            }, payments[0]);
+
+            if (!latestPayment || !latestPayment.date) return '-';
+
+            const lastDate = new Date(latestPayment.date);
+            const today = new Date();
+            lastDate.setHours(0, 0, 0, 0);
+            today.setHours(0, 0, 0, 0);
+
+            const diffTime = Math.abs(today - lastDate);
+            const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+
+            if (diffDays === 0) return 'Today';
+            if (diffDays === 1) return '1 day ago';
+            return `${diffDays} days ago`;
+        };
+
         // --- Table ---
         const tableRows = [];
         customers.forEach((c, idx) => {
@@ -1991,22 +2014,23 @@ export const generateCustomerReportPDF = (customers, typeFilter, grandTotalDue, 
             tableRows.push([
                 idx + 1,
                 c.customerId || '-',
-                c.companyName || '-',
-                c.customerName || '-',
-                c.phone || '-',
-                `Tk ${due.toLocaleString('en-BD', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                c.companyName || c.customerName || '-',
+                getLastTransDay(c),
+                `Tk ${Math.round(due).toLocaleString('en-BD')}`,
+                '' // Remark field
             ]);
         });
 
         // Add Grand Total
         tableRows.push([
-            { content: 'GRAND TOTAL DUE', colSpan: 5, styles: { halign: 'right', fontStyle: 'bold', fillColor: [240, 240, 240] } },
-            { content: `Tk ${grandTotalDue.toLocaleString('en-BD', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, styles: { halign: 'right', fontStyle: 'bold', fillColor: [240, 240, 240], textColor: [220, 38, 38] } }
+            { content: 'GRAND TOTAL DUE', colSpan: 4, styles: { halign: 'right', fontStyle: 'bold', fillColor: [240, 240, 240] } },
+            { content: `Tk ${Math.round(grandTotalDue).toLocaleString('en-BD')}`, styles: { halign: 'right', fontStyle: 'bold', fillColor: [240, 240, 240], textColor: [220, 38, 38] } },
+            { content: '', styles: { fillColor: [240, 240, 240] } } // Remark empty total cell
         ]);
 
         autoTable(doc, {
             startY: yPos + 10,
-            head: [['SL', 'ID', 'Company', 'Customer', 'Phone', 'Total Balance']],
+            head: [['SL', 'ID', 'Company', 'Last Trans. Day', 'Total Balance', 'Remark']],
             body: tableRows,
             theme: 'grid',
             styles: {
@@ -2025,9 +2049,9 @@ export const generateCustomerReportPDF = (customers, typeFilter, grandTotalDue, 
                 0: { cellWidth: 10, halign: 'center' }, // SL
                 1: { cellWidth: 20 },                   // ID
                 2: { cellWidth: 45 },                   // Company
-                3: { cellWidth: 45 },                   // Customer
-                4: { cellWidth: 35 },                   // Phone
-                5: { cellWidth: 35, halign: 'right' }   // Total Balance
+                3: { cellWidth: 30, halign: 'center' }, // Last Trans. Day
+                4: { cellWidth: 35, halign: 'right' },  // Total Balance
+                5: { cellWidth: 50 }                    // Remark
             },
             margin: { left: margin, right: margin }
         });

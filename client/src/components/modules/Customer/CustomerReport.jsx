@@ -22,6 +22,29 @@ const CustomerReport = ({ isOpen, onClose, customers = [] }) => {
         return Math.max(0, totalAmount - totalPaid - totalDiscount - totalHistoryPaid);
     };
 
+    const getLastTransDay = (customer) => {
+        const payments = customer.paymentHistory || [];
+        if (payments.length === 0) return '-';
+        
+        const latestPayment = payments.reduce((latest, current) => {
+            return new Date(current.date) > new Date(latest.date) ? current : latest;
+        }, payments[0]);
+    
+        if (!latestPayment || !latestPayment.date) return '-';
+    
+        const lastDate = new Date(latestPayment.date);
+        const today = new Date();
+        lastDate.setHours(0, 0, 0, 0);
+        today.setHours(0, 0, 0, 0);
+        
+        const diffTime = Math.abs(today - lastDate);
+        const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+        
+        if (diffDays === 0) return 'Today';
+        if (diffDays === 1) return '1 day ago';
+        return `${diffDays} days ago`;
+    };
+
     const filtered = customers.filter(c => {
         const matchType = typeFilter === 'All Customer' || (c.customerType || 'General Customer') === typeFilter;
         const q = searchQuery.toLowerCase();
@@ -143,11 +166,10 @@ const CustomerReport = ({ isOpen, onClose, customers = [] }) => {
                                 <thead>
                                     <tr className="bg-gray-50 border-b border-gray-900">
                                         <th className="border-r border-gray-900 px-2 py-2 text-center text-[12px] font-bold text-gray-900 uppercase tracking-wider w-[5%]">SL</th>
-                                        <th className="border-r border-gray-900 px-2 py-2 text-left text-[12px] font-bold text-gray-900 uppercase tracking-wider w-[10%]">ID</th>
-                                        <th className="border-r border-gray-900 px-2 py-2 text-left text-[12px] font-bold text-gray-900 uppercase tracking-wider w-[22%]">Company</th>
-                                        <th className="border-r border-gray-900 px-2 py-2 text-left text-[12px] font-bold text-gray-900 uppercase tracking-wider w-[22%]">Customer</th>
-                                        <th className="border-r border-gray-900 px-2 py-2 text-left text-[12px] font-bold text-gray-900 uppercase tracking-wider w-[18%]">Phone</th>
-                                        <th className="px-2 py-2 text-right text-[12px] font-bold text-gray-900 uppercase tracking-wider w-[18%]">Total Balance</th>
+                                        <th className="border-r border-gray-900 px-2 py-2 text-left text-[12px] font-bold text-gray-900 uppercase tracking-wider w-[15%]">ID</th>
+                                        <th className="border-r border-gray-900 px-2 py-2 text-left text-[12px] font-bold text-gray-900 uppercase tracking-wider w-[40%]">Company</th>
+                                        <th className="border-r border-gray-900 px-2 py-2 text-center text-[12px] font-bold text-gray-900 uppercase tracking-wider w-[20%]">Last Trans. Day</th>
+                                        <th className="px-2 py-2 text-right text-[12px] font-bold text-gray-900 uppercase tracking-wider w-[20%]">Total Balance</th>
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-gray-900">
@@ -158,11 +180,10 @@ const CustomerReport = ({ isOpen, onClose, customers = [] }) => {
                                                 <tr key={c._id} className="border-b border-gray-200 hover:bg-gray-50 transition-colors">
                                                     <td className="border-r border-gray-200 px-2 py-2 text-[13px] text-gray-900 text-center">{idx + 1}</td>
                                                     <td className="border-r border-gray-200 px-2 py-2 text-[13px] font-bold text-gray-700">{c.customerId || '-'}</td>
-                                                    <td className="border-r border-gray-200 px-2 py-2 text-[13px] text-gray-900">{c.companyName || '-'}</td>
-                                                    <td className="border-r border-gray-200 px-2 py-2 text-[13px] font-medium text-gray-900">{c.customerName || '-'}</td>
-                                                    <td className="border-r border-gray-200 px-2 py-2 text-[13px] text-gray-700">{c.phone || '-'}</td>
+                                                    <td className="border-r border-gray-200 px-2 py-2 text-[13px] text-gray-900">{c.companyName || c.customerName || '-'}</td>
+                                                    <td className="border-r border-gray-200 px-2 py-2 text-[13px] font-medium text-gray-700 text-center">{getLastTransDay(c)}</td>
                                                     <td className={`px-2 py-2 text-[14px] text-right font-black ${due > 0 ? 'text-rose-600' : 'text-emerald-600'}`}>
-                                                        ৳{due.toLocaleString('en-BD', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                                        ৳{Math.round(due).toLocaleString('en-BD')}
                                                     </td>
                                                 </tr>
                                             );
@@ -176,9 +197,9 @@ const CustomerReport = ({ isOpen, onClose, customers = [] }) => {
                                 {filtered.length > 0 && (
                                     <tfoot>
                                         <tr className="bg-gray-100 border-t-2 border-gray-900">
-                                            <td colSpan="5" className="px-2 py-2 text-[14px] font-black text-gray-900 text-right uppercase tracking-wider border-r border-gray-900">Grand Total Due</td>
+                                            <td colSpan="4" className="px-2 py-2 text-[14px] font-black text-gray-900 text-right uppercase tracking-wider border-r border-gray-900">Grand Total Due</td>
                                             <td className="px-2 py-2 text-[14px] text-right font-black text-rose-700">
-                                                ৳{grandTotalDue.toLocaleString('en-BD', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                                ৳{Math.round(grandTotalDue).toLocaleString('en-BD')}
                                             </td>
                                         </tr>
                                     </tfoot>
@@ -208,7 +229,7 @@ const CustomerReport = ({ isOpen, onClose, customers = [] }) => {
                                                 <div className="text-right">
                                                     <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Total Due</p>
                                                     <p className={`text-lg font-black ${due > 0 ? 'text-rose-600' : 'text-emerald-600'}`}>
-                                                        ৳{due.toLocaleString('en-BD', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                                        ৳{Math.round(due).toLocaleString('en-BD')}
                                                     </p>
                                                 </div>
                                             </div>
@@ -227,7 +248,7 @@ const CustomerReport = ({ isOpen, onClose, customers = [] }) => {
                                     <div className="text-center">
                                         <p className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Total Due</p>
                                         <p className="text-3xl font-black text-rose-400">
-                                            ৳{grandTotalDue.toLocaleString('en-BD', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                            ৳{Math.round(grandTotalDue).toLocaleString('en-BD')}
                                         </p>
                                     </div>
                                 </div>
@@ -249,7 +270,7 @@ const CustomerReport = ({ isOpen, onClose, customers = [] }) => {
                             <div className="border border-gray-200 p-4 sm:p-5 rounded-2xl bg-white shadow-sm">
                                 <div className="text-[10px] sm:text-[11px] font-bold text-rose-500 uppercase tracking-wider mb-2">Grand Total Due</div>
                                 <div className="text-xl sm:text-2xl font-black text-rose-600">
-                                    ৳{grandTotalDue.toLocaleString('en-BD', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                    ৳{Math.round(grandTotalDue).toLocaleString('en-BD')}
                                 </div>
                             </div>
                         </div>

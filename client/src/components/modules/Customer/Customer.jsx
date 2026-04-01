@@ -908,7 +908,7 @@ const Customer = ({
                                                             </span>
                                                         </td>
                                                         <td className="px-6 py-4 text-sm font-bold text-red-600 text-right">
-                                                            {custTotalDue.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                                            {Math.round(custTotalDue).toLocaleString('en-IN')}
                                                         </td>
                                                         <td className="px-6 py-4 text-sm text-gray-600"><span className={`customer-status-badge ${c.status === 'Active' ? 'active' : 'inactive'}`}>{c.status}</span></td>
                                                         <td className="px-6 py-4 text-sm text-gray-600">
@@ -961,7 +961,7 @@ const Customer = ({
                                                                     <span className="shrink-0">{c.status}</span>
                                                                 ) : (
                                                                     <span className="font-bold">
-                                                                        ৳{custTotalDue.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
+                                                                        ৳{Math.round(custTotalDue).toLocaleString('en-IN')}
                                                                     </span>
                                                                 )}
                                                             </span>
@@ -986,7 +986,7 @@ const Customer = ({
                                                                 <div className="mobile-card-row">
                                                                     <span className="mobile-card-label">Balance:</span>
                                                                     <span className="mobile-card-value text-red-600 font-bold">
-                                                                        ৳{custTotalDue.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                                                        ৳{Math.round(custTotalDue).toLocaleString('en-IN')}
                                                                     </span>
                                                                 </div>
                                                             </div>
