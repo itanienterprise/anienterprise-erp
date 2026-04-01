@@ -18,14 +18,52 @@ const StockReport = ({
 
     const [showFilterPanel, setShowFilterPanel] = useState(false);
     const [reportType, setReportType] = useState('short'); // 'short' or 'detailed'
-    const [filterSearchInputs, setFilterSearchInputs] = useState({ lcNoSearch: '', portSearch: '', brandSearch: '', productSearch: '', categorySearch: '' });
-    const [filterDropdownOpen, setFilterDropdownOpen] = useState({ lcNo: false, port: false, brand: false, product: false, category: false });
-    const initialFilterDropdownState = { lcNo: false, port: false, brand: false, product: false, category: false };
+    const [searchQuery, setSearchQuery] = useState('');
+    const [filterSearchInputs, setFilterSearchInputs] = useState({ warehouseSearch: '', brandSearch: '', productSearch: '', categorySearch: '' });
+    const [filterDropdownOpen, setFilterDropdownOpen] = useState({ warehouse: false, brand: false, product: false, category: false });
+    const initialFilterDropdownState = { warehouse: false, brand: false, product: false, category: false };
+
+    // --- Search & Filter Logic ---
+    const filteredRecords = React.useMemo(() => {
+        if (!searchQuery.trim()) return stockData.displayRecords;
+
+        const query = searchQuery.toLowerCase().trim();
+        return stockData.displayRecords.filter(item => {
+            const matchesProduct = (item.productName || '').toLowerCase().includes(query);
+            const matchesBrand = item.brandList.some(brand => (brand.brand || '').toLowerCase().includes(query));
+            return matchesProduct || matchesBrand;
+        });
+    }, [stockData.displayRecords, searchQuery]);
+
+    // Recalculate totals based on filteredRecords
+    const totals = React.useMemo(() => {
+        let totalTotalInHouseQty = 0;
+        let totalSaleQty = 0;
+        let totalInHouseQty = 0;
+        let totalSalePkt = 0;
+
+        filteredRecords.forEach(item => {
+            totalTotalInHouseQty += item.totalInHouseQuantity || 0;
+            totalSaleQty += item.saleQuantity || 0;
+            totalInHouseQty += item.inHouseQuantity || 0;
+            totalSalePkt += item.salePacket || 0;
+        });
+
+        return { totalTotalInHouseQty, totalSaleQty, totalInHouseQty, totalSalePkt };
+    }, [filteredRecords]);
+
+    const filteredStockData = React.useMemo(() => ({
+        ...stockData,
+        displayRecords: filteredRecords,
+        totalTotalInHouseQty: totals.totalTotalInHouseQty,
+        totalSaleQty: totals.totalSaleQty,
+        totalInHouseQty: totals.totalInHouseQty,
+        totalSalePkt: totals.totalSalePkt
+    }), [stockData, filteredRecords, totals]);
 
     const filterButtonRef = useRef(null);
     const filterPanelRef = useRef(null);
-    const lcNoFilterRef = useRef(null);
-    const portFilterRef = useRef(null);
+    const warehouseFilterRef = useRef(null);
     const productFilterRef = useRef(null);
     const brandFilterRef = useRef(null);
     const categoryFilterRef = useRef(null);
@@ -38,8 +76,7 @@ const StockReport = ({
             if (showFilterPanel && filterPanelRef.current && !filterPanelRef.current.contains(event.target) && !filterButtonRef.current.contains(event.target)) {
                 setShowFilterPanel(false);
             }
-            if (filterDropdownOpen.lcNo && lcNoFilterRef.current && !lcNoFilterRef.current.contains(event.target)) setFilterDropdownOpen(prev => ({ ...prev, lcNo: false }));
-            if (filterDropdownOpen.port && portFilterRef.current && !portFilterRef.current.contains(event.target)) setFilterDropdownOpen(prev => ({ ...prev, port: false }));
+            if (filterDropdownOpen.warehouse && warehouseFilterRef.current && !warehouseFilterRef.current.contains(event.target)) setFilterDropdownOpen(prev => ({ ...prev, warehouse: false }));
             if (filterDropdownOpen.product && productFilterRef.current && !productFilterRef.current.contains(event.target)) setFilterDropdownOpen(prev => ({ ...prev, product: false }));
             if (filterDropdownOpen.brand && brandFilterRef.current && !brandFilterRef.current.contains(event.target)) setFilterDropdownOpen(prev => ({ ...prev, brand: false }));
             if (filterDropdownOpen.category && categoryFilterRef.current && !categoryFilterRef.current.contains(event.target)) setFilterDropdownOpen(prev => ({ ...prev, category: false }));
@@ -73,12 +110,35 @@ const StockReport = ({
             <div className="bg-white w-full max-w-5xl max-h-[90vh] overflow-visible rounded-3xl shadow-2xl flex flex-col print:max-h-none print:shadow-none print:rounded-none print:w-full print:h-auto">
                 {/* Modal Header/Toolbar (Hidden on Print) */}
                 <div className="flex flex-row items-center justify-between px-4 sm:px-8 py-4 border-b border-gray-100 print:hidden gap-2">
-                    <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+                    <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-shrink-0">
                         <div className="w-9 h-9 sm:w-10 sm:h-10 flex-shrink-0 flex items-center justify-center bg-blue-50 rounded-lg sm:rounded-xl">
                             <BarChartIcon className="w-4 h-4 sm:w-5 sm:h-5 text-blue-600" />
                         </div>
-                        <h3 className="text-base sm:text-xl font-black text-gray-800 truncate leading-none">Stock Report</h3>
+                        <h3 className="text-base sm:text-lg lg:text-xl font-black text-gray-800 truncate leading-none">Stock Report</h3>
                     </div>
+
+                    {/* Quick Search Bar */}
+                    <div className="hidden md:flex relative flex-1 max-w-sm mx-4 no-print">
+                        <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
+                            <SearchIcon className="h-4 w-4 text-gray-400" />
+                        </div>
+                        <input
+                            type="text"
+                            placeholder="Find product or brand..."
+                            value={searchQuery}
+                            onChange={(e) => setSearchQuery(e.target.value)}
+                            className="block w-full pl-10 pr-10 py-2.5 bg-gray-50/50 border border-gray-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 transition-all font-bold placeholder:font-normal"
+                        />
+                        {searchQuery && (
+                            <button
+                                onClick={() => setSearchQuery('')}
+                                className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-600"
+                            >
+                                <XIcon className="h-4 w-4" />
+                            </button>
+                        )}
+                    </div>
+
                     <div className="flex items-center justify-end gap-1.5 sm:gap-3 flex-shrink-0">
                         <div className="relative group no-print">
                             <select
@@ -118,8 +178,8 @@ const StockReport = ({
                                             <h4 className="font-bold text-gray-900 text-sm">Advance Filter</h4>
                                             <button
                                                 onClick={() => {
-                                                    setStockFilters({ startDate: '', endDate: '', lcNo: '', port: '', brand: '', productName: '', category: '' });
-                                                    setFilterSearchInputs({ lcNoSearch: '', portSearch: '', brandSearch: '', productSearch: '', categorySearch: '' });
+                                                    setStockFilters({ startDate: '', endDate: '', warehouse: '', brand: '', productName: '', category: '' });
+                                                    setFilterSearchInputs({ warehouseSearch: '', brandSearch: '', productSearch: '', categorySearch: '' });
                                                     setFilterDropdownOpen(initialFilterDropdownState);
                                                 }}
                                                 className="text-[10px] font-bold text-blue-600 hover:text-blue-700 uppercase tracking-wider"
@@ -145,80 +205,41 @@ const StockReport = ({
                                                 />
                                             </div>
 
-                                            <div className="grid grid-cols-2 gap-4">
-                                                {/* LC No Selection */}
-                                                <div className="space-y-1.5 relative" ref={lcNoFilterRef}>
-                                                    <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider pl-1">LC No</label>
-                                                    <div className="relative">
-                                                        <input
-                                                            type="text"
-                                                            value={filterSearchInputs.lcNoSearch}
-                                                            onChange={(e) => {
-                                                                setFilterSearchInputs({ ...filterSearchInputs, lcNoSearch: e.target.value });
-                                                                setFilterDropdownOpen({ ...initialFilterDropdownState, lcNo: true });
-                                                            }}
-                                                            onFocus={() => setFilterDropdownOpen({ ...initialFilterDropdownState, lcNo: true })}
-                                                            placeholder={stockFilters.lcNo || "Search LC..."}
-                                                            className={`w-full px-4 py-2.5 bg-white border border-gray-100 rounded-xl text-sm focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all shadow-sm hover:border-gray-200 pr-14 ${stockFilters.lcNo ? 'placeholder:text-gray-900 placeholder:font-semibold' : 'placeholder:text-gray-300'}`}
-                                                        />
-                                                        <div className="absolute right-3.5 top-1/2 -translate-y-1/2 flex items-center gap-2">
-                                                            {stockFilters.lcNo && (
-                                                                <button onClick={() => { setStockFilters({ ...stockFilters, lcNo: '' }); setFilterSearchInputs({ ...filterSearchInputs, lcNoSearch: '' }); setFilterDropdownOpen(initialFilterDropdownState); }} className="text-gray-400 hover:text-gray-600">
-                                                                    <XIcon className="w-4 h-4" />
-                                                                </button>
-                                                            )}
-                                                            <SearchIcon className="w-4.5 h-4.5 text-gray-300 pointer-events-none" />
-                                                        </div>
+                                            {/* Warehouse Selection */}
+                                            <div className="space-y-1.5 relative" ref={warehouseFilterRef}>
+                                                <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider pl-1">Warehouse</label>
+                                                <div className="relative">
+                                                    <input
+                                                        type="text"
+                                                        value={filterSearchInputs.warehouseSearch}
+                                                        onChange={(e) => {
+                                                            setFilterSearchInputs({ ...filterSearchInputs, warehouseSearch: e.target.value });
+                                                            setFilterDropdownOpen({ ...initialFilterDropdownState, warehouse: true });
+                                                        }}
+                                                        onFocus={() => setFilterDropdownOpen({ ...initialFilterDropdownState, warehouse: true })}
+                                                        placeholder={stockFilters.warehouse || "Search Warehouse..."}
+                                                        className={`w-full px-4 py-2.5 bg-white border border-gray-100 rounded-xl text-sm focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all shadow-sm hover:border-gray-200 pr-14 ${stockFilters.warehouse ? 'placeholder:text-gray-900 placeholder:font-semibold' : 'placeholder:text-gray-300'}`}
+                                                    />
+                                                    <div className="absolute right-3.5 top-1/2 -translate-y-1/2 flex items-center gap-2">
+                                                        {stockFilters.warehouse && (
+                                                            <button onClick={() => { setStockFilters({ ...stockFilters, warehouse: '' }); setFilterSearchInputs({ ...filterSearchInputs, warehouseSearch: '' }); setFilterDropdownOpen(initialFilterDropdownState); }} className="text-gray-400 hover:text-gray-600">
+                                                                <XIcon className="w-4 h-4" />
+                                                            </button>
+                                                        )}
+                                                        <SearchIcon className="w-4.5 h-4.5 text-gray-300 pointer-events-none" />
                                                     </div>
-                                                    {filterDropdownOpen.lcNo && (() => {
-                                                        const options = getUniqueOptions('lcNo');
-                                                        const filtered = options.filter(lc => lc.toLowerCase().includes(filterSearchInputs.lcNoSearch.toLowerCase()));
-                                                        return filtered.length > 0 ? (
-                                                            <div className="absolute z-[2020] mt-1 w-full bg-white border border-gray-100 rounded-xl shadow-xl max-h-48 overflow-y-auto py-1">
-                                                                {filtered.map(lc => (
-                                                                    <button key={lc} type="button" onClick={() => { setStockFilters({ ...stockFilters, lcNo: lc }); setFilterSearchInputs({ ...filterSearchInputs, lcNoSearch: '' }); setFilterDropdownOpen(initialFilterDropdownState); }} className="w-full px-4 py-2 text-left text-sm hover:bg-blue-50 transition-colors">{lc}</button>
-                                                                ))}
-                                                            </div>
-                                                        ) : null;
-                                                    })()}
                                                 </div>
-
-                                                {/* Port Selection */}
-                                                <div className="space-y-1.5 relative" ref={portFilterRef}>
-                                                    <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider pl-1">Port</label>
-                                                    <div className="relative">
-                                                        <input
-                                                            type="text"
-                                                            value={filterSearchInputs.portSearch}
-                                                            onChange={(e) => {
-                                                                setFilterSearchInputs({ ...filterSearchInputs, portSearch: e.target.value });
-                                                                setFilterDropdownOpen({ ...initialFilterDropdownState, port: true });
-                                                            }}
-                                                            onFocus={() => setFilterDropdownOpen({ ...initialFilterDropdownState, port: true })}
-                                                            placeholder={stockFilters.port || "Search Port..."}
-                                                            className={`w-full px-4 py-2.5 bg-white border border-gray-100 rounded-xl text-sm focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all shadow-sm hover:border-gray-200 pr-14 ${stockFilters.port ? 'placeholder:text-gray-900 placeholder:font-semibold' : 'placeholder:text-gray-300'}`}
-                                                        />
-                                                        <div className="absolute right-3.5 top-1/2 -translate-y-1/2 flex items-center gap-2">
-                                                            {stockFilters.port && (
-                                                                <button onClick={() => { setStockFilters({ ...stockFilters, port: '' }); setFilterSearchInputs({ ...filterSearchInputs, portSearch: '' }); setFilterDropdownOpen(initialFilterDropdownState); }} className="text-gray-400 hover:text-gray-600">
-                                                                    <XIcon className="w-4 h-4" />
-                                                                </button>
-                                                            )}
-                                                            <SearchIcon className="w-4.5 h-4.5 text-gray-300 pointer-events-none" />
+                                                {filterDropdownOpen.warehouse && (() => {
+                                                    const options = getUniqueOptions('warehouse');
+                                                    const filtered = options.filter(wh => wh.toLowerCase().includes(filterSearchInputs.warehouseSearch.toLowerCase()));
+                                                    return filtered.length > 0 ? (
+                                                        <div className="absolute z-[2020] mt-1 w-full bg-white border border-gray-100 rounded-xl shadow-xl max-h-48 overflow-y-auto py-1">
+                                                            {filtered.map(wh => (
+                                                                <button key={wh} type="button" onClick={() => { setStockFilters({ ...stockFilters, warehouse: wh }); setFilterSearchInputs({ ...filterSearchInputs, warehouseSearch: '' }); setFilterDropdownOpen(initialFilterDropdownState); }} className="w-full px-4 py-2 text-left text-sm hover:bg-blue-50 transition-colors">{wh}</button>
+                                                            ))}
                                                         </div>
-                                                    </div>
-                                                    {filterDropdownOpen.port && (() => {
-                                                        const options = getUniqueOptions('port');
-                                                        const filtered = options.filter(p => p.toLowerCase().includes(filterSearchInputs.portSearch.toLowerCase()));
-                                                        return filtered.length > 0 ? (
-                                                            <div className="absolute z-[120] mt-1 w-full bg-white border border-gray-100 rounded-xl shadow-xl max-h-48 overflow-y-auto py-1">
-                                                                {filtered.map(p => (
-                                                                    <button key={p} type="button" onClick={() => { setStockFilters({ ...stockFilters, port: p }); setFilterSearchInputs({ ...filterSearchInputs, portSearch: '' }); setFilterDropdownOpen(initialFilterDropdownState); }} className="w-full px-4 py-2 text-left text-sm hover:bg-blue-50 transition-colors">{p}</button>
-                                                                ))}
-                                                            </div>
-                                                        ) : null;
-                                                    })()}
-                                                </div>
+                                                    ) : null;
+                                                })()}
                                             </div>
 
                                             <div className="space-y-4">
@@ -360,7 +381,7 @@ const StockReport = ({
                                 </>
                             )}
                         </div>
-                        <button onClick={() => generateStockReportPDF(stockData, stockFilters, reportType)} className="w-9 h-9 sm:w-10 sm:h-10 flex items-center justify-center bg-blue-600 hover:bg-blue-700 text-white rounded-lg sm:rounded-xl shadow-lg shadow-blue-500/30 transition-all no-print">
+                        <button onClick={() => generateStockReportPDF(filteredStockData, stockFilters, reportType)} className="w-9 h-9 sm:w-10 sm:h-10 flex items-center justify-center bg-blue-600 hover:bg-blue-700 text-white rounded-lg sm:rounded-xl shadow-lg shadow-blue-500/30 transition-all no-print">
                             <PrinterIcon className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
                         </button>
                         <button onClick={onClose} className="w-9 h-9 sm:w-10 sm:h-10 flex items-center justify-center hover:bg-gray-100 rounded-lg sm:rounded-xl transition-colors no-print"><XIcon className="w-4 h-4 sm:w-6 sm:h-6 text-gray-500" /></button>
@@ -385,7 +406,7 @@ const StockReport = ({
                             <div className="flex flex-col gap-1.5">
                                 <div className="flex"><span className="font-bold text-gray-900 w-28">Date Range:</span> <span className="text-gray-900">{formatDate(stockFilters.startDate) === '-' ? 'Start' : formatDate(stockFilters.startDate)} to {formatDate(stockFilters.endDate) === '-' ? 'Present' : formatDate(stockFilters.endDate)}</span></div>
                                 {stockFilters.productName && <div className="flex"><span className="font-bold text-gray-900 w-28">Product:</span> <span className="text-gray-900">{stockFilters.productName}</span></div>}
-                                {stockFilters.lcNo && <div className="flex"><span className="font-bold text-gray-900 w-28">LC No:</span> <span className="text-blue-700 font-extrabold">{stockFilters.lcNo}</span></div>}
+                                {stockFilters.warehouse && <div className="flex"><span className="font-bold text-gray-900 w-28">Warehouse:</span> <span className="text-blue-700 font-extrabold">{stockFilters.warehouse}</span></div>}
                             </div>
                             <div className="font-bold"><span className="text-gray-900">Printed on:</span> <span className="text-gray-900">{formatDate(new Date().toISOString().split('T')[0])}</span></div>
                         </div>
@@ -420,8 +441,8 @@ const StockReport = ({
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-gray-900">
-                                    {stockData.displayRecords.length > 0 ? (
-                                        stockData.displayRecords.map((item, index) => {
+                                    {filteredRecords.length > 0 ? (
+                                        filteredRecords.map((item, index) => {
                                             const hasTotal = item.brandList.length > 1;
                                             return (
                                                 <tr key={index} className="border-b border-gray-900 last:border-0 hover:bg-gray-50 transition-colors">
@@ -497,7 +518,7 @@ const StockReport = ({
                                         <tr><td colSpan="9" className="px-4 py-8 text-center text-gray-500 italic text-[14px]">No records found for the selected criteria.</td></tr>
                                     )}
                                 </tbody>
-                                {stockData.displayRecords.length > 0 && (
+                                {filteredRecords.length > 0 && (
                                     <tfoot>
                                         <tr className="bg-gray-100 border-t-2 border-gray-900">
                                             <td colSpan="3" className="px-2 py-1.5 text-[14px] font-black text-gray-900 text-right uppercase tracking-wider border-r border-gray-900">Grand Total</td>
@@ -505,31 +526,31 @@ const StockReport = ({
                                                 <>
                                                     <td className="px-2 py-1.5 text-[14px] text-right font-black text-gray-900 border-r border-gray-900">
                                                         {(() => {
-                                                            const totalWhole = stockData.displayRecords.reduce((accWhole, item) => accWhole + item.brandList.reduce((sum, ent) => sum + calculatePktRemainder(ent.totalInHouseQuantity, ent.packetSize).whole, 0), 0);
-                                                            const totalRem = stockData.displayRecords.reduce((accRem, item) => accRem + item.brandList.reduce((sum, ent) => sum + calculatePktRemainder(ent.totalInHouseQuantity, ent.packetSize).remainder, 0), 0);
+                                                            const totalWhole = filteredRecords.reduce((accWhole, item) => accWhole + item.brandList.reduce((sum, ent) => sum + calculatePktRemainder(ent.totalInHouseQuantity, ent.packetSize).whole, 0), 0);
+                                                            const totalRem = filteredRecords.reduce((accRem, item) => accRem + item.brandList.reduce((sum, ent) => sum + calculatePktRemainder(ent.totalInHouseQuantity, ent.packetSize).remainder, 0), 0);
                                                             return `${totalWhole}${totalRem !== 0 ? ` - ${Math.abs(totalRem).toLocaleString()} kg` : ''}`;
                                                         })()}
                                                     </td>
                                                     <td className="px-2 py-1.5 text-[14px] text-right font-black text-gray-900 border-r border-gray-900">
-                                                        {Math.round(stockData.totalTotalInHouseQty)}
+                                                        {Math.round(totals.totalTotalInHouseQty)}
                                                     </td>
                                                     <td className="px-2 py-1.5 text-[14px] text-right font-black text-gray-900 border-r border-gray-900">
-                                                        {Number.isInteger(stockData.totalSalePkt) ? stockData.totalSalePkt : (stockData.totalSalePkt || 0).toFixed(2)}
+                                                        {Number.isInteger(totals.totalSalePkt) ? totals.totalSalePkt : (totals.totalSalePkt || 0).toFixed(2)}
                                                     </td>
                                                     <td className="px-2 py-1.5 text-[14px] text-right font-black text-gray-900 border-r border-gray-900">
-                                                        {Math.round(stockData.totalSaleQty)}
+                                                        {Math.round(totals.totalSaleQty)}
                                                     </td>
                                                 </>
                                             )}
                                             <td className="px-2 py-1.5 text-[14px] text-right font-black text-gray-900 border-r border-gray-900">
                                                 {(() => {
-                                                    const totalWhole = stockData.displayRecords.reduce((accWhole, item) => accWhole + item.brandList.reduce((sum, ent) => sum + calculatePktRemainder(ent.inHouseQuantity, ent.packetSize).whole, 0), 0);
-                                                    const totalRem = stockData.displayRecords.reduce((accRem, item) => accRem + item.brandList.reduce((sum, ent) => sum + calculatePktRemainder(ent.inHouseQuantity, ent.packetSize).remainder, 0), 0);
+                                                    const totalWhole = filteredRecords.reduce((accWhole, item) => accWhole + item.brandList.reduce((sum, ent) => sum + calculatePktRemainder(ent.inHouseQuantity, ent.packetSize).whole, 0), 0);
+                                                    const totalRem = filteredRecords.reduce((accRem, item) => accRem + item.brandList.reduce((sum, ent) => sum + calculatePktRemainder(ent.inHouseQuantity, ent.packetSize).remainder, 0), 0);
                                                     return `${totalWhole}${totalRem !== 0 ? ` - ${Math.abs(totalRem).toLocaleString()} kg` : ''}`;
                                                 })()}
                                             </td>
                                             <td className="px-2 py-1.5 text-[14px] text-right font-black text-gray-900">
-                                                {Math.round(stockData.totalInHouseQty)}
+                                                {Math.round(totals.totalInHouseQty)}
                                             </td>
                                         </tr>
                                     </tfoot>
@@ -537,10 +558,9 @@ const StockReport = ({
                             </table>
                         </div>
 
-                        {/* Mobile Card View */}
                         <div className="md:hidden print:hidden space-y-4">
-                            {stockData.displayRecords.length > 0 ? (
-                                stockData.displayRecords.map((item, index) => (
+                            {filteredRecords.length > 0 ? (
+                                filteredRecords.map((item, index) => (
                                     <div key={index} className="bg-white border border-gray-200 rounded-2xl overflow-hidden shadow-sm">
                                         <div className="bg-gray-50/50 px-4 py-3 border-b border-gray-100 flex justify-between items-center">
                                             <h4 className="font-black text-gray-900 tracking-tight">{item.productName}</h4>
@@ -612,21 +632,21 @@ const StockReport = ({
                             )}
 
                             {/* Mobile Grand Total */}
-                            {stockData.displayRecords.length > 0 && (
+                            {filteredRecords.length > 0 && (
                                 <div className="mt-8 p-5 bg-gray-900 rounded-2xl shadow-xl shadow-gray-200">
                                     <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-4 text-center">Grand Total Summary</h4>
                                     <div className="grid grid-cols-2 gap-y-6 gap-x-4">
                                         <div className="space-y-1">
                                             <p className="text-[10px] font-bold text-gray-500 uppercase tracking-wider text-center">Total Inhouse</p>
-                                            <p className="text-xl font-black text-white text-center">{Math.round(stockData.totalTotalInHouseQty).toLocaleString()}<span className="text-[10px] ml-1 text-gray-400 uppercase">kg</span></p>
+                                            <p className="text-xl font-black text-white text-center">{Math.round(totals.totalTotalInHouseQty).toLocaleString()}<span className="text-[10px] ml-1 text-gray-400 uppercase">kg</span></p>
                                         </div>
                                         <div className="space-y-1">
                                             <p className="text-[10px] font-bold text-gray-500 uppercase tracking-wider text-center">Total Sale</p>
-                                            <p className="text-xl font-black text-white text-center">{Math.round(stockData.totalSaleQty).toLocaleString()}<span className="text-[10px] ml-1 text-gray-400 uppercase">kg</span></p>
+                                            <p className="text-xl font-black text-white text-center">{Math.round(totals.totalSaleQty).toLocaleString()}<span className="text-[10px] ml-1 text-gray-400 uppercase">kg</span></p>
                                         </div>
                                         <div className="col-span-full pt-4 border-t border-gray-800 flex flex-col items-center">
                                             <p className="text-[10px] font-bold text-blue-400 uppercase tracking-[0.2em] mb-1 text-center">Net Inhouse Stock</p>
-                                            <p className="text-4xl font-black text-blue-500 tracking-tighter text-center">{Math.round(stockData.totalInHouseQty).toLocaleString()}<span className="text-sm ml-2 text-blue-400 uppercase">kg</span></p>
+                                            <p className="text-4xl font-black text-blue-500 tracking-tighter text-center">{Math.round(totals.totalInHouseQty).toLocaleString()}<span className="text-sm ml-2 text-blue-400 uppercase">kg</span></p>
                                         </div>
                                     </div>
                                 </div>
@@ -639,13 +659,13 @@ const StockReport = ({
                                 <div className="text-[10px] sm:text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-2 sm:mb-3">Total Inhouse Stock</div>
                                 <div className="text-xs sm:text-sm font-bold text-gray-700 mb-1">
                                     BAG: {(() => {
-                                        const totalWhole = stockData.displayRecords.reduce((accWhole, item) => accWhole + item.brandList.reduce((sum, ent) => sum + calculatePktRemainder(ent.totalInHouseQuantity, ent.packetSize).whole, 0), 0);
-                                        const totalRem = stockData.displayRecords.reduce((accRem, item) => accRem + item.brandList.reduce((sum, ent) => sum + calculatePktRemainder(ent.totalInHouseQuantity, ent.packetSize).remainder, 0), 0);
+                                        const totalWhole = filteredRecords.reduce((accWhole, item) => accWhole + item.brandList.reduce((sum, ent) => sum + calculatePktRemainder(ent.totalInHouseQuantity, ent.packetSize).whole, 0), 0);
+                                        const totalRem = filteredRecords.reduce((accRem, item) => accRem + item.brandList.reduce((sum, ent) => sum + calculatePktRemainder(ent.totalInHouseQuantity, ent.packetSize).remainder, 0), 0);
                                         return `${totalWhole}${totalRem !== 0 ? ` - ${Math.abs(totalRem).toLocaleString()} kg` : ''}`;
                                     })()}
                                 </div>
                                 <div className="text-xl sm:text-2xl font-black text-gray-900">
-                                    QTY: {Math.round(stockData.totalTotalInHouseQty)} <span className="text-xs sm:text-sm font-bold">{stockData.unit}</span>
+                                    QTY: {Math.round(totals.totalTotalInHouseQty)} <span className="text-xs sm:text-sm font-bold">{stockData.unit}</span>
                                 </div>
                             </div>
 
@@ -653,10 +673,10 @@ const StockReport = ({
                             <div className="border border-gray-200 p-4 sm:p-5 rounded-2xl bg-gray-50 shadow-sm print:border-gray-200">
                                 <div className="text-[10px] sm:text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-2 sm:mb-3">Total Sale</div>
                                 <div className="text-xs sm:text-sm font-bold text-gray-700 mb-1">
-                                    BAG: {Number.isInteger(stockData.totalSalePkt) ? stockData.totalSalePkt : (stockData.totalSalePkt || 0).toFixed(2)}
+                                    BAG: {Number.isInteger(totals.totalSalePkt) ? totals.totalSalePkt : (totals.totalSalePkt || 0).toFixed(2)}
                                 </div>
                                 <div className="text-xl sm:text-2xl font-black text-gray-900">
-                                    QTY: {Math.round(stockData.totalSaleQty)} <span className="text-xs sm:text-sm font-bold">{stockData.unit}</span>
+                                    QTY: {Math.round(totals.totalSaleQty)} <span className="text-xs sm:text-sm font-bold">{stockData.unit}</span>
                                 </div>
                             </div>
 
@@ -665,13 +685,13 @@ const StockReport = ({
                                 <div className="text-[10px] sm:text-[11px] font-bold text-blue-500 uppercase tracking-wider mb-2 sm:mb-3">Current Inhouse</div>
                                 <div className="text-xs sm:text-sm font-bold text-gray-700 mb-1">
                                     BAG: {(() => {
-                                        const totalWhole = stockData.displayRecords.reduce((accWhole, item) => accWhole + item.brandList.reduce((sum, ent) => sum + calculatePktRemainder(ent.inHouseQuantity, ent.packetSize).whole, 0), 0);
-                                        const totalRem = stockData.displayRecords.reduce((accRem, item) => accRem + item.brandList.reduce((sum, ent) => sum + calculatePktRemainder(ent.inHouseQuantity, ent.packetSize).remainder, 0), 0);
+                                        const totalWhole = filteredRecords.reduce((accWhole, item) => accWhole + item.brandList.reduce((sum, ent) => sum + calculatePktRemainder(ent.inHouseQuantity, ent.packetSize).whole, 0), 0);
+                                        const totalRem = filteredRecords.reduce((accRem, item) => accRem + item.brandList.reduce((sum, ent) => sum + calculatePktRemainder(ent.inHouseQuantity, ent.packetSize).remainder, 0), 0);
                                         return `${totalWhole}${totalRem !== 0 ? ` - ${Math.abs(totalRem).toLocaleString()} kg` : ''}`;
                                     })()}
                                 </div>
                                 <div className="text-2xl sm:text-3xl font-black text-blue-600">
-                                    QTY: {Math.round(stockData.totalInHouseQty)} <span className="text-sm sm:text-lg font-bold">{stockData.unit}</span>
+                                    QTY: {Math.round(totals.totalInHouseQty)} <span className="text-sm sm:text-lg font-bold">{stockData.unit}</span>
                                 </div>
                             </div>
                         </div>

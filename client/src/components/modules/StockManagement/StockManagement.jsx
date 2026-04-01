@@ -73,15 +73,15 @@ const StockManagement = ({
     const [viewRecord, setViewRecord] = useState(null);
     const [historySearchQuery, setHistorySearchQuery] = useState('');
     const [showHistoryFilterPanel, setShowHistoryFilterPanel] = useState(false);
-    const [historyFilters, setHistoryFilters] = useState({ startDate: '', endDate: '', lcNo: '', port: '', brand: '' });
+    const [historyFilters, setHistoryFilters] = useState({ startDate: '', endDate: '', warehouse: '', brand: '' });
     const [historyTab, setHistoryTab] = useState('purchase'); // 'purchase' or 'sale'
 
     // Dropdown & Selection State
     const [activeDropdown, setActiveDropdown] = useState(null);
     const [highlightedIndex, setHighlightedIndex] = useState(-1);
-    const [filterDropdownOpen, setFilterDropdownOpen] = useState({ lcNo: false, port: false, importer: false, brand: false, productName: false, category: false });
-    const [filterSearchInputs, setFilterSearchInputs] = useState({ lcNoSearch: '', portSearch: '', importerSearch: '', brandSearch: '', productSearch: '', categorySearch: '' });
-    const initialFilterDropdownState = { lcNo: false, port: false, importer: false, brand: false, productName: false, category: false };
+    const [filterDropdownOpen, setFilterDropdownOpen] = useState({ warehouse: false, importer: false, brand: false, productName: false, category: false });
+    const [filterSearchInputs, setFilterSearchInputs] = useState({ warehouseSearch: '', importerSearch: '', brandSearch: '', productSearch: '', categorySearch: '' });
+    const initialFilterDropdownState = { warehouse: false, importer: false, brand: false, productName: false, category: false };
 
     // Table Selection & Sorting
     const [selectedItems, setSelectedItems] = useState(new Set());
@@ -101,15 +101,13 @@ const StockManagement = ({
     const historyFilterRef = useRef(null);
     const filterButtonRef = useRef(null);
 
-    const stockLcNoFilterRef = useRef(null);
-    const stockPortFilterRef = useRef(null);
+    const stockWarehouseFilterRef = useRef(null);
     const stockImporterFilterRef = useRef(null);
     const stockProductFilterRef = useRef(null);
     const stockBrandFilterRef = useRef(null);
     const stockCategoryFilterRef = useRef(null);
 
-    const lcNoFilterRef = useRef(null);
-    const portFilterRef = useRef(null);
+    const warehouseFilterRef = useRef(null);
     const brandFilterRef = useRef(null);
 
     const productRefs = useRef([]);
@@ -195,8 +193,7 @@ const StockManagement = ({
 
             if (historyFilters.startDate && item.date < historyFilters.startDate) return false;
             if (historyFilters.endDate && item.date > historyFilters.endDate) return false;
-            if (historyFilters.lcNo && (item.lcNo || '').trim() !== historyFilters.lcNo) return false;
-            if (historyFilters.port && (item.port || '').trim() !== historyFilters.port) return false;
+            if (historyFilters.warehouse && (item.warehouse || '').trim() !== historyFilters.warehouse) return false;
             if (historyFilters.brand) {
                 const brandLower = historyFilters.brand.toLowerCase();
                 // Check top-level brand, entries (old), and brandEntries (LC Receive)
@@ -1208,16 +1205,14 @@ const StockManagement = ({
 
             // Filter Dropdowns (Main List - only if not viewing record)
             if (!viewRecord) {
-                if (filterDropdownOpen.lcNo && stockLcNoFilterRef.current && !stockLcNoFilterRef.current.contains(event.target)) setFilterDropdownOpen(prev => ({ ...prev, lcNo: false }));
-                if (filterDropdownOpen.port && stockPortFilterRef.current && !stockPortFilterRef.current.contains(event.target)) setFilterDropdownOpen(prev => ({ ...prev, port: false }));
+                if (filterDropdownOpen.warehouse && stockWarehouseFilterRef.current && !stockWarehouseFilterRef.current.contains(event.target)) setFilterDropdownOpen(prev => ({ ...prev, warehouse: false }));
                 if (filterDropdownOpen.importer && stockImporterFilterRef.current && !stockImporterFilterRef.current.contains(event.target)) setFilterDropdownOpen(prev => ({ ...prev, importer: false }));
                 if (filterDropdownOpen.productName && stockProductFilterRef.current && !stockProductFilterRef.current.contains(event.target)) setFilterDropdownOpen(prev => ({ ...prev, productName: false }));
                 if (filterDropdownOpen.brand && stockBrandFilterRef.current && !stockBrandFilterRef.current.contains(event.target)) setFilterDropdownOpen(prev => ({ ...prev, brand: false }));
             }
 
             // Filter Dropdowns (History Modal - always check)
-            if (filterDropdownOpen.lcNo && lcNoFilterRef.current && !lcNoFilterRef.current.contains(event.target)) setFilterDropdownOpen(prev => ({ ...prev, lcNo: false }));
-            if (filterDropdownOpen.port && portFilterRef.current && !portFilterRef.current.contains(event.target)) setFilterDropdownOpen(prev => ({ ...prev, port: false }));
+            if (filterDropdownOpen.warehouse && warehouseFilterRef.current && !warehouseFilterRef.current.contains(event.target)) setFilterDropdownOpen(prev => ({ ...prev, warehouse: false }));
             if (filterDropdownOpen.brand && brandFilterRef.current && !brandFilterRef.current.contains(event.target)) setFilterDropdownOpen(prev => ({ ...prev, brand: false }));
 
             // Custom Dropdowns in Form (activeDropdown)
@@ -1234,7 +1229,7 @@ const StockManagement = ({
                     const bIdx = parseInt(parts[2]);
                     if (brandRefs.current[pIdx]?.[bIdx] && !brandRefs.current[pIdx][bIdx].contains(event.target)) setActiveDropdown(null);
                 }
-                if (activeDropdown === 'port' && portRef.current && !portRef.current.contains(event.target)) setActiveDropdown(null);
+                if (activeDropdown === 'warehouse' && warehouseFilterRef.current && !warehouseFilterRef.current.contains(event.target)) setActiveDropdown(null);
                 if (activeDropdown === 'importer' && importerRef.current && !importerRef.current.contains(event.target)) setActiveDropdown(null);
             }
 
@@ -1857,8 +1852,8 @@ const StockManagement = ({
                                                 <h4 className="font-bold text-gray-900 tracking-tight">Advance Filter</h4>
                                                 <button onClick={() => { 
                                                     const today = new Date().toISOString().split('T')[0];
-                                                    setStockFilters({ startDate: today, endDate: today, lcNo: '', port: '', brand: '', importer: '', productName: '', category: '' }); 
-                                                    setFilterSearchInputs({ ...filterSearchInputs, lcNoSearch: '', portSearch: '', importerSearch: '', brandSearch: '', productSearch: '', categorySearch: '' }); 
+                                                    setStockFilters({ startDate: today, endDate: today, warehouse: '', brand: '', importer: '', productName: '', category: '' }); 
+                                                    setFilterSearchInputs({ ...filterSearchInputs, warehouseSearch: '', importerSearch: '', brandSearch: '', productSearch: '', categorySearch: '' }); 
                                                     setShowStockFilterPanel(false); 
                                                 }} className="text-[11px] font-bold text-blue-600 hover:text-blue-700 uppercase tracking-widest">RESET ALL</button>
                                             </div>
@@ -1868,95 +1863,49 @@ const StockManagement = ({
                                                     <CustomDatePicker label="To Date" value={stockFilters.endDate} onChange={(e) => setStockFilters({ ...stockFilters, endDate: e.target.value })} compact={true} rightAlign={true} />
                                                 </div>
 
-                                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                                    {/* LC No Filter */}
-                                                    <div className="space-y-1.5 relative" ref={stockLcNoFilterRef}>
-                                                        <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider pl-1">LC NUMBER</label>
+                                                    {/* Warehouse Filter */}
+                                                    <div className="space-y-1.5 relative col-span-2" ref={stockWarehouseFilterRef}>
+                                                        <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider pl-1">WAREHOUSE</label>
                                                         <div className="relative">
                                                             <input
                                                                 type="text"
-                                                                value={filterSearchInputs.lcNoSearch}
+                                                                value={filterSearchInputs.warehouseSearch}
                                                                 onChange={(e) => {
-                                                                    setFilterSearchInputs({ ...filterSearchInputs, lcNoSearch: e.target.value });
-                                                                    setFilterDropdownOpen({ ...initialFilterDropdownState, lcNo: true });
+                                                                    setFilterSearchInputs({ ...filterSearchInputs, warehouseSearch: e.target.value });
+                                                                    setFilterDropdownOpen({ ...initialFilterDropdownState, warehouse: true });
                                                                 }}
-                                                                onFocus={() => setFilterDropdownOpen({ ...initialFilterDropdownState, lcNo: true })}
-                                                                placeholder={stockFilters.lcNo || "Search LC..."}
-                                                                className={`w-full px-4 py-2.5 bg-white border border-gray-100 rounded-xl text-sm focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all shadow-sm hover:border-gray-200 pr-14 ${stockFilters.lcNo ? 'placeholder:text-gray-900 placeholder:font-semibold' : 'placeholder:text-gray-300'}`}
+                                                                onFocus={() => setFilterDropdownOpen({ ...initialFilterDropdownState, warehouse: true })}
+                                                                placeholder={stockFilters.warehouse || "Search Warehouse..."}
+                                                                className={`w-full px-4 py-2.5 bg-white border border-gray-100 rounded-xl text-sm focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all shadow-sm hover:border-gray-200 pr-14 ${stockFilters.warehouse ? 'placeholder:text-gray-900 placeholder:font-semibold' : 'placeholder:text-gray-300'}`}
                                                             />
                                                             <div className="absolute right-3.5 top-1/2 -translate-y-1/2 flex items-center gap-2">
-                                                                {stockFilters.lcNo && (
-                                                                    <button onClick={() => { setStockFilters({ ...stockFilters, lcNo: '' }); setFilterSearchInputs({ ...filterSearchInputs, lcNoSearch: '' }); setFilterDropdownOpen(initialFilterDropdownState); }} className="text-gray-400 hover:text-gray-600">
+                                                                {stockFilters.warehouse && (
+                                                                    <button onClick={() => { setStockFilters({ ...stockFilters, warehouse: '' }); setFilterSearchInputs({ ...filterSearchInputs, warehouseSearch: '' }); setFilterDropdownOpen(initialFilterDropdownState); }} className="text-gray-400 hover:text-gray-600">
                                                                         <XIcon className="w-4 h-4" />
                                                                     </button>
                                                                 )}
                                                                 <SearchIcon className="w-4.5 h-4.5 text-gray-300 pointer-events-none" />
                                                             </div>
                                                         </div>
-                                                        {filterDropdownOpen.lcNo && (() => {
-                                                            const options = [...new Set(stockRecords.map(r => r.lcNo).filter(Boolean))].sort();
-                                                            const filtered = options.filter(lc => lc.toLowerCase().includes(filterSearchInputs.lcNoSearch.toLowerCase()));
+                                                        {filterDropdownOpen.warehouse && (() => {
+                                                            const options = [...new Set(stockRecords.map(r => r.warehouse).filter(Boolean))].sort();
+                                                            const filtered = options.filter(wh => wh.toLowerCase().includes(filterSearchInputs.warehouseSearch.toLowerCase()));
                                                             return filtered.length > 0 ? (
                                                                 <div className="absolute z-[120] mt-1 w-full bg-white border border-gray-100 rounded-xl shadow-xl max-h-48 overflow-y-auto py-1">
-                                                                    {filtered.map(lc => (
+                                                                    {filtered.map(wh => (
                                                                         <button
-                                                                            key={lc}
+                                                                            key={wh}
                                                                             type="button"
-                                                                            onClick={() => { setStockFilters({ ...stockFilters, lcNo: lc }); setFilterSearchInputs({ ...filterSearchInputs, lcNoSearch: '' }); setFilterDropdownOpen(initialFilterDropdownState); }}
+                                                                            onClick={() => { setStockFilters({ ...stockFilters, warehouse: wh }); setFilterSearchInputs({ ...filterSearchInputs, warehouseSearch: '' }); setFilterDropdownOpen(initialFilterDropdownState); }}
                                                                             className="w-full px-4 py-2 text-left text-sm hover:bg-blue-50 transition-colors"
                                                                         >
-                                                                            {lc}
+                                                                            {wh}
                                                                         </button>
                                                                     ))}
                                                                 </div>
                                                             ) : null;
                                                         })()}
                                                     </div>
-
-                                                    {/* Port Filter */}
-                                                    <div className="space-y-1.5 relative" ref={stockPortFilterRef}>
-                                                        <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider pl-1">PORT</label>
-                                                        <div className="relative">
-                                                            <input
-                                                                type="text"
-                                                                value={filterSearchInputs.portSearch}
-                                                                onChange={(e) => {
-                                                                    setFilterSearchInputs({ ...filterSearchInputs, portSearch: e.target.value });
-                                                                    setFilterDropdownOpen({ ...initialFilterDropdownState, port: true });
-                                                                }}
-                                                                onFocus={() => setFilterDropdownOpen({ ...initialFilterDropdownState, port: true })}
-                                                                placeholder={stockFilters.port || "Search Port..."}
-                                                                className={`w-full px-4 py-2.5 bg-white border border-gray-100 rounded-xl text-sm focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all shadow-sm hover:border-gray-200 pr-14 ${stockFilters.port ? 'placeholder:text-gray-900 placeholder:font-semibold' : 'placeholder:text-gray-300'}`}
-                                                            />
-                                                            <div className="absolute right-3.5 top-1/2 -translate-y-1/2 flex items-center gap-2">
-                                                                {stockFilters.port && (
-                                                                    <button onClick={() => { setStockFilters({ ...stockFilters, port: '' }); setFilterSearchInputs({ ...filterSearchInputs, portSearch: '' }); setFilterDropdownOpen(initialFilterDropdownState); }} className="text-gray-400 hover:text-gray-600">
-                                                                        <XIcon className="w-4 h-4" />
-                                                                    </button>
-                                                                )}
-                                                                <SearchIcon className="w-4.5 h-4.5 text-gray-300 pointer-events-none" />
-                                                            </div>
-                                                        </div>
-                                                        {filterDropdownOpen.port && (() => {
-                                                            const options = [...new Set(stockRecords.map(r => r.port).filter(Boolean))].sort();
-                                                            const filtered = options.filter(p => p.toLowerCase().includes(filterSearchInputs.portSearch.toLowerCase()));
-                                                            return filtered.length > 0 ? (
-                                                                <div className="absolute z-[120] mt-1 w-full bg-white border border-gray-100 rounded-xl shadow-xl max-h-48 overflow-y-auto py-1">
-                                                                    {filtered.map(p => (
-                                                                        <button
-                                                                            key={p}
-                                                                            type="button"
-                                                                            onClick={() => { setStockFilters({ ...stockFilters, port: p }); setFilterSearchInputs({ ...filterSearchInputs, portSearch: '' }); setFilterDropdownOpen(initialFilterDropdownState); }}
-                                                                            className="w-full px-4 py-2 text-left text-sm hover:bg-blue-50 transition-colors"
-                                                                        >
-                                                                            {p}
-                                                                        </button>
-                                                                    ))}
-                                                                </div>
-                                                            ) : null;
-                                                        })()}
-                                                    </div>
-                                                </div>
 
                                                 <div className="space-y-4">
                                                     {/* Category Filter */}

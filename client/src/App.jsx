@@ -331,7 +331,7 @@ function App() {
   const [stockFilters, setStockFilters] = useState({
     startDate: new Date().toISOString().split('T')[0],
     endDate: new Date().toISOString().split('T')[0],
-    lcNo: '', port: '', brand: '', importer: '', exporter: '', productName: '', category: ''
+    warehouse: '', brand: '', importer: '', exporter: '', productName: '', category: ''
   });
   const [selectedItems, setSelectedItems] = useState(new Set());
   const [isSelectionMode, setIsSelectionMode] = useState(false);
@@ -361,8 +361,7 @@ function App() {
   const initialLcFilterState = {
     startDate: '',
     endDate: '',
-    lcNo: '',
-    port: '',
+    warehouse: '',
     indCnf: '',
     exporter: '',
     bdCnf: '',
@@ -381,8 +380,7 @@ function App() {
       // Apply Advanced Filters
       if (lcFilters.startDate && item.date < lcFilters.startDate) return false;
       if (lcFilters.endDate && item.date > lcFilters.endDate) return false;
-      if (lcFilters.lcNo && (item.lcNo || '').trim().toLowerCase() !== lcFilters.lcNo.toLowerCase()) return false;
-      if (lcFilters.port && (item.port || '').trim().toLowerCase() !== lcFilters.port.toLowerCase()) return false;
+      if (lcFilters.warehouse && (item.warehouse || '').trim().toLowerCase() !== lcFilters.warehouse.toLowerCase()) return false;
       if (lcFilters.indCnf && (item.indianCnF || '').trim().toLowerCase() !== lcFilters.indCnf.toLowerCase()) return false;
       if (lcFilters.bdCnf && (item.bdCnF || '').trim().toLowerCase() !== lcFilters.bdCnf.toLowerCase()) return false;
       if (lcFilters.billOfEntry && (item.billOfEntry || '').trim().toLowerCase() !== lcFilters.billOfEntry.toLowerCase()) return false;
@@ -395,17 +393,13 @@ function App() {
       // Apply Search Query
       if (!searchLower) return true;
 
-      const matchesLC = (item.lcNo || '').toLowerCase().includes(searchLower);
-      const matchesImporter = (item.importer || '').toLowerCase().includes(searchLower);
-      const matchesExporter = (item.exporter || '').toLowerCase().includes(searchLower);
-      const matchesBillOfEntry = (item.billOfEntry || '').toLowerCase().includes(searchLower);
-      const matchesPort = (item.port || '').toLowerCase().includes(searchLower);
+      const matchesWarehouse = (item.warehouse || '').toLowerCase().includes(searchLower);
       const matchesTruck = (item.truckNo || '').toLowerCase().includes(searchLower);
       const matchesProduct = (item.productName || '').toLowerCase().includes(searchLower);
       const brandList = item.brand ? [item.brand] : (item.brandEntries || []).map(e => e.brand);
       const matchesBrand = brandList.some(b => (b || '').trim().toLowerCase().includes(searchLower));
 
-      return matchesLC || matchesImporter || matchesExporter || matchesBillOfEntry || matchesPort || matchesTruck || matchesProduct || matchesBrand;
+      return matchesWarehouse || matchesImporter || matchesExporter || matchesBillOfEntry || matchesTruck || matchesProduct || matchesBrand;
     }).sort((a, b) => new Date(a.date) - new Date(b.date));
   }, [stockRecords, lcSearchQuery, lcFilters]);
 
@@ -415,7 +409,7 @@ function App() {
 
     // Count truckNo only once per unique product entry (date + lcNo + product + truck)
     const uniqueTrucksMap = lcReceiveRecords.reduce((acc, item) => {
-      const key = `${item.date}-${item.lcNo}-${item.productName}-${item.truckNo}`;
+      const key = `${item.date}-${item.warehouse}-${item.productName}-${item.truckNo}`;
       if (!acc[key]) {
         acc[key] = parseFloat(item.truckNo) || 0;
       }

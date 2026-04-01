@@ -159,8 +159,8 @@
 .port-form-input:focus,
 .port-form-textarea:focus,
 .port-form-select:focus {
-    ring: 2px;
-    ring-color: #3b82f6;
+    box-shadow: 0 0 0 2px #3b82f6;
+    outline: none;
     border-color: transparent;
 }
 
@@ -357,7 +357,8 @@
 }
 
 .port-checkbox:focus {
-    ring-color: #3b82f6;
+    box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.5);
+    outline: none;
 }
 
 .port-table-body {

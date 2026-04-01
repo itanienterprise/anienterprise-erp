@@ -159,8 +159,8 @@
 .exporter-form-input:focus,
 .exporter-form-textarea:focus,
 .exporter-form-select:focus {
-    ring: 2px;
-    ring-color: #3b82f6;
+    box-shadow: 0 0 0 2px #3b82f6;
+    outline: none;
     border-color: transparent;
 }
 
@@ -357,7 +357,8 @@
 }
 
 .exporter-checkbox:focus {
-    ring-color: #3b82f6;
+    box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.5);
+    outline: none;
 }
 
 .exporter-table-body {
@@ -487,7 +488,6 @@
 }
 
 @keyframes bounce {
-
     0%,
     100% {
         transform: translateY(-25%);
@@ -498,4 +498,116 @@
         transform: translateY(0);
         animation-timing-function: cubic-bezier(0, 0, 0.2, 1);
     }
+}
+
+/* ===== Mobile Responsiveness ===== */
+@media (max-width: 768px) {
+    .exporter-container {
+        gap: 1rem;
+    }
+
+    .exporter-header {
+        flex-wrap: wrap;
+        gap: 0.75rem;
+    }
+
+    .exporter-title {
+        font-size: 1.2rem;
+    }
+
+    .exporter-add-btn {
+        font-size: 0.875rem;
+        padding: 0.45rem 0.85rem;
+    }
+
+    /* Form */
+    .exporter-form-container {
+        padding: 1.25rem;
+    }
+
+    .exporter-form {
+        grid-template-columns: 1fr;
+    }
+
+    .exporter-form-field-full {
+        grid-column: span 1;
+    }
+
+    .exporter-form-footer {
+        grid-column: span 1;
+        flex-direction: column;
+        gap: 0.75rem;
+        align-items: stretch;
+    }
+
+    .exporter-form-spacer {
+        display: none;
+    }
+
+    .exporter-form-submit {
+        width: 100%;
+        justify-content: center;
+    }
+
+    /* Hide desktop table on mobile is handled by Tailwind hidden md:block in JSX */
+    
+    /* Mobile card */
+    .exporter-mobile-card {
+        background: white;
+        border-radius: 1rem;
+        padding: 1rem 1.15rem;
+        border: 1px solid #f3f4f6;
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
+        cursor: pointer;
+        transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    .exporter-mobile-card:active {
+        transform: scale(0.98);
+        background: #f9fafb;
+    }
+
+    .exporter-mobile-card.selected {
+        border-color: #dbeafe;
+        box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.2);
+        background: #eff6ff;
+    }
+}
+
+@media (max-width: 480px) {
+    .exporter-form-container {
+        padding: 1rem;
+    }
+
+    .exporter-form-title {
+        font-size: 1rem;
+    }
+}
+
+/* History Modal Custom Scrollbar */
+.exporter-history-scrollable::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+}
+
+.exporter-history-scrollable::-webkit-scrollbar-track {
+    background: #f1f1f1;
+}
+
+.exporter-history-scrollable::-webkit-scrollbar-thumb {
+    background: #d1d5db;
+    border-radius: 10px;
+}
+
+.exporter-history-scrollable::-webkit-scrollbar-thumb:hover {
+    background: #9ca3af;
+}
+/* Expandable History Card Animations */
+@keyframes slide-down {
+    from { opacity: 0; transform: translateY(-8px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.animate-in {
+    animation: slide-down 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }

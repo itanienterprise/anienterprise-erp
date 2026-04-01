@@ -831,7 +831,7 @@ const SalesReport = ({
                                             <>
                                                 <th className="border-r border-gray-900 px-1 py-1.5 text-right text-[11px] font-bold text-gray-900 uppercase w-[6%]">Disc</th>
                                                 <th className="border-r border-gray-900 px-1 py-1.5 text-right text-[11px] font-bold text-gray-900 uppercase w-[9%]">Paid</th>
-                                                <th className="px-1 py-1.5 text-right text-[11px] font-bold text-gray-900 uppercase w-[10%]">Due</th>
+                                                <th className="px-1 py-1.5 text-right text-[11px] font-bold text-gray-900 uppercase w-[10%]">Balance</th>
                                             </>
                                         )}
                                     </tr>
@@ -1043,7 +1043,7 @@ const SalesReport = ({
                                                                 <div className="text-[13px] font-black text-emerald-700">৳{parseFloat(sale.paidAmount || 0).toLocaleString()}</div>
                                                             </div>
                                                             <div className="text-center p-2 rounded-lg border bg-orange-50/40 border-orange-100/50">
-                                                                <div className="text-[10px] font-bold text-orange-600 uppercase tracking-widest mb-1">Due Amount</div>
+                                                                <div className="text-[10px] font-bold text-orange-600 uppercase tracking-widest mb-1">Balance</div>
                                                                 <div className="text-[13px] font-black text-orange-700">৳{(parseFloat(sale.totalAmount || 0) - parseFloat(sale.paidAmount || 0)).toLocaleString()}</div>
                                                             </div>
                                                         </div>
@@ -1080,7 +1080,7 @@ const SalesReport = ({
                                             <div className="text-lg font-black text-emerald-400">৳{summary.totalPaid.toLocaleString()}</div>
                                         </div>
                                         <div className="text-right">
-                                            <div className="text-[10px] font-bold text-orange-400 uppercase mb-1">Total Due</div>
+                                            <div className="text-[10px] font-bold text-orange-400 uppercase mb-1">Total Balance</div>
                                             <div className="text-xl font-black text-red-500">৳{(summary.totalAmount - summary.totalPaid).toLocaleString()}</div>
                                         </div>
                                     </div>
@@ -1105,7 +1105,7 @@ const SalesReport = ({
                                 </div>
                             ) : (
                                 <div className="border border-gray-200 p-5 rounded-2xl bg-white shadow-sm transition-all hover:shadow-md ring-2 ring-blue-500/10">
-                                    <div className="text-[12px] font-bold text-blue-500 uppercase tracking-wider mb-2">Net Due Balance</div>
+                                    <div className="text-[12px] font-bold text-blue-500 uppercase tracking-wider mb-2">Net Balance</div>
                                     <div className="text-3xl font-black text-red-600">
                                         TK {(summary.totalAmount - summary.totalPaid).toLocaleString()}
                                     </div>

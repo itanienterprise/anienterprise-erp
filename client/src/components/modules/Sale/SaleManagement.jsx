@@ -1003,8 +1003,16 @@ const SaleManagement = ({
 
             if (prev.saleType === 'Border') {
                 // Border Sale: Total depends on selected UOM (QTY or Truck)
-                if (name === 'truck' || name === 'quantity' || name === 'unitPrice' || name === 'uom') {
+                if (name === 'truck' || name === 'quantity' || name === 'bag' || name === 'unitPrice' || name === 'uom') {
                     const activeUOM = name === 'uom' ? value : entry.uom;
+                    const bSize = parseFloat(String(entry.bagSize || '').replace(/[^0-9.]/g, '')) || 0;
+
+                    if (name === 'quantity' && bSize > 0) {
+                        entry.bag = (parseFloat(value) / bSize).toFixed(2);
+                    } else if (name === 'bag' && bSize > 0) {
+                        entry.quantity = (parseFloat(value) * bSize).toFixed(2);
+                    }
+
                     const qty = parseFloat(name === 'quantity' ? value : entry.quantity) || 0;
                     const truck = parseFloat(name === 'truck' ? value : entry.truck) || 0;
                     const price = parseFloat(name === 'unitPrice' ? value : entry.unitPrice) || 0;
@@ -1018,7 +1026,15 @@ const SaleManagement = ({
                 }
             } else {
                 // General Sale: Total = Quantity * Price
-                if (name === 'quantity' || name === 'unitPrice') {
+                if (name === 'quantity' || name === 'bag' || name === 'unitPrice') {
+                    const bSize = parseFloat(String(entry.bagSize || '').replace(/[^0-9.]/g, '')) || 0;
+
+                    if (name === 'quantity' && bSize > 0) {
+                        entry.bag = (parseFloat(value) / bSize).toFixed(2);
+                    } else if (name === 'bag' && bSize > 0) {
+                        entry.quantity = (parseFloat(value) * bSize).toFixed(2);
+                    }
+
                     const qty = parseFloat(name === 'quantity' ? value : entry.quantity) || 0;
                     const price = parseFloat(name === 'unitPrice' ? value : entry.unitPrice) || 0;
                     entry.totalAmount = (qty * price).toFixed(2);
@@ -1074,7 +1090,7 @@ const SaleManagement = ({
         setSubmitStatus(null);
         try {
             const url = editingId ? `${API_BASE_URL}/api/sales/${editingId}` : `${API_BASE_URL}/api/sales`;
-            
+
             let response;
             if (editingId) {
                 response = await axios.put(url, formData);
@@ -1238,6 +1254,8 @@ const SaleManagement = ({
                     warehouseName: '',
                     warehouseQty: '',
                     quantity: '',
+                    bag: '',
+                    bagSize: '',
                     truck: '',
                     uom: 'Truck',
                     unitPrice: '',
@@ -1605,6 +1623,8 @@ const SaleManagement = ({
                     warehouseName: '',
                     warehouseQty: '',
                     quantity: '',
+                    bag: '',
+                    bagSize: '',
                     truck: '',
                     unitPrice: '',
                     totalAmount: ''
@@ -1626,10 +1646,17 @@ const SaleManagement = ({
             const newItems = [...prev.items];
             const item = { ...newItems[activeItemIndex] };
             const brandEntries = [...item.brandEntries];
+
+            // Link packet size for bag calculations
+            const selectedProduct = products.find(p => p._id === item.productId);
+            const selectedBrandObj = selectedProduct?.brands?.find(b => b.brand === brandNameStr);
+            const packetSize = selectedBrandObj?.packetSize || selectedProduct?.packetSize || '';
+
             brandEntries[activeEntryIndex] = {
                 ...brandEntries[activeEntryIndex],
                 brand: brandNameStr,
-                brandName: brandNameStr // Ensure both are set for UI/Stock calculation
+                brandName: brandNameStr, // Ensure both are set for UI/Stock calculation
+                bagSize: packetSize
             };
             item.brandEntries = brandEntries;
             newItems[activeItemIndex] = item;
@@ -1720,8 +1747,8 @@ const SaleManagement = ({
                                 <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Status / Payment</span>
                                 <div className="flex flex-col gap-1.5">
                                     <div className={`px-2 py-0.5 w-fit rounded text-[10px] font-bold uppercase tracking-wider ${viewData.status === 'Requested' ? 'bg-amber-50 text-amber-600 border border-amber-100' :
-                                            viewData.status === 'Rejected' ? 'bg-red-50 text-red-600 border border-red-100' :
-                                                'bg-emerald-50 text-emerald-600 border border-emerald-100'
+                                        viewData.status === 'Rejected' ? 'bg-red-50 text-red-600 border border-red-100' :
+                                            'bg-emerald-50 text-emerald-600 border border-emerald-100'
                                         }`}>
                                         {viewData.status || 'Completed'}
                                     </div>
@@ -2367,7 +2394,7 @@ const SaleManagement = ({
                         <div className="sale-mgmt-card-value text-emerald-700">৳ {stats.totalPaid.toLocaleString()}</div>
                     </div>
                     <div className="sale-mgmt-card sale-mgmt-card-orange">
-                        <div className="sale-mgmt-card-label text-orange-600">Total Due</div>
+                        <div className="sale-mgmt-card-label text-orange-600">Total Balance</div>
                         <div className="sale-mgmt-card-value text-orange-700">৳ {stats.totalDue.toLocaleString()}</div>
                     </div>
                 </div>
@@ -2704,15 +2731,16 @@ const SaleManagement = ({
 
                                             {saleType === 'Border' && (
                                                 <div className="flex-[3] space-y-4 pt-1">
-                                                    <div className="hidden md:grid grid-cols-5 gap-4 px-4">
+                                                    <div className="hidden md:grid grid-cols-6 gap-4 px-4">
                                                         <div className="sale-mgmt-item-label text-center">UOM</div>
                                                         <div className="sale-mgmt-item-label text-center">Qty</div>
+                                                        <div className="sale-mgmt-item-label text-center">Bag</div>
                                                         <div className="sale-mgmt-item-label text-center">Truck</div>
                                                         <div className="sale-mgmt-item-label text-center">Price</div>
                                                         <div className="sale-mgmt-item-label text-center">Total</div>
                                                     </div>
                                                     {item.brandEntries.map((entry, entryIndex) => (
-                                                        <div key={entryIndex} className="grid grid-cols-1 md:grid-cols-5 gap-4 items-center px-4">
+                                                        <div key={entryIndex} className="grid grid-cols-1 md:grid-cols-6 gap-4 items-center px-4">
                                                             {/* UOM Toggle */}
                                                             <div className="relative">
                                                                 <label className="md:hidden sale-mgmt-item-label mb-1 block">UOM</label>
@@ -2736,6 +2764,10 @@ const SaleManagement = ({
                                                             <div>
                                                                 <label className="md:hidden sale-mgmt-item-label mb-1 block text-center">Qty</label>
                                                                 <input type="number" name="quantity" value={entry.quantity} onChange={(e) => handleItemInputChange(index, entryIndex, e)} placeholder="0" className="sale-mgmt-input !px-2 !text-[13px] font-black text-gray-900 text-center" />
+                                                            </div>
+                                                            <div>
+                                                                <label className="md:hidden sale-mgmt-item-label mb-1 block text-center">Bag</label>
+                                                                <input type="number" name="bag" value={entry.bag} onChange={(e) => handleItemInputChange(index, entryIndex, e)} placeholder="0" className="sale-mgmt-input !px-2 !text-[13px] font-bold text-blue-600 text-center" />
                                                             </div>
                                                             <div>
                                                                 <label className="md:hidden sale-mgmt-item-label mb-1 block text-center">Truck</label>
@@ -2770,18 +2802,19 @@ const SaleManagement = ({
                                         {saleType !== 'Border' && (
                                             <div className="space-y-1">
                                                 {/* Header Row for Brands (Hidden on Mobile) */}
-                                                <div className="hidden md:grid grid-cols-9 gap-4 px-6 py-1 border border-transparent">
+                                                <div className="hidden md:grid grid-cols-10 gap-4 px-6 py-1 border border-transparent">
                                                     <div className="col-span-2 sale-mgmt-item-label text-center">Brand</div>
                                                     <div className="sale-mgmt-item-label text-center">Inhouse</div>
                                                     <div className="sale-mgmt-item-label text-center">Warehouse</div>
                                                     <div className="sale-mgmt-item-label text-center">Wh Stock</div>
                                                     <div className="sale-mgmt-item-label text-center">Qty</div>
+                                                    <div className="sale-mgmt-item-label text-center">Bag</div>
                                                     <div className="sale-mgmt-item-label text-center">Price</div>
                                                     <div className="col-span-2 sale-mgmt-item-label text-center">Total</div>
                                                 </div>
 
                                                 {item.brandEntries.map((entry, entryIndex) => (
-                                                    <div key={entryIndex} className="grid grid-cols-1 md:grid-cols-9 gap-4 items-center px-6 group/entry transition-all hover:bg-gray-50/50 rounded-xl py-1.5 border border-transparent hover:border-gray-100/50 relative">
+                                                    <div key={entryIndex} className="grid grid-cols-1 md:grid-cols-10 gap-4 items-center px-6 group/entry transition-all hover:bg-gray-50/50 rounded-xl py-1.5 border border-transparent hover:border-gray-100/50 relative">
                                                         {/* Brand Selection */}
                                                         <div className="col-span-2 space-y-1 relative brand-dropdown-container">
                                                             <label className="md:hidden sale-mgmt-item-label mb-1 block">Brand</label>
@@ -2933,6 +2966,19 @@ const SaleManagement = ({
                                                             />
                                                         </div>
 
+                                                        {/* Bag */}
+                                                        <div>
+                                                            <label className="md:hidden sale-mgmt-item-label mb-1 block text-center">Bag</label>
+                                                            <input
+                                                                type="number"
+                                                                name="bag"
+                                                                value={entry.bag}
+                                                                onChange={(e) => handleItemInputChange(index, entryIndex, e)}
+                                                                placeholder="0"
+                                                                className="sale-mgmt-input !px-2 !text-[13px] font-bold text-blue-600 text-center"
+                                                            />
+                                                        </div>
+
                                                         {/* Unit Price */}
                                                         <div>
                                                             <label className="md:hidden sale-mgmt-item-label mb-1 block text-center">Price</label>
@@ -3019,7 +3065,7 @@ const SaleManagement = ({
                                     </div>
                                 </div>
                                 <div className="space-y-2">
-                                    <label className="text-sm font-bold text-gray-700">Due Amount</label>
+                                    <label className="text-sm font-bold text-gray-700">Balance</label>
                                     <div className={`text-2xl font-black ${parseFloat(formData.dueAmount) > 0 ? 'text-red-600' : 'text-emerald-600'}`}>
                                         ৳ {parseFloat(formData.dueAmount).toLocaleString()}
                                     </div>
@@ -3193,7 +3239,7 @@ const SaleManagement = ({
                                             <div className="flex items-center justify-center">Paid {renderSortIcon('paidAmount')}</div>
                                         </th>
                                         <th className="sale-mgmt-th text-center cursor-pointer group" onClick={() => handleSort('dueAmount')}>
-                                            <div className="flex items-center justify-center">Due {renderSortIcon('dueAmount')}</div>
+                                            <div className="flex items-center justify-center">Balance {renderSortIcon('dueAmount')}</div>
                                         </th>
                                         <th className="sale-mgmt-th text-center">Actions</th>
                                     </tr>
@@ -3622,7 +3668,7 @@ const SaleManagement = ({
                                                     <div className="text-[14px] font-black text-emerald-700">৳{parseFloat(sale.paidAmount || 0).toLocaleString()}</div>
                                                 </div>
                                                 <div className="sale-mgmt-mobile-money-card bg-orange-50/40 border-orange-100/50">
-                                                    <div className="sale-mgmt-mobile-label text-orange-600">Due</div>
+                                                    <div className="sale-mgmt-mobile-label text-orange-600">Balance</div>
                                                     <div className="text-[14px] font-black text-orange-700">৳{parseFloat(sale.dueAmount || 0).toLocaleString()}</div>
                                                 </div>
                                             </div>

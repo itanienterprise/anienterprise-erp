@@ -88,14 +88,12 @@ export const generateLCReceiveReportPDF = (reportData, filters, summary) => {
         doc.setFont('helvetica', 'normal');
         doc.text(`${formatDate(filters.startDate) === '-' ? 'Start' : formatDate(filters.startDate)} to ${formatDate(filters.endDate) === '-' ? 'Present' : formatDate(filters.endDate)}`, margin + 25, yPos);
 
-        if (filters.lcNo) {
+        if (filters.warehouse) {
             yPos += 5;
             doc.setFont('helvetica', 'bold');
-            doc.text("LC No:", margin, yPos);
+            doc.text("Warehouse:", margin, yPos);
             doc.setFont('helvetica', 'bold');
-            doc.setTextColor(0); // Dark Blue
-            doc.text(filters.lcNo, margin + 25, yPos);
-            doc.setTextColor(0);
+            doc.text(filters.warehouse, margin + 25, yPos);
         }
 
         // Right Side: Printed On
@@ -107,13 +105,12 @@ export const generateLCReceiveReportPDF = (reportData, filters, summary) => {
         // 1. Group by Date + LC No (matches UI logic but adds Date for safer merging)
         const lcGroups = Object.values(reportData.reduce((acc, item) => {
             const dateStr = formatDate(item.date);
-            const key = `${dateStr}_${item.lcNo || 'unknown'}`;
+            const key = `${dateStr}_${item.warehouse || 'unknown'}`;
             if (!acc[key]) {
                 acc[key] = {
                     date: item.date,
-                    lcNo: item.lcNo,
+                    warehouse: item.warehouse,
                     importer: item.importer,
-                    port: item.port,
                     billOfEntry: item.billOfEntry,
                     entries: []
                 };
@@ -151,12 +148,11 @@ export const generateLCReceiveReportPDF = (reportData, filters, summary) => {
                 subGroup.brandDetails.forEach((item, i) => {
                     const row = [];
 
-                    // LC Columns: Date, LC No, Importer, Port, BOE No (Span across all rows of this LC)
+                    // Warehouse Columns: Date, Warehouse, Importer, BOE No (Span across all rows of this LC)
                     if (isFirstRowOfLC) {
                         row.push({ content: formatDate(lcGroup.date), rowSpan: totalRowsForLC, styles: { valign: 'top', halign: 'center' } });
-                        row.push({ content: lcGroup.lcNo || '-', rowSpan: totalRowsForLC, styles: { valign: 'top', fontStyle: 'bold', textColor: [0, 0, 0], halign: 'center' } });
+                        row.push({ content: lcGroup.warehouse || '-', rowSpan: totalRowsForLC, styles: { valign: 'top', fontStyle: 'bold', textColor: [0, 0, 0], halign: 'center' } });
                         row.push({ content: lcGroup.importer || '-', rowSpan: totalRowsForLC, styles: { valign: 'top', halign: 'left' } });
-                        row.push({ content: lcGroup.port || '-', rowSpan: totalRowsForLC, styles: { valign: 'top', halign: 'center' } });
                         row.push({ content: lcGroup.billOfEntry || '-', rowSpan: totalRowsForLC, styles: { valign: 'top', halign: 'center' } });
                         isFirstRowOfLC = false;
                     }
@@ -220,10 +216,10 @@ export const generateLCReceiveReportPDF = (reportData, filters, summary) => {
         // --- Table ---
         autoTable(doc, {
             startY: yPos + 10,
-            head: [['Date', 'LC No', 'Importer', 'Port', 'BOE No', 'Truck', 'Product', 'Brand', 'Bag', 'QTY', 'SHORT', 'IH QTY', 'IH BAG']],
+            head: [['Date', 'Warehouse', 'Importer', 'BOE No', 'Truck', 'Product', 'Brand', 'Bag', 'QTY', 'SHORT', 'Stock QTY', 'Stock Bag']],
             body: tableRows,
             foot: [[
-                { content: 'GRAND TOTAL', colSpan: 8, styles: { halign: 'right', fontStyle: 'bold' } },
+                { content: 'GRAND TOTAL', colSpan: 7, styles: { halign: 'right', fontStyle: 'bold' } },
                 { content: summary.totalPackets.toString(), styles: { halign: 'right', fontStyle: 'bold' } },
                 { content: `${Math.round(summary.totalQuantity)} ${summary.unit}`, styles: { halign: 'right', fontStyle: 'bold' } },
                 { content: `${Math.round(totalShortage)} ${summary.unit}`, styles: { halign: 'right', fontStyle: 'bold' } },
@@ -268,19 +264,18 @@ export const generateLCReceiveReportPDF = (reportData, filters, summary) => {
             },
             margin: { left: margin, right: margin },
             columnStyles: {
-                0: { cellWidth: 22, halign: 'center' }, // Date
-                1: { cellWidth: 28, fontStyle: 'bold', textColor: [0, 0, 0], halign: 'center' }, // LC No
-                2: { cellWidth: 30, halign: 'left' },   // Importer
-                3: { cellWidth: 18, halign: 'center' }, // Port
-                4: { cellWidth: 15, halign: 'center' }, // BOE No
-                5: { cellWidth: 12, halign: 'center' }, // Truck
-                6: { cellWidth: 22, halign: 'left' }, // Product
-                7: { cellWidth: 37, halign: 'left' },   // Brand
-                8: { cellWidth: 20, halign: 'right' },  // Bag
-                9: { cellWidth: 20, halign: 'right' },  // QTY
-                10: { cellWidth: 17, halign: 'right' }, // SHORT
-                11: { cellWidth: 20, halign: 'right' }, // IH QTY
-                12: { cellWidth: 26, halign: 'right' }  // IH BAG
+                0: { cellWidth: 21, halign: 'center' }, // Date
+                1: { cellWidth: 35, fontStyle: 'bold', textColor: [0, 0, 0], halign: 'center' }, // Warehouse
+                2: { cellWidth: 35, halign: 'left' },   // Importer
+                3: { cellWidth: 21, halign: 'center' }, // BOE No
+                4: { cellWidth: 12, halign: 'center' }, // Truck
+                5: { cellWidth: 22, halign: 'left' }, // Product
+                6: { cellWidth: 45, halign: 'left' },   // Brand
+                7: { cellWidth: 14, halign: 'center' },  // Bag
+                8: { cellWidth: 20, halign: 'right' },  // QTY
+                9: { cellWidth: 17, halign: 'right' }, // SHORT
+                10: { cellWidth: 20, halign: 'right' }, // IH QTY
+                11: { cellWidth: 20, halign: 'right' }  // IH BAG
             }
         });
 
@@ -416,14 +411,12 @@ export const generateStockReportPDF = (stockData, filters, reportType = 'short')
             doc.text(filters.productName, margin + 25, yPos);
         }
 
-        if (filters.lcNo) {
+        if (filters.warehouse) {
             yPos += 5;
             doc.setFont('helvetica', 'bold');
-            doc.text("LC No:", margin, yPos);
+            doc.text("Warehouse:", margin, yPos);
             doc.setFont('helvetica', 'bold');
-            doc.setTextColor(0); // Dark Blue
-            doc.text(filters.lcNo, margin + 25, yPos);
-            doc.setTextColor(0);
+            doc.text(filters.warehouse, margin + 25, yPos);
         }
 
         // Right Side: Printed On
@@ -1817,7 +1810,7 @@ export const generateSalesReportPDF = (reportData, filters, summary, saleType = 
 
         const headRow = saleType === 'Border'
             ? [['SL', 'Date', 'LC No', 'Importer', 'Port', 'IND C&F', 'BD C&F', 'Party Name', 'Product', 'Qty', 'Truck', 'Price', 'Total']]
-            : [['SL', 'Date', 'Invoice', 'Company', 'Product', 'Brand', 'Qty', 'Price', 'Total', 'Disc', 'Paid', 'Due']];
+            : [['SL', 'Date', 'Invoice', 'Company', 'Product', 'Brand', 'Qty', 'Price', 'Total', 'Disc', 'Paid', 'Balance']];
 
         const footRow = [[
             { content: 'GRAND TOTAL', colSpan: saleType === 'Border' ? 9 : 6, styles: { halign: 'right', fontStyle: 'bold' } },
@@ -2023,7 +2016,7 @@ export const generateCustomerReportPDF = (customers, typeFilter, grandTotalDue, 
 
         // Add Grand Total
         tableRows.push([
-            { content: 'GRAND TOTAL DUE', colSpan: 4, styles: { halign: 'right', fontStyle: 'bold', fillColor: [240, 240, 240] } },
+            { content: 'GRAND TOTAL BALANCE', colSpan: 4, styles: { halign: 'right', fontStyle: 'bold', fillColor: [240, 240, 240] } },
             { content: `Tk ${Math.round(grandTotalDue).toLocaleString('en-BD')}`, styles: { halign: 'right', fontStyle: 'bold', fillColor: [240, 240, 240], textColor: [220, 38, 38] } },
             { content: '', styles: { fillColor: [240, 240, 240] } } // Remark empty total cell
         ]);

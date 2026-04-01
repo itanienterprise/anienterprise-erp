@@ -313,100 +313,184 @@ const Importer = ({
                             <div className="importer-spinner"></div>
                         </div>
                     ) : importers.length > 0 ? (
-                        <div className="importer-table-wrapper">
-                            <table className="importer-table">
-                                <thead>
-                                    <tr
-                                        className="importer-table-header-row"
-                                        onMouseDown={() => startLongPress(null)}
-                                        onMouseUp={endLongPress}
-                                        onMouseLeave={endLongPress}
-                                        onTouchStart={() => startLongPress(null)}
-                                        onTouchEnd={endLongPress}
-                                    >
-                                        {isSelectionMode && (
-                                            <th className="importer-table-checkbox-header">
-                                                <input
-                                                    type="checkbox"
-                                                    checked={selectedItems.size === importers.length}
-                                                    onChange={toggleSelectAll}
-                                                    className="importer-checkbox"
-                                                />
-                                            </th>
-                                        )}
-                                        <th className="importer-table-header" onClick={() => requestSort('name')}>
-                                            <div className="importer-table-header-content">Importer Name <SortIcon config={sortConfig.importer} columnKey="name" /></div>
-                                        </th>
-                                        <th className="importer-table-header" onClick={() => requestSort('licenseNo')}>
-                                            <div className="importer-table-header-content">License No <SortIcon config={sortConfig.importer} columnKey="licenseNo" /></div>
-                                        </th>
-                                        <th className="importer-table-header" onClick={() => requestSort('contactPerson')}>
-                                            <div className="importer-table-header-content">Contact Person <SortIcon config={sortConfig.importer} columnKey="contactPerson" /></div>
-                                        </th>
-                                        <th className="importer-table-header" onClick={() => requestSort('phone')}>
-                                            <div className="importer-table-header-content">Phone <SortIcon config={sortConfig.importer} columnKey="phone" /></div>
-                                        </th>
-                                        <th className="importer-table-header" onClick={() => requestSort('status')}>
-                                            <div className="importer-table-header-content">Status <SortIcon config={sortConfig.importer} columnKey="status" /></div>
-                                        </th>
-                                        <th className="importer-table-header">Actions</th>
-                                    </tr>
-                                </thead>
-                                <tbody className="importer-table-body">
-                                    {sortData(importers).map((importer) => (
+                        <>
+                            {/* Desktop Table - hidden on mobile */}
+                            <div className="hidden md:block overflow-x-auto">
+                                <table className="importer-table">
+                                    <thead>
                                         <tr
-                                            key={importer._id}
-                                            className={`importer-table-row ${selectedItems.has(importer._id) ? 'selected' : ''}`}
-                                            onMouseDown={() => startLongPress(importer._id)}
+                                            className="importer-table-header-row"
+                                            onMouseDown={() => startLongPress(null)}
                                             onMouseUp={endLongPress}
                                             onMouseLeave={endLongPress}
-                                            onTouchStart={() => startLongPress(importer._id)}
+                                            onTouchStart={() => startLongPress(null)}
                                             onTouchEnd={endLongPress}
-                                            onClick={() => {
-                                                if (isLongPressTriggered.current) {
-                                                    isLongPressTriggered.current = false;
-                                                    return;
-                                                }
-                                                if (isSelectionMode) toggleSelection(importer._id);
-                                            }}
                                         >
                                             {isSelectionMode && (
+                                                <th className="importer-table-checkbox-header">
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={selectedItems.size === importers.length}
+                                                        onChange={toggleSelectAll}
+                                                        className="importer-checkbox"
+                                                    />
+                                                </th>
+                                            )}
+                                            <th className="importer-table-header" onClick={() => requestSort('name')}>
+                                                <div className="importer-table-header-content">Importer Name <SortIcon config={sortConfig.importer} columnKey="name" /></div>
+                                            </th>
+                                            <th className="importer-table-header" onClick={() => requestSort('licenseNo')}>
+                                                <div className="importer-table-header-content">License No <SortIcon config={sortConfig.importer} columnKey="licenseNo" /></div>
+                                            </th>
+                                            <th className="importer-table-header" onClick={() => requestSort('contactPerson')}>
+                                                <div className="importer-table-header-content">Contact Person <SortIcon config={sortConfig.importer} columnKey="contactPerson" /></div>
+                                            </th>
+                                            <th className="importer-table-header" onClick={() => requestSort('phone')}>
+                                                <div className="importer-table-header-content">Phone <SortIcon config={sortConfig.importer} columnKey="phone" /></div>
+                                            </th>
+                                            <th className="importer-table-header" onClick={() => requestSort('status')}>
+                                                <div className="importer-table-header-content">Status <SortIcon config={sortConfig.importer} columnKey="status" /></div>
+                                            </th>
+                                            <th className="importer-table-header">Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="importer-table-body">
+                                        {sortData(importers).map((importer) => (
+                                            <tr
+                                                key={importer._id}
+                                                className={`importer-table-row ${selectedItems.has(importer._id) ? 'selected' : ''}`}
+                                                onMouseDown={() => startLongPress(importer._id)}
+                                                onMouseUp={endLongPress}
+                                                onMouseLeave={endLongPress}
+                                                onTouchStart={() => startLongPress(importer._id)}
+                                                onTouchEnd={endLongPress}
+                                                onClick={() => {
+                                                    if (isLongPressTriggered.current) {
+                                                        isLongPressTriggered.current = false;
+                                                        return;
+                                                    }
+                                                    if (isSelectionMode) toggleSelection(importer._id);
+                                                }}
+                                            >
+                                                {isSelectionMode && (
+                                                    <td className="importer-table-cell">
+                                                        <input
+                                                            type="checkbox"
+                                                            checked={selectedItems.has(importer._id)}
+                                                            onChange={(e) => { e.stopPropagation(); toggleSelection(importer._id); }}
+                                                            className="importer-checkbox"
+                                                        />
+                                                    </td>
+                                                )}
+                                                <td className="importer-table-cell importer-table-cell-name">{importer.name}</td>
+                                                <td className="importer-table-cell importer-table-cell-license">{importer.licenseNo}</td>
+                                                <td className="importer-table-cell">{importer.contactPerson}</td>
+                                                <td className="importer-table-cell importer-table-cell-muted">{importer.phone}</td>
                                                 <td className="importer-table-cell">
+                                                    <span className={`importer-status-badge ${importer.status === 'Active' ? 'active' : 'inactive'}`}>
+                                                        {importer.status}
+                                                    </span>
+                                                </td>
+                                                <td className="importer-table-cell">
+                                                    <div className="importer-table-actions">
+                                                        <button onClick={(e) => { e.stopPropagation(); setViewData(importer); }} className="importer-action-btn hover:bg-gray-100 text-gray-400 hover:text-gray-600">
+                                                            <EyeIcon className="w-5 h-5" />
+                                                        </button>
+                                                        <button onClick={(e) => { e.stopPropagation(); handleEdit(importer); }} className="importer-action-btn importer-action-edit">
+                                                            <EditIcon className="w-5 h-5" />
+                                                        </button>
+                                                        <button onClick={(e) => { e.stopPropagation(); handleDelete(importer._id); }} className="importer-action-btn importer-action-delete">
+                                                            <TrashIcon className="w-5 h-5" />
+                                                        </button>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+
+                            {/* Mobile Card List - hidden on desktop */}
+                            <div className="block md:hidden px-2 py-3 space-y-3">
+                                {sortData(importers).map((importer) => (
+                                    <div
+                                        key={importer._id}
+                                        className={`bg-white rounded-xl border px-4 py-3 shadow-sm cursor-pointer transition-all duration-200 ${selectedItems.has(importer._id) ? 'border-blue-300 bg-blue-50/30 shadow-blue-100' : 'border-gray-100 hover:shadow-md'}`}
+                                        onTouchStart={() => startLongPress(importer._id)}
+                                        onTouchEnd={endLongPress}
+                                        onClick={() => {
+                                            if (isLongPressTriggered.current) {
+                                                isLongPressTriggered.current = false;
+                                                return;
+                                            }
+                                            if (isSelectionMode) toggleSelection(importer._id);
+                                        }}
+                                    >
+                                        {/* Card Header */}
+                                        <div className="flex justify-between items-start mb-2">
+                                            <div className="flex items-center gap-2 flex-1 min-w-0 pr-2">
+                                                {isSelectionMode && (
                                                     <input
                                                         type="checkbox"
                                                         checked={selectedItems.has(importer._id)}
                                                         onChange={(e) => { e.stopPropagation(); toggleSelection(importer._id); }}
-                                                        className="importer-checkbox"
+                                                        className="w-4 h-4 accent-blue-600 shrink-0"
+                                                        onClick={(e) => e.stopPropagation()}
                                                     />
-                                                </td>
-                                            )}
-                                            <td className="importer-table-cell importer-table-cell-name">{importer.name}</td>
-                                            <td className="importer-table-cell importer-table-cell-license">{importer.licenseNo}</td>
-                                            <td className="importer-table-cell">{importer.contactPerson}</td>
-                                            <td className="importer-table-cell importer-table-cell-muted">{importer.phone}</td>
-                                            <td className="importer-table-cell">
-                                                <span className={`importer-status-badge ${importer.status === 'Active' ? 'active' : 'inactive'}`}>
-                                                    {importer.status}
-                                                </span>
-                                            </td>
-                                            <td className="importer-table-cell">
-                                                <div className="importer-table-actions">
-                                                    <button onClick={(e) => { e.stopPropagation(); setViewData(importer); }} className="importer-action-btn hover:bg-gray-100 text-gray-400 hover:text-gray-600">
-                                                        <EyeIcon className="w-5 h-5" />
-                                                    </button>
-                                                    <button onClick={(e) => { e.stopPropagation(); handleEdit(importer); }} className="importer-action-btn importer-action-edit">
-                                                        <EditIcon className="w-5 h-5" />
-                                                    </button>
-                                                    <button onClick={(e) => { e.stopPropagation(); handleDelete(importer._id); }} className="importer-action-btn importer-action-delete">
-                                                        <TrashIcon className="w-5 h-5" />
-                                                    </button>
+                                                )}
+                                                <div className="min-w-0">
+                                                    <p className="font-bold text-gray-900 text-sm truncate">{importer.name}</p>
+                                                    <p className="text-xs text-blue-600 mt-0.5">{importer.licenseNo}</p>
                                                 </div>
-                                            </td>
-                                        </tr>
-                                    ))}
-                                </tbody>
-                            </table>
-                        </div>
+                                            </div>
+                                            <span className={`importer-status-badge ${importer.status === 'Active' ? 'active' : 'inactive'} shrink-0`}>
+                                                {importer.status}
+                                            </span>
+                                        </div>
+
+                                        {/* Card Body */}
+                                        <div className="space-y-1.5 mt-3">
+                                            <div className="flex justify-between items-center text-sm">
+                                                <span className="text-gray-500">Contact</span>
+                                                <span className="text-gray-700 font-medium text-right max-w-[60%]">{importer.contactPerson}</span>
+                                            </div>
+                                            <div className="flex justify-between items-center text-sm">
+                                                <span className="text-gray-500">Phone</span>
+                                                <span className="text-gray-700 font-medium font-mono">{importer.phone}</span>
+                                            </div>
+                                            {importer.address && (
+                                                <div className="flex justify-between items-start text-sm">
+                                                    <span className="text-gray-500 shrink-0">Address</span>
+                                                    <span className="text-gray-700 font-medium text-right max-w-[60%]">{importer.address}</span>
+                                                </div>
+                                            )}
+                                        </div>
+
+                                        {/* Card Actions */}
+                                        <div className="flex items-center gap-2 mt-3 pt-3 border-t border-gray-100">
+                                            <button
+                                                onClick={(e) => { e.stopPropagation(); setViewData(importer); }}
+                                                className="flex items-center justify-center gap-1.5 py-2 px-3 bg-gray-50 text-gray-600 rounded-lg text-xs font-bold flex-1 hover:bg-gray-100 transition-colors"
+                                            >
+                                                <EyeIcon className="w-4 h-4" /> View
+                                            </button>
+                                            <button
+                                                onClick={(e) => { e.stopPropagation(); handleEdit(importer); }}
+                                                className="flex items-center justify-center gap-1.5 py-2 px-3 bg-blue-50 text-blue-600 rounded-lg text-xs font-bold flex-1 hover:bg-blue-100 transition-colors"
+                                            >
+                                                <EditIcon className="w-4 h-4" /> Edit
+                                            </button>
+                                            <button
+                                                onClick={(e) => { e.stopPropagation(); handleDelete(importer._id); }}
+                                                className="flex items-center justify-center gap-1.5 py-2 px-3 bg-red-50 text-red-600 rounded-lg text-xs font-bold hover:bg-red-100 transition-colors"
+                                            >
+                                                <TrashIcon className="w-4 h-4" />
+                                            </button>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        </>
                     ) : (
                         <div className="importer-empty">
                             <div className="importer-empty-icon-wrapper">
@@ -423,36 +507,38 @@ const Importer = ({
                     <div className="absolute inset-0 bg-gray-900/60 backdrop-blur-sm" onClick={() => setViewData(null)}></div>
                     <div className="relative bg-white border border-gray-100 rounded-2xl shadow-2xl max-w-4xl w-full flex flex-col max-h-[90vh] animate-in zoom-in duration-200">
                         {/* Modal Header */}
-                        <div className="px-8 py-6 border-b border-gray-100 flex items-center justify-between bg-white sticky top-0 z-10 rounded-t-2xl">
-                            <div className="flex-1">
-                                <h3 className="text-xl font-bold text-gray-900">Import History - {viewData.name}</h3>
-                                <p className="text-sm text-gray-500 mt-1">License No: {viewData.licenseNo} | {viewData.address}</p>
+                        <div className="relative px-4 py-4 md:px-8 md:py-6 border-b border-gray-100 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 bg-white sticky top-0 z-10 rounded-t-2xl">
+                            <div className="flex-1 text-left">
+                                <h3 className="text-lg md:text-xl font-bold text-gray-900">Import History - {viewData.name}</h3>
+                                <p className="text-xs text-gray-500 mt-1">License: {viewData.licenseNo}{viewData.address ? ` | ${viewData.address}` : ''}</p>
                             </div>
 
-                            {/* Center Search bar */}
-                            <div className="flex-1 max-w-sm mx-auto relative group">
-                                <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
-                                    <SearchIcon className="h-4 w-4 text-gray-400 group-focus-within:text-blue-500 transition-colors" />
+                            {/* Search bar */}
+                            <div className="flex-1 w-full md:max-w-sm md:mx-auto">
+                                <div className="relative group">
+                                    <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
+                                        <SearchIcon className="h-4 w-4 text-gray-400 group-focus-within:text-blue-500 transition-colors" />
+                                    </div>
+                                    <input
+                                        type="text"
+                                        placeholder="Search import history..."
+                                        value={historySearchQuery}
+                                        onChange={(e) => setHistorySearchQuery(e.target.value)}
+                                        className="block w-full pl-10 pr-4 py-2 bg-gray-50/50 border border-gray-200 rounded-xl text-xs focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
+                                    />
                                 </div>
-                                <input
-                                    type="text"
-                                    placeholder="Search import history..."
-                                    value={historySearchQuery}
-                                    onChange={(e) => setHistorySearchQuery(e.target.value)}
-                                    className="block w-full pl-10 pr-4 py-2 bg-gray-50/50 border border-gray-200 rounded-xl text-xs focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
-                                />
                             </div>
 
-                            <div className="flex-1 flex justify-end">
-                                <button onClick={() => setViewData(null)} className="p-2 hover:bg-gray-50 text-gray-400 hover:text-gray-600 rounded-full transition-all">
-                                    <XIcon className="w-5 h-5" />
-                                </button>
-                            </div>
+                            {/* Close button */}
+                            <button onClick={() => setViewData(null)} className="absolute right-4 top-4 md:static p-2 hover:bg-gray-50 text-gray-400 hover:text-gray-600 rounded-full transition-all">
+                                <XIcon className="w-5 h-5" />
+                            </button>
                         </div>
 
-                        <div className="flex-1 overflow-auto p-8">
-                            <div className="bg-gray-50 rounded-xl border border-gray-200 overflow-hidden">
-                                <table className="w-full text-left text-sm">
+                        {/* Modal Body */}
+                        <div className="flex-1 overflow-auto p-4 md:p-8">
+                            <div className="bg-gray-50 rounded-xl border border-gray-200 overflow-x-auto">
+                                <table className="w-full text-left text-sm" style={{ minWidth: '30rem' }}>
                                     <thead className="bg-white border-b border-gray-200">
                                         <tr>
                                             <th className="px-4 py-3 font-semibold text-gray-600">Date</th>
