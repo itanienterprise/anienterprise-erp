@@ -383,11 +383,13 @@ const WarehouseReport = ({
     const totals = [...uniqueBrandsInReport].reduce((acc, brandKey) => {
         const globalInfo = globalStockMap[brandKey];
         if (globalInfo) {
-            acc.totalInHouseQty += globalInfo.inhouseQty;
+            const qty = Math.max(0, globalInfo.inhouseQty || 0);
+            const pkt = Math.max(0, globalInfo.inhousePkt || 0);
+            acc.totalInHouseQty += qty;
             const size = globalInfo.pktSize || 0;
-            const whole = Math.floor(globalInfo.inhousePkt);
+            const whole = Math.floor(pkt);
             acc.totalInHouseWhole += whole;
-            acc.totalInHouseRem += (globalInfo.inhouseQty - (whole * size));
+            acc.totalInHouseRem += (qty - (whole * size));
         }
         return acc;
     }, { totalInHouseQty: 0, totalInHouseWhole: 0, totalInHouseRem: 0, totalWhQty: 0, totalWhWhole: 0, totalWhRem: 0 });
@@ -396,8 +398,8 @@ const WarehouseReport = ({
     displayGroups.forEach(wh => {
         wh.products.forEach(p => {
             p.brands.forEach(b => {
-                const qty = b.whQty || 0;
-                const pkt = b.whPkt || 0;
+                const qty = Math.max(0, b.whQty || 0);
+                const pkt = Math.max(0, b.whPkt || 0);
                 const size = b.packetSize || 0;
                 const whole = Math.floor(pkt);
                 totals.totalWhQty += qty;
@@ -747,7 +749,7 @@ const WarehouseReport = ({
                                                                 <td className="border-r border-gray-900 px-2 py-1 text-[13px] font-bold text-gray-900 text-right uppercase tracking-wider bg-gray-50/30 italic">Sub Total</td>
                                                                 <td className="border-r border-gray-900 px-2 py-1 text-right text-[13px] font-black text-gray-900 text-emerald-700">
                                                                     {(() => {
-                                                                        const totalQty = pGroup.brands.reduce((sum, b) => sum + (parseFloat(b.inhouseQty) || 0), 0);
+                                                                        const totalQty = pGroup.brands.reduce((sum, b) => sum + Math.max(0, parseFloat(b.inhouseQty) || 0), 0);
                                                                         // Use first brand's size for subtotal rollover (standard for same-product groups)
                                                                         const pktSize = pGroup.brands[0]?.packetSize || 0;
                                                                         const { whole, remainder } = calculatePktRemainder(totalQty, pktSize);
@@ -755,18 +757,18 @@ const WarehouseReport = ({
                                                                     })()}
                                                                 </td>
                                                                 <td className="border-r border-gray-900 px-2 py-1 text-right text-[13px] font-black text-gray-900">
-                                                                    {Math.round(pGroup.brands.reduce((sum, b) => sum + (parseFloat(b.inhouseQty) || 0), 0)).toLocaleString()} <span className="text-[10px] text-gray-400">kg</span>
+                                                                    {Math.round(pGroup.brands.reduce((sum, b) => sum + Math.max(0, parseFloat(b.inhouseQty) || 0), 0)).toLocaleString()} <span className="text-[10px] text-gray-400">kg</span>
                                                                 </td>
                                                                 <td className="px-2 py-1 text-right text-[13px] font-black text-gray-900 text-blue-700">
                                                                     {(() => {
-                                                                        const totalQty = pGroup.brands.reduce((sum, b) => sum + (parseFloat(b.whQty) || 0), 0);
+                                                                        const totalQty = pGroup.brands.reduce((sum, b) => sum + Math.max(0, parseFloat(b.whQty) || 0), 0);
                                                                         const pktSize = pGroup.brands[0]?.packetSize || 0;
                                                                         const { whole, remainder } = calculatePktRemainder(totalQty, pktSize);
                                                                         return `${whole.toLocaleString()}${remainder > 0 ? ` - ${remainder.toLocaleString()} kg` : ''}`;
                                                                     })()}
                                                                 </td>
                                                                 <td className="border-r border-gray-900 px-2 py-1 text-right text-[13px] font-black text-gray-900">
-                                                                    {Math.round(pGroup.brands.reduce((sum, b) => sum + (parseFloat(b.whQty) || 0), 0)).toLocaleString()} <span className="text-[10px] text-gray-400">kg</span>
+                                                                    {Math.round(pGroup.brands.reduce((sum, b) => sum + Math.max(0, parseFloat(b.whQty) || 0), 0)).toLocaleString()} <span className="text-[10px] text-gray-400">kg</span>
                                                                 </td>
                                                             </tr>
                                                         )}
