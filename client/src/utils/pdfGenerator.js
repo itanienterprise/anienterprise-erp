@@ -185,15 +185,15 @@ export const generateLCReceiveReportPDF = (reportData, filters, summary) => {
                     const subTotalRow = [
                         { content: 'SUB TOTAL', styles: { fontStyle: 'italic', halign: 'left' } },
                         '', // Empty Packet col
-                        { content: `${Math.round(subGroup.brandDetails.reduce((sum, e) => sum + (parseFloat(e.quantity) || 0), 0))} ${subGroup.brandDetails[0].unit}`, styles: { fontStyle: 'bold', halign: 'right' } },
-                        { content: `${Math.round(subGroup.brandDetails.reduce((sum, e) => sum + (parseFloat(e.sweepedQuantity) || 0), 0))} ${subGroup.brandDetails[0].unit}`, styles: { fontStyle: 'bold', halign: 'right' } },
-                        { content: `${Math.round(subGroup.brandDetails.reduce((sum, e) => sum + getIHQty(e), 0))} ${subGroup.brandDetails[0].unit}`, styles: { fontStyle: 'bold', halign: 'right' } },
+                        { content: `${Math.round(subGroup.brandDetails.reduce((sum, e) => sum + Math.max(0, parseFloat(e.quantity) || 0), 0))} ${subGroup.brandDetails[0].unit}`, styles: { fontStyle: 'bold', halign: 'right' } },
+                        { content: `${Math.round(subGroup.brandDetails.reduce((sum, e) => sum + Math.max(0, parseFloat(e.sweepedQuantity) || 0), 0))} ${subGroup.brandDetails[0].unit}`, styles: { fontStyle: 'bold', halign: 'right' } },
+                        { content: `${Math.round(subGroup.brandDetails.reduce((sum, e) => sum + Math.max(0, getIHQty(e)), 0))} ${subGroup.brandDetails[0].unit}`, styles: { fontStyle: 'bold', halign: 'right' } },
                         {
                             content: (() => {
-                                const totalWhole = subGroup.brandDetails.reduce((sum, e) => sum + Math.floor(getIHPkt(e)), 0);
+                                const totalWhole = subGroup.brandDetails.reduce((sum, e) => sum + Math.floor(Math.max(0, getIHPkt(e))), 0);
                                 const totalRem = Math.round(subGroup.brandDetails.reduce((sum, e) => {
-                                    const pkt = getIHPkt(e);
-                                    const qty = getIHQty(e);
+                                    const pkt = Math.max(0, getIHPkt(e));
+                                    const qty = Math.max(0, getIHQty(e));
                                     const size = parseFloat(e.packetSize) || 0;
                                     const whole = Math.floor(pkt);
                                     return sum + (qty - (whole * size));
@@ -209,9 +209,9 @@ export const generateLCReceiveReportPDF = (reportData, filters, summary) => {
         });
 
         // --- Totals for Footer ---
-        const totalIHQuantity = reportData.reduce((sum, item) => sum + getIHQty(item), 0);
-        const totalIHPackets = reportData.reduce((sum, item) => sum + getIHPkt(item), 0);
-        const totalShortage = reportData.reduce((sum, item) => sum + (parseFloat(item.sweepedQuantity) || 0), 0);
+        const totalIHQuantity = reportData.reduce((sum, item) => sum + Math.max(0, getIHQty(item)), 0);
+        const totalIHPackets = reportData.reduce((sum, item) => sum + Math.max(0, getIHPkt(item)), 0);
+        const totalShortage = reportData.reduce((sum, item) => sum + Math.max(0, parseFloat(item.sweepedQuantity) || 0), 0);
 
         // --- Table ---
         autoTable(doc, {
@@ -226,10 +226,10 @@ export const generateLCReceiveReportPDF = (reportData, filters, summary) => {
                 { content: `${Math.round(totalIHQuantity)} ${summary.unit}`, styles: { halign: 'right', fontStyle: 'bold' } },
                 {
                     content: (() => {
-                        const totalWhole = reportData.reduce((sum, item) => sum + Math.floor(getIHPkt(item)), 0);
+                        const totalWhole = reportData.reduce((sum, item) => sum + Math.floor(Math.max(0, getIHPkt(item))), 0);
                         const totalRem = Math.round(reportData.reduce((sum, item) => {
-                            const pkt = getIHPkt(item);
-                            const qty = getIHQty(item);
+                            const pkt = Math.max(0, getIHPkt(item));
+                            const qty = Math.max(0, getIHQty(item));
                             const size = parseFloat(item.packetSize) || 0;
                             const whole = Math.floor(pkt);
                             return sum + (qty - (whole * size));
@@ -489,8 +489,8 @@ export const generateStockReportPDF = (stockData, filters, reportType = 'short')
                     // Total BAG
                     totalRow.push({
                         content: (() => {
-                            const totalWhole = item.brandList.reduce((sum, ent) => sum + Math.floor(parseFloat(ent.totalInHousePacket) || 0), 0);
-                            const totalRem = Math.round(item.brandList.reduce((sum, ent) => sum + (parseFloat(ent.totalInHouseQuantity) || 0) - (Math.floor(parseFloat(ent.totalInHousePacket) || 0) * (parseFloat(ent.packetSize) || 0)), 0));
+                            const totalWhole = item.brandList.reduce((sum, ent) => sum + Math.floor(Math.max(0, parseFloat(ent.totalInHousePacket) || 0)), 0);
+                            const totalRem = Math.round(item.brandList.reduce((sum, ent) => sum + Math.max(0, parseFloat(ent.totalInHouseQuantity) || 0) - (Math.floor(Math.max(0, parseFloat(ent.totalInHousePacket) || 0)) * (parseFloat(ent.packetSize) || 0)), 0));
                             return `${totalWhole}${totalRem > 0 ? ` - ${totalRem} kg` : ''}`;
                         })(),
                         styles: { fontStyle: 'bold', halign: 'right', fillColor: [250, 250, 250] }
@@ -499,8 +499,8 @@ export const generateStockReportPDF = (stockData, filters, reportType = 'short')
                     // Sale
                     totalRow.push({
                         content: (() => {
-                            const totalWhole = item.brandList.reduce((sum, ent) => sum + Math.floor(parseFloat(ent.salePacket) || 0), 0);
-                            const totalRem = Math.round(item.brandList.reduce((sum, ent) => sum + (parseFloat(ent.saleQuantity) || 0) - (Math.floor(parseFloat(ent.salePacket) || 0) * (parseFloat(ent.packetSize) || 0)), 0));
+                            const totalWhole = item.brandList.reduce((sum, ent) => sum + Math.floor(Math.max(0, parseFloat(ent.salePacket) || 0)), 0);
+                            const totalRem = Math.round(item.brandList.reduce((sum, ent) => sum + Math.max(0, parseFloat(ent.saleQuantity) || 0) - (Math.floor(Math.max(0, parseFloat(ent.salePacket) || 0)) * (parseFloat(ent.packetSize) || 0)), 0));
                             return `${totalWhole}${totalRem > 0 ? ` - ${totalRem} kg` : ''}`;
                         })(),
                         styles: { fontStyle: 'bold', halign: 'right', fillColor: [250, 250, 250] }
@@ -511,8 +511,8 @@ export const generateStockReportPDF = (stockData, filters, reportType = 'short')
                 // Inhouse BAG
                 totalRow.push({
                     content: (() => {
-                        const totalWhole = item.brandList.reduce((sum, ent) => sum + Math.floor(parseFloat(ent.inHousePacket) || 0), 0);
-                        const totalRem = Math.round(item.brandList.reduce((sum, ent) => sum + (parseFloat(ent.inHouseQuantity) || 0) - (Math.floor(parseFloat(ent.inHousePacket) || 0) * (parseFloat(ent.packetSize) || 0)), 0));
+                        const totalWhole = item.brandList.reduce((sum, ent) => sum + Math.floor(Math.max(0, parseFloat(ent.inHousePacket) || 0)), 0);
+                        const totalRem = Math.round(item.brandList.reduce((sum, ent) => sum + Math.max(0, parseFloat(ent.inHouseQuantity) || 0) - (Math.floor(Math.max(0, parseFloat(ent.inHousePacket) || 0)) * (parseFloat(ent.packetSize) || 0)), 0));
                         return `${totalWhole}${totalRem > 0 ? ` - ${totalRem} kg` : ''}`;
                     })(),
                     styles: { fontStyle: 'bold', halign: 'right', fillColor: [250, 250, 250] }
@@ -524,20 +524,20 @@ export const generateStockReportPDF = (stockData, filters, reportType = 'short')
 
         // Summary Calculations for Cards
         const grandTotalPktStr = (() => {
-            const totalWhole = stockData.displayRecords.reduce((accWhole, item) => accWhole + item.brandList.reduce((sum, ent) => sum + Math.floor(parseFloat(ent.totalInHousePacket) || 0), 0), 0);
-            const totalRem = Math.round(stockData.displayRecords.reduce((accRem, item) => accRem + item.brandList.reduce((sum, ent) => sum + (parseFloat(ent.totalInHouseQuantity) || 0) - (Math.floor(parseFloat(ent.totalInHousePacket) || 0) * (parseFloat(ent.packetSize) || 0)), 0), 0));
+            const totalWhole = stockData.displayRecords.reduce((accWhole, item) => accWhole + item.brandList.reduce((sum, ent) => sum + Math.floor(Math.max(0, parseFloat(ent.totalInHousePacket) || 0)), 0), 0);
+            const totalRem = Math.round(stockData.displayRecords.reduce((accRem, item) => accRem + item.brandList.reduce((sum, ent) => sum + Math.max(0, parseFloat(ent.totalInHouseQuantity) || 0) - (Math.floor(Math.max(0, parseFloat(ent.totalInHousePacket) || 0)) * (parseFloat(ent.packetSize) || 0)), 0), 0));
             return `${totalWhole}${totalRem > 0 ? ` - ${totalRem} kg` : ''}`;
         })();
 
         const inHousePktStr = (() => {
-            const totalWhole = stockData.displayRecords.reduce((accWhole, item) => accWhole + item.brandList.reduce((sum, ent) => sum + Math.floor(parseFloat(ent.inHousePacket) || 0), 0), 0);
-            const totalRem = Math.round(stockData.displayRecords.reduce((accRem, item) => accRem + item.brandList.reduce((sum, ent) => sum + (parseFloat(ent.inHouseQuantity) || 0) - (Math.floor(parseFloat(ent.inHousePacket) || 0) * (parseFloat(ent.packetSize) || 0)), 0), 0));
+            const totalWhole = stockData.displayRecords.reduce((accWhole, item) => accWhole + item.brandList.reduce((sum, ent) => sum + Math.floor(Math.max(0, parseFloat(ent.inHousePacket) || 0)), 0), 0);
+            const totalRem = Math.round(stockData.displayRecords.reduce((accRem, item) => accRem + item.brandList.reduce((sum, ent) => sum + Math.max(0, parseFloat(ent.inHouseQuantity) || 0) - (Math.floor(Math.max(0, parseFloat(ent.inHousePacket) || 0)) * (parseFloat(ent.packetSize) || 0)), 0), 0));
             return `${totalWhole}${totalRem > 0 ? ` - ${totalRem} kg` : ''}`;
         })();
 
         const totalSalePktStr = (() => {
-            const totalWhole = stockData.displayRecords.reduce((accWhole, item) => accWhole + item.brandList.reduce((sum, ent) => sum + Math.floor(parseFloat(ent.salePacket) || 0), 0), 0);
-            const totalRem = Math.round(stockData.displayRecords.reduce((accRem, item) => accRem + item.brandList.reduce((sum, ent) => sum + (parseFloat(ent.saleQuantity) || 0) - (Math.floor(parseFloat(ent.salePacket) || 0) * (parseFloat(ent.packetSize) || 0)), 0), 0));
+            const totalWhole = stockData.displayRecords.reduce((accWhole, item) => accWhole + item.brandList.reduce((sum, ent) => sum + Math.floor(Math.max(0, parseFloat(ent.salePacket) || 0)), 0), 0);
+            const totalRem = Math.round(stockData.displayRecords.reduce((accRem, item) => accRem + item.brandList.reduce((sum, ent) => sum + Math.max(0, parseFloat(ent.saleQuantity) || 0) - (Math.floor(Math.max(0, parseFloat(ent.salePacket) || 0)) * (parseFloat(ent.packetSize) || 0)), 0), 0));
             return `${totalWhole}${totalRem > 0 ? ` - ${totalRem} kg` : ''}`;
         })();
 
@@ -831,10 +831,10 @@ export const generateWarehouseReportPDF = (displayGroups, filters, totals) => {
                         { content: 'SUB TOTAL', styles: { fontStyle: 'bold', halign: 'right', fillColor: [250, 250, 250] }, colSpan: 1 }, // Spanning Brand col
                         {
                             content: (() => {
-                                const totalWhole = pGroup.brands.reduce((sum, b) => sum + Math.floor(parseFloat(b.inhousePkt) || 0), 0);
+                                const totalWhole = pGroup.brands.reduce((sum, b) => sum + Math.floor(Math.max(0, parseFloat(b.inhousePkt) || 0)), 0);
                                 const totalRem = Math.round(pGroup.brands.reduce((sum, b) => {
-                                    const pkt = parseFloat(b.inhousePkt) || 0;
-                                    const qty = parseFloat(b.inhouseQty) || 0;
+                                    const pkt = Math.max(0, parseFloat(b.inhousePkt) || 0);
+                                    const qty = Math.max(0, parseFloat(b.inhouseQty) || 0);
                                     const size = parseFloat(b.packetSize || b.size || 0);
                                     return sum + (qty - (Math.floor(pkt) * size));
                                 }, 0));
@@ -843,15 +843,15 @@ export const generateWarehouseReportPDF = (displayGroups, filters, totals) => {
                             styles: { halign: 'right', fontStyle: 'bold', fillColor: [250, 250, 250], textColor: [0, 0, 0] }
                         },
                         {
-                            content: `${Math.round(pGroup.brands.reduce((sum, b) => sum + (parseFloat(b.inhouseQty) || 0), 0)).toLocaleString()} kg`,
+                            content: `${Math.round(pGroup.brands.reduce((sum, b) => sum + Math.max(0, parseFloat(b.inhouseQty) || 0), 0)).toLocaleString()} kg`,
                             styles: { halign: 'right', fontStyle: 'bold', fillColor: [250, 250, 250] }
                         },
                         {
                             content: (() => {
-                                const totalWhole = pGroup.brands.reduce((sum, b) => sum + Math.floor(parseFloat(b.whPkt) || 0), 0);
+                                const totalWhole = pGroup.brands.reduce((sum, b) => sum + Math.floor(Math.max(0, parseFloat(b.whPkt) || 0)), 0);
                                 const totalRem = Math.round(pGroup.brands.reduce((sum, b) => {
-                                    const pkt = parseFloat(b.whPkt) || 0;
-                                    const qty = parseFloat(b.whQty) || 0;
+                                    const pkt = Math.max(0, parseFloat(b.whPkt) || 0);
+                                    const qty = Math.max(0, parseFloat(b.whQty) || 0);
                                     const size = parseFloat(b.packetSize || b.size || 0);
                                     return sum + (qty - (Math.floor(pkt) * size));
                                 }, 0));
@@ -860,7 +860,7 @@ export const generateWarehouseReportPDF = (displayGroups, filters, totals) => {
                             styles: { halign: 'right', fontStyle: 'bold', fillColor: [250, 250, 250], textColor: [0, 0, 0] }
                         },
                         {
-                            content: `${Math.round(pGroup.brands.reduce((sum, b) => sum + (parseFloat(b.whQty) || 0), 0)).toLocaleString()} kg`,
+                            content: `${Math.round(pGroup.brands.reduce((sum, b) => sum + Math.max(0, parseFloat(b.whQty) || 0), 0)).toLocaleString()} kg`,
                             styles: { halign: 'right', fontStyle: 'bold', fillColor: [250, 250, 250] }
                         }
                     ]);

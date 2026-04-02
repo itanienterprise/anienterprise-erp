@@ -38,10 +38,10 @@ const StockReport = ({
 
             if (filteredBrands.length > 0) {
                 // IMPORTANT: Recalculate item-level totals for the filtered brands
-                const inHouseQuantity = filteredBrands.reduce((sum, b) => sum + (b.inHouseQuantity || 0), 0);
-                const totalInHouseQuantity = filteredBrands.reduce((sum, b) => sum + (b.totalInHouseQuantity || 0), 0);
-                const saleQuantity = filteredBrands.reduce((sum, b) => sum + (b.saleQuantity || 0), 0);
-                const salePacket = filteredBrands.reduce((sum, b) => sum + (parseFloat(b.salePacket) || 0), 0);
+                const inHouseQuantity = filteredBrands.reduce((sum, b) => sum + Math.max(0, b.inHouseQuantity || 0), 0);
+                const totalInHouseQuantity = filteredBrands.reduce((sum, b) => sum + Math.max(0, b.totalInHouseQuantity || 0), 0);
+                const saleQuantity = filteredBrands.reduce((sum, b) => sum + Math.max(0, b.saleQuantity || 0), 0);
+                const salePacket = filteredBrands.reduce((sum, b) => sum + Math.max(0, parseFloat(b.salePacket) || 0), 0);
 
                 return {
                     ...item,
@@ -64,10 +64,10 @@ const StockReport = ({
         let totalSalePkt = 0;
 
         filteredRecords.forEach(item => {
-            totalTotalInHouseQty += item.totalInHouseQuantity || 0;
-            totalSaleQty += item.saleQuantity || 0;
-            totalInHouseQty += item.inHouseQuantity || 0;
-            totalSalePkt += item.salePacket || 0;
+            totalTotalInHouseQty += Math.max(0, item.totalInHouseQuantity || 0);
+            totalSaleQty += Math.max(0, item.saleQuantity || 0);
+            totalInHouseQty += Math.max(0, item.inHouseQuantity || 0);
+            totalSalePkt += Math.max(0, item.salePacket || 0);
         });
 
         return { totalTotalInHouseQty, totalSaleQty, totalInHouseQty, totalSalePkt };
