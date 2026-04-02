@@ -2,8 +2,10 @@ import React, { useState } from 'react';
 import { BellIcon, XIcon } from '../../Icons';
 import './NotificationMenu.css';
 
-const NotificationMenu = ({ isOpen, onClose, notifications, onMarkAllAsRead, onClearAll, onMarkAsRead }) => {
+const NotificationMenu = ({ isOpen, onClose, notifications, onMarkAllAsRead, onClearAll, onMarkAsRead, currentUser }) => {
     if (!isOpen) return null;
+
+    const isAdmin = currentUser?.role === 'admin' || currentUser?.isAdmin === true;
 
     const formatTime = (dateString) => {
         if (!dateString) return 'Unknown time';
@@ -43,7 +45,7 @@ const NotificationMenu = ({ isOpen, onClose, notifications, onMarkAllAsRead, onC
                             )}
                         </div>
                         <div className="flex items-center space-x-2">
-                            {notifications.length > 0 && (
+                            {isAdmin && notifications.length > 0 && (
                                 <button
                                     onClick={onClearAll}
                                     className="text-xs font-medium text-red-500 hover:text-red-600 hover:bg-red-50 px-2 py-1 rounded-md transition-all"

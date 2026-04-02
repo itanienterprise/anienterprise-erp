@@ -555,8 +555,7 @@ const SaleManagement = ({
     };
 
     useEffect(() => {
-        if (showForm && !editingId && !formData.invoiceNo && allSalesRecords.length >= 0) {
-            console.log(`[AutoInvoice] Generating for ${saleType}...`);
+        if (showForm && !editingId && allSalesRecords.length >= 0) {
             setFormData(prev => ({ ...prev, invoiceNo: generateInvoiceNo() }));
         }
     }, [showForm, editingId, saleType, allSalesRecords]);
@@ -2424,7 +2423,7 @@ const SaleManagement = ({
                             />
                             <div className="sale-mgmt-input-group">
                                 <label className="sale-mgmt-label">Invoice No</label>
-                                <input type="text" name="invoiceNo" value={formData.invoiceNo} onChange={handleInputChange} placeholder="SALE-001" className="sale-mgmt-input" required />
+                                <input type="text" name="invoiceNo" value={formData.invoiceNo} readOnly placeholder="Auto-generated" className="sale-mgmt-input sale-mgmt-input-readonly cursor-default" required />
                             </div>
 
                             {/* Border Field: Importer */}
@@ -2480,10 +2479,12 @@ const SaleManagement = ({
                                 </div>
                             )}
 
-                            <div className="sale-mgmt-input-group">
-                                <label className="sale-mgmt-label">LC No</label>
-                                <input type="text" name="lcNo" value={formData.lcNo} onChange={handleInputChange} placeholder="LC-001" className="sale-mgmt-input" />
-                            </div>
+                            {saleType === 'Border' && (
+                                <div className="sale-mgmt-input-group">
+                                    <label className="sale-mgmt-label">LC No</label>
+                                    <input type="text" name="lcNo" value={formData.lcNo} onChange={handleInputChange} placeholder="LC-001" className="sale-mgmt-input" />
+                                </div>
+                            )}
 
                             {/* Border Field: Exporter */}
                             {saleType === 'Border' && (

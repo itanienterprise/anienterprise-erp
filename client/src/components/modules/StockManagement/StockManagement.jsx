@@ -79,9 +79,9 @@ const StockManagement = ({
     // Dropdown & Selection State
     const [activeDropdown, setActiveDropdown] = useState(null);
     const [highlightedIndex, setHighlightedIndex] = useState(-1);
-    const [filterDropdownOpen, setFilterDropdownOpen] = useState({ warehouse: false, importer: false, brand: false, productName: false, category: false });
+    const [filterDropdownOpen, setFilterDropdownOpen] = useState({ warehouse: false, importer: false, brand: false, productName: false, category: false, lcNo: false, port: false });
     const [filterSearchInputs, setFilterSearchInputs] = useState({ warehouseSearch: '', importerSearch: '', brandSearch: '', productSearch: '', categorySearch: '' });
-    const initialFilterDropdownState = { warehouse: false, importer: false, brand: false, productName: false, category: false };
+    const initialFilterDropdownState = { warehouse: false, importer: false, brand: false, productName: false, category: false, lcNo: false, port: false };
 
     // Table Selection & Sorting
     const [selectedItems, setSelectedItems] = useState(new Set());
@@ -114,6 +114,8 @@ const StockManagement = ({
     const brandRefs = useRef({});
     const portRef = useRef(null);
     const importerRef = useRef(null);
+    const lcNoFilterRef = useRef(null);
+    const portFilterRef = useRef(null);
 
     // --- Add Stock to Warehouse State ---
     const [warehouseData, setWarehouseData] = useState([]);

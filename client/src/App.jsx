@@ -1544,6 +1544,7 @@ function App() {
                 onMarkAllAsRead={handleMarkAllAsRead}
                 onClearAll={handleClearAll}
                 onMarkAsRead={handleMarkAsRead}
+                currentUser={currentUser}
               />
             </div>
           </div>

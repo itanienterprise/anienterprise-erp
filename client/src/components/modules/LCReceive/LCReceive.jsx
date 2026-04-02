@@ -2915,15 +2915,7 @@ function LCReceive({
                                                 {renderSortIcon('exporter')}
                                             </div>
                                         </th>
-                                        <th
-                                            className="px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase tracking-wider cursor-pointer group hover:bg-gray-100/50 transition-colors"
-                                            onClick={() => handleSort('exporter')}
-                                        >
-                                            <div className="flex items-center">
-                                                Exporter
-                                                {renderSortIcon('exporter')}
-                                            </div>
-                                        </th>
+
                                         <th
                                             className="px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase tracking-wider cursor-pointer group hover:bg-gray-100/50 transition-colors"
                                             onClick={() => handleSort('indianCnF')}
