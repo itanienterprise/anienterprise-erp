@@ -1866,18 +1866,18 @@ export const generateSalesReportPDF = (reportData, filters, summary, saleType = 
                 11: { cellWidth: 18, halign: 'right' },    // Price
                 12: { cellWidth: 18, halign: 'right' }     // Total
             } : {
-                0: { cellWidth: 8, halign: 'center' },
-                1: { cellWidth: 20, halign: 'center' },
-                2: { cellWidth: 22, halign: 'center' },
-                3: { cellWidth: 35 },
-                4: { cellWidth: 38 },
-                5: { cellWidth: 45, noWrap: false, overflow: 'linebreak' },
-                6: { cellWidth: 15, halign: 'right' },
-                7: { cellWidth: 20, halign: 'right' },
-                8: { cellWidth: 22, halign: 'right' },
-                9: { cellWidth: 18, halign: 'right' },
-                10: { cellWidth: 22, halign: 'right' },
-                11: { cellWidth: 22, halign: 'right' }
+                0: { cellWidth: 7, halign: 'center' },     // SL
+                1: { cellWidth: 18, halign: 'center' },    // Date
+                2: { cellWidth: 18, halign: 'center' },    // Invoice
+                3: { cellWidth: 45 },                       // Company (Increased)
+                4: { cellWidth: 25, overflow: 'linebreak' }, // Product (Reduced)
+                5: { cellWidth: 35, noWrap: false, overflow: 'linebreak' }, // Brand (Reduced)
+                6: { cellWidth: 15, halign: 'right' },     // Qty
+                7: { cellWidth: 15, halign: 'right' },     // Price
+                8: { cellWidth: 30, halign: 'right' },     // Total (Increased)
+                9: { cellWidth: 15, halign: 'right' },     // Disc
+                10: { cellWidth: 28, halign: 'right' },    // Paid (Increased)
+                11: { cellWidth: 30, halign: 'right' }     // Balance (Increased)
             },
             margin: { left: saleType === 'Border' ? (pageWidth - 285) / 2 : (pageWidth - 280) / 2, right: margin }
         });
