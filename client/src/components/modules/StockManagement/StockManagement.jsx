@@ -2660,29 +2660,31 @@ const StockManagement = ({
                                                 onClick={() => toggleProductExpansion(group.productName)}
                                             >
                                                 <div className="flex items-center gap-2">
-                                                    <h3 className="text-lg font-bold text-gray-900 leading-none">{group.productName}</h3>
+                                                    <h3 className="text-lg font-black text-gray-900 leading-none">{group.productName}</h3>
                                                 </div>
                                                 {!isExpanded && (
-                                                    <div className="flex items-center flex-wrap gap-2 mt-1.5">
-                                                        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[12px] font-bold ${group.totalInHouseQuantity > 0 ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'}`}>
-                                                            {group.totalInHouseQuantity > 0 ? 'In Stock' : 'Out of Stock'}
-                                                        </span>
+                                                    <div className="flex items-center flex-wrap gap-2 mt-2">
                                                         {group.totalInHouseQuantity > 0 && (
-                                                            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[12px] font-bold bg-gray-100 text-gray-700 border border-gray-200">
+                                                            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-bold bg-gray-100 text-gray-700 border border-gray-200">
                                                                 {Math.round(group.inHousePacket).toLocaleString()} BAG • {Math.round(group.inHouseQuantity).toLocaleString()} {group.unit}
                                                             </span>
                                                         )}
                                                     </div>
                                                 )}
                                             </div>
-                                            <div className="flex items-center gap-1.5 shrink-0 pt-0.5">
+                                            <div className="flex flex-col items-center gap-1.5 shrink-0 pt-0.5">
                                                 <button
                                                     onClick={() => setViewRecord({ data: group })}
-                                                    className="p-1.5 text-blue-500 hover:bg-blue-50 rounded-lg transition-all shadow-sm border border-blue-100"
+                                                    className="p-1 text-blue-500 hover:bg-blue-50 rounded-lg transition-all shadow-sm border border-blue-100"
                                                     title="View History"
                                                 >
-                                                    <EyeIcon className="w-5 h-5" />
+                                                    <EyeIcon className="w-4 h-4" />
                                                 </button>
+                                                {!isExpanded && (
+                                                    <span className={`inline-flex items-center px-1.5 py-0.5 rounded-full text-[9px] font-black ${group.totalInHouseQuantity > 0 ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'}`}>
+                                                        {group.totalInHouseQuantity > 0 ? 'In Stock' : 'Out of Stock'}
+                                                    </span>
+                                                )}
                                             </div>
                                         </div>
 
@@ -2726,17 +2728,21 @@ const StockManagement = ({
                                                                     </div>
                                                                     {!isBrandExpanded && (
                                                                         <div className="flex items-center flex-wrap gap-2 mt-1">
-                                                                            <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[12px] font-bold ${brand.totalInHouseQuantity > 0 ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'}`}>
-                                                                                {brand.totalInHouseQuantity > 0 ? 'In Stock' : 'Out of Stock'}
-                                                                            </span>
                                                                             {brand.totalInHouseQuantity > 0 && (
-                                                                                <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[12px] font-bold bg-white text-gray-700 border border-gray-200 shadow-sm">
+                                                                                <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-bold bg-white text-gray-700 border border-gray-200 shadow-sm">
                                                                                     {Math.round(brand.inHousePacket).toLocaleString()} BAG • {Math.round(brand.inHouseQuantity).toLocaleString()} {group.unit}
                                                                                 </span>
                                                                             )}
                                                                         </div>
                                                                     )}
                                                                 </div>
+                                                                {!isBrandExpanded && (
+                                                                    <div className="flex flex-col items-end shrink-0 pt-1">
+                                                                        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold ${brand.totalInHouseQuantity > 0 ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'}`}>
+                                                                            {brand.totalInHouseQuantity > 0 ? 'In Stock' : 'Out of Stock'}
+                                                                        </span>
+                                                                    </div>
+                                                                )}
                                                             </div>
                                                             {isBrandExpanded && (
                                                             <div className="grid grid-cols-3 gap-1.5 animate-in fade-in slide-in-from-top-2 duration-200 pt-2 border-t border-gray-100">

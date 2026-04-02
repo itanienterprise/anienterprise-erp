@@ -583,9 +583,10 @@ apiRouter.delete('/api/banks/:id', async (req, res) => {
 
 apiRouter.put('/api/banks/:id', async (req, res) => {
   try {
-    const updatedBank = await Bank.findByIdAndUpdate(req.params.id, req.body, { new: true });
+    const encryptedData = encryptData(req.body);
+    const updatedBank = await Bank.findByIdAndUpdate(req.params.id, { data: encryptedData }, { new: true });
     if (!updatedBank) return res.status(404).json({ message: 'Bank not found' });
-    res.json(updatedBank);
+    res.json({ ...req.body, _id: updatedBank._id, createdAt: updatedBank.createdAt });
   } catch (err) {
     res.status(400).json({ message: err.message });
   }

@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { EditIcon, TrashIcon, AnchorIcon } from '../../Icons';
+import React, { useState, useEffect, useMemo } from 'react';
+import { EditIcon, TrashIcon, AnchorIcon, SearchIcon, XIcon } from '../../Icons';
 import { API_BASE_URL, SortIcon } from '../../../utils/helpers';
 import axios from '../../../utils/api';
 import './Port.css';
@@ -23,6 +23,8 @@ const Port = ({
     const [submitStatus, setSubmitStatus] = useState(null);
     const [ports, setPorts] = useState([]);
     const [isLoading, setIsLoading] = useState(false);
+    const [searchQuery, setSearchQuery] = useState('');
+    const [expandedRowId, setExpandedRowId] = useState(null);
     const [formData, setFormData] = useState({
         name: '',
         location: '',
@@ -132,163 +134,156 @@ const Port = ({
         setSortConfig({ ...sortConfig, port: { key, direction } });
     };
 
-    const sortData = (data) => {
-        if (!sortConfig.port) return data;
+    const displayPorts = useMemo(() => {
+        let filtered = ports.filter(port => 
+            (port.name || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+            (port.code || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+            (port.location || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+            (port.type || '').toLowerCase().includes(searchQuery.toLowerCase())
+        );
+
+        if (!sortConfig.port) return filtered;
         const { key, direction } = sortConfig.port;
-        return [...data].sort((a, b) => {
+        return [...filtered].sort((a, b) => {
             if (a[key] < b[key]) return direction === 'asc' ? -1 : 1;
             if (a[key] > b[key]) return direction === 'asc' ? 1 : -1;
             return 0;
         });
-    };
+    }, [ports, searchQuery, sortConfig.port]);
 
     return (
-        <div className="port-container">
-            <div className="port-header">
-                <h2 className="port-title">Port Management</h2>
-                <button onClick={() => setShowForm(!showForm)} className="port-add-btn">
-                    <span className="port-add-icon">+</span> Add New
-                </button>
+        <div className="space-y-4 md:space-y-6">
+            {/* Header section - centered on mobile */}
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                {!showForm ? (
+                    <>
+                        <div className="w-full md:w-1/4 text-center md:text-left">
+                            <h2 className="text-2xl font-bold text-gray-800">Port Management</h2>
+                        </div>
+
+                        <div className="w-full md:flex-1 md:max-w-md md:mx-auto relative group px-2 md:px-0">
+                            <div className="absolute inset-y-0 left-0 pl-5.5 md:pl-3.5 flex items-center pointer-events-none">
+                                <SearchIcon className="h-4 w-4 text-gray-400 group-focus-within:text-blue-500 transition-colors" />
+                            </div>
+                            <input
+                                type="text"
+                                placeholder="Search by port name, code, or location..."
+                                autoComplete="off"
+                                className="block w-full pl-10 md:pl-10 pr-4 py-2.5 md:py-2 bg-white/50 border border-gray-200 rounded-xl text-[13px] text-center md:text-left placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 focus:bg-white transition-all outline-none"
+                                value={searchQuery}
+                                onChange={(e) => setSearchQuery(e.target.value)}
+                            />
+                        </div>
+                    </>
+                ) : (
+                    <div className="hidden md:block md:flex-1"></div>
+                )}
+
+                <div className={`${showForm ? 'w-full md:w-auto flex justify-end' : 'w-full md:w-1/4 flex justify-end'} gap-3 z-50`}>
+                    <button 
+                        onClick={() => setShowForm(!showForm)}
+                        className="w-full md:w-auto px-4 py-2.5 md:py-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-medium rounded-xl shadow-lg shadow-blue-500/30 transition-all transform active:scale-95 md:hover:scale-105 flex items-center justify-center"
+                    >
+                        <span className="mr-2 text-xl font-bold">+</span>
+                        <span>{showForm ? 'Cancel' : 'Add New Port'}</span>
+                    </button>
+                </div>
             </div>
 
             {showForm && (
-                <div className="port-form-container">
-                    <div className="port-form-bg-orb port-form-bg-orb-1"></div>
-                    <div className="port-form-bg-orb port-form-bg-orb-2"></div>
+                <div className="relative overflow-hidden bg-white/60 backdrop-blur-xl border border-white/40 rounded-2xl shadow-2xl p-5 md:p-8 animate-in fade-in slide-in-from-top-4 duration-500">
+                    <div className="absolute -top-24 -right-24 w-64 h-64 bg-blue-500/10 rounded-full blur-3xl animate-pulse"></div>
+                    <div className="absolute -bottom-24 -left-24 w-64 h-64 bg-indigo-500/10 rounded-full blur-3xl animate-pulse delay-1000"></div>
 
-                    <div className="port-form-header">
-                        <h3 className="port-form-title">{editingId ? 'Edit Port' : 'New Port Registration'}</h3>
-                        <button onClick={() => { setShowForm(false); resetForm(); }} className="port-form-close">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                    <div className="flex items-center justify-between mb-6 md:mb-8 relative z-10">
+                        <div className="flex items-center space-x-3">
+                            <h3 className="text-lg md:text-xl font-semibold text-gray-800">{editingId ? 'Edit Port' : 'New Port Registration'}</h3>
+                        </div>
+                        <button 
+                            onClick={() => { setShowForm(false); resetForm(); }}
+                            className="p-1.5 md:p-2 hover:bg-gray-100/80 text-gray-400 hover:text-rose-500 rounded-xl transition-all"
+                        >
+                            <XIcon className="w-5 h-5" />
                         </button>
                     </div>
 
-                    <form onSubmit={handleSubmit} className="port-form">
-                        <div className="port-form-field">
-                            <label className="port-form-label">Port Name</label>
-                            <input type="text" name="name" value={formData.name} onChange={handleInputChange} required placeholder="e.g., Chittagong Port" className="port-form-input" />
+                    <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-6 relative z-10">
+                        <div className="space-y-2">
+                            <label className="text-sm font-medium text-gray-700">Port Name</label>
+                            <input type="text" name="name" value={formData.name} onChange={handleInputChange} required placeholder="e.g., Chittagong Port" className="w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all" />
                         </div>
-                        <div className="port-form-field">
-                            <label className="port-form-label">Port Code</label>
-                            <input type="text" name="code" value={formData.code} onChange={handleInputChange} required placeholder="e.g., BDCGP" className="port-form-input" />
+                        <div className="space-y-2">
+                            <label className="text-sm font-medium text-gray-700">Port Code</label>
+                            <input type="text" name="code" value={formData.code} onChange={handleInputChange} required placeholder="e.g., BDCGP" className="w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all" />
                         </div>
-                        <div className="port-form-field">
-                            <label className="port-form-label">Location</label>
-                            <input type="text" name="location" value={formData.location} onChange={handleInputChange} required placeholder="City, Country" className="port-form-input" />
+                        <div className="space-y-2">
+                            <label className="text-sm font-medium text-gray-700">Location</label>
+                            <input type="text" name="location" value={formData.location} onChange={handleInputChange} required placeholder="City, Country" className="w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all" />
                         </div>
-                        <div className="port-form-field">
-                            <label className="port-form-label">Port Type</label>
-                            <select name="type" value={formData.type} onChange={handleInputChange} className="port-form-select">
+                        <div className="space-y-2">
+                            <label className="text-sm font-medium text-gray-700">Port Type</label>
+                            <select name="type" value={formData.type} onChange={handleInputChange} className="w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all">
                                 <option>Seaport</option>
                                 <option>Airport</option>
                                 <option>Land Port</option>
                             </select>
                         </div>
-                        <div className="port-form-field">
-                            <label className="port-form-label">Status</label>
-                            <select name="status" value={formData.status} onChange={handleInputChange} className="port-form-select">
+                        <div className="space-y-2">
+                            <label className="text-sm font-medium text-gray-700">Status</label>
+                            <select name="status" value={formData.status} onChange={handleInputChange} className="w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all">
                                 <option>Active</option>
                                 <option>Inactive</option>
                             </select>
                         </div>
 
-                        <div className="port-form-footer">
-                            {submitStatus === 'success' && (
-                                <p className="port-form-success">
-                                    <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"></path></svg>
-                                    Port saved successfully!
-                                </p>
-                            )}
-                            {submitStatus === 'error' && (
-                                <p className="port-form-error">
-                                    <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path></svg>
-                                    Failed to save port.
-                                </p>
-                            )}
-                            <div className="port-form-spacer"></div>
-                            <button type="submit" disabled={isSubmitting} className={`port-form-submit ${isSubmitting ? 'disabled' : ''}`}>
-                                {isSubmitting ? 'Saving...' : editingId ? 'Update Port' : 'Register Port'}
-                            </button>
+                        <div className="col-span-1 md:col-span-2 flex flex-col md:flex-row md:items-center justify-between gap-4 pt-4 mt-4 border-t border-gray-100">
+                            <div className="flex-1">
+                                {submitStatus === 'success' && <p className="text-emerald-600 font-bold text-sm animate-in fade-in slide-in-from-left-4">✓ Port saved successfully!</p>}
+                                {submitStatus === 'error' && <p className="text-red-600 font-bold text-sm animate-in fade-in slide-in-from-left-4">✕ Failed to save port.</p>}
+                            </div>
+                            <div className="flex gap-3">
+                                <button type="button" onClick={() => { setShowForm(false); resetForm(); }} className="flex-1 md:flex-none px-6 py-2.5 bg-gray-100 text-gray-600 font-bold rounded-xl hover:bg-gray-200 transition-all text-sm">Cancel</button>
+                                <button type="submit" disabled={isSubmitting} className={`flex-1 md:flex-none px-8 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-bold rounded-xl shadow-lg shadow-blue-500/20 hover:from-blue-700 hover:to-indigo-700 transition-all text-sm ${isSubmitting ? 'opacity-50 cursor-not-allowed' : ''}`}>
+                                    {isSubmitting ? 'Saving...' : editingId ? 'Update Port' : 'Register Port'}
+                                </button>
+                            </div>
                         </div>
                     </form>
                 </div>
             )}
 
             {!showForm && (
-                <div className="port-table-container">
-                    {selectedItems.size > 0 && (
-                        <div className="port-selection-bar">
-                            <span className="port-selection-count">{selectedItems.size} items selected</span>
-                            <div className="port-selection-actions">
-                                <button onClick={() => { setSelectedItems(new Set()); setIsSelectionMode(false); }} className="port-selection-cancel">Cancel</button>
-                                <button onClick={() => onDeleteConfirm({ show: true, type: 'port', id: null, isBulk: true })} className="port-selection-delete">
-                                    <TrashIcon className="w-3.5 h-3.5 mr-1" /> Delete Bulk
-                                </button>
-                            </div>
-                        </div>
-                    )}
-                    {isLoading ? (
-                        <div className="port-loading"><div className="port-spinner"></div></div>
-                    ) : ports.length > 0 ? (
-                        <div className="port-table-wrapper">
-                            <table className="port-table">
+                <div className="space-y-4">
+                    {/* Desktop Table - Hidden on Mobile */}
+                    <div className="hidden md:block bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
+                        <div className="overflow-x-auto">
+                            <table className="w-full text-left border-collapse">
                                 <thead>
-                                    <tr className="port-table-header-row" onMouseDown={() => startLongPress(null)} onMouseUp={endLongPress} onMouseLeave={endLongPress} onTouchStart={() => startLongPress(null)} onTouchEnd={endLongPress}>
-                                        {isSelectionMode && (
-                                            <th className="port-table-checkbox-header">
-                                                <input type="checkbox" checked={selectedItems.size === ports.length} onChange={toggleSelectAll} className="port-checkbox" />
-                                            </th>
-                                        )}
-                                        <th className="port-table-header" onClick={() => requestSort('name')}>
-                                            <div className="port-table-header-content">Port Name <SortIcon config={sortConfig.port} columnKey="name" /></div>
-                                        </th>
-                                        <th className="port-table-header" onClick={() => requestSort('code')}>
-                                            <div className="port-table-header-content">Code <SortIcon config={sortConfig.port} columnKey="code" /></div>
-                                        </th>
-                                        <th className="port-table-header" onClick={() => requestSort('location')}>
-                                            <div className="port-table-header-content">Location <SortIcon config={sortConfig.port} columnKey="location" /></div>
-                                        </th>
-                                        <th className="port-table-header" onClick={() => requestSort('type')}>
-                                            <div className="port-table-header-content">Type <SortIcon config={sortConfig.port} columnKey="type" /></div>
-                                        </th>
-                                        <th className="port-table-header" onClick={() => requestSort('status')}>
-                                            <div className="port-table-header-content">Status <SortIcon config={sortConfig.port} columnKey="status" /></div>
-                                        </th>
-                                        <th className="port-table-header">Actions</th>
+                                    <tr className="bg-gray-50/50">
+                                        <th className="px-6 py-4 text-[10px] font-bold text-gray-400 uppercase tracking-widest border-b border-gray-100" onClick={() => requestSort('name')}>Port Name</th>
+                                        <th className="px-6 py-4 text-[10px] font-bold text-gray-400 uppercase tracking-widest border-b border-gray-100" onClick={() => requestSort('code')}>Code</th>
+                                        <th className="px-6 py-4 text-[10px] font-bold text-gray-400 uppercase tracking-widest border-b border-gray-100" onClick={() => requestSort('location')}>Location</th>
+                                        <th className="px-6 py-4 text-[10px] font-bold text-gray-400 uppercase tracking-widest border-b border-gray-100" onClick={() => requestSort('type')}>Type</th>
+                                        <th className="px-6 py-4 text-[10px] font-bold text-gray-400 uppercase tracking-widest border-b border-gray-100" onClick={() => requestSort('status')}>Status</th>
+                                        <th className="px-6 py-4 text-[10px] font-bold text-gray-400 uppercase tracking-widest border-b border-gray-100 text-center">Actions</th>
                                     </tr>
                                 </thead>
-                                <tbody className="port-table-body">
-                                    {sortData(ports).map((port) => (
-                                        <tr key={port._id} className={`port-table-row ${selectedItems.has(port._id) ? 'selected' : ''}`}
-                                            onMouseDown={() => startLongPress(port._id)} onMouseUp={endLongPress} onMouseLeave={endLongPress}
-                                            onTouchStart={() => startLongPress(port._id)} onTouchEnd={endLongPress}
-                                            onClick={() => {
-                                                if (isLongPressTriggered.current) {
-                                                    isLongPressTriggered.current = false;
-                                                    return;
-                                                }
-                                                if (isSelectionMode) toggleSelection(port._id);
-                                            }}>
-                                            {isSelectionMode && (
-                                                <td className="port-table-cell">
-                                                    <input type="checkbox" checked={selectedItems.has(port._id)} onChange={(e) => { e.stopPropagation(); toggleSelection(port._id); }} className="port-checkbox" />
-                                                </td>
-                                            )}
-                                            <td className="port-table-cell port-table-cell-name">{port.name}</td>
-                                            <td className="port-table-cell port-table-cell-code">{port.code}</td>
-                                            <td className="port-table-cell">{port.location}</td>
-                                            <td className="port-table-cell port-table-cell-muted">{port.type}</td>
-                                            <td className="port-table-cell">
-                                                <span className={`port-status-badge ${port.status === 'Active' ? 'active' : 'inactive'}`}>{port.status}</span>
+                                <tbody className="divide-y divide-gray-50">
+                                    {isLoading ? (
+                                        Array(5).fill(0).map((_, i) => <tr key={i}><td colSpan="6" className="px-6 py-4 animate-pulse bg-gray-100/50"></td></tr>)
+                                    ) : displayPorts.map((port) => (
+                                        <tr key={port._id} className="hover:bg-gray-50/50 transition-colors group">
+                                            <td className="px-6 py-4 text-[13px] font-bold text-gray-700">{port.name}</td>
+                                            <td className="px-6 py-4 text-[13px] font-medium text-gray-600">{port.code}</td>
+                                            <td className="px-6 py-4 text-[13px] font-medium text-gray-600">{port.location}</td>
+                                            <td className="px-6 py-4 text-[13px] font-medium text-gray-600">{port.type}</td>
+                                            <td className="px-6 py-4 text-[13px] font-medium">
+                                                <span className={`px-2.5 py-1 rounded-full text-[11px] font-bold ${port.status === 'Active' ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' : 'bg-gray-50 text-gray-600 border border-gray-100'}`}>{port.status}</span>
                                             </td>
-                                            <td className="port-table-cell">
-                                                <div className="port-table-actions">
-                                                    <button onClick={(e) => { e.stopPropagation(); handleEdit(port); }} className="port-action-btn port-action-edit">
-                                                        <EditIcon className="w-5 h-5" />
-                                                    </button>
-                                                    <button onClick={(e) => { e.stopPropagation(); handleDelete(port._id); }} className="port-action-btn port-action-delete">
-                                                        <TrashIcon className="w-5 h-5" />
-                                                    </button>
+                                            <td className="px-6 py-4">
+                                                <div className="flex justify-center items-center gap-2">
+                                                    <button onClick={() => handleEdit(port)} className="p-1.5 hover:bg-blue-50 text-gray-400 hover:text-blue-600 rounded-lg transition-all"><EditIcon className="w-4 h-4" /></button>
+                                                    <button onClick={() => handleDelete(port._id)} className="p-1.5 hover:bg-red-50 text-gray-400 hover:text-red-500 rounded-lg transition-all"><TrashIcon className="w-4 h-4" /></button>
                                                 </div>
                                             </td>
                                         </tr>
@@ -296,13 +291,67 @@ const Port = ({
                                 </tbody>
                             </table>
                         </div>
-                    ) : (
-                        <div className="port-empty">
-                            <div className="port-empty-icon-wrapper"><AnchorIcon className="port-empty-icon" /></div>
-                            <p className="port-empty-title">No ports found</p>
-                            <p className="port-empty-subtitle">Click "Add New" to register a new port</p>
-                        </div>
-                    )}
+                    </div>
+
+                    {/* Mobile Card View */}
+                    <div className="md:hidden space-y-4">
+                        {isLoading ? (
+                            Array(3).fill(0).map((_, i) => <div key={i} className="h-24 bg-gray-100 animate-pulse rounded-2xl"></div>)
+                        ) : displayPorts.length > 0 ? (
+                            displayPorts.map((port) => {
+                                const isExpanded = expandedRowId === port._id;
+                                return (
+                                    <div 
+                                        key={port._id} 
+                                        onClick={() => setExpandedRowId(isExpanded ? null : port._id)}
+                                        className={`bg-white rounded-2xl border ${isExpanded ? 'border-blue-100 ring-4 ring-blue-500/5 shadow-lg' : 'border-gray-100 shadow-sm'} p-5 transition-all duration-500 cursor-pointer overflow-hidden`}
+                                    >
+                                        <div className="flex justify-between items-center group">
+                                            <div className="space-y-1">
+                                                <h3 className={`text-base font-black transition-colors duration-300 ${isExpanded ? 'text-blue-600' : 'text-gray-800'}`}>{port.name}</h3>
+                                                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest flex items-center">
+                                                    <span className={`w-1.5 h-1.5 rounded-full mr-2 ${port.status === 'Active' ? 'bg-emerald-500' : 'bg-gray-300'}`}></span>
+                                                    {port.status}
+                                                </p>
+                                            </div>
+                                            <div className="flex items-center gap-3">
+                                                <div className="flex items-center bg-gray-50/80 p-0.5 rounded-lg border border-gray-100 divide-x divide-gray-100">
+                                                    <button onClick={(e) => { e.stopPropagation(); handleEdit(port); }} className="p-2 hover:bg-blue-50 text-gray-400 hover:text-blue-500 transition-all"><EditIcon className="w-5 h-5" /></button>
+                                                    <button onClick={(e) => { e.stopPropagation(); handleDelete(port._id); }} className="p-2 hover:bg-rose-50 text-gray-400 hover:text-rose-500 transition-all"><TrashIcon className="w-5 h-5" /></button>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        {isExpanded && (
+                                            <div className="mt-6 space-y-4 animate-in slide-in-from-top-4 duration-500">
+                                                <div className="bg-gray-50/50 rounded-xl p-3 border border-gray-100/50">
+                                                    <div className="flex items-start gap-2">
+                                                        <div className="flex-[0.8]">
+                                                            <div className="text-[9px] font-bold text-gray-400 uppercase leading-none mb-1">Code</div>
+                                                            <div className="text-[13px] font-bold text-gray-800 uppercase">{port.code}</div>
+                                                        </div>
+                                                        <div className="flex-[1.2] border-l border-gray-200/50 pl-3">
+                                                            <div className="text-[9px] font-bold text-gray-400 uppercase leading-none mb-1">Location</div>
+                                                            <div className="text-[13px] font-bold text-gray-700 break-words leading-tight">{port.location}</div>
+                                                        </div>
+                                                        <div className="flex-[1.1] border-l border-gray-200/50 pl-3">
+                                                            <div className="text-[9px] font-bold text-blue-400 uppercase leading-none mb-1">Type</div>
+                                                            <div className="text-[13px] font-black text-blue-600">{port.type}</div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+                                );
+                            })
+                        ) : (
+                            <div className="bg-white rounded-2xl border border-gray-100 p-8 text-center">
+                                <AnchorIcon className="w-8 h-8 text-gray-200 mx-auto mb-2" />
+                                <p className="text-gray-500 font-medium text-sm">No ports found</p>
+                            </div>
+                        )}
+                    </div>
                 </div>
             )}
         </div>
