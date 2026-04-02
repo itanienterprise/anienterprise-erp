@@ -28,11 +28,32 @@ const StockReport = ({
         if (!searchQuery.trim()) return stockData.displayRecords;
 
         const query = searchQuery.toLowerCase().trim();
-        return stockData.displayRecords.filter(item => {
+        return stockData.displayRecords.map(item => {
             const matchesProduct = (item.productName || '').toLowerCase().includes(query);
-            const matchesBrand = item.brandList.some(brand => (brand.brand || '').toLowerCase().includes(query));
-            return matchesProduct || matchesBrand;
-        });
+
+            // Filter brands within the product
+            const filteredBrands = item.brandList.filter(brand =>
+                (brand.brand || '').toLowerCase().includes(query) || matchesProduct
+            );
+
+            if (filteredBrands.length > 0) {
+                // IMPORTANT: Recalculate item-level totals for the filtered brands
+                const inHouseQuantity = filteredBrands.reduce((sum, b) => sum + (b.inHouseQuantity || 0), 0);
+                const totalInHouseQuantity = filteredBrands.reduce((sum, b) => sum + (b.totalInHouseQuantity || 0), 0);
+                const saleQuantity = filteredBrands.reduce((sum, b) => sum + (b.saleQuantity || 0), 0);
+                const salePacket = filteredBrands.reduce((sum, b) => sum + (parseFloat(b.salePacket) || 0), 0);
+
+                return {
+                    ...item,
+                    brandList: filteredBrands,
+                    inHouseQuantity,
+                    totalInHouseQuantity,
+                    saleQuantity,
+                    salePacket
+                };
+            }
+            return null;
+        }).filter(Boolean);
     }, [stockData.displayRecords, searchQuery]);
 
     // Recalculate totals based on filteredRecords
@@ -597,7 +618,7 @@ const StockReport = ({
                                                                     {(() => {
                                                                         const { whole, remainder } = calculatePktRemainder(ent.inHouseQuantity, ent.packetSize);
                                                                         return `${whole}${remainder !== 0 ? ` - ${Math.abs(remainder)} kg` : ''}`;
-                                                                })()} BAG
+                                                                    })()} BAG
                                                                 </p>
                                                                 <p className="text-lg sm:text-xl font-black text-blue-600 text-center">
                                                                     {Math.round(ent.inHouseQuantity).toLocaleString()} kg
