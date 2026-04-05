@@ -2529,3 +2529,167 @@ export const generateCustomerHistoryPDF = (customer, historyData, summary, filte
         alert(`Failed to generate PDF: ${error.message}`);
     }
 };
+
+export const generateCnFHistoryReportPDF = (reportData, agentInfo, filters) => {
+    try {
+        const doc = new jsPDF({ orientation: 'p', unit: 'mm', format: 'a4' });
+
+        // --- Configuration ---
+        const pageWidth = doc.internal.pageSize.width;
+        const pageHeight = doc.internal.pageSize.height;
+        const margin = 10;
+
+        // --- Header ---
+        doc.setFontSize(22);
+        doc.setFont('helvetica', 'bold');
+        doc.text("M/S ANI ENTERPRISE", pageWidth / 2, 20, { align: 'center' });
+
+        doc.setFontSize(10);
+        doc.setFont('helvetica', 'normal');
+        doc.setTextColor(0);
+        doc.text("766, H.M Tower, Level-06, Borogola, Bogura-5800, Bangladesh", pageWidth / 2, 26, { align: 'center' });
+        doc.text("+8802588813057, anienterprise051@gmail.com, www.anienterprises.com.bd", pageWidth / 2, 31, { align: 'center' });
+
+        // Separator
+        doc.setDrawColor(0);
+        doc.setLineWidth(0.5);
+        doc.line(margin, 40, pageWidth - margin, 40);
+
+        // Report Title
+        doc.setFillColor(255, 255, 255);
+        doc.setDrawColor(0);
+        doc.rect(pageWidth / 2 - 40, 37, 80, 8, 'FD');
+        doc.setFontSize(12);
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(0);
+        doc.text("C&F HISTORY REPORT", pageWidth / 2, 42, { align: 'center' });
+
+        // --- Info Row ---
+        let yPos = 55;
+        doc.setFontSize(9);
+
+        // Agent Info (Box Style)
+        doc.setFont('helvetica', 'bold');
+        doc.text("Agent Name:", margin, yPos);
+        doc.setFont('helvetica', 'normal');
+        doc.text(agentInfo.name || '-', margin + 22, yPos);
+
+        doc.setFont('helvetica', 'bold');
+        doc.text("Agent ID:", margin, yPos + 6);
+        doc.setFont('helvetica', 'normal');
+        doc.text(agentInfo.cnfId || '-', margin + 22, yPos + 6);
+
+        // Right Side: Date Range, Printed On
+        const dateStr = formatDate(new Date().toISOString().split('T')[0]);
+        const rightColX = pageWidth - margin - 70; // Increased spacing for long date ranges
+
+        doc.setFont('helvetica', 'bold');
+        doc.text("Printed on:", rightColX, yPos);
+        doc.setFont('helvetica', 'normal');
+        doc.text(dateStr, pageWidth - margin, yPos, { align: 'right' });
+
+        if (filters.startDate || filters.endDate) {
+            doc.setFont('helvetica', 'bold');
+            doc.text("Date Range:", rightColX, yPos + 6);
+            doc.setFont('helvetica', 'normal');
+            doc.text(`${formatDate(filters.startDate) === '-' ? 'Start' : formatDate(filters.startDate)} to ${formatDate(filters.endDate) === '-' ? 'Present' : formatDate(filters.endDate)}`, pageWidth - margin, yPos + 6, { align: 'right' });
+        }
+
+        // --- Data Preparation ---
+        const tableRows = reportData.map((row, index) => [
+            formatDate(row.date),
+            row.lcNo || '-',
+            row.product || '-',
+            row.port || '-',
+            row.uom || '-',
+            row.truck || '0',
+            parseFloat(row.qty || 0).toLocaleString(),
+            parseFloat(row.commission || 0).toLocaleString(undefined, { minimumFractionDigits: 2 }),
+            parseFloat(row.totalCommission || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })
+        ]);
+
+        // Totals
+        const totalTrucks = reportData.reduce((sum, row) => sum + (parseFloat(row.truck) || 0), 0);
+        const totalQty = reportData.reduce((sum, row) => sum + (parseFloat(row.qty) || 0), 0);
+        const totalCommissionVal = reportData.reduce((sum, row) => sum + (parseFloat(row.totalCommission) || 0), 0);
+
+        // --- Table ---
+        autoTable(doc, {
+            startY: yPos + 15,
+            head: [['Date', 'LC No', 'Product', 'Port', 'UOM', 'Trucks', 'QTY', 'Commission', 'Total']],
+            body: tableRows,
+            foot: [[
+                { content: 'GRAND TOTAL', colSpan: 5, styles: { halign: 'right', fontStyle: 'bold' } }, // Date, LC, Product, Port, UOM
+                { content: totalTrucks.toString(), styles: { halign: 'center', fontStyle: 'bold' } },
+                { content: totalQty.toLocaleString(), styles: { halign: 'right', fontStyle: 'bold' } },
+                '', // Commission rate col
+                { content: totalCommissionVal.toLocaleString(undefined, { minimumFractionDigits: 2 }), styles: { halign: 'right', fontStyle: 'bold' } }
+            ]],
+            theme: 'plain',
+            styles: {
+                fontSize: 9.0,
+                cellPadding: 1.0,
+                lineColor: [0, 0, 0],
+                lineWidth: 0.15,
+                textColor: [0, 0, 0],
+                valign: 'middle'
+            },
+            headStyles: {
+                fillColor: [240, 240, 240],
+                textColor: [0, 0, 0],
+                fontStyle: 'bold',
+                halign: 'center',
+                valign: 'middle',
+                lineWidth: 0.15
+            },
+            footStyles: {
+                fillColor: [240, 240, 240],
+                textColor: [0, 0, 0],
+                fontStyle: 'bold',
+                lineWidth: 0.15
+            },
+            margin: { left: margin, right: margin },
+            columnStyles: {
+                0: { cellWidth: 18, halign: 'center' }, // Date
+                1: { cellWidth: 30, halign: 'center' }, // LC No
+                2: { cellWidth: 26, halign: 'left' },   // Product
+                3: { cellWidth: 15, halign: 'center' }, // Port
+                4: { cellWidth: 16, halign: 'center' }, // UOM
+                5: { cellWidth: 12, halign: 'center' }, // Trucks
+                6: { cellWidth: 22, halign: 'right' },  // QTY
+                7: { cellWidth: 21, halign: 'right' },  // Commission
+                8: { cellWidth: 30, halign: 'right' }   // Total
+            }
+        });
+
+        // --- Signatures ---
+        let finalY = doc.lastAutoTable.finalY + 40;
+        if (finalY + 20 > pageHeight) {
+            doc.addPage();
+            finalY = 40;
+        }
+
+        const sigWidth = 40;
+        const sigGap = (pageWidth - (margin * 2) - (sigWidth * 3)) / 2;
+
+        doc.setLineWidth(0.2);
+        doc.line(margin, finalY, margin + sigWidth, finalY);
+        doc.setFontSize(8);
+        doc.text("PREPARED BY", margin + sigWidth / 2, finalY + 5, { align: 'center' });
+
+        doc.line(margin + sigWidth + sigGap, finalY, margin + sigWidth + sigGap + sigWidth, finalY);
+        doc.text("VERIFIED BY", margin + sigWidth + sigGap + sigWidth / 2, finalY + 5, { align: 'center' });
+
+        doc.line(pageWidth - margin - sigWidth, finalY, pageWidth - margin, finalY);
+        doc.text("AUTHORIZED SIGNATURE", pageWidth - margin - sigWidth / 2, finalY + 5, { align: 'center' });
+
+        // Open in new tab
+        const pdfOutput = doc.output('blob');
+        const blobURL = URL.createObjectURL(pdfOutput);
+        window.open(blobURL, '_blank');
+
+    } catch (error) {
+        console.error("C&F PDF Error:", error);
+        alert(`Failed to generate C&F PDF: ${error.message}`);
+    }
+};

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
-    FunnelIcon, XIcon, ChevronDownIcon, EditIcon, TrashIcon, BoxIcon
+    FunnelIcon, XIcon, ChevronDownIcon, EditIcon, TrashIcon, BoxIcon, ChevronUpIcon
 } from '../../Icons';
 import { API_BASE_URL, formatDate, SortIcon } from '../../../utils/helpers';
 import axios from '../../../utils/api';
@@ -31,6 +31,7 @@ function IPManagement({
     const [showFilters, setShowFilters] = useState(false);
     const [activeDropdown, setActiveDropdown] = useState(null);
     const [highlightedIndex, setHighlightedIndex] = useState(0);
+    const [expandedIpId, setExpandedIpId] = useState(null);
 
     const [formData, setFormData] = useState({
         openingDate: '',
@@ -291,18 +292,18 @@ function IPManagement({
 
     return (
         <div className="ip-management space-y-6">
-            <div className="flex items-center justify-between">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
                 <h2 className="text-2xl font-bold text-gray-800">IP Management</h2>
-                <div className="flex items-center space-x-3">
+                <div className="flex items-center space-x-3 w-full sm:w-auto">
                     <button
                         onClick={() => setShowFilters(!showFilters)}
-                        className={`px-4 py-2 ${showFilters ? 'bg-indigo-100 text-indigo-600 border-indigo-200' : 'bg-white text-gray-600 border border-gray-200'} font-medium rounded-lg shadow-sm transition-all flex items-center hover:bg-gray-50 border`}
+                        className={`flex-1 sm:flex-none px-4 py-2 ${showFilters ? 'bg-indigo-100 text-indigo-600 border-indigo-200' : 'bg-white text-gray-600 border border-gray-200'} font-medium rounded-lg shadow-sm transition-all flex items-center justify-center hover:bg-gray-50 border`}
                     >
                         <FunnelIcon className="w-4 h-4 mr-2" /> {showFilters ? 'Hide Filters' : 'Filter'}
                     </button>
                     <button
                         onClick={() => setShowIpForm(!showIpForm)}
-                        className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg shadow-lg shadow-blue-500/30 transition-all transform hover:scale-105 flex items-center"
+                        className="flex-1 sm:flex-none px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg shadow-lg shadow-blue-500/30 transition-all transform hover:scale-105 flex items-center justify-center"
                     >
                         <span className="mr-2 text-xl">+</span> Add New
                     </button>
@@ -585,56 +586,115 @@ function IPManagement({
                             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
                         </div>
                     ) : filteredIpRecords.length > 0 ? (
-                        <div className="overflow-x-auto">
-                            <table className="w-full text-left">
-                                <thead>
-                                    <tr
-                                        className="bg-gray-50 border-b border-gray-100 select-none cursor-pointer"
-                                        onMouseDown={() => startLongPress(null)}
-                                        onMouseUp={endLongPress}
-                                        onMouseLeave={endLongPress}
-                                        onTouchStart={() => startLongPress(null)}
-                                        onTouchEnd={endLongPress}
-                                    >
-                                        {isSelectionMode && (
-                                            <th className="px-6 py-4 w-10">
-                                                <input
-                                                    type="checkbox"
-                                                    checked={selectedItems.size === filteredIpRecords.length && filteredIpRecords.length > 0}
-                                                    onChange={() => toggleSelectAll(filteredIpRecords)}
-                                                    className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                                                />
-                                            </th>
-                                        )}
-                                        <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors" onClick={() => requestSort('openingDate')}>
-                                            <div className="flex items-center">Opening Date <SortIcon config={sortConfig.ip} columnKey="openingDate" /></div>
-                                        </th>
-                                        <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors" onClick={() => requestSort('ipNumber')}>
-                                            <div className="flex items-center">IP Number <SortIcon config={sortConfig.ip} columnKey="ipNumber" /></div>
-                                        </th>
-                                        <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors" onClick={() => requestSort('ipParty')}>
-                                            <div className="flex items-center">Importer <SortIcon config={sortConfig.ip} columnKey="ipParty" /></div>
-                                        </th>
-                                        <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors" onClick={() => requestSort('productName')}>
-                                            <div className="flex items-center">Product <SortIcon config={sortConfig.ip} columnKey="productName" /></div>
-                                        </th>
-                                        <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors" onClick={() => requestSort('quantity')}>
-                                            <div className="flex items-center">Quantity (kg) <SortIcon config={sortConfig.ip} columnKey="quantity" /></div>
-                                        </th>
-                                        <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors" onClick={() => requestSort('status')}>
-                                            <div className="flex items-center">Status <SortIcon config={sortConfig.ip} columnKey="status" /></div>
-                                        </th>
-                                        <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Actions</th>
-                                    </tr>
-                                </thead>
-                                <tbody className="divide-y divide-gray-100">
-                                    {sortData(filteredIpRecords).map((record) => (
+                        <>
+                            {/* Desktop Table View */}
+                            <div className="hidden md:block overflow-x-auto text-sm lg:text-base">
+                                <table className="w-full text-left">
+                                    <thead>
                                         <tr
-                                            key={record._id}
-                                            className={`${selectedItems.has(record._id) ? 'bg-blue-50/30' : 'hover:bg-gray-50'} transition-colors cursor-pointer select-none`}
-                                            onMouseDown={() => startLongPress(record._id)}
+                                            className="bg-gray-50 border-b border-gray-100 select-none cursor-pointer"
+                                            onMouseDown={() => startLongPress(null)}
                                             onMouseUp={endLongPress}
                                             onMouseLeave={endLongPress}
+                                            onTouchStart={() => startLongPress(null)}
+                                            onTouchEnd={endLongPress}
+                                        >
+                                            {isSelectionMode && (
+                                                <th className="px-6 py-4 w-10">
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={selectedItems.size === filteredIpRecords.length && filteredIpRecords.length > 0}
+                                                        onChange={() => toggleSelectAll(filteredIpRecords)}
+                                                        className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                                                    />
+                                                </th>
+                                            )}
+                                            <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors" onClick={() => requestSort('openingDate')}>
+                                                <div className="flex items-center">Opening Date <SortIcon config={sortConfig.ip} columnKey="openingDate" /></div>
+                                            </th>
+                                            <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors" onClick={() => requestSort('ipNumber')}>
+                                                <div className="flex items-center">IP Number <SortIcon config={sortConfig.ip} columnKey="ipNumber" /></div>
+                                            </th>
+                                            <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors" onClick={() => requestSort('ipParty')}>
+                                                <div className="flex items-center">Importer <SortIcon config={sortConfig.ip} columnKey="ipParty" /></div>
+                                            </th>
+                                            <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors" onClick={() => requestSort('productName')}>
+                                                <div className="flex items-center">Product <SortIcon config={sortConfig.ip} columnKey="productName" /></div>
+                                            </th>
+                                            <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors" onClick={() => requestSort('quantity')}>
+                                                <div className="flex items-center">Quantity (kg) <SortIcon config={sortConfig.ip} columnKey="quantity" /></div>
+                                            </th>
+                                            <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors" onClick={() => requestSort('status')}>
+                                                <div className="flex items-center">Status <SortIcon config={sortConfig.ip} columnKey="status" /></div>
+                                            </th>
+                                            <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-gray-100">
+                                        {sortData(filteredIpRecords).map((record) => (
+                                            <tr
+                                                key={record._id}
+                                                className={`${selectedItems.has(record._id) ? 'bg-blue-50/30' : 'hover:bg-gray-50'} transition-colors cursor-pointer select-none`}
+                                                onMouseDown={() => startLongPress(record._id)}
+                                                onMouseUp={endLongPress}
+                                                onMouseLeave={endLongPress}
+                                                onTouchStart={() => startLongPress(record._id)}
+                                                onTouchEnd={endLongPress}
+                                                onClick={() => {
+                                                    if (isLongPressTriggered.current) {
+                                                        isLongPressTriggered.current = false;
+                                                        return;
+                                                    }
+                                                    if (isSelectionMode) toggleSelection(record._id);
+                                                }}
+                                            >
+                                                {isSelectionMode && (
+                                                    <td className="px-6 py-4">
+                                                        <input
+                                                            type="checkbox"
+                                                            checked={selectedItems.has(record._id)}
+                                                            onChange={(e) => { e.stopPropagation(); toggleSelection(record._id); }}
+                                                            className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                                                        />
+                                                    </td>
+                                                )}
+                                                <td className="px-6 py-4 text-sm text-gray-600">{formatDate(record.openingDate)}</td>
+                                                <td className="px-6 py-4 text-sm font-medium text-blue-600">{record.ipNumber}</td>
+                                                <td className="px-6 py-4 text-sm text-gray-900">{record.ipParty}</td>
+                                                <td className="px-6 py-4 text-sm text-gray-500">{record.productName}</td>
+                                                <td className="px-6 py-4 text-sm font-medium text-gray-900">{record.quantity} kg</td>
+                                                <td className="px-6 py-4">
+                                                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${record.status === 'Active' ? 'bg-green-50 text-green-700 border border-green-100' :
+                                                        record.status === 'Closed' ? 'bg-gray-50 text-gray-700 border border-gray-100' :
+                                                            'bg-yellow-50 text-yellow-700 border border-yellow-100'
+                                                        }`}>
+                                                        {record.status}
+                                                    </span>
+                                                </td>
+                                                <td className="px-6 py-4">
+                                                    <div className="flex items-center space-x-3">
+                                                        <button onClick={(e) => { e.stopPropagation(); handleEdit(record); }} className="text-gray-400 hover:text-blue-600 transition-colors">
+                                                            <EditIcon className="w-5 h-5" />
+                                                        </button>
+                                                        <button onClick={(e) => { e.stopPropagation(); handleDelete(record._id); }} className="text-gray-400 hover:text-red-600 transition-colors">
+                                                            <TrashIcon className="w-5 h-5" />
+                                                        </button>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+
+                            {/* Mobile Card View */}
+                            <div className="block md:hidden px-2 py-3 space-y-3">
+                                {sortData(filteredIpRecords).map((record) => {
+                                    const isExpanded = expandedIpId === record._id;
+                                    return (
+                                        <div
+                                            key={record._id}
+                                            className={`bg-white rounded-xl border transition-all duration-300 overflow-hidden ${selectedItems.has(record._id) ? 'border-blue-300 bg-blue-50/30' : 'border-gray-100 shadow-sm'} ${isExpanded ? 'ring-1 ring-blue-50 shadow-md border-blue-200' : 'hover:border-gray-200'}`}
                                             onTouchStart={() => startLongPress(record._id)}
                                             onTouchEnd={endLongPress}
                                             onClick={() => {
@@ -642,47 +702,96 @@ function IPManagement({
                                                     isLongPressTriggered.current = false;
                                                     return;
                                                 }
-                                                if (isSelectionMode) toggleSelection(record._id);
+                                                if (isSelectionMode) {
+                                                    toggleSelection(record._id);
+                                                } else {
+                                                    setExpandedIpId(isExpanded ? null : record._id);
+                                                }
                                             }}
                                         >
-                                            {isSelectionMode && (
-                                                <td className="px-6 py-4">
-                                                    <input
-                                                        type="checkbox"
-                                                        checked={selectedItems.has(record._id)}
-                                                        onChange={(e) => { e.stopPropagation(); toggleSelection(record._id); }}
-                                                        className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                                                    />
-                                                </td>
-                                            )}
-                                            <td className="px-6 py-4 text-sm text-gray-600">{formatDate(record.openingDate)}</td>
-                                            <td className="px-6 py-4 text-sm font-medium text-blue-600">{record.ipNumber}</td>
-                                            <td className="px-6 py-4 text-sm text-gray-900">{record.ipParty}</td>
-                                            <td className="px-6 py-4 text-sm text-gray-500">{record.productName}</td>
-                                            <td className="px-6 py-4 text-sm font-medium text-gray-900">{record.quantity} kg</td>
-                                            <td className="px-6 py-4">
-                                                <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${record.status === 'Active' ? 'bg-green-50 text-green-700 border border-green-100' :
-                                                    record.status === 'Closed' ? 'bg-gray-50 text-gray-700 border border-gray-100' :
-                                                        'bg-yellow-50 text-yellow-700 border border-yellow-100'
-                                                    }`}>
-                                                    {record.status}
-                                                </span>
-                                            </td>
-                                            <td className="px-6 py-4">
-                                                <div className="flex items-center space-x-3">
-                                                    <button onClick={(e) => { e.stopPropagation(); handleEdit(record); }} className="text-gray-400 hover:text-blue-600 transition-colors">
-                                                        <EditIcon className="w-5 h-5" />
-                                                    </button>
-                                                    <button onClick={(e) => { e.stopPropagation(); handleDelete(record._id); }} className="text-gray-400 hover:text-red-600 transition-colors">
-                                                        <TrashIcon className="w-5 h-5" />
-                                                    </button>
+                                            {/* Card Header */}
+                                            <div className="flex justify-between items-center p-4">
+                                                <div className="flex items-center gap-3 flex-1 min-w-0">
+                                                    {isSelectionMode && (
+                                                        <input
+                                                            type="checkbox"
+                                                            checked={selectedItems.has(record._id)}
+                                                            onChange={(e) => { e.stopPropagation(); toggleSelection(record._id); }}
+                                                            className="w-5 h-5 accent-blue-600 shrink-0"
+                                                            onClick={(e) => e.stopPropagation()}
+                                                        />
+                                                    )}
+                                                    <div className="min-w-0">
+                                                        <p className="text-xs font-bold text-gray-400 uppercase tracking-wider">{formatDate(record.openingDate)}</p>
+                                                        <div className="flex items-center gap-2 mt-0.5">
+                                                            <p className="font-bold text-blue-600 text-lg sm:text-xl truncate uppercase tracking-tight shrink-0">{record.ipNumber}</p>
+                                                            <span className="text-gray-300">|</span>
+                                                            <p className="text-sm font-semibold text-gray-900 truncate">{record.ipParty}</p>
+                                                        </div>
+                                                    </div>
                                                 </div>
-                                            </td>
-                                        </tr>
-                                    ))}
-                                </tbody>
-                            </table>
-                        </div>
+                                                <div className="flex items-center gap-3">
+                                                    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${record.status === 'Active' ? 'bg-green-50 text-green-700 border border-green-100' :
+                                                        record.status === 'Closed' ? 'bg-gray-50 text-gray-700 border border-gray-100' :
+                                                            'bg-yellow-50 text-yellow-700 border border-yellow-100'
+                                                        }`}>
+                                                        {record.status}
+                                                    </span>
+                                                </div>
+                                            </div>
+
+                                            {/* Expandable Body */}
+                                            {isExpanded && (
+                                                <div className="px-4 pb-4 animate-in slide-in-from-top-2 duration-300">
+                                                    <div className="space-y-3 pt-3 border-t border-gray-50">
+                                                        <div className="flex justify-between items-center">
+                                                            <span className="text-gray-400 font-bold uppercase tracking-widest text-[10px]">Product</span>
+                                                            <span className="text-gray-900 font-black text-sm">{record.productName}</span>
+                                                        </div>
+                                                        <div className="flex justify-between items-center">
+                                                            <span className="text-gray-400 font-bold uppercase tracking-widest text-[10px]">Quantity</span>
+                                                            <span className="text-gray-900 font-black text-sm">{record.quantity} kg</span>
+                                                        </div>
+                                                        <div className="flex justify-between items-center">
+                                                            <span className="text-gray-400 font-bold uppercase tracking-widest text-[10px]">Port</span>
+                                                            <span className="text-gray-900 font-black text-sm">{record.port}</span>
+                                                        </div>
+                                                        {record.closeDate && (
+                                                            <div className="flex justify-between items-center pt-1">
+                                                                <span className="text-gray-400 font-bold uppercase tracking-widest text-[10px]">Close Date</span>
+                                                                <span className="text-red-600 font-black text-sm">{formatDate(record.closeDate)}</span>
+                                                            </div>
+                                                        )}
+                                                        {record.referenceNo && (
+                                                            <div className="flex justify-between items-center pt-1">
+                                                                <span className="text-gray-400 font-bold uppercase tracking-widest text-[10px]">Reference</span>
+                                                                <span className="text-gray-900 font-black text-sm">{record.referenceNo}</span>
+                                                            </div>
+                                                        )}
+                                                    </div>
+
+                                                    {/* Card Actions */}
+                                                    <div className="flex items-center gap-2 mt-4 pt-4 border-t border-gray-100">
+                                                        <button
+                                                            onClick={(e) => { e.stopPropagation(); handleEdit(record); }}
+                                                            className="flex items-center justify-center gap-2 py-3 px-4 bg-blue-50 text-blue-700 rounded-xl text-sm font-black flex-1 hover:bg-blue-100 transition-all active:scale-95"
+                                                        >
+                                                            <EditIcon className="w-5 h-5" /> Edit Record
+                                                        </button>
+                                                        <button
+                                                            onClick={(e) => { e.stopPropagation(); handleDelete(record._id); }}
+                                                            className="p-3 bg-red-50 text-red-600 rounded-xl hover:bg-red-100 transition-all active:scale-95"
+                                                        >
+                                                            <TrashIcon className="w-5 h-5" />
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            )}
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        </>
                     ) : (
                         <div className="flex flex-col items-center justify-center p-12">
                             <div className="p-4 bg-gray-50 rounded-full mb-4">

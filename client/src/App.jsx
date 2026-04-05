@@ -11,6 +11,7 @@ import { API_BASE_URL, formatDate, parseDate, SortIcon } from './utils/helpers';
 import CustomDatePicker from './components/shared/CustomDatePicker';
 import Importer from './components/modules/Importer/Importer';
 import Exporter from './components/modules/Exporter/Exporter';
+import CnF from './components/modules/CnF/CnF';
 import Port from './components/modules/Port/Port';
 import IPManagement from './components/modules/IPManagement/IPManagement';
 import ProductManagement from './components/modules/Product/ProductManagement';
@@ -287,6 +288,11 @@ function App() {
     return initialView === 'importer-section' || initialView === 'exporter-section';
   });
 
+  const [cnfDropdownOpen, setCnfDropdownOpen] = useState(() => {
+    const initialView = localStorage.getItem('currentView') || 'dashboard';
+    return initialView === 'indian-cnf-section' || initialView === 'bd-cnf-section';
+  });
+
   const [crmDropdownOpen, setCrmDropdownOpen] = useState(() => {
     const initialView = localStorage.getItem('currentView') || 'dashboard';
     return initialView === 'customer-section';
@@ -295,6 +301,7 @@ function App() {
   const [submitStatus, setSubmitStatus] = useState(null);
   const [importers, setImporters] = useState([]);
   const [exporters, setExporters] = useState([]);
+  const [cnfs, setCnfs] = useState([]);
   const [ports, setPorts] = useState([]);
   const [showStockForm, setShowStockForm] = useState(false);
   const [showStockReport, setShowStockReport] = useState(false);
@@ -480,10 +487,10 @@ function App() {
       fetchImporters(); // Fetch importers to populate the dropdown
       fetchExporters();
       fetchPorts(); // Fetch ports to populate the dropdown
-    } else if (currentView === 'importer-section') {
+    } else if (currentView === 'importer-section' || currentView === 'exporter-section' || currentView === 'indian-cnf-section' || currentView === 'bd-cnf-section') {
       fetchImporters();
-    } else if (currentView === 'exporter-section') {
       fetchExporters();
+      fetchCnFs();
     } else if (currentView === 'port-section') {
       fetchPorts();
     } else if (currentView === 'stock-section' || currentView === 'lc-entry-section' || currentView === 'general-sale-section' || currentView === 'border-sale-section') {
@@ -1006,6 +1013,18 @@ function App() {
       setIsLoading(false);
     }
   };
+
+  const fetchCnFs = async () => {
+    setIsLoading(true);
+    try {
+      const response = await axios.get(`${API_BASE_URL}/api/cnfs`);
+      setCnfs(Array.isArray(response.data) ? response.data : []);
+    } catch (error) {
+      console.error('Error fetching C&Fs:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
   const renderContent = () => {
     switch (currentView) {
       case 'dashboard':
@@ -1096,6 +1115,44 @@ function App() {
       case 'exporter-section':
         return (
           <Exporter
+            isSelectionMode={isSelectionMode}
+            setIsSelectionMode={setIsSelectionMode}
+            selectedItems={selectedItems}
+            setSelectedItems={setSelectedItems}
+            editingId={editingId}
+            setEditingId={setEditingId}
+            sortConfig={sortConfig}
+            setSortConfig={setSortConfig}
+            onDeleteConfirm={setDeleteConfirm}
+            startLongPress={startLongPress}
+            endLongPress={endLongPress}
+            isLongPressTriggered={isLongPressTriggered}
+          />
+        );
+      case 'indian-cnf-section':
+        return (
+          <CnF
+            moduleType="Indian"
+            currentUser={currentUser}
+            isSelectionMode={isSelectionMode}
+            setIsSelectionMode={setIsSelectionMode}
+            selectedItems={selectedItems}
+            setSelectedItems={setSelectedItems}
+            editingId={editingId}
+            setEditingId={setEditingId}
+            sortConfig={sortConfig}
+            setSortConfig={setSortConfig}
+            onDeleteConfirm={setDeleteConfirm}
+            startLongPress={startLongPress}
+            endLongPress={endLongPress}
+            isLongPressTriggered={isLongPressTriggered}
+          />
+        );
+      case 'bd-cnf-section':
+        return (
+          <CnF
+            moduleType="BD"
+            currentUser={currentUser}
             isSelectionMode={isSelectionMode}
             setIsSelectionMode={setIsSelectionMode}
             selectedItems={selectedItems}
@@ -1379,6 +1436,36 @@ function App() {
                 >
                   <UserIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
                   <span>Exporter</span>
+                </button>
+              </div>
+            </div>
+          </div>
+          <div>
+            <button
+              onClick={() => setCnfDropdownOpen(!cnfDropdownOpen)}
+              className={`w-full flex items-center justify-between px-4 py-3 rounded-lg transition-all ${currentView === 'indian-cnf-section' || currentView === 'bd-cnf-section' ? 'bg-blue-50 text-blue-600 shadow-sm' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'}`}
+            >
+              <div className="flex items-center">
+                <UsersIcon className="w-5 h-5 mr-3" />
+                <span className="font-medium">C&F</span>
+              </div>
+              <ChevronDownIcon className={`w-4 h-4 transition-transform duration-200 ${cnfDropdownOpen ? 'transform rotate-180' : ''}`} />
+            </button>
+            <div className={`overflow-hidden transition-all duration-300 ease-in-out ${cnfDropdownOpen ? 'max-h-48 opacity-100 mt-1' : 'max-h-0 opacity-0'}`}>
+              <div className="pl-9 pr-2 space-y-1">
+                <button
+                  onClick={() => { setCurrentView('indian-cnf-section'); setSidebarOpen(false); }}
+                  className={`w-full flex flex-row items-center py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'indian-cnf-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'}`}
+                >
+                  <UserIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
+                  <span>Indian C&F</span>
+                </button>
+                <button
+                  onClick={() => { setCurrentView('bd-cnf-section'); setSidebarOpen(false); }}
+                  className={`w-full flex flex-row items-center py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'bd-cnf-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'}`}
+                >
+                  <UserIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
+                  <span>BD C&F</span>
                 </button>
               </div>
             </div>

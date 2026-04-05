@@ -347,8 +347,25 @@ function LCReceive({
     salesRecords = [],
     addNotification
 }) {
+    const [cnfs, setCnfs] = useState([]);
+    const [isLoading, setIsLoading] = useState(false);
     const [activeDropdown, setActiveDropdown] = useState(null);
     const [highlightedIndex, setHighlightedIndex] = useState(-1);
+    const [searchQuery, setSearchQuery] = useState('');
+
+    const fetchCnFs = async () => {
+        try {
+            const response = await axios.get(`${API_BASE_URL}/api/cnfs`);
+            setCnfs(Array.isArray(response.data) ? response.data : []);
+        } catch (error) {
+            console.error('Error fetching cnfs:', error);
+        }
+    };
+
+    useEffect(() => {
+        fetchCnFs();
+    }, []);
+
     const [warehouses, setWarehouses] = useState([]);
     const [allWhRecords, setAllWhRecords] = useState([]);
     const [whSearchQuery, setWhSearchQuery] = useState('');
@@ -395,6 +412,8 @@ function LCReceive({
         return role === 'admin';
     }, [currentUser]);
     const exporterRef = useRef(null);
+    const indCnfRef = useRef(null);
+    const bdCnfRef = useRef(null);
     const whSelectRef = useRef(null);
 
     const fetchWarehouses = async () => {
@@ -489,16 +508,32 @@ function LCReceive({
         fetchWarehouses();
     }, []);
 
-    // Close warehouse dropdown on outside click
+    // Close all dropdowns on outside click
     useEffect(() => {
         const handleClickOutside = (e) => {
             if (whSelectRef.current && !whSelectRef.current.contains(e.target)) {
                 setShowWhSelectDropdown(false);
             }
+            if (activeDropdown) {
+                const isCnf = activeDropdown === 'lcr-indcnf' && indCnfRef.current && indCnfRef.current.contains(e.target);
+                const isBdCnf = activeDropdown === 'lcr-bdcnf' && bdCnfRef.current && bdCnfRef.current.contains(e.target);
+                const isPort = activeDropdown === 'lcr-port' && portRef.current && portRef.current.contains(e.target);
+                const isImporter = activeDropdown === 'lcr-importer' && importerRef.current && importerRef.current.contains(e.target);
+                const isExporter = activeDropdown === 'lcr-exporter' && exporterRef.current && exporterRef.current.contains(e.target);
+                
+                // For dynamic product/brand refs
+                const isProduct = activeDropdown.startsWith('lcr-product-') && productRefs.current.some(ref => ref && ref.contains(e.target));
+                const isBrand = activeDropdown.startsWith('lcr-brand-') && Object.values(brandRefs.current).some(ref => ref && ref.contains(e.target));
+
+                if (!isCnf && !isBdCnf && !isPort && !isImporter && !isExporter && !isProduct && !isBrand) {
+                    setActiveDropdown(null);
+                    setHighlightedIndex(-1);
+                }
+            }
         };
         document.addEventListener('mousedown', handleClickOutside);
         return () => document.removeEventListener('mousedown', handleClickOutside);
-    }, []);
+    }, [activeDropdown]);
 
     const selectedWhStock = useMemo(() => {
         const selectedWh = (stockFormData.warehouse || '').trim();
@@ -649,13 +684,20 @@ function LCReceive({
         return entry;
     };
 
-    const calculateSummaries = (productEntries) => {
+    const calculateSummaries = (productEntries, currentData = null) => {
         let totalLcTruck = 0;
         let totalLcQuantity = 0;
 
         productEntries.forEach(prod => {
-            // Sum the truck numbers
-            totalLcTruck += parseFloat(prod.truckNo) || 0;
+            // Sum the truck value if it is a number, otherwise fallback to 1 if there's any text or quantity attached
+            const hasQty = prod.brandEntries.some(be => parseFloat(be.quantity) > 0);
+            const parsedTruck = parseFloat(prod.truckNo);
+            
+            if (!isNaN(parsedTruck) && parsedTruck > 0) {
+                totalLcTruck += parsedTruck;
+            } else if (prod.truckNo || hasQty) {
+                totalLcTruck += 1;
+            }
 
             // Sum quantities from all brand entries
             prod.brandEntries.forEach(brandEntry => {
@@ -663,123 +705,183 @@ function LCReceive({
             });
         });
 
-        return { totalLcTruck, totalLcQuantity: totalLcQuantity.toFixed(2) };
+        const summaries = { 
+            totalLcTruck, 
+            totalLcQuantity: totalLcQuantity.toFixed(2) 
+        };
+
+        // Auto-calculate C&F costs if agents are selected
+        const dataForCost = currentData || stockFormData;
+        
+        const calculateAgentCost = (agentName, totalQty, totalTruck) => {
+            if (!agentName) return '';
+            const agent = cnfs.find(c => c.name === agentName);
+            if (!agent) return '';
+
+            const commission = parseFloat(agent.commission) || 0;
+            const uom = agent.uom || agent.commissionType;
+
+            if (uom === 'QTY') {
+                return (totalQty * commission).toFixed(2);
+            } else {
+                return (totalTruck * commission).toFixed(2);
+            }
+        };
+
+        summaries.indCnFCost = calculateAgentCost(dataForCost.indianCnF, totalLcQuantity, totalLcTruck);
+        summaries.bdCnFCost = calculateAgentCost(dataForCost.bdCnF, totalLcQuantity, totalLcTruck);
+
+        return summaries;
     };
 
     const handleStockInputChange = (e, pIndex = null) => {
         const { name, value } = e.target;
         if (pIndex !== null) {
-            const updatedProducts = [...stockFormData.productEntries];
-            updatedProducts[pIndex] = { ...updatedProducts[pIndex], [name]: value };
+            setStockFormData(prev => {
+                const updatedProducts = [...prev.productEntries];
+                updatedProducts[pIndex] = { ...updatedProducts[pIndex], [name]: value };
 
-            const summaries = calculateSummaries(updatedProducts);
-            setStockFormData({
-                ...stockFormData,
-                productEntries: updatedProducts,
-                ...summaries
+                const summaries = calculateSummaries(updatedProducts, prev);
+                return {
+                    ...prev,
+                    productEntries: updatedProducts,
+                    ...summaries
+                };
             });
         } else {
-            setStockFormData({ ...stockFormData, [name]: value });
+            setStockFormData(prev => {
+                const newData = { ...prev, [name]: value };
+                // If C&F agents change, recalculate costs
+                if (name === 'indianCnF' || name === 'bdCnF') {
+                    const summaries = calculateSummaries(prev.productEntries, newData);
+                    return { ...newData, ...summaries };
+                }
+                return newData;
+            });
         }
     };
 
     const handleProductModeToggle = (pIndex, isMulti) => {
-        const updatedProducts = [...stockFormData.productEntries];
-        updatedProducts[pIndex].isMultiBrand = isMulti;
-        if (!isMulti && updatedProducts[pIndex].brandEntries.length > 1) {
-            updatedProducts[pIndex].brandEntries = [updatedProducts[pIndex].brandEntries[0]];
-        }
-
-        const summaries = calculateSummaries(updatedProducts);
-        setStockFormData({
-            ...stockFormData,
-            productEntries: updatedProducts,
-            ...summaries
+        setStockFormData(prev => {
+            const updatedProducts = [...prev.productEntries];
+            const product = { ...updatedProducts[pIndex], isMultiBrand: isMulti };
+            
+            if (!isMulti && product.brandEntries.length > 1) {
+                product.brandEntries = [product.brandEntries[0]];
+            }
+            
+            updatedProducts[pIndex] = product;
+            const summaries = calculateSummaries(updatedProducts, prev);
+            return {
+                ...prev,
+                productEntries: updatedProducts,
+                ...summaries
+            };
         });
     };
 
     const handleBrandEntryChange = (pIndex, bIndex, field, value) => {
-        const updatedProducts = [...stockFormData.productEntries];
-        const entry = { ...updatedProducts[pIndex].brandEntries[bIndex] };
-        entry[field] = value;
+        setStockFormData(prev => {
+            const updatedProducts = [...prev.productEntries];
+            const product = { ...updatedProducts[pIndex] };
+            const brandEntries = [...product.brandEntries];
+            const entry = { ...brandEntries[bIndex] };
+            
+            entry[field] = value;
 
-        if (field === 'brand') {
-            const product = products.find(p => p.name === updatedProducts[pIndex].productName);
-            if (product && product.brands) {
-                const brandData = product.brands.find(b => b.brand === value);
-                if (brandData) {
-                    entry.packetSize = brandData.packetSize || entry.packetSize;
-                    entry.purchasedPrice = brandData.purchasedPrice || entry.purchasedPrice;
-                    recalculateEntry(entry);
+            if (field === 'brand') {
+                const productDef = products.find(p => p.name === product.productName);
+                if (productDef && productDef.brands) {
+                    const brandData = productDef.brands.find(b => b.brand === value);
+                    if (brandData) {
+                        entry.packetSize = brandData.packetSize || entry.packetSize;
+                        entry.purchasedPrice = brandData.purchasedPrice || entry.purchasedPrice;
+                        recalculateEntry(entry);
+                    }
                 }
             }
-        }
 
-        if (field === 'packet' || field === 'sweepedPacket') {
-            recalculateEntry(entry, false); // Packet driven
-        }
+            // Always recalculate if quantity, packets or size changes
+            if (['quantity', 'packet', 'packetSize', 'sweepedQuantity', 'sweepedPacket'].includes(field)) {
+                recalculateEntry(entry, (field === 'quantity' || field === 'sweepedQuantity'));
+            }
 
-        if (field === 'quantity' || field === 'packetSize' || field === 'sweepedQuantity') {
-            recalculateEntry(entry, true); // Quantity/Size driven (Auto-fill Packet)
-        }
+            brandEntries[bIndex] = entry;
+            product.brandEntries = brandEntries;
+            updatedProducts[pIndex] = product;
 
-        updatedProducts[pIndex].brandEntries[bIndex] = entry;
-
-        const summaries = calculateSummaries(updatedProducts);
-        setStockFormData({
-            ...stockFormData,
-            productEntries: updatedProducts,
-            ...summaries
+            const summaries = calculateSummaries(updatedProducts, prev);
+            return {
+                ...prev,
+                productEntries: updatedProducts,
+                ...summaries
+            };
         });
     };
 
+
     const addProductEntry = () => {
-        const updatedProducts = [
-            ...stockFormData.productEntries,
-            {
-                isMultiBrand: true,
-                productName: '',
-                truckNo: '',
-                brandEntries: [{ brand: '', purchasedPrice: '', packet: '', packetSize: '', quantity: '', unit: 'kg', sweepedPacket: '', sweepedQuantity: '', inHousePacket: '', inHouseQuantity: '' }]
-            }
-        ];
-        const summaries = calculateSummaries(updatedProducts);
-        setStockFormData({
-            ...stockFormData,
-            productEntries: updatedProducts,
-            ...summaries
+        setStockFormData(prev => {
+            const updatedProducts = [
+                ...prev.productEntries,
+                {
+                    isMultiBrand: true,
+                    productName: '',
+                    truckNo: '',
+                    brandEntries: [{ brand: '', purchasedPrice: '', packet: '', packetSize: '', quantity: '', unit: 'kg', sweepedPacket: '', sweepedQuantity: '', inHousePacket: '', inHouseQuantity: '' }]
+                }
+            ];
+            const summaries = calculateSummaries(updatedProducts, prev);
+            return {
+                ...prev,
+                productEntries: updatedProducts,
+                ...summaries
+            };
         });
     };
 
     const removeProductEntry = (index) => {
-        const updatedProducts = stockFormData.productEntries.filter((_, i) => i !== index);
-        const summaries = calculateSummaries(updatedProducts);
-        setStockFormData({
-            ...stockFormData,
-            productEntries: updatedProducts,
-            ...summaries
+        setStockFormData(prev => {
+            const updatedProducts = prev.productEntries.filter((_, i) => i !== index);
+            const summaries = calculateSummaries(updatedProducts, prev);
+            return {
+                ...prev,
+                productEntries: updatedProducts,
+                ...summaries
+            };
         });
     };
 
     const addBrandEntry = (pIndex) => {
-        const updatedProducts = [...stockFormData.productEntries];
-        updatedProducts[pIndex].brandEntries.push({ brand: '', purchasedPrice: '', packet: '', packetSize: '', quantity: '', unit: 'kg', sweepedPacket: '', sweepedQuantity: '', inHousePacket: '', inHouseQuantity: '' });
-        const summaries = calculateSummaries(updatedProducts);
-        setStockFormData({
-            ...stockFormData,
-            productEntries: updatedProducts,
-            ...summaries
+        setStockFormData(prev => {
+            const updatedProducts = [...prev.productEntries];
+            const product = { ...updatedProducts[pIndex] };
+            product.brandEntries = [
+                ...product.brandEntries,
+                { brand: '', purchasedPrice: '', packet: '', packetSize: '', quantity: '', unit: 'kg', sweepedPacket: '', sweepedQuantity: '', inHousePacket: '', inHouseQuantity: '' }
+            ];
+            updatedProducts[pIndex] = product;
+            const summaries = calculateSummaries(updatedProducts, prev);
+            return {
+                ...prev,
+                productEntries: updatedProducts,
+                ...summaries
+            };
         });
     };
 
     const removeBrandEntry = (pIndex, bIndex) => {
-        const updatedProducts = [...stockFormData.productEntries];
-        updatedProducts[pIndex].brandEntries = updatedProducts[pIndex].brandEntries.filter((_, i) => i !== bIndex);
-        const summaries = calculateSummaries(updatedProducts);
-        setStockFormData({
-            ...stockFormData,
-            productEntries: updatedProducts,
-            ...summaries
+        setStockFormData(prev => {
+            const updatedProducts = [...prev.productEntries];
+            const product = { ...updatedProducts[pIndex] };
+            product.brandEntries = product.brandEntries.filter((_, i) => i !== bIndex);
+            updatedProducts[pIndex] = product;
+            const summaries = calculateSummaries(updatedProducts, prev);
+            return {
+                ...prev,
+                productEntries: updatedProducts,
+                ...summaries
+            };
         });
     };
 
@@ -814,25 +916,48 @@ function LCReceive({
         }
     };
 
+    const getFilteredCnFs = (input, type) => {
+        const typedCnfs = cnfs.filter(c => c.type === type && c.status === 'Active');
+        if (!input) return typedCnfs;
+        return typedCnfs.filter(c =>
+            (c.name || '').toLowerCase().includes(input.toLowerCase()) ||
+            (c.cnfId || '').toLowerCase().includes(input.toLowerCase())
+        );
+    };
+
     const handleStockDropdownSelect = (field, value) => {
-        setStockFormData({ ...stockFormData, [field]: value });
+        setStockFormData(prev => {
+            const newData = { ...prev, [field]: value };
+            
+            // Re-calculate costs using the central logic
+            if (field === 'indianCnF' || field === 'bdCnF' || field === 'port' || field === 'importer' || field === 'exporter') {
+                const summaries = calculateSummaries(prev.productEntries, newData);
+                return { ...newData, ...summaries };
+            }
+            
+            return newData;
+        });
         setActiveDropdown(null);
+        setHighlightedIndex(-1);
     };
 
     const handleProductSelect = (pIndex, productName) => {
-        const updatedProducts = [...stockFormData.productEntries];
-        updatedProducts[pIndex].productName = productName;
+        setStockFormData(prev => {
+            const updatedProducts = [...prev.productEntries];
+            updatedProducts[pIndex] = { ...updatedProducts[pIndex], productName };
 
-        // In Single mode, auto-fill the brand to match the product
-        if (!updatedProducts[pIndex].isMultiBrand && updatedProducts[pIndex].brandEntries[0]) {
-            updatedProducts[pIndex].brandEntries[0].brand = productName;
-        }
+            // In Single mode, auto-fill the brand to match the product
+            if (!updatedProducts[pIndex].isMultiBrand && updatedProducts[pIndex].brandEntries[0]) {
+                const brandEntry = { ...updatedProducts[pIndex].brandEntries[0], brand: productName };
+                updatedProducts[pIndex].brandEntries = [brandEntry];
+            }
 
-        const summaries = calculateSummaries(updatedProducts);
-        setStockFormData({
-            ...stockFormData,
-            productEntries: updatedProducts,
-            ...summaries
+            const summaries = calculateSummaries(updatedProducts);
+            return {
+                ...prev,
+                productEntries: updatedProducts,
+                ...summaries
+            };
         });
         setActiveDropdown(null);
     };
@@ -2032,7 +2157,11 @@ function LCReceive({
                                                 <button
                                                     key={port._id}
                                                     type="button"
-                                                    onClick={() => handleStockDropdownSelect('port', port.name)}
+                                                    onMouseDown={(e) => {
+                                                        e.preventDefault();
+                                                        e.stopPropagation();
+                                                        handleStockDropdownSelect('port', port.name);
+                                                    }}
                                                     onMouseEnter={() => setHighlightedIndex(idx)}
                                                     className={`w-full px-4 py-2 text-left text-sm transition-colors font-medium ${stockFormData.port === port.name ? 'bg-blue-50 text-blue-700' : highlightedIndex === idx ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-blue-50'}`}
                                                 >
@@ -2071,7 +2200,11 @@ function LCReceive({
                                                 <button
                                                     key={imp._id}
                                                     type="button"
-                                                    onClick={() => handleStockDropdownSelect('importer', imp.name)}
+                                                    onMouseDown={(e) => {
+                                                        e.preventDefault();
+                                                        e.stopPropagation();
+                                                        handleStockDropdownSelect('importer', imp.name);
+                                                    }}
                                                     onMouseEnter={() => setHighlightedIndex(idx)}
                                                     className={`w-full px-4 py-2 text-left text-sm transition-colors font-medium ${stockFormData.importer === imp.name ? 'bg-blue-50 text-blue-700' : highlightedIndex === idx ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-blue-50'}`}
                                                 >
@@ -2110,7 +2243,11 @@ function LCReceive({
                                                 <button
                                                     key={exp._id}
                                                     type="button"
-                                                    onClick={() => handleStockDropdownSelect('exporter', exp.name)}
+                                                    onMouseDown={(e) => {
+                                                        e.preventDefault();
+                                                        e.stopPropagation();
+                                                        handleStockDropdownSelect('exporter', exp.name);
+                                                    }}
                                                     onMouseEnter={() => setHighlightedIndex(idx)}
                                                     className={`w-full px-4 py-2 text-left text-sm transition-colors font-medium ${stockFormData.exporter === exp.name ? 'bg-blue-50 text-blue-700' : highlightedIndex === idx ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-blue-50'}`}
                                                 >
@@ -2123,29 +2260,113 @@ function LCReceive({
                             </div>
 
                             <div className="col-span-1 md:col-span-2 grid grid-cols-1 md:grid-cols-5 gap-6">
-                                <div className="space-y-2">
+                                <div className="space-y-2 relative" ref={indCnfRef}>
                                     <label className="text-sm font-medium text-gray-700">IND C&F</label>
-                                    <input
-                                        type="text" name="indianCnF" value={stockFormData.indianCnF} onChange={handleStockInputChange}
-                                        placeholder="IND C&F" autoComplete="off" className="w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm"
-                                    />
+                                    <div className="relative">
+                                        <input
+                                            type="text"
+                                            name="indianCnF"
+                                            value={stockFormData.indianCnF}
+                                            onChange={(e) => { handleStockInputChange(e); setActiveDropdown('lcr-indcnf'); setHighlightedIndex(-1); }}
+                                            onFocus={() => { setActiveDropdown('lcr-indcnf'); setHighlightedIndex(-1); }}
+                                            onKeyDown={(e) => handleDropdownKeyDown(e, 'lcr-indcnf', handleStockDropdownSelect, 'indianCnF', getFilteredCnFs(stockFormData.indianCnF, 'Indian'))}
+                                            placeholder="Search IND C&F..."
+                                            autoComplete="off"
+                                            className={`w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm pr-14 ${stockFormData.indianCnF ? 'placeholder:text-gray-900 placeholder:font-semibold' : 'placeholder:text-gray-400'}`}
+                                        />
+                                        <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-2">
+                                            {stockFormData.indianCnF && (
+                                                <button type="button" onClick={() => handleStockDropdownSelect('indianCnF', '')} className="text-gray-400 hover:text-gray-600">
+                                                    <XIcon className="w-4 h-4" />
+                                                </button>
+                                            )}
+                                            <SearchIcon className="w-4 h-4 text-gray-300 pointer-events-none" />
+                                        </div>
+                                    </div>
+                                    {activeDropdown === 'lcr-indcnf' && (
+                                        <div className="absolute z-[60] w-full mt-1 bg-white border border-gray-100 rounded-xl shadow-xl max-h-48 overflow-y-auto py-1">
+                                            {getFilteredCnFs(stockFormData.indianCnF, 'Indian').map((cnf, idx) => (
+                                                <button
+                                                    key={cnf._id}
+                                                    type="button"
+                                                    onMouseDown={(e) => {
+                                                        e.preventDefault();
+                                                        e.stopPropagation();
+                                                        handleStockDropdownSelect('indianCnF', cnf.name);
+                                                    }}
+                                                    onMouseEnter={() => setHighlightedIndex(idx)}
+                                                    className={`w-full px-4 py-2 text-left text-sm transition-colors font-medium ${stockFormData.indianCnF === cnf.name ? 'bg-blue-50 text-blue-700' : highlightedIndex === idx ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-blue-50'}`}
+                                                >
+                                                    <div className="flex flex-col">
+                                                        <span className="font-bold">{cnf.name}</span>
+                                                        <span className="text-[10px] text-gray-500">{cnf.cnfId}</span>
+                                                    </div>
+                                                </button>
+                                            ))}
+                                            {getFilteredCnFs(stockFormData.indianCnF, 'Indian').length === 0 && (
+                                                <div className="px-4 py-3 text-sm text-gray-500 italic">No agents found</div>
+                                            )}
+                                        </div>
+                                    )}
                                 </div>
                                 <div className="space-y-2">
-                                    <label className="text-sm font-medium text-gray-700">IND C&F Cost</label>
+                                    <label className="text-sm font-medium text-gray-700">IND Cost</label>
                                     <input
                                         type="number" name="indCnFCost" value={stockFormData.indCnFCost} onChange={handleStockInputChange}
                                         placeholder="0.00" autoComplete="off" className="w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                                     />
                                 </div>
-                                <div className="space-y-2">
+                                <div className="space-y-2 relative" ref={bdCnfRef}>
                                     <label className="text-sm font-medium text-gray-700">BD C&F</label>
-                                    <input
-                                        type="text" name="bdCnF" value={stockFormData.bdCnF} onChange={handleStockInputChange}
-                                        placeholder="BD C&F" autoComplete="off" className="w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm"
-                                    />
+                                    <div className="relative">
+                                        <input
+                                            type="text"
+                                            name="bdCnF"
+                                            value={stockFormData.bdCnF}
+                                            onChange={(e) => { handleStockInputChange(e); setActiveDropdown('lcr-bdcnf'); setHighlightedIndex(-1); }}
+                                            onFocus={() => { setActiveDropdown('lcr-bdcnf'); setHighlightedIndex(-1); }}
+                                            onKeyDown={(e) => handleDropdownKeyDown(e, 'lcr-bdcnf', handleStockDropdownSelect, 'bdCnF', getFilteredCnFs(stockFormData.bdCnF, 'BD'))}
+                                            placeholder="Search BD C&F..."
+                                            autoComplete="off"
+                                            className={`w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm pr-14 ${stockFormData.bdCnF ? 'placeholder:text-gray-900 placeholder:font-semibold' : 'placeholder:text-gray-400'}`}
+                                        />
+                                        <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-2">
+                                            {stockFormData.bdCnF && (
+                                                <button type="button" onClick={() => handleStockDropdownSelect('bdCnF', '')} className="text-gray-400 hover:text-gray-600">
+                                                    <XIcon className="w-4 h-4" />
+                                                </button>
+                                            )}
+                                            <SearchIcon className="w-4 h-4 text-gray-300 pointer-events-none" />
+                                        </div>
+                                    </div>
+                                    {activeDropdown === 'lcr-bdcnf' && (
+                                        <div className="absolute z-[60] w-full mt-1 bg-white border border-gray-100 rounded-xl shadow-xl max-h-48 overflow-y-auto py-1">
+                                            {getFilteredCnFs(stockFormData.bdCnF, 'BD').map((cnf, idx) => (
+                                                <button
+                                                    key={cnf._id}
+                                                    type="button"
+                                                    onMouseDown={(e) => {
+                                                        e.preventDefault();
+                                                        e.stopPropagation();
+                                                        handleStockDropdownSelect('bdCnF', cnf.name);
+                                                    }}
+                                                    onMouseEnter={() => setHighlightedIndex(idx)}
+                                                    className={`w-full px-4 py-2 text-left text-sm transition-colors font-medium ${stockFormData.bdCnF === cnf.name ? 'bg-blue-50 text-blue-700' : highlightedIndex === idx ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-blue-50'}`}
+                                                >
+                                                    <div className="flex flex-col">
+                                                        <span className="font-bold">{cnf.name}</span>
+                                                        <span className="text-[10px] text-gray-500">{cnf.cnfId}</span>
+                                                    </div>
+                                                </button>
+                                            ))}
+                                            {getFilteredCnFs(stockFormData.bdCnF, 'BD').length === 0 && (
+                                                <div className="px-4 py-3 text-sm text-gray-500 italic">No agents found</div>
+                                            )}
+                                        </div>
+                                    )}
                                 </div>
                                 <div className="space-y-2">
-                                    <label className="text-sm font-medium text-gray-700">BD C&F Cost</label>
+                                    <label className="text-sm font-medium text-gray-700">BD Cost</label>
                                     <input
                                         type="number" name="bdCnFCost" value={stockFormData.bdCnFCost} onChange={handleStockInputChange}
                                         placeholder="0.00" autoComplete="off" className="w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
@@ -2292,10 +2513,10 @@ function LCReceive({
                                                             </div>
                                                         </div>
                                                         <div className="col-span-2 md:col-span-3 space-y-1.5">
-                                                            <label className="text-sm font-medium text-gray-700">Truck No.</label>
+                                                            <label className="text-sm font-medium text-gray-700">Truck</label>
                                                             <input
                                                                 type="text" name="truckNo" value={product.truckNo} onChange={(e) => handleStockInputChange(e, pIndex)}
-                                                                placeholder="Truck #" autoComplete="off" className="w-full h-[42px] px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm text-sm"
+                                                                placeholder="Truck" autoComplete="off" className="w-full h-[42px] px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm text-sm"
                                                             />
                                                         </div>
                                                         <div className="col-span-2 md:col-span-3 space-y-1.5">
@@ -2441,10 +2662,10 @@ function LCReceive({
                                                             </div>
                                                         </div>
                                                         <div className="space-y-2">
-                                                            <label className="text-sm font-medium text-gray-700">Truck No.</label>
+                                                            <label className="text-sm font-medium text-gray-700">Truck</label>
                                                             <input
                                                                 type="text" name="truckNo" value={product.truckNo} onChange={(e) => handleStockInputChange(e, pIndex)}
-                                                                placeholder="Truck No." autoComplete="off" className="w-full h-[42px] px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm"
+                                                                placeholder="Truck" autoComplete="off" className="w-full h-[42px] px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm"
                                                             />
                                                         </div>
                                                         <div className="space-y-2">
@@ -2534,7 +2755,9 @@ function LCReceive({
                                                                                             <button
                                                                                                 key={idx}
                                                                                                 type="button"
-                                                                                                onClick={() => {
+                                                                                                onMouseDown={(e) => {
+                                                                                                    e.preventDefault();
+                                                                                                    e.stopPropagation();
                                                                                                     handleBrandEntryChange(pIndex, bIndex, 'brand', brand);
                                                                                                     setActiveDropdown(null);
                                                                                                 }}
@@ -3014,7 +3237,10 @@ function LCReceive({
                                                 acc[groupedKey] = {
                                                     groupedKey,
                                                     date: item.date,
-                                                    warehouse: item.warehouse,
+                                                    lcNo: item.lcNo,
+                                                    port: item.port,
+                                                    status: item.status,
+                                                    warehouse: item.warehouse || '',
                                                     indianCnF: item.indianCnF,
                                                     indCnFCost: item.indCnFCost,
                                                     bdCnF: item.bdCnF,
@@ -3022,8 +3248,8 @@ function LCReceive({
                                                     importer: item.importer,
                                                     exporter: item.exporter,
                                                     billOfEntry: item.billOfEntry,
-                                                    warehouse: item.warehouse || '',
                                                     totalLcTruck: 0,
+                                                    totalLcQuantity: 0,
                                                     totalQuantity: 0,
                                                     truckEntries: new Set(),
                                                     products: new Set(),
@@ -3035,6 +3261,7 @@ function LCReceive({
 
                                             const itemQty = parseFloat(item.quantity) || 0;
                                             acc[groupedKey].totalQuantity += itemQty;
+                                            acc[groupedKey].totalLcQuantity += itemQty;
 
                                             const truckEntryKey = `${item.date}-${item.productName}-${item.truckNo}`;
                                             if (!acc[groupedKey].truckEntries.has(truckEntryKey)) {

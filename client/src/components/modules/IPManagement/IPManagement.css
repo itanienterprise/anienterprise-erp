@@ -1,7 +1,3 @@
-/* IP Management Module Styles */
-.ip-management {
-    /* Container styles inherited from parent */
-}
 
 .ip-filters {
     animation: slideInFromTop 0.3s ease-out;
@@ -19,9 +15,6 @@
     }
 }
 
-.ip-form {
-    /* Form specific styles */
-}
 
 .ip-form input[type="number"]::-webkit-outer-spin-button,
 .ip-form input[type="number"]::-webkit-inner-spin-button {
@@ -31,6 +24,7 @@
 
 .ip-form input[type="number"] {
     -moz-appearance: textfield;
+    appearance: textfield;
 }
 
 /* Table styles */
@@ -103,5 +97,43 @@
     .ip-management th,
     .ip-management td {
         padding: 0.75rem 1rem;
+    }
+
+    /* Mobile Header adjustments */
+    .ip-management h2 {
+        font-size: 1.5rem;
+        text-align: center;
+        width: 100%;
+    }
+}
+
+/* Animations for mobile cards */
+.animate-in {
+    animation: fadeIn 0.3s ease-out, slideInFromTop 0.3s ease-out;
+}
+
+@keyframes slideInFromTop {
+    from {
+        opacity: 0;
+        transform: translateY(-10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.slide-in-from-top-2 {
+    animation: slideInFromTop2 0.3s ease-out;
+}
+
+@keyframes slideInFromTop2 {
+    from {
+        opacity: 0;
+        transform: translateY(-8px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
     }
 }

@@ -63,6 +63,7 @@ const Employee = require('./models/Employee');
 const Notification = require('./models/Notification');
 const Bank = require('./models/Bank');
 const Exporter = require('./models/Exporter');
+const CnF = require('./models/CnF');
 const { encryptData, decryptData } = require('./utils/encryption');
 const CryptoJS = require('crypto-js');
 
@@ -241,6 +242,52 @@ apiRouter.put('/api/exporters/:id', async (req, res) => {
 apiRouter.get('/api/exporters', async (req, res) => {
   try {
     const records = await Exporter.find().sort({ createdAt: -1 });
+    const decrypted = records.map(r => {
+      const d = decryptData(r.data);
+      return { ...d, _id: r._id, createdAt: r.createdAt };
+    });
+    res.json(decrypted);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// C&F APIs
+apiRouter.post('/api/cnfs', async (req, res) => {
+  try {
+    const encryptedData = encryptData(req.body);
+    const newCnF = new CnF({ data: encryptedData });
+    const savedCnF = await newCnF.save();
+    res.status(201).json({ ...req.body, _id: savedCnF._id, createdAt: savedCnF.createdAt });
+  } catch (err) {
+    res.status(400).json({ message: err.message });
+  }
+});
+
+apiRouter.delete('/api/cnfs/:id', async (req, res) => {
+  try {
+    const deletedCnF = await CnF.findByIdAndDelete(req.params.id);
+    if (!deletedCnF) return res.status(404).json({ message: 'C&F not found' });
+    res.json({ message: 'C&F deleted' });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+apiRouter.put('/api/cnfs/:id', async (req, res) => {
+  try {
+    const encryptedData = encryptData(req.body);
+    const updatedCnF = await CnF.findByIdAndUpdate(req.params.id, { data: encryptedData }, { new: true });
+    if (!updatedCnF) return res.status(404).json({ message: 'C&F not found' });
+    res.json({ ...req.body, _id: updatedCnF._id, createdAt: updatedCnF.createdAt });
+  } catch (err) {
+    res.status(400).json({ message: err.message });
+  }
+});
+
+apiRouter.get('/api/cnfs', async (req, res) => {
+  try {
+    const records = await CnF.find().sort({ createdAt: -1 });
     const decrypted = records.map(r => {
       const d = decryptData(r.data);
       return { ...d, _id: r._id, createdAt: r.createdAt };
