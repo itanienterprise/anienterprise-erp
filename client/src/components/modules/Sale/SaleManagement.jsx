@@ -502,6 +502,16 @@ const SaleManagement = ({
                 totalAmount: ''
             }]
         }],
+        currentTotalTrucks: 0,
+        currentTotalQty: 0,
+        indCommissionRate: '',
+        indCommissionUom: 'Truck',
+        indCommissionTotal: '0.00',
+        bdCommissionRate: '',
+        bdCommissionUom: 'Truck',
+        bdCommissionTotal: '0.00',
+        indCommissionEdited: false,
+        bdCommissionEdited: false,
         totalAmount: '0.00',
         discount: '0.00',
         paidAmount: '0.00',
@@ -1055,10 +1065,25 @@ const SaleManagement = ({
             product.brandEntries = brandEntries;
             newItems[productIdx] = product;
 
-            // Recalculate invoice totals
+            // Recalculate invoice totals and C&F commissions
             const subtotal = newItems.reduce((sum, p) =>
                 sum + p.brandEntries.reduce((eSum, e) => eSum + (parseFloat(e.totalAmount) || 0), 0)
                 , 0);
+
+            const totalTrucks = newItems.reduce((sum, p) =>
+                sum + (p.brandEntries || []).reduce((eSum, e) => eSum + (parseFloat(e.truck) || 0), 0)
+                , 0);
+
+            const totalQty = newItems.reduce((sum, p) =>
+                sum + (p.brandEntries || []).reduce((eSum, e) => eSum + (parseFloat(e.quantity) || 0), 0)
+                , 0);
+
+            const indRate = parseFloat(prev.indCommissionRate) || 0;
+            const bdRate = parseFloat(prev.bdCommissionRate) || 0;
+
+            const indTotal = (prev.indCommissionUom === 'Truck' ? totalTrucks : totalQty) * indRate;
+            const bdTotal = (prev.bdCommissionUom === 'Truck' ? totalTrucks : totalQty) * bdRate;
+
             const disc = parseFloat(prev.discount) || 0;
             const paid = parseFloat(prev.paidAmount) || 0;
             const grandTotal = Math.max(0, subtotal - disc);
@@ -1066,6 +1091,10 @@ const SaleManagement = ({
             return {
                 ...prev,
                 items: newItems,
+                currentTotalTrucks: totalTrucks,
+                currentTotalQty: totalQty,
+                indCommissionTotal: indTotal.toFixed(2),
+                bdCommissionTotal: bdTotal.toFixed(2),
                 totalAmount: grandTotal.toFixed(2),
                 dueAmount: (grandTotal - paid).toFixed(2)
             };
@@ -1077,17 +1106,38 @@ const SaleManagement = ({
         setFormData(prev => {
             let updatedFormData = { ...prev, [name]: value };
 
-            if (name === 'paidAmount' || name === 'discount') {
+            if (name === 'paidAmount' || name === 'discount' || name.includes('Commission')) {
                 const subtotal = prev.items.reduce(
                     (sum, i) => sum + (i.brandEntries || []).reduce((eSum, e) => eSum + (parseFloat(e.totalAmount) || 0), 0),
                     0
                 );
+
+                const totalTrucks = prev.items.reduce((sum, p) =>
+                    sum + (p.brandEntries || []).reduce((eSum, e) => eSum + (parseFloat(e.truck) || 0), 0)
+                    , 0);
+
+                const totalQty = prev.items.reduce((sum, p) =>
+                    sum + (p.brandEntries || []).reduce((eSum, e) => eSum + (parseFloat(e.quantity) || 0), 0)
+                    , 0);
+
+                const indRate = parseFloat(name === 'indCommissionRate' ? value : prev.indCommissionRate) || 0;
+                const bdRate = parseFloat(name === 'bdCommissionRate' ? value : prev.bdCommissionRate) || 0;
+                const indUom = name === 'indCommissionUom' ? value : prev.indCommissionUom;
+                const bdUom = name === 'bdCommissionUom' ? value : prev.bdCommissionUom;
+
+                const indTotal = (indUom === 'Truck' ? totalTrucks : totalQty) * indRate;
+                const bdTotal = (bdUom === 'Truck' ? totalTrucks : totalQty) * bdRate;
+
                 const disc = parseFloat(name === 'discount' ? value : prev.discount) || 0;
                 const paid = parseFloat(name === 'paidAmount' ? value : prev.paidAmount) || 0;
 
                 const grandTotal = Math.max(0, subtotal - disc);
                 updatedFormData.totalAmount = grandTotal.toFixed(2);
                 updatedFormData.dueAmount = (grandTotal - paid).toFixed(2);
+                updatedFormData.indCommissionTotal = indTotal.toFixed(2);
+                updatedFormData.bdCommissionTotal = bdTotal.toFixed(2);
+                updatedFormData.currentTotalTrucks = totalTrucks;
+                updatedFormData.currentTotalQty = totalQty;
             }
             return updatedFormData;
         });
@@ -1272,6 +1322,16 @@ const SaleManagement = ({
                     totalAmount: ''
                 }]
             }],
+            currentTotalTrucks: 0,
+            currentTotalQty: 0,
+            indCommissionRate: '',
+            indCommissionUom: 'Truck',
+            indCommissionTotal: '0.00',
+            bdCommissionRate: '',
+            bdCommissionUom: 'Truck',
+            bdCommissionTotal: '0.00',
+            indCommissionEdited: false,
+            bdCommissionEdited: false,
             totalAmount: '0.00',
             discount: '0.00',
             paidAmount: '0.00',
@@ -1346,7 +1406,15 @@ const SaleManagement = ({
             items: initialItems,
             date: sale.date ? new Date(sale.date).toISOString().split('T')[0] : '',
             discount: sale.discount || '0.00',
-            previousBalance: sale.previousBalance || '0.00'
+            previousBalance: sale.previousBalance || '0.00',
+            indCommissionRate: sale.indCommissionRate || '',
+            indCommissionUom: sale.indCommissionUom || 'Truck',
+            indCommissionTotal: sale.indCommissionTotal || '0.00',
+            bdCommissionRate: sale.bdCommissionRate || '',
+            bdCommissionUom: sale.bdCommissionUom || 'Truck',
+            bdCommissionTotal: sale.bdCommissionTotal || '0.00',
+            indCommissionEdited: sale.indCommissionEdited || false,
+            bdCommissionEdited: sale.bdCommissionEdited || false
         });
         setEditingId(sale._id);
         setShowForm(true);
@@ -2605,7 +2673,7 @@ const SaleManagement = ({
                                 </div>
                             )}
 
-                            {/* Border Field: BD C&F */}
+                             {/* Border Field: BD C&F */}
                             {saleType === 'Border' && (
                                 <div className="sale-mgmt-input-group relative bd-cnf-dropdown-container">
                                     <label className="sale-mgmt-label">BD C&F</label>
@@ -2655,6 +2723,91 @@ const SaleManagement = ({
                                             ))}
                                         </div>
                                     )}
+                                </div>
+                            )}
+
+                            {/* Border Field: Commissions Row */}
+                            {saleType === 'Border' && (
+                                <div className="col-span-full grid grid-cols-1 md:grid-cols-2 gap-6 p-4 bg-blue-50/30 rounded-2xl border border-blue-100/50 mb-2">
+                                    {/* Indian C&F Commission */}
+                                    <div className="space-y-3">
+                                        <div className="flex items-center justify-between">
+                                            <span className="text-[10px] font-black text-blue-400 uppercase tracking-widest pl-1">IND C&F Commission</span>
+                                            <div className="flex items-center bg-white p-0.5 rounded-lg border border-blue-100 shadow-sm h-7 w-32">
+                                                <button
+                                                    type="button"
+                                                    onClick={() => handleInputChange({ target: { name: 'indCommissionUom', value: 'Truck' } })}
+                                                    className={`flex-1 h-full flex items-center justify-center rounded-md text-[9px] font-bold transition-all ${formData.indCommissionUom === 'Truck' ? 'bg-blue-600 text-white shadow-sm' : 'text-gray-400 hover:text-blue-500'}`}
+                                                >
+                                                    TRUCK
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => handleInputChange({ target: { name: 'indCommissionUom', value: 'QTY' } })}
+                                                    className={`flex-1 h-full flex items-center justify-center rounded-md text-[9px] font-bold transition-all ${formData.indCommissionUom === 'QTY' ? 'bg-blue-600 text-white shadow-sm' : 'text-gray-400 hover:text-blue-500'}`}
+                                                >
+                                                    QTY
+                                                </button>
+                                            </div>
+                                        </div>
+                                        <div className="flex items-center gap-3">
+                                            <div className="flex-1 relative">
+                                                <input
+                                                    type="number"
+                                                    name="indCommissionRate"
+                                                    value={formData.indCommissionRate}
+                                                    onChange={handleInputChange}
+                                                    placeholder="Rate"
+                                                    className="w-full px-4 py-2 bg-white border border-blue-100 rounded-xl text-sm font-bold text-gray-900 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
+                                                />
+                                                <div className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-bold text-gray-400">Rate</div>
+                                            </div>
+                                            <div className="flex-1 px-4 py-2 bg-blue-100/50 border border-blue-200 rounded-xl flex items-center justify-between">
+                                                <span className="text-[10px] font-bold text-blue-400 uppercase">Total</span>
+                                                <span className="text-sm font-black text-blue-700">৳{formData.indCommissionTotal}</span>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* BD C&F Commission */}
+                                    <div className="space-y-3">
+                                        <div className="flex items-center justify-between">
+                                            <span className="text-[10px] font-black text-blue-400 uppercase tracking-widest pl-1">BD C&F Commission</span>
+                                            <div className="flex items-center bg-white p-0.5 rounded-lg border border-blue-100 shadow-sm h-7 w-32">
+                                                <button
+                                                    type="button"
+                                                    onClick={() => handleInputChange({ target: { name: 'bdCommissionUom', value: 'Truck' } })}
+                                                    className={`flex-1 h-full flex items-center justify-center rounded-md text-[9px] font-bold transition-all ${formData.bdCommissionUom === 'Truck' ? 'bg-blue-600 text-white shadow-sm' : 'text-gray-400 hover:text-blue-500'}`}
+                                                >
+                                                    TRUCK
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => handleInputChange({ target: { name: 'bdCommissionUom', value: 'QTY' } })}
+                                                    className={`flex-1 h-full flex items-center justify-center rounded-md text-[9px] font-bold transition-all ${formData.bdCommissionUom === 'QTY' ? 'bg-blue-600 text-white shadow-sm' : 'text-gray-400 hover:text-blue-500'}`}
+                                                >
+                                                    QTY
+                                                </button>
+                                            </div>
+                                        </div>
+                                        <div className="flex items-center gap-3">
+                                            <div className="flex-1 relative">
+                                                <input
+                                                    type="number"
+                                                    name="bdCommissionRate"
+                                                    value={formData.bdCommissionRate}
+                                                    onChange={handleInputChange}
+                                                    placeholder="Rate"
+                                                    className="w-full px-4 py-2 bg-white border border-blue-100 rounded-xl text-sm font-bold text-gray-900 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
+                                                />
+                                                <div className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-bold text-gray-400">Rate</div>
+                                            </div>
+                                            <div className="flex-1 px-4 py-2 bg-blue-100/50 border border-blue-200 rounded-xl flex items-center justify-between">
+                                                <span className="text-[10px] font-bold text-blue-400 uppercase">Total</span>
+                                                <span className="text-sm font-black text-blue-700">৳{formData.bdCommissionTotal}</span>
+                                            </div>
+                                        </div>
+                                    </div>
                                 </div>
                             )}
 

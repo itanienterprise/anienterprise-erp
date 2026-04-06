@@ -227,20 +227,29 @@ const CnF = ({
 
                     if (isMatch) {
                         let totalSaleComm = 0;
-                        const commissionFactor = parseFloat(cnf.commission) || 0;
-                        const uom = (typeof cnf.uom === 'string' ? cnf.uom : (cnf.commissionType || 'QTY')).toUpperCase();
+                        const isIndian = cnf.type === 'Indian' || (saleIndCnF === targetName);
 
-                        (sale.items || []).forEach(item => {
-                            (item.brandEntries || []).forEach(entry => {
-                                if (uom === 'QTY') {
-                                    totalSaleComm += (parseFloat(entry.quantity) || 0) * commissionFactor;
-                                } else if (uom === 'TRUCK') {
-                                    totalSaleComm += (parseFloat(entry.truck) || 1) * commissionFactor;
-                                } else {
-                                    totalSaleComm += commissionFactor;
-                                }
+                        if (isIndian && sale.indCommissionTotal) {
+                            totalSaleComm = parseFloat(sale.indCommissionTotal) || 0;
+                        } else if (!isIndian && sale.bdCommissionTotal) {
+                            totalSaleComm = parseFloat(sale.bdCommissionTotal) || 0;
+                        } else {
+                            // Fallback to default calculation if no sale-specific commission exists
+                            const commissionFactor = parseFloat(cnf.commission) || 0;
+                            const uom = (typeof cnf.uom === 'string' ? cnf.uom : (cnf.commissionType || 'QTY')).toUpperCase();
+
+                            (sale.items || []).forEach(item => {
+                                (item.brandEntries || []).forEach(entry => {
+                                    if (uom === 'QTY') {
+                                        totalSaleComm += (parseFloat(entry.quantity) || 0) * commissionFactor;
+                                    } else if (uom === 'TRUCK') {
+                                        totalSaleComm += (parseFloat(entry.truck) || 1) * commissionFactor;
+                                    } else {
+                                        totalSaleComm += commissionFactor;
+                                    }
+                                });
                             });
-                        });
+                        }
                         return acc + totalSaleComm;
                     }
                     return acc;
@@ -355,19 +364,25 @@ const CnF = ({
                 const isMatch = cnfName.toLowerCase().trim() === saleIndCnF || cnfName.toLowerCase().trim() === saleBdCnf;
                 if (!isMatch) return;
 
-                const commissionFactor = parseFloat(viewData?.commission) || 0;
-                const uom = (typeof viewData?.uom === 'string' ? viewData.uom : (viewData?.commissionType || 'QTY')).toUpperCase();
+                const isIndianAgent = (saleIndCnF === targetCnF);
+                const commissionFactor = isIndianAgent
+                    ? (parseFloat(sale.indCommissionRate) || parseFloat(viewData?.commission) || 0)
+                    : (parseFloat(sale.bdCommissionRate) || parseFloat(viewData?.commission) || 0);
+
+                const uom = isIndianAgent
+                    ? (sale.indCommissionUom || (typeof viewData?.uom === 'string' ? viewData.uom : (viewData?.commissionType || 'QTY'))).toUpperCase()
+                    : (sale.bdCommissionUom || (typeof viewData?.uom === 'string' ? viewData.uom : (viewData?.commissionType || 'QTY'))).toUpperCase();
 
                 (sale.items || []).forEach(item => {
                     (item.brandEntries || []).forEach(entry => {
                         let totalEntryComm = 0;
                         const qty = parseFloat(entry.quantity) || 0;
-                        const truck = parseFloat(entry.truck) || 1;
+                        const truck = parseFloat(entry.truck) || 0;
 
                         if (uom === 'QTY') {
                             totalEntryComm = qty * commissionFactor;
                         } else if (uom === 'TRUCK') {
-                            totalEntryComm = truck * commissionFactor;
+                            totalEntryComm = (truck || 1) * commissionFactor;
                         } else {
                             totalEntryComm = commissionFactor;
                         }
@@ -382,12 +397,15 @@ const CnF = ({
                             rate: entry.unitPrice || 0,
                             bag: '-',
                             qty: qty,
-                            truck: truck,
+                            truck: truck || '-',
                             commission: commissionFactor,
                             uom: uom,
                             totalCommission: parseFloat(totalEntryComm.toFixed(2)),
-                            cnfType: (sale.indianCnF || '').toLowerCase().trim() === targetCnF ? 'Indian' : 'BD',
-                            source: 'Sale'
+                            cnfType: isIndianAgent ? 'Indian' : 'BD',
+                            source: 'Sale',
+                            originalId: sale._id,
+                            indCommissionEdited: sale.indCommissionEdited,
+                            bdCommissionEdited: sale.bdCommissionEdited
                         });
                     });
                 });
@@ -438,30 +456,74 @@ const CnF = ({
         if (!editRecord || !editRecord._id) return;
         setIsSavingHistory(true);
         try {
-            const res = await axios.get('/api/stock');
-            const originalRecord = res.data.find(r => r._id === editRecord._id);
-            if (!originalRecord) throw new Error('Original record not found');
+            if (editRecord.source === 'Sale') {
+                // BRANCH FOR SALES
+                const saleId = editRecord.originalId;
+                const salesRes = await axios.get(`${API_BASE_URL}/api/sales`);
+                const allSales = Array.isArray(salesRes.data) ? salesRes.data : [];
+                const originalSale = allSales.find(s => s._id === saleId);
+                
+                if (!originalSale) throw new Error('Original sale not found');
 
-            const updatedData = { ...originalRecord };
-            const targetCnF = (viewData?.name || '').toLowerCase().trim();
-            const recordIndCnF = (originalRecord.indianCnF || '').toLowerCase().trim();
-            const recordBdCnF = (originalRecord.bdCnF || '').toLowerCase().trim();
+                const updatedSale = { ...originalSale };
+                const isIndian = editRecord.cnfType === 'Indian';
+                
+                if (isIndian) {
+                    updatedSale.indCommissionRate = editHistoryData.commission;
+                    updatedSale.indCommissionUom = editHistoryData.uom;
+                    updatedSale.indCommissionEdited = true;
+                } else {
+                    updatedSale.bdCommissionRate = editHistoryData.commission;
+                    updatedSale.bdCommissionUom = editHistoryData.uom;
+                    updatedSale.bdCommissionEdited = true;
+                }
 
-            if (editRecord.cnfType === 'Indian' || recordIndCnF === targetCnF) {
-                updatedData.indCnFComm = editHistoryData.commission;
-                updatedData.indCnFCost = editHistoryData.totalCommission;
-                updatedData.indCnFUom = editHistoryData.uom;
-                updatedData.indCnFEdited = true;
-                updatedData.indCnFBulkEdited = true; // Set both to be safe
-            } else if (editRecord.cnfType === 'BD' || recordBdCnF === targetCnF) {
-                updatedData.bdCnFComm = editHistoryData.commission;
-                updatedData.bdCnFCost = editHistoryData.totalCommission;
-                updatedData.bdCnFUom = editHistoryData.uom;
-                updatedData.bdCnFEdited = true;
-                updatedData.bdCnFBulkEdited = true; // Set both to be safe
+                // Recalculate global sale commission totals
+                const totalTrucks = (updatedSale.items || []).reduce((sum, p) =>
+                    sum + (p.brandEntries || []).reduce((eSum, e) => eSum + (parseFloat(e.truck) || 0), 0)
+                    , 0);
+                const totalQty = (updatedSale.items || []).reduce((sum, p) =>
+                    sum + (p.brandEntries || []).reduce((eSum, e) => eSum + (parseFloat(e.quantity) || 0), 0)
+                    , 0);
+                
+                const rate = parseFloat(editHistoryData.commission) || 0;
+                const uom = (editHistoryData.uom || '').toUpperCase();
+                const newTotal = (uom === 'TRUCK' ? totalTrucks : totalQty) * rate;
+
+                if (isIndian) {
+                    updatedSale.indCommissionTotal = newTotal.toFixed(2);
+                } else {
+                    updatedSale.bdCommissionTotal = newTotal.toFixed(2);
+                }
+
+                await axios.put(`${API_BASE_URL}/api/sales/${saleId}`, updatedSale);
+            } else {
+                // ORIGINAL BRANCH FOR STOCK (LC)
+                const res = await axios.get(`${API_BASE_URL}/api/stock`);
+                const originalRecord = res.data.find(r => r._id === editRecord._id);
+                if (!originalRecord) throw new Error('Original record not found');
+
+                const updatedData = { ...originalRecord };
+                const targetCnF = (viewData?.name || '').toLowerCase().trim();
+                const recordIndCnF = (originalRecord.indianCnF || '').toLowerCase().trim();
+                const recordBdCnF = (originalRecord.bdCnF || '').toLowerCase().trim();
+
+                if (editRecord.cnfType === 'Indian' || recordIndCnF === targetCnF) {
+                    updatedData.indCnFComm = editHistoryData.commission;
+                    updatedData.indCnFCost = editHistoryData.totalCommission;
+                    updatedData.indCnFUom = editHistoryData.uom;
+                    updatedData.indCnFEdited = true;
+                    updatedData.indCnFBulkEdited = true;
+                } else if (editRecord.cnfType === 'BD' || recordBdCnF === targetCnF) {
+                    updatedData.bdCnFComm = editHistoryData.commission;
+                    updatedData.bdCnFCost = editHistoryData.totalCommission;
+                    updatedData.bdCnFUom = editHistoryData.uom;
+                    updatedData.bdCnFEdited = true;
+                    updatedData.bdCnFBulkEdited = true;
+                }
+
+                await axios.put(`${API_BASE_URL}/api/stock/${editRecord._id}`, updatedData);
             }
-
-            await axios.put(`/api/stock/${editRecord._id}`, updatedData);
             setEditRecord(null);
             fetchCnFHistory(viewData.name);
             fetchCnFs();
@@ -492,7 +554,9 @@ const CnF = ({
         const row = filteredHistory.find(r => r._id === id);
         if (!row) return;
         
-        const isEditable = isAdmin || (!row.indCnFEdited && !row.bdCnFEdited && !row.indCnFBulkEdited && !row.bdCnFBulkEdited);
+        const isEditable = (row.source !== 'Sale' && (isAdmin || (!row.indCnFEdited && !row.bdCnFEdited && !row.indCnFBulkEdited && !row.bdCnFBulkEdited))) || 
+                          (row.source === 'Sale' && (isAdmin || (row.cnfType === 'Indian' ? !row.indCommissionEdited : !row.bdCommissionEdited)));
+        
         if (!isEditable) return;
 
         setSelectedHistoryIds(prev => {
@@ -509,7 +573,8 @@ const CnF = ({
 
     const toggleSelectAllHistory = () => {
         const editableIds = filteredHistory
-            .filter(row => isAdmin || (!row.indCnFEdited && !row.bdCnFEdited && !row.indCnFBulkEdited && !row.bdCnFBulkEdited))
+            .filter(row => (row.source !== 'Sale' && (isAdmin || (!row.indCnFEdited && !row.bdCnFEdited && !row.indCnFBulkEdited && !row.bdCnFBulkEdited))) || 
+                            (row.source === 'Sale' && (isAdmin || (row.cnfType === 'Indian' ? !row.indCommissionEdited : !row.bdCommissionEdited))))
             .map(row => row._id);
 
         if (selectedHistoryIds.size === editableIds.length && editableIds.length > 0) {
@@ -1121,7 +1186,8 @@ const CnF = ({
                                                     }}>
                                                         {isHistorySelectionMode && (
                                                             <td className="cnf-table-cell">
-                                                                {(isAdmin || (!row.indCnFEdited && !row.bdCnFEdited && !row.indCnFBulkEdited && !row.bdCnFBulkEdited)) ? (
+                                                                {((row.source !== 'Sale' && (isAdmin || (!row.indCnFEdited && !row.bdCnFEdited && !row.indCnFBulkEdited && !row.bdCnFBulkEdited))) || 
+                                                                  (row.source === 'Sale' && (isAdmin || (row.cnfType === 'Indian' ? !row.indCommissionEdited : !row.bdCommissionEdited)))) ? (
                                                                     <input type="checkbox" checked={selectedHistoryIds.has(row._id)} readOnly />
                                                                 ) : null}
                                                             </td>
@@ -1141,12 +1207,17 @@ const CnF = ({
                                                             </span>
                                                         </td>
                                                         <td className="cnf-table-cell text-center">
-                                                            {(isAdmin || (!row.indCnFEdited && !row.bdCnFEdited && !row.indCnFBulkEdited && !row.bdCnFBulkEdited)) ? (
+                                                            {((row.source !== 'Sale' && (isAdmin || (!row.indCnFEdited && !row.bdCnFEdited && !row.indCnFBulkEdited && !row.bdCnFBulkEdited))) || 
+                                                              (row.source === 'Sale' && (isAdmin || (row.cnfType === 'Indian' ? !row.indCommissionEdited : !row.bdCommissionEdited)))) ? (
                                                                 <button onClick={(e) => { e.stopPropagation(); handleEditHistory(row); }} className="hover:bg-gray-100 p-1.5 rounded-md transition-colors">
                                                                     <EditIcon className="w-4 h-4 text-gray-400 hover:text-gray-900" />
                                                                 </button>
                                                             ) : (
-                                                                <span className="text-[8px] bg-blue-50 text-blue-500 px-1.5 py-0.5 rounded-md font-black uppercase tracking-tighter shadow-sm inline-block">Edited</span>
+                                                                row.source === 'Sale' ? (
+                                                                    <span className="text-[8px] bg-amber-50 text-amber-500 px-1.5 py-0.5 rounded-md font-black uppercase tracking-tighter shadow-sm inline-block">Sale Edited</span>
+                                                                ) : (
+                                                                    <span className="text-[8px] bg-blue-50 text-blue-500 px-1.5 py-0.5 rounded-md font-black uppercase tracking-tighter shadow-sm inline-block">Edited</span>
+                                                                )
                                                             )}
                                                         </td>
                                                     </tr>
@@ -1174,7 +1245,8 @@ const CnF = ({
                                                                 return; 
                                                             }
                                                             if (isHistorySelectionMode) {
-                                                                const isEditable = isAdmin || (!row.indCnFEdited && !row.bdCnFEdited && !row.indCnFBulkEdited && !row.bdCnFBulkEdited);
+                                                                const isEditable = (row.source !== 'Sale' && (isAdmin || (!row.indCnFEdited && !row.bdCnFEdited && !row.indCnFBulkEdited && !row.bdCnFBulkEdited))) || 
+                                                                                  (row.source === 'Sale' && (isAdmin || (row.cnfType === 'Indian' ? !row.indCommissionEdited : !row.bdCommissionEdited)));
                                                                 if (isEditable) {
                                                                     toggleHistorySelection(row._id);
                                                                 }
@@ -1185,7 +1257,8 @@ const CnF = ({
                                                     >
                                                         <div className="flex justify-between items-center p-4 cursor-pointer select-none active:bg-gray-50 transition-colors">
                                                             <div className="flex-1 min-w-0 pr-4 flex items-center gap-3">
-                                                                {isHistorySelectionMode && (isAdmin || (!row.indCnFEdited && !row.bdCnFEdited && !row.indCnFBulkEdited && !row.bdCnFBulkEdited)) && (
+                                                                {isHistorySelectionMode && ((row.source !== 'Sale' && (isAdmin || (!row.indCnFEdited && !row.bdCnFEdited && !row.indCnFBulkEdited && !row.bdCnFBulkEdited))) || 
+                                                                                           (row.source === 'Sale' && (isAdmin || (row.cnfType === 'Indian' ? !row.indCommissionEdited : !row.bdCommissionEdited)))) && (
                                                                     <input type="checkbox" checked={isSelected} readOnly className="w-5 h-5 accent-gray-900 shrink-0" onClick={(e) => e.stopPropagation()} />
                                                                 )}
                                                                 <div className="min-w-0">
@@ -1197,8 +1270,14 @@ const CnF = ({
                                                                         </span>
                                                                         <span className="h-1 w-1 bg-gray-300 rounded-full"></span>
                                                                         <p className="text-xs font-bold text-gray-800 truncate">{row.product || '-'}</p>
-                                                                        {(row.indCnFEdited || row.bdCnFEdited || row.indCnFBulkEdited || row.bdCnFBulkEdited) && (
-                                                                            <span className="text-[8px] bg-blue-50 text-blue-500 px-1.5 py-0.5 rounded-md font-black uppercase tracking-tighter">Edited</span>
+                                                                        {row.source === 'Sale' ? (
+                                                                            (row.cnfType === 'Indian' ? row.indCommissionEdited : row.bdCommissionEdited) && (
+                                                                                <span className="text-[8px] bg-amber-50 text-amber-500 px-1.5 py-0.5 rounded-md font-black uppercase tracking-tighter">Sale Edited</span>
+                                                                            )
+                                                                        ) : (
+                                                                            (row.indCnFEdited || row.bdCnFEdited || row.indCnFBulkEdited || row.bdCnFBulkEdited) && (
+                                                                                <span className="text-[8px] bg-blue-50 text-blue-500 px-1.5 py-0.5 rounded-md font-black uppercase tracking-tighter">Edited</span>
+                                                                            )
                                                                         )}
                                                                     </div>
                                                                     <p className="text-sm font-black text-gray-900 truncate">{row.lcNo || '-'}</p>
@@ -1226,10 +1305,13 @@ const CnF = ({
                                                                     </div>
                                                                 </div>
                                                                 <div className="mt-4 pt-4 border-t border-gray-100 flex gap-2">
-                                                                    {(isAdmin || (!row.indCnFEdited && !row.bdCnFEdited && !row.indCnFBulkEdited && !row.bdCnFBulkEdited)) ? (
+                                                                    {((row.source !== 'Sale' && (isAdmin || (!row.indCnFEdited && !row.bdCnFEdited && !row.indCnFBulkEdited && !row.bdCnFBulkEdited))) || 
+                                                                      (row.source === 'Sale' && (isAdmin || (row.cnfType === 'Indian' ? !row.indCommissionEdited : !row.bdCommissionEdited)))) ? (
                                                                         <button onClick={() => handleEditHistory(row)} className="flex items-center justify-center gap-2 py-2.5 bg-gray-900 text-white rounded-xl text-xs font-black flex-1 active:scale-95 shadow-lg shadow-gray-900/20"><EditIcon className="w-4 h-4" /> Edit Record</button>
                                                                     ) : (
-                                                                        <div className="flex items-center justify-center gap-2 py-2.5 bg-blue-50 text-blue-500 rounded-xl text-[10px] font-black flex-1 uppercase tracking-widest"><LockIcon className="w-4 h-4" /> Edited & Locked</div>
+                                                                        <div className="flex items-center justify-center gap-2 py-2.5 bg-blue-50 text-blue-500 rounded-xl text-[10px] font-black flex-1 uppercase tracking-widest">
+                                                                            <LockIcon className="w-4 h-4" /> {row.source === 'Sale' ? 'Sale Edited & Locked' : 'Edited & Locked'}
+                                                                        </div>
                                                                     )}
                                                                 </div>
                                                             </div>
