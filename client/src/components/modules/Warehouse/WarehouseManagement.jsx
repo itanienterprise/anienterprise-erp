@@ -251,13 +251,13 @@ const WarehouseManagement = ({ currentUser }) => {
             if (!matchesSearch) return false;
 
             // Apply Advanced Filters
-            if (warehouseFilters.startDate && item.createdAt) {
-                if (new Date(item.createdAt) < new Date(warehouseFilters.startDate)) return false;
-            }
-            if (warehouseFilters.endDate && item.createdAt) {
-                const endDate = new Date(warehouseFilters.endDate);
-                endDate.setHours(23, 59, 59, 999);
-                if (new Date(item.createdAt) > endDate) return false;
+            // Apply Advanced Filters - "Stock Summary" shows state as of the Selected Date
+            if (item.recordType !== 'warehouse') {
+                if (warehouseFilters.endDate && item.createdAt) {
+                    const endDate = new Date(warehouseFilters.endDate);
+                    endDate.setHours(23, 59, 59, 999);
+                    if (new Date(item.createdAt) > endDate) return false;
+                }
             }
             if (warehouseFilters.warehouse && item.whName !== warehouseFilters.warehouse) return false;
             if (warehouseFilters.productName && (item.productName || item.product) !== warehouseFilters.productName) return false;
@@ -341,10 +341,17 @@ const WarehouseManagement = ({ currentUser }) => {
             return acc;
         }, {});
 
-        // Subtract sales from Inhouse totals
         salesRecords.forEach(sale => {
             const sStatus = (sale.status || '').toLowerCase();
             if (sStatus !== 'accepted' && sStatus !== 'pending') return;
+            
+            // Respect period filter: only include sales up to the selected end date
+            if (warehouseFilters.endDate && sale.date) {
+                const endLimit = new Date(warehouseFilters.endDate);
+                endLimit.setHours(23, 59, 59, 999);
+                if (new Date(sale.date) > endLimit) return;
+            }
+
             if (sale.items && Array.isArray(sale.items)) {
                 sale.items.forEach(saleItem => {
                     const prodName = (saleItem.productName || '').trim().toLowerCase();
@@ -529,6 +536,14 @@ const WarehouseManagement = ({ currentUser }) => {
         salesRecords.forEach(sale => {
             const sStatus = (sale.status || '').toLowerCase();
             if (sStatus !== 'accepted' && sStatus !== 'pending') return;
+
+            // Respect period filter: only include sales up to the selected end date
+            if (warehouseFilters.endDate && sale.date) {
+                const endLimit = new Date(warehouseFilters.endDate);
+                endLimit.setHours(23, 59, 59, 999);
+                if (new Date(sale.date) > endLimit) return;
+            }
+
             if (sale.items) {
                 sale.items.forEach(si => {
                     const prodName = (si.productName || '').trim().toLowerCase();
@@ -732,6 +747,14 @@ const WarehouseManagement = ({ currentUser }) => {
         salesRecords.forEach(sale => {
             const sStatus = (sale.status || '').toLowerCase();
             if (sStatus !== 'accepted' && sStatus !== 'pending') return;
+
+            // Respect period filter: only include sales up to the selected end date
+            if (warehouseFilters.endDate && sale.date) {
+                const endLimit = new Date(warehouseFilters.endDate);
+                endLimit.setHours(23, 59, 59, 999);
+                if (new Date(sale.date) > endLimit) return;
+            }
+
             if (sale.items && Array.isArray(sale.items)) {
                 sale.items.forEach(saleItem => {
                     const prodName = (saleItem.productName || '').trim();
@@ -967,7 +990,7 @@ const WarehouseManagement = ({ currentUser }) => {
                                             <h4 className="font-bold text-gray-900 tracking-tight">Advance Filter</h4>
                                             <button
                                                 onClick={() => {
-                                                    setWarehouseFilters({ startDate: '', endDate: '', warehouse: '', productName: '', brand: '', category: 'Crop' });
+                                                    setWarehouseFilters({ startDate: '', endDate: '', warehouse: '', productName: '', brand: '', category: '' });
                                                     setFilterSearchInputs({ productSearch: '', brandSearch: '', warehouseSearch: '', categorySearch: '' });
                                                     setFilterDropdownOpen(initialFilterDropdownState);
                                                 }}
