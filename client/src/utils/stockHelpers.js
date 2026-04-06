@@ -78,6 +78,7 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
         if (stockFilters.lcNo && (item.lcNo || '').trim() !== stockFilters.lcNo) return false;
         if (stockFilters.port && (item.port || '').trim() !== stockFilters.port) return false;
         if (stockFilters.importer && (item.importer || '').trim() !== stockFilters.importer) return false;
+        if (stockFilters.warehouse && (item.warehouse || item.whName || '').trim() !== stockFilters.warehouse) return false;
         if (stockFilters.brand && (item.brand || '').trim() !== stockFilters.brand) return false;
         if (stockFilters.productName) {
             const itemName = (item.productName || item.product || '').trim().toLowerCase();
@@ -227,6 +228,7 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
                         const sProd = (saleItem.productName || '').toLowerCase().trim();
                         if (sProd === targetProd && saleItem.brandEntries) {
                             saleItem.brandEntries.forEach(entry => {
+                                if (stockFilters.warehouse && (entry.warehouseName || '').trim() !== stockFilters.warehouse) return;
                                 const sBrand = (entry.brand || '').toLowerCase().trim();
                                 if (sBrand === targetBrand || ((sBrand === '' || sBrand === '-') && targetBrand === targetProd)) {
                                     const sQty = safeParse(entry.quantity);
@@ -252,6 +254,7 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
                     const wProd = (whItem.productName || whItem.product || '').toLowerCase().trim();
                     const wBrand = (whItem.brand || '').toLowerCase().trim();
                     if (wProd === targetProd && wBrand === targetBrand) {
+                        if (stockFilters.warehouse && (whItem.whName || whItem.warehouse || '').trim() !== stockFilters.warehouse) return;
                         // Warehouse data date filtering? Assuming whItem has a date or linked to record date
                         // However, current schema might not have historical date for warehouse sales readily available here
                         const itemDate = whItem.date || whItem.createdAt;
@@ -367,6 +370,7 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
 
                 const group = groupedStock[sProdName];
                 (saleItem.brandEntries || []).forEach(entry => {
+                    if (stockFilters.warehouse && (entry.warehouseName || '').trim() !== stockFilters.warehouse) return;
                     const brandKey = (entry.brand || 'No Brand').trim().toLowerCase();
                     if (!group.brands[brandKey]) {
                         // Find default packet size with multi-level fallbacks
@@ -429,6 +433,7 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
                                 s.items.forEach(si => {
                                     if ((si.productName || si.productName || '').toLowerCase().trim() === targetProd && si.brandEntries) {
                                         si.brandEntries.forEach(be => {
+                                            if (stockFilters.warehouse && (be.warehouseName || '').trim() !== stockFilters.warehouse) return;
                                             const bName = (be.brand || '').toLowerCase().trim();
                                             if (bName === targetBrand || ((bName === '' || bName === '-') && targetBrand === targetProd)) {
                                                 const sq = safeParse(be.quantity);

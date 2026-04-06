@@ -41,6 +41,7 @@ const SaleManagement = ({
     const [exportersList, setExportersList] = useState([]);
     const [importersList, setImportersList] = useState([]);
     const [portsList, setPortsList] = useState([]);
+    const [cnfsList, setCnfsList] = useState([]);
     const [isLoading, setIsLoading] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
     const [editingId, setEditingId] = useState(null);
@@ -521,6 +522,7 @@ const SaleManagement = ({
         fetchStockRecords();
         fetchImportersList();
         fetchPortsList();
+        fetchCnfsList();
     }, [saleType]); // Refetch if saleType changes
 
     // Reset filters when switching between General and Border sales
@@ -643,6 +645,15 @@ const SaleManagement = ({
             setPortsList(Array.isArray(response.data) ? response.data : []);
         } catch (error) {
             console.error('Error fetching ports:', error);
+        }
+    };
+
+    const fetchCnfsList = async () => {
+        try {
+            const response = await axios.get(`${API_BASE_URL}/api/cnfs`);
+            setCnfsList(Array.isArray(response.data) ? response.data : []);
+        } catch (error) {
+            console.error('Error fetching C&Fs:', error);
         }
     };
 
@@ -1441,6 +1452,8 @@ const SaleManagement = ({
     const [warehouseSearch, setWarehouseSearch] = useState('');
     const [importerSearch, setImporterSearch] = useState('');
     const [portSearch, setPortSearch] = useState('');
+    const [indCnfSearch, setIndCnfSearch] = useState('');
+    const [bdCnfSearch, setBdCnfSearch] = useState('');
 
     // Handle outside clicks for dropdowns
     useEffect(() => {
@@ -1463,7 +1476,11 @@ const SaleManagement = ({
             if (activeDropdown === 'importer' && !e.target.closest('.importer-dropdown-container')) {
                 setActiveDropdown(null);
             }
-            if (activeDropdown === 'port' && !e.target.closest('.port-dropdown-container')) {
+            if (
+                (activeDropdown === 'port' && !e.target.closest('.port-dropdown-container')) ||
+                (activeDropdown === 'indianCnF' && !e.target.closest('.ind-cnf-dropdown-container')) ||
+                (activeDropdown === 'bdCnf' && !e.target.closest('.bd-cnf-dropdown-container'))
+            ) {
                 setActiveDropdown(null);
             }
         };
@@ -1487,6 +1504,20 @@ const SaleManagement = ({
         return customers.filter(c =>
             (c.companyName || '').toLowerCase().includes(companyNameSearch.toLowerCase())
         );
+    };
+
+    const getFilteredIndianCnfs = () => {
+        const query = (indCnfSearch || '').toLowerCase();
+        return cnfsList
+            .filter(c => c.type === 'Indian' && (c.name || '').toLowerCase().includes(query))
+            .slice(0, 50);
+    };
+
+    const getFilteredBdCnfs = () => {
+        const query = (bdCnfSearch || '').toLowerCase();
+        return cnfsList
+            .filter(c => c.type === 'BD' && (c.name || '').toLowerCase().includes(query))
+            .slice(0, 50);
     };
 
     const getFilteredProducts = () => {
@@ -1681,6 +1712,18 @@ const SaleManagement = ({
             return { ...prev, items: newItems };
         });
         setWarehouseSearch('');
+        setActiveDropdown(null);
+    };
+
+    const handleIndCnfSelect = (cnfName) => {
+        setFormData(prev => ({ ...prev, indianCnF: cnfName || '' }));
+        setIndCnfSearch('');
+        setActiveDropdown(null);
+    };
+
+    const handleBdCnfSelect = (cnfName) => {
+        setFormData(prev => ({ ...prev, bdCnf: cnfName || '' }));
+        setBdCnfSearch('');
         setActiveDropdown(null);
     };
 
@@ -2511,17 +2554,107 @@ const SaleManagement = ({
 
                             {/* Border Field: IND C&F */}
                             {saleType === 'Border' && (
-                                <div className="sale-mgmt-input-group">
+                                <div className="sale-mgmt-input-group relative ind-cnf-dropdown-container">
                                     <label className="sale-mgmt-label">IND C&F</label>
-                                    <input type="text" name="indianCnF" value={formData.indianCnF} onChange={handleInputChange} placeholder="IND C&F" className="sale-mgmt-input" />
+                                    <div className="relative">
+                                        <input
+                                            type="text"
+                                            name="indianCnF"
+                                            placeholder={formData.indianCnF || "Search IND C&F..."}
+                                            value={activeDropdown === 'indianCnF' ? indCnfSearch : formData.indianCnF}
+                                            onChange={(e) => {
+                                                setIndCnfSearch(e.target.value);
+                                                setActiveDropdown('indianCnF');
+                                                setHighlightedIndex(-1);
+                                                handleInputChange(e); // allow fallback text input
+                                            }}
+                                            onFocus={() => { setActiveDropdown('indianCnF'); setHighlightedIndex(-1); }}
+                                            onKeyDown={(e) => handleDropdownKeyDown(e, 'indianCnF', getFilteredIndianCnfs(), handleIndCnfSelect)}
+                                            className={`sale-mgmt-input pr-14 ${formData.indianCnF ? 'placeholder:text-gray-900 placeholder:font-semibold' : 'placeholder:text-gray-400'}`}
+                                        />
+                                        <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-2">
+                                            {formData.indianCnF && (
+                                                <button type="button" onClick={() => handleIndCnfSelect(null)} className="text-gray-400 hover:text-red-500">
+                                                    <XIcon className="w-4 h-4" />
+                                                </button>
+                                            )}
+                                            <button
+                                                type="button"
+                                                onClick={() => setActiveDropdown(activeDropdown === 'indianCnF' ? null : 'indianCnF')}
+                                                className="text-gray-300 hover:text-blue-500 transition-colors"
+                                            >
+                                                <ChevronDownIcon className={`w-4 h-4 transition-transform duration-200 ${activeDropdown === 'indianCnF' ? 'rotate-180' : ''}`} />
+                                            </button>
+                                        </div>
+                                    </div>
+                                    {activeDropdown === 'indianCnF' && getFilteredIndianCnfs().length > 0 && (
+                                        <div className="absolute z-[60] w-full mt-1 bg-white border border-gray-100 rounded-xl shadow-xl max-h-48 overflow-y-auto py-1">
+                                            {getFilteredIndianCnfs().map((cnf, idx) => (
+                                                <button
+                                                    key={cnf._id || `indcnf-${idx}`}
+                                                    type="button"
+                                                    onClick={() => handleIndCnfSelect(cnf.name)}
+                                                    onMouseEnter={() => setHighlightedIndex(idx)}
+                                                    className={`w-full px-4 py-2 text-left text-sm transition-colors font-medium ${formData.indianCnF === cnf.name ? 'bg-blue-50 text-blue-700' : highlightedIndex === idx ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-blue-50'}`}
+                                                >
+                                                    {cnf.name}
+                                                </button>
+                                            ))}
+                                        </div>
+                                    )}
                                 </div>
                             )}
 
                             {/* Border Field: BD C&F */}
                             {saleType === 'Border' && (
-                                <div className="sale-mgmt-input-group">
+                                <div className="sale-mgmt-input-group relative bd-cnf-dropdown-container">
                                     <label className="sale-mgmt-label">BD C&F</label>
-                                    <input type="text" name="bdCnf" value={formData.bdCnf} onChange={handleInputChange} placeholder="BD C&F" className="sale-mgmt-input" />
+                                    <div className="relative">
+                                        <input
+                                            type="text"
+                                            name="bdCnf"
+                                            placeholder={formData.bdCnf || "Search BD C&F..."}
+                                            value={activeDropdown === 'bdCnf' ? bdCnfSearch : formData.bdCnf}
+                                            onChange={(e) => {
+                                                setBdCnfSearch(e.target.value);
+                                                setActiveDropdown('bdCnf');
+                                                setHighlightedIndex(-1);
+                                                handleInputChange(e); // allow fallback text input
+                                            }}
+                                            onFocus={() => { setActiveDropdown('bdCnf'); setHighlightedIndex(-1); }}
+                                            onKeyDown={(e) => handleDropdownKeyDown(e, 'bdCnf', getFilteredBdCnfs(), handleBdCnfSelect)}
+                                            className={`sale-mgmt-input pr-14 ${formData.bdCnf ? 'placeholder:text-gray-900 placeholder:font-semibold' : 'placeholder:text-gray-400'}`}
+                                        />
+                                        <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-2">
+                                            {formData.bdCnf && (
+                                                <button type="button" onClick={() => handleBdCnfSelect(null)} className="text-gray-400 hover:text-red-500">
+                                                    <XIcon className="w-4 h-4" />
+                                                </button>
+                                            )}
+                                            <button
+                                                type="button"
+                                                onClick={() => setActiveDropdown(activeDropdown === 'bdCnf' ? null : 'bdCnf')}
+                                                className="text-gray-300 hover:text-blue-500 transition-colors"
+                                            >
+                                                <ChevronDownIcon className={`w-4 h-4 transition-transform duration-200 ${activeDropdown === 'bdCnf' ? 'rotate-180' : ''}`} />
+                                            </button>
+                                        </div>
+                                    </div>
+                                    {activeDropdown === 'bdCnf' && getFilteredBdCnfs().length > 0 && (
+                                        <div className="absolute z-[60] w-full mt-1 bg-white border border-gray-100 rounded-xl shadow-xl max-h-48 overflow-y-auto py-1">
+                                            {getFilteredBdCnfs().map((cnf, idx) => (
+                                                <button
+                                                    key={cnf._id || `bdcnf-${idx}`}
+                                                    type="button"
+                                                    onClick={() => handleBdCnfSelect(cnf.name)}
+                                                    onMouseEnter={() => setHighlightedIndex(idx)}
+                                                    className={`w-full px-4 py-2 text-left text-sm transition-colors font-medium ${formData.bdCnf === cnf.name ? 'bg-blue-50 text-blue-700' : highlightedIndex === idx ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-blue-50'}`}
+                                                >
+                                                    {cnf.name}
+                                                </button>
+                                            ))}
+                                        </div>
+                                    )}
                                 </div>
                             )}
 

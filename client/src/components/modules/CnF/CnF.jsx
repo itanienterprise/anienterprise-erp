@@ -151,17 +151,21 @@ const CnF = ({
     const fetchCnFs = async () => {
         setIsLoading(true);
         try {
-            const [cnfsRes, stockRes] = await Promise.all([
+            const [cnfsRes, stockRes, salesRes] = await Promise.all([
                 axios.get(`${API_BASE_URL}/api/cnfs`),
-                axios.get(`${API_BASE_URL}/api/stock`)
+                axios.get(`${API_BASE_URL}/api/stock`),
+                axios.get(`${API_BASE_URL}/api/sales`)
             ]);
 
             const allCnfs = Array.isArray(cnfsRes.data) ? cnfsRes.data : [];
             const allStock = Array.isArray(stockRes.data) ? stockRes.data : [];
+            const allSales = Array.isArray(salesRes.data) ? salesRes.data : [];
 
             const cnfsWithBalance = allCnfs.map(cnf => {
                 const targetName = (cnf.name || '').toLowerCase().trim();
-                const totalEarned = allStock.reduce((acc, record) => {
+                
+                // 1. Earned from Stock (LC Arrivals)
+                const stockEarned = allStock.reduce((acc, record) => {
                     const recordIndCnF = (record.indianCnF || '').toLowerCase().trim();
                     const recordBdCnF = (record.bdCnF || '').toLowerCase().trim();
 
@@ -172,7 +176,6 @@ const CnF = ({
                             : (recordIndCnF === targetName || recordBdCnF === targetName);
 
                     if (isMatch) {
-                        // Use per-record commission if available, else fall back to parent C&F agent default
                         let commission = parseFloat(cnf.commission) || 0;
                         if (recordIndCnF === targetName && record.indCnFComm !== undefined && record.indCnFComm !== null && record.indCnFComm !== '') {
                             commission = parseFloat(record.indCnFComm);
@@ -180,13 +183,11 @@ const CnF = ({
                             commission = parseFloat(record.bdCnFComm);
                         }
 
-                        // Use per-type UOM fields to prevent cross-contamination between Indian and BD C&F agents
                         const rawUom = recordIndCnF === targetName
                             ? (record.indCnFUom || record.uom || cnf.uom || cnf.commissionType || 'QTY')
                             : (record.bdCnFUom || record.uom || cnf.uom || cnf.commissionType || 'QTY');
                         const uom = typeof rawUom === 'string' ? rawUom.toUpperCase() : 'QTY';
 
-                        // Filter out unaccepted records
                         const isAccepted = !record.status || record.status === 'In Stock';
                         if (!isAccepted) return acc;
 
@@ -206,7 +207,46 @@ const CnF = ({
                     return acc;
                 }, 0);
 
-                return { ...cnf, totalBalance: totalEarned };
+                // 2. Earned from Border Sales
+                const salesEarned = allSales.reduce((acc, sale) => {
+                    const sTypeLow = (sale.saleType || '').toLowerCase().trim();
+                    const isBorder = sTypeLow === 'border' || sTypeLow === 'border sale' || (sale.invoiceNo || '').startsWith('BS');
+                    if (!isBorder) return acc;
+
+                    // Skip rejected sales
+                    if (sale.status && sale.status.toLowerCase().includes('rejected')) return acc;
+
+                    const saleIndCnF = (sale.indianCnF || '').toLowerCase().trim();
+                    const saleBdCnf = (sale.bdCnf || '').toLowerCase().trim();
+
+                    const isMatch = cnf.type === 'Indian'
+                        ? saleIndCnF === targetName
+                        : cnf.type === 'BD'
+                            ? saleBdCnf === targetName
+                            : (saleIndCnF === targetName || saleBdCnf === targetName);
+
+                    if (isMatch) {
+                        let totalSaleComm = 0;
+                        const commissionFactor = parseFloat(cnf.commission) || 0;
+                        const uom = (typeof cnf.uom === 'string' ? cnf.uom : (cnf.commissionType || 'QTY')).toUpperCase();
+
+                        (sale.items || []).forEach(item => {
+                            (item.brandEntries || []).forEach(entry => {
+                                if (uom === 'QTY') {
+                                    totalSaleComm += (parseFloat(entry.quantity) || 0) * commissionFactor;
+                                } else if (uom === 'TRUCK') {
+                                    totalSaleComm += (parseFloat(entry.truck) || 1) * commissionFactor;
+                                } else {
+                                    totalSaleComm += commissionFactor;
+                                }
+                            });
+                        });
+                        return acc + totalSaleComm;
+                    }
+                    return acc;
+                }, 0);
+
+                return { ...cnf, totalBalance: stockEarned + salesEarned };
             });
 
             const filtered = moduleType
@@ -223,12 +263,17 @@ const CnF = ({
     const fetchCnFHistory = async (cnfName) => {
         setHistoryLoading(true);
         try {
-            const response = await axios.get(`${API_BASE_URL}/api/stock`);
-            const stockData = Array.isArray(response.data) ? response.data : [];
-
+            const [stockRes, salesRes] = await Promise.all([
+                axios.get(`${API_BASE_URL}/api/stock`),
+                axios.get(`${API_BASE_URL}/api/sales`)
+            ]);
+            
+            const stockData = Array.isArray(stockRes.data) ? stockRes.data : [];
+            const salesData = Array.isArray(salesRes.data) ? salesRes.data : [];
             const rows = [];
             const targetCnF = (cnfName || '').toLowerCase().trim();
 
+            // 1. Process Stock (LC) Records
             stockData.forEach(record => {
                 const indCnF = (record.indianCnF || '').toLowerCase().trim();
                 const bdCnF = (record.bdCnF || '').toLowerCase().trim();
@@ -286,12 +331,66 @@ const CnF = ({
                         uom: uom,
                         totalCommission: totalCommission,
                         cnfType: indCnF === targetCnF ? 'Indian' : 'BD',
+                        source: 'LC',
                         indCnFEdited: record.indCnFEdited,
                         bdCnFEdited: record.bdCnFEdited,
                         indCnFBulkEdited: record.indCnFBulkEdited,
                         bdCnFBulkEdited: record.bdCnFBulkEdited
                     });
                 }
+            });
+
+            // 2. Process Border Sale Records
+            salesData.forEach(sale => {
+                const sTypeLow = (sale.saleType || '').toLowerCase().trim();
+                const isBorder = sTypeLow === 'border' || sTypeLow === 'border sale' || (sale.invoiceNo || '').startsWith('BS');
+                if (!isBorder) return;
+
+                // Skip rejected sales
+                if (sale.status && sale.status.toLowerCase().includes('rejected')) return;
+
+                const saleIndCnF = (sale.indianCnF || '').toLowerCase().trim();
+                const saleBdCnf = (sale.bdCnf || '').toLowerCase().trim();
+
+                const isMatch = cnfName.toLowerCase().trim() === saleIndCnF || cnfName.toLowerCase().trim() === saleBdCnf;
+                if (!isMatch) return;
+
+                const commissionFactor = parseFloat(viewData?.commission) || 0;
+                const uom = (typeof viewData?.uom === 'string' ? viewData.uom : (viewData?.commissionType || 'QTY')).toUpperCase();
+
+                (sale.items || []).forEach(item => {
+                    (item.brandEntries || []).forEach(entry => {
+                        let totalEntryComm = 0;
+                        const qty = parseFloat(entry.quantity) || 0;
+                        const truck = parseFloat(entry.truck) || 1;
+
+                        if (uom === 'QTY') {
+                            totalEntryComm = qty * commissionFactor;
+                        } else if (uom === 'TRUCK') {
+                            totalEntryComm = truck * commissionFactor;
+                        } else {
+                            totalEntryComm = commissionFactor;
+                        }
+
+                        rows.push({
+                            _id: `${sale._id}-${entry.brand}-${entry.warehouseName}`,
+                            date: sale.date,
+                            lcNo: sale.lcNo || '-',
+                            port: sale.port || '-',
+                            product: item.productName || '-',
+                            brand: entry.brand || '-',
+                            rate: entry.unitPrice || 0,
+                            bag: '-',
+                            qty: qty,
+                            truck: truck,
+                            commission: commissionFactor,
+                            uom: uom,
+                            totalCommission: parseFloat(totalEntryComm.toFixed(2)),
+                            cnfType: (sale.indianCnF || '').toLowerCase().trim() === targetCnF ? 'Indian' : 'BD',
+                            source: 'Sale'
+                        });
+                    });
+                });
             });
 
             rows.sort((a, b) => new Date(b.date) - new Date(a.date));
@@ -990,7 +1089,17 @@ const CnF = ({
                                             <thead>
                                                 <tr className="cnf-table-header-row">
                                                     {isHistorySelectionMode && <th className="cnf-table-checkbox-header"><input type="checkbox" checked={selectedHistoryIds.size === filteredHistory.length} onChange={toggleSelectAllHistory} /></th>}
-                                                    <th className="cnf-table-header">Date</th><th className="cnf-table-header">LC No</th><th className="cnf-table-header">Product</th><th className="cnf-table-header">Port</th><th className="cnf-table-header">Truck</th><th className="cnf-table-header">Bag</th><th className="cnf-table-header">Qty</th><th className="cnf-table-header">Commission</th><th className="cnf-table-header">Total</th><th className="cnf-table-header text-center">Action</th>
+                                                    <th className="cnf-table-header">Date</th>
+                                                    <th className="cnf-table-header whitespace-nowrap">LC No</th>
+                                                    <th className="cnf-table-header">Product</th>
+                                                    <th className="cnf-table-header">Port</th>
+                                                    <th className="cnf-table-header">Truck</th>
+                                                    <th className="cnf-table-header">Bag</th>
+                                                    <th className="cnf-table-header">Qty</th>
+                                                    <th className="cnf-table-header">Commission</th>
+                                                    <th className="cnf-table-header">Total</th>
+                                                    <th className="cnf-table-header text-center whitespace-nowrap">Source</th>
+                                                    <th className="cnf-table-header text-center">Action</th>
                                                 </tr>
                                             </thead>
                                             <tbody className="cnf-table-body">
@@ -1017,15 +1126,20 @@ const CnF = ({
                                                                 ) : null}
                                                             </td>
                                                         )}
-                                                        <td className="cnf-table-cell">{formatDate(row.date)}</td>
-                                                        <td className="cnf-table-cell font-bold">{row.lcNo}</td>
+                                                        <td className="cnf-table-cell whitespace-nowrap">{formatDate(row.date)}</td>
+                                                        <td className="cnf-table-cell font-bold whitespace-nowrap">{row.lcNo}</td>
                                                         <td className="cnf-table-cell font-medium">{row.product || '-'}</td>
                                                         <td className="cnf-table-cell">{row.port || '-'}</td>
                                                         <td className="cnf-table-cell uppercase">{row.truck || '-'}</td>
-                                                        <td className="cnf-table-cell font-bold">{Math.round(row.bag).toLocaleString()}</td>
-                                                        <td className="cnf-table-cell font-bold">{Math.round(row.qty).toLocaleString()}</td>
+                                                        <td className="cnf-table-cell font-bold">{(!isNaN(parseFloat(row.bag))) ? Math.round(row.bag).toLocaleString() : '-'}</td>
+                                                        <td className="cnf-table-cell font-bold">{(!isNaN(parseFloat(row.qty))) ? Math.round(row.qty).toLocaleString() : '-'}</td>
                                                         <td className="cnf-table-cell">{row.commission}</td>
                                                         <td className="cnf-table-cell font-black">{(row.totalCommission || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                                                        <td className="cnf-table-cell text-center">
+                                                            <span className={`px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-widest ${row.source === 'Sale' ? 'bg-amber-100 text-amber-700' : 'bg-blue-100 text-blue-700'} border ${row.source === 'Sale' ? 'border-amber-200' : 'border-blue-200'}`}>
+                                                                {row.source || 'LC'}
+                                                            </span>
+                                                        </td>
                                                         <td className="cnf-table-cell text-center">
                                                             {(isAdmin || (!row.indCnFEdited && !row.bdCnFEdited && !row.indCnFBulkEdited && !row.bdCnFBulkEdited)) ? (
                                                                 <button onClick={(e) => { e.stopPropagation(); handleEditHistory(row); }} className="hover:bg-gray-100 p-1.5 rounded-md transition-colors">
@@ -1077,6 +1191,10 @@ const CnF = ({
                                                                 <div className="min-w-0">
                                                                     <div className="flex items-center gap-2 mb-1">
                                                                         <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">{formatDate(row.date)}</p>
+                                                                        <span className="h-1 w-1 bg-gray-300 rounded-full"></span>
+                                                                        <span className={`px-1.5 py-0.5 rounded text-[8px] font-black uppercase tracking-widest ${row.source === 'Sale' ? 'bg-amber-100 text-amber-700 border border-amber-200' : 'bg-blue-100 text-blue-700 border border-blue-200'}`}>
+                                                                            {row.source || 'LC'}
+                                                                        </span>
                                                                         <span className="h-1 w-1 bg-gray-300 rounded-full"></span>
                                                                         <p className="text-xs font-bold text-gray-800 truncate">{row.product || '-'}</p>
                                                                         {(row.indCnFEdited || row.bdCnFEdited || row.indCnFBulkEdited || row.bdCnFBulkEdited) && (
