@@ -1030,7 +1030,7 @@ const Customer = ({
                             <div className="absolute inset-0 bg-gray-900/60 backdrop-blur-sm"></div>
                             <div className="relative bg-white border border-gray-100 rounded-2xl shadow-2xl max-w-[1400px] w-full flex flex-col max-h-[90vh] animate-in zoom-in duration-200">
                                 {/* Modal Header */}
-                                <div className="relative px-4 py-4 md:px-8 md:py-6 border-b border-gray-100 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 bg-white sticky top-0 z-10 rounded-t-2xl">
+                                <div className="relative px-4 py-4 md:px-8 md:py-6 border-b border-gray-100 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 bg-white flex-shrink-0 z-10 rounded-t-2xl">
                                     <div className="flex-1 text-left">
                                         <h2 className="text-xl font-bold text-gray-900">{viewData.companyName}</h2>
                                         {viewData.customerName && viewData.customerName !== viewData.companyName && (
@@ -1452,7 +1452,7 @@ const Customer = ({
                                     </div>
                                 </div>
 
-                                <div className="flex-1 overflow-auto p-4 md:p-8 pt-6 md:pt-8">
+                                <div className="flex-1 overflow-auto p-4 md:p-8 pt-6 md:pt-8 min-h-0">
                                     {/* Global Summary Cards */}
                                     <div className={`grid ${activeHistoryTab === 'all' ? 'grid-cols-2 md:grid-cols-4' : (activeHistoryTab === 'sales' ? 'grid-cols-2 md:grid-cols-6' : 'grid-cols-2 md:grid-cols-4')} gap-2 md:gap-3 mb-4 md:mb-8 summary-grid-mobile`}>
                                         {activeHistoryTab === 'sales' && (

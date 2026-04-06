@@ -498,7 +498,7 @@ const Exporter = ({
                     <div className="absolute inset-0 bg-gray-900/60 backdrop-blur-sm" onClick={() => setViewData(null)}></div>
                     <div className="relative bg-white border border-gray-100 rounded-2xl shadow-2xl max-w-6xl w-full flex flex-col max-h-[90vh] animate-in zoom-in duration-200">
                         {/* Modal Header */}
-                        <div className="relative px-4 py-4 md:px-8 md:py-6 border-b border-gray-100 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 bg-white sticky top-0 z-10 rounded-t-2xl">
+                        <div className="relative px-4 py-4 md:px-8 md:py-6 border-b border-gray-100 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 bg-white flex-shrink-0 z-10 rounded-t-2xl">
                             <div className="flex-1 text-left min-w-0 pr-8 md:pr-0">
                                 <h3 className="text-lg md:text-xl font-bold text-gray-900 truncate">{viewData.name}</h3>
                                 <p className="text-xs text-gray-500 mt-1 truncate">License: {viewData.licenseNo}{viewData.address ? ` | ${viewData.address}` : ''}</p>
@@ -527,7 +527,7 @@ const Exporter = ({
                         </div>
 
                         {/* Modal Body */}
-                        <div className="flex-1 overflow-auto p-4 md:p-8">
+                        <div className="flex-1 overflow-auto p-4 md:p-8 min-h-0">
                             {historyLoading ? (
                                 <div className="flex items-center justify-center py-16">
                                     <div className="w-8 h-8 border-2 border-blue-200 border-t-blue-600 rounded-full animate-spin"></div>

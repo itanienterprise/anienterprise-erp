@@ -2923,7 +2923,7 @@ const StockManagement = ({
                         <div className="absolute inset-0 bg-gray-900/60 backdrop-blur-sm"></div>
                         <div className="relative bg-white/95 backdrop-blur-2xl border border-white/50 rounded-3xl shadow-2xl max-w-[95vw] w-full animate-in zoom-in duration-300 flex flex-col max-h-[90vh]">
                             {/* Modal Header */}
-                            <div className="px-4 sm:px-8 pt-2 pb-4 sm:pt-4 sm:pb-6 border-b border-gray-100 flex items-center justify-between bg-white sticky top-0 z-10 rounded-t-3xl gap-3">
+                            <div className="px-4 sm:px-8 pt-2 pb-4 sm:pt-4 sm:pb-6 border-b border-gray-100 flex items-center justify-between bg-white rounded-t-3xl gap-3 flex-shrink-0 z-10 relative">
                                 <div className="flex-shrink-0 min-w-0">
                                     <h3 className="text-lg sm:text-2xl font-bold text-gray-900 truncate">Stock History - {viewRecord.data.productName}</h3>
                                 </div>
@@ -3132,7 +3132,7 @@ const StockManagement = ({
                             </div>
 
                             {/* Mobile Tabs & Search Unified - Visible only on mobile */}
-                            <div className="lg:hidden px-4 pb-4 border-b border-gray-100">
+                            <div className="lg:hidden px-4 pb-4 border-b border-gray-100 flex-shrink-0 bg-white">
                                 <div className="bg-gray-50 rounded-2xl border border-gray-200/60 p-2 space-y-2.5 shadow-inner-sm">
                                     <div className="w-full relative group">
                                         <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
@@ -3164,7 +3164,7 @@ const StockManagement = ({
                             </div>
 
                             {/* Modal Content */}
-                            <div className="px-4 sm:px-8 py-6 sm:py-8 flex-1 overflow-y-auto custom-scrollbar">
+                            <div className="px-4 sm:px-8 py-6 sm:py-8 flex-1 overflow-y-auto custom-scrollbar min-h-0">
                                 {historyTab === 'purchase' ? (() => {
                                     const history = activePurchaseHistory;
                                     const unit = history[0]?.unit || 'kg';
