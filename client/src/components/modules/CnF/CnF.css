@@ -337,7 +337,6 @@
     color: #6b7280;
     text-transform: uppercase;
     letter-spacing: 0.05em;
-    text-align: left;
     cursor: pointer;
     transition: background 0.2s;
 }

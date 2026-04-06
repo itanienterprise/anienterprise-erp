@@ -855,15 +855,19 @@ const CnF = ({
                                     <thead>
                                         <tr className="cnf-table-header-row">
                                             {isSelectionMode && <th className="cnf-table-checkbox-header"><input type="checkbox" checked={selectedItems.size === cnfs.length} onChange={toggleSelectAll} /></th>}
-                                            <th className="cnf-table-header" onClick={() => requestSort('cnfId')}>ID <SortIcon config={sortConfig.cnf} columnKey="cnfId" /></th>
-                                            <th className="cnf-table-header" onClick={() => requestSort('name')}>Name <SortIcon config={sortConfig.cnf} columnKey="name" /></th>
-                                            <th className="cnf-table-header">Contact</th>
-                                            <th className="cnf-table-header">Phone</th>
-                                            <th className="cnf-table-header">UOM</th>
-                                            <th className="cnf-table-header text-right">Commission</th>
-                                            <th className="cnf-table-header text-right">Balance</th>
-                                            <th className="cnf-table-header text-center">Status</th>
-                                            <th className="cnf-table-header text-right pr-8">Actions</th>
+                                            <th className="cnf-table-header !text-left px-6" onClick={() => requestSort('cnfId')}>
+                                                <div className="flex items-center gap-1">ID <SortIcon config={sortConfig.cnf} columnKey="cnfId" /></div>
+                                            </th>
+                                            <th className="cnf-table-header !text-left px-6" onClick={() => requestSort('name')}>
+                                                <div className="flex items-center gap-1">Name <SortIcon config={sortConfig.cnf} columnKey="name" /></div>
+                                            </th>
+                                            <th className="cnf-table-header !text-left px-6">Contact</th>
+                                            <th className="cnf-table-header !text-left px-6">Phone</th>
+                                            <th className="cnf-table-header !text-left px-6">UOM</th>
+                                            <th className="cnf-table-header !text-right px-6">Commission (Tk)</th>
+                                            <th className="cnf-table-header !text-right px-6">Balance (Tk)</th>
+                                            <th className="cnf-table-header !text-center px-6">Status</th>
+                                            <th className="cnf-table-header !text-right px-6">Actions</th>
                                         </tr>
                                     </thead>
                                     <tbody className="cnf-table-body">
@@ -881,17 +885,17 @@ const CnF = ({
                                                 }
                                                 if (isSelectionMode) toggleSelection(cnf._id);
                                             }}>
-                                                {isSelectionMode && <td className="cnf-table-cell"><input type="checkbox" checked={selectedItems.has(cnf._id)} readOnly /></td>}
-                                                <td className="cnf-table-cell font-bold">{cnf.cnfId}</td>
-                                                <td className="cnf-table-cell">{cnf.name}</td>
-                                                <td className="cnf-table-cell">{cnf.contactPerson}</td>
-                                                <td className="cnf-table-cell">{cnf.phone}</td>
-                                                <td className="cnf-table-cell">{cnf.uom || 'QTY'}</td>
-                                                <td className="cnf-table-cell font-bold text-right">{cnf.commission} Tk</td>
-                                                <td className="cnf-table-cell font-black text-right">{(cnf.totalBalance || 0).toLocaleString()} Tk</td>
-                                                <td className="cnf-table-cell text-center"><span className={`cnf-status-badge ${cnf.status === 'Active' ? 'active' : 'inactive'}`}>{cnf.status}</span></td>
-                                                <td className="cnf-table-cell">
-                                                    <div className="cnf-table-actions justify-end pr-3">
+                                                {isSelectionMode && <td className="cnf-table-cell px-6"><input type="checkbox" checked={selectedItems.has(cnf._id)} readOnly /></td>}
+                                                <td className="cnf-table-cell px-6 font-bold !text-left">{cnf.cnfId}</td>
+                                                <td className="cnf-table-cell px-6 !text-left">{cnf.name}</td>
+                                                <td className="cnf-table-cell px-6 !text-left">{cnf.contactPerson}</td>
+                                                <td className="cnf-table-cell px-6 !text-left">{cnf.phone}</td>
+                                                <td className="cnf-table-cell px-6 !text-left">{cnf.uom || 'QTY'}</td>
+                                                <td className="cnf-table-cell px-6 font-bold !text-right">{cnf.commission}</td>
+                                                <td className="cnf-table-cell px-6 font-black !text-right">{(cnf.totalBalance || 0).toLocaleString()}</td>
+                                                <td className="cnf-table-cell px-6 !text-center"><span className={`cnf-status-badge ${cnf.status === 'Active' ? 'active' : 'inactive'}`}>{cnf.status}</span></td>
+                                                <td className="cnf-table-cell px-6">
+                                                    <div className="cnf-table-actions justify-end">
                                                         <button onClick={(e) => { e.stopPropagation(); setViewData(cnf); }} className="cnf-action-btn hover:bg-gray-100 text-gray-400 hover:text-gray-600"><EyeIcon className="w-5 h-5" /></button>
                                                         <button onClick={(e) => { e.stopPropagation(); handleEdit(cnf); }} className="cnf-action-btn cnf-action-edit"><EditIcon className="w-5 h-5" /></button>
                                                         <button onClick={(e) => { e.stopPropagation(); handleDelete(cnf._id); }} className="cnf-action-btn cnf-action-delete"><TrashIcon className="w-5 h-5" /></button>
