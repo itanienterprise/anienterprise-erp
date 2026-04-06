@@ -860,10 +860,10 @@ const CnF = ({
                                             <th className="cnf-table-header">Contact</th>
                                             <th className="cnf-table-header">Phone</th>
                                             <th className="cnf-table-header">UOM</th>
-                                            <th className="cnf-table-header">Commission</th>
-                                            <th className="cnf-table-header">Balance</th>
-                                            <th className="cnf-table-header">Status</th>
-                                            <th className="cnf-table-header">Actions</th>
+                                            <th className="cnf-table-header text-right">Commission</th>
+                                            <th className="cnf-table-header text-right">Balance</th>
+                                            <th className="cnf-table-header text-center">Status</th>
+                                            <th className="cnf-table-header text-right pr-8">Actions</th>
                                         </tr>
                                     </thead>
                                     <tbody className="cnf-table-body">
@@ -887,11 +887,11 @@ const CnF = ({
                                                 <td className="cnf-table-cell">{cnf.contactPerson}</td>
                                                 <td className="cnf-table-cell">{cnf.phone}</td>
                                                 <td className="cnf-table-cell">{cnf.uom || 'QTY'}</td>
-                                                <td className="cnf-table-cell font-bold">{cnf.commission} Tk</td>
-                                                <td className="cnf-table-cell font-black">{(cnf.totalBalance || 0).toLocaleString()} Tk</td>
-                                                <td className="cnf-table-cell"><span className={`cnf-status-badge ${cnf.status === 'Active' ? 'active' : 'inactive'}`}>{cnf.status}</span></td>
+                                                <td className="cnf-table-cell font-bold text-right">{cnf.commission} Tk</td>
+                                                <td className="cnf-table-cell font-black text-right">{(cnf.totalBalance || 0).toLocaleString()} Tk</td>
+                                                <td className="cnf-table-cell text-center"><span className={`cnf-status-badge ${cnf.status === 'Active' ? 'active' : 'inactive'}`}>{cnf.status}</span></td>
                                                 <td className="cnf-table-cell">
-                                                    <div className="cnf-table-actions">
+                                                    <div className="cnf-table-actions justify-end pr-3">
                                                         <button onClick={(e) => { e.stopPropagation(); setViewData(cnf); }} className="cnf-action-btn hover:bg-gray-100 text-gray-400 hover:text-gray-600"><EyeIcon className="w-5 h-5" /></button>
                                                         <button onClick={(e) => { e.stopPropagation(); handleEdit(cnf); }} className="cnf-action-btn cnf-action-edit"><EditIcon className="w-5 h-5" /></button>
                                                         <button onClick={(e) => { e.stopPropagation(); handleDelete(cnf._id); }} className="cnf-action-btn cnf-action-delete"><TrashIcon className="w-5 h-5" /></button>
@@ -1209,11 +1209,11 @@ const CnF = ({
                                                     <th className="cnf-table-header whitespace-nowrap">LC No</th>
                                                     <th className="cnf-table-header">Product</th>
                                                     <th className="cnf-table-header">Port</th>
-                                                    <th className="cnf-table-header">Truck</th>
-                                                    <th className="cnf-table-header">Bag</th>
-                                                    <th className="cnf-table-header">Qty</th>
-                                                    <th className="cnf-table-header">Commission</th>
-                                                    <th className="cnf-table-header">Total</th>
+                                                    <th className="cnf-table-header text-center">Truck</th>
+                                                    <th className="cnf-table-header text-right">Bag</th>
+                                                    <th className="cnf-table-header text-right">Qty</th>
+                                                    <th className="cnf-table-header text-right">Commission</th>
+                                                    <th className="cnf-table-header text-right">Total</th>
                                                     <th className="cnf-table-header text-center whitespace-nowrap">Source</th>
                                                     <th className="cnf-table-header text-center">Action</th>
                                                 </tr>
@@ -1247,11 +1247,11 @@ const CnF = ({
                                                         <td className="cnf-table-cell font-bold whitespace-nowrap">{row.lcNo}</td>
                                                         <td className="cnf-table-cell font-medium">{row.product || '-'}</td>
                                                         <td className="cnf-table-cell">{row.port || '-'}</td>
-                                                        <td className="cnf-table-cell uppercase">{row.truck || '-'}</td>
-                                                        <td className="cnf-table-cell font-bold">{(!isNaN(parseFloat(row.bag))) ? Math.round(row.bag).toLocaleString() : '-'}</td>
-                                                        <td className="cnf-table-cell font-bold">{(!isNaN(parseFloat(row.qty))) ? Math.round(row.qty).toLocaleString() : '-'}</td>
-                                                        <td className="cnf-table-cell">{row.commission}</td>
-                                                        <td className="cnf-table-cell font-black">{(row.totalCommission || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                                                        <td className="cnf-table-cell text-center uppercase">{row.truck || '-'}</td>
+                                                        <td className="cnf-table-cell text-right font-bold">{(!isNaN(parseFloat(row.bag))) ? Math.round(row.bag).toLocaleString() : '-'}</td>
+                                                        <td className="cnf-table-cell text-right font-bold">{(!isNaN(parseFloat(row.qty))) ? Math.round(row.qty).toLocaleString() : '-'}</td>
+                                                        <td className="cnf-table-cell text-right">{row.commission}</td>
+                                                        <td className="cnf-table-cell text-right font-black">{(row.totalCommission || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                                                         <td className="cnf-table-cell text-center">
                                                             <span className={`px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-widest ${row.source === 'Sale' ? 'bg-amber-100 text-amber-700' : 'bg-blue-100 text-blue-700'} border ${row.source === 'Sale' ? 'border-amber-200' : 'border-blue-200'}`}>
                                                                 {row.source || 'LC'}
