@@ -1351,8 +1351,8 @@ function App() {
         />
       )}
       {/* Sidebar */}
-      <aside className={`fixed inset-y-0 left-0 z-[1100] w-64 bg-white text-gray-900 border-r border-gray-200 transform transition-transform duration-300 ease-in-out ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'} md:relative md:translate-x-0 flex flex-col ${(showLcReport || showStockReport || showProductHistoryReport || showSalesReport) ? 'print:hidden' : ''}`}>
-        <div className="p-5 border-b border-gray-200 bg-gray-50/50">
+      <aside className={`fixed inset-y-0 left-0 z-[1100] w-56 bg-white text-gray-900 border-r border-gray-200 transform transition-transform duration-300 ease-in-out ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'} md:relative md:translate-x-0 flex flex-col ${(showLcReport || showStockReport || showProductHistoryReport || showSalesReport) ? 'print:hidden' : ''}`}>
+        <div className="p-4 border-b border-gray-200 bg-gray-50/50">
           <div className="flex items-center">
             <button
               onClick={() => setShowProfile(true)}
@@ -1361,44 +1361,44 @@ function App() {
               <img
                 src={`https://ui-avatars.com/api/?name=${currentUser?.name || currentUser?.username || 'User'}&background=3b82f6&color=fff`}
                 alt="Profile"
-                className="w-12 h-12 rounded-full border-2 border-white shadow-md transition-all group-hover:scale-110 group-hover:border-blue-400"
+                className="w-10 h-10 rounded-full border-2 border-white shadow-md transition-all group-hover:scale-110 group-hover:border-blue-400"
               />
               <div className="absolute inset-0 rounded-full bg-blue-600/0 group-hover:bg-blue-600/10 transition-colors flex items-center justify-center">
                 <span className="sr-only">View Profile</span>
               </div>
             </button>
-            <div className="ml-4">
-              <p className="text-base font-bold text-gray-900 leading-tight uppercase tracking-tight">
+            <div className="ml-3 min-w-0">
+              <p className="text-sm font-bold text-gray-900 leading-tight uppercase tracking-tight truncate">
                 {currentUser?.name || currentUser?.username || 'Admin User'}
               </p>
               <button
                 onClick={handleLogout}
-                className="text-sm text-red-600 font-medium hover:underline cursor-pointer flex items-center mt-1"
+                className="text-[11px] text-red-600 font-medium hover:underline cursor-pointer flex items-center mt-0.5"
               >
-                <LogOutIcon className="w-3.5 h-3.5 mr-1" />
+                <LogOutIcon className="w-3 h-3 mr-1" />
                 Logout
               </button>
             </div>
           </div>
         </div>
-        <nav className="flex-1 px-4 py-6 space-y-2 overflow-y-auto">
-          <button onClick={() => { setCurrentView('dashboard'); setSidebarOpen(false); }} className={`w-full flex items-center px-4 py-3 rounded-lg transition-all ${currentView === 'dashboard' ? 'bg-blue-50 text-blue-600 shadow-sm' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'}`}>
+        <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto hide-scrollbar">
+          <button onClick={() => { setCurrentView('dashboard'); setSidebarOpen(false); }} className={`w-full flex items-center px-4 py-2.5 rounded-lg transition-all ${currentView === 'dashboard' ? 'bg-blue-50 text-blue-600 shadow-sm' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'}`}>
             <HomeIcon className="w-5 h-5 mr-3" />
-            <span className="font-medium">Dashboard</span>
+            <span className="font-medium text-sm">Dashboard</span>
           </button>
           <div>
             <button
               onClick={() => setHrmsDropdownOpen(!hrmsDropdownOpen)}
-              className={`w-full flex items-center justify-between px-4 py-3 rounded-lg transition-all ${currentView === 'employee-section' ? 'bg-blue-50 text-blue-600 shadow-sm' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'}`}
+              className={`w-full flex items-center justify-between px-4 py-2.5 rounded-lg transition-all ${currentView === 'employee-section' ? 'bg-blue-50 text-blue-600 shadow-sm' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'}`}
             >
               <div className="flex items-center">
                 <BriefcaseIcon className="w-5 h-5 mr-3" />
-                <span className="font-medium">HRMS</span>
+                <span className="font-medium text-sm">HRMS</span>
               </div>
               <ChevronDownIcon className={`w-4 h-4 transition-transform duration-200 ${hrmsDropdownOpen ? 'transform rotate-180' : ''}`} />
             </button>
             <div className={`overflow-hidden transition-all duration-300 ease-in-out ${hrmsDropdownOpen ? 'max-h-48 opacity-100 mt-1' : 'max-h-0 opacity-0'}`}>
-              <div className="pl-9 pr-2 space-y-1">
+              <div className="pl-7 pr-2 space-y-1">
                 <button
                   onClick={() => { setCurrentView('employee-section'); setSidebarOpen(false); }}
                   className={`w-full flex flex-row items-center py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'employee-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'}`}
@@ -1413,16 +1413,16 @@ function App() {
           <div>
             <button
               onClick={() => setImporterDropdownOpen(!importerDropdownOpen)}
-              className={`w-full flex items-center justify-between px-4 py-3 rounded-lg transition-all ${currentView === 'importer-section' || currentView === 'exporter-section' ? 'bg-blue-50 text-blue-600 shadow-sm' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'}`}
+              className={`w-full flex items-center justify-between px-4 py-2 rounded-lg transition-all ${currentView === 'importer-section' || currentView === 'exporter-section' ? 'bg-blue-50 text-blue-600 shadow-sm' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'}`}
             >
               <div className="flex items-center">
                 <UserIcon className="w-5 h-5 mr-3" />
-                <span className="font-medium">Importer/Exporter</span>
+                <span className="font-medium text-sm">Importer/Exporter</span>
               </div>
               <ChevronDownIcon className={`w-4 h-4 transition-transform duration-200 ${importerDropdownOpen ? 'transform rotate-180' : ''}`} />
             </button>
             <div className={`overflow-hidden transition-all duration-300 ease-in-out ${importerDropdownOpen ? 'max-h-48 opacity-100 mt-1' : 'max-h-0 opacity-0'}`}>
-              <div className="pl-9 pr-2 space-y-1">
+              <div className="pl-7 pr-2 space-y-1">
                 <button
                   onClick={() => { setCurrentView('importer-section'); setSidebarOpen(false); }}
                   className={`w-full flex flex-row items-center py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'importer-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'}`}
@@ -1443,16 +1443,16 @@ function App() {
           <div>
             <button
               onClick={() => setCnfDropdownOpen(!cnfDropdownOpen)}
-              className={`w-full flex items-center justify-between px-4 py-3 rounded-lg transition-all ${currentView === 'indian-cnf-section' || currentView === 'bd-cnf-section' ? 'bg-blue-50 text-blue-600 shadow-sm' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'}`}
+              className={`w-full flex items-center justify-between px-4 py-2 rounded-lg transition-all ${currentView === 'indian-cnf-section' || currentView === 'bd-cnf-section' ? 'bg-blue-50 text-blue-600 shadow-sm' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'}`}
             >
               <div className="flex items-center">
                 <UsersIcon className="w-5 h-5 mr-3" />
-                <span className="font-medium">C&F</span>
+                <span className="font-medium text-sm">C&F</span>
               </div>
               <ChevronDownIcon className={`w-4 h-4 transition-transform duration-200 ${cnfDropdownOpen ? 'transform rotate-180' : ''}`} />
             </button>
             <div className={`overflow-hidden transition-all duration-300 ease-in-out ${cnfDropdownOpen ? 'max-h-48 opacity-100 mt-1' : 'max-h-0 opacity-0'}`}>
-              <div className="pl-9 pr-2 space-y-1">
+              <div className="pl-7 pr-2 space-y-1">
                 <button
                   onClick={() => { setCurrentView('indian-cnf-section'); setSidebarOpen(false); }}
                   className={`w-full flex flex-row items-center py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'indian-cnf-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'}`}
@@ -1470,36 +1470,36 @@ function App() {
               </div>
             </div>
           </div>
-          <button onClick={() => { setCurrentView('bank-section'); setSidebarOpen(false); }} className={`w-full flex items-center px-4 py-3 rounded-lg transition-all ${currentView === 'bank-section' ? 'bg-blue-50 text-blue-600 shadow-sm' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'}`}>
+          <button onClick={() => { setCurrentView('bank-section'); setSidebarOpen(false); }} className={`w-full flex items-center px-4 py-2 rounded-lg transition-all ${currentView === 'bank-section' ? 'bg-blue-50 text-blue-600 shadow-sm' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'}`}>
             <DollarSignIcon className="w-5 h-5 mr-3" />
-            <span className="font-medium">Bank</span>
+            <span className="font-medium text-sm">Bank</span>
           </button>
-          <button onClick={() => { setCurrentView('port-section'); setSidebarOpen(false); }} className={`w-full flex items-center px-4 py-3 rounded-lg transition-all ${currentView === 'port-section' ? 'bg-blue-50 text-blue-600 shadow-sm' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'}`}>
+          <button onClick={() => { setCurrentView('port-section'); setSidebarOpen(false); }} className={`w-full flex items-center px-4 py-2 rounded-lg transition-all ${currentView === 'port-section' ? 'bg-blue-50 text-blue-600 shadow-sm' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'}`}>
             <AnchorIcon className="w-5 h-5 mr-3" />
-            <span className="font-medium">Port</span>
+            <span className="font-medium text-sm">Port</span>
           </button>
-          <button onClick={() => { setCurrentView('ip-section'); setSidebarOpen(false); }} className={`w-full flex items-center px-4 py-3 rounded-lg transition-all ${currentView === 'ip-section' ? 'bg-blue-50 text-blue-600 shadow-sm' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'}`}>
+          <button onClick={() => { setCurrentView('ip-section'); setSidebarOpen(false); }} className={`w-full flex items-center px-4 py-2 rounded-lg transition-all ${currentView === 'ip-section' ? 'bg-blue-50 text-blue-600 shadow-sm' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'}`}>
             <BoxIcon className="w-5 h-5 mr-3" />
-            <span className="font-medium">IP</span>
+            <span className="font-medium text-sm">IP</span>
           </button>
-          <button onClick={() => { setCurrentView('lc-entry-section'); setSidebarOpen(false); }} className={`w-full flex items-center px-4 py-3 rounded-lg transition-all ${currentView === 'lc-entry-section' ? 'bg-blue-50 text-blue-600 shadow-sm' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'}`}>
+          <button onClick={() => { setCurrentView('lc-entry-section'); setSidebarOpen(false); }} className={`w-full flex items-center px-4 py-2 rounded-lg transition-all ${currentView === 'lc-entry-section' ? 'bg-blue-50 text-blue-600 shadow-sm' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'}`}>
             <DollarSignIcon className="w-5 h-5 mr-3" />
-            <span className="font-medium">LC Receive</span>
+            <span className="font-medium text-sm">LC Receive</span>
           </button>
 
           <div>
             <button
               onClick={() => setStockDropdownOpen(!stockDropdownOpen)}
-              className={`w-full flex items-center justify-between px-4 py-3 rounded-lg transition-all ${currentView.includes('stock') || currentView === 'products-section' ? 'bg-blue-50 text-blue-600 shadow-sm' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'}`}
+              className={`w-full flex items-center justify-between px-4 py-2 rounded-lg transition-all ${currentView.includes('stock') || currentView === 'products-section' ? 'bg-blue-50 text-blue-600 shadow-sm' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'}`}
             >
               <div className="flex items-center">
                 <ShoppingCartIcon className="w-5 h-5 mr-3" />
-                <span className="font-medium">Stock</span>
+                <span className="font-medium text-sm">Stock</span>
               </div>
               <ChevronDownIcon className={`w-4 h-4 transition-transform duration-200 ${stockDropdownOpen ? 'transform rotate-180' : ''}`} />
             </button>
             <div className={`overflow-hidden transition-all duration-300 ease-in-out ${stockDropdownOpen ? 'max-h-48 opacity-100 mt-1' : 'max-h-0 opacity-0'}`}>
-              <div className="pl-9 pr-2 space-y-1">
+              <div className="pl-7 pr-2 space-y-1">
                 <button
                   onClick={() => { setCurrentView('products-section'); setSidebarOpen(false); }}
                   className={`w-full flex flex-row items-center py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'products-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'}`}
@@ -1528,16 +1528,16 @@ function App() {
           <div>
             <button
               onClick={() => setCrmDropdownOpen(!crmDropdownOpen)}
-              className={`w-full flex items-center justify-between px-4 py-3 rounded-lg transition-all ${currentView === 'customer-section' || currentView === 'payment-collection-section' ? 'bg-blue-50 text-blue-600 shadow-sm' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'}`}
+              className={`w-full flex items-center justify-between px-4 py-2 rounded-lg transition-all ${currentView === 'customer-section' || currentView === 'payment-collection-section' ? 'bg-blue-50 text-blue-600 shadow-sm' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'}`}
             >
               <div className="flex items-center">
                 <UsersIcon className="w-5 h-5 mr-3" />
-                <span className="font-medium">CRM</span>
+                <span className="font-medium text-sm">CRM</span>
               </div>
               <ChevronDownIcon className={`w-4 h-4 transition-transform duration-200 ${crmDropdownOpen ? 'transform rotate-180' : ''}`} />
             </button>
             {crmDropdownOpen && (
-              <div className="pl-9 pr-2 space-y-1 mt-1 transition-all duration-300">
+              <div className="pl-7 pr-2 space-y-1 mt-1 transition-all duration-300">
                 <button
                   onClick={() => { setCurrentView('customer-section'); setSidebarOpen(false); }}
                   className={`w-full flex flex-row items-center py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'customer-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'}`}
@@ -1558,16 +1558,16 @@ function App() {
           <div>
             <button
               onClick={() => setSaleDropdownOpen(!saleDropdownOpen)}
-              className={`w-full flex items-center justify-between px-4 py-3 rounded-lg transition-all ${currentView.includes('sale-section') ? 'bg-blue-50 text-blue-600 shadow-sm' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'}`}
+              className={`w-full flex items-center justify-between px-4 py-2 rounded-lg transition-all ${currentView.includes('sale-section') ? 'bg-blue-50 text-blue-600 shadow-sm' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'}`}
             >
               <div className="flex items-center">
                 <ReceiptIcon className="w-5 h-5 mr-3" />
-                <span className="font-medium">Sale</span>
+                <span className="font-medium text-sm">Sale</span>
               </div>
               <ChevronDownIcon className={`w-4 h-4 transition-transform duration-200 ${saleDropdownOpen ? 'transform rotate-180' : ''}`} />
             </button>
             <div className={`overflow-hidden transition-all duration-300 ease-in-out ${saleDropdownOpen ? 'max-h-48 opacity-100 mt-1' : 'max-h-0 opacity-0'}`}>
-              <div className="pl-9 pr-2 space-y-1">
+              <div className="pl-7 pr-2 space-y-1">
                 <button
                   onClick={() => { setCurrentView('general-sale-section'); setSidebarOpen(false); }}
                   className={`w-full flex flex-row items-center py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'general-sale-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'}`}

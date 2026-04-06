@@ -2445,15 +2445,15 @@ export const generateCustomerHistoryPDF = (customer, historyData, summary, filte
                 styles: { fontSize: 8.5, cellPadding: 2, lineColor: [0, 0, 0], lineWidth: 0.1, textColor: [0, 0, 0] },
                 headStyles: { fillColor: [245, 245, 245], fontStyle: 'bold', halign: 'center' },
                 columnStyles: {
-                    0: { halign: 'center', cellWidth: 10 },
-                    1: { cellWidth: 20 },
-                    2: { cellWidth: 25 },
-                    3: { cellWidth: 35 },
-                    4: { cellWidth: 25 },
-                    5: { halign: 'right', cellWidth: 20 },
-                    6: { halign: 'right', cellWidth: 20 },
-                    7: { halign: 'right', cellWidth: 25 },
-                    8: { halign: 'right', cellWidth: 20 }
+                    0: { halign: 'center', cellWidth: 8 },    // SL
+                    1: { cellWidth: 20, halign: 'center' },   // Date
+                    2: { cellWidth: 25 },                     // LC No / Invoice No
+                    3: { cellWidth: 25 },                     // Product
+                    4: { halign: 'center', cellWidth: 40 },    // Brand / Truck
+                    5: { halign: 'right', cellWidth: 20 },    // Qty
+                    6: { halign: 'right', cellWidth: 20 },    // Rate
+                    7: { halign: 'right', cellWidth: 27 },    // Amount
+                    8: { halign: 'right', cellWidth: 15 }     // Disc
                 },
                 margin: { left: margin, right: margin }
             });

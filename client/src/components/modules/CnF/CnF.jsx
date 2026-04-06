@@ -1146,9 +1146,60 @@ const CnF = ({
                                 </button>
                             </div>
                         </div>
-                        <div className="flex-1 overflow-auto p-4 md:p-8 pt-6 md:pt-8">
+                        <div className="flex-1 overflow-auto p-4 md:p-8 pt-6 md:pt-8 hide-scrollbar">
                             {historyLoading ? <div className="flex justify-center p-12"><div className="w-8 h-8 border-2 border-t-blue-600 rounded-full animate-spin"></div></div> : (
-                                <div className="space-y-4">
+                                <div className="space-y-6">
+                                    {/* History Summary Cards */}
+                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                        {/* Total Truck Card */}
+                                        <div className="bg-gradient-to-br from-blue-50 to-indigo-50 border border-blue-100/50 p-5 rounded-2xl shadow-sm group hover:shadow-md transition-all duration-300">
+                                            <div className="flex items-center justify-between">
+                                                <div className="space-y-1">
+                                                    <p className="text-[10px] font-bold text-blue-600 uppercase tracking-widest opacity-70">Total Trucks</p>
+                                                    <h3 className="text-2xl font-black text-gray-900 leading-none">
+                                                        {filteredHistory.reduce((acc, row) => acc + (parseFloat(row.truck) || 0), 0)}
+                                                    </h3>
+                                                </div>
+                                                <div className="w-12 h-12 rounded-xl bg-blue-100 flex items-center justify-center text-blue-600 group-hover:scale-110 transition-transform">
+                                                    <BoxIcon className="w-6 h-6" />
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        {/* Total Qty Card */}
+                                        <div className="bg-gradient-to-br from-amber-50 to-orange-50 border border-amber-100/50 p-5 rounded-2xl shadow-sm group hover:shadow-md transition-all duration-300">
+                                            <div className="flex items-center justify-between">
+                                                <div className="space-y-1">
+                                                    <p className="text-[10px] font-bold text-amber-600 uppercase tracking-widest opacity-70">Total Quantity</p>
+                                                    <h3 className="text-2xl font-black text-gray-900 leading-none">
+                                                        {filteredHistory.reduce((acc, row) => acc + (parseFloat(row.qty) || 0), 0).toLocaleString()}
+                                                    </h3>
+                                                </div>
+                                                <div className="w-12 h-12 rounded-xl bg-amber-100 flex items-center justify-center text-amber-600 group-hover:scale-110 transition-transform">
+                                                    <TrendingUpIcon className="w-6 h-6" />
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        {/* Total Commission Card */}
+                                        <div className="bg-gradient-to-br from-emerald-50 to-teal-50 border border-emerald-100/50 p-5 rounded-2xl shadow-sm group hover:shadow-md transition-all duration-300">
+                                            <div className="flex items-center justify-between">
+                                                <div className="space-y-1">
+                                                    <p className="text-[10px] font-bold text-emerald-600 uppercase tracking-widest opacity-70">Total Commission</p>
+                                                    <div className="flex items-baseline gap-1">
+                                                        <h3 className="text-2xl font-black text-gray-900 leading-none">
+                                                            {filteredHistory.reduce((acc, row) => acc + (parseFloat(row.totalCommission) || 0), 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                                        </h3>
+                                                        <span className="text-[10px] font-bold text-gray-400">TK</span>
+                                                    </div>
+                                                </div>
+                                                <div className="w-12 h-12 rounded-xl bg-emerald-100 flex items-center justify-center text-emerald-600 group-hover:scale-110 transition-transform">
+                                                    <DollarSignIcon className="w-6 h-6" />
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+
                                     <div className="hidden md:block overflow-x-auto">
                                         <table className="cnf-table">
                                             <thead>
