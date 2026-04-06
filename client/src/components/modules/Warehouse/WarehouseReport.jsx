@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { SearchIcon, XIcon, BarChartIcon, FunnelIcon, MapPinIcon, PrinterIcon } from '../../Icons';
 import CustomDatePicker from "../../shared/CustomDatePicker";
 import { generateWarehouseReportPDF } from '../../../utils/pdfGenerator';
@@ -85,337 +85,266 @@ const WarehouseReport = ({
     // --- TWO SEPARATE DATA STREAMS ---
     // Stream 1: InHouse records — all stock records, NO warehouse filter (date/product/brand only)
     //   Used to compute global InHouse totals so they are never zeroed out by a warehouse filter
-    // 1. Calculate Global Stock Map: { [brandKey]: { inhouseQty, inhousePkt } }
-    // This is the total stock (received) for each brand, minus ALL sales for that brand.
-    const globalStockMap = {};
+    // --- DATA STREAM 1: Global Brand Totals ---
+    // This provides a company-wide view of each brand's unallocated stock.
+    const globalBrandTotals = useMemo(() => {
+        const brands = {};
+        
+        // 1. Sum up all stock records up to the end date
+        warehouseData.forEach(item => {
+            if ((item.status || '').toLowerCase().includes('requested')) return;
+            
+            // Respect end date for stock position
+            if (filters.endDate && item.createdAt) {
+                const endDate = new Date(filters.endDate);
+                endDate.setHours(23, 59, 59, 999);
+                if (new Date(item.createdAt) > endDate) return;
+            }
 
-    // Sum from all records
-    warehouseData.forEach(item => {
-        if (!item.hasLCRecord && item.recordType !== 'warehouse') return;
-        // Exclude "Requested" items from stock calculations as they are not yet officially in stock
-        if ((item.status || '').toLowerCase().includes('requested')) return;
+            const prodName = (item.productName || item.product || '').trim().toLowerCase();
+            const brandName = (item.brand || '').trim().toLowerCase();
+            const brandKey = `${prodName}|${brandName}`;
 
-        const prodName = (item.productName || item.product || '').trim().toLowerCase();
-        const brandName = (item.brand || '').trim().toLowerCase();
-        const brandKey = `${prodName}|${brandName}`;
+            if (!brands[brandKey]) {
+                brands[brandKey] = { inhouseQty: 0, inhousePkt: 0, packetSize: 0 };
+            }
 
-        if (!globalStockMap[brandKey]) {
-            globalStockMap[brandKey] = { inhouseQty: 0, inhousePkt: 0, pktSize: parseFloat(item.packetSize || item.size || 0) };
-        }
-        globalStockMap[brandKey].inhouseQty += parseFloat(item.whQty) || 0;
-        globalStockMap[brandKey].inhousePkt += parseFloat(item.whPkt) || 0;
-    });
+            const rawPktSize = parseFloat(item.packetSize || item.size || 0);
+            if (rawPktSize > 0) brands[brandKey].packetSize = rawPktSize;
 
-    // Subtract ALL sales for each brand
-    salesRecords.forEach(sale => {
-        if (sale.items) {
-            sale.items.forEach(si => {
-                const prodName = (si.productName || si.product || '').trim().toLowerCase();
-                if (si.brandEntries) {
-                    si.brandEntries.forEach(be => {
-                        const brandName = (be.brand || '').trim().toLowerCase();
-                        const brandKey = `${prodName}|${brandName}`;
-                        const sQty = parseFloat(be.quantity) || 0;
+            // Only 'stock' records (initial or manual) contribute to unallocated/'inhouse' balance
+            if (item.recordType !== 'warehouse') {
+                brands[brandKey].inhouseQty += (parseFloat(item.inhouseQty || item.inHouseQuantity || 0));
+                brands[brandKey].inhousePkt += (parseFloat(item.inhousePkt || 0));
+            }
+        });
 
-                        if (globalStockMap[brandKey]) {
-                            globalStockMap[brandKey].inhouseQty -= sQty;
-                            const size = globalStockMap[brandKey].pktSize || 0;
-                            if (size > 0) globalStockMap[brandKey].inhousePkt -= (sQty / size);
-                        } else if (brandName === '') {
-                            // Single-entry: try product-name-as-brand key (e.g., 'maize|-')
-                            const fallbackKey = `${prodName}|-`;
-                            const target = globalStockMap[fallbackKey] ||
-                                Object.entries(globalStockMap).find(([k]) => k.startsWith(`${prodName}|`))?.[1];
-                            const targetKey = globalStockMap[fallbackKey] ? fallbackKey :
-                                Object.keys(globalStockMap).find(k => k.startsWith(`${prodName}|`));
-                            if (targetKey && globalStockMap[targetKey]) {
-                                globalStockMap[targetKey].inhouseQty -= sQty;
-                                const size = globalStockMap[targetKey].pktSize || 0;
-                                if (size > 0) globalStockMap[targetKey].inhousePkt -= (sQty / size);
+        // 2. Subtract ALL sales up to the end date (this gives the unallocated balance)
+        salesRecords.forEach(sale => {
+            const sStatus = (sale.status || '').toLowerCase();
+            if (sStatus !== 'accepted' && sStatus !== 'pending') return;
+
+            if (filters.endDate && sale.date) {
+                const endLimit = new Date(filters.endDate);
+                endLimit.setHours(23, 59, 59, 999);
+                if (new Date(sale.date) > endLimit) return;
+            }
+
+            if (sale.items && Array.isArray(sale.items)) {
+                sale.items.forEach(si => {
+                    const prodName = (si.productName || '').trim().toLowerCase();
+                    if (si.brandEntries && Array.isArray(si.brandEntries)) {
+                        si.brandEntries.forEach(be => {
+                            const brandName = (be.brand || '').trim().toLowerCase();
+                            const brandKey = `${prodName}|${brandName}`;
+                            const sQty = parseFloat(be.quantity) || 0;
+
+                            if (brands[brandKey]) {
+                                const pktSize = brands[brandKey].packetSize || parseFloat(si.packetSize || be.packetSize) || 0;
+                                brands[brandKey].inhouseQty -= sQty;
+                                if (pktSize > 0) brands[brandKey].inhousePkt -= (sQty / pktSize);
                             }
-                        }
-                    });
-                }
-            });
-        }
-    });
-
-    // Ensure no negatives — except for 'GENERAL' category products which allow pre-sales
-    Object.keys(globalStockMap).forEach(key => {
-        const [prodName] = key.split('|');
-        const product = products.find(p => (p.name || p.productName || '').trim().toLowerCase() === prodName);
-        const category = (product?.category || '').trim().toUpperCase();
-
-        if (category !== 'GENERAL') {
-            globalStockMap[key].inhouseQty = Math.max(0, globalStockMap[key].inhouseQty);
-            globalStockMap[key].inhousePkt = Math.max(0, globalStockMap[key].inhousePkt);
-        }
-    });
-
-    // --- SECOND PASS: Include sales for 'GENERAL' products that have NO stock records ---
-    salesRecords.forEach(sale => {
-        if (!sale.items || !Array.isArray(sale.items)) return;
-        sale.items.forEach(si => {
-            const prodName = (si.productName || si.product || '').trim().toLowerCase();
-            const product = products.find(p => (p.name || p.productName || '').trim().toLowerCase() === prodName);
-            if ((product?.category || '').trim().toUpperCase() !== 'GENERAL') return;
-
-            if (si.brandEntries && Array.isArray(si.brandEntries)) {
-                si.brandEntries.forEach(be => {
-                    const brandName = (be.brand || '').trim().toLowerCase();
-                    const brandKey = `${prodName}|${brandName}`;
-                    const sQty = parseFloat(be.quantity) || 0;
-
-                    // If it doesn't exist in 'globalStockMap', it means there are NO stock records for this brand
-                    if (!globalStockMap[brandKey]) {
-                        const pktSize = parseFloat(si.packetSize || be.packetSize) || 0;
-                        globalStockMap[brandKey] = {
-                            inhouseQty: -sQty,
-                            inhousePkt: pktSize > 0 ? -(sQty / pktSize) : 0,
-                            pktSize: pktSize
-                        };
+                        });
                     }
                 });
             }
         });
-    });
 
-    // 2. Calculate Sales Map by Warehouse: { [whKey]: { [brandKey]: qty } }
-    const salesMapByWh = {};
-    salesRecords.forEach(sale => {
-        if (sale.items) {
-            sale.items.forEach(si => {
-                const prodName = (si.productName || si.product || '').trim().toLowerCase();
-                if (si.brandEntries) {
-                    si.brandEntries.forEach(be => {
-                        const brandName = (be.brand || '').trim().toLowerCase();
-                        const whNameRaw = (be.warehouseName || '').trim();
-                        const whKey = (whNameRaw || 'General / In Stock').toLowerCase();
-
-                        // Store under exact key and '-' fallback for single-entry products
-                        const brandKey = brandName === '' ? `${prodName}|-` : `${prodName}|${brandName}`;
-
-                        if (!salesMapByWh[whKey]) salesMapByWh[whKey] = {};
-                        if (!salesMapByWh[whKey][brandKey]) salesMapByWh[whKey][brandKey] = { qty: 0 };
-                        salesMapByWh[whKey][brandKey].qty += parseFloat(be.quantity) || 0;
-
-                        // Also store under original empty-brand key for multi-brand fallback
-                        if (brandName === '') {
-                            const emptyKey = `${prodName}|`;
-                            if (!salesMapByWh[whKey][emptyKey]) salesMapByWh[whKey][emptyKey] = { qty: 0 };
-                            salesMapByWh[whKey][emptyKey].qty += parseFloat(be.quantity) || 0;
-                        }
-                    });
-                }
-            });
-        }
-    });
-
-    // 3. Group for Display: Warehouse -> Product -> Brands
-    const groupedData = warehouseData.reduce((acc, item) => {
-        // Exclude "Requested" items from stock calculations as they are not yet officially in stock
-        if ((item.status || '').toLowerCase().includes('requested')) return acc;
-
-        // Date filter
-        const itemDate = item.createdAt ? new Date(item.createdAt) : null;
-        if (filters.startDate && itemDate && itemDate < new Date(filters.startDate)) return acc;
-        if (filters.endDate && itemDate && itemDate > new Date(filters.endDate + 'T23:59:59')) return acc;
-
-        // Grouping keys
-        const rawWhName = (item.whName || item.warehouse || '').trim();
-        const whName = rawWhName || 'General / In Stock';
-
-        // Warehouse filter (strict)
-        if (filters.warehouse && whName !== filters.warehouse) return acc;
-
-        const prodName = (item.productName || item.product || 'Unknown').trim();
-        // Product filter
-        if (filters.productName && prodName !== filters.productName) return acc;
-
-        // Category filter
-        if (filters.category) {
-            const productMatch = products.find(p => {
-                const pName = (p.name || p.productName || '').trim().toLowerCase();
-                return pName === prodName.toLowerCase();
-            });
-            if (!productMatch || (productMatch.category || '').trim() !== filters.category) return acc;
-        }
-
-        const brand = (item.brand || '-').trim();
-        // Brand filter
-        if (filters.brand && brand !== filters.brand) return acc;
-
-        const brandKey = `${prodName.toLowerCase()}|${brand.toLowerCase()}`;
-
-        if (!acc[whName]) acc[whName] = { whName, products: {} };
-        if (!acc[whName].products[prodName]) {
-            acc[whName].products[prodName] = { productName: prodName, brands: {} };
-        }
-        if (!acc[whName].products[prodName].brands[brand]) {
-            acc[whName].products[prodName].brands[brand] = {
-                brand,
-                inhouseQty: globalStockMap[brandKey]?.inhouseQty || 0,
-                inhousePkt: globalStockMap[brandKey]?.inhousePkt || 0,
-                whQty: 0,
-                whPkt: 0,
-                packetSize: parseFloat(item.packetSize || item.size || 0)
-            };
-        }
-
-        const qty = parseFloat(item.whQty) || 0;
-        const pkt = parseFloat(item.whPkt) || 0;
-
-        const isRealWarehouse = item.recordType === 'warehouse' ||
-            (item.recordType === 'stock' && rawWhName && rawWhName.toLowerCase() !== 'general / in stock');
-
-        if (isRealWarehouse) {
-            acc[whName].products[prodName].brands[brand].whQty += qty;
-            acc[whName].products[prodName].brands[brand].whPkt += pkt;
-        }
-        return acc;
-    }, {});
-
-    // 4. Subtract warehouse-specific sales from whQty
-    Object.values(groupedData).forEach(whGroup => {
-        const whKey = whGroup.whName.toLowerCase();
-
-        // 4a. Apply sales to existing products and brands
-        Object.values(whGroup.products).forEach(pGroup => {
-            const prodNameLower = pGroup.productName.toLowerCase();
-            const product = products.find(prod => (prod.name || prod.productName || '').trim().toLowerCase() === prodNameLower);
-            const isGeneral = (product?.category || '').trim().toUpperCase() === 'GENERAL';
-
-            Object.values(pGroup.brands).forEach(brandItem => {
-                const brandNameLower = brandItem.brand.toLowerCase();
-                const exactBrandKey = `${prodNameLower}|${brandNameLower}`;
-                let saleData = salesMapByWh[whKey]?.[exactBrandKey];
-
-                // If no exact match, and it's a single-entry product (brand equals product name)
-                if (!saleData && brandNameLower === prodNameLower) {
-                    saleData = salesMapByWh[whKey]?.[`${prodNameLower}|-`] ||
-                        salesMapByWh[whKey]?.[`${prodNameLower}|`];
-                }
-
-                if (saleData) {
-                    const sQty = saleData.qty;
-                    const size = brandItem.packetSize || 0;
-
-                    if (isGeneral) {
-                        brandItem.whQty -= sQty;
-                        if (size > 0) brandItem.whPkt -= (sQty / size);
-                    } else {
-                        brandItem.whQty = Math.max(0, brandItem.whQty - sQty);
-                        if (size > 0) brandItem.whPkt = Math.max(0, brandItem.whPkt - (sQty / size));
-                    }
-
-                    // Mark as processed so we don't add it again later
-                    saleData.processed = true;
-                }
-            });
-        });
-
-        // 4b. SECOND PASS: Include NO-WAREHOUSE stock sales for 'GENERAL' products
-        Object.keys(salesMapByWh[whKey] || {}).forEach(brandKey => {
-            const saleData = salesMapByWh[whKey][brandKey];
-            if (saleData.processed) return; // Skip if already subtracted
-
-            const [prodNameLower, brandNameLower] = brandKey.split('|');
-            const product = products.find(p => (p.name || p.productName || '').trim().toLowerCase() === prodNameLower);
-
-            if ((product?.category || '').trim().toUpperCase() === 'GENERAL') {
-                const actualProdName = product.name || product.productName || prodNameLower;
-                const actualBrandName = (brandNameLower === '-' || brandNameLower === '') ? '' : brandNameLower;
-
-                if (!whGroup.products[actualProdName]) {
-                    whGroup.products[actualProdName] = { productName: actualProdName, brands: {} };
-                }
-
-                // Only add if it doesn't already exist from warehouse stock
-                if (!whGroup.products[actualProdName].brands[actualBrandName]) {
-                    const sQty = saleData.qty;
-                    const pktSize = globalStockMap[brandKey]?.pktSize || 0;
-
-                    whGroup.products[actualProdName].brands[actualBrandName] = {
-                        brand: actualBrandName,
-                        inhouseQty: globalStockMap[brandKey]?.inhouseQty || 0,
-                        inhousePkt: globalStockMap[brandKey]?.inhousePkt || 0,
-                        whQty: -sQty,
-                        whPkt: pktSize > 0 ? -(sQty / pktSize) : 0,
-                        packetSize: pktSize
-                    };
-                }
-                saleData.processed = true;
+        // Resolve missing packet sizes from product definitions and ensure no negatives
+        Object.keys(brands).forEach(key => {
+            if (brands[key].packetSize === 0) {
+                const [prodName] = key.split('|');
+                const product = products.find(p => (p.name || p.productName || '').trim().toLowerCase() === prodName);
+                brands[key].packetSize = parseFloat(product?.packetSize || product?.size || product?.weight || 0);
+            }
+            
+            // Only non-GENERAL items are clamped to zero
+            const [prodName] = key.split('|');
+            const product = products.find(p => (p.name || p.productName || '').trim().toLowerCase() === prodName);
+            if ((product?.category || '').trim().toUpperCase() !== 'GENERAL') {
+                brands[key].inhouseQty = Math.max(0, brands[key].inhouseQty);
+                brands[key].inhousePkt = Math.max(0, brands[key].inhousePkt);
             }
         });
 
-        // 4c. Filter out empty brands and SORT them
-        Object.values(whGroup.products).forEach(pGroup => {
-            const brandList = Object.values(pGroup.brands)
-                .filter(b => {
-                    const pnl = pGroup.productName.toLowerCase();
-                    const product = products.find(prod => (prod.name || prod.productName || '').trim().toLowerCase() === pnl);
-                    const isGeneral = (product?.category || '').trim().toUpperCase() === 'GENERAL';
-                    return b.whQty !== 0 || (whGroup.whName === 'General / In Stock' && b.inhouseQty !== 0) || isGeneral;
-                })
-                .sort((a, b) => (a.brand || '').localeCompare(b.brand || '', undefined, { sensitivity: 'base' }));
-            pGroup.brands = brandList;
+        return brands;
+    }, [warehouseData, salesRecords, filters.endDate, products]);
+
+    // --- DATA STREAM 2: Grouped Display Data ---
+    const displayGroups = useMemo(() => {
+        const groups = {};
+
+        // PASS 1: Physical Stock from 'warehouseData'
+        warehouseData.forEach(item => {
+            if ((item.status || '').toLowerCase().includes('requested')) return;
+
+            // Date filtering: Position as of End Date (matches main Stock Summary)
+            const itemDate = item.createdAt ? new Date(item.createdAt) : null;
+            if (filters.endDate && itemDate && itemDate > new Date(filters.endDate + 'T23:59:59')) return;
+
+            const whName = (item.whName || item.warehouse || 'General / In Stock').trim();
+            if (filters.warehouse && whName !== filters.warehouse) return;
+
+            const prodName = (item.productName || item.product || 'Unknown').trim();
+            if (filters.productName && prodName !== filters.productName) return;
+
+            const brandName = (item.brand || '-').trim();
+            if (filters.brand && brandName !== filters.brand) return;
+
+            const product = products.find(p => (p.name || p.productName || '').trim().toLowerCase() === prodName.toLowerCase());
+            const category = (product?.category || '').trim();
+            if (filters.category && category !== filters.category) return;
+
+            const brandKey = `${prodName.toLowerCase()}|${brandName.toLowerCase()}`;
+            const whQty = parseFloat(item.whQty) || 0;
+            const whPkt = parseFloat(item.whPkt) || 0;
+            const ihQty = globalBrandTotals[brandKey]?.inhouseQty || 0;
+            const isGeneral = category.toUpperCase() === 'GENERAL';
+
+            // Respect visibility: show if it has warehouse stock or unallocated stock
+            if (whQty === 0 && ihQty === 0 && !isGeneral) return;
+
+            if (!groups[whName]) groups[whName] = { whName, products: {} };
+            if (!groups[whName].products[prodName]) groups[whName].products[prodName] = { productName: prodName, brands: {} };
+            
+            if (!groups[whName].products[prodName].brands[brandName]) {
+                groups[whName].products[prodName].brands[brandName] = {
+                    brand: brandName,
+                    inhouseQty: ihQty,
+                    inhousePkt: globalBrandTotals[brandKey]?.inhousePkt || 0,
+                    whQty: 0,
+                    whPkt: 0,
+                    packetSize: parseFloat(item.packetSize || item.size || globalBrandTotals[brandKey]?.packetSize || 0)
+                };
+            }
+            groups[whName].products[prodName].brands[brandName].whQty += whQty;
+            groups[whName].products[prodName].brands[brandName].whPkt += whPkt;
         });
 
-        // Filter out empty products
-        whGroup.products = Object.values(whGroup.products).filter(p => p.brands.length > 0);
-    });
+        // PASS 2: Discovery pass for 'GENERAL' products in Sales records
+        salesRecords.forEach(sale => {
+            const sStatus = (sale.status || '').toLowerCase();
+            if (sStatus !== 'accepted' && sStatus !== 'pending' && sStatus !== 'requested') return;
 
-    const displayGroups = Object.values(groupedData).filter(wh => wh.products.length > 0).map(wh => ({
-        ...wh,
-        products: wh.products.sort((a, b) => (a.productName || '').localeCompare(b.productName || '', undefined, { sensitivity: 'base' }))
-    })).sort((a, b) => (a.whName || '').localeCompare(b.whName || '', undefined, { sensitivity: 'base' }));
+            // Date filtering for sales: subtract sales up to End Date
+            const saleDate = sale.date ? new Date(sale.date) : null;
+            if (filters.endDate && saleDate && saleDate > new Date(filters.endDate + 'T23:59:59')) return;
 
-    // 5. Overall Totals (Avoid double counting brands)
-    const uniqueBrandsInReport = new Set();
-    displayGroups.forEach(wh => {
-        wh.products.forEach(p => {
-            p.brands.forEach(b => {
-                uniqueBrandsInReport.add(`${p.productName.toLowerCase()}|${b.brand.toLowerCase()}`);
+            if (!sale.items) return;
+            sale.items.forEach(si => {
+                const prodName = (si.productName || '').trim().toLowerCase();
+                const product = products.find(p => (p.name || p.productName || '').trim().toLowerCase() === prodName);
+                const category = (product?.category || '').trim();
+                
+                if (category.toUpperCase() !== 'GENERAL') return;
+
+                // Sync filters
+                if (filters.productName && prodName !== filters.productName.toLowerCase()) return;
+                if (filters.category && category !== filters.category) return;
+
+                if (si.brandEntries) {
+                    si.brandEntries.forEach(be => {
+                        const whName = (be.warehouseName || 'General / In Stock').trim();
+                        if (filters.warehouse && whName !== filters.warehouse) return;
+                        
+                        const brandName = (be.brand || '').trim();
+                        if (filters.brand && brandName !== filters.brand) return;
+                        
+                        const brandKey = `${prodName}|${brandName.toLowerCase()}`;
+                        const displayWhName = whName || 'General / In Stock';
+
+                        if (!groups[displayWhName]) groups[displayWhName] = { whName: displayWhName, products: {} };
+                        if (!groups[displayWhName].products[si.productName]) groups[displayWhName].products[si.productName] = { productName: si.productName, brands: {} };
+                        
+                        if (!groups[displayWhName].products[si.productName].brands[brandName]) {
+                            const pktSize = parseFloat(si.packetSize || be.packetSize || product?.packetSize || 0);
+                            groups[displayWhName].products[si.productName].brands[brandName] = {
+                                brand: brandName,
+                                inhouseQty: globalBrandTotals[brandKey]?.inhouseQty || 0,
+                                inhousePkt: globalBrandTotals[brandKey]?.inhousePkt || 0,
+                                whQty: 0,
+                                whPkt: 0,
+                                packetSize: pktSize
+                            };
+                        }
+                        const sQty = parseFloat(be.quantity) || 0;
+                        const bObj = groups[displayWhName].products[si.productName].brands[brandName];
+                        bObj.whQty -= sQty;
+                        if (bObj.packetSize > 0) bObj.whPkt -= (sQty / bObj.packetSize);
+                    });
+                }
             });
         });
-    });
 
-    const totals = [...uniqueBrandsInReport].reduce((acc, brandKey) => {
-        const globalInfo = globalStockMap[brandKey];
-        if (globalInfo) {
-            const qty = Math.max(0, globalInfo.inhouseQty || 0);
-            const pkt = Math.max(0, globalInfo.inhousePkt || 0);
-            acc.totalInHouseQty += qty;
-            const size = globalInfo.pktSize || 0;
-            const whole = Math.floor(pkt);
-            acc.totalInHouseWhole += whole;
-            acc.totalInHouseRem += (qty - (whole * size));
-        }
-        return acc;
-    }, { totalInHouseQty: 0, totalInHouseWhole: 0, totalInHouseRem: 0, totalWhQty: 0, totalWhWhole: 0, totalWhRem: 0 });
+        // Final Mapping and Cleanup
+        return Object.values(groups)
+            .map(wh => ({
+                ...wh,
+                products: Object.values(wh.products)
+                    .map(p => ({
+                        ...p,
+                        brands: Object.values(p.brands)
+                            .filter(b => b.whQty !== 0 || b.inhouseQty !== 0)
+                            .sort((a, b) => (a.brand || '').localeCompare(b.brand || '', undefined, { sensitivity: 'base' }))
+                    }))
+                    .filter(p => p.brands.length > 0)
+                    .sort((a, b) => a.productName.localeCompare(b.productName, undefined, { sensitivity: 'base' }))
+            }))
+            .filter(wh => wh.products.length > 0)
+            .sort((a, b) => a.whName.localeCompare(b.whName, undefined, { sensitivity: 'base' }));
+    }, [warehouseData, filters, salesRecords, products, globalBrandTotals]);
 
-    // Calculate total warehouse stock separately because physical stock across warehouses IS additive
-    displayGroups.forEach(wh => {
-        wh.products.forEach(p => {
-            p.brands.forEach(b => {
-                const qty = Math.max(0, b.whQty || 0);
-                const pkt = Math.max(0, b.whPkt || 0);
-                const size = b.packetSize || 0;
-                const whole = Math.floor(pkt);
-                totals.totalWhQty += qty;
-                totals.totalWhWhole += whole;
-                totals.totalWhRem += (qty - (whole * size));
+    // --- DATA STREAM 3: Report Totals (Synced with Display) ---
+    const totals = useMemo(() => {
+        const uniqueBrandKeys = new Set();
+        let totalInHouseQty = 0;
+        let totalInHouseWhole = 0;
+        let totalInHouseRem = 0;
+        let totalWhQty = 0;
+        let totalWhWhole = 0;
+        let totalWhRem = 0;
+
+        displayGroups.forEach(wh => {
+            wh.products.forEach(p => {
+                p.brands.forEach(b => {
+                    const brandKey = `${p.productName.toLowerCase()}|${b.brand.toLowerCase()}`;
+                    if (!uniqueBrandKeys.has(brandKey)) {
+                        uniqueBrandKeys.add(brandKey);
+                        const ihQty = Math.max(0, b.inhouseQty || 0);
+                        totalInHouseQty += ihQty;
+                        const { whole, remainder } = calculatePktRemainder(ihQty, b.packetSize);
+                        totalInHouseWhole += whole;
+                        totalInHouseRem += remainder;
+                    }
+                    
+                    const whQtyVal = Math.max(0, b.whQty || 0);
+                    totalWhQty += whQtyVal;
+                    const { whole: wWhole, remainder: wRem } = calculatePktRemainder(whQtyVal, b.packetSize);
+                    totalWhWhole += wWhole;
+                    totalWhRem += wRem;
+                });
             });
         });
-    });
 
-    // Final rounding for remainders
-    totals.totalInHouseRem = Math.round(totals.totalInHouseRem);
-    totals.totalWhRem = Math.round(totals.totalWhRem);
+        return {
+            totalInHouseQty, totalInHouseWhole, totalInHouseRem: Math.round(totalInHouseRem),
+            totalWhQty, totalWhWhole, totalWhRem: Math.round(totalWhRem)
+        };
+    }, [displayGroups]);
+
 
     const getUniqueOptions = (key) => {
         if (key === 'productName') {
-            return [...new Set(warehouseData.map(item => (item.productName || item.product || '').trim()).filter(Boolean))].sort();
+            // Use the comprehensive products list as the source of truth for names
+            const fromStock = warehouseData.map(item => (item.productName || item.product || '').trim()).filter(Boolean);
+            const fromRegistry = products.map(p => (p.name || p.productName || '').trim()).filter(Boolean);
+            return [...new Set([...fromStock, ...fromRegistry])].sort();
+        }
+        if (key === 'brand') {
+            const dataToFilter = filters.productName 
+                ? warehouseData.filter(item => (item.productName || item.product) === filters.productName)
+                : warehouseData;
+            return [...new Set(dataToFilter.map(item => (item.brand || '').trim()).filter(Boolean))].sort();
         }
         return [...new Set(warehouseData.map(item => (item[key] || '').trim()).filter(Boolean))].sort();
     };
@@ -450,7 +379,7 @@ const WarehouseReport = ({
                                     {/* Backdrop for mobile */}
                                     <div className="fixed inset-0 bg-black/20 backdrop-blur-[2px] z-[2005] md:hidden" onClick={() => setShowFilterPanel(false)} />
 
-                                    <div ref={filterPanelRef} className="fixed inset-x-4 md:inset-x-auto top-24 md:absolute md:top-full md:right-0 md:mt-3 w-auto md:w-72 bg-white border border-gray-100 rounded-2xl shadow-[0_20px_50px_rgba(0,0,0,0.15)] z-[2010] p-5 flex flex-col max-h-[calc(100vh-160px)] animate-in fade-in zoom-in-95 duration-200">
+                                    <div ref={filterPanelRef} className="fixed inset-x-4 md:inset-x-auto top-24 md:absolute md:top-full md:right-0 md:mt-3 w-auto md:w-[22rem] bg-white border border-gray-100 rounded-2xl shadow-[0_20px_50px_rgba(0,0,0,0.15)] z-[2010] p-5 flex flex-col mb-4 animate-in fade-in zoom-in-95 duration-200">
                                         <div className="flex items-center justify-between mb-6 pb-2 border-b border-gray-100 flex-shrink-0">
                                             <h4 className="font-bold text-gray-900 tracking-tight">Advance Filter</h4>
                                             <button
@@ -465,7 +394,7 @@ const WarehouseReport = ({
                                             </button>
                                         </div>
 
-                                        <div className="space-y-4 overflow-y-auto pr-1 custom-scrollbar">
+                                        <div className="space-y-4">
                                             <div className="grid grid-cols-2 gap-3">
                                                 <CustomDatePicker
                                                     label="From Date"
@@ -630,7 +559,11 @@ const WarehouseReport = ({
                                                         return filtered.length > 0 ? (
                                                             <div className="absolute z-[120] mt-1 w-full bg-white border border-gray-100 rounded-xl shadow-xl max-h-48 overflow-y-auto py-1">
                                                                 {filtered.map(b => (
-                                                                    <button key={b} type="button" onClick={() => { setFilters({ ...filters, brand: b }); setFilterSearchInputs({ ...filterSearchInputs, brandSearch: '' }); setFilterDropdownOpen({ warehouse: false, product: false, brand: false, category: false }); }} className="w-full px-4 py-2 text-left text-sm hover:bg-blue-50 transition-colors font-medium text-gray-700">{b}</button>
+                                                                    <button key={b} type="button" onClick={() => { 
+                                                                    setFilters({ ...filters, brand: b }); 
+                                                                    setFilterSearchInputs(prev => ({ ...prev, brandSearch: '' })); 
+                                                                    setFilterDropdownOpen({ warehouse: false, product: false, brand: false, category: false }); 
+                                                                }} className="w-full px-4 py-2 text-left text-sm hover:bg-blue-50 transition-colors font-medium text-gray-700">{b}</button>
                                                                 ))}
                                                             </div>
                                                         ) : null;
