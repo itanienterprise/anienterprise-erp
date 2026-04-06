@@ -1849,7 +1849,7 @@ const StockManagement = ({
                                             className="md:hidden fixed inset-0 bg-black/20 backdrop-blur-sm z-[55]"
                                             onClick={() => setShowStockFilterPanel(false)}
                                         />
-                                        <div ref={stockFilterRef} className="fixed inset-x-4 top-24 md:absolute md:inset-auto md:right-0 md:mt-3 md:w-80 bg-white border border-gray-100 rounded-2xl shadow-2xl z-[60] p-5 animate-in fade-in zoom-in duration-200 overflow-y-auto max-h-[80vh] md:max-h-none">
+                                        <div ref={stockFilterRef} className="fixed inset-x-4 top-24 md:absolute md:inset-auto md:right-0 md:mt-3 md:w-80 bg-white border border-gray-100 rounded-2xl shadow-2xl z-[60] p-5 animate-in fade-in zoom-in duration-200 mb-4">
                                             <div className="flex items-center justify-between mb-6 pb-2 border-b border-gray-100">
                                                 <h4 className="font-bold text-gray-900 tracking-tight">Advance Filter</h4>
                                                 <button onClick={() => { 

@@ -194,7 +194,7 @@ const StockReport = ({
                                 <>
                                     {/* Backdrop for mobile */}
                                     <div className="fixed inset-0 bg-black/20 backdrop-blur-[2px] z-[2005] md:hidden" onClick={() => setShowFilterPanel(false)} />
-                                    <div ref={filterPanelRef} className="fixed inset-x-4 top-24 md:absolute md:top-full md:right-0 md:mt-2 w-auto md:w-72 bg-white border border-gray-100 rounded-2xl shadow-[0_20px_50px_rgba(0,0,0,0.15)] z-[2010] p-4 flex flex-col max-h-[78vh] animate-in fade-in zoom-in-95 duration-200">
+                                    <div ref={filterPanelRef} className="fixed inset-x-4 top-24 md:absolute md:top-full md:right-0 md:mt-2 w-auto md:w-[22rem] bg-white border border-gray-100 rounded-2xl shadow-[0_20px_50px_rgba(0,0,0,0.15)] z-[2010] p-4 flex flex-col mb-4 animate-in fade-in zoom-in-95 duration-200">
                                         <div className="flex items-center justify-between mb-3 pb-2 border-b border-gray-100 flex-shrink-0">
                                             <h4 className="font-bold text-gray-900 text-sm">Advance Filter</h4>
                                             <button
@@ -209,7 +209,7 @@ const StockReport = ({
                                             </button>
                                         </div>
 
-                                        <div className="space-y-3 overflow-y-auto flex-1 pr-0.5">
+                                        <div className="space-y-3">
                                             {/* Date Range */}
                                             <div className="space-y-2">
                                                 <CustomDatePicker
