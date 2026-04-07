@@ -40,8 +40,8 @@ const StockReport = ({
                 // IMPORTANT: Recalculate item-level totals for the filtered brands
                 const inHouseQuantity = filteredBrands.reduce((sum, b) => sum + Math.max(0, b.inHouseQuantity || 0), 0);
                 const totalInHouseQuantity = filteredBrands.reduce((sum, b) => sum + Math.max(0, b.totalInHouseQuantity || 0), 0);
-                const saleQuantity = filteredBrands.reduce((sum, b) => sum + Math.max(0, b.saleQuantity || 0), 0);
-                const salePacket = filteredBrands.reduce((sum, b) => sum + Math.max(0, parseFloat(b.salePacket) || 0), 0);
+                const saleQuantity = filteredBrands.reduce((sum, b) => sum + (b.saleQuantity || 0), 0);
+                const salePacket = filteredBrands.reduce((sum, b) => sum + (parseFloat(b.salePacket) || 0), 0);
 
                 return {
                     ...item,
@@ -64,10 +64,10 @@ const StockReport = ({
         let totalSalePkt = 0;
 
         filteredRecords.forEach(item => {
-            totalTotalInHouseQty += Math.max(0, item.totalInHouseQuantity || 0);
-            totalSaleQty += Math.max(0, item.saleQuantity || 0);
-            totalInHouseQty += Math.max(0, item.inHouseQuantity || 0);
-            totalSalePkt += Math.max(0, item.salePacket || 0);
+            totalTotalInHouseQty += (item.totalInHouseQuantity || 0);
+            totalSaleQty += (item.saleQuantity || 0);
+            totalInHouseQty += (item.inHouseQuantity || 0);
+            totalSalePkt += (item.salePacket || 0);
         });
 
         return { totalTotalInHouseQty, totalSaleQty, totalInHouseQty, totalSalePkt };
@@ -547,8 +547,8 @@ const StockReport = ({
                                                 <>
                                                     <td className="px-2 py-1.5 text-[14px] text-right font-black text-gray-900 border-r border-gray-900">
                                                         {(() => {
-                                                            const totalWhole = filteredRecords.reduce((accWhole, item) => accWhole + item.brandList.reduce((sum, ent) => sum + calculatePktRemainder(Math.max(0, ent.totalInHouseQuantity || 0), ent.packetSize).whole, 0), 0);
-                                                            const totalRem = filteredRecords.reduce((accRem, item) => accRem + item.brandList.reduce((sum, ent) => sum + calculatePktRemainder(Math.max(0, ent.totalInHouseQuantity || 0), ent.packetSize).remainder, 0), 0);
+                                                            const totalWhole = filteredRecords.reduce((accWhole, item) => accWhole + item.brandList.reduce((sum, ent) => sum + calculatePktRemainder((ent.totalInHouseQuantity || 0), ent.packetSize).whole, 0), 0);
+                                                            const totalRem = filteredRecords.reduce((accRem, item) => accRem + item.brandList.reduce((sum, ent) => sum + calculatePktRemainder((ent.totalInHouseQuantity || 0), ent.packetSize).remainder, 0), 0);
                                                             return `${totalWhole}${totalRem !== 0 ? ` - ${Math.abs(totalRem).toLocaleString()} kg` : ''}`;
                                                         })()}
                                                     </td>
@@ -565,8 +565,8 @@ const StockReport = ({
                                             )}
                                             <td className="px-2 py-1.5 text-[14px] text-right font-black text-gray-900 border-r border-gray-900">
                                                 {(() => {
-                                                    const totalWhole = filteredRecords.reduce((accWhole, item) => accWhole + item.brandList.reduce((sum, ent) => sum + calculatePktRemainder(Math.max(0, ent.inHouseQuantity || 0), ent.packetSize).whole, 0), 0);
-                                                    const totalRem = filteredRecords.reduce((accRem, item) => accRem + item.brandList.reduce((sum, ent) => sum + calculatePktRemainder(Math.max(0, ent.inHouseQuantity || 0), ent.packetSize).remainder, 0), 0);
+                                                    const totalWhole = filteredRecords.reduce((accWhole, item) => accWhole + item.brandList.reduce((sum, ent) => sum + calculatePktRemainder((ent.inHouseQuantity || 0), ent.packetSize).whole, 0), 0);
+                                                    const totalRem = filteredRecords.reduce((accRem, item) => accRem + item.brandList.reduce((sum, ent) => sum + calculatePktRemainder((ent.inHouseQuantity || 0), ent.packetSize).remainder, 0), 0);
                                                     return `${totalWhole}${totalRem !== 0 ? ` - ${Math.abs(totalRem).toLocaleString()} kg` : ''}`;
                                                 })()}
                                             </td>

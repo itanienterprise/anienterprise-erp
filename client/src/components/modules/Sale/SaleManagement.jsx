@@ -478,6 +478,7 @@ const SaleManagement = ({
         customerId: '',
         companyName: '',
         customerName: '',
+        address: '',
         lcNo: '',
         contact: '',
         importer: '',
@@ -1658,6 +1659,7 @@ const SaleManagement = ({
             customerId: customer._id,
             companyName: customer.companyName || '',
             customerName: customer.customerName || '',
+            address: customer.address || '',
             contact: customer.phone || '',
             previousBalance: previousBalance.toFixed(2)
         }));
@@ -1671,6 +1673,7 @@ const SaleManagement = ({
                 companyName: '',
                 customerId: '',
                 customerName: '',
+                address: '',
                 contact: '',
                 previousBalance: '0.00'
             }));
@@ -2673,7 +2676,7 @@ const SaleManagement = ({
                                 </div>
                             )}
 
-                             {/* Border Field: BD C&F */}
+                            {/* Border Field: BD C&F */}
                             {saleType === 'Border' && (
                                 <div className="sale-mgmt-input-group relative bd-cnf-dropdown-container">
                                     <label className="sale-mgmt-label">BD C&F</label>
@@ -2723,91 +2726,6 @@ const SaleManagement = ({
                                             ))}
                                         </div>
                                     )}
-                                </div>
-                            )}
-
-                            {/* Border Field: Commissions Row */}
-                            {saleType === 'Border' && (
-                                <div className="col-span-full grid grid-cols-1 md:grid-cols-2 gap-6 p-4 bg-blue-50/30 rounded-2xl border border-blue-100/50 mb-2">
-                                    {/* Indian C&F Commission */}
-                                    <div className="space-y-3">
-                                        <div className="flex items-center justify-between">
-                                            <span className="text-[10px] font-black text-blue-400 uppercase tracking-widest pl-1">IND C&F Commission</span>
-                                            <div className="flex items-center bg-white p-0.5 rounded-lg border border-blue-100 shadow-sm h-7 w-32">
-                                                <button
-                                                    type="button"
-                                                    onClick={() => handleInputChange({ target: { name: 'indCommissionUom', value: 'Truck' } })}
-                                                    className={`flex-1 h-full flex items-center justify-center rounded-md text-[9px] font-bold transition-all ${formData.indCommissionUom === 'Truck' ? 'bg-blue-600 text-white shadow-sm' : 'text-gray-400 hover:text-blue-500'}`}
-                                                >
-                                                    TRUCK
-                                                </button>
-                                                <button
-                                                    type="button"
-                                                    onClick={() => handleInputChange({ target: { name: 'indCommissionUom', value: 'QTY' } })}
-                                                    className={`flex-1 h-full flex items-center justify-center rounded-md text-[9px] font-bold transition-all ${formData.indCommissionUom === 'QTY' ? 'bg-blue-600 text-white shadow-sm' : 'text-gray-400 hover:text-blue-500'}`}
-                                                >
-                                                    QTY
-                                                </button>
-                                            </div>
-                                        </div>
-                                        <div className="flex items-center gap-3">
-                                            <div className="flex-1 relative">
-                                                <input
-                                                    type="number"
-                                                    name="indCommissionRate"
-                                                    value={formData.indCommissionRate}
-                                                    onChange={handleInputChange}
-                                                    placeholder="Rate"
-                                                    className="w-full px-4 py-2 bg-white border border-blue-100 rounded-xl text-sm font-bold text-gray-900 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
-                                                />
-                                                <div className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-bold text-gray-400">Rate</div>
-                                            </div>
-                                            <div className="flex-1 px-4 py-2 bg-blue-100/50 border border-blue-200 rounded-xl flex items-center justify-between">
-                                                <span className="text-[10px] font-bold text-blue-400 uppercase">Total</span>
-                                                <span className="text-sm font-black text-blue-700">৳{formData.indCommissionTotal}</span>
-                                            </div>
-                                        </div>
-                                    </div>
-
-                                    {/* BD C&F Commission */}
-                                    <div className="space-y-3">
-                                        <div className="flex items-center justify-between">
-                                            <span className="text-[10px] font-black text-blue-400 uppercase tracking-widest pl-1">BD C&F Commission</span>
-                                            <div className="flex items-center bg-white p-0.5 rounded-lg border border-blue-100 shadow-sm h-7 w-32">
-                                                <button
-                                                    type="button"
-                                                    onClick={() => handleInputChange({ target: { name: 'bdCommissionUom', value: 'Truck' } })}
-                                                    className={`flex-1 h-full flex items-center justify-center rounded-md text-[9px] font-bold transition-all ${formData.bdCommissionUom === 'Truck' ? 'bg-blue-600 text-white shadow-sm' : 'text-gray-400 hover:text-blue-500'}`}
-                                                >
-                                                    TRUCK
-                                                </button>
-                                                <button
-                                                    type="button"
-                                                    onClick={() => handleInputChange({ target: { name: 'bdCommissionUom', value: 'QTY' } })}
-                                                    className={`flex-1 h-full flex items-center justify-center rounded-md text-[9px] font-bold transition-all ${formData.bdCommissionUom === 'QTY' ? 'bg-blue-600 text-white shadow-sm' : 'text-gray-400 hover:text-blue-500'}`}
-                                                >
-                                                    QTY
-                                                </button>
-                                            </div>
-                                        </div>
-                                        <div className="flex items-center gap-3">
-                                            <div className="flex-1 relative">
-                                                <input
-                                                    type="number"
-                                                    name="bdCommissionRate"
-                                                    value={formData.bdCommissionRate}
-                                                    onChange={handleInputChange}
-                                                    placeholder="Rate"
-                                                    className="w-full px-4 py-2 bg-white border border-blue-100 rounded-xl text-sm font-bold text-gray-900 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
-                                                />
-                                                <div className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-bold text-gray-400">Rate</div>
-                                            </div>
-                                            <div className="flex-1 px-4 py-2 bg-blue-100/50 border border-blue-200 rounded-xl flex items-center justify-between">
-                                                <span className="text-[10px] font-bold text-blue-400 uppercase">Total</span>
-                                                <span className="text-sm font-black text-blue-700">৳{formData.bdCommissionTotal}</span>
-                                            </div>
-                                        </div>
-                                    </div>
                                 </div>
                             )}
 
@@ -2913,14 +2831,107 @@ const SaleManagement = ({
                                     </div>
                                 )}
                             </div>
-                            <div className="sale-mgmt-input-group">
-                                <label className="sale-mgmt-label">Customer</label>
-                                <input type="text" name="customerName" value={formData.customerName} readOnly placeholder="Customer" className="sale-mgmt-input sale-mgmt-input-readonly" />
-                            </div>
+                            {saleType !== 'Border' && (
+                                <div className="sale-mgmt-input-group">
+                                    <label className="sale-mgmt-label">Customer</label>
+                                    <input type="text" name="customerName" value={formData.customerName} readOnly placeholder="Customer" className="sale-mgmt-input sale-mgmt-input-readonly" />
+                                </div>
+                            )}
                             <div className="sale-mgmt-input-group">
                                 <label className="sale-mgmt-label">Contact</label>
                                 <input type="text" name="contact" value={formData.contact} readOnly placeholder="Contact" className="sale-mgmt-input sale-mgmt-input-readonly" />
                             </div>
+                            {saleType !== 'Border' && (
+                                <div className="sale-mgmt-input-group">
+                                    <label className="sale-mgmt-label">Address</label>
+                                    <input type="text" name="address" value={formData.address} readOnly placeholder="Address" className="sale-mgmt-input sale-mgmt-input-readonly" />
+                                </div>
+                            )}
+
+                            {/* Border Field: Commissions Row */}
+                            {saleType === 'Border' && (
+                                <div className="col-span-full grid grid-cols-1 md:grid-cols-2 gap-6 p-4 bg-blue-50/30 rounded-2xl border border-blue-100/50 mb-2">
+                                    {/* Indian C&F Commission */}
+                                    <div className="space-y-3">
+                                        <div className="flex items-center justify-between">
+                                            <span className="text-[10px] font-black text-blue-400 uppercase tracking-widest pl-1">IND C&F Commission</span>
+                                            <div className="flex items-center bg-white p-0.5 rounded-lg border border-blue-100 shadow-sm h-7 w-32">
+                                                <button
+                                                    type="button"
+                                                    onClick={() => handleInputChange({ target: { name: 'indCommissionUom', value: 'Truck' } })}
+                                                    className={`flex-1 h-full flex items-center justify-center rounded-md text-[9px] font-bold transition-all ${formData.indCommissionUom === 'Truck' ? 'bg-blue-600 text-white shadow-sm' : 'text-gray-400 hover:text-blue-500'}`}
+                                                >
+                                                    TRUCK
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => handleInputChange({ target: { name: 'indCommissionUom', value: 'QTY' } })}
+                                                    className={`flex-1 h-full flex items-center justify-center rounded-md text-[9px] font-bold transition-all ${formData.indCommissionUom === 'QTY' ? 'bg-blue-600 text-white shadow-sm' : 'text-gray-400 hover:text-blue-500'}`}
+                                                >
+                                                    QTY
+                                                </button>
+                                            </div>
+                                        </div>
+                                        <div className="flex items-center gap-3">
+                                            <div className="flex-1 relative">
+                                                <input
+                                                    type="number"
+                                                    name="indCommissionRate"
+                                                    value={formData.indCommissionRate}
+                                                    onChange={handleInputChange}
+                                                    placeholder="Rate"
+                                                    className="w-full px-4 py-2 bg-white border border-blue-100 rounded-xl text-sm font-bold text-gray-900 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
+                                                />
+                                                <div className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-bold text-gray-400">Rate</div>
+                                            </div>
+                                            <div className="flex-1 px-4 py-2 bg-blue-100/50 border border-blue-200 rounded-xl flex items-center justify-between">
+                                                <span className="text-[10px] font-bold text-blue-400 uppercase">Total</span>
+                                                <span className="text-sm font-black text-blue-700">৳{formData.indCommissionTotal}</span>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* BD C&F Commission */}
+                                    <div className="space-y-3">
+                                        <div className="flex items-center justify-between">
+                                            <span className="text-[10px] font-black text-blue-400 uppercase tracking-widest pl-1">BD C&F Commission</span>
+                                            <div className="flex items-center bg-white p-0.5 rounded-lg border border-blue-100 shadow-sm h-7 w-32">
+                                                <button
+                                                    type="button"
+                                                    onClick={() => handleInputChange({ target: { name: 'bdCommissionUom', value: 'Truck' } })}
+                                                    className={`flex-1 h-full flex items-center justify-center rounded-md text-[9px] font-bold transition-all ${formData.bdCommissionUom === 'Truck' ? 'bg-blue-600 text-white shadow-sm' : 'text-gray-400 hover:text-blue-500'}`}
+                                                >
+                                                    TRUCK
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => handleInputChange({ target: { name: 'bdCommissionUom', value: 'QTY' } })}
+                                                    className={`flex-1 h-full flex items-center justify-center rounded-md text-[9px] font-bold transition-all ${formData.bdCommissionUom === 'QTY' ? 'bg-blue-600 text-white shadow-sm' : 'text-gray-400 hover:text-blue-500'}`}
+                                                >
+                                                    QTY
+                                                </button>
+                                            </div>
+                                        </div>
+                                        <div className="flex items-center gap-3">
+                                            <div className="flex-1 relative">
+                                                <input
+                                                    type="number"
+                                                    name="bdCommissionRate"
+                                                    value={formData.bdCommissionRate}
+                                                    onChange={handleInputChange}
+                                                    placeholder="Rate"
+                                                    className="w-full px-4 py-2 bg-white border border-blue-100 rounded-xl text-sm font-bold text-gray-900 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
+                                                />
+                                                <div className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-bold text-gray-400">Rate</div>
+                                            </div>
+                                            <div className="flex-1 px-4 py-2 bg-blue-100/50 border border-blue-200 rounded-xl flex items-center justify-between">
+                                                <span className="text-[10px] font-bold text-blue-400 uppercase">Total</span>
+                                                <span className="text-sm font-black text-blue-700">৳{formData.bdCommissionTotal}</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
                         </div>
 
                         <div className="col-span-2 space-y-6">
@@ -3094,8 +3105,8 @@ const SaleManagement = ({
                                                     <div className="sale-mgmt-item-label text-center">Inhouse</div>
                                                     <div className="sale-mgmt-item-label text-center">Warehouse</div>
                                                     <div className="sale-mgmt-item-label text-center">Wh Stock</div>
-                                                    <div className="sale-mgmt-item-label text-center">Qty</div>
                                                     <div className="sale-mgmt-item-label text-center">Bag</div>
+                                                    <div className="sale-mgmt-item-label text-center">Qty</div>
                                                     <div className="sale-mgmt-item-label text-center">Price</div>
                                                     <div className="col-span-2 sale-mgmt-item-label text-center">Total</div>
                                                 </div>
@@ -3240,19 +3251,6 @@ const SaleManagement = ({
                                                             </div>
                                                         </div>
 
-                                                        {/* Quantity */}
-                                                        <div>
-                                                            <label className="md:hidden sale-mgmt-item-label mb-1 block text-center">Qty</label>
-                                                            <input
-                                                                type="number"
-                                                                name="quantity"
-                                                                value={entry.quantity}
-                                                                onChange={(e) => handleItemInputChange(index, entryIndex, e)}
-                                                                placeholder="0"
-                                                                className="sale-mgmt-input !px-2 !text-[13px] font-black text-gray-900 text-center"
-                                                            />
-                                                        </div>
-
                                                         {/* Bag */}
                                                         <div>
                                                             <label className="md:hidden sale-mgmt-item-label mb-1 block text-center">Bag</label>
@@ -3263,6 +3261,19 @@ const SaleManagement = ({
                                                                 onChange={(e) => handleItemInputChange(index, entryIndex, e)}
                                                                 placeholder="0"
                                                                 className="sale-mgmt-input !px-2 !text-[13px] font-bold text-blue-600 text-center"
+                                                            />
+                                                        </div>
+
+                                                        {/* Quantity */}
+                                                        <div>
+                                                            <label className="md:hidden sale-mgmt-item-label mb-1 block text-center">Qty</label>
+                                                            <input
+                                                                type="number"
+                                                                name="quantity"
+                                                                value={entry.quantity}
+                                                                onChange={(e) => handleItemInputChange(index, entryIndex, e)}
+                                                                placeholder="0"
+                                                                className="sale-mgmt-input !px-2 !text-[13px] font-black text-gray-900 text-center"
                                                             />
                                                         </div>
 

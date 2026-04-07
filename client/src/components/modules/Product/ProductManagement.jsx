@@ -15,7 +15,7 @@ const ProductManagement = ({ products, fetchProducts }) => {
         name: '',
         category: '',
         uom: 'kg',
-        brands: [{ brand: '', packetSize: '', purchasedPrice: '' }],
+        brands: [{ brand: '', quality: '', packetSize: '', purchasedPrice: '' }],
         description: ''
     });
 
@@ -26,7 +26,7 @@ const ProductManagement = ({ products, fetchProducts }) => {
             name: '',
             category: '',
             uom: 'kg',
-            brands: [{ brand: '', packetSize: '', purchasedPrice: '' }],
+            brands: [{ brand: '', quality: '', packetSize: '', purchasedPrice: '' }],
             description: ''
         });
         setEditingId(null);
@@ -45,7 +45,7 @@ const ProductManagement = ({ products, fetchProducts }) => {
     const handleAddProductBrand = () => {
         setProductFormData(prev => ({
             ...prev,
-            brands: [...prev.brands, { brand: '', packetSize: '', purchasedPrice: '' }]
+            brands: [...prev.brands, { brand: '', quality: '', packetSize: '', purchasedPrice: '' }]
         }));
     };
 
@@ -90,9 +90,15 @@ const ProductManagement = ({ products, fetchProducts }) => {
             category: product.category || '',
             uom: product.uom || product.unit || 'kg',
             brands: product.brands && product.brands.length > 0
-                ? product.brands
+                ? product.brands.map(b => ({
+                    brand: b.brand || '',
+                    quality: b.quality || '',
+                    packetSize: b.packetSize || '',
+                    purchasedPrice: b.purchasedPrice || ''
+                }))
                 : [{
                     brand: product.brand || '',
+                    quality: product.quality || '',
                     packetSize: product.packetSize || '',
                     purchasedPrice: product.purchasedPrice || ''
                 }],
@@ -240,7 +246,17 @@ const ProductManagement = ({ products, fetchProducts }) => {
                                                         value={brandEntry.brand}
                                                         onChange={(e) => handleProductBrandChange(bIndex, 'brand', e.target.value)}
                                                         className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm outline-none focus:border-blue-500 transition-all bg-white"
-                                                        placeholder="Enter Brand Name"
+                                                        placeholder="Brand Name"
+                                                    />
+                                                </div>
+                                                <div className="w-full md:w-32">
+                                                    <label className="block text-[10px] font-bold text-gray-500 uppercase mb-1">Quality</label>
+                                                    <input
+                                                        type="text"
+                                                        value={brandEntry.quality}
+                                                        onChange={(e) => handleProductBrandChange(bIndex, 'quality', e.target.value)}
+                                                        className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm outline-none focus:border-blue-500 transition-all bg-white"
+                                                        placeholder="Quality"
                                                     />
                                                 </div>
                                                 <div className="w-full md:w-32">
@@ -324,6 +340,7 @@ const ProductManagement = ({ products, fetchProducts }) => {
                                         <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">HS Code (IND)</th>
                                         <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Product Name</th>
                                         <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Brand</th>
+                                        <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Quality</th>
                                         <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Packet Size</th>
                                         <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">UOM</th>
                                         <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Price</th>
@@ -341,6 +358,11 @@ const ProductManagement = ({ products, fetchProducts }) => {
                                                 {product.brands?.map((b, i) => (
                                                     <div key={i}>{b.brand || '-'}</div>
                                                 )) || product.brand || '-'}
+                                            </td>
+                                            <td className="px-6 py-4 text-sm text-gray-600 leading-relaxed align-top">
+                                                {product.brands?.map((b, i) => (
+                                                    <div key={i}>{b.quality || '-'}</div>
+                                                )) || product.quality || '-'}
                                             </td>
                                             <td className="px-6 py-4 text-sm text-gray-600 leading-relaxed align-top">
                                                 {product.brands?.map((b, i) => (

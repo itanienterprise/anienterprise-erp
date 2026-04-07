@@ -68,11 +68,20 @@ export default defineConfig(({ mode }) => ({
   },
   build: {
     assetsDir: 's',
+    chunkSizeWarningLimit: 2000,
     rollupOptions: {
       output: {
         entryFileNames: `s/[hash].js`,
         chunkFileNames: `s/[hash].js`,
-        assetFileNames: `s/[hash].[ext]`
+        assetFileNames: `s/[hash].[ext]`,
+        manualChunks(id) {
+          if (id.includes('node_modules')) {
+            if (id.includes('jspdf')) return 'vendor-jspdf';
+            if (id.includes('crypto-js')) return 'vendor-crypto';
+            if (id.includes('react')) return 'vendor-react';
+            return 'vendor'; // all other node_modules
+          }
+        }
       }
     }
   }

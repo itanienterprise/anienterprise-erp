@@ -528,25 +528,25 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
 
     displayRecords.forEach(group => {
         group.brandList.forEach(brand => {
-            totalOpeningQty += Math.max(0, brand.trueOpeningQuantity || 0);
-            totalArrivalQty += Math.max(0, brand.periodArrivalQuantity || 0);
+            totalOpeningQty += (brand.trueOpeningQuantity || 0);
+            totalArrivalQty += (brand.periodArrivalQuantity || 0);
             totalSaleQty += (brand.saleQuantity || 0);
-            totalInHouseQty += Math.max(0, brand.inHouseQuantity || 0);
+            totalInHouseQty += (brand.inHouseQuantity || 0);
             
-            totalOpeningPkt += Math.max(0, brand.trueOpeningPacket || 0);
-            totalArrivalPkt += Math.max(0, brand.periodArrivalPacket || 0);
+            totalOpeningPkt += (brand.trueOpeningPacket || 0);
+            totalArrivalPkt += (brand.periodArrivalPacket || 0);
             totalSalePkt += (brand.salePacket || 0);
-            totalInHousePkt += Math.max(0, brand.inHousePacket || 0);
+            totalInHousePkt += (brand.inHousePacket || 0);
         });
     });
 
-    const totalPackets = filteredRecords.reduce((sum, item) => sum + Math.max(0, safeParse(item.packet)), 0);
-    const totalQuantity = filteredRecords.reduce((sum, item) => sum + Math.max(0, safeParse(item.quantity)), 0);
+    const totalPackets = filteredRecords.reduce((sum, item) => sum + (safeParse(item.packet)), 0);
+    const totalQuantity = filteredRecords.reduce((sum, item) => sum + (safeParse(item.quantity)), 0);
     const totalShortage = filteredRecords.reduce((sum, item) => sum + safeParse(item.sweepedQuantity), 0);
 
     const totalInHousePktDetails = displayRecords.reduce((acc, group) => {
         group.brandList.forEach(brand => {
-            const { whole, remainder } = calculatePktRemainder(Math.max(0, brand.inHouseQuantity), brand.packetSize);
+            const { whole, remainder } = calculatePktRemainder(brand.inHouseQuantity, brand.packetSize);
             acc.whole += whole;
             acc.remainder += remainder;
         });
@@ -558,7 +558,7 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
 
     const totalSalePktDetails = displayRecords.reduce((acc, group) => {
         group.brandList.forEach(brand => {
-            const { whole, remainder } = calculatePktRemainder(Math.max(0, brand.saleQuantity), brand.packetSize);
+            const { whole, remainder } = calculatePktRemainder(brand.saleQuantity, brand.packetSize);
             acc.whole += whole;
             acc.remainder += remainder;
         });
@@ -570,7 +570,7 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
 
     const totalArrivalPktDetails = displayRecords.reduce((acc, group) => {
         group.brandList.forEach(brand => {
-            const { whole, remainder } = calculatePktRemainder(Math.max(0, brand.periodArrivalQuantity), brand.packetSize);
+            const { whole, remainder } = calculatePktRemainder(brand.periodArrivalQuantity, brand.packetSize);
             acc.whole += whole;
             acc.remainder += remainder;
         });
@@ -579,7 +579,7 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
 
     const totalOpeningPktDetails = displayRecords.reduce((acc, group) => {
         group.brandList.forEach(brand => {
-            const { whole, remainder } = calculatePktRemainder(Math.max(0, brand.trueOpeningQuantity), brand.packetSize);
+            const { whole, remainder } = calculatePktRemainder(brand.trueOpeningQuantity, brand.packetSize);
             acc.whole += whole;
             acc.remainder += remainder;
         });

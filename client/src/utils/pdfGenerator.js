@@ -429,7 +429,7 @@ export const generateStockReportPDF = (stockData, filters, reportType = 'short')
 
         stockData.displayRecords.forEach((item, index) => {
             const hasTotal = true;
-            const totalRowsForProduct = item.brandList.length + 1;
+            const totalRowsForProduct = item.brandList.length;
 
             item.brandList.forEach((brandEnt, i) => {
                 const row = [];
@@ -443,38 +443,58 @@ export const generateStockReportPDF = (stockData, filters, reportType = 'short')
                 // 3. Brand
                 row.push(brandEnt.brand || '-');
 
-                // 4. Total BAG
-                const tPkt = parseFloat(brandEnt.totalInHousePacket) || 0;
-                const tQty = parseFloat(brandEnt.totalInHouseQuantity) || 0;
-                const tSize = parseFloat(brandEnt.packetSize) || 0;
-                const tWhole = Math.floor(tPkt);
-                const tRem = Math.round(tQty - (tWhole * tSize));
-                row.push(`${tWhole}${tRem > 0 ? ` - ${tRem} kg` : ''}`);
+                if (reportType === 'detailed') {
+                    // 4. Total BAG (Opening)
+                    const tPkt = parseFloat(brandEnt.totalInHousePacket) || 0;
+                    const tQty = parseFloat(brandEnt.totalInHouseQuantity) || 0;
+                    const tSize = parseFloat(brandEnt.packetSize) || 0;
+                    const tWhole = Math.floor(tPkt);
+                    const tRem = Math.round(tQty - (tWhole * tSize));
+                    row.push(`${tWhole}${tRem > 0 ? ` - ${tRem} kg` : ''}`);
 
-                // 5. Total QTY
-                row.push(Math.round(brandEnt.totalInHouseQuantity).toString());
+                    // 5. Total QTY (Opening)
+                    row.push(Math.round(brandEnt.totalInHouseQuantity).toString());
 
-                // 6. Sale BAG
-                const sPkt = parseFloat(brandEnt.salePacket) || 0;
-                const sQty = parseFloat(brandEnt.saleQuantity) || 0;
-                const sSize = parseFloat(brandEnt.packetSize) || 0;
-                const sWhole = Math.floor(sPkt);
-                const sRem = Math.round(sQty - (sWhole * sSize));
-                row.push(`${sWhole}${sRem > 0 ? ` - ${sRem} kg` : ''}`);
+                    // 6. Sale BAG
+                    const sPkt = parseFloat(brandEnt.salePacket) || 0;
+                    const sQty = parseFloat(brandEnt.saleQuantity) || 0;
+                    const sSize = parseFloat(brandEnt.packetSize) || 0;
+                    const sWhole = Math.floor(sPkt);
+                    const sRem = Math.round(sQty - (sWhole * sSize));
+                    row.push(`${sWhole}${sRem > 0 ? ` - ${sRem} kg` : ''}`);
 
-                // 7. Sale QTY
-                row.push(Math.round(brandEnt.saleQuantity).toString());
+                    // 7. Sale QTY
+                    row.push(Math.round(brandEnt.saleQuantity).toString());
+                }
 
-                // 8. InHouse BAG (Remaining)
-                const rPkt = parseFloat(brandEnt.inHousePacket) || 0;
+                // 8. InHouse BAG (Remaining/Closing) - This becomes column 4 in 'short' mode
                 const rQty = parseFloat(brandEnt.inHouseQuantity) || 0;
                 const rSize = parseFloat(brandEnt.packetSize) || 0;
-                const rWhole = Math.floor(rPkt);
-                const rRem = Math.round(rQty - (rWhole * rSize));
-                row.push(`${rWhole}${rRem > 0 ? ` - ${rRem} kg` : ''}`);
+                let rWhole = 0;
+                let rRem = rQty;
+                if (rSize > 0) {
+                    if (rQty >= 0) {
+                        rWhole = Math.floor(rQty / rSize + 1e-9);
+                        rRem = Math.round(rQty - (rWhole * rSize));
+                        if (rRem >= rSize) { rWhole += 1; rRem = 0; }
+                    } else {
+                        const absQty = Math.abs(rQty);
+                        const whole = Math.floor(absQty / rSize + 1e-9);
+                        const remainder = Math.round(absQty - (whole * rSize));
+                        if (remainder >= rSize) {
+                            rWhole = -(whole + 1);
+                            rRem = 0;
+                        } else {
+                            rWhole = -whole;
+                            rRem = -remainder;
+                        }
+                    }
+                }
+                const remStr = rRem !== 0 ? ` - ${Math.abs(rRem)} kg` : '';
+                row.push(`${rWhole}${remStr}`);
 
-                // 9. Inhouse QTY (Remaining)
-                row.push(Math.round(brandEnt.inHouseQuantity).toString());
+                // 9. Inhouse QTY (Remaining/Closing) - This becomes column 5 in 'short' mode
+                row.push(Math.round(rQty).toString());
 
                 tableRows.push(row);
             });
@@ -482,70 +502,72 @@ export const generateStockReportPDF = (stockData, filters, reportType = 'short')
             // Add Total row for product
             if (hasTotal) {
                 const totalRow = [
-                    { content: 'SUB TOTAL', styles: { fontStyle: 'bold', halign: 'center', fillColor: [250, 250, 250] } }
+                    { content: '', styles: { fillColor: [240, 240, 240] } },
+                    { content: '', styles: { fillColor: [240, 240, 240] } },
+                    { content: 'SUB TOTAL', styles: { fontStyle: 'bold', halign: 'center', fillColor: [240, 240, 240] } }
                 ];
 
                 if (reportType === 'detailed') {
                     // Total BAG
                     totalRow.push({
                         content: (() => {
-                            const totalWhole = item.brandList.reduce((sum, ent) => sum + Math.floor(Math.max(0, parseFloat(ent.totalInHousePacket) || 0)), 0);
-                            const totalRem = Math.round(item.brandList.reduce((sum, ent) => sum + Math.max(0, parseFloat(ent.totalInHouseQuantity) || 0) - (Math.floor(Math.max(0, parseFloat(ent.totalInHousePacket) || 0)) * (parseFloat(ent.packetSize) || 0)), 0));
-                            return `${totalWhole}${totalRem > 0 ? ` - ${totalRem} kg` : ''}`;
+                            const totalWhole = item.brandList.reduce((sum, ent) => sum + Math.max(0, Math.floor(parseFloat(ent.totalInHousePacket) || 0)), 0);
+                            const totalRem = Math.round(item.brandList.reduce((sum, ent) => sum + Math.max(0, (parseFloat(ent.totalInHouseQuantity) || 0)) - (Math.max(0, Math.floor(parseFloat(ent.totalInHousePacket) || 0)) * (parseFloat(ent.packetSize) || 0)), 0));
+                            return `${totalWhole}${totalRem !== 0 ? ` - ${Math.abs(totalRem)} kg` : ''}`;
                         })(),
-                        styles: { fontStyle: 'bold', halign: 'right', fillColor: [250, 250, 250] }
+                        styles: { fontStyle: 'bold', halign: 'right', fillColor: [240, 240, 240] }
                     });
-                    totalRow.push({ content: Math.round(item.totalInHouseQuantity).toString(), styles: { fontStyle: 'bold', halign: 'right', fillColor: [250, 250, 250] } });
+                    totalRow.push({ content: Math.round(item.totalInHouseQuantity).toString(), styles: { fontStyle: 'bold', halign: 'right', fillColor: [240, 240, 240] } });
                     // Sale
                     totalRow.push({
                         content: (() => {
-                            const totalWhole = item.brandList.reduce((sum, ent) => sum + Math.floor(Math.max(0, parseFloat(ent.salePacket) || 0)), 0);
-                            const totalRem = Math.round(item.brandList.reduce((sum, ent) => sum + Math.max(0, parseFloat(ent.saleQuantity) || 0) - (Math.floor(Math.max(0, parseFloat(ent.salePacket) || 0)) * (parseFloat(ent.packetSize) || 0)), 0));
-                            return `${totalWhole}${totalRem > 0 ? ` - ${totalRem} kg` : ''}`;
+                            const totalWhole = item.brandList.reduce((sum, ent) => sum + Math.floor(parseFloat(ent.salePacket) || 0), 0);
+                            const totalRem = Math.round(item.brandList.reduce((sum, ent) => sum + (parseFloat(ent.saleQuantity) || 0) - (Math.floor(parseFloat(ent.salePacket) || 0) * (parseFloat(ent.packetSize) || 0)), 0));
+                            return `${totalWhole}${totalRem !== 0 ? ` - ${Math.abs(totalRem)} kg` : ''}`;
                         })(),
-                        styles: { fontStyle: 'bold', halign: 'right', fillColor: [250, 250, 250] }
+                        styles: { fontStyle: 'bold', halign: 'right', fillColor: [240, 240, 240] }
                     });
-                    totalRow.push({ content: Math.round(item.saleQuantity).toString(), styles: { fontStyle: 'bold', halign: 'right', fillColor: [250, 250, 250] } });
+                    totalRow.push({ content: Math.round(item.saleQuantity).toString(), styles: { fontStyle: 'bold', halign: 'right', fillColor: [240, 240, 240] } });
                 }
 
                 // Inhouse BAG
                 totalRow.push({
                     content: (() => {
-                        const totalWhole = item.brandList.reduce((sum, ent) => sum + Math.floor(Math.max(0, parseFloat(ent.inHousePacket) || 0)), 0);
-                        const totalRem = Math.round(item.brandList.reduce((sum, ent) => sum + Math.max(0, parseFloat(ent.inHouseQuantity) || 0) - (Math.floor(Math.max(0, parseFloat(ent.inHousePacket) || 0)) * (parseFloat(ent.packetSize) || 0)), 0));
-                        return `${totalWhole}${totalRem > 0 ? ` - ${totalRem} kg` : ''}`;
+                        const totalWhole = item.brandList.reduce((sum, ent) => sum + Math.max(0, Math.floor(parseFloat(ent.inHousePacket) || 0)), 0);
+                        const totalRem = Math.round(item.brandList.reduce((sum, ent) => sum + Math.max(0, (parseFloat(ent.inHouseQuantity) || 0)) - (Math.max(0, Math.floor(parseFloat(ent.inHousePacket) || 0)) * (parseFloat(ent.packetSize) || 0)), 0));
+                        return `${totalWhole}${totalRem !== 0 ? ` - ${Math.abs(totalRem)} kg` : ''}`;
                     })(),
-                    styles: { fontStyle: 'bold', halign: 'right', fillColor: [250, 250, 250] }
+                    styles: { fontStyle: 'bold', halign: 'right', fillColor: [240, 240, 240] }
                 });
-                totalRow.push({ content: Math.round(item.inHouseQuantity).toString(), styles: { fontStyle: 'bold', halign: 'right', fillColor: [250, 250, 250] } });
+                totalRow.push({ content: Math.round(item.inHouseQuantity).toString(), styles: { fontStyle: 'bold', halign: 'right', fillColor: [240, 240, 240] } });
                 tableRows.push(totalRow);
             }
         });
 
         // Summary Calculations for Cards
         const grandTotalPktStr = (() => {
-            const totalWhole = stockData.displayRecords.reduce((accWhole, item) => accWhole + item.brandList.reduce((sum, ent) => sum + Math.floor(Math.max(0, parseFloat(ent.totalInHousePacket) || 0)), 0), 0);
-            const totalRem = Math.round(stockData.displayRecords.reduce((accRem, item) => accRem + item.brandList.reduce((sum, ent) => sum + Math.max(0, parseFloat(ent.totalInHouseQuantity) || 0) - (Math.floor(Math.max(0, parseFloat(ent.totalInHousePacket) || 0)) * (parseFloat(ent.packetSize) || 0)), 0), 0));
-            return `${totalWhole}${totalRem > 0 ? ` - ${totalRem} kg` : ''}`;
+            const totalWhole = stockData.displayRecords.reduce((accWhole, item) => accWhole + item.brandList.reduce((sum, ent) => sum + Math.max(0, Math.floor(parseFloat(ent.totalInHousePacket) || 0)), 0), 0);
+            const totalRem = Math.round(stockData.displayRecords.reduce((accRem, item) => accRem + item.brandList.reduce((sum, ent) => sum + Math.max(0, (parseFloat(ent.totalInHouseQuantity) || 0)) - (Math.max(0, Math.floor(parseFloat(ent.totalInHousePacket) || 0)) * (parseFloat(ent.packetSize) || 0)), 0), 0));
+            return `${totalWhole}${totalRem !== 0 ? ` - ${Math.abs(totalRem)} kg` : ''}`;
         })();
-
+ 
         const inHousePktStr = (() => {
-            const totalWhole = stockData.displayRecords.reduce((accWhole, item) => accWhole + item.brandList.reduce((sum, ent) => sum + Math.floor(Math.max(0, parseFloat(ent.inHousePacket) || 0)), 0), 0);
-            const totalRem = Math.round(stockData.displayRecords.reduce((accRem, item) => accRem + item.brandList.reduce((sum, ent) => sum + Math.max(0, parseFloat(ent.inHouseQuantity) || 0) - (Math.floor(Math.max(0, parseFloat(ent.inHousePacket) || 0)) * (parseFloat(ent.packetSize) || 0)), 0), 0));
-            return `${totalWhole}${totalRem > 0 ? ` - ${totalRem} kg` : ''}`;
+            const totalWhole = stockData.displayRecords.reduce((accWhole, item) => accWhole + item.brandList.reduce((sum, ent) => sum + Math.max(0, Math.floor(parseFloat(ent.inHousePacket) || 0)), 0), 0);
+            const totalRem = Math.round(stockData.displayRecords.reduce((accRem, item) => accRem + item.brandList.reduce((sum, ent) => sum + Math.max(0, (parseFloat(ent.inHouseQuantity) || 0)) - (Math.max(0, Math.floor(parseFloat(ent.inHousePacket) || 0)) * (parseFloat(ent.packetSize) || 0)), 0), 0));
+            return `${totalWhole}${totalRem !== 0 ? ` - ${Math.abs(totalRem)} kg` : ''}`;
         })();
 
         const totalSalePktStr = (() => {
-            const totalWhole = stockData.displayRecords.reduce((accWhole, item) => accWhole + item.brandList.reduce((sum, ent) => sum + Math.floor(Math.max(0, parseFloat(ent.salePacket) || 0)), 0), 0);
-            const totalRem = Math.round(stockData.displayRecords.reduce((accRem, item) => accRem + item.brandList.reduce((sum, ent) => sum + Math.max(0, parseFloat(ent.saleQuantity) || 0) - (Math.floor(Math.max(0, parseFloat(ent.salePacket) || 0)) * (parseFloat(ent.packetSize) || 0)), 0), 0));
-            return `${totalWhole}${totalRem > 0 ? ` - ${totalRem} kg` : ''}`;
+            const totalWhole = stockData.displayRecords.reduce((accWhole, item) => accWhole + item.brandList.reduce((sum, ent) => sum + Math.floor(parseFloat(ent.salePacket) || 0), 0), 0);
+            const totalRem = Math.round(stockData.displayRecords.reduce((accRem, item) => accRem + item.brandList.reduce((sum, ent) => sum + (parseFloat(ent.saleQuantity) || 0) - (Math.floor(parseFloat(ent.salePacket) || 0) * (parseFloat(ent.packetSize) || 0)), 0), 0));
+            return `${totalWhole}${totalRem !== 0 ? ` - ${Math.abs(totalRem)} kg` : ''}`;
         })();
 
         // Append Grand Total Row
         const grandTotalRow = [
             { content: '', styles: { fillColor: [240, 240, 240] } },
-            { content: 'GRAND TOTAL', styles: { fontStyle: 'bold', halign: 'center', fillColor: [240, 240, 240] } },
-            { content: '', styles: { fillColor: [240, 240, 240] } }
+            { content: '', styles: { fillColor: [240, 240, 240] } },
+            { content: 'GRAND TOTAL', styles: { fontStyle: 'bold', halign: 'center', fillColor: [240, 240, 240] } }
         ];
 
         if (reportType === 'detailed') {

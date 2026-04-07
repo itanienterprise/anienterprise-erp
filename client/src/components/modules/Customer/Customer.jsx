@@ -224,6 +224,22 @@ const Customer = ({
         return () => document.removeEventListener('mousedown', handleClickOutside);
     }, [showFilterPanel]);
 
+    const generateNextCustomerId = (type, allCustomers) => {
+        const prefix = type === 'Party Customer' ? 'B' : 'G';
+        const typedCustomers = (allCustomers || []).filter(c => (c.customerId || '').startsWith(prefix));
+        
+        let maxNum = 0;
+        typedCustomers.forEach(c => {
+            const numPart = parseInt(c.customerId.substring(1));
+            if (!isNaN(numPart) && numPart > maxNum) {
+                maxNum = numPart;
+            }
+        });
+        
+        const nextNum = maxNum + 1;
+        return `${prefix}${nextNum.toString().padStart(4, '0')}`;
+    };
+
     const fetchCustomers = async () => {
         setIsLoading(true);
         try {
@@ -248,6 +264,12 @@ const Customer = ({
                 }
                 return;
             }
+        }
+
+        if (name === 'customerType') {
+            const nextId = !editingId ? generateNextCustomerId(value, customers) : formData.customerId;
+            setFormData(prev => ({ ...prev, [name]: value, customerId: nextId }));
+            return;
         }
 
         setFormData(prev => ({ ...prev, [name]: value }));
@@ -342,14 +364,16 @@ const Customer = ({
     };
 
     const resetForm = () => {
+        const initialType = 'General Customer';
+        const initialId = generateNextCustomerId(initialType, customers);
         setFormData({
-            customerId: '',
+            customerId: initialId,
             companyName: '',
             customerName: '',
             address: '',
             location: '',
             phone: '+880',
-            customerType: 'General Customer',
+            customerType: initialType,
             status: 'Active'
         });
         setEditingId(null);
@@ -648,7 +672,10 @@ const Customer = ({
                                 <span className="text-sm font-medium">Report</span>
                             </button>
                             <button
-                                onClick={() => setShowForm(!showForm)}
+                                onClick={() => {
+                                    if (!showForm) resetForm();
+                                    setShowForm(!showForm);
+                                }}
                                 className="flex-1 md:flex-none w-full md:w-auto flex justify-center items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl hover:from-blue-700 hover:to-indigo-700 transition-all duration-200 shadow-lg shadow-blue-500/30 hover:scale-105 h-[42px]"
                             >
                                 <span className="text-sm font-medium">+ Add New</span>
@@ -688,6 +715,25 @@ const Customer = ({
                             </button>
                         </div>
                         <form onSubmit={handleSubmit} autoComplete="off" className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-6 relative z-10">
+                            <div className="space-y-2">
+                                <label className="text-sm font-medium text-gray-700">Customer Type</label>
+                                <div className="relative">
+                                    <select
+                                        name="customerType"
+                                        value={formData.customerType}
+                                        onChange={handleInputChange}
+                                        className="w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm appearance-none pr-10 cursor-pointer"
+                                    >
+                                        <option value="General Customer">General Customer</option>
+                                        <option value="Party Customer">Party Customer</option>
+                                    </select>
+                                    <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
+                                        <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path>
+                                        </svg>
+                                    </div>
+                                </div>
+                            </div>
                            <div className="space-y-2">
                                 <label className="text-sm font-medium text-gray-700">ID</label>
                                 <input
@@ -695,10 +741,11 @@ const Customer = ({
                                     name="customerId"
                                     value={formData.customerId}
                                     onChange={handleInputChange}
+                                    readOnly
                                     required
                                     placeholder="Customer ID"
                                     autoComplete="off"
-                                    className="w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm"
+                                    className="w-full px-4 py-2 bg-gray-50/80 border border-gray-200/60 rounded-lg focus:ring-0 focus:border-gray-200 outline-none transition-all backdrop-blur-sm font-semibold text-gray-600 cursor-not-allowed"
                                 />
                             </div>
                             <div className="space-y-2">
@@ -740,14 +787,14 @@ const Customer = ({
                                     className="w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm"
                                 />
                             </div>
-                            <div className="col-span-1 lg:col-span-2 space-y-2">
+                            <div className="space-y-2">
                                 <label className="text-sm font-medium text-gray-700">Address</label>
                                 <textarea
                                     name="address"
                                     value={formData.address}
                                     onChange={handleInputChange}
                                     required
-                                    rows="2"
+                                    rows="1"
                                     placeholder="Full Street Address"
                                     className="w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm resize-none"
                                 />
@@ -765,25 +812,7 @@ const Customer = ({
                                     className="w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm"
                                 />
                             </div>
-                            <div className="space-y-2">
-                                <label className="text-sm font-medium text-gray-700">Customer Type</label>
-                                <div className="relative">
-                                    <select
-                                        name="customerType"
-                                        value={formData.customerType}
-                                        onChange={handleInputChange}
-                                        className="w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm appearance-none pr-10 cursor-pointer"
-                                    >
-                                        <option value="General Customer">General Customer</option>
-                                        <option value="Party Customer">Party Customer</option>
-                                    </select>
-                                    <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
-                                        <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path>
-                                        </svg>
-                                    </div>
-                                </div>
-                            </div>
+
                             <div className="space-y-2">
                                 <label className="text-sm font-medium text-gray-700">Status</label>
                                 <div className="relative">
