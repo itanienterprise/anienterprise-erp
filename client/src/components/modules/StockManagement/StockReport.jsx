@@ -464,27 +464,55 @@ const StockReport = ({
                                 <tbody className="divide-y divide-gray-900">
                                     {filteredRecords.length > 0 ? (
                                         filteredRecords.map((item, index) => {
+                                            // Pre-process brandList into a renderList with quality groups
+                                            const renderList = [];
+                                            let currentQuality = null;
+                                            
+                                            item.brandList.forEach((ent, i) => {
+                                                const q = (ent.quality && ent.quality !== '-') ? ent.quality : '';
+                                                if (q !== currentQuality) {
+                                                    currentQuality = q;
+                                                    renderList.push({ ...ent, type: 'brand', showQuality: true });
+                                                } else {
+                                                    renderList.push({ ...ent, type: 'brand', showQuality: false });
+                                                }
+                                            });
+
                                             const hasTotal = item.brandList.length > 1;
                                             return (
                                                 <tr key={index} className="border-b border-gray-900 last:border-0 hover:bg-gray-50 transition-colors">
                                                     <td className="border-r border-gray-900 px-2 py-0.5 text-[14px] text-gray-900 text-center align-top">{index + 1}</td>
                                                     <td className="border-r border-gray-900 px-2 py-0.5 text-[14px] font-bold text-gray-900 align-top">
-                                                        <div className="leading-tight">{item.productName}</div>
-                                                        {item.brandList.map((_, i) => i > 0 && <div key={i} className="leading-tight">&nbsp;</div>)}
-                                                        {hasTotal && <div className="mt-0 pt-0.5 border-t border-transparent leading-tight">&nbsp;</div>}
+                                                        <div className="leading-tight mb-0.5 underline decoration-gray-300">{item.productName}</div>
+                                                        {renderList.map((ent, i) => {
+                                                            const isFirstSub = i === 0 && !(ent.quality && ent.quality !== '-');
+                                                            if (isFirstSub) return null;
+                                                            return (
+                                                                <div key={i} className="leading-tight text-[12px] text-gray-900">
+                                                                    {ent.showQuality ? (ent.quality && ent.quality !== '-' ? ent.quality : '') : <span className="opacity-20">.</span>}
+                                                                </div>
+                                                            );
+                                                        })}
                                                     </td>
                                                     <td className="border-r border-gray-900 px-2 py-0.5 text-[14px] text-gray-900 align-top whitespace-nowrap">
-                                                        {item.brandList.map((ent, i) => (
-                                                            <div key={i} className="leading-tight">{ent.brand}</div>
+                                                        {renderList[0] && renderList[0].quality && renderList[0].quality !== '-' && <div className="leading-tight mb-0.5">&nbsp;</div>}
+                                                        {renderList.map((ent, i) => (
+                                                            <div key={i} className="leading-tight">
+                                                                {ent.brand || 'No Brand'}
+                                                            </div>
                                                         ))}
-                                                        {hasTotal && <div className="mt-0 pt-0.5 border-t border-transparent leading-tight font-bold">&nbsp;</div>}
+                                                        {hasTotal && <div className="mt-0 pt-0.5 border-t border-gray-900 font-bold leading-tight uppercase text-gray-400">SUB TOTAL</div>}
                                                     </td>
                                                     {reportType === 'detailed' && (
                                                         <>
                                                             <td className="border-r border-gray-900 px-2 py-0.5 text-[14px] text-right text-gray-900 font-medium align-top whitespace-nowrap">
-                                                                {item.brandList.map((ent, i) => {
+                                                                {renderList.map((ent, i) => {
                                                                     const { whole, remainder } = calculatePktRemainder(ent.totalInHouseQuantity, ent.packetSize);
-                                                                    return <div key={i} className="leading-tight">{whole}{remainder !== 0 ? ` - ${Math.abs(remainder)} kg` : ''}</div>;
+                                                                    return (
+                                                                        <div key={i} className="leading-tight">
+                                                                            {whole}{remainder !== 0 ? ` - ${Math.abs(remainder)} kg` : ''}
+                                                                        </div>
+                                                                    );
                                                                 })}
                                                                 {hasTotal && (
                                                                     <div className="mt-0 pt-0.5 border-t border-gray-900 font-bold leading-tight">
@@ -497,26 +525,42 @@ const StockReport = ({
                                                                 )}
                                                             </td>
                                                             <td className="border-r border-gray-900 px-2 py-0.5 text-[14px] text-right text-gray-900 font-bold align-top whitespace-nowrap">
-                                                                {item.brandList.map((ent, i) => <div key={i} className="leading-tight">{Math.round(ent.totalInHouseQuantity)}</div>)}
+                                                                {renderList.map((ent, i) => (
+                                                                    <div key={i} className={`leading-tight ${ent.type === 'subtotal' ? 'text-gray-600' : ''}`}>
+                                                                        {Math.round(ent.totalInHouseQuantity || 0)}
+                                                                    </div>
+                                                                ))}
                                                                 {hasTotal && <div className="mt-0 pt-0.5 border-t border-gray-900 font-black leading-tight">{Math.round(item.totalInHouseQuantity)}</div>}
                                                             </td>
                                                             <td className="border-r border-gray-900 px-2 py-0.5 text-[14px] text-right text-gray-900 font-medium align-top whitespace-nowrap">
-                                                                {item.brandList.map((ent, i) => {
+                                                                {renderList.map((ent, i) => {
                                                                     const sPkt = parseFloat(ent.salePacket) || 0;
-                                                                    return <div key={i} className="leading-tight">{Number.isInteger(sPkt) ? sPkt : sPkt.toFixed(2)}</div>;
+                                                                    return (
+                                                                        <div key={i} className={`leading-tight ${ent.type === 'subtotal' ? 'font-bold text-gray-600' : ''}`}>
+                                                                            {Number.isInteger(sPkt) ? sPkt : sPkt.toFixed(2)}
+                                                                        </div>
+                                                                    );
                                                                 })}
                                                                 {hasTotal && <div className="mt-0 pt-0.5 border-t border-gray-900 font-bold leading-tight text-right">{Number.isInteger(item.salePacket) ? item.salePacket : (item.salePacket || 0).toFixed(2)}</div>}
                                                             </td>
                                                             <td className="border-r border-gray-900 px-2 py-0.5 text-[14px] text-right text-gray-900 font-bold align-top whitespace-nowrap">
-                                                                {item.brandList.map((ent, i) => <div key={i} className="leading-tight">{Math.round(ent.saleQuantity)}</div>)}
+                                                                {renderList.map((ent, i) => (
+                                                                    <div key={i} className={`leading-tight ${ent.type === 'subtotal' ? 'text-gray-600' : ''}`}>
+                                                                        {Math.round(ent.saleQuantity || 0)}
+                                                                    </div>
+                                                                ))}
                                                                 {hasTotal && <div className="mt-0 pt-0.5 border-t border-gray-900 font-black leading-tight">{Math.round(item.saleQuantity)}</div>}
                                                             </td>
                                                         </>
                                                     )}
                                                     <td className="border-r border-gray-900 px-2 py-0.5 text-[14px] text-right text-gray-900 font-medium align-top whitespace-nowrap">
-                                                        {item.brandList.map((ent, i) => {
+                                                        {renderList.map((ent, i) => {
                                                             const { whole, remainder } = calculatePktRemainder(ent.inHouseQuantity, ent.packetSize);
-                                                            return <div key={i} className="leading-tight">{whole}{remainder !== 0 ? ` - ${Math.abs(remainder)} kg` : ''}</div>;
+                                                            return (
+                                                                <div key={i} className={`leading-tight ${ent.type === 'subtotal' ? 'font-bold text-gray-600' : ''}`}>
+                                                                    {whole}{remainder !== 0 ? ` - ${Math.abs(remainder)} kg` : ''}
+                                                                </div>
+                                                            );
                                                         })}
                                                         {hasTotal && (
                                                             <div className="mt-0 pt-0.5 border-t border-gray-900 font-bold leading-tight">
@@ -529,7 +573,11 @@ const StockReport = ({
                                                         )}
                                                     </td>
                                                     <td className="px-2 py-0.5 text-[14px] text-right text-gray-900 font-bold whitespace-nowrap border-gray-900 align-top">
-                                                        {item.brandList.map((ent, i) => <div key={i} className="leading-tight">{Math.round(ent.inHouseQuantity)}</div>)}
+                                                        {renderList.map((ent, i) => (
+                                                            <div key={i} className={`leading-tight ${ent.type === 'subtotal' ? 'text-gray-600' : ''}`}>
+                                                                {Math.round(ent.inHouseQuantity || 0)}
+                                                            </div>
+                                                        ))}
                                                         {hasTotal && <div className="mt-0 pt-0.5 border-t border-gray-900 font-black leading-tight">{Math.round(item.inHouseQuantity)}</div>}
                                                     </td>
                                                 </tr>
@@ -542,7 +590,9 @@ const StockReport = ({
                                 {filteredRecords.length > 0 && (
                                     <tfoot>
                                         <tr className="bg-gray-100 border-t-2 border-gray-900">
-                                            <td colSpan="3" className="px-2 py-1.5 text-[14px] font-black text-gray-900 text-right uppercase tracking-wider border-r border-gray-900">Grand Total</td>
+                                            <td className="border-r border-gray-900 px-2 py-1.5"></td>
+                                            <td className="border-r border-gray-900 px-2 py-1.5"></td>
+                                            <td className="px-2 py-1.5 text-[14px] font-black text-gray-900 text-center uppercase tracking-wider border-r border-gray-900">Grand Total</td>
                                             {reportType === 'detailed' && (
                                                 <>
                                                     <td className="px-2 py-1.5 text-[14px] text-right font-black text-gray-900 border-r border-gray-900">

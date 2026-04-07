@@ -210,6 +210,7 @@ const SaleManagement = ({
         }
     }, [saleType]);
 
+
     const processSaleEffects = async (saleData, isEditing = false) => {
         // Resolve Customer ID if missing but name is present
         let targetCustomerId = saleData.customerId;

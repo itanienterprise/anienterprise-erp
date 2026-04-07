@@ -152,25 +152,45 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
             };
         }
 
-        const brandKey = (item.brand || 'No Brand').trim().toLowerCase();
+        const normalizedBrand = (item.brand || 'No Brand').trim().toLowerCase();
+        
+        // --- Quality Lookup ---
+        let defaultQuality = '-';
+        if (acc[key].productRef?.brands) {
+            const bRef = acc[key].productRef.brands.find(b => (b.name || b.brand || b.brandName || '').trim().toLowerCase() === normalizedBrand);
+            if (bRef) defaultQuality = bRef.quality || '-';
+            else {
+                const looseRef = acc[key].productRef.brands.find(b => {
+                    const bName = (b.name || b.brand || b.brandName || '').trim().toLowerCase();
+                    return bName !== '' && (normalizedBrand.includes(bName) || bName.includes(normalizedBrand));
+                });
+                if (looseRef) defaultQuality = looseRef.quality || '-';
+            }
+        }
+
+        // --- GROUPING LOGIC ---
+        // Group by brand only to keep individual entries manageable. 
+        // We will handle Quality-based visual merging in the UI component.
+        const brandKey = normalizedBrand;
+
         if (!acc[key].brands[brandKey]) {
             // Find default packet size with multi-level fallbacks
             let defaultPktSize = safeParse(item.packetSize || item.size);
             
-            // Fallback 1: Global Brand Map (from all system records)
-            if (defaultPktSize === 0) defaultPktSize = globalBrandSizeMap[brandKey] || 0;
+            // Fallback 1: Global Brand Map
+            if (defaultPktSize === 0) defaultPktSize = globalBrandSizeMap[normalizedBrand] || 0;
             
             // Fallback 2: Product Definition - Exact Brand Match
             if (defaultPktSize === 0 && acc[key].productRef?.brands) {
-                const bRef = acc[key].productRef.brands.find(b => (b.name || b.brandName || '').trim().toLowerCase() === brandKey);
+                const bRef = acc[key].productRef.brands.find(b => (b.name || b.brandName || '').trim().toLowerCase() === normalizedBrand);
                 if (bRef) defaultPktSize = safeParse(bRef.packetSize || bRef.size || bRef.weight);
             }
 
-            // Fallback 3: Product Definition - Loose Brand Match (e.g. "RANI CIKON" matches "RANI CIKON(MOSUR)")
+            // Fallback 3: Product Definition - Loose Brand Match
             if (defaultPktSize === 0 && acc[key].productRef?.brands) {
                 const bRef = acc[key].productRef.brands.find(b => {
                     const bName = (b.name || b.brandName || '').trim().toLowerCase();
-                    return bName !== '' && (brandKey.includes(bName) || bName.includes(brandKey));
+                    return bName !== '' && (normalizedBrand.includes(bName) || bName.includes(normalizedBrand));
                 });
                 if (bRef) defaultPktSize = safeParse(bRef.packetSize || bRef.size || bRef.weight);
             }
@@ -181,7 +201,8 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
             }
 
             acc[key].brands[brandKey] = {
-                brand: item.brand,
+                brand: item.brand || 'No Brand',
+                quality: defaultQuality,
                 importer: item.importer,
                 port: item.port,
                 openingPacket: 0,
@@ -192,13 +213,9 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
                 saleQuantity: 0,
                 sweepedPacket: 0,
                 sweepedQuantity: 0,
-                packetSize: defaultPktSize
+                packetSize: defaultPktSize,
+                _salesResolved: false
             };
-        } else if (acc[key].brands[brandKey].packetSize === 0) {
-            // Late binding check if packetSize is still 0
-            const currentSize = safeParse(item.packetSize || item.size);
-            if (currentSize > 0) acc[key].brands[brandKey].packetSize = currentSize;
-            else if (globalBrandSizeMap[brandKey]) acc[key].brands[brandKey].packetSize = globalBrandSizeMap[brandKey];
         }
 
         const brandObj = acc[key].brands[brandKey];
@@ -210,15 +227,14 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
             let currentSaleQty = 0;
             let currentSalePkt = 0;
 
-            const currentPktSize = safeParse(item.packetSize);
+            const currentPktSize = brandObj.packetSize;
             const targetProd = (item.productName || item.product || '').toLowerCase().trim();
-            const targetBrand = (item.brand || '').toLowerCase().trim();
+            const targetBrand = normalizedBrand;
 
             // 1. Sales Records
             salesRecords.forEach(sale => {
                 const sStatus = (sale.status || '').toLowerCase();
                 if (sStatus !== 'accepted' && sStatus !== 'pending') return;
-                // Exclude sales after end date
                 if (endDate && sale.date > endDate) return;
 
                 const isBeforeSale = startDate && sale.date < startDate;
@@ -255,8 +271,6 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
                     const wBrand = (whItem.brand || '').toLowerCase().trim();
                     if (wProd === targetProd && wBrand === targetBrand) {
                         if (stockFilters.warehouse && (whItem.whName || whItem.warehouse || '').trim() !== stockFilters.warehouse) return;
-                        // Warehouse data date filtering? Assuming whItem has a date or linked to record date
-                        // However, current schema might not have historical date for warehouse sales readily available here
                         const itemDate = whItem.date || whItem.createdAt;
                         const isBeforeWh = startDate && itemDate && itemDate < startDate;
                         
@@ -278,12 +292,13 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
             brandObj.openingPacket -= beforeSalePkt;
             brandObj.saleQuantity = currentSaleQty;
             brandObj.salePacket = currentSalePkt;
-            brandObj._salesResolved = true;
-
+            
             acc[key].openingQuantity -= beforeSaleQty;
             acc[key].openingPacket -= beforeSalePkt;
             acc[key].saleQuantity += currentSaleQty;
             acc[key].salePacket += currentSalePkt;
+            
+            brandObj._salesResolved = true;
         }
 
         const qty = safeParse(item.quantity);
@@ -349,7 +364,6 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
                 }
 
                 if (!groupedStock[sProdName]) {
-                    const product = products.find(p => (p.name || p.productName || '').trim().toLowerCase() === sProdName.toLowerCase());
                     groupedStock[sProdName] = {
                         productName: sProdName,
                         productRef: product,
@@ -371,48 +385,58 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
                 const group = groupedStock[sProdName];
                 (saleItem.brandEntries || []).forEach(entry => {
                     if (stockFilters.warehouse && (entry.warehouseName || '').trim() !== stockFilters.warehouse) return;
-                    const brandKey = (entry.brand || 'No Brand').trim().toLowerCase();
+                    const normalizedBrand = (entry.brand || 'No Brand').trim().toLowerCase();
+
+                    // --- Quality Lookup ---
+                    let defaultQuality = '-';
+                    if (group.productRef?.brands) {
+                        const bRef = group.productRef.brands.find(b => (b.name || b.brand || b.brandName || '').trim().toLowerCase() === normalizedBrand);
+                        if (bRef) defaultQuality = bRef.quality || '-';
+                        else {
+                            const looseRef = group.productRef.brands.find(b => {
+                                const bName = (b.name || b.brand || b.brandName || '').trim().toLowerCase();
+                                return bName !== '' && (normalizedBrand.includes(bName) || bName.includes(normalizedBrand));
+                            });
+                            if (looseRef) defaultQuality = looseRef.quality || '-';
+                        }
+                    }
+
+                    // --- GROUPING LOGIC ---
+                    // Group by brand name. Visual merging by quality will be handled in UI.
+                    const brandKey = normalizedBrand;
+
                     if (!group.brands[brandKey]) {
                         // Find default packet size with multi-level fallbacks
                         let defaultPktSize = safeParse(saleItem.packetSize || entry.packetSize || entry.size);
 
-                        // Fallback 1: Global Brand Map (from all system records)
-                        if (defaultPktSize === 0) defaultPktSize = globalBrandSizeMap[brandKey] || 0;
-
-                        // Fallback 2: Product Definition - Exact Brand Match
+                        if (defaultPktSize === 0) defaultPktSize = globalBrandSizeMap[normalizedBrand] || 0;
                         if (defaultPktSize === 0 && group.productRef?.brands) {
-                            const bRef = group.productRef.brands.find(b => (b.name || b.brandName || '').trim().toLowerCase() === brandKey);
+                            const bRef = group.productRef.brands.find(b => (b.name || b.brandName || '').trim().toLowerCase() === normalizedBrand);
                             if (bRef) defaultPktSize = safeParse(bRef.packetSize || bRef.size || bRef.weight);
                         }
-
-                        // Fallback 3: Product Definition - Loose Brand Match
                         if (defaultPktSize === 0 && group.productRef?.brands) {
                             const bRef = group.productRef.brands.find(b => {
                                 const bName = (b.name || b.brandName || '').trim().toLowerCase();
-                                return bName !== '' && (brandKey.includes(bName) || bName.includes(brandKey));
+                                return bName !== '' && (normalizedBrand.includes(bName) || bName.includes(normalizedBrand));
                             });
                             if (bRef) defaultPktSize = safeParse(bRef.packetSize || bRef.size || bRef.weight);
                         }
-
-                        // Fallback 4: Top-level Product Default
                         if (defaultPktSize === 0 && sProdName) {
                             defaultPktSize = productDefaults[sProdName.toLowerCase()] || 0;
                         }
 
                         group.brands[brandKey] = {
-                            brand: entry.brand,
+                            brand: entry.brand || 'No Brand',
+                            quality: defaultQuality,
                             importer: '-',
                             port: '-',
                             openingPacket: 0, openingQuantity: 0,
                             periodArrivalPacket: 0, periodArrivalQuantity: 0,
                             salePacket: 0, saleQuantity: 0,
                             sweepedPacket: 0, sweepedQuantity: 0,
-                            packetSize: defaultPktSize
+                            packetSize: defaultPktSize,
+                            _salesResolved: false
                         };
-                    } else if (group.brands[brandKey].packetSize === 0) {
-                        const currentSize = safeParse(saleItem.packetSize || entry.packetSize || entry.size);
-                        if (currentSize > 0) group.brands[brandKey].packetSize = currentSize;
-                        else if (globalBrandSizeMap[brandKey]) group.brands[brandKey].packetSize = globalBrandSizeMap[brandKey];
                     }
 
                     const brandObj = group.brands[brandKey];
@@ -420,7 +444,7 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
                         let beforeSaleQty = 0; let beforeSalePkt = 0;
                         let currentSaleQty = 0; let currentSalePkt = 0;
                         const targetProd = sProdName.toLowerCase().trim();
-                        const targetBrand = (entry.brand || '').toLowerCase().trim();
+                        const targetBrand = normalizedBrand;
                         const currentPktSize = brandObj.packetSize;
 
                         salesRecords.forEach(s => {
@@ -451,12 +475,13 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
                         brandObj.openingPacket -= beforeSalePkt;
                         brandObj.saleQuantity = currentSaleQty;
                         brandObj.salePacket = currentSalePkt;
-                        brandObj._salesResolved = true;
-
+                        
                         group.openingQuantity -= beforeSaleQty;
                         group.openingPacket -= beforeSalePkt;
                         group.saleQuantity += currentSaleQty;
                         group.salePacket += currentSalePkt;
+
+                        brandObj._salesResolved = true;
                     }
                 });
             });
@@ -493,7 +518,16 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
             if (b.inHouseQuantity !== 0 || b.openingQuantity !== 0 || b.saleQuantity !== 0) return true;
             if (isGeneral && b.saleQuantity > 0) return true;
             return false;
-        }).sort((a, b) => (a.brand || '').localeCompare(b.brand || '', undefined, { sensitivity: 'base' }));
+        }).sort((a, b) => {
+            const qA = (a.quality || '').toLowerCase();
+            const qB = (b.quality || '').toLowerCase();
+            if (qA !== qB) {
+                if (qA === '-') return 1;
+                if (qB === '-') return -1;
+                return qA.localeCompare(qB);
+            }
+            return (a.brand || '').localeCompare(b.brand || '', undefined, { sensitivity: 'base' });
+        });
 
         const trueOpeningQty = brandList.reduce((sum, b) => sum + Math.max(0, b.trueOpeningQuantity || 0), 0);
         const reportOpeningQty = brandList.reduce((sum, b) => sum + Math.max(0, b.openingQuantity || 0), 0);
