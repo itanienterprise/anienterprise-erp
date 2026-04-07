@@ -468,9 +468,10 @@ export const generateStockReportPDF = (stockData, filters, reportType = 'short')
                 }
             }
 
-            const hasTotal = item.brandList.length > 1;
+            const hasTotal = true; // Always show subtotal row for each product group
             const firstEnt = renderList[0];
             const hasQualityHeader = !!(firstEnt && firstEnt.quality && firstEnt.quality !== '-');
+            const hasAnyQuality = renderList.some(ent => ent.quality && ent.quality !== '-');
             const totalRowsForProduct = renderList.length + (hasQualityHeader ? 1 : 0) + (hasTotal ? 1 : 0);
 
             // --- 1. HEADER ROW (Product Name [+ First Brand if no quality]) ---
@@ -483,11 +484,17 @@ export const generateStockReportPDF = (stockData, filters, reportType = 'short')
             // Column 2: Product Name
             headerRow.push({ 
                 content: (item.productName || '-').toUpperCase(), 
+                rowSpan: !hasAnyQuality ? totalRowsForProduct : 1,
                 styles: { valign: 'top', fontStyle: 'bold', halign: 'center', fillColor: [248, 248, 248] } 
             });
 
             if (!hasQualityHeader) {
-                // Consolidate first brand into header row
+                // Product has no quality, so we consolidate the first brand into the header row.
+                // If the report HAS a quality column elsewhere, we must push an empty placeholder for it first.
+                if (hasAnyQuality) {
+                    headerRow.push({ content: '', styles: { fillColor: [248, 248, 248] } });
+                }
+                
                 headerRow.push({ content: firstEnt?.brand || '-', styles: { fillColor: [248, 248, 248], fontStyle: 'normal' } });
 
                 if (reportType === 'detailed') {
@@ -510,8 +517,14 @@ export const generateStockReportPDF = (stockData, filters, reportType = 'short')
                 headerRow.push({ content: `${rW}${rR !== 0 ? ` - ${Math.abs(rR)} kg` : ''}`, styles: { halign: 'right', fillColor: [248, 248, 248], fontStyle: 'normal' } });
                 headerRow.push({ content: Math.round(rQty).toString(), styles: { halign: 'right', fillColor: [248, 248, 248], fontStyle: 'normal' } });
             } else {
-                // Quality exists, so header columns for brand etc are empty placeholders
-                headerRow.push({ content: '', styles: { fillColor: [248, 248, 248] } });
+                // Product HAS quality grades.
+                // The Product header row only contains SL and Product Name.
+                // Quality and Brand columns are left empty here, and will be filled by Detail rows.
+                if (hasAnyQuality) {
+                    headerRow.push({ content: '', styles: { fillColor: [248, 248, 248] } }); // Quality Col
+                }
+                headerRow.push({ content: '', styles: { fillColor: [248, 248, 248] } }); // Brand Col placeholder
+                
                 if (reportType === 'detailed') {
                     headerRow.push({ content: '', styles: { fillColor: [248, 248, 248] } });
                     headerRow.push({ content: '', styles: { fillColor: [248, 248, 248] } });
@@ -537,10 +550,11 @@ export const generateStockReportPDF = (stockData, filters, reportType = 'short')
                         rowSpan: ent.qualityRowSpan,
                         styles: { fontStyle: 'normal', textColor: [0, 0, 0], halign: 'center', valign: 'middle' } 
                     });
-                } else if (!hasQualityHeader) {
-                    // If the first brand was consolidated into the header without a quality span,
-                    // we must push an empty cell for the quality column in subsequent body rows
-                    // to keep the Brand column aligned.
+                } else if (hasAnyQuality && (!hasQualityHeader || isSubtotal)) {
+                    // Only push Placeholder/Quality cell if the column exists in the report 
+                    // AND it's not currently covered by a vertical quality span.
+                    // !hasQualityHeader means the entire product is quality-less (no span), 
+                    // and isSubtotal means the span has ended.
                     row.push('');
                 }
 
@@ -595,9 +609,12 @@ export const generateStockReportPDF = (stockData, filters, reportType = 'short')
             // --- 3. PRODUCT GRAND TOTAL ROW ---
             if (hasTotal) {
                 const totalRow = [];
-                totalRow.push({ content: '', styles: { fillColor: [248, 248, 248] } });
+                // Add placeholder for Product Name column only if it's NOT spanned (!hasAnyQuality means it IS spanned)
+                if (hasAnyQuality) {
+                    totalRow.push({ content: '', styles: { fillColor: [248, 248, 248] } });
+                }
                 
-                // Brand Column - Center "SUB TOTAL"
+                // Brand Column - Center "SUB TOTAL" (Always appears in Column 2 / Brand)
                 totalRow.push({ 
                     content: 'SUB TOTAL', 
                     styles: { fontStyle: 'bold', halign: 'center', fillColor: [248, 248, 248], textColor: [0, 0, 0] } 

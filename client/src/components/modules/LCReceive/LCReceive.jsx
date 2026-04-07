@@ -3113,11 +3113,20 @@ function LCReceive({
                                         </th>
                                         <th
                                             className="px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase tracking-wider cursor-pointer group hover:bg-gray-100/50 transition-colors"
-                                            onClick={() => handleSort('warehouse')}
+                                            onClick={() => handleSort('lcNo')}
                                         >
                                             <div className="flex items-center">
-                                                Warehouse
-                                                {renderSortIcon('warehouse')}
+                                                LC No
+                                                {renderSortIcon('lcNo')}
+                                            </div>
+                                        </th>
+                                        <th
+                                            className="px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase tracking-wider cursor-pointer group hover:bg-gray-100/50 transition-colors"
+                                            onClick={() => handleSort('port')}
+                                        >
+                                            <div className="flex items-center">
+                                                Port
+                                                {renderSortIcon('port')}
                                             </div>
                                         </th>
                                         <th
@@ -3308,8 +3317,9 @@ function LCReceive({
                                                         </td>
                                                     )}
                                                     <td className="px-6 py-4 text-sm font-medium text-gray-900">{formatDate(entry.date)}</td>
-                                                    <td className="px-6 py-4 text-sm text-gray-600">{entry.warehouse || '-'}</td>
-                                                    <td className="px-6 py-4 text-sm text-gray-600">{entry.importer || '-'}</td>
+                                                    <td className="px-6 py-4 text-sm text-gray-600">{entry.lcNo || '-'}</td>
+                                                    <td className="px-6 py-4 text-sm text-gray-600">{entry.port || '-'}</td>
+                                                    <td className="px-6 py-4 text-sm text-gray-600 whitespace-nowrap">{entry.importer || '-'}</td>
                                                     <td className="px-6 py-4 text-sm text-gray-600">{entry.exporter || '-'}</td>
                                                     <td className="px-6 py-4 text-sm text-gray-600">{entry.indianCnF || '-'}</td>
                                                     <td className="px-6 py-4 text-sm text-gray-600">
