@@ -195,6 +195,21 @@ const SaleManagement = ({
         return ['admin', 'incharge', 'sales manager'].includes(role);
     }, [currentUser]);
 
+    const canUserEditSale = (sale) => {
+        if (isFullAdmin) return true;
+        // Non-admin can only edit if rate was missing and it hasn't been edited yet
+        return sale.rateMissing === true && sale.isEdited !== true;
+    };
+
+    const isFieldReadOnly = (value) => {
+        if (isFullAdmin) return false;
+        if (!editingId) return false; // New entries are always editable
+        if (value === null || value === undefined) return false;
+        if (typeof value === 'number') return value !== 0;
+        if (typeof value === 'string') return value.trim() !== '' && value.trim() !== '0';
+        return !!value;
+    };
+
     const fetchExporters = async () => {
         try {
             const response = await axios.get(`${API_BASE_URL}/api/exporters`);
@@ -2528,14 +2543,15 @@ const SaleManagement = ({
 
                     <form onSubmit={handleSubmit} autoComplete="off" className="grid grid-cols-1 md:grid-cols-2 gap-6 relative z-10">
                         <div className={`grid grid-cols-1 ${saleType === 'Border' ? 'md:grid-cols-5' : 'md:grid-cols-6'} gap-4 col-span-2`}>
-                            <CustomDatePicker
-                                label="Date"
-                                name="date"
-                                value={formData.date}
-                                onChange={handleInputChange}
-                                required
-                                compact={true}
-                            />
+                                <CustomDatePicker
+                                    label="Date"
+                                    name="date"
+                                    value={formData.date}
+                                    onChange={handleInputChange}
+                                    required
+                                    compact={true}
+                                    readOnly={isFieldReadOnly(originalData?.date)}
+                                />
                             <div className="sale-mgmt-input-group">
                                 <label className="sale-mgmt-label">Invoice No</label>
                                 <input type="text" name="invoiceNo" value={formData.invoiceNo} readOnly placeholder="Auto-generated" className="sale-mgmt-input sale-mgmt-input-readonly cursor-default" required />
@@ -2551,15 +2567,21 @@ const SaleManagement = ({
                                             name="importer"
                                             placeholder={formData.importer || "Search importer..."}
                                             value={activeDropdown === 'importer' ? importerSearch : formData.importer}
+                                            readOnly={isFieldReadOnly(originalData?.importer)}
                                             onChange={(e) => {
+                                                if (isFieldReadOnly(originalData?.importer)) return;
                                                 setImporterSearch(e.target.value);
                                                 setActiveDropdown('importer');
                                                 setHighlightedIndex(-1);
                                                 handleInputChange(e); // allow fallback text input
                                             }}
-                                            onFocus={() => { setActiveDropdown('importer'); setHighlightedIndex(-1); }}
-                                            onKeyDown={(e) => handleDropdownKeyDown(e, 'importer', getFilteredImporters(), handleImporterSelect)}
-                                            className={`sale-mgmt-input pr-14 ${formData.importer ? 'placeholder:text-gray-900 placeholder:font-semibold' : 'placeholder:text-gray-400'}`}
+                                            onFocus={() => {
+                                                if (isFieldReadOnly(originalData?.importer)) return;
+                                                setActiveDropdown('importer');
+                                                setHighlightedIndex(-1);
+                                            }}
+                                            onKeyDown={(e) => !isFieldReadOnly(originalData?.importer) && handleDropdownKeyDown(e, 'importer', getFilteredImporters(), handleImporterSelect)}
+                                            className={`sale-mgmt-input pr-14 ${formData.importer ? 'placeholder:text-gray-900 placeholder:font-semibold' : 'placeholder:text-gray-400'} ${isFieldReadOnly(originalData?.importer) ? 'bg-gray-50' : ''}`}
                                         />
                                         <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-2">
                                             {formData.importer && (
@@ -2597,7 +2619,7 @@ const SaleManagement = ({
                             {saleType === 'Border' && (
                                 <div className="sale-mgmt-input-group">
                                     <label className="sale-mgmt-label">LC No</label>
-                                    <input type="text" name="lcNo" value={formData.lcNo} onChange={handleInputChange} placeholder="LC-001" className="sale-mgmt-input" />
+                                    <input type="text" name="lcNo" value={formData.lcNo} onChange={handleInputChange} readOnly={isFieldReadOnly(originalData?.lcNo)} placeholder="LC-001" className={`sale-mgmt-input ${isFieldReadOnly(originalData?.lcNo) ? 'bg-gray-50' : ''}`} />
                                 </div>
                             )}
 
@@ -2609,8 +2631,9 @@ const SaleManagement = ({
                                         <select
                                             name="exporter"
                                             value={formData.exporter || ''}
+                                            disabled={isFieldReadOnly(originalData?.exporter)}
                                             onChange={handleInputChange}
-                                            className="sale-mgmt-input appearance-none bg-white pr-10"
+                                            className={`sale-mgmt-input appearance-none bg-white pr-10 ${isFieldReadOnly(originalData?.exporter) ? 'bg-gray-50' : ''}`}
                                         >
                                             <option value="">Select Exporter</option>
                                             {exportersList.map(exp => (
@@ -2634,15 +2657,21 @@ const SaleManagement = ({
                                             name="indianCnF"
                                             placeholder={formData.indianCnF || "Search IND C&F..."}
                                             value={activeDropdown === 'indianCnF' ? indCnfSearch : formData.indianCnF}
+                                            readOnly={isFieldReadOnly(originalData?.indianCnF)}
                                             onChange={(e) => {
+                                                if (isFieldReadOnly(originalData?.indianCnF)) return;
                                                 setIndCnfSearch(e.target.value);
                                                 setActiveDropdown('indianCnF');
                                                 setHighlightedIndex(-1);
                                                 handleInputChange(e); // allow fallback text input
                                             }}
-                                            onFocus={() => { setActiveDropdown('indianCnF'); setHighlightedIndex(-1); }}
-                                            onKeyDown={(e) => handleDropdownKeyDown(e, 'indianCnF', getFilteredIndianCnfs(), handleIndCnfSelect)}
-                                            className={`sale-mgmt-input pr-14 ${formData.indianCnF ? 'placeholder:text-gray-900 placeholder:font-semibold' : 'placeholder:text-gray-400'}`}
+                                            onFocus={() => {
+                                                if (isFieldReadOnly(originalData?.indianCnF)) return;
+                                                setActiveDropdown('indianCnF');
+                                                setHighlightedIndex(-1);
+                                            }}
+                                            onKeyDown={(e) => !isFieldReadOnly(originalData?.indianCnF) && handleDropdownKeyDown(e, 'indianCnF', getFilteredIndianCnfs(), handleIndCnfSelect)}
+                                            className={`sale-mgmt-input pr-14 ${formData.indianCnF ? 'placeholder:text-gray-900 placeholder:font-semibold' : 'placeholder:text-gray-400'} ${isFieldReadOnly(originalData?.indianCnF) ? 'bg-gray-50' : ''}`}
                                         />
                                         <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-2">
                                             {formData.indianCnF && (
@@ -2687,15 +2716,21 @@ const SaleManagement = ({
                                             name="bdCnf"
                                             placeholder={formData.bdCnf || "Search BD C&F..."}
                                             value={activeDropdown === 'bdCnf' ? bdCnfSearch : formData.bdCnf}
+                                            readOnly={isFieldReadOnly(originalData?.bdCnf)}
                                             onChange={(e) => {
+                                                if (isFieldReadOnly(originalData?.bdCnf)) return;
                                                 setBdCnfSearch(e.target.value);
                                                 setActiveDropdown('bdCnf');
                                                 setHighlightedIndex(-1);
                                                 handleInputChange(e); // allow fallback text input
                                             }}
-                                            onFocus={() => { setActiveDropdown('bdCnf'); setHighlightedIndex(-1); }}
-                                            onKeyDown={(e) => handleDropdownKeyDown(e, 'bdCnf', getFilteredBdCnfs(), handleBdCnfSelect)}
-                                            className={`sale-mgmt-input pr-14 ${formData.bdCnf ? 'placeholder:text-gray-900 placeholder:font-semibold' : 'placeholder:text-gray-400'}`}
+                                            onFocus={() => {
+                                                if (isFieldReadOnly(originalData?.bdCnf)) return;
+                                                setActiveDropdown('bdCnf');
+                                                setHighlightedIndex(-1);
+                                            }}
+                                            onKeyDown={(e) => !isFieldReadOnly(originalData?.bdCnf) && handleDropdownKeyDown(e, 'bdCnf', getFilteredBdCnfs(), handleBdCnfSelect)}
+                                            className={`sale-mgmt-input pr-14 ${formData.bdCnf ? 'placeholder:text-gray-900 placeholder:font-semibold' : 'placeholder:text-gray-400'} ${isFieldReadOnly(originalData?.bdCnf) ? 'bg-gray-50' : ''}`}
                                         />
                                         <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-2">
                                             {formData.bdCnf && (
@@ -2740,15 +2775,21 @@ const SaleManagement = ({
                                             name="port"
                                             placeholder={formData.port || "Search port..."}
                                             value={activeDropdown === 'port' ? portSearch : formData.port}
+                                            readOnly={isFieldReadOnly(originalData?.port)}
                                             onChange={(e) => {
+                                                if (isFieldReadOnly(originalData?.port)) return;
                                                 setPortSearch(e.target.value);
                                                 setActiveDropdown('port');
                                                 setHighlightedIndex(-1);
                                                 handleInputChange(e); // allow fallback text input
                                             }}
-                                            onFocus={() => { setActiveDropdown('port'); setHighlightedIndex(-1); }}
-                                            onKeyDown={(e) => handleDropdownKeyDown(e, 'port', getFilteredPorts(), handlePortSelect)}
-                                            className={`sale-mgmt-input pr-14 ${formData.port ? 'placeholder:text-gray-900 placeholder:font-semibold' : 'placeholder:text-gray-400'}`}
+                                            onFocus={() => {
+                                                if (isFieldReadOnly(originalData?.port)) return;
+                                                setActiveDropdown('port');
+                                                setHighlightedIndex(-1);
+                                            }}
+                                            onKeyDown={(e) => !isFieldReadOnly(originalData?.port) && handleDropdownKeyDown(e, 'port', getFilteredPorts(), handlePortSelect)}
+                                            className={`sale-mgmt-input pr-14 ${formData.port ? 'placeholder:text-gray-900 placeholder:font-semibold' : 'placeholder:text-gray-400'} ${isFieldReadOnly(originalData?.port) ? 'bg-gray-50' : ''}`}
                                         />
                                         <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-2">
                                             {formData.port && (
@@ -2791,15 +2832,21 @@ const SaleManagement = ({
                                         type="text"
                                         placeholder={formData.companyName || "Search company..."}
                                         value={companyNameSearch}
+                                        readOnly={isFieldReadOnly(originalData?.companyName)}
                                         onChange={(e) => {
+                                            if (isFieldReadOnly(originalData?.companyName)) return;
                                             setCompanyNameSearch(e.target.value);
                                             setActiveDropdown('companyName');
                                             setHighlightedIndex(-1);
                                             setFormData(prev => ({ ...prev, companyName: e.target.value }));
                                         }}
-                                        onFocus={() => { setActiveDropdown('companyName'); setHighlightedIndex(-1); }}
-                                        onKeyDown={(e) => handleDropdownKeyDown(e, 'companyName', getFilteredCompanies(), handleCompanyNameSelect)}
-                                        className={`sale-mgmt-input pr-14 ${formData.companyName ? 'placeholder:text-gray-900 placeholder:font-semibold' : 'placeholder:text-gray-400'}`}
+                                        onFocus={() => {
+                                            if (isFieldReadOnly(originalData?.companyName)) return;
+                                            setActiveDropdown('companyName');
+                                            setHighlightedIndex(-1);
+                                        }}
+                                        onKeyDown={(e) => !isFieldReadOnly(originalData?.companyName) && handleDropdownKeyDown(e, 'companyName', getFilteredCompanies(), handleCompanyNameSelect)}
+                                        className={`sale-mgmt-input pr-14 ${formData.companyName ? 'placeholder:text-gray-900 placeholder:font-semibold' : 'placeholder:text-gray-400'} ${isFieldReadOnly(originalData?.companyName) ? 'bg-gray-50' : ''}`}
                                     />
                                     <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-2">
                                         {formData.companyName && (
@@ -2919,9 +2966,10 @@ const SaleManagement = ({
                                                     type="number"
                                                     name="bdCommissionRate"
                                                     value={formData.bdCommissionRate}
+                                                    readOnly={isFieldReadOnly(originalData?.bdCommissionRate)}
                                                     onChange={handleInputChange}
                                                     placeholder="Rate"
-                                                    className="w-full px-4 py-2 bg-white border border-blue-100 rounded-xl text-sm font-bold text-gray-900 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
+                                                    className={`w-full px-4 py-2 bg-white border border-blue-100 rounded-xl text-sm font-bold text-gray-900 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all ${isFieldReadOnly(originalData?.bdCommissionRate) ? 'bg-gray-50' : ''}`}
                                                 />
                                                 <div className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-bold text-gray-400">Rate</div>
                                             </div>
@@ -2941,20 +2989,22 @@ const SaleManagement = ({
                                     <div className="w-1.5 h-6 bg-blue-600 rounded-full"></div>
                                     Product Details
                                 </h4>
-                                <button
-                                    type="button"
-                                    onClick={addProductItem}
-                                    className="px-4 py-2 bg-blue-50 text-blue-600 rounded-xl text-xs font-bold hover:bg-blue-100 transition-all flex items-center gap-2"
-                                >
-                                    <span className="text-lg">+</span> Add Product
-                                </button>
+                                {(isFullAdmin || !editingId) && (
+                                    <button
+                                        type="button"
+                                        onClick={addProductItem}
+                                        className="px-4 py-2 bg-blue-50 text-blue-600 rounded-xl text-xs font-bold hover:bg-blue-100 transition-all flex items-center gap-2"
+                                    >
+                                        <span className="text-lg">+</span> Add Product
+                                    </button>
+                                )}
                             </div>
 
                             <div className="space-y-8">
                                 {formData.items.map((item, index) => (
                                     <div key={index} className="sale-mgmt-product-card group/item">
                                         {/* Remove Product Button */}
-                                        {formData.items.length > 1 && (
+                                        {formData.items.length > 1 && (isFullAdmin || !editingId) && (
                                             <button
                                                 type="button"
                                                 onClick={() => removeProductItem(index)}
@@ -2974,18 +3024,21 @@ const SaleManagement = ({
                                                         placeholder={item.productName || "Select Product"}
                                                         value={activeDropdown === 'product' && activeItemIndex === index ? productSearch : ''}
                                                         autoComplete="off"
+                                                        readOnly={isFieldReadOnly(originalData?.items?.[index]?.productName)}
                                                         onChange={(e) => {
+                                                            if (isFieldReadOnly(originalData?.items?.[index]?.productName)) return;
                                                             setProductSearch(e.target.value);
                                                             setActiveDropdown('product');
                                                             setActiveItemIndex(index);
                                                             handleItemInputChange(index, null, { target: { name: 'productName', value: e.target.value } });
                                                         }}
                                                         onFocus={() => {
+                                                            if (isFieldReadOnly(originalData?.items?.[index]?.productName)) return;
                                                             setActiveDropdown('product');
                                                             setActiveItemIndex(index);
                                                             setProductSearch(item.productName || '');
                                                         }}
-                                                        className={`sale-mgmt-input pr-14 ${item.productName ? 'placeholder:text-gray-900 placeholder:font-semibold' : 'placeholder:text-gray-400'}`}
+                                                        className={`sale-mgmt-input pr-14 ${item.productName ? 'placeholder:text-gray-900 placeholder:font-semibold' : 'placeholder:text-gray-400'} ${isFieldReadOnly(originalData?.items?.[index]?.productName) ? 'bg-gray-50' : ''}`}
                                                     />
                                                     <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-2">
                                                         {item.productName && (
@@ -3046,15 +3099,17 @@ const SaleManagement = ({
                                                                 <div className="flex items-center bg-gray-50/50 p-1 rounded-xl border border-gray-100/50 h-10 shadow-inner group/uom">
                                                                     <button
                                                                         type="button"
+                                                                        disabled={isFieldReadOnly(originalData?.items?.[index]?.brandEntries?.[entryIndex]?.uom)}
                                                                         onClick={() => handleItemInputChange(index, entryIndex, { target: { name: 'uom', value: 'QTY' } })}
-                                                                        className={`flex-1 h-full flex items-center justify-center rounded-lg text-[10px] font-black transition-all duration-200 ${entry.uom === 'QTY' ? 'bg-white text-blue-600 shadow-md ring-1 ring-black/5' : 'text-gray-400 hover:text-gray-600'}`}
+                                                                        className={`flex-1 h-full flex items-center justify-center rounded-lg text-[10px] font-black transition-all duration-200 ${entry.uom === 'QTY' ? 'bg-white text-blue-600 shadow-md ring-1 ring-black/5' : 'text-gray-400 hover:text-gray-600'} ${isFieldReadOnly(originalData?.items?.[index]?.brandEntries?.[entryIndex]?.uom) ? 'cursor-not-allowed opacity-50' : ''}`}
                                                                     >
                                                                         QTY
                                                                     </button>
                                                                     <button
                                                                         type="button"
+                                                                        disabled={isFieldReadOnly(originalData?.items?.[index]?.brandEntries?.[entryIndex]?.uom)}
                                                                         onClick={() => handleItemInputChange(index, entryIndex, { target: { name: 'uom', value: 'Truck' } })}
-                                                                        className={`flex-1 h-full flex items-center justify-center rounded-lg text-[10px] font-black transition-all duration-200 ${entry.uom === 'Truck' || !entry.uom ? 'bg-white text-blue-600 shadow-md ring-1 ring-black/5' : 'text-gray-400 hover:text-gray-600'}`}
+                                                                        className={`flex-1 h-full flex items-center justify-center rounded-lg text-[10px] font-black transition-all duration-200 ${entry.uom === 'Truck' || !entry.uom ? 'bg-white text-blue-600 shadow-md ring-1 ring-black/5' : 'text-gray-400 hover:text-gray-600'} ${isFieldReadOnly(originalData?.items?.[index]?.brandEntries?.[entryIndex]?.uom) ? 'cursor-not-allowed opacity-50' : ''}`}
                                                                     >
                                                                         TRUCK
                                                                     </button>
@@ -3062,19 +3117,19 @@ const SaleManagement = ({
                                                             </div>
                                                             <div>
                                                                 <label className="md:hidden sale-mgmt-item-label mb-1 block text-center">Qty</label>
-                                                                <input type="number" name="quantity" value={entry.quantity} onChange={(e) => handleItemInputChange(index, entryIndex, e)} placeholder="0" className="sale-mgmt-input !px-2 !text-[13px] font-black text-gray-900 text-center" />
+                                                                <input type="number" name="quantity" value={entry.quantity} onChange={(e) => handleItemInputChange(index, entryIndex, e)} readOnly={isFieldReadOnly(originalData?.items?.[index]?.brandEntries?.[entryIndex]?.quantity)} placeholder="0" className={`sale-mgmt-input !px-2 !text-[13px] font-black text-gray-900 text-center ${isFieldReadOnly(originalData?.items?.[index]?.brandEntries?.[entryIndex]?.quantity) ? 'bg-gray-50' : ''}`} />
                                                             </div>
                                                             <div>
                                                                 <label className="md:hidden sale-mgmt-item-label mb-1 block text-center">Bag</label>
-                                                                <input type="number" name="bag" value={entry.bag} onChange={(e) => handleItemInputChange(index, entryIndex, e)} placeholder="0" className="sale-mgmt-input !px-2 !text-[13px] font-bold text-blue-600 text-center" />
+                                                                <input type="number" name="bag" value={entry.bag} onChange={(e) => handleItemInputChange(index, entryIndex, e)} readOnly={isFieldReadOnly(originalData?.items?.[index]?.brandEntries?.[entryIndex]?.bag)} placeholder="0" className={`sale-mgmt-input !px-2 !text-[13px] font-bold text-blue-600 text-center ${isFieldReadOnly(originalData?.items?.[index]?.brandEntries?.[entryIndex]?.bag) ? 'bg-gray-50' : ''}`} />
                                                             </div>
                                                             <div>
                                                                 <label className="md:hidden sale-mgmt-item-label mb-1 block text-center">Truck</label>
-                                                                <input type="number" name="truck" value={entry.truck || ''} onChange={(e) => handleItemInputChange(index, entryIndex, e)} placeholder="0" className="sale-mgmt-input !px-2 !text-[13px] font-bold text-gray-600 text-center" />
+                                                                <input type="number" name="truck" value={entry.truck || ''} onChange={(e) => handleItemInputChange(index, entryIndex, e)} readOnly={isFieldReadOnly(originalData?.items?.[index]?.brandEntries?.[entryIndex]?.truck)} placeholder="0" className={`sale-mgmt-input !px-2 !text-[13px] font-bold text-gray-600 text-center ${isFieldReadOnly(originalData?.items?.[index]?.brandEntries?.[entryIndex]?.truck) ? 'bg-gray-50' : ''}`} />
                                                             </div>
                                                             <div>
                                                                 <label className="md:hidden sale-mgmt-item-label mb-1 block text-center">Price</label>
-                                                                <input type="number" name="unitPrice" value={entry.unitPrice} onChange={(e) => handleItemInputChange(index, entryIndex, e)} placeholder="0" className="sale-mgmt-input !px-2 !text-[13px] font-bold text-gray-600 text-center" />
+                                                                <input type="number" name="unitPrice" value={entry.unitPrice} onChange={(e) => handleItemInputChange(index, entryIndex, e)} readOnly={isFieldReadOnly(originalData?.items?.[index]?.brandEntries?.[entryIndex]?.unitPrice)} placeholder="0" className={`sale-mgmt-input !px-2 !text-[13px] font-bold text-gray-600 text-center ${isFieldReadOnly(originalData?.items?.[index]?.brandEntries?.[entryIndex]?.unitPrice) ? 'bg-gray-50' : ''}`} />
                                                             </div>
                                                             <div className="flex items-center gap-2">
                                                                 <div className="flex-1">
@@ -3084,10 +3139,10 @@ const SaleManagement = ({
                                                                     </div>
                                                                 </div>
                                                                 <div className="flex flex-row gap-1 items-center justify-center">
-                                                                    {entryIndex === item.brandEntries.length - 1 && (
+                                                                    {entryIndex === item.brandEntries.length - 1 && (isFullAdmin || !editingId) && (
                                                                         <button type="button" onClick={() => addBrandEntry(index)} className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-lg transition-all active:scale-90" title="Add Brand"><span className="text-xl font-bold">+</span></button>
                                                                     )}
-                                                                    {item.brandEntries.length > 1 && (
+                                                                    {item.brandEntries.length > 1 && (isFullAdmin || !editingId) && (
                                                                         <button type="button" onClick={() => removeBrandEntry(index, entryIndex)} className="p-1.5 text-red-500 hover:bg-red-50 rounded-lg transition-all active:scale-90" title="Remove Brand"><TrashIcon className="w-3.5 h-3.5" /></button>
                                                                     )}
                                                                 </div>
@@ -3122,7 +3177,9 @@ const SaleManagement = ({
                                                                     type="text"
                                                                     placeholder={entry.brandName || "Brand"}
                                                                     value={activeDropdown === 'brand' && activeItemIndex === index && activeEntryIndex === entryIndex ? brandSearch : ''}
+                                                                    readOnly={isFieldReadOnly(originalData?.items?.[index]?.brandEntries?.[entryIndex]?.brandName)}
                                                                     onChange={(e) => {
+                                                                        if (isFieldReadOnly(originalData?.items?.[index]?.brandEntries?.[entryIndex]?.brandName)) return;
                                                                         setBrandSearch(e.target.value);
                                                                         setActiveDropdown('brand');
                                                                         setActiveItemIndex(index);
@@ -3130,12 +3187,13 @@ const SaleManagement = ({
                                                                         handleItemInputChange(index, entryIndex, { target: { name: 'brandName', value: e.target.value } });
                                                                     }}
                                                                     onFocus={() => {
+                                                                        if (isFieldReadOnly(originalData?.items?.[index]?.brandEntries?.[entryIndex]?.brandName)) return;
                                                                         setActiveDropdown('brand');
                                                                         setActiveItemIndex(index);
                                                                         setActiveEntryIndex(entryIndex);
                                                                         setBrandSearch(entry.brandName || '');
                                                                     }}
-                                                                    className={`sale-mgmt-input pr-10 !text-xs ${entry.brandName ? 'placeholder:text-gray-900 placeholder:font-semibold' : 'placeholder:text-gray-400'}`}
+                                                                    className={`sale-mgmt-input pr-10 !text-xs ${entry.brandName ? 'placeholder:text-gray-900 placeholder:font-semibold' : 'placeholder:text-gray-400'} ${isFieldReadOnly(originalData?.items?.[index]?.brandEntries?.[entryIndex]?.brandName) ? 'bg-gray-50' : ''}`}
                                                                 />
                                                                 <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
                                                                     {entry.brandName && (
@@ -3191,7 +3249,9 @@ const SaleManagement = ({
                                                                         type="text"
                                                                         placeholder={entry.warehouseName || "Warehouse"}
                                                                         value={activeDropdown === 'warehouse' && activeItemIndex === index && activeEntryIndex === entryIndex ? warehouseSearch : ''}
+                                                                        readOnly={isFieldReadOnly(originalData?.items?.[index]?.brandEntries?.[entryIndex]?.warehouseName)}
                                                                         onChange={(e) => {
+                                                                            if (isFieldReadOnly(originalData?.items?.[index]?.brandEntries?.[entryIndex]?.warehouseName)) return;
                                                                             setWarehouseSearch(e.target.value);
                                                                             setActiveDropdown('warehouse');
                                                                             setActiveItemIndex(index);
@@ -3199,12 +3259,13 @@ const SaleManagement = ({
                                                                             handleItemInputChange(index, entryIndex, { target: { name: 'warehouseName', value: e.target.value } });
                                                                         }}
                                                                         onFocus={() => {
+                                                                            if (isFieldReadOnly(originalData?.items?.[index]?.brandEntries?.[entryIndex]?.warehouseName)) return;
                                                                             setActiveDropdown('warehouse');
                                                                             setActiveItemIndex(index);
                                                                             setActiveEntryIndex(entryIndex);
                                                                             setWarehouseSearch(entry.warehouseName || '');
                                                                         }}
-                                                                        className={`sale-mgmt-input pr-10 !text-xs ${entry.warehouseName ? 'placeholder:text-gray-900 placeholder:font-semibold' : 'placeholder:text-gray-400'}`}
+                                                                        className={`sale-mgmt-input pr-10 !text-xs ${entry.warehouseName ? 'placeholder:text-gray-900 placeholder:font-semibold' : 'placeholder:text-gray-400'} ${isFieldReadOnly(originalData?.items?.[index]?.brandEntries?.[entryIndex]?.warehouseName) ? 'bg-gray-50' : ''}`}
                                                                     />
                                                                     <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
                                                                         {entry.warehouseName && (
@@ -3259,9 +3320,10 @@ const SaleManagement = ({
                                                                 type="number"
                                                                 name="bag"
                                                                 value={entry.bag}
+                                                                readOnly={isFieldReadOnly(originalData?.items?.[index]?.brandEntries?.[entryIndex]?.bag)}
                                                                 onChange={(e) => handleItemInputChange(index, entryIndex, e)}
                                                                 placeholder="0"
-                                                                className="sale-mgmt-input !px-2 !text-[13px] font-bold text-blue-600 text-center"
+                                                                className={`sale-mgmt-input !px-2 !text-[13px] font-bold text-blue-600 text-center ${isFieldReadOnly(originalData?.items?.[index]?.brandEntries?.[entryIndex]?.bag) ? 'bg-gray-50' : ''}`}
                                                             />
                                                         </div>
 
@@ -3272,9 +3334,10 @@ const SaleManagement = ({
                                                                 type="number"
                                                                 name="quantity"
                                                                 value={entry.quantity}
+                                                                readOnly={isFieldReadOnly(originalData?.items?.[index]?.brandEntries?.[entryIndex]?.quantity)}
                                                                 onChange={(e) => handleItemInputChange(index, entryIndex, e)}
                                                                 placeholder="0"
-                                                                className="sale-mgmt-input !px-2 !text-[13px] font-black text-gray-900 text-center"
+                                                                className={`sale-mgmt-input !px-2 !text-[13px] font-black text-gray-900 text-center ${isFieldReadOnly(originalData?.items?.[index]?.brandEntries?.[entryIndex]?.quantity) ? 'bg-gray-50' : ''}`}
                                                             />
                                                         </div>
 
@@ -3285,9 +3348,10 @@ const SaleManagement = ({
                                                                 type="number"
                                                                 name="unitPrice"
                                                                 value={entry.unitPrice}
+                                                                readOnly={isFieldReadOnly(originalData?.items?.[index]?.brandEntries?.[entryIndex]?.unitPrice)}
                                                                 onChange={(e) => handleItemInputChange(index, entryIndex, e)}
                                                                 placeholder="0"
-                                                                className="sale-mgmt-input !px-2 !text-[13px] font-bold text-gray-600 text-center"
+                                                                className={`sale-mgmt-input !px-2 !text-[13px] font-bold text-gray-600 text-center ${isFieldReadOnly(originalData?.items?.[index]?.brandEntries?.[entryIndex]?.unitPrice) ? 'bg-gray-50' : ''}`}
                                                             />
                                                         </div>
 
@@ -3300,7 +3364,7 @@ const SaleManagement = ({
                                                                 </div>
                                                             </div>
                                                             <div className="flex flex-row items-center gap-0.5 shrink-0">
-                                                                {entryIndex === item.brandEntries.length - 1 && (
+                                                                {entryIndex === item.brandEntries.length - 1 && (isFullAdmin || !editingId) && (
                                                                     <button
                                                                         type="button"
                                                                         onClick={() => addBrandEntry(index)}
@@ -3310,7 +3374,7 @@ const SaleManagement = ({
                                                                         <span className="text-xl font-black">+</span>
                                                                     </button>
                                                                 )}
-                                                                {item.brandEntries.length > 1 && (
+                                                                {item.brandEntries.length > 1 && (isFullAdmin || !editingId) && (
                                                                     <button
                                                                         type="button"
                                                                         onClick={() => removeBrandEntry(index, entryIndex)}
@@ -3340,8 +3404,9 @@ const SaleManagement = ({
                                             type="number"
                                             name="discount"
                                             value={formData.discount}
+                                            readOnly={isFieldReadOnly(originalData?.discount)}
                                             onChange={handleInputChange}
-                                            className="w-full pl-8 pr-4 py-2.5 bg-white border border-orange-200 rounded-xl focus:ring-4 focus:ring-orange-500/10 focus:border-orange-500 outline-none transition-all font-bold text-orange-700"
+                                            className={`w-full pl-8 pr-4 py-2.5 bg-white border border-orange-200 rounded-xl focus:ring-4 focus:ring-orange-500/10 focus:border-orange-500 outline-none transition-all font-bold text-orange-700 ${isFieldReadOnly(originalData?.discount) ? 'bg-gray-50' : ''}`}
                                             placeholder="0"
                                         />
                                     </div>
@@ -3358,8 +3423,10 @@ const SaleManagement = ({
                                             type="number"
                                             name="paidAmount"
                                             value={formData.paidAmount}
+                                            readOnly={isFieldReadOnly(originalData?.paidAmount)}
                                             onChange={handleInputChange}
-                                            className="w-full pl-8 pr-4 py-2.5 bg-white border border-blue-200 rounded-xl focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all font-bold text-blue-700"
+                                            className={`w-full pl-8 pr-4 py-2.5 bg-white border border-blue-200 rounded-xl focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all font-bold text-blue-700 ${isFieldReadOnly(originalData?.paidAmount) ? 'bg-gray-50' : ''}`}
+                                            placeholder="0"
                                         />
                                     </div>
                                 </div>
@@ -3583,12 +3650,16 @@ const SaleManagement = ({
                                             >
                                                 <td className="px-3 py-4 text-center" onClick={(e) => e.stopPropagation()}>
                                                     {isSelectionMode ? (
-                                                        <input
-                                                            type="checkbox"
-                                                            checked={selectedItems.has(sale._id)}
-                                                            onChange={() => toggleSelection(sale._id)}
-                                                            className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                                                        />
+                                                        (isFullAdmin || canUserEditSale(sale)) ? (
+                                                            <input
+                                                                type="checkbox"
+                                                                checked={selectedItems.has(sale._id)}
+                                                                onChange={() => toggleSelection(sale._id)}
+                                                                className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                                                            />
+                                                        ) : (
+                                                            <div className="w-4 h-4" /> // Empty space for non-editable
+                                                        )
                                                     ) : (
                                                         <span className="text-gray-400 font-medium">{index + 1}</span>
                                                     )}
@@ -3647,10 +3718,10 @@ const SaleManagement = ({
                                                         ) : (
                                                             <>
                                                                 <button onClick={(e) => { e.stopPropagation(); generateSaleInvoicePDF(sale, customers); }} className="p-2 hover:bg-emerald-100 text-emerald-600 rounded-xl transition-all" title="Invoice"><FileTextIcon className="w-4 h-4" /></button>
-                                                                {isFullAdmin && (
+                                                                {(isFullAdmin || canUserEditSale(sale)) && (
                                                                     <>
                                                                         <button onClick={(e) => { e.stopPropagation(); handleEdit(sale); }} className="p-2 hover:bg-blue-100 text-blue-600 rounded-xl transition-all" title="Edit"><EditIcon className="w-4 h-4" /></button>
-                                                                        <button onClick={(e) => { e.stopPropagation(); handleDelete(sale); }} className="p-2 hover:bg-red-100 text-red-600 rounded-xl transition-all" title="Delete"><TrashIcon className="w-4 h-4" /></button>
+                                                                        {isFullAdmin && <button onClick={(e) => { e.stopPropagation(); handleDelete(sale); }} className="p-2 hover:bg-red-100 text-red-600 rounded-xl transition-all" title="Delete"><TrashIcon className="w-4 h-4" /></button>}
                                                                     </>
                                                                 )}
                                                             </>
@@ -3756,7 +3827,9 @@ const SaleManagement = ({
                                                     {sale.status === 'Requested' ? (
                                                         <>
                                                             <button onClick={(e) => { e.stopPropagation(); setViewData(sale); }} className="text-gray-400 hover:text-blue-600 transition-colors" title="View Details"><EyeIcon className="w-5 h-5" /></button>
-                                                            <button onClick={(e) => { e.stopPropagation(); handleEdit(sale); }} className="text-gray-400 hover:text-blue-600 transition-colors" title="Edit"><EditIcon className="w-5 h-5" /></button>
+                                                            {(isFullAdmin || canUserEditSale(sale)) && (
+                                                                <button onClick={(e) => { e.stopPropagation(); handleEdit(sale); }} className="text-gray-400 hover:text-blue-600 transition-colors" title="Edit"><EditIcon className="w-5 h-5" /></button>
+                                                            )}
                                                             {canApprove && (
                                                                 <>
                                                                     <button onClick={(e) => { e.stopPropagation(); handleStatusUpdate(sale, 'Pending'); }} className="text-gray-400 hover:text-emerald-600 transition-colors" title="Accept"><CheckIcon className="w-5 h-5" /></button>
@@ -3767,10 +3840,10 @@ const SaleManagement = ({
                                                     ) : (
                                                         <>
                                                             <button onClick={(e) => { e.stopPropagation(); generateSaleInvoicePDF(sale, customers); }} className="p-2 hover:bg-emerald-100 text-emerald-600 rounded-xl transition-all" title="Invoice"><FileTextIcon className="w-4 h-4" /></button>
-                                                            {isFullAdmin && (
+                                                            {(isFullAdmin || canUserEditSale(sale)) && (
                                                                 <>
                                                                     <button onClick={(e) => { e.stopPropagation(); handleEdit(sale); }} className="p-2 hover:bg-blue-100 text-blue-600 rounded-xl transition-all" title="Edit"><EditIcon className="w-4 h-4" /></button>
-                                                                    <button onClick={(e) => { e.stopPropagation(); handleDelete(sale); }} className="p-2 hover:bg-red-100 text-red-600 rounded-xl transition-all" title="Delete"><TrashIcon className="w-4 h-4" /></button>
+                                                                    {isFullAdmin && <button onClick={(e) => { e.stopPropagation(); handleDelete(sale); }} className="p-2 hover:bg-red-100 text-red-600 rounded-xl transition-all" title="Delete"><TrashIcon className="w-4 h-4" /></button>}
                                                                 </>
                                                             )}
                                                         </>
@@ -3828,12 +3901,16 @@ const SaleManagement = ({
                                         <div className="flex items-center gap-3 overflow-hidden flex-1 min-w-0">
                                             {isSelectionMode && saleType === 'Border' && (
                                                 <div className="flex-shrink-0 pr-1" onClick={(e) => e.stopPropagation()}>
-                                                    <input
-                                                        type="checkbox"
-                                                        checked={selectedItems.has(sale._id)}
-                                                        onChange={() => toggleSelection(sale._id)}
-                                                        className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                                                    />
+                                                    {(isFullAdmin || canUserEditSale(sale)) ? (
+                                                        <input
+                                                            type="checkbox"
+                                                            checked={selectedItems.has(sale._id)}
+                                                            onChange={() => toggleSelection(sale._id)}
+                                                            className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                                                        />
+                                                    ) : (
+                                                        <div className="w-4 h-4" />
+                                                    )}
                                                 </div>
                                             )}
                                             {/* Date & Inv */}
@@ -3857,12 +3934,19 @@ const SaleManagement = ({
                                         </div>
 
                                         <div className="flex items-center gap-2 ml-2">
+                                            {sale.isEdited && (
+                                                <span className="flex items-center gap-1 px-2 py-0.5 bg-amber-50 text-amber-600 rounded-full text-[9px] font-medium border border-amber-100">
+                                                    Edited
+                                                </span>
+                                            )}
                                             {isExpanded ? (
                                                 <div className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
                                                     {sale.status === 'Requested' ? (
                                                         <>
                                                             <button onClick={(e) => { e.stopPropagation(); setViewData(sale); }} className="p-2 text-blue-600 bg-blue-50/50 rounded-lg transition-colors hover:bg-blue-100" title="View Details"><EyeIcon className="w-4 h-4" /></button>
-                                                            <button onClick={(e) => { e.stopPropagation(); handleEdit(sale); }} className="p-2 text-blue-600 bg-blue-50/50 rounded-lg transition-colors hover:bg-blue-100" title="Edit"><EditIcon className="w-4 h-4" /></button>
+                                                            {(isFullAdmin || canUserEditSale(sale)) && (
+                                                                <button onClick={(e) => { e.stopPropagation(); handleEdit(sale); }} className="p-2 text-blue-600 bg-blue-50/50 rounded-lg transition-colors hover:bg-blue-100" title="Edit"><EditIcon className="w-4 h-4" /></button>
+                                                            )}
                                                             {canApprove && (
                                                                 <>
                                                                     <button onClick={(e) => { e.stopPropagation(); handleStatusUpdate(sale, 'Pending'); }} className="p-2 text-emerald-600 bg-emerald-50/50 rounded-lg transition-colors hover:bg-emerald-100" title="Accept"><CheckIcon className="w-4 h-4" /></button>
@@ -3873,10 +3957,10 @@ const SaleManagement = ({
                                                     ) : (
                                                         <>
                                                             <button onClick={(e) => { e.stopPropagation(); generateSaleInvoicePDF(sale, customers); }} className="p-2 bg-emerald-50 text-emerald-600 rounded-lg transition-colors hover:bg-emerald-100"><FileTextIcon className="w-4 h-4" /></button>
-                                                            {isFullAdmin && (
+                                                            {(isFullAdmin || canUserEditSale(sale)) && (
                                                                 <>
                                                                     <button onClick={(e) => { e.stopPropagation(); handleEdit(sale); }} className="p-2 bg-blue-50 text-blue-600 rounded-lg transition-colors hover:bg-blue-100"><EditIcon className="w-4 h-4" /></button>
-                                                                    <button onClick={(e) => { e.stopPropagation(); handleDelete(sale); }} className="p-2 bg-red-50 text-red-600 rounded-lg transition-colors hover:bg-red-100"><TrashIcon className="w-4 h-4" /></button>
+                                                                    {isFullAdmin && <button onClick={(e) => { e.stopPropagation(); handleDelete(sale); }} className="p-2 bg-red-50 text-red-600 rounded-lg transition-colors hover:bg-red-100"><TrashIcon className="w-4 h-4" /></button>}
                                                                 </>
                                                             )}
                                                         </>

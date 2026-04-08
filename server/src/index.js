@@ -559,10 +559,33 @@ apiRouter.get('/api/warehouses', async (req, res) => {
 // Sale APIs
 apiRouter.post('/api/sales', async (req, res) => {
   try {
-    const encryptedData = encryptData(req.body);
+    const saleData = req.body;
+    let rateMissing = false;
+
+    // Detect if rate is missing
+    if (saleData.items && Array.isArray(saleData.items)) {
+      saleData.items.forEach(item => {
+        if (item.brandEntries && Array.isArray(item.brandEntries)) {
+          item.brandEntries.forEach(be => {
+            const price = parseFloat(be.unitPrice);
+            if (isNaN(price) || price === 0) rateMissing = true;
+          });
+        } else {
+          const price = parseFloat(item.unitPrice);
+          if (isNaN(price) || price === 0) rateMissing = true;
+        }
+      });
+    } else {
+      const price = parseFloat(saleData.unitPrice);
+      if (isNaN(price) || price === 0) rateMissing = true;
+    }
+
+    if (rateMissing) saleData.rateMissing = true;
+
+    const encryptedData = encryptData(saleData);
     const newSale = new Sale({ data: encryptedData });
     const savedSale = await newSale.save();
-    res.status(201).json({ ...req.body, _id: savedSale._id, createdAt: savedSale.createdAt });
+    res.status(201).json({ ...saleData, _id: savedSale._id, createdAt: savedSale.createdAt });
   } catch (err) {
     res.status(400).json({ message: err.message });
   }
@@ -580,9 +603,35 @@ apiRouter.delete('/api/sales/:id', async (req, res) => {
 
 apiRouter.put('/api/sales/:id', async (req, res) => {
   try {
+    const userSession = req.session.user;
+    const isAdmin = userSession && (userSession.username === 'admin' || (userSession.role || '').toLowerCase() === 'admin');
+
+    const existingSale = await Sale.findById(req.params.id);
+    if (!existingSale) return res.status(404).json({ message: 'Sale not found' });
+
+    let existingData = decryptData(existingSale.data);
+    if (existingData && existingData.data && typeof existingData.data === 'string' && !existingData.invoiceNo) {
+      try { existingData = decryptData(existingData.data); } catch (e) { }
+    }
+
+    if (!isAdmin) {
+      const wasRateMissing = existingData.rateMissing === true;
+      const alreadyEdited = existingData.isEdited === true;
+
+      if (!wasRateMissing) {
+        return res.status(403).json({ message: 'Forbidden: You cannot edit a sale entry that already has a rate.' });
+      }
+      if (alreadyEdited) {
+        return res.status(403).json({ message: 'Forbidden: You have already edited this entry once.' });
+      }
+
+      // Mark as edited for non-admin
+      req.body.isEdited = true;
+      req.body.rateMissing = true; // Preserve the flag
+    }
+
     const encryptedData = encryptData(req.body);
     const updatedSale = await Sale.findByIdAndUpdate(req.params.id, { data: encryptedData }, { new: true });
-    if (!updatedSale) return res.status(404).json({ message: 'Sale not found' });
     res.json({ ...req.body, _id: updatedSale._id, createdAt: updatedSale.createdAt });
   } catch (err) {
     res.status(400).json({ message: err.message });
