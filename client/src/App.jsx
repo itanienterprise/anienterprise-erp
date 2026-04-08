@@ -3,7 +3,8 @@ import axios from './utils/api';
 import {
   MenuIcon, SearchIcon, HomeIcon, UsersIcon, UserIcon, AnchorIcon,
   BarChartIcon, FunnelIcon, XIcon, DollarSignIcon, ShoppingCartIcon,
-  ChevronDownIcon, BoxIcon, BellIcon, TrashIcon, VegetableIcon, ReceiptIcon, TrendingUpIcon, LogOutIcon, BriefcaseIcon
+  ChevronDownIcon, BoxIcon, BellIcon, TrashIcon, VegetableIcon, ReceiptIcon, TrendingUpIcon, LogOutIcon, BriefcaseIcon,
+  GlobeIcon, ArrowUpRightIcon, ArrowDownLeftIcon, LinkIcon, BuildingIcon
 } from './components/Icons';
 
 import { encryptData, decryptData } from './utils/encryption';
@@ -1416,7 +1417,7 @@ function App() {
               className={`w-full flex items-center justify-between px-4 py-2 rounded-lg transition-all ${currentView === 'importer-section' || currentView === 'exporter-section' ? 'bg-blue-50 text-blue-600 shadow-sm' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'}`}
             >
               <div className="flex items-center">
-                <UserIcon className="w-5 h-5 mr-3" />
+                <GlobeIcon className="w-5 h-5 mr-3" />
                 <span className="font-medium text-sm">Importer/Exporter</span>
               </div>
               <ChevronDownIcon className={`w-4 h-4 transition-transform duration-200 ${importerDropdownOpen ? 'transform rotate-180' : ''}`} />
@@ -1427,14 +1428,14 @@ function App() {
                   onClick={() => { setCurrentView('importer-section'); setSidebarOpen(false); }}
                   className={`w-full flex flex-row items-center py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'importer-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'}`}
                 >
-                  <UserIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
+                  <ArrowDownLeftIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
                   <span>Importer</span>
                 </button>
                 <button
                   onClick={() => { setCurrentView('exporter-section'); setSidebarOpen(false); }}
                   className={`w-full flex flex-row items-center py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'exporter-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'}`}
                 >
-                  <UserIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
+                  <ArrowUpRightIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
                   <span>Exporter</span>
                 </button>
               </div>
@@ -1446,7 +1447,7 @@ function App() {
               className={`w-full flex items-center justify-between px-4 py-2 rounded-lg transition-all ${currentView === 'indian-cnf-section' || currentView === 'bd-cnf-section' ? 'bg-blue-50 text-blue-600 shadow-sm' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'}`}
             >
               <div className="flex items-center">
-                <UsersIcon className="w-5 h-5 mr-3" />
+                <LinkIcon className="w-5 h-5 mr-3" />
                 <span className="font-medium text-sm">C&F</span>
               </div>
               <ChevronDownIcon className={`w-4 h-4 transition-transform duration-200 ${cnfDropdownOpen ? 'transform rotate-180' : ''}`} />
@@ -1457,14 +1458,14 @@ function App() {
                   onClick={() => { setCurrentView('indian-cnf-section'); setSidebarOpen(false); }}
                   className={`w-full flex flex-row items-center py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'indian-cnf-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'}`}
                 >
-                  <UserIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
+                  <BuildingIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
                   <span>Indian C&F</span>
                 </button>
                 <button
                   onClick={() => { setCurrentView('bd-cnf-section'); setSidebarOpen(false); }}
                   className={`w-full flex flex-row items-center py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'bd-cnf-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'}`}
                 >
-                  <UserIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
+                  <BuildingIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
                   <span>BD C&F</span>
                 </button>
               </div>

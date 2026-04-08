@@ -1256,7 +1256,7 @@ export const generateSaleInvoicePDF = (sale, allCustomers = []) => {
 
         // --- 2b. Customer Type (Centered under Title Box) ---
         let custTypeLabel = "General Customer";
-        const cType = (sale.customerType || "").toLowerCase();
+        const cType = (customer?.customerType || sale.customerType || "").toLowerCase();
         if (cType.includes("party") || sale.isParty) {
             custTypeLabel = "Party Customer";
         }
@@ -1341,11 +1341,13 @@ export const generateSaleInvoicePDF = (sale, allCustomers = []) => {
             ];
         };
 
+        const isBorderSale = (sale.invoiceNo || '').startsWith('BS');
+
         if (items.length === 0 && (sale.productId || sale.productName || sale.product)) {
             tableRows.push(prepareRow(
                 1,
                 sale.productName || sale.product || '-',
-                sale.brand || '-',
+                isBorderSale ? (sale.truck || '-') : (sale.brand || '-'),
                 sale.quantity,
                 sale.unitPrice || sale.rate,
                 sale.totalAmount || sale.amount
@@ -1359,7 +1361,7 @@ export const generateSaleInvoicePDF = (sale, allCustomers = []) => {
                         tableRows.push(prepareRow(
                             sl++,
                             item.productName || item.product || '-',
-                            brand.brand || '-',
+                            isBorderSale ? (brand.truck || '-') : (brand.brand || '-'),
                             brand.quantity,
                             brand.unitPrice || brand.rate || 0,
                             brand.totalAmount || brand.amount || 0
@@ -1369,7 +1371,7 @@ export const generateSaleInvoicePDF = (sale, allCustomers = []) => {
                     tableRows.push(prepareRow(
                         sl++,
                         item.productName || item.product || '-',
-                        item.brand || '-',
+                        isBorderSale ? (item.truck || '-') : (item.brand || '-'),
                         item.quantity,
                         item.unitPrice || item.rate || 0,
                         item.totalAmount || item.amount || 0
@@ -1380,7 +1382,7 @@ export const generateSaleInvoicePDF = (sale, allCustomers = []) => {
 
         autoTable(doc, {
             startY: Math.max(infoY, ryPos) + 12,
-            head: [['SN', 'Product Name', 'Brand', 'Quantity', 'Rate', 'Total Amount']],
+            head: [['SN', 'Product Name', (sale.invoiceNo || '').startsWith('BS') ? 'Truck' : 'Brand', 'Quantity', 'Rate', 'Total Amount']],
             body: tableRows,
             theme: 'grid',
             headStyles: {
@@ -1402,7 +1404,7 @@ export const generateSaleInvoicePDF = (sale, allCustomers = []) => {
             columnStyles: {
                 0: { halign: 'center', cellWidth: 10 },
                 1: { halign: 'left', cellWidth: 42 },
-                2: { halign: 'left', cellWidth: 68 }, // Changed to left align
+                2: { halign: isBorderSale ? 'center' : 'left', cellWidth: 68 },
                 3: { halign: 'center', cellWidth: 20 },
                 4: { halign: 'right', cellWidth: 20 },
                 5: { halign: 'right', cellWidth: 30 }

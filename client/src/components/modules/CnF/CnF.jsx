@@ -790,7 +790,7 @@ const CnF = ({
             )}
             <div className="cnf-header">
                 <h2 className="cnf-title">{moduleType || 'C&F'} C&F Agent Management</h2>
-                <button onClick={() => setShowForm(!showForm)} className="cnf-add-btn">+ Add New</button>
+                <button onClick={() => { resetForm(); setShowForm(true); }} className="cnf-add-btn">+ Add New</button>
             </div>
 
             {showForm && (
