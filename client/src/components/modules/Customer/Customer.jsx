@@ -1192,7 +1192,9 @@ const Customer = ({
 
                                                     {/* LC No Filter */}
                                                     <div className="space-y-1.5 relative" ref={lcNoFilterRef}>
-                                                        <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">LC No</label>
+                                                        <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">
+                                                            {viewData?.customerType?.toLowerCase().includes('party') ? 'LC No' : 'Invoice No'}
+                                                        </label>
                                                         <div className="relative">
                                                             <input
                                                                 type="text"
@@ -1202,7 +1204,7 @@ const Customer = ({
                                                                     setHistoryFilterDropdownOpen({ ...initialHistoryFilterDropdownState, lcNo: true });
                                                                 }}
                                                                 onFocus={() => setHistoryFilterDropdownOpen({ ...initialHistoryFilterDropdownState, lcNo: true })}
-                                                                placeholder={historyFilters.lcNo || "Search LC No..."}
+                                                                placeholder={historyFilters.lcNo || `Search ${viewData?.customerType?.toLowerCase().includes('party') ? 'LC No' : 'Invoice No'}...`}
                                                                 className={`w-full px-4 py-2.5 bg-white border border-gray-100 rounded-xl text-sm focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all shadow-sm hover:border-gray-200 pr-14 ${historyFilters.lcNo ? 'placeholder:text-gray-900 placeholder:font-semibold' : 'placeholder:text-gray-300'}`}
                                                             />
                                                             <div className="absolute right-3.5 top-1/2 -translate-y-1/2 flex items-center gap-2">
@@ -1486,10 +1488,12 @@ const Customer = ({
                                     <div className={`grid ${activeHistoryTab === 'all' ? 'grid-cols-2 md:grid-cols-4' : (activeHistoryTab === 'sales' ? 'grid-cols-2 md:grid-cols-6' : 'grid-cols-2 md:grid-cols-4')} gap-2 md:gap-3 mb-4 md:mb-8 summary-grid-mobile`}>
                                         {activeHistoryTab === 'sales' && (
                                             <>
-                                                <div className="bg-blue-50/50 p-3 md:p-4 rounded-2xl border border-blue-100 shadow-sm transition-all hover:shadow-md">
-                                                    <p className="text-[9px] md:text-[10px] text-blue-500 font-bold uppercase tracking-wider mb-1">Total Truck</p>
-                                                    <p className="text-base md:text-lg font-black text-blue-700">{totalTruck}</p>
-                                                </div>
+                                                {viewData.customerType?.includes('Party') && (
+                                                    <div className="bg-blue-50/50 p-3 md:p-4 rounded-2xl border border-blue-100 shadow-sm transition-all hover:shadow-md">
+                                                        <p className="text-[9px] md:text-[10px] text-blue-500 font-bold uppercase tracking-wider mb-1">Total Truck</p>
+                                                        <p className="text-base md:text-lg font-black text-blue-700">{totalTruck}</p>
+                                                    </div>
+                                                )}
                                                 <div className="bg-emerald-50/50 p-3 md:p-4 rounded-2xl border border-emerald-100 shadow-sm transition-all hover:shadow-md">
                                                     <p className="text-[9px] md:text-[10px] text-emerald-500 font-bold uppercase tracking-wider mb-1">Total Quantity</p>
                                                     <p className="text-base md:text-lg font-black text-emerald-700">{totalQuantity}</p>
@@ -1587,7 +1591,7 @@ const Customer = ({
                                                                 </th>
                                                                 <th className="px-4 py-3 font-semibold text-gray-600 cursor-pointer hover:bg-gray-100 transition-colors" onClick={() => requestHistorySort('lcNo')}>
                                                                     <div className="flex items-center gap-1">
-                                                                        <span>Invoice</span>
+                                                                        <span>Invoice No</span>
                                                                         <SortIcon config={historySortConfig} columnKey="lcNo" />
                                                                     </div>
                                                                 </th>
@@ -1781,7 +1785,9 @@ const Customer = ({
                                                                                     <td className="px-4 py-3 text-xs text-gray-600">{item.brand || '-'}</td>
                                                                                 )}
                                                                                 {isParty ? (
-                                                                                    <td className="px-4 py-3 text-center text-xs text-gray-900 font-medium">{item.truck || '-'}</td>
+                                                                                    viewData.customerType?.includes('Party') ? (
+                                                                                        <td className="px-4 py-3 text-center text-xs text-gray-900 font-medium">{item.truck || '-'}</td>
+                                                                                    ) : null
                                                                                 ) : (
                                                                                     <td className="px-4 py-3 text-right text-xs font-bold text-gray-900">{parseFloat(item.quantity).toLocaleString()}</td>
                                                                                 )}
@@ -2110,7 +2116,7 @@ const Customer = ({
                                                                 </th>
                                                                 <th className="px-4 py-3 font-semibold text-gray-600 cursor-pointer hover:bg-gray-100 transition-colors" onClick={() => requestHistorySort('lcNo')}>
                                                                     <div className="flex items-center gap-1">
-                                                                        <span>LC No</span>
+                                                                        <span>{viewData?.customerType?.toLowerCase().includes('party') ? 'LC No' : 'Invoice No'}</span>
                                                                         <SortIcon config={historySortConfig} columnKey="lcNo" />
                                                                     </div>
                                                                 </th>
@@ -2120,12 +2126,14 @@ const Customer = ({
                                                                         <SortIcon config={historySortConfig} columnKey="product" />
                                                                     </div>
                                                                 </th>
-                                                                <th className="px-4 py-3 font-semibold text-gray-600 cursor-pointer hover:bg-gray-100 transition-colors" onClick={() => requestHistorySort('truck')}>
-                                                                    <div className="flex items-center gap-1">
-                                                                        <span>Truck</span>
-                                                                        <SortIcon config={historySortConfig} columnKey="truck" />
-                                                                    </div>
-                                                                </th>
+                                                                {viewData.customerType?.includes('Party') && (
+                                                                    <th className="px-4 py-3 font-semibold text-gray-600 cursor-pointer hover:bg-gray-100 transition-colors" onClick={() => requestHistorySort('truck')}>
+                                                                        <div className="flex items-center gap-1">
+                                                                            <span>Truck</span>
+                                                                            <SortIcon config={historySortConfig} columnKey="truck" />
+                                                                        </div>
+                                                                    </th>
+                                                                )}
                                                                 <th className="px-4 py-3 font-semibold text-gray-600 text-right cursor-pointer hover:bg-gray-100 transition-colors" onClick={() => requestHistorySort('quantity')}>
                                                                     <div className="flex items-center justify-end gap-1">
                                                                         <span>Qty</span>
@@ -2161,14 +2169,68 @@ const Customer = ({
                                                         </thead>
                                                         <tbody>
                                                             {combinedHistory && combinedHistory.length > 0 ? (
-                                                                combinedHistory.map((item, index) => (
+                                                                combinedHistory.reduce((acc, item) => {
+                                                                    const invoice = item.invoiceNo || item.lcNo;
+                                                                    const existing = item.type === 'sale' && invoice 
+                                                                        ? acc.find(x => x.type === 'sale' && (x.invoiceNo === invoice || x.lcNo === invoice))
+                                                                        : null;
+                                                                    
+                                                                    if (existing) {
+                                                                        existing.amount = (parseFloat(existing.amount) || 0) + (parseFloat(item.amount) || 0);
+                                                                        existing.paid = (parseFloat(existing.paid) || 0) + (parseFloat(item.paid) || 0);
+                                                                        existing.truck = (parseFloat(existing.truck) || 0) + (parseFloat(item.truck) || 0);
+                                                                        
+                                                                        // Initialize sub-items for merging logic if not present
+                                                                        if (!existing.items) {
+                                                                            existing.items = [{
+                                                                                product: existing.product_original || existing.product,
+                                                                                quantity: parseFloat(existing.quantity_original || existing.quantity),
+                                                                                rate: parseFloat(existing.rate_original || existing.rate)
+                                                                            }];
+                                                                        }
+                                                                        
+                                                                        const itemRate = parseFloat(item.rate || 0);
+                                                                        const matchingItem = existing.items.find(si => 
+                                                                            (si.product?.trim() === item.product?.trim()) && 
+                                                                            (parseFloat(si.rate || 0) === itemRate)
+                                                                        );
+                                                                        if (matchingItem) {
+                                                                            matchingItem.quantity += parseFloat(item.quantity || 0);
+                                                                        } else {
+                                                                            existing.items.push({
+                                                                                product: item.product,
+                                                                                quantity: parseFloat(item.quantity || 0),
+                                                                                rate: itemRate
+                                                                            });
+                                                                        }
+                                                                        
+                                                                        // Rebuild display properties
+                                                                        existing.product = existing.items.map(si => si.product || '—').join('\n');
+                                                                        existing.quantity_display = existing.items.map(si => si.quantity.toLocaleString()).join('\n');
+                                                                        existing.rate_display = existing.items.map(si => si.rate > 0 ? `৳${si.rate.toLocaleString()}` : '—').join('\n');
+                                                                        
+                                                                        existing.quantity = (parseFloat(existing.quantity || 0)) + (parseFloat(item.quantity || 0));
+                                                                        existing.runningBalance = item.runningBalance;
+                                                                        return acc;
+                                                                    }
+                                                                    
+                                                                    acc.push({ 
+                                                                        ...item,
+                                                                        product_original: item.product,
+                                                                        quantity_original: item.quantity,
+                                                                        rate_original: item.rate
+                                                                    });
+                                                                    return acc;
+                                                                }, []).map((item, index) => (
                                                                     <tr key={index} className={`border-b border-gray-100 transition-colors hover:bg-gray-50 ${item.type === 'payment' ? 'bg-emerald-50/20' : 'bg-white'}`}>
                                                                         <td className="px-4 py-3 text-gray-600 whitespace-nowrap">{formatDate(item.date)}</td>
                                                                         <td className="px-4 py-3 font-bold text-gray-900 uppercase">{item.invoiceNo || item.lcNo || '—'}</td>
-                                                                        <td className="px-4 py-3 text-gray-700">{item.product || '—'}</td>
-                                                                        <td className="px-4 py-3 text-gray-700">{item.truck || '—'}</td>
-                                                                        <td className="px-4 py-3 text-right text-gray-900">{parseFloat(item.quantity || 0) > 0 ? parseFloat(item.quantity).toLocaleString() : '—'}</td>
-                                                                        <td className="px-4 py-3 text-right text-gray-500">{parseFloat(item.rate || 0) > 0 ? `৳${parseFloat(item.rate).toLocaleString()}` : '—'}</td>
+                                                                        <td className="px-4 py-3 text-gray-700 whitespace-pre-wrap">{item.product || '—'}</td>
+                                                                         {viewData.customerType?.includes('Party') && (
+                                                                            <td className="px-4 py-3 text-gray-700">{item.truck || '—'}</td>
+                                                                        )}
+                                                                        <td className="px-4 py-3 text-right text-gray-900 whitespace-pre-wrap">{item.quantity_display || (parseFloat(item.quantity || 0) > 0 ? parseFloat(item.quantity).toLocaleString() : '—')}</td>
+                                                                        <td className="px-4 py-3 text-right text-gray-500 whitespace-pre-wrap">{item.rate_display || (parseFloat(item.rate || 0) > 0 ? `৳${parseFloat(item.rate).toLocaleString()}` : '—')}</td>
                                                                         <td className="px-4 py-3 text-right font-black text-violet-700">{item.type === 'sale' ? `৳${parseFloat(item.amount || 0).toLocaleString()}` : '—'}</td>
                                                                         <td className="px-4 py-3 text-gray-600 text-xs">
                                                                             {item.type === 'payment' ? (
@@ -2200,7 +2262,59 @@ const Customer = ({
                                                     {/* Mobile All History Card View */}
                                                     <div className="block md:hidden p-4 space-y-3">
                                                         {combinedHistory && combinedHistory.length > 0 ? (
-                                                            combinedHistory.map((item, index) => {
+                                                            combinedHistory.reduce((acc, item) => {
+                                                                const invoice = item.invoiceNo || item.lcNo;
+                                                                const existing = item.type === 'sale' && invoice 
+                                                                    ? acc.find(x => x.type === 'sale' && (x.invoiceNo === invoice || x.lcNo === invoice))
+                                                                    : null;
+                                                                
+                                                                 if (existing) {
+                                                                    existing.amount = (parseFloat(existing.amount) || 0) + (parseFloat(item.amount) || 0);
+                                                                    existing.paid = (parseFloat(existing.paid) || 0) + (parseFloat(item.paid) || 0);
+                                                                    existing.truck = (parseFloat(existing.truck) || 0) + (parseFloat(item.truck) || 0);
+                                                                    
+                                                                    // Initialize sub-items for merging logic if not present
+                                                                    if (!existing.items) {
+                                                                        existing.items = [{
+                                                                            product: existing.product_original || existing.product,
+                                                                            quantity: parseFloat(existing.quantity_original || existing.quantity),
+                                                                            rate: parseFloat(existing.rate_original || existing.rate)
+                                                                        }];
+                                                                    }
+                                                                    
+                                                                    const itemRate = parseFloat(item.rate || 0);
+                                                                    const matchingItem = existing.items.find(si => 
+                                                                        (si.product?.trim() === item.product?.trim()) && 
+                                                                        (parseFloat(si.rate || 0) === itemRate)
+                                                                    );
+                                                                    if (matchingItem) {
+                                                                        matchingItem.quantity += parseFloat(item.quantity || 0);
+                                                                    } else {
+                                                                        existing.items.push({
+                                                                            product: item.product,
+                                                                            quantity: parseFloat(item.quantity || 0),
+                                                                            rate: itemRate
+                                                                        });
+                                                                    }
+                                                                    
+                                                                    // Rebuild display properties
+                                                                    existing.product = existing.items.map(si => si.product || '—').join('\n');
+                                                                    existing.quantity_display = existing.items.map(si => si.quantity.toLocaleString()).join('\n');
+                                                                    existing.rate_display = existing.items.map(si => si.rate > 0 ? `৳${si.rate.toLocaleString()}` : '—').join('\n');
+                                                                    
+                                                                    existing.quantity = (parseFloat(existing.quantity || 0)) + (parseFloat(item.quantity || 0));
+                                                                    existing.runningBalance = item.runningBalance;
+                                                                    return acc;
+                                                                }
+                                                                
+                                                                acc.push({ 
+                                                                    ...item,
+                                                                    product_original: item.product,
+                                                                    quantity_original: item.quantity,
+                                                                    rate_original: item.rate
+                                                                });
+                                                                return acc;
+                                                            }, []).map((item, index) => {
                                                                 const isExpanded = expandedAllHistoryCards === index;
                                                                 return (
                                                                     <div 
@@ -2227,8 +2341,18 @@ const Customer = ({
                                                                             <div className="space-y-1 text-xs">
                                                                                 {item.type === 'sale' ? (
                                                                                     <>
-                                                                                        <div className="flex justify-between"><span className="text-gray-500">Product:</span><span className="font-bold">{item.product}</span></div>
-                                                                                        <div className="flex justify-between"><span className="text-gray-500">Qty:</span><span className="font-bold">{item.quantity}</span></div>
+                                                                                        <div className="flex justify-between items-start">
+                                                                                            <span className="text-gray-500">Product:</span>
+                                                                                            <span className="font-bold text-right whitespace-pre-wrap">{item.product}</span>
+                                                                                        </div>
+                                                                                        <div className="flex justify-between items-start">
+                                                                                            <span className="text-gray-500">Qty:</span>
+                                                                                            <span className="font-bold text-right whitespace-pre-wrap">{item.quantity_display || (parseFloat(item.quantity || 0) > 0 ? parseFloat(item.quantity).toLocaleString() : '—')}</span>
+                                                                                        </div>
+                                                                                        <div className="flex justify-between items-start">
+                                                                                            <span className="text-gray-500">Rate:</span>
+                                                                                            <span className="font-bold text-right whitespace-pre-wrap">{item.rate_display || (parseFloat(item.rate || 0) > 0 ? `৳${parseFloat(item.rate).toLocaleString()}` : '—')}</span>
+                                                                                        </div>
                                                                                         <div className="flex justify-between"><span className="text-gray-500">Paid:</span><span className="font-bold text-emerald-600">৳{parseFloat(item.paid || 0).toLocaleString()}</span></div>
                                                                                     </>
                                                                                 ) : (

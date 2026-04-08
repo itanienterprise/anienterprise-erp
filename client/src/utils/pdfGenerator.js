@@ -445,7 +445,7 @@ export const generateStockReportPDF = (stockData, filters, reportType = 'short')
             // Pre-process brandList into a renderList for PDF with Quality rowSpan
             const renderList = [];
             let currentQuality = null;
-            
+
             item.brandList.forEach((ent, i) => {
                 const q = (ent.quality && ent.quality !== '-') ? ent.quality : '';
                 if (q !== currentQuality) {
@@ -476,16 +476,16 @@ export const generateStockReportPDF = (stockData, filters, reportType = 'short')
 
             // --- 1. HEADER ROW (Product Name [+ First Brand if no quality]) ---
             const headerRow = [];
-            headerRow.push({ 
-                content: (index + 1).toString(), rowSpan: totalRowsForProduct, 
-                styles: { valign: 'top', halign: 'center', fontStyle: 'bold' } 
+            headerRow.push({
+                content: (index + 1).toString(), rowSpan: totalRowsForProduct,
+                styles: { valign: 'top', halign: 'center', fontStyle: 'bold' }
             });
 
             // Column 2: Product Name
-            headerRow.push({ 
-                content: (item.productName || '-').toUpperCase(), 
+            headerRow.push({
+                content: (item.productName || '-').toUpperCase(),
                 rowSpan: !hasAnyQuality ? totalRowsForProduct : 1,
-                styles: { valign: 'top', fontStyle: 'bold', halign: 'center', fillColor: [248, 248, 248] } 
+                styles: { valign: 'top', fontStyle: 'bold', halign: 'center', fillColor: [248, 248, 248] }
             });
 
             if (!hasQualityHeader) {
@@ -494,7 +494,7 @@ export const generateStockReportPDF = (stockData, filters, reportType = 'short')
                 if (hasAnyQuality) {
                     headerRow.push({ content: '', styles: { fillColor: [248, 248, 248] } });
                 }
-                
+
                 headerRow.push({ content: firstEnt?.brand || '-', styles: { fillColor: [248, 248, 248], fontStyle: 'normal' } });
 
                 if (reportType === 'detailed') {
@@ -524,7 +524,7 @@ export const generateStockReportPDF = (stockData, filters, reportType = 'short')
                     headerRow.push({ content: '', styles: { fillColor: [248, 248, 248] } }); // Quality Col
                 }
                 headerRow.push({ content: '', styles: { fillColor: [248, 248, 248] } }); // Brand Col placeholder
-                
+
                 if (reportType === 'detailed') {
                     headerRow.push({ content: '', styles: { fillColor: [248, 248, 248] } });
                     headerRow.push({ content: '', styles: { fillColor: [248, 248, 248] } });
@@ -545,10 +545,10 @@ export const generateStockReportPDF = (stockData, filters, reportType = 'short')
 
                 // Column 1: Quality (Spanned)
                 if (ent.qualityRowSpan) {
-                    row.push({ 
-                        content: (ent.quality && ent.quality !== '-') ? ent.quality : '', 
+                    row.push({
+                        content: (ent.quality && ent.quality !== '-') ? ent.quality : '',
                         rowSpan: ent.qualityRowSpan,
-                        styles: { fontStyle: 'normal', textColor: [0, 0, 0], halign: 'center', valign: 'middle' } 
+                        styles: { fontStyle: 'normal', textColor: [0, 0, 0], halign: 'center', valign: 'middle' }
                     });
                 } else if (hasAnyQuality && (!hasQualityHeader || isSubtotal)) {
                     // Only push Placeholder/Quality cell if the column exists in the report 
@@ -569,38 +569,38 @@ export const generateStockReportPDF = (stockData, filters, reportType = 'short')
                     const tQty = parseFloat(ent.totalInHouseQuantity) || 0;
                     const tSize = parseFloat(ent.packetSize) || 0;
                     const { whole: tW, remainder: tR } = calculatePktRemainder(tQty, tSize);
-                    row.push({ 
-                        content: `${tW}${tR !== 0 ? ` - ${Math.abs(tR)} kg` : ''}`, 
-                        styles: isSubtotal ? { fontStyle: 'bold', halign: 'right' } : { halign: 'right' } 
+                    row.push({
+                        content: `${tW}${tR !== 0 ? ` - ${Math.abs(tR)} kg` : ''}`,
+                        styles: isSubtotal ? { fontStyle: 'bold', halign: 'right' } : { halign: 'right' }
                     });
-                    row.push({ 
-                        content: Math.round(tQty).toString(), 
-                        styles: isSubtotal ? { fontStyle: 'bold', halign: 'right' } : { halign: 'right' } 
+                    row.push({
+                        content: Math.round(tQty).toString(),
+                        styles: isSubtotal ? { fontStyle: 'bold', halign: 'right' } : { halign: 'right' }
                     });
 
                     const sQty = parseFloat(ent.saleQuantity) || 0;
                     const sSize = parseFloat(ent.packetSize) || 0;
                     const { whole: sW, remainder: sR } = calculatePktRemainder(sQty, sSize);
-                    row.push({ 
-                        content: `${sW}${sR !== 0 ? ` - ${Math.abs(sR)} kg` : ''}`, 
-                        styles: isSubtotal ? { fontStyle: 'bold', halign: 'right' } : { halign: 'right' } 
+                    row.push({
+                        content: `${sW}${sR !== 0 ? ` - ${Math.abs(sR)} kg` : ''}`,
+                        styles: isSubtotal ? { fontStyle: 'bold', halign: 'right' } : { halign: 'right' }
                     });
-                    row.push({ 
-                        content: Math.round(sQty).toString(), 
-                        styles: isSubtotal ? { fontStyle: 'bold', halign: 'right' } : { halign: 'right' } 
+                    row.push({
+                        content: Math.round(sQty).toString(),
+                        styles: isSubtotal ? { fontStyle: 'bold', halign: 'right' } : { halign: 'right' }
                     });
                 }
 
                 const rQty = parseFloat(ent.inHouseQuantity) || 0;
                 const rSize = parseFloat(ent.packetSize) || 0;
                 const { whole: rW, remainder: rR } = calculatePktRemainder(rQty, rSize);
-                row.push({ 
-                    content: `${rW}${rR !== 0 ? ` - ${Math.abs(rR)} kg` : ''}`, 
-                    styles: isSubtotal ? { fontStyle: 'bold', halign: 'right' } : { halign: 'right' } 
+                row.push({
+                    content: `${rW}${rR !== 0 ? ` - ${Math.abs(rR)} kg` : ''}`,
+                    styles: isSubtotal ? { fontStyle: 'bold', halign: 'right' } : { halign: 'right' }
                 });
-                row.push({ 
-                    content: Math.round(rQty).toString(), 
-                    styles: isSubtotal ? { fontStyle: 'bold', halign: 'right' } : { halign: 'right' } 
+                row.push({
+                    content: Math.round(rQty).toString(),
+                    styles: isSubtotal ? { fontStyle: 'bold', halign: 'right' } : { halign: 'right' }
                 });
 
                 tableRows.push(row);
@@ -613,11 +613,11 @@ export const generateStockReportPDF = (stockData, filters, reportType = 'short')
                 if (hasAnyQuality) {
                     totalRow.push({ content: '', styles: { fillColor: [248, 248, 248] } });
                 }
-                
+
                 // Brand Column - Center "SUB TOTAL" (Always appears in Column 2 / Brand)
-                totalRow.push({ 
-                    content: 'SUB TOTAL', 
-                    styles: { fontStyle: 'bold', halign: 'center', fillColor: [248, 248, 248], textColor: [0, 0, 0] } 
+                totalRow.push({
+                    content: 'SUB TOTAL',
+                    styles: { fontStyle: 'bold', halign: 'center', fillColor: [248, 248, 248], textColor: [0, 0, 0] }
                 });
 
                 if (reportType === 'detailed') {
@@ -630,11 +630,11 @@ export const generateStockReportPDF = (stockData, filters, reportType = 'short')
                         })(),
                         styles: { fontStyle: 'bold', halign: 'right', fillColor: [248, 248, 248] }
                     });
-                    totalRow.push({ 
-                        content: Math.round(item.totalInHouseQuantity).toString(), 
-                        styles: { fontStyle: 'bold', halign: 'right', fillColor: [248, 248, 248] } 
+                    totalRow.push({
+                        content: Math.round(item.totalInHouseQuantity).toString(),
+                        styles: { fontStyle: 'bold', halign: 'right', fillColor: [248, 248, 248] }
                     });
-                    
+
                     // Sale BAG
                     totalRow.push({
                         content: (() => {
@@ -644,9 +644,9 @@ export const generateStockReportPDF = (stockData, filters, reportType = 'short')
                         })(),
                         styles: { fontStyle: 'bold', halign: 'right', fillColor: [248, 248, 248] }
                     });
-                    totalRow.push({ 
-                        content: Math.round(item.saleQuantity).toString(), 
-                        styles: { fontStyle: 'bold', halign: 'right', fillColor: [248, 248, 248] } 
+                    totalRow.push({
+                        content: Math.round(item.saleQuantity).toString(),
+                        styles: { fontStyle: 'bold', halign: 'right', fillColor: [248, 248, 248] }
                     });
                 }
 
@@ -659,9 +659,9 @@ export const generateStockReportPDF = (stockData, filters, reportType = 'short')
                     })(),
                     styles: { fontStyle: 'bold', halign: 'right', fillColor: [248, 248, 248] }
                 });
-                totalRow.push({ 
-                    content: Math.round(item.inHouseQuantity).toString(), 
-                    styles: { fontStyle: 'bold', halign: 'right', fillColor: [248, 248, 248] } 
+                totalRow.push({
+                    content: Math.round(item.inHouseQuantity).toString(),
+                    styles: { fontStyle: 'bold', halign: 'right', fillColor: [248, 248, 248] }
                 });
 
                 tableRows.push(totalRow);
@@ -674,7 +674,7 @@ export const generateStockReportPDF = (stockData, filters, reportType = 'short')
             const totalRem = Math.round(stockData.displayRecords.reduce((accRem, item) => accRem + item.brandList.reduce((sum, ent) => sum + Math.max(0, (parseFloat(ent.totalInHouseQuantity) || 0)) - (Math.max(0, Math.floor(parseFloat(ent.totalInHousePacket) || 0)) * (parseFloat(ent.packetSize) || 0)), 0), 0));
             return `${totalWhole}${totalRem !== 0 ? ` - ${Math.abs(totalRem)} kg` : ''}`;
         })();
- 
+
         const inHousePktStr = (() => {
             const totalWhole = stockData.displayRecords.reduce((accWhole, item) => accWhole + item.brandList.reduce((sum, ent) => sum + Math.max(0, Math.floor(parseFloat(ent.inHousePacket) || 0)), 0), 0);
             const totalRem = Math.round(stockData.displayRecords.reduce((accRem, item) => accRem + item.brandList.reduce((sum, ent) => sum + Math.max(0, (parseFloat(ent.inHouseQuantity) || 0)) - (Math.max(0, Math.floor(parseFloat(ent.inHousePacket) || 0)) * (parseFloat(ent.packetSize) || 0)), 0), 0));
@@ -2469,7 +2469,62 @@ export const generateCustomerHistoryPDF = (customer, historyData, summary, filte
             let grandTrucks = 0;
 
             // Sort for ascending order (chronological) in PDF
-            const chronoHistory = [...historyData].sort((a, b) => new Date(a.date) - new Date(b.date));
+            const rawChronoHistory = [...historyData].sort((a, b) => new Date(a.date) - new Date(b.date));
+
+            // Merge same invoice numbers
+            const chronoHistory = rawChronoHistory.reduce((acc, item) => {
+                const invoice = item.invoiceNo || item.lcNo;
+                const existing = item.type === 'sale' && invoice
+                    ? acc.find(x => x.type === 'sale' && (x.invoiceNo === invoice || x.lcNo === invoice))
+                    : null;
+
+                if (existing) {
+                    existing.amount = (parseFloat(existing.amount || 0)) + (parseFloat(item.amount || 0));
+                    existing.paid = (parseFloat(existing.paid || 0)) + (parseFloat(item.paid || 0));
+                    existing.truck = (parseFloat(existing.truck || 0)) + (parseFloat(item.truck || 0));
+
+                    // Initialize sub-items for merging logic if not present
+                    if (!existing.items) {
+                        existing.items = [{
+                            product: existing.product_original || existing.product,
+                            quantity: parseFloat(existing.quantity_original || existing.quantity),
+                            rate: parseFloat(existing.rate_original || existing.rate)
+                        }];
+                    }
+
+                    const itemRate = parseFloat(item.rate || 0);
+                    const matchingItem = existing.items.find(si =>
+                        (si.product?.trim() === item.product?.trim()) &&
+                        (parseFloat(si.rate || 0) === itemRate)
+                    );
+                    if (matchingItem) {
+                        matchingItem.quantity += parseFloat(item.quantity || 0);
+                    } else {
+                        existing.items.push({
+                            product: item.product,
+                            quantity: parseFloat(item.quantity || 0),
+                            rate: itemRate
+                        });
+                    }
+
+                    // Rebuild display properties (PDF uses clean numbers without Taka symbol)
+                    existing.product = existing.items.map(si => si.product || '—').join('\n');
+                    existing.quantity_display = existing.items.map(si => (si.quantity || 0).toLocaleString()).join('\n');
+                    existing.rate_display = existing.items.map(si => (si.rate || 0) > 0 ? si.rate.toLocaleString() : '—').join('\n');
+
+                    existing.quantity = (parseFloat(existing.quantity || 0)) + (parseFloat(item.quantity || 0));
+                    existing.runningBalance = item.runningBalance;
+                    return acc;
+                }
+                acc.push({
+                    ...item,
+                    product_original: item.product,
+                    quantity_original: item.quantity,
+                    rate_original: item.rate
+                });
+                return acc;
+            }, []);
+
             let lastBalance = chronoHistory.length > 0 ? chronoHistory[chronoHistory.length - 1].runningBalance : 0;
 
             chronoHistory.forEach((item, idx) => {
@@ -2492,36 +2547,52 @@ export const generateCustomerHistoryPDF = (customer, historyData, summary, filte
                     idx + 1,
                     formatDate(item.date),
                     item.invoiceNo || item.lcNo || '-',
-                    item.product || '-',
-                    item.truck || '-',
-                    qty > 0 ? qty.toLocaleString() : '-',
-                    item.type === 'sale' ? `${parseFloat(item.rate || 0).toLocaleString(undefined, { maximumFractionDigits: 0 })}` : '-',
+                    item.product || '-'
+                ];
+
+                if (isParty) {
+                    row.push(item.truck || '-');
+                }
+
+                row.push(
+                    item.type === 'sale' ? (item.quantity_display || (qty > 0 ? qty.toLocaleString() : '-')) : '-',
+                    item.type === 'sale' ? (item.rate_display || (parseFloat(item.rate || 0) > 0 ? parseFloat(item.rate || 0).toLocaleString() : '-')) : '-',
                     amt > 0 ? `${amt.toLocaleString(undefined, { maximumFractionDigits: 0 })}` : '-',
                     details,
                     paid > 0 ? `${paid.toLocaleString(undefined, { maximumFractionDigits: 0 })}` : '-',
                     `${runningBal.toLocaleString(undefined, { maximumFractionDigits: 0 })}`
-                ];
+                );
                 tableRows.push(row);
             });
 
+            const head = ['SL', 'Date', isParty ? 'LC No' : 'Invoice No', 'Product'];
+            if (isParty) head.push('Truck');
+            head.push('Qty', 'Rate', 'Amount', 'Payment Details', 'Paid', 'Balance');
+
+            const foot = [
+                { content: 'GRAND TOTAL', colSpan: 4, styles: { halign: 'right', fontStyle: 'bold', fillColor: [240, 240, 240] } },
+            ];
+            if (isParty) {
+                foot.push({ content: grandTrucks.toLocaleString(), styles: { halign: 'center', fontStyle: 'bold', fillColor: [240, 240, 240] } });
+            }
+            foot.push(
+                { content: grandQty.toLocaleString(), styles: { halign: 'right', fontStyle: 'bold', fillColor: [240, 240, 240] } },
+                { content: '', styles: { fillColor: [240, 240, 240] } },
+                { content: grandAmt.toLocaleString(undefined, { maximumFractionDigits: 0 }), styles: { halign: 'right', fontStyle: 'bold', fillColor: [240, 240, 240] } },
+                { content: '', styles: { fillColor: [240, 240, 240] } },
+                { content: grandPaid.toLocaleString(undefined, { maximumFractionDigits: 0 }), styles: { halign: 'right', fontStyle: 'bold', fillColor: [240, 240, 240] } },
+                { content: lastBalance.toLocaleString(undefined, { maximumFractionDigits: 0 }), styles: { halign: 'right', fontStyle: 'bold', fillColor: [240, 240, 240] } }
+            );
+
             autoTable(doc, {
                 startY: yPos + 10,
-                head: [['SL', 'Date', 'LC No', 'Product', 'Truck', 'Qty', 'Rate', 'Amount', 'Payment Details', 'Paid', 'Balance']],
+                head: [head],
                 body: tableRows,
-                foot: [[
-                    { content: 'GRAND TOTAL', colSpan: 4, styles: { halign: 'right', fontStyle: 'bold', fillColor: [240, 240, 240] } },
-                    { content: grandTrucks.toLocaleString(), styles: { halign: 'center', fontStyle: 'bold', fillColor: [240, 240, 240] } },
-                    { content: grandQty.toLocaleString(), styles: { halign: 'right', fontStyle: 'bold', fillColor: [240, 240, 240] } },
-                    { content: '', styles: { fillColor: [240, 240, 240] } },
-                    { content: grandAmt.toLocaleString(undefined, { maximumFractionDigits: 0 }), styles: { halign: 'right', fontStyle: 'bold', fillColor: [240, 240, 240] } },
-                    { content: '', styles: { fillColor: [240, 240, 240] } },
-                    { content: grandPaid.toLocaleString(undefined, { maximumFractionDigits: 0 }), styles: { halign: 'right', fontStyle: 'bold', fillColor: [240, 240, 240] } },
-                    { content: lastBalance.toLocaleString(undefined, { maximumFractionDigits: 0 }), styles: { halign: 'right', fontStyle: 'bold', fillColor: [240, 240, 240] } }
-                ]],
+                foot: [foot],
                 theme: 'grid',
                 styles: { fontSize: 8.5, cellPadding: 1.5, lineColor: [0, 0, 0], lineWidth: 0.1, textColor: [0, 0, 0], valign: 'middle' },
                 headStyles: { fillColor: [245, 245, 245], fontStyle: 'bold', halign: 'center' },
-                columnStyles: {
+                columnStyles: isParty ? {
                     0: { halign: 'center', cellWidth: 7 },
                     1: { cellWidth: 18, halign: 'center' },
                     2: { cellWidth: 20 },
@@ -2533,6 +2604,17 @@ export const generateCustomerHistoryPDF = (customer, historyData, summary, filte
                     8: { cellWidth: 25 },
                     9: { halign: 'right', cellWidth: 20 },
                     10: { halign: 'right', cellWidth: 20 }
+                } : {
+                    0: { halign: 'center', cellWidth: 7 },
+                    1: { cellWidth: 18, halign: 'center' },
+                    2: { cellWidth: 18 },
+                    3: { cellWidth: 25 },
+                    4: { halign: 'right', cellWidth: 18 }, // Qty
+                    5: { halign: 'right', cellWidth: 15 }, // Rate
+                    6: { halign: 'right', cellWidth: 22 }, // Amount
+                    7: { cellWidth: 35 }, // Details
+                    8: { halign: 'right', cellWidth: 20 }, // Paid
+                    9: { halign: 'right', cellWidth: 22 }  // Balance
                 },
                 margin: { left: margin, right: margin }
             });
