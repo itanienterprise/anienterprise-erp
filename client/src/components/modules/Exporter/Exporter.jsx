@@ -24,6 +24,7 @@ const Exporter = ({
     const [exporters, setExporters] = useState([]);
     const [isLoading, setIsLoading] = useState(false);
     const [viewData, setViewData] = useState(null);
+    const [searchQuery, setSearchQuery] = useState('');
     const [historySearchQuery, setHistorySearchQuery] = useState('');
     const [historyRecords, setHistoryRecords] = useState([]);
     const [historyLoading, setHistoryLoading] = useState(false);
@@ -245,11 +246,29 @@ const Exporter = ({
 
     return (
         <div className="exporter-container">
-            <div className="exporter-header">
-                <h2 className="exporter-title">Exporter Management</h2>
-                <button onClick={() => setShowForm(!showForm)} className="exporter-add-btn">
-                    <span className="exporter-add-icon">+</span> Add New
-                </button>
+            <div className="exporter-header flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <div className="w-full md:w-1/4 text-center md:text-left">
+                    <h2 className="exporter-title" style={{margin:0}}>Exporter Management</h2>
+                </div>
+                
+                <div className="w-full md:flex-1 md:max-w-md md:mx-auto relative group px-2 md:px-0">
+                    <div className="absolute inset-y-0 left-0 pl-5 md:pl-3.5 flex items-center pointer-events-none">
+                        <SearchIcon className="h-4 w-4 text-gray-400 group-focus-within:text-blue-500 transition-colors" />
+                    </div>
+                    <input
+                        type="text"
+                        placeholder="Search exporters..."
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        className="block w-full pl-12 md:pl-10 pr-4 py-2.5 md:py-2 bg-white/50 border border-gray-200 rounded-xl text-[13px] md:text-[13px] text-center md:text-left placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 focus:bg-white transition-all outline-none shadow-sm"
+                    />
+                </div>
+
+                <div className="w-full md:w-1/4 flex justify-end z-10">
+                    <button onClick={() => setShowForm(!showForm)} className="w-full md:w-auto exporter-add-btn whitespace-nowrap">
+                        <span className="exporter-add-icon">+</span> Add New
+                    </button>
+                </div>
             </div>
 
             {showForm && (
@@ -316,7 +335,15 @@ const Exporter = ({
                 </div>
             )}
 
-            {!showForm && (
+            {!showForm && (() => {
+                const filteredExporters = exporters.filter(exporter => 
+                    (exporter.name || '').toLowerCase().includes(searchQuery.toLowerCase()) || 
+                    (exporter.licenseNo || '').toLowerCase().includes(searchQuery.toLowerCase()) || 
+                    (exporter.phone || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+                    (exporter.contactPerson || '').toLowerCase().includes(searchQuery.toLowerCase())
+                );
+
+                return (
                 <div className="exporter-table-container">
                     {selectedItems.size > 0 && (
                         <div className="exporter-selection-bar">
@@ -331,7 +358,7 @@ const Exporter = ({
                     )}
                     {isLoading ? (
                         <div className="exporter-loading"><div className="exporter-spinner"></div></div>
-                    ) : exporters.length > 0 ? (
+                    ) : filteredExporters.length > 0 ? (
                         <>
                             {/* Desktop Table - hidden on mobile */}
                             <div className="hidden md:block overflow-x-auto">
@@ -352,7 +379,7 @@ const Exporter = ({
                                         </tr>
                                     </thead>
                                     <tbody className="exporter-table-body">
-                                        {sortData(exporters).map((exporter) => (
+                                        {sortData(filteredExporters).map((exporter) => (
                                             <tr
                                                 key={exporter._id}
                                                 className={`exporter-table-row ${selectedItems.has(exporter._id) ? 'selected' : ''}`}
@@ -387,7 +414,7 @@ const Exporter = ({
 
                             {/* Mobile Card List - hidden on desktop */}
                             <div className="block md:hidden px-2 py-3 space-y-3">
-                                {sortData(exporters).map((exporter) => {
+                                {sortData(filteredExporters).map((exporter) => {
                                     const isExpanded = expandedExporterId === exporter._id;
                                     return (
                                         <div
@@ -485,12 +512,13 @@ const Exporter = ({
                     ) : (
                         <div className="exporter-empty">
                             <div className="exporter-empty-icon-wrapper"><UserIcon className="exporter-empty-icon" /></div>
-                            <p className="exporter-empty-title">No exporters found</p>
-                            <p className="exporter-empty-subtitle">Click "Add New" to register a new exporter</p>
+                            <p className="exporter-empty-title">{searchQuery ? 'No exporters found matching your search' : 'No exporters found'}</p>
+                            <p className="exporter-empty-subtitle">{searchQuery ? '' : 'Click "Add New" to register a new exporter'}</p>
                         </div>
                     )}
                 </div>
-            )}
+            );
+            })()}
 
             {/* Export History Modal */}
             {viewData && (

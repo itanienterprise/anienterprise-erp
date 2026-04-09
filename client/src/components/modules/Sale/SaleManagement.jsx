@@ -1368,6 +1368,7 @@ const SaleManagement = ({
         setOriginalData(null);
         setActiveItemIndex(null);
         setActiveEntryIndex(null);
+        setSubmitStatus(null);
     };
 
     const handleEdit = (sale) => {

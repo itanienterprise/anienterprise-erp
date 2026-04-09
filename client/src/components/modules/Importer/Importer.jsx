@@ -27,6 +27,7 @@ const Importer = ({
     const [importers, setImporters] = useState([]);
     const [isLoading, setIsLoading] = useState(false);
     const [viewData, setViewData] = useState(null);
+    const [searchQuery, setSearchQuery] = useState('');
     const [historySearchQuery, setHistorySearchQuery] = useState('');
     const [formData, setFormData] = useState({
         name: '',
@@ -186,14 +187,29 @@ const Importer = ({
 
     return (
         <div className="importer-container">
-            <div className="importer-header">
-                <h2 className="importer-title">Importer Management</h2>
-                <button
-                    onClick={() => setShowForm(!showForm)}
-                    className="importer-add-btn"
-                >
-                    <span className="importer-add-icon">+</span> Add New
-                </button>
+            <div className="importer-header flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <div className="w-full md:w-1/4 text-center md:text-left">
+                    <h2 className="importer-title" style={{margin:0}}>Importer Management</h2>
+                </div>
+                
+                <div className="w-full md:flex-1 md:max-w-md md:mx-auto relative group px-2 md:px-0">
+                    <div className="absolute inset-y-0 left-0 pl-5 md:pl-3.5 flex items-center pointer-events-none">
+                        <SearchIcon className="h-4 w-4 text-gray-400 group-focus-within:text-blue-500 transition-colors" />
+                    </div>
+                    <input
+                        type="text"
+                        placeholder="Search importers..."
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        className="block w-full pl-12 md:pl-10 pr-4 py-2.5 md:py-2 bg-white/50 border border-gray-200 rounded-xl text-[13px] md:text-[13px] text-center md:text-left placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 focus:bg-white transition-all outline-none shadow-sm"
+                    />
+                </div>
+
+                <div className="w-full md:w-1/4 flex justify-end z-10">
+                    <button onClick={() => setShowForm(!showForm)} className="w-full md:w-auto importer-add-btn whitespace-nowrap">
+                        <span className="importer-add-icon">+</span> Add New
+                    </button>
+                </div>
             </div>
 
             {showForm && (
@@ -287,7 +303,15 @@ const Importer = ({
                 </div>
             )}
 
-            {!showForm && (
+            {!showForm && (() => {
+                const filteredImporters = importers.filter(importer => 
+                    (importer.name || '').toLowerCase().includes(searchQuery.toLowerCase()) || 
+                    (importer.licenseNo || '').toLowerCase().includes(searchQuery.toLowerCase()) || 
+                    (importer.phone || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+                    (importer.contactPerson || '').toLowerCase().includes(searchQuery.toLowerCase())
+                );
+
+                return (
                 <div className="importer-table-container">
                     {selectedItems.size > 0 && (
                         <div className="importer-selection-bar">
@@ -312,7 +336,7 @@ const Importer = ({
                         <div className="importer-loading">
                             <div className="importer-spinner"></div>
                         </div>
-                    ) : importers.length > 0 ? (
+                    ) : filteredImporters.length > 0 ? (
                         <>
                             {/* Desktop Table - hidden on mobile */}
                             <div className="hidden md:block overflow-x-auto">
@@ -355,7 +379,7 @@ const Importer = ({
                                         </tr>
                                     </thead>
                                     <tbody className="importer-table-body">
-                                        {sortData(importers).map((importer) => (
+                                        {sortData(filteredImporters).map((importer) => (
                                             <tr
                                                 key={importer._id}
                                                 className={`importer-table-row ${selectedItems.has(importer._id) ? 'selected' : ''}`}
@@ -412,7 +436,7 @@ const Importer = ({
 
                             {/* Mobile Card List - hidden on desktop */}
                             <div className="block md:hidden px-2 py-3 space-y-3">
-                                {sortData(importers).map((importer) => (
+                                {sortData(filteredImporters).map((importer) => (
                                     <div
                                         key={importer._id}
                                         className={`bg-white rounded-xl border px-4 py-3 shadow-sm cursor-pointer transition-all duration-200 ${selectedItems.has(importer._id) ? 'border-blue-300 bg-blue-50/30 shadow-blue-100' : 'border-gray-100 hover:shadow-md'}`}
@@ -496,12 +520,13 @@ const Importer = ({
                             <div className="importer-empty-icon-wrapper">
                                 <UserIcon className="importer-empty-icon" />
                             </div>
-                            <p className="importer-empty-title">No importers found</p>
-                            <p className="importer-empty-subtitle">Click "Add New" to register a new importer</p>
+                            <p className="importer-empty-title">{searchQuery ? 'No importers found matching your search' : 'No importers found'}</p>
+                            <p className="importer-empty-subtitle">{searchQuery ? '' : 'Click "Add New" to register a new importer'}</p>
                         </div>
                     )}
                 </div>
-            )}
+            );
+            })()}
             {viewData && (
                 <div className="fixed inset-0 z-[2000] flex items-center justify-center p-4">
                     <div className="absolute inset-0 bg-gray-900/60 backdrop-blur-sm" onClick={() => setViewData(null)}></div>

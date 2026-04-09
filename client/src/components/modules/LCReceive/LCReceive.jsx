@@ -520,7 +520,7 @@ function LCReceive({
                 const isPort = activeDropdown === 'lcr-port' && portRef.current && portRef.current.contains(e.target);
                 const isImporter = activeDropdown === 'lcr-importer' && importerRef.current && importerRef.current.contains(e.target);
                 const isExporter = activeDropdown === 'lcr-exporter' && exporterRef.current && exporterRef.current.contains(e.target);
-                
+
                 // For dynamic product/brand refs
                 const isProduct = activeDropdown.startsWith('lcr-product-') && productRefs.current.some(ref => ref && ref.contains(e.target));
                 const isBrand = activeDropdown.startsWith('lcr-brand-') && Object.values(brandRefs.current).some(ref => ref && ref.contains(e.target));
@@ -692,7 +692,7 @@ function LCReceive({
             // Sum the truck value if it is a number, otherwise fallback to 1 if there's any text or quantity attached
             const hasQty = prod.brandEntries.some(be => parseFloat(be.quantity) > 0);
             const parsedTruck = parseFloat(prod.truckNo);
-            
+
             if (!isNaN(parsedTruck) && parsedTruck > 0) {
                 totalLcTruck += parsedTruck;
             } else if (prod.truckNo || hasQty) {
@@ -705,14 +705,14 @@ function LCReceive({
             });
         });
 
-        const summaries = { 
-            totalLcTruck, 
-            totalLcQuantity: totalLcQuantity.toFixed(2) 
+        const summaries = {
+            totalLcTruck,
+            totalLcQuantity: totalLcQuantity.toFixed(2)
         };
 
         // Auto-calculate C&F costs if agents are selected
         const dataForCost = currentData || stockFormData;
-        
+
         const calculateAgentCost = (agentName, totalQty, totalTruck) => {
             if (!agentName) return '';
             const agent = cnfs.find(c => c.name === agentName);
@@ -765,11 +765,11 @@ function LCReceive({
         setStockFormData(prev => {
             const updatedProducts = [...prev.productEntries];
             const product = { ...updatedProducts[pIndex], isMultiBrand: isMulti };
-            
+
             if (!isMulti && product.brandEntries.length > 1) {
                 product.brandEntries = [product.brandEntries[0]];
             }
-            
+
             updatedProducts[pIndex] = product;
             const summaries = calculateSummaries(updatedProducts, prev);
             return {
@@ -786,7 +786,7 @@ function LCReceive({
             const product = { ...updatedProducts[pIndex] };
             const brandEntries = [...product.brandEntries];
             const entry = { ...brandEntries[bIndex] };
-            
+
             entry[field] = value;
 
             if (field === 'brand') {
@@ -928,13 +928,13 @@ function LCReceive({
     const handleStockDropdownSelect = (field, value) => {
         setStockFormData(prev => {
             const newData = { ...prev, [field]: value };
-            
+
             // Re-calculate costs using the central logic
             if (field === 'indianCnF' || field === 'bdCnF' || field === 'port' || field === 'importer' || field === 'exporter') {
                 const summaries = calculateSummaries(prev.productEntries, newData);
                 return { ...newData, ...summaries };
             }
-            
+
             return newData;
         });
         setActiveDropdown(null);
@@ -1634,7 +1634,7 @@ function LCReceive({
         // Apply Search Query
         if (lcSearchQuery.trim()) {
             const query = lcSearchQuery.toLowerCase().trim();
-            records = records.filter(item => 
+            records = records.filter(item =>
                 (item.warehouse || '').toLowerCase().includes(query) ||
                 (item.importer || '').toLowerCase().includes(query) ||
                 (item.exporter || '').toLowerCase().includes(query) ||
@@ -1734,7 +1734,7 @@ function LCReceive({
                             </div>
                             <input
                                 type="text"
-                                placeholder="Search by Warehouse, Importer, Exporter, Truck..."
+                                placeholder="Search by LC NO , PORT..."
                                 value={lcSearchQuery}
                                 onChange={(e) => setLcSearchQuery(e.target.value)}
                                 className="block w-full pl-10 pr-4 py-2 bg-white/50 border border-gray-200 rounded-xl text-[13px] placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 focus:bg-white transition-all outline-none"

@@ -48,6 +48,7 @@ const CnF = ({
     const [isLoading, setIsLoading] = useState(false);
     const [viewData, setViewData] = useState(null);
     const [historySearchQuery, setHistorySearchQuery] = useState('');
+    const [searchQuery, setSearchQuery] = useState('');
     const [historyRecords, setHistoryRecords] = useState([]);
     const [historyLoading, setHistoryLoading] = useState(false);
     const [expandedHistoryIdx, setExpandedHistoryIdx] = useState(null);
@@ -792,9 +793,27 @@ const CnF = ({
                     }}>×</button>
                 </div>
             )}
-            <div className="cnf-header">
-                <h2 className="cnf-title">{moduleType || 'C&F'} C&F Agent Management</h2>
-                <button onClick={() => { resetForm(); setShowForm(true); }} className="cnf-add-btn">+ Add New</button>
+            <div className="cnf-header flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <div className="w-full md:w-1/4 text-center md:text-left">
+                    <h2 className="cnf-title whitespace-nowrap">{moduleType || 'C&F'} C&F Agent Management</h2>
+                </div>
+                
+                <div className="w-full md:flex-1 md:max-w-md md:mx-auto relative group px-2 md:px-0">
+                    <div className="absolute inset-y-0 left-0 pl-5 md:pl-3.5 flex items-center pointer-events-none">
+                        <SearchIcon className="h-4 w-4 text-gray-400 group-focus-within:text-blue-500 transition-colors" />
+                    </div>
+                    <input
+                        type="text"
+                        placeholder="Search agents..."
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        className="block w-full pl-12 md:pl-10 pr-4 py-2.5 md:py-2 bg-white/50 border border-gray-200 rounded-xl text-[13px] md:text-[13px] text-center md:text-left placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 focus:bg-white transition-all outline-none shadow-sm"
+                    />
+                </div>
+
+                <div className="w-full md:w-1/4 flex justify-end z-10">
+                    <button onClick={() => { resetForm(); setShowForm(true); }} className="w-full md:w-auto cnf-add-btn whitespace-nowrap">+ Add New</button>
+                </div>
             </div>
 
             {showForm && (
@@ -834,7 +853,14 @@ const CnF = ({
                 </div>
             )}
 
-            {!showForm && (
+            {!showForm && (() => {
+                const filteredCnfs = cnfs.filter(cnf => 
+                    (cnf.name || '').toLowerCase().includes(searchQuery.toLowerCase()) || 
+                    (cnf.cnfId || '').toLowerCase().includes(searchQuery.toLowerCase()) || 
+                    (cnf.phone || '').includes(searchQuery)
+                );
+
+                return (
                 <div className="cnf-table-container">
                     {selectedItems.size > 0 && (
                         <div className="cnf-selection-bar flex items-center justify-between px-6 py-4 bg-gray-900 rounded-2xl mb-4 shadow-xl shadow-gray-900/20 animate-in slide-in-from-top-4 duration-300">
@@ -875,7 +901,7 @@ const CnF = ({
                                         </tr>
                                     </thead>
                                     <tbody className="cnf-table-body">
-                                        {sortData(cnfs).map((cnf) => (
+                                        {sortData(filteredCnfs).map((cnf) => (
                                             <tr key={cnf._id} className="cnf-table-row" 
                                             onMouseDown={() => startLongPress(cnf._id)} 
                                             onMouseUp={endLongPress} 
@@ -911,7 +937,7 @@ const CnF = ({
                                 </table>
                             </div>
                             <div className="block md:hidden px-2 py-3 space-y-3">
-                                {sortData(cnfs).map((cnf) => {
+                                {sortData(filteredCnfs).map((cnf) => {
                                     const isExpanded = expandedCnFId === cnf._id;
                                     return (
                                         <div
@@ -973,9 +999,10 @@ const CnF = ({
                                 })}
                             </div>
                         </>
-                    ) : <div className="cnf-empty"><p>No agents found</p></div>}
+                    ) : <div className="cnf-empty"><p>{searchQuery ? 'No agents found matching your search.' : 'No agents found.'}</p></div>}
                 </div>
-            )}
+            );
+            })()}
 
             {viewData && (
                 <div className="fixed inset-0 z-[2000] flex items-center justify-center p-4">

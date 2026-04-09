@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
-    FunnelIcon, XIcon, ChevronDownIcon, EditIcon, TrashIcon, BoxIcon, ChevronUpIcon
+    FunnelIcon, XIcon, ChevronDownIcon, EditIcon, TrashIcon, BoxIcon, ChevronUpIcon, SearchIcon
 } from '../../Icons';
 import { API_BASE_URL, formatDate, SortIcon } from '../../../utils/helpers';
 import axios from '../../../utils/api';
@@ -32,6 +32,7 @@ function IPManagement({
     const [activeDropdown, setActiveDropdown] = useState(null);
     const [highlightedIndex, setHighlightedIndex] = useState(0);
     const [expandedIpId, setExpandedIpId] = useState(null);
+    const [searchQuery, setSearchQuery] = useState('');
 
     const [formData, setFormData] = useState({
         openingDate: '',
@@ -267,6 +268,17 @@ function IPManagement({
     };
 
     const filteredIpRecords = ipRecords.filter(record => {
+        // Apply text search
+        if (searchQuery) {
+            const query = searchQuery.toLowerCase();
+            const matchesText = 
+                (record.ipNumber || '').toLowerCase().includes(query) ||
+                (record.ipParty || '').toLowerCase().includes(query) ||
+                (record.productName || '').toLowerCase().includes(query) ||
+                (record.referenceNo || '').toLowerCase().includes(query);
+            if (!matchesText) return false;
+        }
+
         // Apply filters
         if (filters.port && record.port !== filters.port) return false;
         if (filters.importer && record.ipParty !== filters.importer) return false;
@@ -292,20 +304,36 @@ function IPManagement({
 
     return (
         <div className="ip-management space-y-6">
-            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-                <h2 className="text-2xl font-bold text-gray-800">IP Management</h2>
-                <div className="flex items-center space-x-3 w-full sm:w-auto">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <div className="w-full md:w-1/4 text-center md:text-left">
+                    <h2 className="text-2xl font-bold text-gray-800" style={{margin:0}}>IP Management</h2>
+                </div>
+                
+                <div className="w-full md:flex-1 md:max-w-md md:mx-auto relative group px-2 md:px-0">
+                    <div className="absolute inset-y-0 left-0 pl-5 md:pl-3.5 flex items-center pointer-events-none">
+                        <SearchIcon className="h-4 w-4 text-gray-400 group-focus-within:text-blue-500 transition-colors" />
+                    </div>
+                    <input
+                        type="text"
+                        placeholder="Search IP No, Party, Product or Ref..."
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        className="block w-full pl-12 md:pl-10 pr-4 py-2.5 md:py-2 bg-white/50 border border-gray-200 rounded-xl text-[13px] text-center md:text-left placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all outline-none shadow-sm focus:bg-white"
+                    />
+                </div>
+
+                <div className="w-full md:w-1/4 flex justify-end z-10 gap-2 sm:gap-3">
                     <button
                         onClick={() => setShowFilters(!showFilters)}
-                        className={`flex-1 sm:flex-none px-4 py-2 ${showFilters ? 'bg-indigo-100 text-indigo-600 border-indigo-200' : 'bg-white text-gray-600 border border-gray-200'} font-medium rounded-lg shadow-sm transition-all flex items-center justify-center hover:bg-gray-50 border`}
+                        className={`flex-1 md:flex-none px-4 py-2 ${showFilters ? 'bg-indigo-100 text-indigo-600 border-indigo-200' : 'bg-white text-gray-600 border border-gray-200'} font-medium rounded-xl shadow-sm transition-all flex items-center justify-center hover:bg-gray-50 border`}
                     >
-                        <FunnelIcon className="w-4 h-4 mr-2" /> {showFilters ? 'Hide Filters' : 'Filter'}
+                        <FunnelIcon className="w-4 h-4 sm:mr-2" /> <span className="hidden sm:inline">{showFilters ? 'Hide Filters' : 'Filter'}</span>
                     </button>
                     <button
                         onClick={() => setShowIpForm(!showIpForm)}
-                        className="flex-1 sm:flex-none px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg shadow-lg shadow-blue-500/30 transition-all transform hover:scale-105 flex items-center justify-center"
+                        className="flex-1 md:flex-none px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-xl shadow-lg shadow-blue-500/30 transition-all transform hover:scale-105 flex items-center justify-center whitespace-nowrap"
                     >
-                        <span className="mr-2 text-xl">+</span> Add New
+                        <span className="mr-1.5 font-bold text-lg leading-none">+</span> Add New
                     </button>
                 </div>
             </div>
@@ -797,8 +825,8 @@ function IPManagement({
                             <div className="p-4 bg-gray-50 rounded-full mb-4">
                                 <BoxIcon className="w-8 h-8 text-gray-400" />
                             </div>
-                            <p className="text-gray-500 font-medium">No IP records found</p>
-                            <p className="text-sm text-gray-400 mt-1">Click "Add New" to create a new entry</p>
+                            <p className="text-gray-500 font-medium">{searchQuery ? 'No IP records found matching your search' : 'No IP records found'}</p>
+                            <p className="text-sm text-gray-400 mt-1">{searchQuery ? '' : 'Click "Add New" to create a new entry'}</p>
                         </div>
                     )}
                 </div>
