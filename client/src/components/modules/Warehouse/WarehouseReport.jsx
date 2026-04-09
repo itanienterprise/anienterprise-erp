@@ -112,11 +112,12 @@ const WarehouseReport = ({
             const rawPktSize = parseFloat(item.packetSize || item.size || 0);
             if (rawPktSize > 0) brands[brandKey].packetSize = rawPktSize;
 
-            // Only 'stock' records (initial or manual) contribute to unallocated/'inhouse' balance
-            if (item.recordType !== 'warehouse') {
-                brands[brandKey].inhouseQty += (parseFloat(item.inhouseQty || item.inHouseQuantity || 0));
-                brands[brandKey].inhousePkt += (parseFloat(item.inhousePkt || 0));
-            }
+            const physicalQty = parseFloat(item.whQty !== undefined ? item.whQty : (item.inhouseQty || item.inHouseQuantity || 0));
+            const physicalPkt = parseFloat(item.whPkt !== undefined ? item.whPkt : (item.inhousePkt || item.inHousePacket || 0));
+
+            // Sum physical stock from all sources into the global "Inhouse" view
+            brands[brandKey].inhouseQty += physicalQty;
+            brands[brandKey].inhousePkt += physicalPkt;
         });
 
         // 2. Subtract ALL sales up to the end date (this gives the unallocated balance)
@@ -143,6 +144,13 @@ const WarehouseReport = ({
                                 const pktSize = brands[brandKey].packetSize || parseFloat(si.packetSize || be.packetSize) || 0;
                                 brands[brandKey].inhouseQty -= sQty;
                                 if (pktSize > 0) brands[brandKey].inhousePkt -= (sQty / pktSize);
+                            } else if (brandName === '') {
+                                const fallbackKey = `${prodName}|${prodName}`;
+                                if (brands[fallbackKey]) {
+                                    const pktSize = brands[fallbackKey].packetSize || parseFloat(si.packetSize || be.packetSize) || 0;
+                                    brands[fallbackKey].inhouseQty -= sQty;
+                                    if (pktSize > 0) brands[fallbackKey].inhousePkt -= (sQty / pktSize);
+                                }
                             }
                         });
                     }
