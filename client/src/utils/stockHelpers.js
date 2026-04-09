@@ -66,6 +66,25 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
         }
     });
 
+    // --- INCLUDE INDEPENDENT WAREHOUSE RECORDS ---
+    // Transferring stock to a warehouse removes it from the source stock record's inhouse qty.
+    // We add the warehouse record itself as a valid incoming stock entry so the system total reflects it.
+    warehouseData.forEach(whItem => {
+        if (whItem && whItem.recordType === 'warehouse') {
+            expandedRecords.push({
+                ...whItem,
+                date: whItem.date || whItem.createdAt || new Date().toISOString(),
+                quantity: whItem.whQty,
+                packet: whItem.whPkt,
+                inhouseQty: whItem.whQty,
+                inhousePkt: whItem.whPkt,
+                packetSize: whItem.packetSize || 0,
+                unit: whItem.unit || 'kg',
+                _isWarehouseRecord: true
+            });
+        }
+    });
+
     // 1. Separate filtration criteria: Identify records BEFORE the period and WITHIN the period
     const startDate = stockFilters.startDate || '';
     const endDate = stockFilters.endDate || '';
