@@ -2762,7 +2762,7 @@ export const generateCustomerHistoryPDF = (customer, historyData, summary, filte
 
 export const generateCnFHistoryReportPDF = (reportData, agentInfo, filters) => {
     try {
-        const doc = new jsPDF({ orientation: 'p', unit: 'mm', format: 'a4' });
+        const doc = new jsPDF({ orientation: 'l', unit: 'mm', format: 'a4' });
 
         // --- Configuration ---
         const pageWidth = doc.internal.pageSize.width;
@@ -2829,6 +2829,8 @@ export const generateCnFHistoryReportPDF = (reportData, agentInfo, filters) => {
         const tableRows = reportData.map((row, index) => [
             formatDate(row.date),
             row.lcNo || '-',
+            row.importer || '-',
+            row.exporter || '-',
             row.product || '-',
             row.port || '-',
             row.uom || '-',
@@ -2846,10 +2848,10 @@ export const generateCnFHistoryReportPDF = (reportData, agentInfo, filters) => {
         // --- Table ---
         autoTable(doc, {
             startY: yPos + 15,
-            head: [['Date', 'LC No', 'Product', 'Port', 'UOM', 'Trucks', 'QTY', 'Commission', 'Total']],
+            head: [['Date', 'LC No', 'Importer', 'Exporter', 'Product', 'Port', 'UOM', 'Trucks', 'QTY', 'Commission', 'Total']],
             body: tableRows,
             foot: [[
-                { content: 'GRAND TOTAL', colSpan: 5, styles: { halign: 'right', fontStyle: 'bold' } }, // Date, LC, Product, Port, UOM
+                { content: 'GRAND TOTAL', colSpan: 7, styles: { halign: 'right', fontStyle: 'bold' } }, // Date, LC, Importer, Exporter, Product, Port, UOM
                 { content: totalTrucks.toString(), styles: { halign: 'center', fontStyle: 'bold' } },
                 { content: totalQty.toLocaleString(), styles: { halign: 'right', fontStyle: 'bold' } },
                 '', // Commission rate col
@@ -2857,8 +2859,8 @@ export const generateCnFHistoryReportPDF = (reportData, agentInfo, filters) => {
             ]],
             theme: 'plain',
             styles: {
-                fontSize: 9.0,
-                cellPadding: 1.0,
+                fontSize: 9.5,
+                cellPadding: 1.2,
                 lineColor: [0, 0, 0],
                 lineWidth: 0.15,
                 textColor: [0, 0, 0],
@@ -2880,15 +2882,17 @@ export const generateCnFHistoryReportPDF = (reportData, agentInfo, filters) => {
             },
             margin: { left: margin, right: margin },
             columnStyles: {
-                0: { cellWidth: 18, halign: 'center' }, // Date
-                1: { cellWidth: 30, halign: 'center' }, // LC No
-                2: { cellWidth: 26, halign: 'left' },   // Product
-                3: { cellWidth: 15, halign: 'center' }, // Port
-                4: { cellWidth: 16, halign: 'center' }, // UOM
-                5: { cellWidth: 12, halign: 'center' }, // Trucks
-                6: { cellWidth: 22, halign: 'right' },  // QTY
-                7: { cellWidth: 21, halign: 'right' },  // Commission
-                8: { cellWidth: 30, halign: 'right' }   // Total
+                0: { cellWidth: 20, halign: 'center' }, // Date
+                1: { cellWidth: 28, halign: 'left' }, // LC No
+                2: { cellWidth: 36, halign: 'left' },   // Importer
+                3: { cellWidth: 36, halign: 'left' },   // Exporter
+                4: { cellWidth: 30, halign: 'left' },   // Product
+                5: { cellWidth: 15, halign: 'center' }, // Port
+                6: { cellWidth: 16, halign: 'center' }, // UOM
+                7: { cellWidth: 15, halign: 'center' }, // Trucks
+                8: { cellWidth: 26, halign: 'right' },  // QTY
+                9: { cellWidth: 24, halign: 'right' },  // Commission
+                10: { cellWidth: 31, halign: 'right' }   // Total
             }
         });
 

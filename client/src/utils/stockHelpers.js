@@ -51,12 +51,12 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
                     quantity: safeParse(entry.quantity) || safeParse(item.quantity),
                     packet: safeParse(entry.packet) || safeParse(item.packet),
                     packetSize: safeParse(entry.packetSize) || safeParse(item.packetSize),
-                    inHousePacket: safeParse(entry.inHousePacket),
-                    inHouseQuantity: safeParse(entry.inHouseQuantity),
-                    totalInHousePacket: safeParse(entry.inHousePacket),
-                    totalInHouseQuantity: safeParse(entry.inHouseQuantity),
-                    sweepedPacket: safeParse(entry.sweepedPacket),
-                    sweepedQuantity: safeParse(entry.sweepedQuantity),
+                    inHousePacket: safeParse(entry.inHousePacket !== undefined ? entry.inHousePacket : entry.inhousePkt),
+                    inHouseQuantity: safeParse(entry.inHouseQuantity !== undefined ? entry.inHouseQuantity : entry.inhouseQty),
+                    totalInHousePacket: safeParse(entry.totalInHousePacket !== undefined ? entry.totalInHousePacket : (entry.inHousePacket !== undefined ? entry.inHousePacket : entry.inhousePkt)),
+                    totalInHouseQuantity: safeParse(entry.totalInHouseQuantity !== undefined ? entry.totalInHouseQuantity : (entry.inHouseQuantity !== undefined ? entry.inHouseQuantity : entry.inhouseQty)),
+                    sweepedPacket: safeParse(entry.sweepedPacket !== undefined ? entry.sweepedPacket : entry.shortagePkt),
+                    sweepedQuantity: safeParse(entry.sweepedQuantity !== undefined ? entry.sweepedQuantity : entry.shortageQty),
                     unit: entry.unit || item.unit,
                     _expandedFromBrandEntries: true
                 });
@@ -301,16 +301,18 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
             brandObj._salesResolved = true;
         }
 
-        const qty = safeParse(item.quantity);
-        const shortagePkt = safeParse(item.sweepedPacket);
-        const shortageQty = safeParse(item.sweepedQuantity);
-        const basePkt = safeParse(item.packet);
+        const qty = safeParse(item.quantity || item.qty);
+        const shortagePkt = safeParse(item.sweepedPacket !== undefined ? item.sweepedPacket : item.shortagePkt);
+        const shortageQty = safeParse(item.sweepedQuantity !== undefined ? item.sweepedQuantity : item.shortageQty);
+        const basePkt = safeParse(item.packet || item.pkt);
         const currentPktSize = safeParse(item.packetSize);
 
-        const totalInPkt = item.totalInHousePacket !== undefined ? safeParse(item.totalInHousePacket) : (basePkt - shortagePkt);
+        const totalInPkt = item.totalInHousePacket !== undefined ? safeParse(item.totalInHousePacket) : (item.inhousePkt !== undefined ? safeParse(item.inhousePkt) : (basePkt - shortagePkt));
         let totalInQty = 0;
         if (item.totalInHouseQuantity !== undefined) {
             totalInQty = safeParse(item.totalInHouseQuantity);
+        } else if (item.inhouseQty !== undefined) {
+            totalInQty = safeParse(item.inhouseQty);
         } else if (currentPktSize > 0) {
             totalInQty = totalInPkt * currentPktSize;
         } else {

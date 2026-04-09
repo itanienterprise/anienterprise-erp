@@ -329,6 +329,8 @@ const CnF = ({
                         _id: record._id,
                         date: record.date,
                         lcNo: record.lcNo,
+                        importer: record.importer,
+                        exporter: record.exporter,
                         port: record.port,
                         product: record.productName,
                         brand: record.brand,
@@ -391,6 +393,8 @@ const CnF = ({
                             _id: `${sale._id}-${entry.brand}-${entry.warehouseName}`,
                             date: sale.date,
                             lcNo: sale.lcNo || '-',
+                            importer: sale.importer,
+                            exporter: sale.exporter,
                             port: sale.port || '-',
                             product: item.productName || '-',
                             brand: entry.brand || '-',
@@ -976,7 +980,7 @@ const CnF = ({
             {viewData && (
                 <div className="fixed inset-0 z-[2000] flex items-center justify-center p-4">
                     <div className="absolute inset-0 bg-gray-900/60 backdrop-blur-sm" onClick={() => setViewData(null)}></div>
-                    <div className="relative bg-white border border-gray-100 rounded-2xl shadow-2xl max-w-[1400px] w-full flex flex-col max-h-[90vh] animate-in zoom-in duration-200">
+                    <div className="relative bg-white border border-gray-100 rounded-2xl shadow-2xl max-w-[1600px] w-full flex flex-col max-h-[90vh] animate-in zoom-in duration-200">
                         <div className="relative px-4 py-4 md:px-8 md:py-6 border-b border-gray-100 flex flex-col md:flex-row items-start md:items-center gap-4 bg-white flex-shrink-0 z-10 rounded-t-2xl">
                             <div className="flex-1 text-left">
                                 <h2 className="text-xl font-bold text-gray-900">{viewData.name}</h2>
@@ -1211,6 +1215,8 @@ const CnF = ({
                                                     {isHistorySelectionMode && <th className="cnf-table-checkbox-header"><input type="checkbox" checked={selectedHistoryIds.size === filteredHistory.length} onChange={toggleSelectAllHistory} /></th>}
                                                     <th className="cnf-table-header">Date</th>
                                                     <th className="cnf-table-header whitespace-nowrap">LC No</th>
+                                                    <th className="cnf-table-header">Importer</th>
+                                                    <th className="cnf-table-header">Exporter</th>
                                                     <th className="cnf-table-header">Product</th>
                                                     <th className="cnf-table-header">Port</th>
                                                     <th className="cnf-table-header text-center">Truck</th>
@@ -1249,6 +1255,8 @@ const CnF = ({
                                                         )}
                                                         <td className="cnf-table-cell whitespace-nowrap">{formatDate(row.date)}</td>
                                                         <td className="cnf-table-cell font-bold whitespace-nowrap">{row.lcNo}</td>
+                                                        <td className="cnf-table-cell truncate max-w-[200px]" title={row.importer || '-'}>{row.importer || '-'}</td>
+                                                        <td className="cnf-table-cell truncate max-w-[200px]" title={row.exporter || '-'}>{row.exporter || '-'}</td>
                                                         <td className="cnf-table-cell font-medium">{row.product || '-'}</td>
                                                         <td className="cnf-table-cell">{row.port || '-'}</td>
                                                         <td className="cnf-table-cell text-center uppercase">{row.truck || '-'}</td>
@@ -1342,8 +1350,12 @@ const CnF = ({
                                                         </div>
                                                         {isExpanded && (
                                                             <div className="px-4 pb-4 space-y-3 animate-in slide-in-from-top-4 duration-300">
-                                                                <div className="flex justify-between items-start pt-3 border-t border-gray-50">
+                                                                <div className="grid grid-cols-2 gap-3 pt-3 border-t border-gray-50">
                                                                     <div><p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-0.5">Port</p><p className="text-xs font-medium text-gray-700">{row.port || '-'}</p></div>
+                                                                </div>
+                                                                <div className="grid grid-cols-2 gap-3 py-2.5 bg-gray-50/70 rounded-xl px-4 mt-2">
+                                                                    <div className="space-y-1"><p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Importer</p><p className="text-xs font-medium text-gray-700 truncate" title={row.importer || '-'}>{row.importer || '-'}</p></div>
+                                                                    <div className="space-y-1 text-right"><p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Exporter</p><p className="text-xs font-medium text-gray-700 truncate" title={row.exporter || '-'}>{row.exporter || '-'}</p></div>
                                                                 </div>
                                                                 <div className="grid grid-cols-2 gap-3 py-2.5 bg-gray-50/70 rounded-xl px-4">
                                                                     <div className="space-y-1"><p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Truck No</p><p className="text-xs font-semibold text-gray-700">{row.truck || '-'}</p></div>
