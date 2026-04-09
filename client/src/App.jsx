@@ -401,13 +401,18 @@ function App() {
       // Apply Search Query
       if (!searchLower) return true;
 
+      const matchesLcNo = (item.lcNo || '').toLowerCase().includes(searchLower);
+      const matchesPort = (item.port || '').toLowerCase().includes(searchLower);
       const matchesWarehouse = (item.warehouse || '').toLowerCase().includes(searchLower);
+      const matchesImporter = (item.importer || '').toLowerCase().includes(searchLower);
+      const matchesExporter = (item.exporter || '').toLowerCase().includes(searchLower);
+      const matchesBillOfEntry = (item.billOfEntry || '').toLowerCase().includes(searchLower);
       const matchesTruck = (item.truckNo || '').toLowerCase().includes(searchLower);
       const matchesProduct = (item.productName || '').toLowerCase().includes(searchLower);
       const brandList = item.brand ? [item.brand] : (item.brandEntries || []).map(e => e.brand);
       const matchesBrand = brandList.some(b => (b || '').trim().toLowerCase().includes(searchLower));
 
-      return matchesWarehouse || matchesImporter || matchesExporter || matchesBillOfEntry || matchesTruck || matchesProduct || matchesBrand;
+      return matchesLcNo || matchesPort || matchesWarehouse || matchesImporter || matchesExporter || matchesBillOfEntry || matchesTruck || matchesProduct || matchesBrand;
     }).sort((a, b) => new Date(a.date) - new Date(b.date));
   }, [stockRecords, lcSearchQuery, lcFilters]);
 

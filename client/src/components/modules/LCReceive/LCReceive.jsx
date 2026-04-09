@@ -1631,45 +1631,7 @@ function LCReceive({
             records = lcReceiveRecords.filter(item => !(item.status || '').toLowerCase().includes('requested'));
         }
 
-        // Apply Search Query
-        if (lcSearchQuery.trim()) {
-            const query = lcSearchQuery.toLowerCase().trim();
-            records = records.filter(item =>
-                (item.warehouse || '').toLowerCase().includes(query) ||
-                (item.importer || '').toLowerCase().includes(query) ||
-                (item.exporter || '').toLowerCase().includes(query) ||
-                (item.truckNo || '').toLowerCase().includes(query) ||
-                (item.productName || '').toLowerCase().includes(query)
-            );
-        }
-
-        // Apply Advanced Filters
-        if (lcFilters) {
-            if (lcFilters.startDate) {
-                records = records.filter(item => new Date(item.date) >= new Date(lcFilters.startDate));
-            }
-            if (lcFilters.endDate) {
-                records = records.filter(item => new Date(item.date) <= new Date(lcFilters.endDate));
-            }
-            if (lcFilters.warehouse) {
-                records = records.filter(item => (item.warehouse || '').toLowerCase() === lcFilters.warehouse.toLowerCase());
-            }
-            if (lcFilters.indCnf) {
-                records = records.filter(item => (item.indianCnF || '').toLowerCase() === lcFilters.indCnf.toLowerCase());
-            }
-            if (lcFilters.bdCnf) {
-                records = records.filter(item => (item.bdCnF || '').toLowerCase() === lcFilters.bdCnf.toLowerCase());
-            }
-            if (lcFilters.billOfEntry) {
-                records = records.filter(item => (item.billOfEntry || '').toLowerCase() === lcFilters.billOfEntry.toLowerCase());
-            }
-            if (lcFilters.productName) {
-                records = records.filter(item => (item.productName || '').toLowerCase() === lcFilters.productName.toLowerCase());
-            }
-            if (lcFilters.brand) {
-                records = records.filter(item => (item.brand || '').toLowerCase() === lcFilters.brand.toLowerCase());
-            }
-        }
+        // The search query and advanced filters are already applied to lcReceiveRecords by App.jsx
 
         // Apply interactive sorting
         return [...records].sort((a, b) => {
