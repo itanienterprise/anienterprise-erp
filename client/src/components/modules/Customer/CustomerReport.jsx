@@ -54,6 +54,12 @@ const CustomerReport = ({ isOpen, onClose, customers = [] }) => {
             (c.customerName || '').toLowerCase().includes(q) ||
             (c.phone || '').toLowerCase().includes(q);
         return matchType && matchSearch;
+    }).sort((a, b) => {
+        const idA = a.customerId || '';
+        const idB = b.customerId || '';
+        if (!idA) return 1;
+        if (!idB) return -1;
+        return idA.localeCompare(idB, undefined, { numeric: true, sensitivity: 'base' });
     });
 
     const grandTotalDue = filtered.reduce((s, c) => s + computeDue(c), 0);

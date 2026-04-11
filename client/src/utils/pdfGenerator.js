@@ -256,17 +256,17 @@ export const generateLCReceiveReportPDF = (reportData, filters, summary) => {
             margin: { left: margin, right: margin },
             columnStyles: {
                 0: { cellWidth: 21, halign: 'center' }, // Date
-                1: { cellWidth: 35, fontStyle: 'bold', textColor: [0, 0, 0], halign: 'center' }, // LC No
-                2: { cellWidth: 35, halign: 'left' },   // Importer
+                1: { cellWidth: 30, fontStyle: 'bold', textColor: [0, 0, 0], halign: 'center' }, // LC No
+                2: { cellWidth: 40, halign: 'left' },   // Importer
                 3: { cellWidth: 21, halign: 'center' }, // BOE No
                 4: { cellWidth: 12, halign: 'center' }, // Truck
                 5: { cellWidth: 22, halign: 'left' }, // Product
-                6: { cellWidth: 40, halign: 'left' },   // Brand
-                7: { cellWidth: 15, halign: 'center' },  // Bag
+                6: { cellWidth: 36, halign: 'left' },   // Brand
+                7: { cellWidth: 17, halign: 'center' },  // Bag
                 8: { cellWidth: 21, halign: 'right' },  // QTY
                 9: { cellWidth: 18, halign: 'right' }, // SHORT
                 10: { cellWidth: 21, halign: 'right' }, // IH QTY
-                11: { cellWidth: 21, halign: 'right' }  // IH BAG
+                11: { cellWidth: 23, halign: 'right' }  // IH BAG
             }
         });
 
