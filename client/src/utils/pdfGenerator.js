@@ -88,12 +88,12 @@ export const generateLCReceiveReportPDF = (reportData, filters, summary) => {
         doc.setFont('helvetica', 'normal');
         doc.text(`${formatDate(filters.startDate) === '-' ? 'Start' : formatDate(filters.startDate)} to ${formatDate(filters.endDate) === '-' ? 'Present' : formatDate(filters.endDate)}`, margin + 25, yPos);
 
-        if (filters.warehouse) {
+        if (filters.lcNo) {
             yPos += 5;
             doc.setFont('helvetica', 'bold');
-            doc.text("Warehouse:", margin, yPos);
+            doc.text("LC No:", margin, yPos);
             doc.setFont('helvetica', 'bold');
-            doc.text(filters.warehouse, margin + 25, yPos);
+            doc.text(filters.lcNo, margin + 25, yPos);
         }
 
         // Right Side: Printed On
@@ -105,11 +105,11 @@ export const generateLCReceiveReportPDF = (reportData, filters, summary) => {
         // 1. Group by Date + LC No (matches UI logic but adds Date for safer merging)
         const lcGroups = Object.values(reportData.reduce((acc, item) => {
             const dateStr = formatDate(item.date);
-            const key = `${dateStr}_${item.warehouse || 'unknown'}`;
+            const key = `${dateStr}_${item.lcNo || 'unknown'}`;
             if (!acc[key]) {
                 acc[key] = {
                     date: item.date,
-                    warehouse: item.warehouse,
+                    lcNo: item.lcNo,
                     importer: item.importer,
                     billOfEntry: item.billOfEntry,
                     entries: []
@@ -136,10 +136,6 @@ export const generateLCReceiveReportPDF = (reportData, filters, summary) => {
                 return acc;
             }, {}));
 
-            // Calculate total rows for this LC (entries + subtotal rows for groups with >1 entry)
-            const totalRowsForLC = lcGroup.entries.length + productSubGroups.filter(sg => sg.brandDetails.length > 1).length;
-            let isFirstRowOfLC = true;
-
             productSubGroups.forEach((subGroup) => {
                 const hasSubTotal = subGroup.brandDetails.length > 1;
                 const totalRowsForSubGroup = subGroup.brandDetails.length + (hasSubTotal ? 1 : 0);
@@ -148,17 +144,12 @@ export const generateLCReceiveReportPDF = (reportData, filters, summary) => {
                 subGroup.brandDetails.forEach((item, i) => {
                     const row = [];
 
-                    // Warehouse Columns: Date, Warehouse, Importer, BOE No (Span across all rows of this LC)
-                    if (isFirstRowOfLC) {
-                        row.push({ content: formatDate(lcGroup.date), rowSpan: totalRowsForLC, styles: { valign: 'top', halign: 'center' } });
-                        row.push({ content: lcGroup.warehouse || '-', rowSpan: totalRowsForLC, styles: { valign: 'top', fontStyle: 'bold', textColor: [0, 0, 0], halign: 'center' } });
-                        row.push({ content: lcGroup.importer || '-', rowSpan: totalRowsForLC, styles: { valign: 'top', halign: 'left' } });
-                        row.push({ content: lcGroup.billOfEntry || '-', rowSpan: totalRowsForLC, styles: { valign: 'top', halign: 'center' } });
-                        isFirstRowOfLC = false;
-                    }
-
-                    // Product Grouping Columns: Truck, Product
+                    // Group Columns: Date, LC No, Importer, BOE No, Truck, Product (Span across sub-group)
                     if (isFirstRowOfProduct) {
+                        row.push({ content: formatDate(lcGroup.date), rowSpan: totalRowsForSubGroup, styles: { valign: 'top', halign: 'center' } });
+                        row.push({ content: lcGroup.lcNo || '-', rowSpan: totalRowsForSubGroup, styles: { valign: 'top', fontStyle: 'bold', textColor: [0, 0, 0], halign: 'center' } });
+                        row.push({ content: lcGroup.importer || '-', rowSpan: totalRowsForSubGroup, styles: { valign: 'top', halign: 'left' } });
+                        row.push({ content: lcGroup.billOfEntry || '-', rowSpan: totalRowsForSubGroup, styles: { valign: 'top', halign: 'center' } });
                         row.push({ content: item.truckNo || '-', rowSpan: totalRowsForSubGroup, styles: { valign: 'top', halign: 'center' } });
                         row.push({ content: (item.productName || '-').toUpperCase(), rowSpan: totalRowsForSubGroup, styles: { valign: 'top', fontStyle: 'bold', halign: 'center' } });
                     }
@@ -216,7 +207,7 @@ export const generateLCReceiveReportPDF = (reportData, filters, summary) => {
         // --- Table ---
         autoTable(doc, {
             startY: yPos + 10,
-            head: [['Date', 'Warehouse', 'Importer', 'BOE No', 'Truck', 'Product', 'Brand', 'Bag', 'QTY', 'SHORT', 'Stock QTY', 'Stock Bag']],
+            head: [['Date', 'LC No', 'Importer', 'BOE No', 'Truck', 'Product', 'Brand', 'Bag', 'QTY', 'SHORT', 'Stock QTY', 'Stock Bag']],
             body: tableRows,
             foot: [[
                 { content: 'GRAND TOTAL', colSpan: 7, styles: { halign: 'right', fontStyle: 'bold' } },
@@ -265,17 +256,17 @@ export const generateLCReceiveReportPDF = (reportData, filters, summary) => {
             margin: { left: margin, right: margin },
             columnStyles: {
                 0: { cellWidth: 21, halign: 'center' }, // Date
-                1: { cellWidth: 35, fontStyle: 'bold', textColor: [0, 0, 0], halign: 'center' }, // Warehouse
+                1: { cellWidth: 35, fontStyle: 'bold', textColor: [0, 0, 0], halign: 'center' }, // LC No
                 2: { cellWidth: 35, halign: 'left' },   // Importer
                 3: { cellWidth: 21, halign: 'center' }, // BOE No
                 4: { cellWidth: 12, halign: 'center' }, // Truck
                 5: { cellWidth: 22, halign: 'left' }, // Product
-                6: { cellWidth: 45, halign: 'left' },   // Brand
-                7: { cellWidth: 14, halign: 'center' },  // Bag
-                8: { cellWidth: 20, halign: 'right' },  // QTY
-                9: { cellWidth: 17, halign: 'right' }, // SHORT
-                10: { cellWidth: 20, halign: 'right' }, // IH QTY
-                11: { cellWidth: 20, halign: 'right' }  // IH BAG
+                6: { cellWidth: 40, halign: 'left' },   // Brand
+                7: { cellWidth: 15, halign: 'center' },  // Bag
+                8: { cellWidth: 21, halign: 'right' },  // QTY
+                9: { cellWidth: 18, halign: 'right' }, // SHORT
+                10: { cellWidth: 21, halign: 'right' }, // IH QTY
+                11: { cellWidth: 21, halign: 'right' }  // IH BAG
             }
         });
 
