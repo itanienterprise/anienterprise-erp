@@ -1867,16 +1867,22 @@ export const generateSalesReportPDF = (reportData, filters, summary, saleType = 
 
         reportData.forEach((sale) => {
             // Create flattened list of all entries across all items
-            const flatItems = (sale.items || []).flatMap(item =>
-                (item.brandEntries || []).map(entry => ({
+            const flatItems = (sale.items || []).flatMap(item => {
+                const entries = (item.brandEntries && item.brandEntries.length > 0)
+                    ? item.brandEntries
+                    : [{ brandName: item.brand || '-', quantity: item.quantity, unitPrice: 0, totalAmount: item.totalAmount }];
+
+                return entries.map((entry, subIdx) => ({
                     productName: item.productName || item.product || '-',
                     brand: entry.brandName || entry.brand || '-',
                     quantity: entry.quantity || 0,
                     truck: entry.truck || sale.truck || '-',
                     price: entry.unitPrice || 0,
-                    total: entry.totalAmount || 0
-                }))
-            );
+                    total: entry.totalAmount || 0,
+                    isFirstInProduct: subIdx === 0,
+                    productSpan: entries.length
+                }));
+            });
 
             // If no items, fallback to sale level
             if (flatItems.length === 0) {
@@ -1886,28 +1892,34 @@ export const generateSalesReportPDF = (reportData, filters, summary, saleType = 
                     quantity: sale.quantity || 0,
                     price: 0,
                     total: sale.totalAmount || 0,
-                    lcNo: sale.lcNo || '-'
+                    lcNo: sale.lcNo || '-',
+                    isFirstInProduct: true,
+                    productSpan: 1
                 });
             }
 
             flatItems.forEach((item, idx) => {
-                const row = [
-                    idx === 0 ? (slNum++).toString() : '',
-                    idx === 0 ? formatDate(sale.date) : '',
-                    idx === 0 ? (saleType === 'Border' ? (sale.lcNo || '-') : (sale.invoiceNo || '-')) : ''
-                ];
+                const row = [];
 
-                if (saleType === 'Border') {
-                    row.push(idx === 0 ? (sale.importer || '-') : '');
-                    row.push(idx === 0 ? (sale.port || '-') : '');
-                    row.push(idx === 0 ? (sale.indianCnF || '-') : '');
-                    row.push(idx === 0 ? (sale.bdCnf || '-') : '');
-                    row.push(idx === 0 ? (sale.companyName || sale.customerName || '-') : '');
-                } else {
-                    row.push(idx === 0 ? (sale.companyName || '-') : '');
+                if (idx === 0) {
+                    row.push({ content: (slNum++).toString(), rowSpan: flatItems.length, styles: { halign: 'center' } });
+                    row.push({ content: formatDate(sale.date), rowSpan: flatItems.length, styles: { halign: 'center' } });
+                    row.push({ content: (saleType === 'Border' ? (sale.lcNo || '-') : (sale.invoiceNo || '-')), rowSpan: flatItems.length, styles: { halign: 'center' } });
+
+                    if (saleType === 'Border') {
+                        row.push({ content: (sale.importer || '-'), rowSpan: flatItems.length });
+                        row.push({ content: (sale.port || '-'), rowSpan: flatItems.length });
+                        row.push({ content: (sale.indianCnF || '-'), rowSpan: flatItems.length });
+                        row.push({ content: (sale.bdCnf || '-'), rowSpan: flatItems.length });
+                        row.push({ content: (sale.companyName || sale.customerName || '-'), rowSpan: flatItems.length });
+                    } else {
+                        row.push({ content: (sale.companyName || '-'), rowSpan: flatItems.length });
+                    }
                 }
 
-                row.push(item.productName);
+                if (item.isFirstInProduct) {
+                    row.push({ content: item.productName, rowSpan: item.productSpan });
+                }
 
                 if (saleType !== 'Border') {
                     row.push(item.brand);
@@ -1926,10 +1938,10 @@ export const generateSalesReportPDF = (reportData, filters, summary, saleType = 
                     ? (parseFloat(item.total) || 0).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 })
                     : (parseFloat(item.total) || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
 
-                if (saleType !== 'Border') {
-                    row.push(idx === 0 ? (parseFloat(sale.discount || 0)).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '');
-                    row.push(idx === 0 ? (parseFloat(sale.paidAmount || 0)).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '');
-                    row.push(idx === 0 ? ((parseFloat(sale.totalAmount || 0) - parseFloat(sale.paidAmount || 0))).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '');
+                if (saleType !== 'Border' && idx === 0) {
+                    row.push({ content: (parseFloat(sale.discount || 0)).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }), rowSpan: flatItems.length, styles: { halign: 'right' } });
+                    row.push({ content: (parseFloat(sale.paidAmount || 0)).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }), rowSpan: flatItems.length, styles: { halign: 'right' } });
+                    row.push({ content: ((parseFloat(sale.totalAmount || 0) - parseFloat(sale.paidAmount || 0))).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }), rowSpan: flatItems.length, styles: { halign: 'right' } });
                 }
 
                 tableRows.push(row);
@@ -2611,37 +2623,79 @@ export const generateCustomerHistoryPDF = (customer, historyData, summary, filte
             });
         } else if (isSales) {
             let totalQty = 0, totalAmt = 0, totalDisc = 0, totalTrucksCount = 0;
-            historyData.forEach((item, idx) => {
-                const qty = parseFloat(item.quantity || 0);
-                const amt = parseFloat(item.amount || 0);
-                const disc = parseFloat(item.discount || 0);
-                const trucksCount = parseFloat(item.truck || 0);
-                totalQty += qty;
-                totalAmt += amt;
-                totalDisc += disc;
-                if (!isNaN(trucksCount)) totalTrucksCount += trucksCount;
+            let slIndex = 1;
 
-                const row = [
-                    idx + 1,
-                    formatDate(item.date),
-                    item.lcNo || item.invoiceNo || '-',
-                    item.product || '-',
-                ];
+            const invoiceGroups = [];
+            historyData.forEach(item => {
+                const dateStr = formatDate(item.date);
+                const invNo = item.lcNo || item.invoiceNo || '-';
+                const key = `${dateStr}_${invNo}`;
 
-                if (isParty) {
-                    row.push(item.truck || '-');
-                } else {
-                    row.push(item.brand || '-');
+                let ig = invoiceGroups.find(g => g.key === key);
+                if (!ig) {
+                    ig = { key, dateStr, invNo, products: [] };
+                    invoiceGroups.push(ig);
                 }
+                const prodKey = item.product || '-';
+                let pg = ig.products.find(p => p.prodKey === prodKey);
+                if (!pg) {
+                    pg = { prodKey, items: [] };
+                    ig.products.push(pg);
+                }
+                pg.items.push(item);
+            });
 
-                row.push(
-                    qty.toLocaleString(),
-                    `${parseFloat(item.rate || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}`,
-                    `${amt.toLocaleString(undefined, { minimumFractionDigits: 2 })}`,
-                    `${disc.toLocaleString(undefined, { minimumFractionDigits: 2 })}`
-                );
+            invoiceGroups.forEach((ig) => {
+                const totalRowsForInv = ig.products.reduce((sum, p) => sum + p.items.length, 0);
+                let isFirstRowOfInv = true;
 
-                tableRows.push(row);
+                ig.products.forEach((pg) => {
+                    const totalRowsForProd = pg.items.length;
+                    let isFirstRowOfProd = true;
+
+                    pg.items.forEach((item) => {
+                        const qty = parseFloat(item.quantity || 0);
+                        const amt = parseFloat(item.amount || 0);
+                        const disc = parseFloat(item.discount || 0);
+                        const trucksCount = parseFloat(item.truck || 0);
+                        totalQty += qty;
+                        totalAmt += amt;
+                        totalDisc += disc;
+                        if (!isNaN(trucksCount)) totalTrucksCount += trucksCount;
+
+                        const row = [];
+
+                        // Merged SL, Date and Invoice
+                        if (isFirstRowOfInv) {
+                            row.push({ content: slIndex++, rowSpan: totalRowsForInv, styles: { halign: 'center', valign: 'middle' } });
+                            row.push({ content: ig.dateStr, rowSpan: totalRowsForInv, styles: { halign: 'center', valign: 'middle' } });
+                            row.push({ content: ig.invNo, rowSpan: totalRowsForInv, styles: { valign: 'middle' } });
+                        }
+
+                        // Merged Product
+                        if (isFirstRowOfProd) {
+                            row.push({ content: pg.prodKey, rowSpan: totalRowsForProd, styles: { valign: 'middle' } });
+                        }
+
+                        if (isParty) {
+                            row.push(item.truck || '-');
+                        } else {
+                            row.push(item.brand || '-');
+                        }
+
+                        row.push(
+                            { content: qty.toLocaleString(), styles: { halign: 'right' } },
+                            { content: `${parseFloat(item.rate || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}`, styles: { halign: 'right' } },
+                            { content: `${amt.toLocaleString(undefined, { minimumFractionDigits: 2 })}`, styles: { halign: 'right' } },
+                            { content: `${disc.toLocaleString(undefined, { minimumFractionDigits: 2 })}`, styles: { halign: 'right' } }
+                        );
+
+                        tableRows.push(row);
+
+                        isFirstRowOfInv = false;
+                        isFirstRowOfProd = false;
+                    });
+                });
             });
 
             // Add Grand Total row

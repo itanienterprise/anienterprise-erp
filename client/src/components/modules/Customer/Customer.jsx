@@ -1776,7 +1776,7 @@ const Customer = ({
                                                                         {/* Detailed Rows */}
                                                                         {isExpanded && group.items.map((item, idx) => (
                                                                             <tr key={`${index}-${idx}`} className="bg-blue-50/10 border-b border-gray-50/50">
-                                                                                <td className="px-4 py-3 pl-10 text-xs text-gray-400">-{idx + 1}</td>
+                                                                                <td className="px-4 py-3 pl-10 text-xs text-gray-400"></td>
                                                                                 <td className="px-4 py-3 text-xs text-gray-500 italic">{item.lcNo || '-'}</td>
                                                                                 <td className="px-4 py-3 text-xs text-gray-900 font-medium">{item.product}</td>
                                                                                 {isParty ? (
@@ -1792,8 +1792,8 @@ const Customer = ({
                                                                                     <td className="px-4 py-3 text-right text-xs font-bold text-gray-900">{parseFloat(item.quantity).toLocaleString()}</td>
                                                                                 )}
                                                                                 <td className="px-4 py-3 text-right text-xs text-gray-500">৳{parseFloat(item.rate).toLocaleString()}</td>
-                                                                                <td className="px-4 py-3 text-right text-xs font-bold text-violet-600/70">৳{parseFloat(item.amount).toLocaleString()}</td>
-                                                                                <td className="px-4 py-3 text-right text-xs font-bold text-pink-500/70">৳{parseFloat(item.discount || 0).toLocaleString()}</td>
+                                                                                <td className="px-4 py-3 text-right text-xs font-bold text-violet-600">৳{parseFloat(item.amount).toLocaleString()}</td>
+                                                                                <td className="px-4 py-3 text-right text-xs font-bold text-pink-500">৳{parseFloat(item.discount || 0).toLocaleString()}</td>
                                                                                 <td className="px-4 py-3"></td>
                                                                                 <td className="px-4 py-3"></td>
                                                                             </tr>

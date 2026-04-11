@@ -843,17 +843,23 @@ const SalesReport = ({
                                             filteredSales.flatMap((sale) => {
                                                 const items = sale.items || [];
                                                 // Create a list of all brand entries across all items
-                                                const flatItems = items.flatMap(item =>
-                                                    (item.brandEntries || []).map(entry => ({
+                                                const flatItems = items.flatMap(item => {
+                                                    const entries = (item.brandEntries && item.brandEntries.length > 0)
+                                                        ? item.brandEntries
+                                                        : [{ brandName: item.brand || '-', quantity: item.quantity, unitPrice: 0, totalAmount: item.totalAmount }];
+
+                                                    return entries.map((entry, subIdx) => ({
                                                         productName: item.productName || item.product || '-',
                                                         brand: entry.brandName || entry.brand || '-',
                                                         quantity: entry.quantity || 0,
                                                         truck: entry.truck || sale.truck || '-',
                                                         price: entry.unitPrice || 0,
                                                         total: entry.totalAmount || 0,
-                                                        lcNo: sale.lcNo || '-'
-                                                    }))
-                                                );
+                                                        lcNo: sale.lcNo || '-',
+                                                        isFirstInProduct: subIdx === 0,
+                                                        productSpan: entries.length
+                                                    }));
+                                                });
 
                                                 // If no items, fallback to sale level (safety)
                                                 if (flatItems.length === 0) {
@@ -862,27 +868,35 @@ const SalesReport = ({
                                                         brand: sale.brand || '-',
                                                         quantity: sale.quantity || 0,
                                                         price: 0,
-                                                        total: sale.totalAmount || 0
+                                                        total: sale.totalAmount || 0,
+                                                        isFirstInProduct: true,
+                                                        productSpan: 1
                                                     });
                                                 }
 
                                                 return flatItems.map((item, idx) => (
-                                                    <tr key={`${sale._id}-${idx}`} className="hover:bg-gray-50 transition-colors">
-                                                        <td className={`border-r border-gray-900 ${saleType === 'Border' ? 'px-0.5' : 'px-1'} py-1 ${saleType === 'Border' ? 'text-[12px]' : 'text-[12px]'} text-gray-900 text-center`}>{idx === 0 ? sl++ : ''}</td>
-                                                        <td className={`border-r border-gray-900 ${saleType === 'Border' ? 'px-0.5' : 'px-1'} py-1 ${saleType === 'Border' ? 'text-[12px]' : 'text-[12px]'} text-gray-900 text-center`}>{idx === 0 ? formatDate(sale.date) : ''}</td>
-                                                        <td className={`border-r border-gray-900 ${saleType === 'Border' ? 'px-0.5' : 'px-1'} py-1 ${saleType === 'Border' ? 'text-[12px]' : 'text-[12px]'} font-bold text-gray-900 text-center`}>{idx === 0 ? (saleType === 'Border' ? (sale.lcNo || '-') : sale.invoiceNo) : ''}</td>
-                                                        {saleType === 'Border' ? (
-                                                            <>
-                                                                <td className="border-r border-gray-900 px-0.5 py-1 text-[12px] text-gray-900 text-left whitespace-nowrap">{idx === 0 ? (sale.importer || '-') : ''}</td>
-                                                                <td className="border-r border-gray-900 px-0.5 py-1 text-[12px] text-gray-900 text-center whitespace-nowrap">{idx === 0 ? (sale.port || '-') : ''}</td>
-                                                                <td className="border-r border-gray-900 px-0.5 py-1 text-[12px] text-gray-900 text-center whitespace-nowrap">{idx === 0 ? (sale.indianCnF || '-') : ''}</td>
-                                                                <td className="border-r border-gray-900 px-0.5 py-1 text-[12px] text-gray-900 text-center whitespace-nowrap">{idx === 0 ? (sale.bdCnf || '-') : ''}</td>
-                                                                <td className="border-r border-gray-900 px-1 py-1 text-[12px] text-gray-900 whitespace-nowrap">{idx === 0 ? (sale.companyName || sale.customerName || '-') : ''}</td>
-                                                            </>
-                                                        ) : (
-                                                            <td className="border-r border-gray-900 px-2 py-1 text-[12px] text-gray-900">{idx === 0 ? sale.companyName : ''}</td>
+                                                        <tr key={`${sale._id}-${idx}`} className="hover:bg-gray-50 transition-colors">
+                                                            {idx === 0 && (
+                                                                <>
+                                                                    <td rowSpan={flatItems.length} className={`border-r border-gray-900 ${saleType === 'Border' ? 'px-0.5' : 'px-1'} py-1 ${saleType === 'Border' ? 'text-[12px]' : 'text-[12px]'} text-gray-900 text-center`}>{sl++}</td>
+                                                                    <td rowSpan={flatItems.length} className={`border-r border-gray-900 ${saleType === 'Border' ? 'px-0.5' : 'px-1'} py-1 ${saleType === 'Border' ? 'text-[12px]' : 'text-[12px]'} text-gray-900 text-center`}>{formatDate(sale.date)}</td>
+                                                                    <td rowSpan={flatItems.length} className={`border-r border-gray-900 ${saleType === 'Border' ? 'px-0.5' : 'px-1'} py-1 ${saleType === 'Border' ? 'text-[12px]' : 'text-[12px]'} font-bold text-gray-900 text-center`}>{saleType === 'Border' ? (sale.lcNo || '-') : sale.invoiceNo}</td>
+                                                                    {saleType === 'Border' ? (
+                                                                        <>
+                                                                            <td rowSpan={flatItems.length} className="border-r border-gray-900 px-0.5 py-1 text-[12px] text-gray-900 text-left whitespace-nowrap">{sale.importer || '-'}</td>
+                                                                            <td rowSpan={flatItems.length} className="border-r border-gray-900 px-0.5 py-1 text-[12px] text-gray-900 text-center whitespace-nowrap">{sale.port || '-'}</td>
+                                                                            <td rowSpan={flatItems.length} className="border-r border-gray-900 px-0.5 py-1 text-[12px] text-gray-900 text-center whitespace-nowrap">{sale.indianCnF || '-'}</td>
+                                                                            <td rowSpan={flatItems.length} className="border-r border-gray-900 px-0.5 py-1 text-[12px] text-gray-900 text-center whitespace-nowrap">{sale.bdCnf || '-'}</td>
+                                                                            <td rowSpan={flatItems.length} className="border-r border-gray-900 px-1 py-1 text-[12px] text-gray-900 whitespace-nowrap">{sale.companyName || sale.customerName || '-'}</td>
+                                                                        </>
+                                                                    ) : (
+                                                                        <td rowSpan={flatItems.length} className="border-r border-gray-900 px-2 py-1 text-[12px] text-gray-900">{sale.companyName}</td>
+                                                                    )}
+                                                                </>
+                                                            )}
+                                                        {item.isFirstInProduct && (
+                                                            <td rowSpan={item.productSpan} className={`border-r border-gray-900 ${saleType === 'Border' ? 'px-0.5' : 'px-2'} py-1 ${saleType === 'Border' ? 'text-[12px]' : 'text-[12px]'} text-gray-900 truncate`}>{item.productName}</td>
                                                         )}
-                                                        <td className={`border-r border-gray-900 ${saleType === 'Border' ? 'px-0.5' : 'px-2'} py-1 ${saleType === 'Border' ? 'text-[12px]' : 'text-[12px]'} text-gray-900 truncate`}>{item.productName}</td>
                                                         {saleType !== 'Border' && (
                                                             <td className="border-r border-gray-900 px-2 py-1 text-[12px] text-gray-900 truncate">{item.brand}</td>
                                                         )}
@@ -892,11 +906,11 @@ const SalesReport = ({
                                                         )}
                                                         <td className={`border-r border-gray-900 ${saleType === 'Border' ? 'px-0.5' : 'px-1'} py-1 ${saleType === 'Border' ? 'text-[12px]' : 'text-[12px]'} text-right text-gray-900`}>{parseFloat(item.price).toLocaleString()}</td>
                                                         <td className={`${saleType === 'Border' ? '' : 'border-r'} border-gray-900 ${saleType === 'Border' ? 'px-0.5' : 'px-1'} py-1 ${saleType === 'Border' ? 'text-[12px]' : 'text-[12px]'} text-right font-bold text-gray-900`}>{parseFloat(item.total).toLocaleString()}</td>
-                                                        {saleType !== 'Border' && (
+                                                        {saleType !== 'Border' && idx === 0 && (
                                                             <>
-                                                                <td className="border-r border-gray-900 px-1 py-1 text-[12px] text-right text-gray-600">{idx === 0 ? parseFloat(sale.discount || 0).toLocaleString() : ''}</td>
-                                                                <td className="border-r border-gray-900 px-1 py-1 text-[12px] text-right text-green-700 font-bold">{idx === 0 ? parseFloat(sale.paidAmount || 0).toLocaleString() : ''}</td>
-                                                                <td className="px-1 py-1 text-[12px] text-right text-red-700 font-black">{idx === 0 ? (parseFloat(sale.totalAmount || 0) - parseFloat(sale.paidAmount || 0)).toLocaleString() : ''}</td>
+                                                                <td rowSpan={flatItems.length} className="border-r border-gray-900 px-1 py-1 text-[12px] text-right text-gray-600">{parseFloat(sale.discount || 0).toLocaleString()}</td>
+                                                                <td rowSpan={flatItems.length} className="border-r border-gray-900 px-1 py-1 text-[12px] text-right text-green-700 font-bold">{parseFloat(sale.paidAmount || 0).toLocaleString()}</td>
+                                                                <td rowSpan={flatItems.length} className="px-1 py-1 text-[12px] text-right text-red-700 font-black">{(parseFloat(sale.totalAmount || 0) - parseFloat(sale.paidAmount || 0)).toLocaleString()}</td>
                                                             </>
                                                         )}
                                                     </tr>

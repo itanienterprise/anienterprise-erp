@@ -493,6 +493,7 @@ function App() {
       fetchImporters(); // Fetch importers to populate the dropdown
       fetchExporters();
       fetchPorts(); // Fetch ports to populate the dropdown
+      fetchProducts(); // Fetch products to populate the dropdown
     } else if (currentView === 'importer-section' || currentView === 'exporter-section' || currentView === 'indian-cnf-section' || currentView === 'bd-cnf-section') {
       fetchImporters();
       fetchExporters();
@@ -620,6 +621,7 @@ function App() {
                   type === 'employees' ? 'employees' :
                     type === 'customer' ? 'customers' :
                       type === 'bank' ? 'banks' :
+                        type === 'cnf' ? 'cnfs' :
                         'stock';
 
 
@@ -727,13 +729,13 @@ function App() {
           }
         }
 
-        if (type === 'ip') fetchIpRecords();
-        else if (type === 'importer') fetchImporters();
+        if (type === 'importer') fetchImporters();
         else if (type === 'exporter') fetchExporters();
         else if (type === 'port') fetchPorts();
         else if (type === 'product') fetchProducts();
         else if (type === 'stock') fetchStockRecords();
-        else if (['employees', 'sales', 'customer'].includes(type)) {
+
+        if (['employees', 'sales', 'customer', 'ip', 'cnf', 'bank', 'importer', 'exporter', 'port'].includes(type) || type.includes('cnf')) {
           setRefreshKey(prev => prev + 1);
         }
       }
@@ -1085,6 +1087,7 @@ function App() {
       case 'ip-section':
         return (
           <IPManagement
+            key={refreshKey}
             isSelectionMode={isSelectionMode}
             setIsSelectionMode={setIsSelectionMode}
             selectedItems={selectedItems}
@@ -1099,11 +1102,13 @@ function App() {
             isLongPressTriggered={isLongPressTriggered}
             importers={importers}
             ports={ports}
+            products={products}
           />
         );
       case 'importer-section':
         return (
           <Importer
+            key={refreshKey}
             isSelectionMode={isSelectionMode}
             setIsSelectionMode={setIsSelectionMode}
             selectedItems={selectedItems}
@@ -1121,6 +1126,7 @@ function App() {
       case 'exporter-section':
         return (
           <Exporter
+            key={refreshKey}
             isSelectionMode={isSelectionMode}
             setIsSelectionMode={setIsSelectionMode}
             selectedItems={selectedItems}
@@ -1138,6 +1144,7 @@ function App() {
       case 'indian-cnf-section':
         return (
           <CnF
+            key={refreshKey}
             moduleType="Indian"
             currentUser={currentUser}
             isSelectionMode={isSelectionMode}
@@ -1157,6 +1164,7 @@ function App() {
       case 'bd-cnf-section':
         return (
           <CnF
+            key={refreshKey}
             moduleType="BD"
             currentUser={currentUser}
             isSelectionMode={isSelectionMode}
@@ -1176,12 +1184,14 @@ function App() {
       case 'bank-section':
         return (
           <Bank
+            key={refreshKey}
             onDeleteConfirm={(data) => handleDelete(data.type, data.id, data.isBulk, data.extraData)}
           />
         );
       case 'port-section':
         return (
           <Port
+            key={refreshKey}
             isSelectionMode={isSelectionMode}
             setIsSelectionMode={setIsSelectionMode}
             selectedItems={selectedItems}

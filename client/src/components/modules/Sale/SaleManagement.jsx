@@ -1977,8 +1977,8 @@ const SaleManagement = ({
     // Apply search + advanced filters
     const displayedSales = sales.filter(sale => {
         const matchesRequestFilter = isRequestedOnly
-            ? (sale.status || '').toLowerCase().includes('requested')
-            : !(sale.status || '').toLowerCase().includes('requested');
+            ? (sale.status || '').toLowerCase().includes('requested') && (sale.status || '').toLowerCase() !== 'rejected'
+            : !(sale.status || '').toLowerCase().includes('requested') && (sale.status || '').toLowerCase() !== 'rejected';
 
         if (!matchesRequestFilter) return false;
 

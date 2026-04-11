@@ -21,7 +21,8 @@ function IPManagement({
     endLongPress,
     isLongPressTriggered,
     importers,
-    ports
+    ports,
+    products = []
 }) {
     const [showIpForm, setShowIpForm] = useState(false);
     const [ipRecords, setIpRecords] = useState([]);
@@ -41,7 +42,9 @@ function IPManagement({
         referenceNo: '',
         ipParty: '',
         productName: '',
+        product: null,
         quantity: '',
+        remainingQuantity: '',
         port: '',
         status: 'Active'
     });
@@ -51,13 +54,17 @@ function IPManagement({
         startDate: '',
         endDate: '',
         port: '',
-        importer: ''
+        importer: '',
+        productName: ''
     });
 
     const ipImporterRef = useRef(null);
     const ipPortRef = useRef(null);
+    const ipProductRef = useRef(null);
     const filterPortRef = useRef(null);
     const filterImporterRef = useRef(null);
+    const filterProductRef = useRef(null);
+    const ipStatusRef = useRef(null);
 
     useEffect(() => {
         fetchIpRecords();
@@ -65,19 +72,13 @@ function IPManagement({
 
     useEffect(() => {
         const handleClickOutside = (event) => {
-            if (event.target && !document.body.contains(event.target)) {
-                return;
-            }
-            if (ipImporterRef.current && !ipImporterRef.current.contains(event.target) &&
-                ipPortRef.current && !ipPortRef.current.contains(event.target) &&
-                filterPortRef.current && !filterPortRef.current.contains(event.target) &&
-                filterImporterRef.current && !filterImporterRef.current.contains(event.target)) {
+            if (activeDropdown && !event.target.closest('.dropdown-container')) {
                 setActiveDropdown(null);
             }
         };
         document.addEventListener('mousedown', handleClickOutside);
         return () => document.removeEventListener('mousedown', handleClickOutside);
-    }, []);
+    }, [activeDropdown]);
 
     const fetchIpRecords = async () => {
         setIsLoading(true);
@@ -108,6 +109,44 @@ function IPManagement({
 
             return newData;
         });
+    };
+
+    const handleIpDropdownSelect = (field, value) => {
+        setFormData(prev => ({ ...prev, [field]: value }));
+        setActiveDropdown(null);
+        setHighlightedIndex(-1);
+    };
+
+    const handleDropdownKeyDown = (e, dropdownId, options = [], field) => {
+        if (e.key === 'ArrowDown') {
+            e.preventDefault();
+            setHighlightedIndex(prev => Math.min(prev + 1, options.length - 1));
+        } else if (e.key === 'ArrowUp') {
+            e.preventDefault();
+            setHighlightedIndex(prev => Math.max(prev - 1, 0));
+        } else if (e.key === 'Enter') {
+            e.preventDefault();
+            if (highlightedIndex >= 0 && highlightedIndex < options.length) {
+                const selected = options[highlightedIndex];
+                const value = selected.name || selected;
+                
+                if (dropdownId.startsWith('filter-')) {
+                    const filterField = dropdownId.replace('filter-', '');
+                    setFilters(prev => ({ ...prev, [filterField]: value }));
+                    setActiveDropdown(null);
+                    setHighlightedIndex(-1);
+                } else if (dropdownId === 'ip-product') {
+                    // For product, value is just the name as per user request
+                    setFormData(prev => ({ ...prev, productName: value }));
+                    setActiveDropdown(null);
+                    setHighlightedIndex(-1);
+                } else {
+                    handleIpDropdownSelect(field || dropdownId, value);
+                }
+            }
+        } else if (e.key === 'Escape') {
+            setActiveDropdown(null);
+        }
     };
 
     const handleSubmit = async (e) => {
@@ -217,45 +256,6 @@ function IPManagement({
         });
     };
 
-    const handleIpDropdownSelect = (field, value) => {
-        setFormData(prev => ({ ...prev, [field]: value }));
-        setActiveDropdown(null);
-    };
-
-    const handleFilterDropdownSelect = (field, value) => {
-        setFilters(prev => ({ ...prev, [field]: value }));
-        setActiveDropdown(null);
-    };
-
-    const getFilteredOptions = (dropdownType) => {
-        if (dropdownType === 'ipImporter' || dropdownType === 'filterImporter') {
-            const searchTerm = dropdownType === 'ipImporter' ? formData.ipParty : filters.importer;
-            return importers.filter(imp =>
-                imp.name.toLowerCase().includes(searchTerm.toLowerCase())
-            );
-        }
-        if (dropdownType === 'ipPort' || dropdownType === 'filterPort') {
-            const searchTerm = dropdownType === 'ipPort' ? formData.port : filters.port;
-            return ports.filter(port =>
-                port.name.toLowerCase().includes(searchTerm.toLowerCase())
-            );
-        }
-        return [];
-    };
-
-    const handleDropdownKeyDown = (e, dropdownType, selectHandler, field) => {
-        const options = getFilteredOptions(dropdownType);
-        if (e.key === 'ArrowDown') {
-            e.preventDefault();
-            setHighlightedIndex(prev => Math.min(prev + 1, options.length - 1));
-        } else if (e.key === 'ArrowUp') {
-            e.preventDefault();
-            setHighlightedIndex(prev => Math.max(prev - 1, 0));
-        } else if (e.key === 'Enter' && options[highlightedIndex]) {
-            e.preventDefault();
-            selectHandler(field, options[highlightedIndex].name);
-        }
-    };
 
     const resetFilters = () => {
         setFilters({
@@ -282,6 +282,7 @@ function IPManagement({
         // Apply filters
         if (filters.port && record.port !== filters.port) return false;
         if (filters.importer && record.ipParty !== filters.importer) return false;
+        if (filters.productName && record.productName !== filters.productName) return false;
 
         // Date filtering
         if (filters.startDate || filters.endDate) {
@@ -340,7 +341,7 @@ function IPManagement({
 
             {/* Filters Section - Truncated for brevity, keeping the structure */}
             {showFilters && (
-                <div className="ip-filters relative overflow-hidden rounded-2xl bg-white/70 backdrop-blur-xl border border-white/50 shadow-xl p-6 transition-all duration-300 animate-in slide-in-from-top-4">
+                <div className="ip-filters relative rounded-2xl bg-white/70 backdrop-blur-xl border border-white/50 shadow-xl p-6 transition-all duration-300 animate-in slide-in-from-top-4">
                     <div className="grid grid-cols-1 md:grid-cols-4 gap-6 relative z-10">
                         {/* Quick Range */}
                         <div className="space-y-3">
@@ -384,34 +385,135 @@ function IPManagement({
                             </div>
                         </div>
 
-                        {/* Port Filter - Simplified */}
-                        <div className="space-y-3">
-                            <label className="text-xs font-bold text-gray-500 uppercase tracking-wider block">Port</label>
-                            <select
-                                value={filters.port}
-                                onChange={(e) => setFilters(prev => ({ ...prev, port: e.target.value }))}
-                                className="w-full px-3 py-2 text-xs bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-all"
-                            >
-                                <option value="">All Ports</option>
-                                {ports.map(port => (
-                                    <option key={port._id} value={port.name}>{port.name}</option>
-                                ))}
-                            </select>
+                        {/* Importer Filter - Simplified */}
+                        <div className="space-y-3 relative dropdown-container" ref={filterImporterRef}>
+                            <label className="text-xs font-bold text-gray-500 uppercase tracking-wider block">Importer</label>
+                            <div className="relative">
+                                <input
+                                    type="text"
+                                    value={filters.importer}
+                                    onChange={(e) => { setFilters(prev => ({ ...prev, importer: e.target.value })); setActiveDropdown('filter-importer'); setHighlightedIndex(-1); }}
+                                    onFocus={() => { setActiveDropdown('filter-importer'); setHighlightedIndex(-1); }}
+                                    onKeyDown={(e) => handleDropdownKeyDown(e, 'filter-importer', importers.filter(imp => !filters.importer || importers.some(x => x.name === filters.importer) || imp.name.toLowerCase().includes(filters.importer.toLowerCase())), 'filter-importer')}
+                                    placeholder="Search Importer..."
+                                    autoComplete="off"
+                                    className="w-full px-3 py-2 text-xs bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-all pr-8"
+                                />
+                                <div className="absolute right-2.5 top-1/2 -translate-y-1/2 flex items-center gap-1.5">
+                                    {filters.importer && (
+                                        <button type="button" onClick={() => setFilters(prev => ({ ...prev, importer: '' }))} className="text-gray-400 hover:text-gray-600">
+                                            <XIcon className="w-3 h-3" />
+                                        </button>
+                                    )}
+                                    <SearchIcon className="w-3 h-3 text-gray-300 pointer-events-none" />
+                                </div>
+                            </div>
+                            {activeDropdown === 'filter-importer' && (
+                                <div className="absolute z-[60] w-full mt-1 bg-white border border-gray-100 rounded-xl shadow-xl max-h-40 overflow-y-auto py-1 animate-in zoom-in duration-200">
+                                    {importers.filter(imp => !filters.importer || importers.some(x => x.name === filters.importer) || imp.name.toLowerCase().includes(filters.importer.toLowerCase())).length > 0 ? (
+                                        importers.filter(imp => !filters.importer || importers.some(x => x.name === filters.importer) || imp.name.toLowerCase().includes(filters.importer.toLowerCase())).map((imp, idx) => (
+                                            <button
+                                                key={imp._id}
+                                                type="button"
+                                                onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); setFilters(prev => ({ ...prev, importer: imp.name })); setActiveDropdown(null); }}
+                                                onMouseEnter={() => setHighlightedIndex(idx)}
+                                                className={`w-full px-3 py-1.5 text-left text-[11px] transition-colors font-medium ${filters.importer === imp.name ? 'bg-blue-50 text-blue-700' : highlightedIndex === idx ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-blue-50'}`}
+                                            >
+                                                {imp.name}
+                                            </button>
+                                        ))
+                                    ) : (
+                                        <div className="px-3 py-1.5 text-[11px] text-gray-500">No importers found</div>
+                                    )}
+                                </div>
+                            )}
                         </div>
 
-                        {/* Importer Filter - Simplified */}
-                        <div className="space-y-3">
-                            <label className="text-xs font-bold text-gray-500 uppercase tracking-wider block">Importer</label>
-                            <select
-                                value={filters.importer}
-                                onChange={(e) => setFilters(prev => ({ ...prev, importer: e.target.value }))}
-                                className="w-full px-3 py-2 text-xs bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-all"
-                            >
-                                <option value="">All Importers</option>
-                                {importers.map(imp => (
-                                    <option key={imp._id} value={imp.name}>{imp.name}</option>
-                                ))}
-                            </select>
+                        {/* Port Filter - Simplified */}
+                        <div className="space-y-3 relative dropdown-container" ref={filterPortRef}>
+                            <label className="text-xs font-bold text-gray-500 uppercase tracking-wider block">Port</label>
+                            <div className="relative">
+                                <input
+                                    type="text"
+                                    value={filters.port}
+                                    onChange={(e) => { setFilters(prev => ({ ...prev, port: e.target.value })); setActiveDropdown('filter-port'); setHighlightedIndex(-1); }}
+                                    onFocus={() => { setActiveDropdown('filter-port'); setHighlightedIndex(-1); }}
+                                    onKeyDown={(e) => handleDropdownKeyDown(e, 'filter-port', ports.filter(p => !filters.port || ports.some(x => x.name === filters.port) || p.name.toLowerCase().includes(filters.port.toLowerCase())), 'filter-port')}
+                                    placeholder="Search Port..."
+                                    autoComplete="off"
+                                    className="w-full px-3 py-2 text-xs bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-all pr-8"
+                                />
+                                <div className="absolute right-2.5 top-1/2 -translate-y-1/2 flex items-center gap-1.5">
+                                    {filters.port && (
+                                        <button type="button" onClick={() => setFilters(prev => ({ ...prev, port: '' }))} className="text-gray-400 hover:text-gray-600">
+                                            <XIcon className="w-3 h-3" />
+                                        </button>
+                                    )}
+                                    <SearchIcon className="w-3 h-3 text-gray-300 pointer-events-none" />
+                                </div>
+                            </div>
+                            {activeDropdown === 'filter-port' && (
+                                <div className="absolute z-[60] w-full mt-1 bg-white border border-gray-100 rounded-xl shadow-xl max-h-40 overflow-y-auto py-1 animate-in zoom-in duration-200">
+                                    {ports.filter(p => !filters.port || ports.some(x => x.name === filters.port) || p.name.toLowerCase().includes(filters.port.toLowerCase())).length > 0 ? (
+                                        ports.filter(p => !filters.port || ports.some(x => x.name === filters.port) || p.name.toLowerCase().includes(filters.port.toLowerCase())).map((port, idx) => (
+                                            <button
+                                                key={port._id}
+                                                type="button"
+                                                onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); setFilters(prev => ({ ...prev, port: port.name })); setActiveDropdown(null); }}
+                                                onMouseEnter={() => setHighlightedIndex(idx)}
+                                                className={`w-full px-3 py-1.5 text-left text-[11px] transition-colors font-medium ${filters.port === port.name ? 'bg-blue-50 text-blue-700' : highlightedIndex === idx ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-blue-50'}`}
+                                            >
+                                                {port.name}
+                                            </button>
+                                        ))
+                                    ) : (
+                                        <div className="px-3 py-1.5 text-[11px] text-gray-500">No ports found</div>
+                                    )}
+                                </div>
+                            )}
+                        </div>
+                    
+                        <div className="space-y-3 relative dropdown-container" ref={filterProductRef}>
+                            <label className="text-xs font-bold text-gray-500 uppercase tracking-wider block">Product</label>
+                            <div className="relative">
+                                <input
+                                    type="text"
+                                    value={filters.productName}
+                                    onChange={(e) => { setFilters(prev => ({ ...prev, productName: e.target.value })); setActiveDropdown('filter-product'); setHighlightedIndex(-1); }}
+                                    onFocus={() => { setActiveDropdown('filter-product'); setHighlightedIndex(-1); }}
+                                    onKeyDown={(e) => handleDropdownKeyDown(e, 'filter-product', products.filter(p => !filters.productName || p.name.toLowerCase().includes(filters.productName.toLowerCase())), 'filter-product')}
+                                    placeholder="Search Product..."
+                                    autoComplete="off"
+                                    className="w-full px-3 py-2 text-xs bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-all pr-8"
+                                />
+                                <div className="absolute right-2.5 top-1/2 -translate-y-1/2 flex items-center gap-1.5">
+                                    {filters.productName && (
+                                        <button type="button" onClick={() => setFilters(prev => ({ ...prev, productName: '' }))} className="text-gray-400 hover:text-gray-600">
+                                            <XIcon className="w-3 h-3" />
+                                        </button>
+                                    )}
+                                    <SearchIcon className="w-3 h-3 text-gray-300 pointer-events-none" />
+                                </div>
+                            </div>
+                            {activeDropdown === 'filter-product' && (
+                                <div className="absolute z-[60] w-full mt-1 bg-white border border-gray-100 rounded-xl shadow-xl max-h-40 overflow-y-auto py-1 animate-in zoom-in duration-200">
+                                    {products.filter(p => !filters.productName || p.name.toLowerCase().includes(filters.productName.toLowerCase())).length > 0 ? (
+                                        products.filter(p => !filters.productName || p.name.toLowerCase().includes(filters.productName.toLowerCase())).map((p, idx) => (
+                                            <button
+                                                key={p._id}
+                                                type="button"
+                                                onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); setFilters(prev => ({ ...prev, productName: p.name })); setActiveDropdown(null); }}
+                                                onMouseEnter={() => setHighlightedIndex(idx)}
+                                                className={`w-full px-3 py-1.5 text-left text-[11px] transition-colors font-medium ${filters.productName === p.name ? 'bg-blue-50 text-blue-700' : highlightedIndex === idx ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-blue-50'}`}
+                                            >
+                                                {p.name}
+                                            </button>
+                                        ))
+                                    ) : (
+                                        <div className="px-3 py-1.5 text-[11px] text-gray-500">No products found</div>
+                                    )}
+                                </div>
+                            )}
                         </div>
                     </div>
 
@@ -428,7 +530,7 @@ function IPManagement({
 
             {/* Form Section - Continuing in next message due to length */}
             {showIpForm && (
-                <div className="ip-form relative overflow-hidden rounded-2xl bg-white/60 backdrop-blur-xl border border-white/50 shadow-2xl p-8 transition-all duration-300">
+                <div className="ip-form relative rounded-2xl bg-white/60 backdrop-blur-xl border border-white/50 shadow-2xl p-8 transition-all duration-300">
                     <div className="absolute -top-20 -right-20 w-64 h-64 bg-blue-400/20 rounded-full blur-3xl pointer-events-none"></div>
                     <div className="absolute -bottom-20 -left-20 w-64 h-64 bg-purple-400/20 rounded-full blur-3xl pointer-events-none"></div>
 
@@ -441,7 +543,7 @@ function IPManagement({
 
                     <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-6 relative z-10">
                         <CustomDatePicker
-                            label="Opening Date"
+                            label="Date"
                             name="openingDate"
                             value={formData.openingDate}
                             onChange={handleInputChange}
@@ -467,6 +569,7 @@ function IPManagement({
                                 onChange={handleInputChange}
                                 required
                                 placeholder="Enter IP Number"
+                                autoComplete="off"
                                 className="w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm"
                             />
                         </div>
@@ -480,37 +583,99 @@ function IPManagement({
                                 onChange={handleInputChange}
                                 required
                                 placeholder="REF-12345"
+                                autoComplete="off"
                                 className="w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm"
                             />
                         </div>
 
-                        <div className="col-span-1 md:col-span-2 space-y-2">
+                        <div className="col-span-1 md:col-span-2 space-y-2 relative dropdown-container" ref={ipImporterRef}>
                             <label className="text-sm font-medium text-gray-700">Importer</label>
-                            <select
-                                name="ipParty"
-                                value={formData.ipParty}
-                                onChange={handleInputChange}
-                                required
-                                className="w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm"
-                            >
-                                <option value="">Select Importer</option>
-                                {importers.map(imp => (
-                                    <option key={imp._id} value={imp.name}>{imp.name}</option>
-                                ))}
-                            </select>
+                            <div className="relative">
+                                <input
+                                    type="text"
+                                    name="ipParty"
+                                    value={formData.ipParty}
+                                    onChange={(e) => { handleInputChange(e); setActiveDropdown('ip-importer'); setHighlightedIndex(-1); }}
+                                    onFocus={() => { setActiveDropdown('ip-importer'); setHighlightedIndex(-1); }}
+                                    onKeyDown={(e) => handleDropdownKeyDown(e, 'ip-importer', importers.filter(imp => !formData.ipParty || importers.some(x => x.name === formData.ipParty) || imp.name.toLowerCase().includes(formData.ipParty.toLowerCase())), 'ipParty')}
+                                    placeholder="Search Importer..."
+                                    autoComplete="off"
+                                    required
+                                    className={`w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm pr-10 ${formData.ipParty ? 'placeholder:text-gray-900 placeholder:font-semibold' : 'placeholder:text-gray-400'}`}
+                                />
+                                <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-2">
+                                    {formData.ipParty && (
+                                        <button type="button" onClick={() => handleIpDropdownSelect('ipParty', '')} className="text-gray-400 hover:text-gray-600">
+                                            <XIcon className="w-4 h-4" />
+                                        </button>
+                                    )}
+                                    <SearchIcon className="w-4 h-4 text-gray-300 pointer-events-none" />
+                                </div>
+                            </div>
+                            {activeDropdown === 'ip-importer' && (
+                                <div className="absolute z-[60] w-full mt-1 bg-white border border-gray-100 rounded-xl shadow-xl max-h-48 overflow-y-auto py-1 animate-in zoom-in duration-200">
+                                    {importers.filter(imp => !formData.ipParty || importers.some(x => x.name === formData.ipParty) || imp.name.toLowerCase().includes(formData.ipParty.toLowerCase())).length > 0 ? (
+                                        importers.filter(imp => !formData.ipParty || importers.some(x => x.name === formData.ipParty) || imp.name.toLowerCase().includes(formData.ipParty.toLowerCase())).map((imp, idx) => (
+                                            <button
+                                                key={imp._id}
+                                                type="button"
+                                                onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); handleIpDropdownSelect('ipParty', imp.name); }}
+                                                onMouseEnter={() => setHighlightedIndex(idx)}
+                                                className={`w-full px-4 py-2 text-left text-sm transition-colors font-medium ${formData.ipParty === imp.name ? 'bg-blue-50 text-blue-700' : highlightedIndex === idx ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-blue-50'}`}
+                                            >
+                                                {imp.name}
+                                            </button>
+                                        ))
+                                    ) : (
+                                        <div className="px-4 py-2 text-sm text-gray-500">No importers found</div>
+                                    )}
+                                </div>
+                            )}
                         </div>
 
-                        <div className="space-y-2">
+                        <div className="space-y-2 relative dropdown-container" ref={ipProductRef}>
                             <label className="text-sm font-medium text-gray-700">Product Name</label>
-                            <input
-                                type="text"
-                                name="productName"
-                                value={formData.productName}
-                                onChange={handleInputChange}
-                                required
-                                placeholder="Product Name"
-                                className="w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm"
-                            />
+                            <div className="relative">
+                                <input
+                                    type="text"
+                                    name="productName"
+                                    value={formData.productName}
+                                    onChange={(e) => { handleInputChange(e); setActiveDropdown('ip-product'); setHighlightedIndex(-1); }}
+                                    onFocus={() => { setActiveDropdown('ip-product'); setHighlightedIndex(-1); }}
+                                    onKeyDown={(e) => handleDropdownKeyDown(e, 'ip-product', products.filter(p => !formData.productName || products.some(x => x.name === formData.productName) || p.name.toLowerCase().includes(formData.productName.toLowerCase())), 'productName')}
+                                    placeholder="Search Product..."
+                                    autoComplete="off"
+                                    required
+                                    className={`w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm pr-10 ${formData.productName ? 'placeholder:text-gray-900 placeholder:font-semibold' : 'placeholder:text-gray-400'}`}
+                                />
+                                <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-2">
+                                    {formData.productName && (
+                                        <button type="button" onClick={() => handleIpDropdownSelect('productName', '')} className="text-gray-400 hover:text-gray-600">
+                                            <XIcon className="w-4 h-4" />
+                                        </button>
+                                    )}
+                                    <SearchIcon className="w-4 h-4 text-gray-300 pointer-events-none" />
+                                </div>
+                            </div>
+                            {activeDropdown === 'ip-product' && (
+                                <div className="absolute z-[60] w-full mt-1 bg-white border border-gray-100 rounded-xl shadow-xl max-h-48 overflow-y-auto py-1 animate-in zoom-in duration-200">
+                                    {products.filter(p => !formData.productName || products.some(x => x.name === formData.productName) || p.name.toLowerCase().includes(formData.productName.toLowerCase())).length > 0 ? (
+                                        products.filter(p => !formData.productName || products.some(x => x.name === formData.productName) || p.name.toLowerCase().includes(formData.productName.toLowerCase())).map((p, idx) => (
+                                            <button
+                                                key={p._id}
+                                                type="button"
+                                                onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); handleIpDropdownSelect('productName', p.name); }}
+                                                onMouseEnter={() => setHighlightedIndex(idx)}
+                                                className={`w-full px-4 py-2 text-left text-sm transition-colors font-medium ${formData.productName === p.name ? 'bg-blue-50 text-blue-700' : highlightedIndex === idx ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-blue-50'}`}
+                                            >
+                                                {p.name}
+                                            </button>
+                                        ))
+                                    ) : (
+                                        <div className="px-4 py-2 text-sm text-gray-500">No products found</div>
+                                    )}
+                                </div>
+                            )}
                         </div>
 
                         <div className="space-y-2">
@@ -523,6 +688,7 @@ function IPManagement({
                                     onChange={handleInputChange}
                                     required
                                     placeholder="0.00"
+                                    autoComplete="off"
                                     className="w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm"
                                 />
                                 <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
@@ -532,33 +698,97 @@ function IPManagement({
                         </div>
 
                         <div className="space-y-2">
-                            <label className="text-sm font-medium text-gray-700">Port</label>
-                            <select
-                                name="port"
-                                value={formData.port}
-                                onChange={handleInputChange}
-                                required
-                                className="w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm"
-                            >
-                                <option value="">Select Port</option>
-                                {ports.map(port => (
-                                    <option key={port._id} value={port.name}>{port.name}</option>
-                                ))}
-                            </select>
+                            <label className="text-sm font-medium text-gray-700">Remaining Quantity (kg)</label>
+                            <div className="relative">
+                                <input
+                                    type="number"
+                                    name="remainingQuantity"
+                                    value={formData.remainingQuantity}
+                                    onChange={handleInputChange}
+                                    placeholder="0.00"
+                                    autoComplete="off"
+                                    className="w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm"
+                                />
+                                <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
+                                    <span className="text-gray-400 text-sm">kg</span>
+                                </div>
+                            </div>
                         </div>
 
-                        <div className="space-y-2">
+                        <div className="space-y-2 relative dropdown-container" ref={ipPortRef}>
+                            <label className="text-sm font-medium text-gray-700">Port</label>
+                            <div className="relative">
+                                <input
+                                    type="text"
+                                    name="port"
+                                    value={formData.port}
+                                    onChange={(e) => { handleInputChange(e); setActiveDropdown('ip-port'); setHighlightedIndex(-1); }}
+                                    onFocus={() => { setActiveDropdown('ip-port'); setHighlightedIndex(-1); }}
+                                    onKeyDown={(e) => handleDropdownKeyDown(e, 'ip-port', ports.filter(p => !formData.port || ports.some(x => x.name === formData.port) || p.name.toLowerCase().includes(formData.port.toLowerCase())), 'port')}
+                                    placeholder="Search Port..."
+                                    autoComplete="off"
+                                    required
+                                    className={`w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm pr-10 ${formData.port ? 'placeholder:text-gray-900 placeholder:font-semibold' : 'placeholder:text-gray-400'}`}
+                                />
+                                <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-2">
+                                    {formData.port && (
+                                        <button type="button" onClick={() => handleIpDropdownSelect('port', '')} className="text-gray-400 hover:text-red-500 shrink-0">
+                                            <XIcon className="w-4 h-4" />
+                                        </button>
+                                    )}
+                                    <SearchIcon className="w-4 h-4 text-gray-300 pointer-events-none shrink-0" />
+                                </div>
+                            </div>
+                            {activeDropdown === 'ip-port' && (
+                                <div className="absolute z-[60] w-full mt-1 bg-white border border-gray-100 rounded-xl shadow-xl max-h-48 overflow-y-auto py-1 animate-in zoom-in duration-200">
+                                    {ports.filter(p => !formData.port || ports.some(x => x.name === formData.port) || p.name.toLowerCase().includes(formData.port.toLowerCase())).length > 0 ? (
+                                        ports.filter(p => !formData.port || ports.some(x => x.name === formData.port) || p.name.toLowerCase().includes(formData.port.toLowerCase())).map((port, idx) => (
+                                            <button
+                                                key={port._id}
+                                                type="button"
+                                                onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); handleIpDropdownSelect('port', port.name); }}
+                                                onMouseEnter={() => setHighlightedIndex(idx)}
+                                                className={`w-full px-4 py-2 text-left text-sm transition-colors font-medium ${formData.port === port.name ? 'bg-blue-50 text-blue-700' : highlightedIndex === idx ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-blue-50'}`}
+                                            >
+                                                {port.name}
+                                            </button>
+                                        ))
+                                    ) : (
+                                        <div className="px-4 py-2 text-sm text-gray-500">No ports found</div>
+                                    )}
+                                </div>
+                            )}
+                        </div>
+
+                        <div className="space-y-2 relative dropdown-container" ref={ipStatusRef}>
                             <label className="text-sm font-medium text-gray-700">Status</label>
-                            <select
-                                name="status"
-                                value={formData.status}
-                                onChange={handleInputChange}
-                                className="w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm"
-                            >
-                                <option>Active</option>
-                                <option>Closed</option>
-                                <option>Pending</option>
-                            </select>
+                            <div className="relative">
+                                <button
+                                    type="button"
+                                    onClick={() => { setActiveDropdown(activeDropdown === 'ip-status' ? null : 'ip-status'); setHighlightedIndex(-1); }}
+                                    className="w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg text-left text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm flex items-center justify-between"
+                                >
+                                    <span className={formData.status ? 'text-gray-900 font-semibold' : 'text-gray-400'}>
+                                        {formData.status || 'Select Status'}
+                                    </span>
+                                    <ChevronDownIcon className={`w-4 h-4 text-gray-400 transition-transform duration-200 ${activeDropdown === 'ip-status' ? 'rotate-180' : ''}`} />
+                                </button>
+                                {activeDropdown === 'ip-status' && (
+                                    <div className="absolute z-[60] w-full mt-1 bg-white border border-gray-100 rounded-xl shadow-xl py-1 animate-in zoom-in duration-200">
+                                        {['Active', 'Closed', 'Pending'].map((status, idx) => (
+                                            <button
+                                                key={status}
+                                                type="button"
+                                                onClick={() => handleIpDropdownSelect('status', status)}
+                                                onMouseEnter={() => setHighlightedIndex(idx)}
+                                                className={`w-full px-4 py-2 text-left text-sm transition-colors font-medium ${formData.status === status ? 'bg-blue-50 text-blue-700' : highlightedIndex === idx ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-blue-50'}`}
+                                            >
+                                                {status}
+                                            </button>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
                         </div>
 
                         <div className="col-span-1 md:col-span-2 pt-4 flex items-center justify-between">
@@ -638,19 +868,28 @@ function IPManagement({
                                                 </th>
                                             )}
                                             <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors" onClick={() => requestSort('openingDate')}>
-                                                <div className="flex items-center">Opening Date <SortIcon config={sortConfig.ip} columnKey="openingDate" /></div>
+                                                <div className="flex items-center">Date <SortIcon config={sortConfig.ip} columnKey="openingDate" /></div>
                                             </th>
                                             <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors" onClick={() => requestSort('ipNumber')}>
                                                 <div className="flex items-center">IP Number <SortIcon config={sortConfig.ip} columnKey="ipNumber" /></div>
                                             </th>
+                                            <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors" onClick={() => requestSort('referenceNo')}>
+                                                <div className="flex items-center">Reference No <SortIcon config={sortConfig.ip} columnKey="referenceNo" /></div>
+                                            </th>
                                             <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors" onClick={() => requestSort('ipParty')}>
                                                 <div className="flex items-center">Importer <SortIcon config={sortConfig.ip} columnKey="ipParty" /></div>
+                                            </th>
+                                            <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors" onClick={() => requestSort('port')}>
+                                                <div className="flex items-center">Port <SortIcon config={sortConfig.ip} columnKey="port" /></div>
                                             </th>
                                             <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors" onClick={() => requestSort('productName')}>
                                                 <div className="flex items-center">Product <SortIcon config={sortConfig.ip} columnKey="productName" /></div>
                                             </th>
                                             <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors" onClick={() => requestSort('quantity')}>
                                                 <div className="flex items-center">Quantity (kg) <SortIcon config={sortConfig.ip} columnKey="quantity" /></div>
+                                            </th>
+                                            <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors" onClick={() => requestSort('remainingQuantity')}>
+                                                <div className="flex items-center">Rem. Qty (kg) <SortIcon config={sortConfig.ip} columnKey="remainingQuantity" /></div>
                                             </th>
                                             <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors" onClick={() => requestSort('status')}>
                                                 <div className="flex items-center">Status <SortIcon config={sortConfig.ip} columnKey="status" /></div>
@@ -687,10 +926,13 @@ function IPManagement({
                                                     </td>
                                                 )}
                                                 <td className="px-6 py-4 text-sm text-gray-600">{formatDate(record.openingDate)}</td>
-                                                <td className="px-6 py-4 text-sm font-medium text-blue-600">{record.ipNumber}</td>
+                                                <td className="px-6 py-4 text-sm font-medium text-black">{record.ipNumber}</td>
+                                                <td className="px-6 py-4 text-sm text-gray-500">{record.referenceNo || '-'}</td>
                                                 <td className="px-6 py-4 text-sm text-gray-900">{record.ipParty}</td>
+                                                <td className="px-6 py-4 text-sm text-gray-500">{record.port || '-'}</td>
                                                 <td className="px-6 py-4 text-sm text-gray-500">{record.productName}</td>
                                                 <td className="px-6 py-4 text-sm font-medium text-gray-900">{record.quantity} kg</td>
+                                                <td className="px-6 py-4 text-sm font-medium text-black">{record.remainingQuantity || '0'} kg</td>
                                                 <td className="px-6 py-4">
                                                     <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${record.status === 'Active' ? 'bg-green-50 text-green-700 border border-green-100' :
                                                         record.status === 'Closed' ? 'bg-gray-50 text-gray-700 border border-gray-100' :
@@ -752,7 +994,7 @@ function IPManagement({
                                                     <div className="min-w-0">
                                                         <p className="text-xs font-bold text-gray-400 uppercase tracking-wider">{formatDate(record.openingDate)}</p>
                                                         <div className="flex items-center gap-2 mt-0.5">
-                                                            <p className="font-bold text-blue-600 text-lg sm:text-xl truncate uppercase tracking-tight shrink-0">{record.ipNumber}</p>
+                                                            <p className="font-bold text-black text-lg sm:text-xl truncate uppercase tracking-tight shrink-0">{record.ipNumber}</p>
                                                             <span className="text-gray-300">|</span>
                                                             <p className="text-sm font-semibold text-gray-900 truncate">{record.ipParty}</p>
                                                         </div>
@@ -779,6 +1021,10 @@ function IPManagement({
                                                         <div className="flex justify-between items-center">
                                                             <span className="text-gray-400 font-bold uppercase tracking-widest text-[10px]">Quantity</span>
                                                             <span className="text-gray-900 font-black text-sm">{record.quantity} kg</span>
+                                                        </div>
+                                                        <div className="flex justify-between items-center">
+                                                            <span className="text-gray-400 font-bold uppercase tracking-widest text-[10px]">Rem. Quantity</span>
+                                                            <span className="text-black font-black text-sm">{record.remainingQuantity || '0'} kg</span>
                                                         </div>
                                                         <div className="flex justify-between items-center">
                                                             <span className="text-gray-400 font-bold uppercase tracking-widest text-[10px]">Port</span>

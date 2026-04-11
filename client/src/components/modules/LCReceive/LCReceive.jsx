@@ -1626,9 +1626,9 @@ function LCReceive({
     const filteredRecords = useMemo(() => {
         let records = [];
         if (isRequestedOnly) {
-            records = lcReceiveRecords.filter(item => (item.status || '').toLowerCase().includes('requested'));
+            records = lcReceiveRecords.filter(item => (item.status || '').toLowerCase().includes('requested') && (item.status || '').toLowerCase() !== 'rejected');
         } else {
-            records = lcReceiveRecords.filter(item => !(item.status || '').toLowerCase().includes('requested'));
+            records = lcReceiveRecords.filter(item => !(item.status || '').toLowerCase().includes('requested') && (item.status || '').toLowerCase() !== 'rejected');
         }
 
         // The search query and advanced filters are already applied to lcReceiveRecords by App.jsx
