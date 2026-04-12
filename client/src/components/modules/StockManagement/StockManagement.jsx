@@ -2163,7 +2163,15 @@ const StockManagement = ({
                         </button>
                     </div>
 
-                    <form onSubmit={handleAddWarehouseStockSubmit} className="relative z-10 space-y-6">
+                    <form 
+                        onSubmit={handleAddWarehouseStockSubmit} 
+                        onKeyDown={(e) => {
+                            if (e.key === 'Enter' && e.target.tagName !== 'TEXTAREA') {
+                                e.preventDefault();
+                            }
+                        }}
+                        className="relative z-10 space-y-6"
+                    >
                         <div className="grid grid-cols-1 md:grid-cols-4 gap-4 md:gap-6">
                             <div className="space-y-2 relative" ref={whDropdownRef}>
                                 <label className="text-sm font-bold text-gray-700 ml-1">From</label>

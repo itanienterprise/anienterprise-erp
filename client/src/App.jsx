@@ -4,7 +4,7 @@ import {
   MenuIcon, SearchIcon, HomeIcon, UsersIcon, UserIcon, AnchorIcon,
   BarChartIcon, FunnelIcon, XIcon, DollarSignIcon, ShoppingCartIcon,
   ChevronDownIcon, BoxIcon, BellIcon, TrashIcon, VegetableIcon, ReceiptIcon, TrendingUpIcon, LogOutIcon, BriefcaseIcon,
-  GlobeIcon, ArrowUpRightIcon, ArrowDownLeftIcon, LinkIcon, BuildingIcon
+  GlobeIcon, ArrowUpRightIcon, ArrowDownLeftIcon, LinkIcon, BuildingIcon, ShieldIcon, FileTextIcon, LayoutIcon, LCManagerIcon
 } from './components/Icons';
 
 import { encryptData, decryptData } from './utils/encryption';
@@ -15,6 +15,7 @@ import Exporter from './components/modules/Exporter/Exporter';
 import CnF from './components/modules/CnF/CnF';
 import Port from './components/modules/Port/Port';
 import IPManagement from './components/modules/IPManagement/IPManagement';
+import PI from './components/modules/PI/PI';
 import ProductManagement from './components/modules/Product/ProductManagement';
 import Customer from './components/modules/Customer/Customer';
 import LCReceive from './components/modules/LCReceive/LCReceive';
@@ -28,6 +29,8 @@ import SaleManagement from './components/modules/Sale/SaleManagement';
 import EmployeeManagement from './components/modules/Employee/EmployeeManagement';
 import PaymentCollection from './components/modules/PaymentCollection/PaymentCollection';
 import Bank from './components/modules/Bank/Bank';
+import Insurance from './components/modules/Insurance/Insurance';
+import LCManagement from './components/modules/LCManagement/LCManagement';
 import { calculateStockData } from './utils/stockHelpers';
 import LoginPage from './components/auth/LoginPage';
 import Profile from './components/modules/Profile/Profile';
@@ -298,6 +301,11 @@ function App() {
     const initialView = localStorage.getItem('currentView') || 'dashboard';
     return initialView === 'customer-section';
   });
+
+  const [lcDropdownOpen, setLcDropdownOpen] = useState(() => {
+    const initialView = localStorage.getItem('currentView') || 'dashboard';
+    return initialView === 'lc-management-section';
+  });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitStatus, setSubmitStatus] = useState(null);
   const [importers, setImporters] = useState([]);
@@ -489,7 +497,7 @@ function App() {
     localStorage.setItem('currentView', currentView);
 
     // Close all forms when changing sections
-    if (currentView === 'ip-section' || currentView === 'customer-section') {
+    if (currentView === 'ip-section' || currentView === 'customer-section' || currentView === 'pi-section') {
       fetchImporters(); // Fetch importers to populate the dropdown
       fetchExporters();
       fetchPorts(); // Fetch ports to populate the dropdown
@@ -1105,10 +1113,21 @@ function App() {
             products={products}
           />
         );
+      case 'pi-section':
+        return (
+          <PI
+            importers={importers}
+            exporters={exporters}
+            ports={ports}
+            products={products}
+            onDeleteConfirm={setDeleteConfirm}
+          />
+        );
       case 'importer-section':
         return (
           <Importer
             key={refreshKey}
+            currentUser={currentUser}
             isSelectionMode={isSelectionMode}
             setIsSelectionMode={setIsSelectionMode}
             selectedItems={selectedItems}
@@ -1127,6 +1146,7 @@ function App() {
         return (
           <Exporter
             key={refreshKey}
+            currentUser={currentUser}
             isSelectionMode={isSelectionMode}
             setIsSelectionMode={setIsSelectionMode}
             selectedItems={selectedItems}
@@ -1335,6 +1355,15 @@ function App() {
             isLongPressTriggered={isLongPressTriggered}
           />
         );
+      case 'insurance-section':
+        return (
+          <Insurance
+            key={refreshKey}
+            onDeleteConfirm={(data) => handleDelete(data.type, data.id, data.isBulk, data.extraData)}
+          />
+        );
+      case 'lc-management-section':
+        return <LCManagement addNotification={addNotification} />;
       default:
         return null;
     }
@@ -1425,6 +1454,10 @@ function App() {
               </div>
             </div>
           </div>
+          <button onClick={() => { setCurrentView('port-section'); setSidebarOpen(false); }} className={`w-full flex items-center px-4 py-2 rounded-lg transition-all ${currentView === 'port-section' ? 'bg-blue-50 text-blue-600 shadow-sm' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'}`}>
+            <AnchorIcon className="w-5 h-5 mr-3" />
+            <span className="font-medium text-sm">Port</span>
+          </button>
 
           <div>
             <button
@@ -1490,16 +1523,43 @@ function App() {
             <DollarSignIcon className="w-5 h-5 mr-3" />
             <span className="font-medium text-sm">Bank</span>
           </button>
-          <button onClick={() => { setCurrentView('port-section'); setSidebarOpen(false); }} className={`w-full flex items-center px-4 py-2 rounded-lg transition-all ${currentView === 'port-section' ? 'bg-blue-50 text-blue-600 shadow-sm' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'}`}>
-            <AnchorIcon className="w-5 h-5 mr-3" />
-            <span className="font-medium text-sm">Port</span>
-          </button>
           <button onClick={() => { setCurrentView('ip-section'); setSidebarOpen(false); }} className={`w-full flex items-center px-4 py-2 rounded-lg transition-all ${currentView === 'ip-section' ? 'bg-blue-50 text-blue-600 shadow-sm' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'}`}>
             <BoxIcon className="w-5 h-5 mr-3" />
             <span className="font-medium text-sm">IP</span>
           </button>
+          <button onClick={() => { setCurrentView('pi-section'); setSidebarOpen(false); }} className={`w-full flex items-center px-4 py-2 rounded-lg transition-all ${currentView === 'pi-section' ? 'bg-blue-50 text-blue-600 shadow-sm' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'}`}>
+            <FileTextIcon className="w-5 h-5 mr-3" />
+            <span className="font-medium text-sm">Proforma Invoice</span>
+          </button>
+          <button onClick={() => { setCurrentView('insurance-section'); setSidebarOpen(false); }} className={`w-full flex items-center px-4 py-2 rounded-lg transition-all ${currentView === 'insurance-section' ? 'bg-blue-50 text-blue-600 shadow-sm' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'}`}>
+            <ShieldIcon className="w-5 h-5 mr-3" />
+            <span className="font-medium text-sm">Insurance</span>
+          </button>
+          <div>
+            <button
+              onClick={() => setLcDropdownOpen(!lcDropdownOpen)}
+              className={`w-full flex items-center justify-between px-4 py-2 rounded-lg transition-all ${currentView === 'lc-management-section' ? 'bg-blue-50 text-blue-600 shadow-sm' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'}`}
+            >
+              <div className="flex items-center">
+                <LCManagerIcon className="w-5 h-5 mr-3" />
+                <span className="font-medium text-sm">LC Management</span>
+              </div>
+              <ChevronDownIcon className={`w-4 h-4 transition-transform duration-200 ${lcDropdownOpen ? 'transform rotate-180' : ''}`} />
+            </button>
+            <div className={`overflow-hidden transition-all duration-300 ease-in-out ${lcDropdownOpen ? 'max-h-48 opacity-100 mt-1' : 'max-h-0 opacity-0'}`}>
+              <div className="pl-7 pr-2 space-y-1">
+                <button
+                  onClick={() => { setCurrentView('lc-management-section'); setSidebarOpen(false); }}
+                  className={`w-full flex flex-row items-center py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'lc-management-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'}`}
+                >
+                  <LCManagerIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
+                  <span>LC Open</span>
+                </button>
+              </div>
+            </div>
+          </div>
           <button onClick={() => { setCurrentView('lc-entry-section'); setSidebarOpen(false); }} className={`w-full flex items-center px-4 py-2 rounded-lg transition-all ${currentView === 'lc-entry-section' ? 'bg-blue-50 text-blue-600 shadow-sm' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'}`}>
-            <DollarSignIcon className="w-5 h-5 mr-3" />
+            <FileTextIcon className="w-5 h-5 mr-3" />
             <span className="font-medium text-sm">LC Receive</span>
           </button>
 

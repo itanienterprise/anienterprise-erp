@@ -207,7 +207,15 @@ const Port = ({
                         </button>
                     </div>
 
-                    <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-6 relative z-10">
+                    <form 
+                        onSubmit={handleSubmit} 
+                        onKeyDown={(e) => {
+                            if (e.key === 'Enter' && e.target.tagName !== 'TEXTAREA') {
+                                e.preventDefault();
+                            }
+                        }}
+                        className="grid grid-cols-1 md:grid-cols-2 gap-6 relative z-10"
+                    >
                         <div className="space-y-2">
                             <label className="text-sm font-medium text-gray-700">Port Name</label>
                             <input type="text" name="name" value={formData.name} onChange={handleInputChange} required placeholder="e.g., Chittagong Port" className="w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all" />

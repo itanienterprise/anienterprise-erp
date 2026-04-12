@@ -541,7 +541,15 @@ function IPManagement({
                         </button>
                     </div>
 
-                    <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-6 relative z-10">
+                    <form 
+                        onSubmit={handleSubmit} 
+                        onKeyDown={(e) => {
+                            if (e.key === 'Enter' && e.target.tagName !== 'TEXTAREA') {
+                                e.preventDefault();
+                            }
+                        }}
+                        className="grid grid-cols-1 md:grid-cols-2 gap-6 relative z-10"
+                    >
                         <CustomDatePicker
                             label="Date"
                             name="openingDate"

@@ -1,0 +1,61 @@
+/* LC Management Specific Styles */
+
+/* Status Badge Styles - Matching System Aesthetic */
+.lc-status-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.25rem 0.75rem;
+    border-radius: 9999px;
+    font-size: 0.75rem;
+    font-weight: 600;
+}
+
+.status-opened { background-color: #e0e7ff; color: #4338ca; } /* Indigo */
+.status-in-transit { background-color: #fef3c7; color: #92400e; } /* Amber */
+.status-received { background-color: #dcfce7; color: #166534; } /* Green */
+.status-closed { background-color: #f3f4f6; color: #374151; } /* Gray */
+.status-cancelled { background-color: #fee2e2; color: #991b1b; } /* Red */
+
+/* Table Row Hover & Animation */
+.lc-table-row {
+    transition: all 0.2s ease;
+}
+
+.lc-table-row:hover {
+    background-color: rgba(249, 250, 251, 1);
+    transform: translateX(4px);
+}
+
+/* Form Animations */
+.lc-form-container {
+    animation: slideInFromTop 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+@keyframes slideInFromTop {
+    from {
+        opacity: 0;
+        transform: translateY(-20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* Custom dropdown scrollbar */
+.lc-manage-select::-webkit-scrollbar {
+    width: 6px;
+}
+
+.lc-manage-select::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.lc-manage-select::-webkit-scrollbar-thumb {
+    background: #e2e8f0;
+    border-radius: 10px;
+}
+
+.lc-manage-select::-webkit-scrollbar-thumb:hover {
+    background: #cbd5e1;
+}

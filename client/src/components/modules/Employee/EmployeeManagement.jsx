@@ -380,7 +380,16 @@ const EmployeeManagement = ({
                             <XIcon className="w-6 h-6" />
                         </button>
                     </div>
-                    <form onSubmit={handleSubmit} autoComplete="off" className="grid grid-cols-1 md:grid-cols-2 gap-6 relative z-10 text-left">
+                    <form 
+                        onSubmit={handleSubmit} 
+                        onKeyDown={(e) => {
+                            if (e.key === 'Enter' && e.target.tagName !== 'TEXTAREA') {
+                                e.preventDefault();
+                            }
+                        }}
+                        autoComplete="off" 
+                        className="grid grid-cols-1 md:grid-cols-2 gap-6 relative z-10 text-left"
+                    >
                         <div className="space-y-2">
                             <label className="text-sm font-medium text-gray-700 font-sans">Employee ID</label>
                             <input

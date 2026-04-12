@@ -2972,3 +2972,133 @@ export const generateCnFHistoryReportPDF = (reportData, agentInfo, filters) => {
         alert(`Failed to generate C&F PDF: ${error.message}`);
     }
 };
+
+export const generateCnFAgentListReportPDF = (agents, moduleType) => {
+    try {
+        const doc = new jsPDF({ orientation: 'p', unit: 'mm', format: 'a4' });
+
+        const pageWidth = doc.internal.pageSize.width;
+        const pageHeight = doc.internal.pageSize.height;
+        const margin = 10;
+
+        // --- Header ---
+        doc.setFontSize(22);
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(0);
+        doc.text("M/S ANI ENTERPRISE", pageWidth / 2, 20, { align: 'center' });
+
+        doc.setFontSize(10);
+        doc.setFont('helvetica', 'normal');
+        doc.text("766, H.M Tower, Level-06, Borogola, Bogura-5800, Bangladesh", pageWidth / 2, 26, { align: 'center' });
+        doc.text("+8802588813057, anienterprise051@gmail.com, www.anienterprises.com.bd", pageWidth / 2, 31, { align: 'center' });
+
+        // Separator
+        doc.setDrawColor(0);
+        doc.setLineWidth(0.5);
+        doc.line(margin, 40, pageWidth - margin, 40);
+
+        // Report Title
+        const reportTitle = `${moduleType ? moduleType + ' ' : ''}C&F AGENT REPORT`;
+        doc.setFillColor(255, 255, 255);
+        doc.setDrawColor(0);
+        doc.rect(pageWidth / 2 - 50, 37, 100, 8, 'FD');
+        doc.setFontSize(12);
+        doc.setFont('helvetica', 'bold');
+        doc.text(reportTitle, pageWidth / 2, 42, { align: 'center' });
+
+        // --- Info Row ---
+        let yPos = 55;
+        const dateStr = formatDate(new Date().toISOString().split('T')[0]);
+        doc.setFontSize(9);
+
+        doc.setFont('helvetica', 'bold');
+        doc.text("Total Agents:", margin, yPos);
+        doc.setFont('helvetica', 'normal');
+        doc.text(String(agents.length), margin + 24, yPos);
+
+        doc.setFont('helvetica', 'bold');
+        doc.text("Printed on:", pageWidth - margin - 50, yPos);
+        doc.setFont('helvetica', 'normal');
+        doc.text(dateStr, pageWidth - margin, yPos, { align: 'right' });
+
+        // --- Table ---
+        let grandTotal = 0;
+
+        const tableRows = agents.map((agent, index) => {
+            const balance = parseFloat(agent.totalBalance) || 0;
+            grandTotal += balance;
+            return [
+                index + 1,
+                agent.cnfId || '-',
+                agent.name || '-',
+                agent.contactPerson || '-',
+                agent.phone || '-',
+                balance.toLocaleString('en-BD', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+            ];
+        });
+
+        // Grand total row
+        tableRows.push([
+            { content: 'GRAND TOTAL', colSpan: 5, styles: { halign: 'right', fontStyle: 'bold', fillColor: [240, 240, 240], textColor: [0, 0, 0] } },
+            { content: grandTotal.toLocaleString('en-BD', { minimumFractionDigits: 2, maximumFractionDigits: 2 }), styles: { halign: 'right', fontStyle: 'bold', fillColor: [240, 240, 240], textColor: [0, 0, 0] } }
+        ]);
+
+        autoTable(doc, {
+            startY: yPos + 10,
+            head: [['SL', 'ID', 'Name', 'Contact Person', 'Phone', 'Total Balance']],
+            body: tableRows,
+            theme: 'grid',
+            styles: {
+                fontSize: 9,
+                cellPadding: 3,
+                lineColor: [0, 0, 0],
+                lineWidth: 0.1,
+                textColor: [0, 0, 0],
+                valign: 'middle'
+            },
+            headStyles: {
+                fillColor: [245, 245, 245],
+                fontStyle: 'bold',
+                halign: 'center'
+            },
+            columnStyles: {
+                0: { cellWidth: 14, halign: 'center' },   // SL
+                1: { cellWidth: 24 },                     // ID
+                2: { cellWidth: 54 },                     // Name
+                3: { cellWidth: 33 },                     // Contact
+                4: { cellWidth: 35 },                     // Phone
+                5: { cellWidth: 30, halign: 'right' }     // Total Balance
+            },
+            margin: { left: margin, right: margin }
+        });
+
+        // --- Signatures ---
+        let finalY = doc.lastAutoTable.finalY + 30;
+        if (finalY + 20 > pageHeight) {
+            doc.addPage();
+            finalY = 30;
+        }
+
+        const sigWidth = 45;
+        const sigGap = (pageWidth - (margin * 2) - (sigWidth * 3)) / 2;
+
+        doc.setFontSize(8);
+        doc.setFont('helvetica', 'bold');
+        doc.line(margin, finalY, margin + sigWidth, finalY);
+        doc.text("PREPARED BY", margin + sigWidth / 2, finalY + 5, { align: 'center' });
+
+        doc.line(margin + sigWidth + sigGap, finalY, margin + sigWidth + sigGap + sigWidth, finalY);
+        doc.text("VERIFIED BY", margin + sigWidth + sigGap + sigWidth / 2, finalY + 5, { align: 'center' });
+
+        doc.line(pageWidth - margin - sigWidth, finalY, pageWidth - margin, finalY);
+        doc.text("AUTHORIZED SIGNATURE", pageWidth - margin - sigWidth / 2, finalY + 5, { align: 'center' });
+
+        const pdfOutput = doc.output('blob');
+        const blobURL = URL.createObjectURL(pdfOutput);
+        window.open(blobURL, '_blank');
+
+    } catch (error) {
+        console.error("C&F Agent List PDF Error:", error);
+        alert(`Failed to generate C&F Agent List PDF: ${error.message}`);
+    }
+};

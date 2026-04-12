@@ -18,9 +18,11 @@ const Importer = ({
     onDeleteConfirm,
     startLongPress,
     endLongPress,
-    isLongPressTriggered
+    isLongPressTriggered,
+    currentUser
 }) => {
     // Local state
+    const isAdmin = currentUser?.role === 'admin' || currentUser?.username === 'admin';
     const [showForm, setShowForm] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [submitStatus, setSubmitStatus] = useState(null);
@@ -224,7 +226,15 @@ const Importer = ({
                         </button>
                     </div>
 
-                    <form onSubmit={handleSubmit} className="importer-form">
+                    <form 
+                        onSubmit={handleSubmit} 
+                        onKeyDown={(e) => {
+                            if (e.key === 'Enter' && e.target.tagName !== 'TEXTAREA') {
+                                e.preventDefault();
+                            }
+                        }}
+                        className="importer-form"
+                    >
                         <div className="importer-form-field">
                             <label className="importer-form-label">Importer Name</label>
                             <input
@@ -369,12 +379,8 @@ const Importer = ({
                                             <th className="importer-table-header" onClick={() => requestSort('contactPerson')}>
                                                 <div className="importer-table-header-content">Contact Person <SortIcon config={sortConfig.importer} columnKey="contactPerson" /></div>
                                             </th>
-                                            <th className="importer-table-header" onClick={() => requestSort('phone')}>
-                                                <div className="importer-table-header-content">Phone <SortIcon config={sortConfig.importer} columnKey="phone" /></div>
-                                            </th>
-                                            <th className="importer-table-header" onClick={() => requestSort('status')}>
-                                                <div className="importer-table-header-content">Status <SortIcon config={sortConfig.importer} columnKey="status" /></div>
-                                            </th>
+                                            <th className="importer-table-header" onClick={() => requestSort('phone')}><div className="importer-table-header-content">Phone <SortIcon config={sortConfig.importer} columnKey="phone" /></div></th>
+                                            <th className="importer-table-header" onClick={() => requestSort('status')}><div className="importer-table-header-content">Status <SortIcon config={sortConfig.importer} columnKey="status" /></div></th>
                                             <th className="importer-table-header">Actions</th>
                                         </tr>
                                     </thead>
@@ -411,21 +417,17 @@ const Importer = ({
                                                 <td className="importer-table-cell">{importer.contactPerson}</td>
                                                 <td className="importer-table-cell importer-table-cell-muted">{importer.phone}</td>
                                                 <td className="importer-table-cell">
-                                                    <span className={`importer-status-badge ${importer.status === 'Active' ? 'active' : 'inactive'}`}>
-                                                        {importer.status}
-                                                    </span>
+                                                    <span className={`importer-status-badge ${importer.status === 'Active' ? 'active' : 'inactive'}`}>{importer.status}</span>
                                                 </td>
                                                 <td className="importer-table-cell">
                                                     <div className="importer-table-actions">
-                                                        <button onClick={(e) => { e.stopPropagation(); setViewData(importer); }} className="importer-action-btn hover:bg-gray-100 text-gray-400 hover:text-gray-600">
-                                                            <EyeIcon className="w-5 h-5" />
-                                                        </button>
-                                                        <button onClick={(e) => { e.stopPropagation(); handleEdit(importer); }} className="importer-action-btn importer-action-edit">
-                                                            <EditIcon className="w-5 h-5" />
-                                                        </button>
-                                                        <button onClick={(e) => { e.stopPropagation(); handleDelete(importer._id); }} className="importer-action-btn importer-action-delete">
-                                                            <TrashIcon className="w-5 h-5" />
-                                                        </button>
+                                                        <button onClick={(e) => { e.stopPropagation(); setViewData(importer); }} className="importer-action-btn hover:bg-gray-100 text-gray-400 hover:text-gray-600"><EyeIcon className="w-5 h-5" /></button>
+                                                        {isAdmin && (
+                                                            <>
+                                                                <button onClick={(e) => { e.stopPropagation(); handleEdit(importer); }} className="importer-action-btn importer-action-edit"><EditIcon className="w-5 h-5" /></button>
+                                                                <button onClick={(e) => { e.stopPropagation(); handleDelete(importer._id); }} className="importer-action-btn importer-action-delete"><TrashIcon className="w-5 h-5" /></button>
+                                                            </>
+                                                        )}
                                                     </div>
                                                 </td>
                                             </tr>

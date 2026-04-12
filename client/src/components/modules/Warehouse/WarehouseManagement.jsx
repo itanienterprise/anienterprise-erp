@@ -1244,7 +1244,15 @@ const WarehouseManagement = ({ currentUser }) => {
                             </button>
                         </div>
 
-                        <form onSubmit={handleSubmit} className="relative z-10 space-y-6">
+                        <form 
+                            onSubmit={handleSubmit} 
+                            onKeyDown={(e) => {
+                                if (e.key === 'Enter' && e.target.tagName !== 'TEXTAREA') {
+                                    e.preventDefault();
+                                }
+                            }}
+                            className="relative z-10 space-y-6"
+                        >
                             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                                 <div className="space-y-2">
                                     <label className="text-sm font-bold text-gray-700 ml-1">Warehouse Name</label>

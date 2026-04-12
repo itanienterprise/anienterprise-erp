@@ -169,3 +169,25 @@ export const BuildingIcon = ({ className }) => (
     <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><rect width="16" height="20" x="4" y="2" rx="2" ry="2" /><path d="M9 22v-4h6v4" /><path d="M8 6h.01" /><path d="M16 6h.01" /><path d="M12 6h.01" /><path d="M12 10h.01" /><path d="M12 14h.01" /><path d="M16 10h.01" /><path d="M16 14h.01" /><path d="M8 10h.01" /><path d="M8 14h.01" /></svg>
 );
 
+
+export const LayoutIcon = ({ className }) => (
+    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><rect width="18" height="18" x="3" y="3" rx="2" ry="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="21" x2="9" y2="9"/></svg>
+);
+
+export const LCManagerIcon = ({ className }) => (
+    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+        {/* Document */}
+        <path d="M7 2h10v12H7z" />
+        {/* Bank Logo on Document */}
+        <path d="M9 6l3-2 3 2" />
+        <path d="M10 6v3" />
+        <path d="M14 6v3" />
+        <path d="M11 7.5h2" />
+        <path d="M12 6v3" />
+        
+        {/* Envelope */}
+        <path d="M2 12v8a2 2 0 002 2h16a2 2 0 002-2v-8" />
+        <path d="M2 12l10 7 10-7" />
+        <path d="M2 12l10-6 10 6" />
+    </svg>
+);

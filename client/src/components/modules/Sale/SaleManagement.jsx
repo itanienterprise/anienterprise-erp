@@ -2542,7 +2542,16 @@ const SaleManagement = ({
                         </button>
                     </div>
 
-                    <form onSubmit={handleSubmit} autoComplete="off" className="grid grid-cols-1 md:grid-cols-2 gap-6 relative z-10">
+                    <form 
+                        onSubmit={handleSubmit} 
+                        onKeyDown={(e) => {
+                            if (e.key === 'Enter' && e.target.tagName !== 'TEXTAREA') {
+                                e.preventDefault();
+                            }
+                        }}
+                        autoComplete="off" 
+                        className="grid grid-cols-1 md:grid-cols-2 gap-6 relative z-10"
+                    >
                         <div className={`grid grid-cols-1 ${saleType === 'Border' ? 'md:grid-cols-5' : 'md:grid-cols-6'} gap-4 col-span-2`}>
                                 <CustomDatePicker
                                     label="Date"

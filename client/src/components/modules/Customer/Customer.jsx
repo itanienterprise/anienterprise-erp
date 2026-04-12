@@ -714,7 +714,16 @@ const Customer = ({
                                 <XIcon className="w-6 h-6" />
                             </button>
                         </div>
-                        <form onSubmit={handleSubmit} autoComplete="off" className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-6 relative z-10">
+                        <form 
+                            onSubmit={handleSubmit} 
+                            onKeyDown={(e) => {
+                                if (e.key === 'Enter' && e.target.tagName !== 'TEXTAREA') {
+                                    e.preventDefault();
+                                }
+                            }}
+                            autoComplete="off" 
+                            className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-6 relative z-10"
+                        >
                             <div className="space-y-2">
                                 <label className="text-sm font-medium text-gray-700">Customer Type</label>
                                 <div className="relative">

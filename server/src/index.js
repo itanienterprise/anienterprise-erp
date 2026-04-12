@@ -64,6 +64,9 @@ const Notification = require('./models/Notification');
 const Bank = require('./models/Bank');
 const Exporter = require('./models/Exporter');
 const CnF = require('./models/CnF');
+const Insurance = require('./models/Insurance');
+const LCManagement = require('./models/LCManagement');
+const PI = require('./models/PI');
 const { encryptData, decryptData } = require('./utils/encryption');
 const CryptoJS = require('crypto-js');
 
@@ -107,6 +110,16 @@ app.post('/v', (req, res, next) => {
 app.get('/', (req, res) => {
   res.send('API is running...');
 });
+
+// Admin Authorization Middleware
+const adminOnly = (req, res, next) => {
+  const user = req.session.user;
+  const isAdmin = user && (user.username === 'admin' || user.role === 'admin');
+  if (!isAdmin) {
+    return res.status(403).json({ message: 'Forbidden: Admin access required' });
+  }
+  next();
+};
 
 // IP Records APIs
 apiRouter.post('/api/ip-records', async (req, res) => {
@@ -169,7 +182,7 @@ apiRouter.post('/api/importers', async (req, res) => {
 });
 
 // Delete Importer
-apiRouter.delete('/api/importers/:id', async (req, res) => {
+apiRouter.delete('/api/importers/:id', adminOnly, async (req, res) => {
   try {
     const deletedImporter = await Importer.findByIdAndDelete(req.params.id);
     if (!deletedImporter) return res.status(404).json({ message: 'Importer not found' });
@@ -180,7 +193,7 @@ apiRouter.delete('/api/importers/:id', async (req, res) => {
 });
 
 // Update Importer
-apiRouter.put('/api/importers/:id', async (req, res) => {
+apiRouter.put('/api/importers/:id', adminOnly, async (req, res) => {
   try {
     const encryptedData = encryptData(req.body);
     const updatedImporter = await Importer.findByIdAndUpdate(req.params.id, { data: encryptedData }, { new: true });
@@ -217,7 +230,7 @@ apiRouter.post('/api/exporters', async (req, res) => {
 });
 
 // Delete Exporter
-apiRouter.delete('/api/exporters/:id', async (req, res) => {
+apiRouter.delete('/api/exporters/:id', adminOnly, async (req, res) => {
   try {
     const deletedExporter = await Exporter.findByIdAndDelete(req.params.id);
     if (!deletedExporter) return res.status(404).json({ message: 'Exporter not found' });
@@ -228,7 +241,7 @@ apiRouter.delete('/api/exporters/:id', async (req, res) => {
 });
 
 // Update Exporter
-apiRouter.put('/api/exporters/:id', async (req, res) => {
+apiRouter.put('/api/exporters/:id', adminOnly, async (req, res) => {
   try {
     const encryptedData = encryptData(req.body);
     const updatedExporter = await Exporter.findByIdAndUpdate(req.params.id, { data: encryptedData }, { new: true });
@@ -264,7 +277,7 @@ apiRouter.post('/api/cnfs', async (req, res) => {
   }
 });
 
-apiRouter.delete('/api/cnfs/:id', async (req, res) => {
+apiRouter.delete('/api/cnfs/:id', adminOnly, async (req, res) => {
   try {
     const deletedCnF = await CnF.findByIdAndDelete(req.params.id);
     if (!deletedCnF) return res.status(404).json({ message: 'C&F not found' });
@@ -274,7 +287,7 @@ apiRouter.delete('/api/cnfs/:id', async (req, res) => {
   }
 });
 
-apiRouter.put('/api/cnfs/:id', async (req, res) => {
+apiRouter.put('/api/cnfs/:id', adminOnly, async (req, res) => {
   try {
     const encryptedData = encryptData(req.body);
     const updatedCnF = await CnF.findByIdAndUpdate(req.params.id, { data: encryptedData }, { new: true });
@@ -691,6 +704,144 @@ apiRouter.put('/api/banks/:id', async (req, res) => {
 apiRouter.get('/api/banks', async (req, res) => {
   try {
     const records = await Bank.find().sort({ createdAt: -1 });
+    const decrypted = records.map(r => {
+      const d = decryptData(r.data);
+      return { ...d, _id: r._id, createdAt: r.createdAt };
+    });
+    res.json(decrypted);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// Insurance APIs
+apiRouter.post('/api/insurance', async (req, res) => {
+  try {
+    const encryptedData = encryptData(req.body);
+    const newRecord = new Insurance({ data: encryptedData });
+    const savedRecord = await newRecord.save();
+    res.status(201).json({ ...req.body, _id: savedRecord._id, createdAt: savedRecord.createdAt });
+  } catch (err) {
+    res.status(400).json({ message: err.message });
+  }
+});
+
+apiRouter.delete('/api/insurance/:id', async (req, res) => {
+  try {
+    const deletedRecord = await Insurance.findByIdAndDelete(req.params.id);
+    if (!deletedRecord) return res.status(404).json({ message: 'Insurance record not found' });
+    res.json({ message: 'Insurance record deleted' });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+apiRouter.put('/api/insurance/:id', async (req, res) => {
+  try {
+    const encryptedData = encryptData(req.body);
+    const updatedRecord = await Insurance.findByIdAndUpdate(req.params.id, { data: encryptedData }, { new: true });
+    if (!updatedRecord) return res.status(404).json({ message: 'Insurance record not found' });
+    res.json({ ...req.body, _id: updatedRecord._id, createdAt: updatedRecord.createdAt });
+  } catch (err) {
+    res.status(400).json({ message: err.message });
+  }
+});
+
+apiRouter.get('/api/insurance', async (req, res) => {
+  try {
+    const records = await Insurance.find().sort({ createdAt: -1 });
+    const decrypted = records.map(r => {
+      const d = decryptData(r.data);
+      return { ...d, _id: r._id, createdAt: r.createdAt };
+    });
+    res.json(decrypted);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// LC Management APIs
+apiRouter.post('/api/lc-management', async (req, res) => {
+  try {
+    const encryptedData = encryptData(req.body);
+    const newRecord = new LCManagement({ data: encryptedData });
+    const savedRecord = await newRecord.save();
+    res.status(201).json({ ...req.body, _id: savedRecord._id, createdAt: savedRecord.createdAt });
+  } catch (err) {
+    res.status(400).json({ message: err.message });
+  }
+});
+
+apiRouter.delete('/api/lc-management/:id', async (req, res) => {
+  try {
+    const deletedRecord = await LCManagement.findByIdAndDelete(req.params.id);
+    if (!deletedRecord) return res.status(404).json({ message: 'LC record not found' });
+    res.json({ message: 'LC record deleted' });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+apiRouter.put('/api/lc-management/:id', async (req, res) => {
+  try {
+    const encryptedData = encryptData(req.body);
+    const updatedRecord = await LCManagement.findByIdAndUpdate(req.params.id, { data: encryptedData }, { new: true });
+    if (!updatedRecord) return res.status(404).json({ message: 'LC record not found' });
+    res.json({ ...req.body, _id: updatedRecord._id, createdAt: updatedRecord.createdAt });
+  } catch (err) {
+    res.status(400).json({ message: err.message });
+  }
+});
+
+apiRouter.get('/api/lc-management', async (req, res) => {
+  try {
+    const records = await LCManagement.find().sort({ createdAt: -1 });
+    const decrypted = records.map(r => {
+      const d = decryptData(r.data);
+      return { ...d, _id: r._id, createdAt: r.createdAt };
+    });
+    res.json(decrypted);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// PI APIs
+apiRouter.post('/api/pi', async (req, res) => {
+  try {
+    const encryptedData = encryptData(req.body);
+    const newRecord = new PI({ data: encryptedData });
+    const savedRecord = await newRecord.save();
+    res.status(201).json({ ...req.body, _id: savedRecord._id, createdAt: savedRecord.createdAt });
+  } catch (err) {
+    res.status(400).json({ message: err.message });
+  }
+});
+
+apiRouter.delete('/api/pi/:id', async (req, res) => {
+  try {
+    const deletedRecord = await PI.findByIdAndDelete(req.params.id);
+    if (!deletedRecord) return res.status(404).json({ message: 'PI record not found' });
+    res.json({ message: 'PI record deleted' });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+apiRouter.put('/api/pi/:id', async (req, res) => {
+  try {
+    const encryptedData = encryptData(req.body);
+    const updatedRecord = await PI.findByIdAndUpdate(req.params.id, { data: encryptedData }, { new: true });
+    if (!updatedRecord) return res.status(404).json({ message: 'PI record not found' });
+    res.json({ ...req.body, _id: updatedRecord._id, createdAt: updatedRecord.createdAt });
+  } catch (err) {
+    res.status(400).json({ message: err.message });
+  }
+});
+
+apiRouter.get('/api/pi', async (req, res) => {
+  try {
+    const records = await PI.find().sort({ createdAt: -1 });
     const decrypted = records.map(r => {
       const d = decryptData(r.data);
       return { ...d, _id: r._id, createdAt: r.createdAt };

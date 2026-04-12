@@ -2072,7 +2072,16 @@ function LCReceive({
                             </button>
                         </div>
 
-                        <form onSubmit={handleStockSubmit} autoComplete="off" className="grid grid-cols-1 md:grid-cols-2 gap-6 relative z-10">
+                        <form 
+                            onSubmit={handleStockSubmit} 
+                            onKeyDown={(e) => {
+                                if (e.key === 'Enter' && e.target.tagName !== 'TEXTAREA') {
+                                    e.preventDefault();
+                                }
+                            }}
+                            autoComplete="off" 
+                            className="grid grid-cols-1 md:grid-cols-2 gap-6 relative z-10"
+                        >
                             {/* Form Fields - Reusing logic by passing handlers */}
                             <div className="col-span-1 md:col-span-2 grid grid-cols-1 md:grid-cols-5 gap-6">
                                 <CustomDatePicker

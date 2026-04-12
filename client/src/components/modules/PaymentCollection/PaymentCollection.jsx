@@ -975,7 +975,15 @@ const PaymentCollection = () => {
                         </button>
                     </div>
 
-                    <form onSubmit={isEditMode ? handleUpdateCollection : handleAddCollection} className="grid grid-cols-1 md:grid-cols-2 gap-6 relative z-10">
+                    <form 
+                        onSubmit={isEditMode ? handleUpdateCollection : handleAddCollection} 
+                        onKeyDown={(e) => {
+                            if (e.key === 'Enter' && e.target.tagName !== 'TEXTAREA') {
+                                e.preventDefault();
+                            }
+                        }}
+                        className="grid grid-cols-1 md:grid-cols-2 gap-6 relative z-10"
+                    >
                         <div className="md:col-span-2 grid grid-cols-1 md:grid-cols-4 gap-6 items-end">
                             {/* Row 1: Date, Customer, Total Balance, Total Collection */}
                             <div className="space-y-2">

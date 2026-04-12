@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { EditIcon, TrashIcon, UserIcon, EyeIcon, XIcon, BoxIcon, SearchIcon, ChevronDownIcon, ChevronUpIcon, TrendingUpIcon, DollarSignIcon, FunnelIcon, PrinterIcon } from '../../Icons';
+import { EditIcon, TrashIcon, UserIcon, EyeIcon, XIcon, BoxIcon, SearchIcon, ChevronDownIcon, ChevronUpIcon, TrendingUpIcon, DollarSignIcon, FunnelIcon, PrinterIcon, BarChartIcon } from '../../Icons';
 import CustomDatePicker from "../../shared/CustomDatePicker";
-import { generateCnFHistoryReportPDF } from '../../../utils/pdfGenerator';
+import { generateCnFHistoryReportPDF, generateCnFAgentListReportPDF } from '../../../utils/pdfGenerator';
 import { API_BASE_URL, SortIcon, formatDate } from '../../../utils/helpers';
 import axios from '../../../utils/api';
 import './CnF.css';
+import CnFReport from './CnFReport';
 
 const CnF = ({
     moduleType,
@@ -26,6 +27,7 @@ const CnF = ({
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [submitStatus, setSubmitStatus] = useState(null);
     const [toast, setToast] = useState(null);
+    const [isReportModalOpen, setIsReportModalOpen] = useState(false);
     const toastTimerRef = useRef(null);
     const getEffectiveUser = () => {
         if (currentUser && currentUser.username) return currentUser;
@@ -811,7 +813,15 @@ const CnF = ({
                     />
                 </div>
 
-                <div className="w-full md:w-1/4 flex justify-end z-10">
+                <div className="w-full md:w-1/4 flex justify-end gap-2 z-10">
+                    <button
+                        onClick={() => setIsReportModalOpen(true)}
+                        className="w-full md:w-auto flex items-center justify-center gap-2 h-10 px-5 bg-white border border-gray-200 text-gray-700 rounded-xl text-[13px] font-bold shadow-sm hover:bg-gray-50 active:scale-95 transition-all whitespace-nowrap"
+                        title={`View ${moduleType} C&F Agent Report`}
+                    >
+                        <BarChartIcon className="w-5 h-5 text-gray-500" />
+                        <span>Report</span>
+                    </button>
                     <button onClick={() => { resetForm(); setShowForm(true); }} className="w-full md:w-auto cnf-add-btn whitespace-nowrap">+ Add New</button>
                 </div>
             </div>
@@ -822,7 +832,16 @@ const CnF = ({
                         <h3 className="cnf-form-title">{editingId ? `Edit ${moduleType}` : `New ${moduleType} Registration`}</h3>
                         <button onClick={() => { setShowForm(false); resetForm(); }} className="cnf-form-close"><XIcon className="w-6 h-6" /></button>
                     </div>
-                    <form onSubmit={handleSubmit} className="cnf-form" autoComplete="off">
+                    <form 
+                        onSubmit={handleSubmit} 
+                        onKeyDown={(e) => {
+                            if (e.key === 'Enter' && e.target.tagName !== 'TEXTAREA') {
+                                e.preventDefault();
+                            }
+                        }}
+                        className="cnf-form" 
+                        autoComplete="off"
+                    >
                         <div className="cnf-form-field"><label className="cnf-form-label">ID</label><input type="text" name="cnfId" value={formData.cnfId} readOnly className="cnf-form-input bg-gray-50/50 cursor-not-allowed font-bold" /></div>
                         <div className="cnf-form-field"><label className="cnf-form-label">{moduleType} Name</label><input type="text" name="name" value={formData.name} onChange={handleInputChange} required placeholder="Full Name" className="cnf-form-input" /></div>
                         <div className="cnf-form-field"><label className="cnf-form-label">Address</label><textarea name="cnf_location_full" value={formData.cnf_location_full} onChange={handleInputChange} required placeholder="Full Address" rows="1" className="cnf-form-textarea" /></div>
@@ -927,8 +946,12 @@ const CnF = ({
                                                 <td className="cnf-table-cell px-6">
                                                     <div className="cnf-table-actions justify-end">
                                                         <button onClick={(e) => { e.stopPropagation(); setViewData(cnf); }} className="cnf-action-btn hover:bg-gray-100 text-gray-400 hover:text-gray-600"><EyeIcon className="w-5 h-5" /></button>
-                                                        <button onClick={(e) => { e.stopPropagation(); handleEdit(cnf); }} className="cnf-action-btn cnf-action-edit"><EditIcon className="w-5 h-5" /></button>
-                                                        <button onClick={(e) => { e.stopPropagation(); handleDelete(cnf._id); }} className="cnf-action-btn cnf-action-delete"><TrashIcon className="w-5 h-5" /></button>
+                                                        {isAdmin && (
+                                                            <>
+                                                                <button onClick={(e) => { e.stopPropagation(); handleEdit(cnf); }} className="cnf-action-btn cnf-action-edit"><EditIcon className="w-5 h-5" /></button>
+                                                                <button onClick={(e) => { e.stopPropagation(); handleDelete(cnf._id); }} className="cnf-action-btn cnf-action-delete"><TrashIcon className="w-5 h-5" /></button>
+                                                            </>
+                                                        )}
                                                     </div>
                                                 </td>
                                             </tr>
@@ -989,8 +1012,12 @@ const CnF = ({
                                                     </div>
                                                     <div className="flex items-center gap-2 mt-4 pt-4 border-t border-gray-100">
                                                         <button onClick={(e) => { e.stopPropagation(); setViewData(cnf); }} className="flex items-center justify-center gap-2 py-2.5 px-4 bg-gray-50 text-gray-700 rounded-xl text-xs font-black flex-1 hover:bg-gray-100 transition-all active:scale-95"><EyeIcon className="w-4 h-4" /> History</button>
-                                                        <button onClick={(e) => { e.stopPropagation(); handleEdit(cnf); }} className="flex items-center justify-center gap-2 py-2.5 px-4 bg-blue-50 text-blue-700 rounded-xl text-xs font-black flex-1 hover:bg-blue-100 transition-all active:scale-95"><EditIcon className="w-4 h-4" /> Edit</button>
-                                                        <button onClick={(e) => { e.stopPropagation(); handleDelete(cnf._id); }} className="p-2.5 bg-red-50 text-red-600 rounded-xl hover:bg-red-100 transition-all active:scale-95"><TrashIcon className="w-4 h-4" /></button>
+                                                        {isAdmin && (
+                                                            <>
+                                                                <button onClick={(e) => { e.stopPropagation(); handleEdit(cnf); }} className="flex items-center justify-center gap-2 py-2.5 px-4 bg-blue-50 text-blue-700 rounded-xl text-xs font-black flex-1 hover:bg-blue-100 transition-all active:scale-95"><EditIcon className="w-4 h-4" /> Edit</button>
+                                                                <button onClick={(e) => { e.stopPropagation(); handleDelete(cnf._id); }} className="p-2.5 bg-red-50 text-red-600 rounded-xl hover:bg-red-100 transition-all active:scale-95"><TrashIcon className="w-4 h-4" /></button>
+                                                            </>
+                                                        )}
                                                     </div>
                                                 </div>
                                             )}
@@ -1497,6 +1524,13 @@ const CnF = ({
                     </div>
                 </div>
             )}
+
+            <CnFReport
+                isOpen={isReportModalOpen}
+                onClose={() => setIsReportModalOpen(false)}
+                agents={cnfs}
+                moduleType={moduleType}
+            />
         </div>
     );
 };

@@ -150,7 +150,15 @@ const ProductManagement = ({ products, fetchProducts }) => {
                                 <XIcon className="w-6 h-6" />
                             </button>
                         </div>
-                        <form onSubmit={handleProductSubmit} className="w-full flex flex-col gap-6">
+                        <form 
+                            onSubmit={handleProductSubmit} 
+                            onKeyDown={(e) => {
+                                if (e.key === 'Enter' && e.target.tagName !== 'TEXTAREA') {
+                                    e.preventDefault();
+                                }
+                            }}
+                            className="w-full flex flex-col gap-6"
+                        >
                             {/* Row 0: Top Grid Fields */}
                             <div className="grid grid-cols-2 md:grid-cols-6 gap-4 md:gap-6 w-full">
                                 <div className="col-span-1 md:col-span-3">

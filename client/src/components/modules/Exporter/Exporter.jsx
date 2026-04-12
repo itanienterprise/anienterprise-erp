@@ -16,8 +16,10 @@ const Exporter = ({
     onDeleteConfirm,
     startLongPress,
     endLongPress,
-    isLongPressTriggered
+    isLongPressTriggered,
+    currentUser
 }) => {
+    const isAdmin = currentUser?.role === 'admin' || currentUser?.username === 'admin';
     const [showForm, setShowForm] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [submitStatus, setSubmitStatus] = useState(null);
@@ -281,7 +283,15 @@ const Exporter = ({
                             <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
                         </button>
                     </div>
-                    <form onSubmit={handleSubmit} className="exporter-form">
+                    <form 
+                        onSubmit={handleSubmit} 
+                        onKeyDown={(e) => {
+                            if (e.key === 'Enter' && e.target.tagName !== 'TEXTAREA') {
+                                e.preventDefault();
+                            }
+                        }}
+                        className="exporter-form"
+                    >
                         <div className="exporter-form-field">
                             <label className="exporter-form-label">Exporter Name</label>
                             <input type="text" name="name" value={formData.name} onChange={handleInputChange} required placeholder="Full Name" className="exporter-form-input" />
@@ -402,8 +412,12 @@ const Exporter = ({
                                                 <td className="exporter-table-cell">
                                                     <div className="exporter-table-actions">
                                                         <button onClick={(e) => { e.stopPropagation(); setViewData(exporter); }} className="exporter-action-btn hover:bg-gray-100 text-gray-400 hover:text-gray-600"><EyeIcon className="w-5 h-5" /></button>
-                                                        <button onClick={(e) => { e.stopPropagation(); handleEdit(exporter); }} className="exporter-action-btn exporter-action-edit"><EditIcon className="w-5 h-5" /></button>
-                                                        <button onClick={(e) => { e.stopPropagation(); handleDelete(exporter._id); }} className="exporter-action-btn exporter-action-delete"><TrashIcon className="w-5 h-5" /></button>
+                                                        {isAdmin && (
+                                                            <>
+                                                                <button onClick={(e) => { e.stopPropagation(); handleEdit(exporter); }} className="exporter-action-btn exporter-action-edit"><EditIcon className="w-5 h-5" /></button>
+                                                                <button onClick={(e) => { e.stopPropagation(); handleDelete(exporter._id); }} className="exporter-action-btn exporter-action-delete"><TrashIcon className="w-5 h-5" /></button>
+                                                            </>
+                                                        )}
                                                     </div>
                                                 </td>
                                             </tr>
@@ -489,18 +503,22 @@ const Exporter = ({
                                                         >
                                                             <EyeIcon className="w-4 h-4" /> View History
                                                         </button>
-                                                        <button
-                                                            onClick={(e) => { e.stopPropagation(); handleEdit(exporter); }}
-                                                            className="flex items-center justify-center gap-2 py-2.5 px-4 bg-blue-50 text-blue-700 rounded-xl text-xs font-black flex-1 hover:bg-blue-100 transition-all active:scale-95"
-                                                        >
-                                                            <EditIcon className="w-4 h-4" /> Edit
-                                                        </button>
-                                                        <button
-                                                            onClick={(e) => { e.stopPropagation(); handleDelete(exporter._id); }}
-                                                            className="p-2.5 bg-red-50 text-red-600 rounded-xl hover:bg-red-100 transition-all active:scale-95"
-                                                        >
-                                                            <TrashIcon className="w-4 h-4" />
-                                                        </button>
+                                                        {isAdmin && (
+                                                            <>
+                                                                <button
+                                                                    onClick={(e) => { e.stopPropagation(); handleEdit(exporter); }}
+                                                                    className="flex items-center justify-center gap-2 py-2.5 px-4 bg-blue-50 text-blue-700 rounded-xl text-xs font-black flex-1 hover:bg-blue-100 transition-all active:scale-95"
+                                                                >
+                                                                    <EditIcon className="w-4 h-4" /> Edit
+                                                                </button>
+                                                                <button
+                                                                    onClick={(e) => { e.stopPropagation(); handleDelete(exporter._id); }}
+                                                                    className="p-2.5 bg-red-50 text-red-600 rounded-xl hover:bg-red-100 transition-all active:scale-95"
+                                                                >
+                                                                    <TrashIcon className="w-4 h-4" />
+                                                                </button>
+                                                            </>
+                                                        )}
                                                     </div>
                                                 </div>
                                             )}

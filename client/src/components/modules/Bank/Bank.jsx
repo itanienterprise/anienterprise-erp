@@ -222,7 +222,16 @@ const Bank = ({ onDeleteConfirm }) => {
                         </button>
                     </div>
 
-                    <form onSubmit={handleSubmit} autoComplete="off" className="grid grid-cols-1 md:grid-cols-2 gap-6 relative z-10">
+                    <form 
+                        onSubmit={handleSubmit} 
+                        onKeyDown={(e) => {
+                            if (e.key === 'Enter' && e.target.tagName !== 'TEXTAREA') {
+                                e.preventDefault();
+                            }
+                        }}
+                        autoComplete="off" 
+                        className="grid grid-cols-1 md:grid-cols-2 gap-6 relative z-10"
+                    >
                         <div className="col-span-1 md:col-span-2 space-y-2">
                             <label className="text-sm font-medium text-gray-700">Bank Name</label>
                             <input
