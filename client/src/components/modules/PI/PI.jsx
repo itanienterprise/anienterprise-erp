@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
-    FunnelIcon, XIcon, ChevronDownIcon, EditIcon, TrashIcon, SearchIcon
+    FunnelIcon, XIcon, ChevronDownIcon, EditIcon, TrashIcon, SearchIcon, PlusIcon, EyeIcon, PDFIcon
 } from '../../Icons';
+import { generatePIPDF } from '../../../utils/pipdfgenerator';
 import { API_BASE_URL, formatDate } from '../../../utils/helpers';
 import axios from '../../../utils/api';
 import CustomDatePicker from '../../shared/CustomDatePicker';
@@ -12,8 +13,11 @@ function PI({
     exporters,
     ports,
     products = [],
+    fetchPorts,
     onDeleteConfirm
 }) {
+    const DEFAULT_DESC_GOODS = "Insurance to be covered by the opener.\nPartial Bill & Partial Payment be allowed.\nNegotiation any Bank in India.\nThe Importer or Bank will not hold the bill in any circumstances.\nAll Foreign Bank Charges outside India are on account of Importer.\nWeight and measurement are final which is taken by weighing bridge in India.\n\nTRANSHIPMENT: ALLOWED\nPARTIAL SHIPMENT: ALLOWED";
+
     const [showForm, setShowForm] = useState(false);
     const [records, setRecords] = useState([]);
     const [isLoading, setIsLoading] = useState(false);
@@ -21,16 +25,25 @@ function PI({
     const [submitStatus, setSubmitStatus] = useState(null);
     const [searchQuery, setSearchQuery] = useState('');
     const [editingId, setEditingId] = useState(null);
+    const [banks, setBanks] = useState([]);
+    const [preCarriages, setPreCarriages] = useState([]);
+    const [receiptPlaces, setReceiptPlaces] = useState([]);
+    const [vessels, setVessels] = useState([]);
+    const [countries, setCountries] = useState([]);
     const [activeDropdown, setActiveDropdown] = useState(null);
     const [highlightedIndex, setHighlightedIndex] = useState(-1);
 
-    const [banks, setBanks] = useState([]);
     const [formData, setFormData] = useState({
         date: '',
         validityDate: '',
         piNumber: '',
         partyName: '',
+        partyAddress: '',
+        partyContact: '',
         exporterName: '',
+        exporterAddress: '',
+        exporterContact: '',
+        exporterEmail: '',
         productName: '',
         quantity: '',
         rate: '',
@@ -43,21 +56,44 @@ function PI({
         portOfLoading: '',
         portOfDischarge: '',
         indianBank: '',
+        buyerOrderNo: '',
+        buyerOrderDate: '',
+        otherReferences: '',
+        buyerName: '',
+        preCarriageBy: 'ROAD',
+        placeOfReceiptByPreCarrier: '',
+        vesselFlightNo: 'BY TRUCK',
+        countryOrigin: 'INDIA',
+        countryFinalDest: 'BANGLADESH',
+        finalDestination: 'BANGLADESH',
+        hsCode: '',
+        marksNo: '',
+        noKindPackage: '',
+        descriptionGoods: DEFAULT_DESC_GOODS,
+        termsDeliveryPayment: 'CPT BHOMRA, BANGLADESH, BY ROAD, BY TRUCK AGAINST 100% Irrevocable at Sight Letter of Credit valid for 90 days & Negotiable within 21 days of Shipment.\nPacking: Export Standard P.P/Gunny Bags.',
+        declaration: '1. Deliveries age quoted in good faith, however we shall not be responsible for delays due to reasons beyond our control.\n2. We declare that this invoice shows the actual price of the goods described and that all particulars are true and correct.',
         status: 'Active'
     });
 
     const partyRef = useRef(null);
     const exporterRef = useRef(null);
     const productRef = useRef(null);
-    const portRef = useRef(null);
-    const placeOfReceiptRef = useRef(null);
+    const bankRef = useRef(null);
     const portLoadingRef = useRef(null);
     const portDischargeRef = useRef(null);
-    const bankRef = useRef(null);
+    const preCarriageRef = useRef(null);
+    const receiptPlaceRef = useRef(null);
+    const vesselRef = useRef(null);
+    const countryOriginRef = useRef(null);
+    const countryFinalDestRef = useRef(null);
     const statusRef = useRef(null);
 
     useEffect(() => {
         fetchRecords();
+        fetchMetaData('preCarriage', setPreCarriages);
+        fetchMetaData('receiptPlace', setReceiptPlaces);
+        fetchMetaData('vessel', setVessels);
+        fetchMetaData('country', setCountries);
     }, []);
 
     useEffect(() => {
@@ -69,6 +105,15 @@ function PI({
         document.addEventListener('mousedown', handleClickOutside);
         return () => document.removeEventListener('mousedown', handleClickOutside);
     }, [activeDropdown]);
+
+    const fetchMetaData = async (category, setter) => {
+        try {
+            const response = await axios.get(`${API_BASE_URL}/api/metadata?category=${category}`);
+            setter(response.data);
+        } catch (error) {
+            console.error(`Error fetching meta ${category}:`, error);
+        }
+    };
 
     const fetchRecords = async () => {
         setIsLoading(true);
@@ -94,22 +139,99 @@ function PI({
                 const q = parseFloat(updated.quantity) || 0;
                 const r = parseFloat(updated.rate) || 0;
                 const f = parseFloat(updated.freight) || 0;
-                
-                const amt = q > 0 && r > 0 ? (q * r) : 0;
+
+                const amt = q * r;
+                const totalFreight = q * f;
+                const grandT = amt + totalFreight;
+
                 updated.amount = amt > 0 ? amt.toFixed(2) : '';
-                
-                const totFr = q > 0 && f > 0 ? (q * f) : 0;
-                updated.totalFreight = totFr > 0 ? totFr.toFixed(2) : '';
-                
-                const grand = amt + totFr;
-                updated.grandTotal = grand > 0 ? grand.toFixed(2) : '';
+                updated.totalFreight = totalFreight > 0 ? totalFreight.toFixed(2) : '';
+                updated.grandTotal = grandT > 0 ? grandT.toFixed(2) : '';
             }
+
+            if (name === 'date' && value) {
+                const selectedDate = new Date(value);
+                if (!isNaN(selectedDate.getTime())) {
+                    selectedDate.setDate(selectedDate.getDate() + 30);
+                    updated.validityDate = selectedDate.toISOString().split('T')[0];
+                }
+            }
+
+            if (name === 'countryFinalDest') {
+                updated.finalDestination = value;
+            }
+
             return updated;
         });
     };
 
+    const handleAddQuickPort = async (name) => {
+        if (!name) return;
+        try {
+            await axios.post(`${API_BASE_URL}/api/ports`, { name, isLoadingPort: true });
+            if (typeof fetchPorts === 'function') {
+                await fetchPorts();
+            }
+        } catch (error) {
+            console.error('Error adding quick port:', error);
+            alert('Failed to add port');
+        }
+    };
+
+    const handleAddQuickBank = async (name) => {
+        if (!name) return;
+        try {
+            await axios.post(`${API_BASE_URL}/api/banks`, { bankName: name, isIndian: true });
+            await fetchRecords();
+        } catch (error) {
+            console.error('Error adding quick bank:', error);
+            alert('Failed to add bank');
+        }
+    };
+
+    const handleAddQuickMetaData = async (category, value) => {
+        if (!value) return;
+        try {
+            await axios.post(`${API_BASE_URL}/api/metadata`, { category, value });
+            if (category === 'preCarriage') fetchMetaData(category, setPreCarriages);
+            else if (category === 'receiptPlace') fetchMetaData(category, setReceiptPlaces);
+            else if (category === 'vessel') fetchMetaData(category, setVessels);
+            else if (category === 'country') fetchMetaData(category, setCountries);
+        } catch (error) {
+            console.error(`Error adding quick ${category}:`, error);
+        }
+    };
+
     const handleDropdownSelect = (field, value) => {
-        setFormData(prev => ({ ...prev, [field]: value }));
+        setFormData(prev => {
+            const updated = { ...prev, [field]: value };
+
+            if (field === 'exporterName') {
+                const exporter = exporters.find(e => e.name === value);
+                if (exporter) {
+                    updated.exporterAddress = exporter.address || '';
+                    updated.exporterContact = exporter.phone || '';
+                    updated.exporterEmail = exporter.email || '';
+                }
+            }
+
+            if (field === 'partyName') {
+                const importer = importers.find(i => i.name === value);
+                if (importer) {
+                    updated.partyAddress = importer.address || '';
+                    updated.partyContact = importer.phone || '';
+                }
+            }
+
+            if (field === 'productName') {
+                const product = products.find(p => p.name === value);
+                if (product) {
+                    updated.hsCode = product.hsCode || '';
+                }
+            }
+
+            return updated;
+        });
         setActiveDropdown(null);
         setHighlightedIndex(-1);
     };
@@ -168,7 +290,12 @@ function PI({
             validityDate: '',
             piNumber: '',
             partyName: '',
+            partyAddress: '',
+            partyContact: '',
             exporterName: '',
+            exporterAddress: '',
+            exporterContact: '',
+            exporterEmail: '',
             productName: '',
             quantity: '',
             rate: '',
@@ -181,6 +308,22 @@ function PI({
             portOfLoading: '',
             portOfDischarge: '',
             indianBank: '',
+            buyerOrderNo: '',
+            buyerOrderDate: '',
+            otherReferences: '',
+            buyerName: '',
+            preCarriageBy: 'ROAD',
+            placeOfReceiptByPreCarrier: '',
+            vesselFlightNo: 'BY TRUCK',
+            countryOrigin: 'INDIA',
+            countryFinalDest: 'BANGLADESH',
+            finalDestination: 'BANGLADESH',
+            hsCode: '0806.10.90',
+            marksNo: '',
+            noKindPackage: '',
+            descriptionGoods: DEFAULT_DESC_GOODS,
+            termsDeliveryPayment: 'CPT BHOMRA, BANGLADESH, BY ROAD, BY TRUCK AGAINST 100% Confirm Irrevocable at Sight Letter of Credit valid for 90 days & Negotiable within 21 days of Shipment.\nPacking: Export Standard P.P/Gunny Bags.',
+            declaration: '1. Deliveries age quoted in good faith, however we shall not be responsible for delays due to reasons beyond our control.\n2. We declare that this invoice shows the actual price of the goods described and that all particulars are true and correct.',
             status: 'Active'
         });
         setEditingId(null);
@@ -193,7 +336,12 @@ function PI({
             validityDate: record.validityDate || '',
             piNumber: record.piNumber || '',
             partyName: record.partyName || '',
+            partyAddress: record.partyAddress || '',
+            partyContact: record.partyContact || '',
             exporterName: record.exporterName || '',
+            exporterAddress: record.exporterAddress || '',
+            exporterContact: record.exporterContact || '',
+            exporterEmail: record.exporterEmail || '',
             productName: record.productName || '',
             quantity: record.quantity || '',
             rate: record.rate || '',
@@ -206,6 +354,22 @@ function PI({
             portOfLoading: record.portOfLoading || '',
             portOfDischarge: record.portOfDischarge || '',
             indianBank: record.indianBank || '',
+            buyerOrderNo: record.buyerOrderNo || '',
+            buyerOrderDate: record.buyerOrderDate || '',
+            otherReferences: record.otherReferences || '',
+            buyerName: record.buyerName || '',
+            preCarriageBy: record.preCarriageBy || 'ROAD',
+            placeOfReceiptByPreCarrier: record.placeOfReceiptByPreCarrier || '',
+            vesselFlightNo: record.vesselFlightNo || 'BY TRUCK',
+            countryOrigin: record.countryOrigin || 'INDIA',
+            countryFinalDest: record.countryFinalDest || 'BANGLADESH',
+            finalDestination: record.finalDestination || 'BANGLADESH',
+            hsCode: record.hsCode || '0806.10.90',
+            marksNo: record.marksNo || '',
+            noKindPackage: record.noKindPackage || '',
+            descriptionGoods: record.descriptionGoods || '',
+            termsDeliveryPayment: record.termsDeliveryPayment || 'CPT BHOMRA, BANGLADESH, BY ROAD, BY TRUCK AGAINST 100% Confirm Irrevocable at Sight Letter of Credit valid for 90 days & Negotiable within 21 days of Shipment.\nPacking: Export Standard P.P/Gunny Bags.',
+            declaration: record.declaration || '1. Deliveries age quoted in good faith, however we shall not be responsible for delays due to reasons beyond our control.\n2. We declare that this invoice shows the actual price of the goods described and that all particulars are true and correct.',
             status: record.status || 'Active'
         });
         setEditingId(record._id);
@@ -217,9 +381,9 @@ function PI({
             // Reusing existing generalized delete modal if possible, otherwise trigger native confirm or basic logic
             onDeleteConfirm({ show: true, type: 'pi', id, isBulk: false });
         } else {
-             if (window.confirm("Are you sure you want to delete this PI record?")) {
-                 axios.delete(`${API_BASE_URL}/api/pi/${id}`).then(() => fetchRecords());
-             }
+            if (window.confirm("Are you sure you want to delete this PI record?")) {
+                axios.delete(`${API_BASE_URL}/api/pi/${id}`).then(() => fetchRecords());
+            }
         }
     };
 
@@ -227,41 +391,43 @@ function PI({
         if (searchQuery) {
             const query = searchQuery.toLowerCase();
             return (record.piNumber || '').toLowerCase().includes(query) ||
-                   (record.partyName || '').toLowerCase().includes(query) ||
-                   (record.productName || '').toLowerCase().includes(query);
+                (record.partyName || '').toLowerCase().includes(query) ||
+                (record.productName || '').toLowerCase().includes(query);
         }
         return true;
     });
 
     return (
         <div className="pi-management space-y-6">
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                <div className="w-full md:w-1/4 text-center md:text-left">
-                    <h2 className="text-2xl font-bold text-gray-800" style={{margin:0}}>Proforma Invoice (PI)</h2>
-                </div>
-                
-                <div className="w-full md:flex-1 md:max-w-md md:mx-auto relative group px-2 md:px-0">
-                    <div className="absolute inset-y-0 left-0 pl-5 md:pl-3.5 flex items-center pointer-events-none">
-                        <SearchIcon className="h-4 w-4 text-gray-400 group-focus-within:text-blue-500 transition-colors" />
+            {!showForm && (
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                    <div className="w-full md:w-1/4 text-center md:text-left">
+                        <h2 className="text-2xl font-bold text-gray-800" style={{ margin: 0 }}>Proforma Invoice (PI)</h2>
                     </div>
-                    <input
-                        type="text"
-                        placeholder="Search PI No, Party, or Product..."
-                        value={searchQuery}
-                        onChange={(e) => setSearchQuery(e.target.value)}
-                        className="block w-full pl-12 md:pl-10 pr-4 py-2.5 md:py-2 bg-white/50 border border-gray-200 rounded-xl text-[13px] text-center md:text-left placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all outline-none shadow-sm focus:bg-white"
-                    />
-                </div>
 
-                <div className="w-full md:w-1/4 flex justify-end z-10 gap-2 sm:gap-3">
-                    <button
-                        onClick={() => setShowForm(!showForm)}
-                        className="flex-1 md:flex-none px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-xl shadow-lg shadow-blue-500/30 transition-all transform hover:scale-105 flex items-center justify-center whitespace-nowrap"
-                    >
-                        <span className="mr-1.5 font-bold text-lg leading-none">+</span> Add New
-                    </button>
+                    <div className="w-full md:flex-1 md:max-w-md md:mx-auto relative group px-2 md:px-0">
+                        <div className="absolute inset-y-0 left-0 pl-5 md:pl-3.5 flex items-center pointer-events-none">
+                            <SearchIcon className="h-4 w-4 text-gray-400 group-focus-within:text-blue-500 transition-colors" />
+                        </div>
+                        <input
+                            type="text"
+                            placeholder="Search PI No, Party, or Product..."
+                            value={searchQuery}
+                            onChange={(e) => setSearchQuery(e.target.value)}
+                            className="block w-full pl-12 md:pl-10 pr-4 py-2.5 md:py-2 bg-white/50 border border-gray-200 rounded-xl text-[13px] text-center md:text-left placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all outline-none shadow-sm focus:bg-white"
+                        />
+                    </div>
+
+                    <div className="w-full md:w-1/4 flex justify-end z-10 gap-2 sm:gap-3">
+                        <button
+                            onClick={() => setShowForm(!showForm)}
+                            className="flex-1 md:flex-none px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-xl shadow-lg shadow-blue-500/30 transition-all transform hover:scale-105 flex items-center justify-center whitespace-nowrap"
+                        >
+                            <span className="mr-1.5 font-bold text-lg leading-none">+</span> Add New
+                        </button>
+                    </div>
                 </div>
-            </div>
+            )}
 
             {showForm && (
                 <div className="pi-form relative rounded-2xl bg-white/60 backdrop-blur-xl border border-white/50 shadow-2xl p-8 transition-all duration-300">
@@ -275,10 +441,11 @@ function PI({
                         </button>
                     </div>
 
-                    <form 
-                        onSubmit={handleSubmit} 
+                    <form
+                        onSubmit={handleSubmit}
                         className="grid grid-cols-1 md:grid-cols-3 gap-6 relative z-10"
                     >
+                        {/* --- Basic Info --- */}
                         <CustomDatePicker
                             label="Date"
                             name="date"
@@ -310,38 +477,7 @@ function PI({
                             />
                         </div>
 
-                        <div className="space-y-2 relative dropdown-container" ref={partyRef}>
-                            <label className="text-sm font-medium text-gray-700">Party / Importer</label>
-                            <div className="relative">
-                                <input
-                                    type="text"
-                                    name="partyName"
-                                    value={formData.partyName}
-                                    onChange={(e) => { handleInputChange(e); setActiveDropdown('party'); setHighlightedIndex(-1); }}
-                                    onFocus={() => { setActiveDropdown('party'); setHighlightedIndex(-1); }}
-                                    onKeyDown={(e) => handleDropdownKeyDown(e, 'party', importers.filter(imp => !formData.partyName || imp.name.toLowerCase().includes(formData.partyName.toLowerCase())), 'partyName')}
-                                    placeholder="Search Importer..."
-                                    required
-                                    className="w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-all pr-10"
-                                />
-                                {activeDropdown === 'party' && (
-                                    <div className="absolute z-[60] w-full mt-1 bg-white border border-gray-100 rounded-xl shadow-xl max-h-48 overflow-y-auto">
-                                        {importers.filter(imp => !formData.partyName || imp.name.toLowerCase().includes(formData.partyName.toLowerCase())).map((imp, idx) => (
-                                            <button
-                                                key={imp._id}
-                                                type="button"
-                                                onMouseDown={() => handleDropdownSelect('partyName', imp.name)}
-                                                onMouseEnter={() => setHighlightedIndex(idx)}
-                                                className={`w-full px-4 py-2 text-left text-sm ${highlightedIndex === idx || formData.partyName === imp.name ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-blue-50'}`}
-                                            >
-                                                {imp.name}
-                                            </button>
-                                        ))}
-                                    </div>
-                                )}
-                            </div>
-                        </div>
-
+                        {/* --- Exporter Section --- */}
                         <div className="space-y-2 relative dropdown-container" ref={exporterRef}>
                             <label className="text-sm font-medium text-gray-700">Exporter</label>
                             <div className="relative">
@@ -354,6 +490,7 @@ function PI({
                                     onKeyDown={(e) => handleDropdownKeyDown(e, 'exporter', exporters.filter(exp => !formData.exporterName || exp.name.toLowerCase().includes(formData.exporterName.toLowerCase())), 'exporterName')}
                                     placeholder="Search Exporter..."
                                     required
+                                    autoComplete="off"
                                     className="w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-all pr-10"
                                 />
                                 {activeDropdown === 'exporter' && (
@@ -374,6 +511,445 @@ function PI({
                             </div>
                         </div>
 
+                        <div className="space-y-2">
+                            <label className="text-sm font-medium text-gray-700">Exporter Address</label>
+                            <input
+                                type="text"
+                                name="exporterAddress"
+                                value={formData.exporterAddress}
+                                onChange={handleInputChange}
+                                placeholder="Address"
+                                autoComplete="off"
+                                className="w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-all"
+                            />
+                        </div>
+
+                        <div className="space-y-2">
+                            <label className="text-sm font-medium text-gray-700">Exporter Contact</label>
+                            <input
+                                type="text"
+                                name="exporterContact"
+                                value={formData.exporterContact}
+                                onChange={handleInputChange}
+                                placeholder="Phone / Email"
+                                autoComplete="off"
+                                className="w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-all"
+                            />
+                        </div>
+
+                        {/* --- Importer Section --- */}
+                        <div className="space-y-2 relative dropdown-container" ref={partyRef}>
+                            <label className="text-sm font-medium text-gray-700">Party / Importer</label>
+                            <div className="relative">
+                                <input
+                                    type="text"
+                                    name="partyName"
+                                    value={formData.partyName}
+                                    onChange={(e) => { handleInputChange(e); setActiveDropdown('party'); setHighlightedIndex(-1); }}
+                                    onFocus={() => { setActiveDropdown('party'); setHighlightedIndex(-1); }}
+                                    onKeyDown={(e) => handleDropdownKeyDown(e, 'party', importers.filter(imp => !formData.partyName || imp.name.toLowerCase().includes(formData.partyName.toLowerCase())), 'partyName')}
+                                    placeholder="Search Importer..."
+                                    required
+                                    autoComplete="off"
+                                    className="w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-all pr-10"
+                                />
+                                {activeDropdown === 'party' && (
+                                    <div className="absolute z-[60] w-full mt-1 bg-white border border-gray-100 rounded-xl shadow-xl max-h-48 overflow-y-auto">
+                                        {importers.filter(imp => !formData.partyName || imp.name.toLowerCase().includes(formData.partyName.toLowerCase())).map((imp, idx) => (
+                                            <button
+                                                key={imp._id}
+                                                type="button"
+                                                onMouseDown={() => handleDropdownSelect('partyName', imp.name)}
+                                                onMouseEnter={() => setHighlightedIndex(idx)}
+                                                className={`w-full px-4 py-2 text-left text-sm ${highlightedIndex === idx || formData.partyName === imp.name ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-blue-50'}`}
+                                            >
+                                                {imp.name}
+                                            </button>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+
+                        <div className="space-y-2">
+                            <label className="text-sm font-medium text-gray-700">Party Address</label>
+                            <input
+                                type="text"
+                                name="partyAddress"
+                                value={formData.partyAddress}
+                                onChange={handleInputChange}
+                                placeholder="Address"
+                                autoComplete="off"
+                                className="w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-all"
+                            />
+                        </div>
+
+                        <div className="space-y-2">
+                            <label className="text-sm font-medium text-gray-700">Party Contact</label>
+                            <input
+                                type="text"
+                                name="partyContact"
+                                value={formData.partyContact}
+                                onChange={handleInputChange}
+                                placeholder="Contact Details"
+                                autoComplete="off"
+                                className="w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-all"
+                            />
+                        </div>
+
+                        {/* --- Shipping Info --- */}
+                        <div className="space-y-2 relative dropdown-container" ref={preCarriageRef}>
+                            <label className="text-sm font-medium text-gray-700">Pre-Carriage By</label>
+                            <div className="relative">
+                                <input
+                                    type="text"
+                                    name="preCarriageBy"
+                                    value={formData.preCarriageBy}
+                                    onChange={(e) => { handleInputChange(e); setActiveDropdown('preCarriage'); setHighlightedIndex(-1); }}
+                                    onFocus={() => { setActiveDropdown('preCarriage'); setHighlightedIndex(-1); }}
+                                    onKeyDown={(e) => handleDropdownKeyDown(e, 'preCarriage', preCarriages.filter(v => !formData.preCarriageBy || v.value.toLowerCase().includes(formData.preCarriageBy.toLowerCase())), 'preCarriageBy')}
+                                    placeholder="e.g. ROAD"
+                                    className="w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-all pr-10"
+                                    autoComplete="off"
+                                />
+                                <button
+                                    type="button"
+                                    onClick={() => handleAddQuickMetaData('preCarriage', formData.preCarriageBy)}
+                                    className="absolute right-2 top-1/2 -translate-y-1/2 text-blue-500 hover:text-blue-700 p-1"
+                                    title="Add new pre-carriage mode"
+                                >
+                                    <PlusIcon className="w-4 h-4" />
+                                </button>
+                                {activeDropdown === 'preCarriage' && (
+                                    <div className="absolute z-[60] w-full mt-1 bg-white border border-gray-100 rounded-xl shadow-xl max-h-48 overflow-y-auto">
+                                        {preCarriages.filter(v => !formData.preCarriageBy || v.value.toLowerCase().includes(formData.preCarriageBy.toLowerCase())).map((v, idx) => (
+                                            <button
+                                                key={v._id}
+                                                type="button"
+                                                onMouseDown={() => handleDropdownSelect('preCarriageBy', v.value)}
+                                                onMouseEnter={() => setHighlightedIndex(idx)}
+                                                className={`w-full px-4 py-2 text-left text-sm ${highlightedIndex === idx || formData.preCarriageBy === v.value ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-blue-50'}`}
+                                            >
+                                                {v.value}
+                                            </button>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+
+                        <div className="space-y-2 relative dropdown-container" ref={receiptPlaceRef}>
+                            <label className="text-sm font-medium text-gray-700">Place of Receipt (Pre-Carrier)</label>
+                            <div className="relative">
+                                <input
+                                    type="text"
+                                    name="placeOfReceipt"
+                                    value={formData.placeOfReceipt}
+                                    onChange={(e) => { handleInputChange(e); setActiveDropdown('receiptPlace'); setHighlightedIndex(-1); }}
+                                    onFocus={() => { setActiveDropdown('receiptPlace'); setHighlightedIndex(-1); }}
+                                    onKeyDown={(e) => handleDropdownKeyDown(e, 'receiptPlace', receiptPlaces.filter(v => !formData.placeOfReceipt || v.value.toLowerCase().includes(formData.placeOfReceipt.toLowerCase())), 'placeOfReceipt')}
+                                    placeholder="e.g. GHOJADANGA"
+                                    className="w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-all pr-10"
+                                    autoComplete="off"
+                                />
+                                <button
+                                    type="button"
+                                    onClick={() => handleAddQuickMetaData('receiptPlace', formData.placeOfReceipt)}
+                                    className="absolute right-2 top-1/2 -translate-y-1/2 text-blue-500 hover:text-blue-700 p-1"
+                                    title="Add new place of receipt"
+                                >
+                                    <PlusIcon className="w-4 h-4" />
+                                </button>
+                                {activeDropdown === 'receiptPlace' && (
+                                    <div className="absolute z-[60] w-full mt-1 bg-white border border-gray-100 rounded-xl shadow-xl max-h-48 overflow-y-auto">
+                                        {receiptPlaces.filter(v => !formData.placeOfReceipt || v.value.toLowerCase().includes(formData.placeOfReceipt.toLowerCase())).map((v, idx) => (
+                                            <button
+                                                key={v._id}
+                                                type="button"
+                                                onMouseDown={() => handleDropdownSelect('placeOfReceipt', v.value)}
+                                                onMouseEnter={() => setHighlightedIndex(idx)}
+                                                className={`w-full px-4 py-2 text-left text-sm ${highlightedIndex === idx || formData.placeOfReceipt === v.value ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-blue-50'}`}
+                                            >
+                                                {v.value}
+                                            </button>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+
+                        <div className="space-y-2 relative dropdown-container" ref={vesselRef}>
+                            <label className="text-sm font-medium text-gray-700">Vessel / Flight No</label>
+                            <div className="relative">
+                                <input
+                                    type="text"
+                                    name="vesselFlightNo"
+                                    value={formData.vesselFlightNo}
+                                    onChange={(e) => { handleInputChange(e); setActiveDropdown('vessel'); setHighlightedIndex(-1); }}
+                                    onFocus={() => { setActiveDropdown('vessel'); setHighlightedIndex(-1); }}
+                                    onKeyDown={(e) => handleDropdownKeyDown(e, 'vessel', vessels.filter(v => !formData.vesselFlightNo || v.value.toLowerCase().includes(formData.vesselFlightNo.toLowerCase())), 'vesselFlightNo')}
+                                    placeholder="e.g. BY TRUCK"
+                                    className="w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-all pr-10"
+                                    autoComplete="off"
+                                />
+                                <button
+                                    type="button"
+                                    onClick={() => handleAddQuickMetaData('vessel', formData.vesselFlightNo)}
+                                    className="absolute right-2 top-1/2 -translate-y-1/2 text-blue-500 hover:text-blue-700 p-1"
+                                    title="Add new vessel/flight"
+                                >
+                                    <PlusIcon className="w-4 h-4" />
+                                </button>
+                                {activeDropdown === 'vessel' && (
+                                    <div className="absolute z-[60] w-full mt-1 bg-white border border-gray-100 rounded-xl shadow-xl max-h-48 overflow-y-auto">
+                                        {vessels.filter(v => !formData.vesselFlightNo || v.value.toLowerCase().includes(formData.vesselFlightNo.toLowerCase())).map((v, idx) => (
+                                            <button
+                                                key={v._id}
+                                                type="button"
+                                                onMouseDown={() => handleDropdownSelect('vesselFlightNo', v.value)}
+                                                onMouseEnter={() => setHighlightedIndex(idx)}
+                                                className={`w-full px-4 py-2 text-left text-sm ${highlightedIndex === idx || formData.vesselFlightNo === v.value ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-blue-50'}`}
+                                            >
+                                                {v.value}
+                                            </button>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+
+                        <div className="space-y-2 relative dropdown-container" ref={portLoadingRef}>
+                            <label className="text-sm font-medium text-gray-700">Port of Loading</label>
+                            <div className="relative">
+                                <input
+                                    type="text"
+                                    name="portOfLoading"
+                                    value={formData.portOfLoading}
+                                    onChange={(e) => { handleInputChange(e); setActiveDropdown('portLoading'); setHighlightedIndex(-1); }}
+                                    onFocus={() => { setActiveDropdown('portLoading'); setHighlightedIndex(-1); }}
+                                    onKeyDown={(e) => handleDropdownKeyDown(e, 'portLoading', ports.filter(p => p.isLoadingPort && (!formData.portOfLoading || p.name.toLowerCase().includes(formData.portOfLoading.toLowerCase()))), 'portOfLoading')}
+                                    placeholder="Search Port of Loading..."
+                                    required
+                                    autoComplete="off"
+                                    className="w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-all pr-10"
+                                />
+                                <button
+                                    type="button"
+                                    onClick={() => handleAddQuickPort(formData.portOfLoading)}
+                                    className="absolute right-2 top-1/2 -translate-y-1/2 text-blue-500 hover:text-blue-700 p-1"
+                                    title="Add new loading port"
+                                >
+                                    <PlusIcon className="w-4 h-4" />
+                                </button>
+                                {activeDropdown === 'portLoading' && (
+                                    <div className="absolute z-[60] w-full mt-1 bg-white border border-gray-100 rounded-xl shadow-xl max-h-48 overflow-y-auto">
+                                        {ports.filter(p => p.isLoadingPort && (!formData.portOfLoading || p.name.toLowerCase().includes(formData.portOfLoading.toLowerCase()))).map((p, idx) => (
+                                            <button
+                                                key={p._id}
+                                                type="button"
+                                                onMouseDown={() => handleDropdownSelect('portOfLoading', p.name)}
+                                                onMouseEnter={() => setHighlightedIndex(idx)}
+                                                className={`w-full px-4 py-2 text-left text-sm ${highlightedIndex === idx || formData.portOfLoading === p.name ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-blue-50'}`}
+                                            >
+                                                {p.name}
+                                            </button>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+
+                        <div className="space-y-2 relative dropdown-container" ref={portDischargeRef}>
+                            <label className="text-sm font-medium text-gray-700">Port of Discharge</label>
+                            <div className="relative">
+                                <input
+                                    type="text"
+                                    name="portOfDischarge"
+                                    value={formData.portOfDischarge}
+                                    onChange={(e) => { handleInputChange(e); setActiveDropdown('portDischarge'); setHighlightedIndex(-1); }}
+                                    onFocus={() => { setActiveDropdown('portDischarge'); setHighlightedIndex(-1); }}
+                                    onKeyDown={(e) => handleDropdownKeyDown(e, 'portDischarge', ports.filter(p => !p.isLoadingPort && (!formData.portOfDischarge || p.name.toLowerCase().includes(formData.portOfDischarge.toLowerCase()))), 'portOfDischarge')}
+                                    placeholder="Search Port of Discharge..."
+                                    required
+                                    autoComplete="off"
+                                    className="w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-all pr-10"
+                                />
+                                {activeDropdown === 'portDischarge' && (
+                                    <div className="absolute z-[60] w-full mt-1 bg-white border border-gray-100 rounded-xl shadow-xl max-h-48 overflow-y-auto">
+                                        {ports.filter(p => !p.isLoadingPort && (!formData.portOfDischarge || p.name.toLowerCase().includes(formData.portOfDischarge.toLowerCase()))).map((p, idx) => (
+                                            <button
+                                                key={p._id}
+                                                type="button"
+                                                onMouseDown={() => handleDropdownSelect('portOfDischarge', p.name)}
+                                                onMouseEnter={() => setHighlightedIndex(idx)}
+                                                className={`w-full px-4 py-2 text-left text-sm ${highlightedIndex === idx || formData.portOfDischarge === p.name ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-blue-50'}`}
+                                            >
+                                                {p.name}
+                                            </button>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+
+                        <div className="space-y-2 relative dropdown-container" ref={countryOriginRef}>
+                            <label className="text-sm font-medium text-gray-700">Country of Origin</label>
+                            <div className="relative">
+                                <input
+                                    type="text"
+                                    name="countryOrigin"
+                                    value={formData.countryOrigin}
+                                    onChange={(e) => { handleInputChange(e); setActiveDropdown('countryOrigin'); setHighlightedIndex(-1); }}
+                                    onFocus={() => { setActiveDropdown('countryOrigin'); setHighlightedIndex(-1); }}
+                                    onKeyDown={(e) => handleDropdownKeyDown(e, 'country', countries.filter(v => !formData.countryOrigin || v.value.toLowerCase().includes(formData.countryOrigin.toLowerCase())), 'countryOrigin')}
+                                    autoComplete="off"
+                                    className="w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-all pr-10"
+                                />
+                                <button
+                                    type="button"
+                                    onClick={() => handleAddQuickMetaData('country', formData.countryOrigin)}
+                                    className="absolute right-2 top-1/2 -translate-y-1/2 text-blue-500 hover:text-blue-700 p-1"
+                                    title="Add new country"
+                                >
+                                    <PlusIcon className="w-4 h-4" />
+                                </button>
+                                {activeDropdown === 'countryOrigin' && (
+                                    <div className="absolute z-[60] w-full mt-1 bg-white border border-gray-100 rounded-xl shadow-xl max-h-48 overflow-y-auto">
+                                        {countries.filter(v => !formData.countryOrigin || v.value.toLowerCase().includes(formData.countryOrigin.toLowerCase())).map((v, idx) => (
+                                            <button
+                                                key={v._id}
+                                                type="button"
+                                                onMouseDown={() => handleDropdownSelect('countryOrigin', v.value)}
+                                                onMouseEnter={() => setHighlightedIndex(idx)}
+                                                className={`w-full px-4 py-2 text-left text-sm ${highlightedIndex === idx || formData.countryOrigin === v.value ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-blue-50'}`}
+                                            >
+                                                {v.value}
+                                            </button>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+
+                        <div className="space-y-2 relative dropdown-container" ref={countryFinalDestRef}>
+                            <label className="text-sm font-medium text-gray-700">Country of Final Destination</label>
+                            <div className="relative">
+                                <input
+                                    type="text"
+                                    name="countryFinalDest"
+                                    value={formData.countryFinalDest}
+                                    onChange={(e) => { handleInputChange(e); setActiveDropdown('countryFinalDest'); setHighlightedIndex(-1); }}
+                                    onFocus={() => { setActiveDropdown('countryFinalDest'); setHighlightedIndex(-1); }}
+                                    onKeyDown={(e) => handleDropdownKeyDown(e, 'country', countries.filter(v => !formData.countryFinalDest || v.value.toLowerCase().includes(formData.countryFinalDest.toLowerCase())), 'countryFinalDest')}
+                                    autoComplete="off"
+                                    className="w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-all pr-10"
+                                />
+                                <button
+                                    type="button"
+                                    onClick={() => handleAddQuickMetaData('country', formData.countryFinalDest)}
+                                    className="absolute right-2 top-1/2 -translate-y-1/2 text-blue-500 hover:text-blue-700 p-1"
+                                    title="Add new country"
+                                >
+                                    <PlusIcon className="w-4 h-4" />
+                                </button>
+                                {activeDropdown === 'countryFinalDest' && (
+                                    <div className="absolute z-[60] w-full mt-1 bg-white border border-gray-100 rounded-xl shadow-xl max-h-48 overflow-y-auto">
+                                        {countries.filter(v => !formData.countryFinalDest || v.value.toLowerCase().includes(formData.countryFinalDest.toLowerCase())).map((v, idx) => (
+                                            <button
+                                                key={v._id}
+                                                type="button"
+                                                onMouseDown={() => handleDropdownSelect('countryFinalDest', v.value)}
+                                                onMouseEnter={() => setHighlightedIndex(idx)}
+                                                className={`w-full px-4 py-2 text-left text-sm ${highlightedIndex === idx || formData.countryFinalDest === v.value ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-blue-50'}`}
+                                            >
+                                                {v.value}
+                                            </button>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+
+                        <div className="space-y-2 relative dropdown-container" ref={bankRef}>
+                            <label className="text-sm font-medium text-gray-700">Advising Bank (Indian Bank)</label>
+                            <div className="relative">
+                                <input
+                                    type="text"
+                                    name="indianBank"
+                                    value={formData.indianBank}
+                                    onChange={(e) => { handleInputChange(e); setActiveDropdown('bank'); setHighlightedIndex(-1); }}
+                                    onFocus={() => { setActiveDropdown('bank'); setHighlightedIndex(-1); }}
+                                    onKeyDown={(e) => handleDropdownKeyDown(e, 'bank', banks.filter(bank => bank.isIndian && (!formData.indianBank || bank.bankName.toLowerCase().includes(formData.indianBank.toLowerCase()))), 'indianBank')}
+                                    placeholder="Search Indian Bank..."
+                                    autoComplete="off"
+                                    className="w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-all pr-10"
+                                />
+                                <button
+                                    type="button"
+                                    onClick={() => handleAddQuickBank(formData.indianBank)}
+                                    className="absolute right-2 top-1/2 -translate-y-1/2 text-blue-500 hover:text-blue-700 p-1"
+                                    title="Add new bank"
+                                >
+                                    <PlusIcon className="w-4 h-4" />
+                                </button>
+                                {activeDropdown === 'bank' && (
+                                    <div className="absolute z-[60] w-full mt-1 bg-white border border-gray-100 rounded-xl shadow-xl max-h-48 overflow-y-auto">
+                                        {banks.filter(bank => bank.isIndian && (!formData.indianBank || bank.bankName.toLowerCase().includes(formData.indianBank.toLowerCase()))).map((bank, idx) => (
+                                            <button
+                                                key={bank._id}
+                                                type="button"
+                                                onMouseDown={() => handleDropdownSelect('indianBank', bank.bankName)}
+                                                onMouseEnter={() => setHighlightedIndex(idx)}
+                                                className={`w-full px-4 py-2 text-left text-sm ${highlightedIndex === idx || formData.indianBank === bank.bankName ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-blue-50'}`}
+                                            >
+                                                {bank.bankName}
+                                            </button>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+
+                        {/* --- Reference Info --- */}
+                        <div className="space-y-2">
+                            <label className="text-sm font-medium text-gray-700">Buyer Order No & Date</label>
+                            <input
+                                type="text"
+                                name="buyerOrderNo"
+                                value={formData.buyerOrderNo}
+                                onChange={handleInputChange}
+                                placeholder="Order details"
+                                autoComplete="off"
+                                className="w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-all"
+                            />
+                        </div>
+
+                        <div className="space-y-2">
+                            <label className="text-sm font-medium text-gray-700">Other References</label>
+                            <input
+                                type="text"
+                                name="otherReferences"
+                                value={formData.otherReferences}
+                                onChange={handleInputChange}
+                                autoComplete="off"
+                                className="w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-all"
+                            />
+                        </div>
+
+                        <div className="space-y-2">
+                            <label className="text-sm font-medium text-gray-700">Buyer (if other than Consignee)</label>
+                            <input
+                                type="text"
+                                name="buyerName"
+                                value={formData.buyerName}
+                                onChange={handleInputChange}
+                                placeholder="Optional"
+                                autoComplete="off"
+                                className="w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-all"
+                            />
+                        </div>
+
+                        {/* --- Item Details --- */}
                         <div className="space-y-2 relative dropdown-container" ref={productRef}>
                             <label className="text-sm font-medium text-gray-700">Product Name</label>
                             <div className="relative">
@@ -386,6 +962,7 @@ function PI({
                                     onKeyDown={(e) => handleDropdownKeyDown(e, 'product', products.filter(p => !formData.productName || p.name.toLowerCase().includes(formData.productName.toLowerCase())), 'productName')}
                                     placeholder="Search Product..."
                                     required
+                                    autoComplete="off"
                                     className="w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-all pr-10"
                                 />
                                 {activeDropdown === 'product' && (
@@ -407,7 +984,20 @@ function PI({
                         </div>
 
                         <div className="space-y-2">
-                            <label className="text-sm font-medium text-gray-700">Quantity</label>
+                            <label className="text-sm font-medium text-gray-700">HS Code</label>
+                            <input
+                                type="text"
+                                name="hsCode"
+                                value={formData.hsCode}
+                                onChange={handleInputChange}
+                                maxLength="10"
+                                placeholder="10-digit HS Code"
+                                className="w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-all"
+                            />
+                        </div>
+
+                        <div className="space-y-2">
+                            <label className="text-sm font-medium text-gray-700">Quantity (KG)</label>
                             <input
                                 type="number"
                                 name="quantity"
@@ -420,7 +1010,7 @@ function PI({
                         </div>
 
                         <div className="space-y-2">
-                            <label className="text-sm font-medium text-gray-700">Rate</label>
+                            <label className="text-sm font-medium text-gray-700">Rate Per KG (US $)</label>
                             <div className="relative">
                                 <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500">$</span>
                                 <input
@@ -429,6 +1019,7 @@ function PI({
                                     value={formData.rate}
                                     onChange={handleInputChange}
                                     required
+                                    step="0.001"
                                     placeholder="0.00"
                                     className="w-full pl-8 pr-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-all"
                                 />
@@ -436,7 +1027,38 @@ function PI({
                         </div>
 
                         <div className="space-y-2">
-                            <label className="text-sm font-medium text-gray-700">Total Amount</label>
+                            <label className="text-sm font-medium text-gray-700">Freight Per KG (US $)</label>
+                            <div className="relative">
+                                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500">$</span>
+                                <input
+                                    type="number"
+                                    name="freight"
+                                    value={formData.freight}
+                                    onChange={handleInputChange}
+                                    step="0.001"
+                                    placeholder="0.00"
+                                    className="w-full pl-8 pr-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-all"
+                                />
+                            </div>
+                        </div>
+
+                        <div className="space-y-2">
+                            <label className="text-sm font-medium text-gray-700">Total Freight (US $)</label>
+                            <div className="relative">
+                                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500">$</span>
+                                <input
+                                    type="number"
+                                    name="totalFreight"
+                                    value={formData.totalFreight}
+                                    readOnly
+                                    placeholder="0.00"
+                                    className="w-full pl-8 pr-4 py-2 bg-gray-50/50 border border-gray-200/60 rounded-lg outline-none transition-all cursor-not-allowed"
+                                />
+                            </div>
+                        </div>
+
+                        <div className="space-y-2">
+                            <label className="text-sm font-medium text-gray-700">Total Amount (US $)</label>
                             <div className="relative">
                                 <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500">$</span>
                                 <input
@@ -445,214 +1067,89 @@ function PI({
                                     value={formData.amount}
                                     onChange={handleInputChange}
                                     required
+                                    readOnly
                                     placeholder="0.00"
-                                    className="w-full pl-8 pr-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-all"
+                                    className="w-full pl-8 pr-4 py-2 bg-gray-50/50 border border-gray-200/60 rounded-lg outline-none transition-all cursor-not-allowed font-bold"
                                 />
                             </div>
                         </div>
 
+
                         <div className="space-y-2">
-                            <label className="text-sm font-medium text-gray-700">Freight</label>
-                            <div className="relative">
-                                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500">$</span>
-                                <input
-                                    type="number"
-                                    name="freight"
-                                    value={formData.freight}
-                                    onChange={handleInputChange}
-                                    placeholder="0.00"
-                                    className="w-full pl-8 pr-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-all"
-                                />
-                            </div>
+                            <label className="text-sm font-medium text-gray-700">Marks & No.</label>
+                            <input
+                                type="text"
+                                name="marksNo"
+                                value={formData.marksNo}
+                                onChange={handleInputChange}
+                                placeholder="CONTAINER/MARKS"
+                                className="w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-all"
+                            />
                         </div>
 
                         <div className="space-y-2">
-                            <label className="text-sm font-medium text-gray-700">Total Freight</label>
-                            <div className="relative">
-                                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500">$</span>
-                                <input
-                                    type="number"
-                                    name="totalFreight"
-                                    value={formData.totalFreight}
-                                    onChange={handleInputChange}
-                                    placeholder="0.00"
-                                    className="w-full pl-8 pr-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-all"
-                                />
-                            </div>
+                            <label className="text-sm font-medium text-gray-700">No. & Kind of Package</label>
+                            <input
+                                type="text"
+                                name="noKindPackage"
+                                value={formData.noKindPackage}
+                                onChange={handleInputChange}
+                                placeholder="e.g. 500 BAGS"
+                                className="w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-all"
+                            />
                         </div>
 
                         <div className="space-y-2">
-                            <label className="text-sm font-medium text-gray-700">Grand Total</label>
+                            <label className="text-sm font-medium text-gray-700 font-bold text-blue-700">Grand Total (US $)</label>
                             <div className="relative">
-                                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500">$</span>
+                                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-blue-600 font-bold">$</span>
                                 <input
                                     type="number"
                                     name="grandTotal"
                                     value={formData.grandTotal}
-                                    onChange={handleInputChange}
+                                    readOnly
                                     placeholder="0.00"
-                                    className="w-full pl-8 pr-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-all"
+                                    className="w-full pl-8 pr-4 py-2 bg-blue-50/50 border border-blue-200/60 rounded-lg outline-none font-bold text-blue-700 transition-all cursor-not-allowed"
                                 />
-                            </div>
-                        </div>
-                        
-                        <div className="space-y-2 relative dropdown-container" ref={placeOfReceiptRef}>
-                            <label className="text-sm font-medium text-gray-700">Place of Receipt</label>
-                            <div className="relative">
-                                <input
-                                    type="text"
-                                    name="placeOfReceipt"
-                                    value={formData.placeOfReceipt}
-                                    onChange={(e) => { handleInputChange(e); setActiveDropdown('placeOfReceipt'); setHighlightedIndex(-1); }}
-                                    onFocus={() => { setActiveDropdown('placeOfReceipt'); setHighlightedIndex(-1); }}
-                                    onKeyDown={(e) => handleDropdownKeyDown(e, 'placeOfReceipt', ports.filter(p => !formData.placeOfReceipt || p.name.toLowerCase().includes(formData.placeOfReceipt.toLowerCase())), 'placeOfReceipt')}
-                                    placeholder="Search Port..."
-                                    className="w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-all pr-10"
-                                />
-                                {activeDropdown === 'placeOfReceipt' && (
-                                    <div className="absolute z-[60] w-full mt-1 bg-white border border-gray-100 rounded-xl shadow-xl max-h-48 overflow-y-auto">
-                                        {ports.filter(p => !formData.placeOfReceipt || p.name.toLowerCase().includes(formData.placeOfReceipt.toLowerCase())).map((port, idx) => (
-                                            <button
-                                                key={port._id}
-                                                type="button"
-                                                onMouseDown={() => handleDropdownSelect('placeOfReceipt', port.name)}
-                                                onMouseEnter={() => setHighlightedIndex(idx)}
-                                                className={`w-full px-4 py-2 text-left text-sm ${highlightedIndex === idx || formData.placeOfReceipt === port.name ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-blue-50'}`}
-                                            >
-                                                {port.name}
-                                            </button>
-                                        ))}
-                                    </div>
-                                )}
                             </div>
                         </div>
 
-                        <div className="space-y-2 relative dropdown-container" ref={portLoadingRef}>
-                            <label className="text-sm font-medium text-gray-700">Port of Loading</label>
-                            <div className="relative">
-                                <input
-                                    type="text"
-                                    name="portOfLoading"
-                                    value={formData.portOfLoading}
-                                    onChange={(e) => { handleInputChange(e); setActiveDropdown('portOfLoading'); setHighlightedIndex(-1); }}
-                                    onFocus={() => { setActiveDropdown('portOfLoading'); setHighlightedIndex(-1); }}
-                                    onKeyDown={(e) => handleDropdownKeyDown(e, 'portOfLoading', ports.filter(p => !formData.portOfLoading || p.name.toLowerCase().includes(formData.portOfLoading.toLowerCase())), 'portOfLoading')}
-                                    placeholder="Search Port..."
-                                    required
-                                    className="w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-all pr-10"
-                                />
-                                {activeDropdown === 'portOfLoading' && (
-                                    <div className="absolute z-[60] w-full mt-1 bg-white border border-gray-100 rounded-xl shadow-xl max-h-48 overflow-y-auto">
-                                        {ports.filter(p => !formData.portOfLoading || p.name.toLowerCase().includes(formData.portOfLoading.toLowerCase())).map((port, idx) => (
-                                            <button
-                                                key={port._id}
-                                                type="button"
-                                                onMouseDown={() => handleDropdownSelect('portOfLoading', port.name)}
-                                                onMouseEnter={() => setHighlightedIndex(idx)}
-                                                className={`w-full px-4 py-2 text-left text-sm ${highlightedIndex === idx || formData.portOfLoading === port.name ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-blue-50'}`}
-                                            >
-                                                {port.name}
-                                            </button>
-                                        ))}
-                                    </div>
-                                )}
-                            </div>
+                        {/* --- Advanced/Detailed Sections --- */}
+                        <div className="md:col-span-3 space-y-2">
+                            <label className="text-sm font-medium text-gray-700">Description of Goods</label>
+                            <textarea
+                                name="descriptionGoods"
+                                value={formData.descriptionGoods}
+                                onChange={handleInputChange}
+                                rows="3"
+                                className="w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-all resize-none"
+                            ></textarea>
                         </div>
 
-                        <div className="space-y-2 relative dropdown-container" ref={portDischargeRef}>
-                            <label className="text-sm font-medium text-gray-700">Port of Discharge</label>
-                            <div className="relative">
-                                <input
-                                    type="text"
-                                    name="portOfDischarge"
-                                    value={formData.portOfDischarge}
-                                    onChange={(e) => { handleInputChange(e); setActiveDropdown('portOfDischarge'); setHighlightedIndex(-1); }}
-                                    onFocus={() => { setActiveDropdown('portOfDischarge'); setHighlightedIndex(-1); }}
-                                    onKeyDown={(e) => handleDropdownKeyDown(e, 'portOfDischarge', ports.filter(p => !formData.portOfDischarge || p.name.toLowerCase().includes(formData.portOfDischarge.toLowerCase())), 'portOfDischarge')}
-                                    placeholder="Search Port..."
-                                    required
-                                    className="w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-all pr-10"
-                                />
-                                {activeDropdown === 'portOfDischarge' && (
-                                    <div className="absolute z-[60] w-full mt-1 bg-white border border-gray-100 rounded-xl shadow-xl max-h-48 overflow-y-auto">
-                                        {ports.filter(p => !formData.portOfDischarge || p.name.toLowerCase().includes(formData.portOfDischarge.toLowerCase())).map((port, idx) => (
-                                            <button
-                                                key={port._id}
-                                                type="button"
-                                                onMouseDown={() => handleDropdownSelect('portOfDischarge', port.name)}
-                                                onMouseEnter={() => setHighlightedIndex(idx)}
-                                                className={`w-full px-4 py-2 text-left text-sm ${highlightedIndex === idx || formData.portOfDischarge === port.name ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-blue-50'}`}
-                                            >
-                                                {port.name}
-                                            </button>
-                                        ))}
-                                    </div>
-                                )}
-                            </div>
+                        <div className="md:col-span-3 space-y-2">
+                            <label className="text-sm font-medium text-gray-700">Terms of Delivery and Payment</label>
+                            <textarea
+                                name="termsDeliveryPayment"
+                                value={formData.termsDeliveryPayment}
+                                onChange={handleInputChange}
+                                rows="3"
+                                className="w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-all resize-none text-[13px]"
+                            ></textarea>
                         </div>
 
-                        <div className="space-y-2 relative dropdown-container" ref={bankRef}>
-                            <label className="text-sm font-medium text-gray-700">Indian Bank</label>
-                            <div className="relative">
-                                <input
-                                    type="text"
-                                    name="indianBank"
-                                    value={formData.indianBank}
-                                    onChange={(e) => { handleInputChange(e); setActiveDropdown('indianBank'); setHighlightedIndex(-1); }}
-                                    onFocus={() => { setActiveDropdown('indianBank'); setHighlightedIndex(-1); }}
-                                    onKeyDown={(e) => handleDropdownKeyDown(e, 'indianBank', banks.filter(b => !formData.indianBank || b.bankName.toLowerCase().includes(formData.indianBank.toLowerCase())), 'indianBank')}
-                                    placeholder="Search Bank..."
-                                    className="w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-all pr-10"
-                                />
-                                {activeDropdown === 'indianBank' && (
-                                    <div className="absolute z-[60] w-full mt-1 bg-white border border-gray-100 rounded-xl shadow-xl max-h-48 overflow-y-auto">
-                                        {banks.filter(b => !formData.indianBank || b.bankName.toLowerCase().includes(formData.indianBank.toLowerCase())).map((bank, idx) => (
-                                            <button
-                                                key={bank._id}
-                                                type="button"
-                                                onMouseDown={() => handleDropdownSelect('indianBank', bank.bankName)}
-                                                onMouseEnter={() => setHighlightedIndex(idx)}
-                                                className={`w-full px-4 py-2 text-left text-sm ${highlightedIndex === idx || formData.indianBank === bank.bankName ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-blue-50'}`}
-                                            >
-                                                {bank.bankName}
-                                            </button>
-                                        ))}
-                                    </div>
-                                )}
-                            </div>
+                        <div className="md:col-span-3 space-y-2">
+                            <label className="text-sm font-medium text-gray-700">Declaration</label>
+                            <textarea
+                                name="declaration"
+                                value={formData.declaration}
+                                onChange={handleInputChange}
+                                rows="2"
+                                className="w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-all resize-none text-[13px]"
+                            ></textarea>
                         </div>
 
-                        <div className="space-y-2 relative dropdown-container" ref={portRef}>
-                            <label className="text-sm font-medium text-gray-700">Port</label>
-                            <div className="relative">
-                                <input
-                                    type="text"
-                                    name="port"
-                                    value={formData.port}
-                                    onChange={(e) => { handleInputChange(e); setActiveDropdown('port'); setHighlightedIndex(-1); }}
-                                    onFocus={() => { setActiveDropdown('port'); setHighlightedIndex(-1); }}
-                                    onKeyDown={(e) => handleDropdownKeyDown(e, 'port', ports.filter(p => !formData.port || p.name.toLowerCase().includes(formData.port.toLowerCase())), 'port')}
-                                    placeholder="Search Port..."
-                                    required
-                                    className="w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-all pr-10"
-                                />
-                                {activeDropdown === 'port' && (
-                                    <div className="absolute z-[60] w-full mt-1 bg-white border border-gray-100 rounded-xl shadow-xl max-h-48 overflow-y-auto">
-                                        {ports.filter(p => !formData.port || p.name.toLowerCase().includes(formData.port.toLowerCase())).map((port, idx) => (
-                                            <button
-                                                key={port._id}
-                                                type="button"
-                                                onMouseDown={() => handleDropdownSelect('port', port.name)}
-                                                onMouseEnter={() => setHighlightedIndex(idx)}
-                                                className={`w-full px-4 py-2 text-left text-sm ${highlightedIndex === idx || formData.port === port.name ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-blue-50'}`}
-                                            >
-                                                {port.name}
-                                            </button>
-                                        ))}
-                                    </div>
-                                )}
-                            </div>
-                        </div>
+
+
 
                         <div className="space-y-2 relative dropdown-container" ref={statusRef}>
                             <label className="text-sm font-medium text-gray-700">Status</label>
@@ -684,8 +1181,8 @@ function PI({
                         </div>
 
                         <div className="col-span-1 md:col-span-3 flex justify-end gap-3 mt-4 border-t border-gray-100 pt-6">
-                             {submitStatus === 'success' && <span className="text-green-600 font-medium flex items-center">Saved!</span>}
-                             {submitStatus === 'error' && <span className="text-red-600 font-medium flex items-center">Error saving</span>}
+                            {submitStatus === 'success' && <span className="text-green-600 font-medium flex items-center">Saved!</span>}
+                            {submitStatus === 'error' && <span className="text-red-600 font-medium flex items-center">Error saving</span>}
                             <button
                                 type="button"
                                 onClick={() => { setShowForm(false); resetForm(); }}
@@ -748,21 +1245,56 @@ function PI({
                                             <td className="px-6 py-4 text-sm text-blue-700 font-bold">${record.grandTotal}</td>
                                             <td className="px-6 py-4 text-sm text-gray-600">{record.port}</td>
                                             <td className="px-6 py-4">
-                                                <span className={`px-3 py-1 rounded-full text-xs font-bold ${
-                                                    record.status === 'Active' ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' :
+                                                <span className={`px-3 py-1 rounded-full text-xs font-bold ${record.status === 'Active' ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' :
                                                     record.status === 'Closed' ? 'bg-gray-100 text-gray-600 border border-gray-200' :
-                                                    'bg-amber-50 text-amber-600 border border-amber-100'
-                                                }`}>
+                                                        'bg-amber-50 text-amber-600 border border-amber-100'
+                                                    }`}>
                                                     {record.status}
                                                 </span>
                                             </td>
-                                            <td className="px-6 py-4 text-center">
-                                                <div className="flex justify-center items-center gap-2">
-                                                    <button onClick={() => handleEdit(record)} className="p-1.5 hover:bg-blue-50 text-gray-400 hover:text-blue-600 rounded-lg transition-all" title="Edit">
-                                                        <EditIcon className="w-4 h-4" />
+                                            <td className="px-4 py-4 text-center">
+                                                <div className="flex items-center justify-center gap-2">
+                                                    <button
+                                                        onClick={() => {
+                                                            const enriched = { ...record };
+                                                            if (!enriched.exporterAddress || !enriched.exporterEmail || !enriched.exporterSignature) {
+                                                                const exp = exporters?.find(e => e.name === enriched.exporterName);
+                                                                if (exp) {
+                                                                    enriched.exporterAddress = enriched.exporterAddress || exp.address;
+                                                                    enriched.exporterContact = enriched.exporterContact || exp.phone;
+                                                                    enriched.exporterEmail = enriched.exporterEmail || exp.email;
+                                                                    enriched.exporterSignature = enriched.exporterSignature || exp.signature;
+                                                                }
+                                                            }
+                                                            if (!enriched.partyAddress || !enriched.partyEmail || !enriched.partySignature) {
+                                                                const imp = importers?.find(i => i.name === enriched.partyName);
+                                                                if (imp) {
+                                                                    enriched.partyAddress = enriched.partyAddress || imp.address;
+                                                                    enriched.partyContact = enriched.partyContact || imp.phone;
+                                                                    enriched.partyEmail = enriched.partyEmail || imp.email;
+                                                                    enriched.partySignature = enriched.partySignature || imp.signature;
+                                                                }
+                                                            }
+                                                            generatePIPDF(enriched);
+                                                        }}
+                                                        className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50/50 rounded-lg transition-all"
+                                                        title="Generate PI PDF"
+                                                    >
+                                                        <PDFIcon className="w-5 h-5" />
                                                     </button>
-                                                    <button onClick={() => handleDelete(record._id)} className="p-1.5 hover:bg-red-50 text-gray-400 hover:text-red-500 rounded-lg transition-all" title="Delete">
-                                                        <TrashIcon className="w-4 h-4" />
+                                                    <button
+                                                        onClick={() => handleEdit(record)}
+                                                        className="p-1.5 text-gray-400 hover:text-amber-600 hover:bg-amber-50/50 rounded-lg transition-all"
+                                                        title="Edit Record"
+                                                    >
+                                                        <EditIcon className="w-5 h-5" />
+                                                    </button>
+                                                    <button
+                                                        onClick={() => handleDelete(record._id)}
+                                                        className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50/50 rounded-lg transition-all"
+                                                        title="Delete Record"
+                                                    >
+                                                        <TrashIcon className="w-5 h-5" />
                                                     </button>
                                                 </div>
                                             </td>
@@ -770,7 +1302,7 @@ function PI({
                                     ))
                                 ) : (
                                     <tr>
-                                        <td colSpan="9" className="px-6 py-12 text-center text-gray-500 font-medium">
+                                        <td colSpan="13" className="px-6 py-12 text-center text-gray-500 font-medium">
                                             No PI records found.
                                         </td>
                                     </tr>

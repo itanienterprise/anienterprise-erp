@@ -67,6 +67,7 @@ const CnF = require('./models/CnF');
 const Insurance = require('./models/Insurance');
 const LCManagement = require('./models/LCManagement');
 const PI = require('./models/PI');
+const MetaData = require('./models/MetaData');
 const { encryptData, decryptData } = require('./utils/encryption');
 const CryptoJS = require('crypto-js');
 
@@ -714,6 +715,7 @@ apiRouter.get('/api/banks', async (req, res) => {
   }
 });
 
+
 // Insurance APIs
 apiRouter.post('/api/insurance', async (req, res) => {
   try {
@@ -790,6 +792,45 @@ apiRouter.put('/api/lc-management/:id', async (req, res) => {
     res.json({ ...req.body, _id: updatedRecord._id, createdAt: updatedRecord.createdAt });
   } catch (err) {
     res.status(400).json({ message: err.message });
+    }
+});
+
+// MetaData APIs (Generic Reference Values)
+apiRouter.post('/api/metadata', async (req, res) => {
+  try {
+    const { category, ...rest } = req.body;
+    if (!category) return res.status(400).json({ message: 'Category is required' });
+    const encryptedData = encryptData(rest);
+    const newRecord = new MetaData({ category, data: encryptedData });
+    const savedRecord = await newRecord.save();
+    res.status(201).json({ ...rest, _id: savedRecord._id, category: savedRecord.category, createdAt: savedRecord.createdAt });
+  } catch (err) {
+    res.status(400).json({ message: err.message });
+  }
+});
+
+apiRouter.get('/api/metadata', async (req, res) => {
+  try {
+    const { category } = req.query;
+    const filter = category ? { category } : {};
+    const records = await MetaData.find(filter).sort({ createdAt: -1 });
+    const decrypted = records.map(r => {
+      const d = decryptData(r.data);
+      return { ...d, _id: r._id, category: r.category, createdAt: r.createdAt };
+    });
+    res.json(decrypted);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+apiRouter.delete('/api/metadata/:id', async (req, res) => {
+  try {
+    const deletedRecord = await MetaData.findByIdAndDelete(req.params.id);
+    if (!deletedRecord) return res.status(404).json({ message: 'Record not found' });
+    res.json({ message: 'Record deleted' });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
   }
 });
 

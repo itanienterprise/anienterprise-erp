@@ -144,7 +144,8 @@ const Bank = ({ onDeleteConfirm }) => {
                 ...branch,
                 uniqueRowKey: `${bank._id}-${idx}`
             }));
-        }).filter(item => 
+        }).filter(item => !item.isIndian)
+        .filter(item => 
             (item.bankName || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
             (item.accountNo || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
             (item.accountName || '').toLowerCase().includes(searchQuery.toLowerCase()) ||

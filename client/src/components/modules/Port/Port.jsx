@@ -135,7 +135,7 @@ const Port = ({
     };
 
     const displayPorts = useMemo(() => {
-        let filtered = ports.filter(port => 
+        let filtered = ports.filter(p => !p.isLoadingPort).filter(port => 
             (port.name || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
             (port.code || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
             (port.location || '').toLowerCase().includes(searchQuery.toLowerCase()) ||

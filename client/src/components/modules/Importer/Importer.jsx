@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { EditIcon, TrashIcon, UserIcon, EyeIcon, XIcon, BoxIcon, SearchIcon } from '../../Icons';
+import { EditIcon, TrashIcon, UserIcon, EyeIcon, XIcon, BoxIcon, SearchIcon, PlusIcon } from '../../Icons';
 import { API_BASE_URL, SortIcon } from '../../../utils/helpers';
 import axios from '../../../utils/api';
 import './Importer.css';
@@ -38,7 +38,8 @@ const Importer = ({
         email: '',
         phone: '+880',
         licenseNo: '',
-        status: 'Active'
+        status: 'Active',
+        signature: ''
     });
 
     // Fetch importers on mount
@@ -75,6 +76,34 @@ const Importer = ({
         setFormData(prev => ({
             ...prev,
             [name]: value
+        }));
+    };
+    
+    const handleFileChange = (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        // Validate file type
+        const validTypes = ['image/jpeg', 'image/png', 'image/jpg'];
+        if (!validTypes.includes(file.type)) {
+            alert('Please upload a JPG or PNG image.');
+            return;
+        }
+
+        const reader = new FileReader();
+        reader.onloadend = () => {
+            setFormData(prev => ({
+                ...prev,
+                signature: reader.result
+            }));
+        };
+        reader.readAsDataURL(file);
+    };
+
+    const removeSignature = () => {
+        setFormData(prev => ({
+            ...prev,
+            signature: ''
         }));
     };
 
@@ -123,7 +152,8 @@ const Importer = ({
             email: '',
             phone: '+880',
             licenseNo: '',
-            status: 'Active'
+            status: 'Active',
+            signature: ''
         });
         setEditingId(null);
         setSubmitStatus(null);
@@ -137,7 +167,8 @@ const Importer = ({
             email: importer.email || '',
             phone: importer.phone || '+880',
             licenseNo: importer.licenseNo || '',
-            status: importer.status || 'Active'
+            status: importer.status || 'Active',
+            signature: importer.signature || ''
         });
         setEditingId(importer._id);
         setShowForm(true);
@@ -286,6 +317,42 @@ const Importer = ({
                                 <option>Active</option>
                                 <option>Inactive</option>
                             </select>
+                        </div>
+
+                        <div className="importer-form-field importer-form-field-full">
+                            <label className="importer-form-label">Digital Signature (JPG/PNG)</label>
+                            <div className="mt-1 flex items-center gap-4">
+                                {formData.signature ? (
+                                    <div className="relative group">
+                                        <img 
+                                            src={formData.signature} 
+                                            alt="Signature" 
+                                            className="h-20 w-40 object-contain border border-gray-200 rounded bg-gray-50 p-2"
+                                        />
+                                        <button
+                                            type="button"
+                                            onClick={removeSignature}
+                                            className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 shadow-md hover:bg-red-600 transition-colors"
+                                            title="Remove signature"
+                                        >
+                                            <XIcon className="w-3 h-3" />
+                                        </button>
+                                    </div>
+                                ) : (
+                                    <label className="flex flex-col items-center justify-center w-full h-24 border-2 border-dashed border-gray-300 rounded-xl cursor-pointer hover:bg-gray-50 hover:border-blue-400 transition-all group">
+                                        <div className="flex flex-col items-center justify-center pt-5 pb-6">
+                                            <PlusIcon className="w-6 h-6 text-gray-400 group-hover:text-blue-500 mb-2" />
+                                            <p className="text-xs text-gray-500">Click to upload signature</p>
+                                        </div>
+                                        <input 
+                                            type="file" 
+                                            className="hidden" 
+                                            accept="image/png, image/jpeg, image/jpg"
+                                            onChange={handleFileChange}
+                                        />
+                                    </label>
+                                )}
+                            </div>
                         </div>
 
                         <div className="importer-form-footer">

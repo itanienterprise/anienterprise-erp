@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { EditIcon, TrashIcon, UserIcon, EyeIcon, XIcon, BoxIcon, SearchIcon, ChevronDownIcon, ChevronUpIcon, TrendingUpIcon, DollarSignIcon } from '../../Icons';
+import { EditIcon, TrashIcon, UserIcon, EyeIcon, XIcon, BoxIcon, SearchIcon, ChevronDownIcon, ChevronUpIcon, TrendingUpIcon, DollarSignIcon, PlusIcon } from '../../Icons';
 import { API_BASE_URL, SortIcon, formatDate } from '../../../utils/helpers';
 import axios from '../../../utils/api';
 import './Exporter.css';
@@ -39,7 +39,8 @@ const Exporter = ({
         email: '',
         phone: '+880',
         licenseNo: '',
-        status: 'Active'
+        status: 'Active',
+        signature: ''
     });
 
     useEffect(() => { fetchExporters(); }, []);
@@ -155,6 +156,33 @@ const Exporter = ({
         setFormData(prev => ({ ...prev, [name]: value }));
     };
 
+    const handleFileChange = (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        const validTypes = ['image/jpeg', 'image/png', 'image/jpg'];
+        if (!validTypes.includes(file.type)) {
+            alert('Please upload a JPG or PNG image.');
+            return;
+        }
+
+        const reader = new FileReader();
+        reader.onloadend = () => {
+            setFormData(prev => ({
+                ...prev,
+                signature: reader.result
+            }));
+        };
+        reader.readAsDataURL(file);
+    };
+
+    const removeSignature = () => {
+        setFormData(prev => ({
+            ...prev,
+            signature: ''
+        }));
+    };
+
     const handleSubmit = async (e) => {
         e.preventDefault();
         if (formData.phone.length !== 14) {
@@ -181,7 +209,7 @@ const Exporter = ({
     };
 
     const resetForm = () => {
-        setFormData({ name: '', address: '', contactPerson: '', email: '', phone: '+880', licenseNo: '', status: 'Active' });
+        setFormData({ name: '', address: '', contactPerson: '', email: '', phone: '+880', licenseNo: '', status: 'Active', signature: '' });
         setEditingId(null);
         setSubmitStatus(null);
     };
@@ -194,7 +222,8 @@ const Exporter = ({
             email: exporter.email || '',
             phone: exporter.phone || '+880',
             licenseNo: exporter.licenseNo || '',
-            status: exporter.status || 'Active'
+            status: exporter.status || 'Active',
+            signature: exporter.signature || ''
         });
         setEditingId(exporter._id);
         setShowForm(true);
@@ -322,6 +351,41 @@ const Exporter = ({
                                 <option>Active</option>
                                 <option>Inactive</option>
                             </select>
+                        </div>
+                        <div className="exporter-form-field exporter-form-field-full">
+                            <label className="exporter-form-label">Digital Signature (JPG/PNG)</label>
+                            <div className="mt-1 flex items-center gap-4">
+                                {formData.signature ? (
+                                    <div className="relative group">
+                                        <img 
+                                            src={formData.signature} 
+                                            alt="Signature" 
+                                            className="h-20 w-40 object-contain border border-gray-200 rounded bg-gray-50 p-2"
+                                        />
+                                        <button
+                                            type="button"
+                                            onClick={removeSignature}
+                                            className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 shadow-md hover:bg-red-600 transition-colors"
+                                            title="Remove signature"
+                                        >
+                                            <XIcon className="w-3 h-3" />
+                                        </button>
+                                    </div>
+                                ) : (
+                                    <label className="flex flex-col items-center justify-center w-full h-24 border-2 border-dashed border-gray-300 rounded-xl cursor-pointer hover:bg-gray-50 hover:border-blue-400 transition-all group">
+                                        <div className="flex flex-col items-center justify-center pt-5 pb-6">
+                                            <PlusIcon className="w-6 h-6 text-gray-400 group-hover:text-blue-500 mb-2" />
+                                            <p className="text-xs text-gray-500">Click to upload signature</p>
+                                        </div>
+                                        <input 
+                                            type="file" 
+                                            className="hidden" 
+                                            accept="image/png, image/jpeg, image/jpg"
+                                            onChange={handleFileChange}
+                                        />
+                                    </label>
+                                )}
+                            </div>
                         </div>
                         <div className="exporter-form-footer">
                             {submitStatus === 'success' && (

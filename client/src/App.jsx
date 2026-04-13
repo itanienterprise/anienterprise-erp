@@ -306,6 +306,17 @@ function App() {
     const initialView = localStorage.getItem('currentView') || 'dashboard';
     return initialView === 'lc-management-section';
   });
+
+  const [ipDropdownOpen, setIpDropdownOpen] = useState(() => {
+    const initialView = localStorage.getItem('currentView') || 'dashboard';
+    return initialView === 'ip-section';
+  });
+
+  const [piDropdownOpen, setPiDropdownOpen] = useState(() => {
+    const initialView = localStorage.getItem('currentView') || 'dashboard';
+    return initialView === 'pi-section' || initialView === 'indian-bank-section';
+  });
+
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitStatus, setSubmitStatus] = useState(null);
   const [importers, setImporters] = useState([]);
@@ -629,6 +640,7 @@ function App() {
                   type === 'employees' ? 'employees' :
                     type === 'customer' ? 'customers' :
                       type === 'bank' ? 'banks' :
+                        type === 'indian-bank' ? 'indian-banks' :
                         type === 'cnf' ? 'cnfs' :
                         'stock';
 
@@ -743,7 +755,7 @@ function App() {
         else if (type === 'product') fetchProducts();
         else if (type === 'stock') fetchStockRecords();
 
-        if (['employees', 'sales', 'customer', 'ip', 'cnf', 'bank', 'importer', 'exporter', 'port'].includes(type) || type.includes('cnf')) {
+        if (['employees', 'sales', 'customer', 'ip', 'cnf', 'bank', 'indian-bank', 'importer', 'exporter', 'port'].includes(type) || type.includes('cnf')) {
           setRefreshKey(prev => prev + 1);
         }
       }
@@ -1523,10 +1535,29 @@ function App() {
             <DollarSignIcon className="w-5 h-5 mr-3" />
             <span className="font-medium text-sm">Bank</span>
           </button>
-          <button onClick={() => { setCurrentView('ip-section'); setSidebarOpen(false); }} className={`w-full flex items-center px-4 py-2 rounded-lg transition-all ${currentView === 'ip-section' ? 'bg-blue-50 text-blue-600 shadow-sm' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'}`}>
-            <BoxIcon className="w-5 h-5 mr-3" />
-            <span className="font-medium text-sm">IP</span>
-          </button>
+          <div>
+            <button
+              onClick={() => setIpDropdownOpen(!ipDropdownOpen)}
+              className={`w-full flex items-center justify-between px-4 py-2 rounded-lg transition-all ${currentView === 'ip-section' ? 'bg-blue-50 text-blue-600 shadow-sm' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'}`}
+            >
+              <div className="flex items-center">
+                <BoxIcon className="w-5 h-5 mr-3" />
+                <span className="font-medium text-sm">IP</span>
+              </div>
+              <ChevronDownIcon className={`w-4 h-4 transition-transform duration-200 ${ipDropdownOpen ? 'transform rotate-180' : ''}`} />
+            </button>
+            <div className={`overflow-hidden transition-all duration-300 ease-in-out ${ipDropdownOpen ? 'max-h-48 opacity-100 mt-1' : 'max-h-0 opacity-0'}`}>
+              <div className="pl-7 pr-2 space-y-1">
+                <button
+                  onClick={() => { setCurrentView('ip-section'); setSidebarOpen(false); }}
+                  className={`w-full flex flex-row items-center py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'ip-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'}`}
+                >
+                  <BoxIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
+                  <span>Create IP</span>
+                </button>
+              </div>
+            </div>
+          </div>
           <button onClick={() => { setCurrentView('pi-section'); setSidebarOpen(false); }} className={`w-full flex items-center px-4 py-2 rounded-lg transition-all ${currentView === 'pi-section' ? 'bg-blue-50 text-blue-600 shadow-sm' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'}`}>
             <FileTextIcon className="w-5 h-5 mr-3" />
             <span className="font-medium text-sm">Proforma Invoice</span>
