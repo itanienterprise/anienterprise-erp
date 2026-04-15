@@ -16,11 +16,14 @@ const Insurance = ({ onDeleteConfirm }) => {
     
     const [formData, setFormData] = useState({
         companyName: '',
-        policyNumber: '',
+        address: '',
+        contactPerson: '',
+        phone: '',
+        email: '',
         policyType: '',
-        coverageAmount: '',
-        premiumAmount: '',
-        expiryDate: '',
+        premiumPercent: '',
+        premiumReturnPercent: '',
+        stampCharge: '',
         status: 'Active'
     });
 
@@ -79,11 +82,14 @@ const Insurance = ({ onDeleteConfirm }) => {
     const resetForm = () => {
         setFormData({
             companyName: '',
-            policyNumber: '',
+            address: '',
+            contactPerson: '',
+            phone: '',
+            email: '',
             policyType: '',
-            coverageAmount: '',
-            premiumAmount: '',
-            expiryDate: '',
+            premiumPercent: '',
+            premiumReturnPercent: '',
+            stampCharge: '',
             status: 'Active'
         });
         setEditingId(null);
@@ -93,11 +99,14 @@ const Insurance = ({ onDeleteConfirm }) => {
     const handleEdit = (record) => {
         setFormData({
             companyName: record.companyName || '',
-            policyNumber: record.policyNumber || '',
+            address: record.address || '',
+            contactPerson: record.contactPerson || '',
+            phone: record.phone || '',
+            email: record.email || '',
             policyType: record.policyType || '',
-            coverageAmount: record.coverageAmount || '',
-            premiumAmount: record.premiumAmount || '',
-            expiryDate: record.expiryDate || '',
+            premiumPercent: record.premiumPercent || '',
+            premiumReturnPercent: record.premiumReturnPercent || '',
+            stampCharge: record.stampCharge || '',
             status: record.status || 'Active'
         });
         setEditingId(record._id);
@@ -115,7 +124,6 @@ const Insurance = ({ onDeleteConfirm }) => {
     const displayRecords = useMemo(() => {
         return insuranceRecords.filter(item => 
             (item.companyName || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
-            (item.policyNumber || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
             (item.policyType || '').toLowerCase().includes(searchQuery.toLowerCase())
         ).sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
     }, [insuranceRecords, searchQuery]);
@@ -153,7 +161,7 @@ const Insurance = ({ onDeleteConfirm }) => {
                         className="w-full md:w-auto px-4 py-2.5 md:py-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-medium rounded-xl shadow-lg shadow-blue-500/30 transition-all transform active:scale-95 md:hover:scale-105 flex items-center justify-center"
                     >
                         <span className="mr-2 text-xl font-bold">+</span>
-                        <span>{showForm ? 'Cancel Policy' : 'New Insurance Policy'}</span>
+                        <span>{showForm ? 'Cancel Policy' : 'New Company'}</span>
                     </button>
                 </div>
             </div>
@@ -165,7 +173,7 @@ const Insurance = ({ onDeleteConfirm }) => {
 
                     <div className="flex items-center justify-between mb-6 md:mb-8 relative z-10">
                         <div className="flex items-center space-x-3">
-                            <h3 className="text-lg md:text-xl font-semibold text-gray-800">{editingId ? 'Edit Insurance Policy' : 'New Insurance Registration'}</h3>
+                            <h3 className="text-lg md:text-xl font-semibold text-gray-800">{editingId ? 'Edit Insurance Policy' : 'New Insurance Company'}</h3>
                         </div>
                     </div>
 
@@ -179,84 +187,133 @@ const Insurance = ({ onDeleteConfirm }) => {
                         autoComplete="off" 
                         className="grid grid-cols-1 md:grid-cols-2 gap-6 relative z-10"
                     >
-                        <div className="space-y-2">
-                            <label className="text-sm font-medium text-gray-700">Insurance Company</label>
-                            <input
-                                type="text"
-                                name="companyName"
-                                value={formData.companyName}
-                                onChange={handleInputChange}
-                                required
-                                placeholder="Enter Company Name"
-                                className="w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all"
-                            />
+                        <div className="md:col-span-2 space-y-4">
+                            <h4 className="text-sm font-bold text-blue-600 uppercase tracking-wider bg-blue-50/50 p-2 rounded-lg">Company Information</h4>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                <div className="space-y-2">
+                                    <label className="text-sm font-medium text-gray-700">Insurance Company</label>
+                                    <input
+                                        type="text"
+                                        name="companyName"
+                                        value={formData.companyName}
+                                        onChange={handleInputChange}
+                                        required
+                                        placeholder="Enter Company Name"
+                                        className="w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all"
+                                    />
+                                </div>
+                                <div className="space-y-2">
+                                    <label className="text-sm font-medium text-gray-700">Contact Person</label>
+                                    <input
+                                        type="text"
+                                        name="contactPerson"
+                                        value={formData.contactPerson}
+                                        onChange={handleInputChange}
+                                        placeholder="Name of Contact Person"
+                                        className="w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all"
+                                    />
+                                </div>
+                                <div className="md:col-span-2 space-y-2">
+                                    <label className="text-sm font-medium text-gray-700">Company Address</label>
+                                    <textarea
+                                        name="address"
+                                        value={formData.address}
+                                        onChange={handleInputChange}
+                                        placeholder="Full Address"
+                                        rows="2"
+                                        className="w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all resize-none"
+                                    />
+                                </div>
+                                <div className="space-y-2">
+                                    <label className="text-sm font-medium text-gray-700">Phone Number</label>
+                                    <input
+                                        type="text"
+                                        name="phone"
+                                        value={formData.phone}
+                                        onChange={handleInputChange}
+                                        placeholder="Office Phone"
+                                        className="w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all"
+                                    />
+                                </div>
+                                <div className="space-y-2">
+                                    <label className="text-sm font-medium text-gray-700">Email Address</label>
+                                    <input
+                                        type="email"
+                                        name="email"
+                                        value={formData.email}
+                                        onChange={handleInputChange}
+                                        placeholder="Email"
+                                        className="w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all"
+                                    />
+                                </div>
+                            </div>
                         </div>
 
-                        <div className="space-y-2">
-                            <label className="text-sm font-medium text-gray-700">Policy Number</label>
-                            <input
-                                type="text"
-                                name="policyNumber"
-                                value={formData.policyNumber}
-                                onChange={handleInputChange}
-                                required
-                                placeholder="Enter Policy Number"
-                                className="w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all"
-                            />
-                        </div>
+                        <div className="md:col-span-2 space-y-4 pt-4">
+                            <h4 className="text-sm font-bold text-indigo-600 uppercase tracking-wider bg-indigo-50/50 p-2 rounded-lg">Policy Details</h4>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                <div className="space-y-2">
+                                    <label className="text-sm font-medium text-gray-700">Policy Type</label>
+                                    <select
+                                        name="policyType"
+                                        value={formData.policyType}
+                                        onChange={handleInputChange}
+                                        required
+                                        className="w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all"
+                                    >
+                                        <option value="">Select Type</option>
+                                        <option value="Marine Insurance">Marine Insurance</option>
+                                        <option value="Fire Insurance">Fire Insurance</option>
+                                        <option value="Transit Insurance">Transit Insurance</option>
+                                        <option value="General Asset">General Asset</option>
+                                        <option value="Other">Other</option>
+                                    </select>
+                                </div>
 
-                        <div className="space-y-2">
-                            <label className="text-sm font-medium text-gray-700">Policy Type</label>
-                            <select
-                                name="policyType"
-                                value={formData.policyType}
-                                onChange={handleInputChange}
-                                required
-                                className="w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all"
-                            >
-                                <option value="">Select Type</option>
-                                <option value="Marine Insurance">Marine Insurance</option>
-                                <option value="Fire Insurance">Fire Insurance</option>
-                                <option value="Transit Insurance">Transit Insurance</option>
-                                <option value="General Asset">General Asset</option>
-                                <option value="Other">Other</option>
-                            </select>
-                        </div>
 
-                        <div className="space-y-2">
-                            <CustomDatePicker
-                                label="Expiry Date"
-                                value={formData.expiryDate}
-                                onChange={(e) => setFormData(prev => ({ ...prev, expiryDate: e.target.value }))}
-                                required
-                                compact={true}
-                            />
-                        </div>
 
-                        <div className="space-y-2">
-                            <label className="text-sm font-medium text-gray-700">Coverage Amount</label>
-                            <input
-                                type="number"
-                                name="coverageAmount"
-                                value={formData.coverageAmount}
-                                onChange={handleInputChange}
-                                required
-                                placeholder="0.00"
-                                className="w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all"
-                            />
-                        </div>
 
-                        <div className="space-y-2">
-                            <label className="text-sm font-medium text-gray-700">Premium Amount</label>
-                            <input
-                                type="number"
-                                name="premiumAmount"
-                                value={formData.premiumAmount}
-                                onChange={handleInputChange}
-                                required
-                                placeholder="0.00"
-                                className="w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all"
-                            />
+                                <div className="space-y-2">
+                                    <label className="text-sm font-medium text-gray-700">
+                                        {formData.policyType ? formData.policyType.split(' ')[0] : 'Policy type'} premium (%)
+                                    </label>
+                                    <input
+                                        type="number"
+                                        name="premiumPercent"
+                                        value={formData.premiumPercent}
+                                        onChange={handleInputChange}
+                                        step="0.01"
+                                        placeholder="0.00"
+                                        className="w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all"
+                                    />
+                                </div>
+
+
+                                <div className="space-y-2">
+                                    <label className="text-sm font-medium text-gray-700">Premium Return (%)</label>
+                                    <input
+                                        type="number"
+                                        name="premiumReturnPercent"
+                                        value={formData.premiumReturnPercent}
+                                        onChange={handleInputChange}
+                                        step="0.01"
+                                        placeholder="0.00"
+                                        className="w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all"
+                                    />
+                                </div>
+
+                                <div className="space-y-2">
+                                    <label className="text-sm font-medium text-gray-700">Stamp Charge</label>
+                                    <input
+                                        type="number"
+                                        name="stampCharge"
+                                        value={formData.stampCharge}
+                                        onChange={handleInputChange}
+                                        placeholder="0.00"
+                                        className="w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all"
+                                    />
+                                </div>
+                            </div>
                         </div>
 
                         <div className="col-span-1 md:col-span-2 flex flex-col md:flex-row md:items-center justify-between gap-4 pt-4 mt-4 border-t border-gray-100">
@@ -301,10 +358,11 @@ const Insurance = ({ onDeleteConfirm }) => {
                             <thead>
                                 <tr className="bg-gray-50/50">
                                     <th className="px-6 py-4 text-[10px] font-bold text-gray-400 uppercase tracking-widest border-b border-gray-100">Company</th>
-                                    <th className="px-6 py-4 text-[10px] font-bold text-gray-400 uppercase tracking-widest border-b border-gray-100">Policy No</th>
+                                    <th className="px-6 py-4 text-[10px] font-bold text-gray-400 uppercase tracking-widest border-b border-gray-100">Phone</th>
+                                    <th className="px-6 py-4 text-[10px] font-bold text-gray-400 uppercase tracking-widest border-b border-gray-100">Email</th>
                                     <th className="px-6 py-4 text-[10px] font-bold text-gray-400 uppercase tracking-widest border-b border-gray-100">Type</th>
-                                    <th className="px-6 py-4 text-[10px] font-bold text-gray-400 uppercase tracking-widest border-b border-gray-100 text-right">Coverage</th>
-                                    <th className="px-6 py-4 text-[10px] font-bold text-gray-400 uppercase tracking-widest border-b border-gray-100 text-center">Expiry</th>
+                                    <th className="px-6 py-4 text-[10px] font-bold text-gray-400 uppercase tracking-widest border-b border-gray-100 text-center">Premium (%)</th>
+                                    <th className="px-6 py-4 text-[10px] font-bold text-gray-400 uppercase tracking-widest border-b border-gray-100 text-center">Return (%)</th>
                                     <th className="px-6 py-4 text-[10px] font-bold text-gray-400 uppercase tracking-widest border-b border-gray-100 text-center">Action</th>
                                 </tr>
                             </thead>
@@ -312,17 +370,18 @@ const Insurance = ({ onDeleteConfirm }) => {
                                 {isLoading ? (
                                     Array(5).fill(0).map((_, i) => (
                                         <tr key={i} className="animate-pulse">
-                                            <td colSpan="6" className="px-6 py-4"><div className="h-4 bg-gray-100 rounded w-full"></div></td>
+                                            <td colSpan="7" className="px-6 py-4"><div className="h-4 bg-gray-100 rounded w-full"></div></td>
                                         </tr>
                                     ))
                                 ) : displayRecords.length > 0 ? (
                                     displayRecords.map((item) => (
                                         <tr key={item._id} className="hover:bg-gray-50/50 transition-colors group">
                                             <td className="px-6 py-4 text-[13px] font-bold text-gray-700">{item.companyName}</td>
-                                            <td className="px-6 py-4 text-[13px] font-medium text-gray-600">{item.policyNumber}</td>
+                                            <td className="px-6 py-4 text-[13px] font-medium text-gray-600">{item.phone || 'N/A'}</td>
+                                            <td className="px-6 py-4 text-[13px] font-medium text-blue-600">{item.email || 'N/A'}</td>
                                             <td className="px-6 py-4 text-[13px] font-medium text-gray-600">{item.policyType}</td>
-                                            <td className="px-6 py-4 text-[13px] font-bold text-gray-700 text-right">{parseFloat(item.coverageAmount).toLocaleString()}</td>
-                                            <td className="px-6 py-4 text-[13px] font-medium text-gray-600 text-center">{formatDate(item.expiryDate)}</td>
+                                            <td className="px-6 py-4 text-[13px] font-bold text-indigo-600 text-center">{item.premiumPercent || '0.00'}%</td>
+                                            <td className="px-6 py-4 text-[13px] font-bold text-emerald-600 text-center">{item.premiumReturnPercent || '0.00'}%</td>
                                             <td className="px-6 py-4 text-center">
                                                 <div className="flex justify-center items-center gap-2">
                                                     <button onClick={() => handleEdit(item)} className="p-1.5 hover:bg-blue-50 text-gray-400 hover:text-blue-600 rounded-lg transition-all" title="Edit">
@@ -337,7 +396,7 @@ const Insurance = ({ onDeleteConfirm }) => {
                                     ))
                                 ) : (
                                     <tr>
-                                        <td colSpan="6" className="px-6 py-12 text-center text-gray-500">No insurance policies found</td>
+                                        <td colSpan="7" className="px-6 py-12 text-center text-gray-500">No insurance policies found</td>
                                     </tr>
                                 )}
                             </tbody>
@@ -353,7 +412,7 @@ const Insurance = ({ onDeleteConfirm }) => {
                                     <div className="flex justify-between items-start">
                                         <div className="space-y-1">
                                             <h3 className="text-base font-bold text-gray-800">{item.companyName}</h3>
-                                            <p className="text-xs text-gray-500">{item.policyNumber} • {item.policyType}</p>
+                                            <p className="text-xs text-gray-500">{item.policyType}</p>
                                         </div>
                                         <div className="flex items-center gap-2">
                                             <button onClick={(e) => { e.stopPropagation(); handleEdit(item); }} className="p-2 hover:bg-blue-50 text-gray-400 hover:text-blue-500 rounded-lg transition-all">
@@ -365,22 +424,49 @@ const Insurance = ({ onDeleteConfirm }) => {
                                         </div>
                                     </div>
                                     {isExpanded && (
-                                        <div className="mt-4 pt-4 border-t border-gray-100 grid grid-cols-2 gap-4 animate-in fade-in duration-300">
-                                            <div className="space-y-1">
-                                                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Coverage</p>
-                                                <p className="text-sm font-bold text-gray-800">{parseFloat(item.coverageAmount).toLocaleString()}</p>
+                                        <div className="mt-4 pt-4 border-t border-gray-100 flex flex-col gap-6 animate-in fade-in duration-300">
+                                            {/* Company Contact */}
+                                            <div className="grid grid-cols-1 gap-4 bg-gray-50/50 p-4 rounded-xl border border-gray-100">
+                                                <div className="md:col-span-1 space-y-1">
+                                                    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Address</p>
+                                                    <p className="text-[13px] text-gray-600 leading-relaxed font-medium">{item.address || 'N/A'}</p>
+                                                </div>
+                                                <div className="grid grid-cols-2 gap-4">
+                                                    <div className="space-y-1">
+                                                        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Contact Person</p>
+                                                        <p className="text-[13px] text-gray-700 font-bold">{item.contactPerson || 'N/A'}</p>
+                                                    </div>
+                                                    <div className="space-y-1">
+                                                        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Phone</p>
+                                                        <p className="text-[13px] text-gray-700 font-bold">{item.phone || 'N/A'}</p>
+                                                    </div>
+                                                    <div className="space-y-1">
+                                                        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Email</p>
+                                                        <p className="text-[13px] text-blue-600 font-bold break-all">{item.email || 'N/A'}</p>
+                                                    </div>
+                                                </div>
                                             </div>
-                                            <div className="space-y-1">
-                                                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Premium</p>
-                                                <p className="text-sm font-bold text-gray-800">{parseFloat(item.premiumAmount).toLocaleString()}</p>
-                                            </div>
-                                            <div className="space-y-1">
-                                                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Expiry</p>
-                                                <p className="text-sm font-medium text-gray-600">{formatDate(item.expiryDate)}</p>
-                                            </div>
-                                            <div className="space-y-1">
-                                                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Status</p>
-                                                <p className={`text-sm font-bold ${item.status === 'Active' ? 'text-emerald-600' : 'text-amber-600'}`}>{item.status}</p>
+
+                                            {/* Detailed Policy Metrics */}
+                                            <div className="grid grid-cols-2 gap-4 px-1">
+                                                <div className="space-y-1">
+                                                    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">
+                                                        {item.policyType ? item.policyType.split(' ')[0] : 'Policy type'} premium (%)
+                                                    </p>
+                                                    <p className="text-sm font-bold text-indigo-600">{item.premiumPercent || '0.00'}%</p>
+                                                </div>
+                                                <div className="space-y-1">
+                                                    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Return (%)</p>
+                                                    <p className="text-sm font-bold text-emerald-600">{item.premiumReturnPercent || '0.00'}%</p>
+                                                </div>
+                                                <div className="space-y-1">
+                                                    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Stamp Charge</p>
+                                                    <p className="text-sm font-bold text-gray-800">{parseFloat(item.stampCharge || 0).toLocaleString()}</p>
+                                                </div>
+                                                <div className="space-y-1">
+                                                    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Status</p>
+                                                    <p className={`text-sm font-bold ${item.status === 'Active' ? 'text-emerald-600' : 'text-amber-600'}`}>{item.status}</p>
+                                                </div>
                                             </div>
                                         </div>
                                     )}

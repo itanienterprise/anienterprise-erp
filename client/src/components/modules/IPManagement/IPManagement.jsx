@@ -129,7 +129,7 @@ function IPManagement({
             if (highlightedIndex >= 0 && highlightedIndex < options.length) {
                 const selected = options[highlightedIndex];
                 const value = selected.name || selected;
-                
+
                 if (dropdownId.startsWith('filter-')) {
                     const filterField = dropdownId.replace('filter-', '');
                     setFilters(prev => ({ ...prev, [filterField]: value }));
@@ -271,7 +271,7 @@ function IPManagement({
         // Apply text search
         if (searchQuery) {
             const query = searchQuery.toLowerCase();
-            const matchesText = 
+            const matchesText =
                 (record.ipNumber || '').toLowerCase().includes(query) ||
                 (record.ipParty || '').toLowerCase().includes(query) ||
                 (record.productName || '').toLowerCase().includes(query) ||
@@ -307,9 +307,9 @@ function IPManagement({
         <div className="ip-management space-y-6">
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <div className="w-full md:w-1/4 text-center md:text-left">
-                    <h2 className="text-2xl font-bold text-gray-800" style={{margin:0}}>IP Management</h2>
+                    <h2 className="text-2xl font-bold text-gray-800" style={{ margin: 0 }}>IP Management</h2>
                 </div>
-                
+
                 <div className="w-full md:flex-1 md:max-w-md md:mx-auto relative group px-2 md:px-0">
                     <div className="absolute inset-y-0 left-0 pl-5 md:pl-3.5 flex items-center pointer-events-none">
                         <SearchIcon className="h-4 w-4 text-gray-400 group-focus-within:text-blue-500 transition-colors" />
@@ -472,7 +472,7 @@ function IPManagement({
                                 </div>
                             )}
                         </div>
-                    
+
                         <div className="space-y-3 relative dropdown-container" ref={filterProductRef}>
                             <label className="text-xs font-bold text-gray-500 uppercase tracking-wider block">Product</label>
                             <div className="relative">
@@ -541,8 +541,8 @@ function IPManagement({
                         </button>
                     </div>
 
-                    <form 
-                        onSubmit={handleSubmit} 
+                    <form
+                        onSubmit={handleSubmit}
                         onKeyDown={(e) => {
                             if (e.key === 'Enter' && e.target.tagName !== 'TEXTAREA') {
                                 e.preventDefault();

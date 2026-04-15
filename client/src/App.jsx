@@ -641,8 +641,9 @@ function App() {
                     type === 'customer' ? 'customers' :
                       type === 'bank' ? 'banks' :
                         type === 'indian-bank' ? 'indian-banks' :
-                        type === 'cnf' ? 'cnfs' :
-                        'stock';
+                          type === 'cnf' ? 'cnfs' :
+                            type === 'pi' ? 'pi' :
+                              'stock';
 
 
     try {
@@ -755,7 +756,7 @@ function App() {
         else if (type === 'product') fetchProducts();
         else if (type === 'stock') fetchStockRecords();
 
-        if (['employees', 'sales', 'customer', 'ip', 'cnf', 'bank', 'indian-bank', 'importer', 'exporter', 'port'].includes(type) || type.includes('cnf')) {
+        if (['employees', 'sales', 'customer', 'ip', 'cnf', 'bank', 'indian-bank', 'importer', 'exporter', 'port', 'pi'].includes(type) || type.includes('cnf')) {
           setRefreshKey(prev => prev + 1);
         }
       }
@@ -1128,10 +1129,12 @@ function App() {
       case 'pi-section':
         return (
           <PI
+            key={refreshKey}
             importers={importers}
             exporters={exporters}
             ports={ports}
             products={products}
+            fetchPorts={fetchPorts}
             onDeleteConfirm={setDeleteConfirm}
           />
         );

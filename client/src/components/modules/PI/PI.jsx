@@ -202,6 +202,44 @@ function PI({
         }
     };
 
+    const handleDeleteQuickMetaData = async (category, id) => {
+        if (!window.confirm("Are you sure you want to delete this option?")) return;
+        try {
+            await axios.delete(`${API_BASE_URL}/api/metadata/${id}`);
+            if (category === 'preCarriage') fetchMetaData(category, setPreCarriages);
+            else if (category === 'receiptPlace') fetchMetaData(category, setReceiptPlaces);
+            else if (category === 'vessel') fetchMetaData(category, setVessels);
+            else if (category === 'country') fetchMetaData(category, setCountries);
+        } catch (error) {
+            console.error(`Error deleting quick ${category}:`, error);
+            alert('Failed to delete option');
+        }
+    };
+
+    const handleDeleteQuickBank = async (id) => {
+        if (!window.confirm("Are you sure you want to delete this bank?")) return;
+        try {
+            await axios.delete(`${API_BASE_URL}/api/banks/${id}`);
+            await fetchRecords();
+        } catch (error) {
+            console.error('Error deleting quick bank:', error);
+            alert('Failed to delete bank');
+        }
+    };
+
+    const handleDeleteQuickPort = async (id) => {
+        if (!window.confirm("Are you sure you want to delete this port?")) return;
+        try {
+            await axios.delete(`${API_BASE_URL}/api/ports/${id}`);
+            if (typeof fetchPorts === 'function') {
+                await fetchPorts();
+            }
+        } catch (error) {
+            console.error('Error deleting quick port:', error);
+            alert('Failed to delete port');
+        }
+    };
+
     const handleDropdownSelect = (field, value) => {
         setFormData(prev => {
             const updated = { ...prev, [field]: value };
@@ -257,6 +295,20 @@ function PI({
 
     const handleSubmit = async (e) => {
         e.preventDefault();
+
+        // Check for duplicate PI Number
+        const isDuplicate = records.some(r =>
+            r.piNumber &&
+            r.piNumber.trim().toLowerCase() === (formData.piNumber || '').trim().toLowerCase() &&
+            r._id !== editingId
+        );
+
+        if (isDuplicate) {
+            alert("Duplicate PI Number detected! Each PI must have a unique number.");
+            setIsSubmitting(false);
+            return;
+        }
+
         setIsSubmitting(true);
         setSubmitStatus(null);
 
@@ -411,7 +463,7 @@ function PI({
                         </div>
                         <input
                             type="text"
-                            placeholder="Search PI No, Party, or Product..."
+                            placeholder="Search PI No, Importer, or Product..."
                             value={searchQuery}
                             onChange={(e) => setSearchQuery(e.target.value)}
                             className="block w-full pl-12 md:pl-10 pr-4 py-2.5 md:py-2 bg-white/50 border border-gray-200 rounded-xl text-[13px] text-center md:text-left placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all outline-none shadow-sm focus:bg-white"
@@ -472,6 +524,7 @@ function PI({
                                 value={formData.piNumber}
                                 onChange={handleInputChange}
                                 required
+                                autoComplete="off"
                                 placeholder="Enter PI Number"
                                 className="w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-all"
                             />
@@ -539,7 +592,7 @@ function PI({
 
                         {/* --- Importer Section --- */}
                         <div className="space-y-2 relative dropdown-container" ref={partyRef}>
-                            <label className="text-sm font-medium text-gray-700">Party / Importer</label>
+                            <label className="text-sm font-medium text-gray-700">Importer</label>
                             <div className="relative">
                                 <input
                                     type="text"
@@ -553,7 +606,7 @@ function PI({
                                     autoComplete="off"
                                     className="w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-all pr-10"
                                 />
-                                {activeDropdown === 'party' && (
+                                {activeDropdown === 'Importer' && (
                                     <div className="absolute z-[60] w-full mt-1 bg-white border border-gray-100 rounded-xl shadow-xl max-h-48 overflow-y-auto">
                                         {importers.filter(imp => !formData.partyName || imp.name.toLowerCase().includes(formData.partyName.toLowerCase())).map((imp, idx) => (
                                             <button
@@ -623,15 +676,25 @@ function PI({
                                 {activeDropdown === 'preCarriage' && (
                                     <div className="absolute z-[60] w-full mt-1 bg-white border border-gray-100 rounded-xl shadow-xl max-h-48 overflow-y-auto">
                                         {preCarriages.filter(v => !formData.preCarriageBy || v.value.toLowerCase().includes(formData.preCarriageBy.toLowerCase())).map((v, idx) => (
-                                            <button
-                                                key={v._id}
-                                                type="button"
-                                                onMouseDown={() => handleDropdownSelect('preCarriageBy', v.value)}
-                                                onMouseEnter={() => setHighlightedIndex(idx)}
-                                                className={`w-full px-4 py-2 text-left text-sm ${highlightedIndex === idx || formData.preCarriageBy === v.value ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-blue-50'}`}
-                                            >
-                                                {v.value}
-                                            </button>
+                                            <div key={v._id} className="flex items-center group">
+                                                <button
+                                                    key={v._id}
+                                                    type="button"
+                                                    onMouseDown={() => handleDropdownSelect('preCarriageBy', v.value)}
+                                                    onMouseEnter={() => setHighlightedIndex(idx)}
+                                                    className={`flex-1 px-4 py-2 text-left text-sm ${highlightedIndex === idx || formData.preCarriageBy === v.value ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-blue-50'}`}
+                                                >
+                                                    {v.value}
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); handleDeleteQuickMetaData('preCarriage', v._id); }}
+                                                    className="p-2 text-gray-400 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"
+                                                    title="Delete this option"
+                                                >
+                                                    <TrashIcon className="w-3.5 h-3.5" />
+                                                </button>
+                                            </div>
                                         ))}
                                     </div>
                                 )}
@@ -663,15 +726,25 @@ function PI({
                                 {activeDropdown === 'receiptPlace' && (
                                     <div className="absolute z-[60] w-full mt-1 bg-white border border-gray-100 rounded-xl shadow-xl max-h-48 overflow-y-auto">
                                         {receiptPlaces.filter(v => !formData.placeOfReceipt || v.value.toLowerCase().includes(formData.placeOfReceipt.toLowerCase())).map((v, idx) => (
-                                            <button
-                                                key={v._id}
-                                                type="button"
-                                                onMouseDown={() => handleDropdownSelect('placeOfReceipt', v.value)}
-                                                onMouseEnter={() => setHighlightedIndex(idx)}
-                                                className={`w-full px-4 py-2 text-left text-sm ${highlightedIndex === idx || formData.placeOfReceipt === v.value ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-blue-50'}`}
-                                            >
-                                                {v.value}
-                                            </button>
+                                            <div key={v._id} className="flex items-center group">
+                                                <button
+                                                    key={v._id}
+                                                    type="button"
+                                                    onMouseDown={() => handleDropdownSelect('placeOfReceipt', v.value)}
+                                                    onMouseEnter={() => setHighlightedIndex(idx)}
+                                                    className={`flex-1 px-4 py-2 text-left text-sm ${highlightedIndex === idx || formData.placeOfReceipt === v.value ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-blue-50'}`}
+                                                >
+                                                    {v.value}
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); handleDeleteQuickMetaData('receiptPlace', v._id); }}
+                                                    className="p-2 text-gray-400 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"
+                                                    title="Delete this option"
+                                                >
+                                                    <TrashIcon className="w-3.5 h-3.5" />
+                                                </button>
+                                            </div>
                                         ))}
                                     </div>
                                 )}
@@ -703,15 +776,25 @@ function PI({
                                 {activeDropdown === 'vessel' && (
                                     <div className="absolute z-[60] w-full mt-1 bg-white border border-gray-100 rounded-xl shadow-xl max-h-48 overflow-y-auto">
                                         {vessels.filter(v => !formData.vesselFlightNo || v.value.toLowerCase().includes(formData.vesselFlightNo.toLowerCase())).map((v, idx) => (
-                                            <button
-                                                key={v._id}
-                                                type="button"
-                                                onMouseDown={() => handleDropdownSelect('vesselFlightNo', v.value)}
-                                                onMouseEnter={() => setHighlightedIndex(idx)}
-                                                className={`w-full px-4 py-2 text-left text-sm ${highlightedIndex === idx || formData.vesselFlightNo === v.value ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-blue-50'}`}
-                                            >
-                                                {v.value}
-                                            </button>
+                                            <div key={v._id} className="flex items-center group">
+                                                <button
+                                                    key={v._id}
+                                                    type="button"
+                                                    onMouseDown={() => handleDropdownSelect('vesselFlightNo', v.value)}
+                                                    onMouseEnter={() => setHighlightedIndex(idx)}
+                                                    className={`flex-1 px-4 py-2 text-left text-sm ${highlightedIndex === idx || formData.vesselFlightNo === v.value ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-blue-50'}`}
+                                                >
+                                                    {v.value}
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); handleDeleteQuickMetaData('vessel', v._id); }}
+                                                    className="p-2 text-gray-400 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"
+                                                    title="Delete this option"
+                                                >
+                                                    <TrashIcon className="w-3.5 h-3.5" />
+                                                </button>
+                                            </div>
                                         ))}
                                     </div>
                                 )}
@@ -744,15 +827,25 @@ function PI({
                                 {activeDropdown === 'portLoading' && (
                                     <div className="absolute z-[60] w-full mt-1 bg-white border border-gray-100 rounded-xl shadow-xl max-h-48 overflow-y-auto">
                                         {ports.filter(p => p.isLoadingPort && (!formData.portOfLoading || p.name.toLowerCase().includes(formData.portOfLoading.toLowerCase()))).map((p, idx) => (
-                                            <button
-                                                key={p._id}
-                                                type="button"
-                                                onMouseDown={() => handleDropdownSelect('portOfLoading', p.name)}
-                                                onMouseEnter={() => setHighlightedIndex(idx)}
-                                                className={`w-full px-4 py-2 text-left text-sm ${highlightedIndex === idx || formData.portOfLoading === p.name ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-blue-50'}`}
-                                            >
-                                                {p.name}
-                                            </button>
+                                            <div key={p._id} className="flex items-center group">
+                                                <button
+                                                    key={p._id}
+                                                    type="button"
+                                                    onMouseDown={() => handleDropdownSelect('portOfLoading', p.name)}
+                                                    onMouseEnter={() => setHighlightedIndex(idx)}
+                                                    className={`flex-1 px-4 py-2 text-left text-sm ${highlightedIndex === idx || formData.portOfLoading === p.name ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-blue-50'}`}
+                                                >
+                                                    {p.name}
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); handleDeleteQuickPort(p._id); }}
+                                                    className="p-2 text-gray-400 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"
+                                                    title="Delete this port"
+                                                >
+                                                    <TrashIcon className="w-3.5 h-3.5" />
+                                                </button>
+                                            </div>
                                         ))}
                                     </div>
                                 )}
@@ -816,15 +909,25 @@ function PI({
                                 {activeDropdown === 'countryOrigin' && (
                                     <div className="absolute z-[60] w-full mt-1 bg-white border border-gray-100 rounded-xl shadow-xl max-h-48 overflow-y-auto">
                                         {countries.filter(v => !formData.countryOrigin || v.value.toLowerCase().includes(formData.countryOrigin.toLowerCase())).map((v, idx) => (
-                                            <button
-                                                key={v._id}
-                                                type="button"
-                                                onMouseDown={() => handleDropdownSelect('countryOrigin', v.value)}
-                                                onMouseEnter={() => setHighlightedIndex(idx)}
-                                                className={`w-full px-4 py-2 text-left text-sm ${highlightedIndex === idx || formData.countryOrigin === v.value ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-blue-50'}`}
-                                            >
-                                                {v.value}
-                                            </button>
+                                            <div key={v._id} className="flex items-center group">
+                                                <button
+                                                    key={v._id}
+                                                    type="button"
+                                                    onMouseDown={() => handleDropdownSelect('countryOrigin', v.value)}
+                                                    onMouseEnter={() => setHighlightedIndex(idx)}
+                                                    className={`flex-1 px-4 py-2 text-left text-sm ${highlightedIndex === idx || formData.countryOrigin === v.value ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-blue-50'}`}
+                                                >
+                                                    {v.value}
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); handleDeleteQuickMetaData('country', v._id); }}
+                                                    className="p-2 text-gray-400 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"
+                                                    title="Delete this country"
+                                                >
+                                                    <TrashIcon className="w-3.5 h-3.5" />
+                                                </button>
+                                            </div>
                                         ))}
                                     </div>
                                 )}
@@ -855,15 +958,25 @@ function PI({
                                 {activeDropdown === 'countryFinalDest' && (
                                     <div className="absolute z-[60] w-full mt-1 bg-white border border-gray-100 rounded-xl shadow-xl max-h-48 overflow-y-auto">
                                         {countries.filter(v => !formData.countryFinalDest || v.value.toLowerCase().includes(formData.countryFinalDest.toLowerCase())).map((v, idx) => (
-                                            <button
-                                                key={v._id}
-                                                type="button"
-                                                onMouseDown={() => handleDropdownSelect('countryFinalDest', v.value)}
-                                                onMouseEnter={() => setHighlightedIndex(idx)}
-                                                className={`w-full px-4 py-2 text-left text-sm ${highlightedIndex === idx || formData.countryFinalDest === v.value ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-blue-50'}`}
-                                            >
-                                                {v.value}
-                                            </button>
+                                            <div key={v._id} className="flex items-center group">
+                                                <button
+                                                    key={v._id}
+                                                    type="button"
+                                                    onMouseDown={() => handleDropdownSelect('countryFinalDest', v.value)}
+                                                    onMouseEnter={() => setHighlightedIndex(idx)}
+                                                    className={`flex-1 px-4 py-2 text-left text-sm ${highlightedIndex === idx || formData.countryFinalDest === v.value ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-blue-50'}`}
+                                                >
+                                                    {v.value}
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); handleDeleteQuickMetaData('country', v._id); }}
+                                                    className="p-2 text-gray-400 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"
+                                                    title="Delete this country"
+                                                >
+                                                    <TrashIcon className="w-3.5 h-3.5" />
+                                                </button>
+                                            </div>
                                         ))}
                                     </div>
                                 )}
@@ -895,15 +1008,25 @@ function PI({
                                 {activeDropdown === 'bank' && (
                                     <div className="absolute z-[60] w-full mt-1 bg-white border border-gray-100 rounded-xl shadow-xl max-h-48 overflow-y-auto">
                                         {banks.filter(bank => bank.isIndian && (!formData.indianBank || bank.bankName.toLowerCase().includes(formData.indianBank.toLowerCase()))).map((bank, idx) => (
-                                            <button
-                                                key={bank._id}
-                                                type="button"
-                                                onMouseDown={() => handleDropdownSelect('indianBank', bank.bankName)}
-                                                onMouseEnter={() => setHighlightedIndex(idx)}
-                                                className={`w-full px-4 py-2 text-left text-sm ${highlightedIndex === idx || formData.indianBank === bank.bankName ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-blue-50'}`}
-                                            >
-                                                {bank.bankName}
-                                            </button>
+                                            <div key={bank._id} className="flex items-center group">
+                                                <button
+                                                    key={bank._id}
+                                                    type="button"
+                                                    onMouseDown={() => handleDropdownSelect('indianBank', bank.bankName)}
+                                                    onMouseEnter={() => setHighlightedIndex(idx)}
+                                                    className={`flex-1 px-4 py-2 text-left text-sm ${highlightedIndex === idx || formData.indianBank === bank.bankName ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-blue-50'}`}
+                                                >
+                                                    {bank.bankName}
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); handleDeleteQuickBank(bank._id); }}
+                                                    className="p-2 text-gray-400 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"
+                                                    title="Delete this bank"
+                                                >
+                                                    <TrashIcon className="w-3.5 h-3.5" />
+                                                </button>
+                                            </div>
                                         ))}
                                     </div>
                                 )}
@@ -1210,7 +1333,7 @@ function PI({
                                 <tr className="bg-gray-50/80">
                                     <th className="px-6 py-4 text-[11px] font-bold text-gray-400 uppercase tracking-wider border-b border-gray-100">Date</th>
                                     <th className="px-6 py-4 text-[11px] font-bold text-gray-400 uppercase tracking-wider border-b border-gray-100">PI Number</th>
-                                    <th className="px-6 py-4 text-[11px] font-bold text-gray-400 uppercase tracking-wider border-b border-gray-100">Party</th>
+                                    <th className="px-6 py-4 text-[11px] font-bold text-gray-400 uppercase tracking-wider border-b border-gray-100">Importer</th>
                                     <th className="px-6 py-4 text-[11px] font-bold text-gray-400 uppercase tracking-wider border-b border-gray-100">Product</th>
                                     <th className="px-6 py-4 text-[11px] font-bold text-gray-400 uppercase tracking-wider border-b border-gray-100">Qty</th>
                                     <th className="px-6 py-4 text-[11px] font-bold text-gray-400 uppercase tracking-wider border-b border-gray-100">Rate</th>
