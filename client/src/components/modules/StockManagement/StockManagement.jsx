@@ -617,6 +617,8 @@ const StockManagement = ({
                     let whSalePkt = 0;
 
                     (salesRecords || []).forEach(sale => {
+                        const sStatus = (sale.status || '').toLowerCase();
+                        if (sStatus !== 'accepted') return;
                         if (sale.items) {
                             sale.items.forEach(saleItem => {
                                 if ((saleItem.productName || '').trim().toLowerCase() === targetProd) {
@@ -691,6 +693,8 @@ const StockManagement = ({
                     let whSalePkt = 0;
 
                     (salesRecords || []).forEach(sale => {
+                        const sStatus = (sale.status || '').toLowerCase();
+                        if (sStatus !== 'accepted') return;
                         if (sale.items) {
                             sale.items.forEach(saleItem => {
                                 if ((saleItem.productName || '').trim().toLowerCase() === targetProd) {
@@ -810,6 +814,8 @@ const StockManagement = ({
                             let wSalePkt = 0;
 
                             (salesRecords || []).forEach(sale => {
+                                const sStatus = (sale.status || '').toLowerCase();
+                                if (sStatus !== 'accepted') return;
                                 if (sale.items) {
                                     sale.items.forEach(saleItem => {
                                         if ((saleItem.productName || '').trim().toLowerCase() === targetProd) {
@@ -915,6 +921,8 @@ const StockManagement = ({
                                 let whSaleQty = 0;
                                 let whSalePkt = 0;
                                 (salesRecords || []).forEach(sale => {
+                                    const sStatus = (sale.status || '').toLowerCase();
+                                    if (sStatus !== 'accepted') return;
                                     if (sale.items) {
                                         sale.items.forEach(saleItem => {
                                             if ((saleItem.productName || '').trim().toLowerCase() === targetProd) {
@@ -1821,7 +1829,7 @@ const StockManagement = ({
                             </div>
                             <input
                                 type="text"
-                                placeholder="Search by LC, Port, Importer, Truck or Brand..."
+                                placeholder="Search by Product or Brand..."
                                 value={stockSearchQuery}
                                 onChange={(e) => setStockSearchQuery(e.target.value)}
                                 className="block w-full pl-10 pr-4 py-2 bg-white/50 border border-gray-200 rounded-xl text-[13px] placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 focus:bg-white transition-all outline-none"
@@ -2122,12 +2130,18 @@ const StockManagement = ({
                             { 
                                 label: 'INHOUSE BAG', 
                                 value: `${(totalInHousePktWhole || 0).toLocaleString()} - ${Math.round(totalInHousePktDecimalKg || 0).toLocaleString()} ${unit}`, 
-                                bgColor: 'bg-emerald-50/50', borderColor: 'border-emerald-100', textColor: 'text-emerald-700', labelColor: 'text-emerald-600' 
+                                bgColor: (totalInHouseQty || 0) < 0 ? 'bg-blue-50/50' : 'bg-emerald-50/50', 
+                                borderColor: (totalInHouseQty || 0) < 0 ? 'border-blue-100' : 'border-emerald-100', 
+                                textColor: (totalInHouseQty || 0) < 0 ? 'text-blue-700' : 'text-emerald-700', 
+                                labelColor: (totalInHouseQty || 0) < 0 ? 'text-blue-600' : 'text-emerald-600' 
                             },
                             { 
                                 label: 'INHOUSE QTY', 
                                 value: `${Math.round(totalInHouseQty || 0).toLocaleString()} ${unit}`, 
-                                bgColor: 'bg-emerald-50/50', borderColor: 'border-emerald-100', textColor: 'text-emerald-700', labelColor: 'text-emerald-600' 
+                                bgColor: (totalInHouseQty || 0) < 0 ? 'bg-blue-50/50' : 'bg-emerald-50/50', 
+                                borderColor: (totalInHouseQty || 0) < 0 ? 'border-blue-100' : 'border-emerald-100', 
+                                textColor: (totalInHouseQty || 0) < 0 ? 'text-blue-700' : 'text-emerald-700', 
+                                labelColor: (totalInHouseQty || 0) < 0 ? 'text-blue-600' : 'text-emerald-600' 
                             },
                             { 
                                 label: 'SHORTAGE', 
@@ -2691,8 +2705,8 @@ const StockManagement = ({
                                                     <EyeIcon className="w-4 h-4" />
                                                 </button>
                                                 {!isExpanded && (
-                                                    <span className={`inline-flex items-center px-1.5 py-0.5 rounded-full text-[9px] font-black ${group.totalInHouseQuantity > 0 ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'}`}>
-                                                        {group.totalInHouseQuantity > 0 ? 'In Stock' : 'Out of Stock'}
+                                                    <span className={`inline-flex items-center px-1.5 py-0.5 rounded-full text-[9px] font-black ${group.totalInHouseQuantity > 0 ? 'bg-emerald-100 text-emerald-700' : group.totalInHouseQuantity < 0 ? 'bg-blue-100 text-blue-700' : 'bg-red-100 text-red-700'}`}>
+                                                        {group.totalInHouseQuantity > 0 ? 'In Stock' : group.totalInHouseQuantity < 0 ? 'Pre-Sold' : 'Out of Stock'}
                                                     </span>
                                                 )}
                                             </div>
@@ -2748,8 +2762,8 @@ const StockManagement = ({
                                                                 </div>
                                                                 {!isBrandExpanded && (
                                                                     <div className="flex flex-col items-end shrink-0 pt-1">
-                                                                        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold ${brand.totalInHouseQuantity > 0 ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'}`}>
-                                                                            {brand.totalInHouseQuantity > 0 ? 'In Stock' : 'Out of Stock'}
+                                                                        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold ${brand.totalInHouseQuantity > 0 ? 'bg-emerald-100 text-emerald-700' : brand.totalInHouseQuantity < 0 ? 'bg-blue-100 text-blue-700' : 'bg-red-100 text-red-700'}`}>
+                                                                            {brand.totalInHouseQuantity > 0 ? 'In Stock' : brand.totalInHouseQuantity < 0 ? 'Pre-Sold' : 'Out of Stock'}
                                                                         </span>
                                                                     </div>
                                                                 )}
@@ -2864,8 +2878,8 @@ const StockManagement = ({
                                                             </div>
 
                                                             <div className="text-center overflow-hidden">
-                                                                <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold ${brand.inHouseQuantity > 0 ? 'bg-emerald-50 text-emerald-600' : brand.isPreSold ? 'bg-blue-50 text-blue-600' : 'bg-red-50 text-red-600'}`}>
-                                                                    {brand.inHouseQuantity > 0 ? 'In Stock' : brand.isPreSold ? 'Pre-Sold' : 'Out of Stock'}
+                                                                <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold ${brand.inHouseQuantity > 0 ? 'bg-emerald-50 text-emerald-600' : brand.inHouseQuantity < 0 ? 'bg-blue-50 text-blue-600' : 'bg-red-50 text-red-600'}`}>
+                                                                    {brand.inHouseQuantity > 0 ? 'In Stock' : brand.inHouseQuantity < 0 ? 'Pre-Sold' : 'Out of Stock'}
                                                                 </span>
                                                             </div>
                                                         </div>
@@ -2944,7 +2958,7 @@ const StockManagement = ({
                                         </div>
                                         <input
                                             type="text"
-                                            placeholder={historyTab === 'purchase' ? "Search by LC, Port, Importer, Truck or Brand..." : "Search by Invoice, Company, Customer, Phone or Brand..."}
+                                            placeholder={historyTab === 'purchase' ? "Search by Product or Brand..." : "Search by Invoice, Company, Customer, Phone or Brand..."}
                                             value={historySearchQuery}
                                             onChange={(e) => setHistorySearchQuery(e.target.value)}
                                             className="block w-full pl-10 pr-4 py-2 bg-gray-50/50 border border-gray-200 rounded-xl text-[13px] placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 focus:bg-white transition-all outline-none"

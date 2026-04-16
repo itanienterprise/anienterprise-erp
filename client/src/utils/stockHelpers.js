@@ -132,7 +132,8 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
         
         if (stockSearchQuery) {
             const q = stockSearchQuery.toLowerCase();
-            return (item.lcNo||'').toLowerCase().includes(q) || (item.brand||'').toLowerCase().includes(q) || (item.productName||item.product||'').toLowerCase().includes(q);
+            return (item.brand || '').toLowerCase().includes(q) ||
+                (item.productName || item.product || '').toLowerCase().includes(q);
         }
         return true;
     });
@@ -179,7 +180,7 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
         if (!brandObj._salesResolved) {
             salesRecords.forEach(sale => {
                 const sStatus = (sale.status || '').toLowerCase();
-                if (sStatus !== 'accepted' && sStatus !== 'pending') return;
+                if (sStatus !== 'accepted') return;
                 
                 const sDate = (sale.date || sale.createdAt || '').split('T')[0];
                 if (endDate && sDate > endDate) return;
@@ -257,7 +258,7 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
     // 5. Second Pass: General Products (from sales)
     salesRecords.forEach(sale => {
         const sStatus = (sale.status || '').toLowerCase();
-        if (sStatus !== 'accepted' && sStatus !== 'pending' && sStatus !== 'requested') return;
+        if (sStatus !== 'accepted') return;
         if (endDate && (sale.date || '').split('T')[0] > endDate) return;
 
         (sale.items || []).forEach(si => {
@@ -268,6 +269,11 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
             if (product?.category?.toLowerCase() !== 'general') return;
 
             if (stockFilters.productName && sProdName.toLowerCase() !== stockFilters.productName.toLowerCase()) return;
+            
+            if (stockSearchQuery) {
+                const q = stockSearchQuery.toLowerCase();
+                if (!sProdName.toLowerCase().includes(q)) return;
+            }
             
             if (!groupedStock[sProdName]) {
                 groupedStock[sProdName] = {
@@ -336,17 +342,19 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
             };
         }).sort((a,b) => a.brand.localeCompare(b.brand));
 
-        const openingQty = brandList.reduce((sum, b) => sum + b.openingQuantity, 0);
-        const inHouseQty = brandList.reduce((sum, b) => sum + b.inHouseQuantity, 0);
+        const openingQty = brandList.reduce((sum, b) => sum + Math.max(0, b.openingQuantity), 0);
+        const inHouseQty = brandList.reduce((sum, b) => sum + Math.max(0, b.inHouseQuantity), 0);
         const saleQty = brandList.reduce((sum, b) => sum + b.saleQuantity, 0);
-        const openingPkt = brandList.reduce((sum, b) => sum + b.openingPacket, 0);
-        const inHousePkt = brandList.reduce((sum, b) => sum + b.inHousePacket, 0);
+        const openingPkt = brandList.reduce((sum, b) => sum + Math.max(0, b.openingPacket), 0);
+        const inHousePkt = brandList.reduce((sum, b) => sum + Math.max(0, b.inHousePacket), 0);
         const salePkt = brandList.reduce((sum, b) => sum + b.salePacket, 0);
+
+        const groupPktSize = brandList.find(b => (b.packetSize || 0) > 0)?.packetSize || products.find(p => (p.name || p.productName || '').trim().toLowerCase() === group.productName.toLowerCase())?.packetSize || 30;
 
         return {
             ...group, 
-            brandList,
-            packetSize: brandList[0]?.packetSize || 0,
+            brandList: brandList.map(b => ({ ...b, packetSize: b.packetSize || groupPktSize })),
+            packetSize: groupPktSize,
             openingQuantity: openingQty,
             openingPacket: openingPkt,
             totalInHouseQuantity: openingQty,
@@ -356,7 +364,7 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
             saleQuantity: saleQty,
             salePacket: salePkt
         };
-    }).sort((a, b) => a.productName.localeCompare(b.productName));
+    }).filter(p => p.productName && p.productName.trim() !== '-' && p.productName.trim() !== '').sort((a, b) => a.productName.localeCompare(b.productName));
 
     // Summary Calculations
     let tOpeningQty = 0; let tSaleQty = 0; let tInHouseQty = 0; let tShortageQty = 0;
@@ -366,18 +374,18 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
 
     displayRecords.forEach(group => {
         group.brandList.forEach(b => {
-            tOpeningQty += b.openingQuantity;
+            tOpeningQty += Math.max(0, b.openingQuantity);
             tSaleQty += b.saleQuantity;
-            tInHouseQty += b.inHouseQuantity;
+            tInHouseQty += Math.max(0, b.inHouseQuantity);
             tShortageQty += b.sweepedQuantity;
 
-            const op = calculatePktRemainder(b.openingQuantity, b.packetSize);
+            const op = calculatePktRemainder(Math.max(0, b.openingQuantity), b.packetSize);
             tOpeningPkt.whole += op.whole; tOpeningPkt.remainder += op.remainder;
 
             const sl = calculatePktRemainder(b.saleQuantity, b.packetSize);
             tSalePkt.whole += sl.whole; tSalePkt.remainder += sl.remainder;
 
-            const ih = calculatePktRemainder(b.inHouseQuantity, b.packetSize);
+            const ih = calculatePktRemainder(Math.max(0, b.inHouseQuantity), b.packetSize);
             tInHousePkt.whole += ih.whole; tInHousePkt.remainder += ih.remainder;
         });
     });

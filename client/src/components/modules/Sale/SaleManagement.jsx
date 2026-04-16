@@ -350,8 +350,8 @@ const SaleManagement = ({
 
             if (response.status >= 200 && response.status < 300) {
                 // If accepted, trigger history and stock updates
-                if (newStatus === 'Pending') {
-                    console.log(`[handleStatusUpdate] Status is Pending. Triggering processSaleEffects...`);
+                if (newStatus === 'accepted') {
+                    console.log(`[handleStatusUpdate] Status is accepted. Triggering processSaleEffects...`);
                     try {
                         await processSaleEffects(updatedData, false);
                         console.log(`[handleStatusUpdate] processSaleEffects successful.`);
@@ -369,8 +369,8 @@ const SaleManagement = ({
                         const dateStr = formatDate(now);
                         const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
                         const adminName = currentUser?.name || currentUser?.username || 'Admin';
-                        const statusLabel = newStatus === 'Pending' ? 'Accepted' : newStatus;
-                        const actionLabel = newStatus === 'Pending' ? 'accepted' : 'rejected';
+                        const statusLabel = newStatus === 'accepted' ? 'Accepted' : (newStatus === 'Pending' ? 'Pending' : newStatus);
+                        const actionLabel = newStatus === 'accepted' ? 'accepted' : (newStatus === 'Pending' ? 'set to pending' : 'rejected');
                         const requesterName = sale.requestedBy || sale.requestedByUsername || 'an employee';
                         const sType = saleType === 'Border' ? 'Border Sale' : 'General Sale';
 
@@ -734,7 +734,7 @@ const SaleManagement = ({
                         // Subtract ALL matching sales to get REMAINING stock
                         allSalesRecords.forEach(s => {
                             const sStatus = (s.status || '').toLowerCase();
-                            if (sStatus !== 'accepted' && sStatus !== 'pending') return;
+                            if (sStatus !== 'accepted') return;
                             if (s.items) {
                                 s.items.forEach(si => {
                                     const sProdName = (si.productName || '').toLowerCase().trim();
@@ -777,7 +777,7 @@ const SaleManagement = ({
                         // Subtract ALL sales for this product
                         allSalesRecords.forEach(s => {
                             const sStatus = (s.status || '').toLowerCase();
-                            if (sStatus !== 'accepted' && sStatus !== 'pending') return;
+                            if (sStatus !== 'accepted') return;
                             if (s.items) {
                                 s.items.forEach(si => {
                                     const sProdName = (si.productName || '').toLowerCase().trim();
@@ -834,7 +834,7 @@ const SaleManagement = ({
                         // Subtract ALL matching sales for this specific warehouse
                         allSalesRecords.forEach(s => {
                             const sStatus = (s.status || '').toLowerCase();
-                            if (sStatus !== 'accepted' && sStatus !== 'pending') return;
+                            if (sStatus !== 'accepted') return;
                             if (s.items) {
                                 s.items.forEach(si => {
                                     const sProdName = (si.productName || '').toLowerCase().trim();
@@ -893,7 +893,7 @@ const SaleManagement = ({
                         // Subtract ALL matching sales for this warehouse (across all brands)
                         allSalesRecords.forEach(s => {
                             const sStatus = (s.status || '').toLowerCase();
-                            if (sStatus !== 'accepted' && sStatus !== 'pending') return;
+                            if (sStatus !== 'accepted') return;
                             if (s.items) {
                                 s.items.forEach(si => {
                                     const sProdName = (si.productName || '').toLowerCase().trim();
@@ -1282,7 +1282,7 @@ const SaleManagement = ({
                     }
                 }
 
-                if (formData.status !== 'Requested') {
+                if (formData.status === 'accepted') {
                     await processSaleEffects(formData, !!editingId);
                 }
 
@@ -3842,7 +3842,7 @@ const SaleManagement = ({
                                                             )}
                                                             {canApprove && (
                                                                 <>
-                                                                    <button onClick={(e) => { e.stopPropagation(); handleStatusUpdate(sale, 'Pending'); }} className="text-gray-400 hover:text-emerald-600 transition-colors" title="Accept"><CheckIcon className="w-5 h-5" /></button>
+                                                                    <button onClick={(e) => { e.stopPropagation(); handleStatusUpdate(sale, 'accepted'); }} className="text-gray-400 hover:text-emerald-600 transition-colors" title="Accept"><CheckIcon className="w-5 h-5" /></button>
                                                                     <button onClick={(e) => { e.stopPropagation(); handleStatusUpdate(sale, 'Rejected'); }} className="text-gray-400 hover:text-red-600 transition-colors" title="Reject"><XIcon className="w-5 h-5" /></button>
                                                                 </>
                                                             )}
