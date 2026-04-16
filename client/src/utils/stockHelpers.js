@@ -396,7 +396,14 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
             const qCmp = (a.quality || '-').localeCompare(b.quality || '-');
             if (qCmp !== 0) return qCmp;
             return a.brand.localeCompare(b.brand);
-        });
+        }).filter(b => 
+            Math.abs(b.totalInHouseQuantity) > 0.01 || 
+            Math.abs(b.saleQuantity) > 0.01 || 
+            Math.abs(b.inHouseQuantity) > 0.01 || 
+            Math.abs(b.sweepedQuantity) > 0.01
+        );
+
+        if (brandList.length === 0) return null;
 
         const openingQty = brandList.reduce((sum, b) => sum + Math.max(0, b.openingQuantity), 0);
         const inHouseQty = brandList.reduce((sum, b) => sum + Math.max(0, b.inHouseQuantity), 0);
@@ -420,7 +427,7 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
             saleQuantity: saleQty,
             salePacket: salePkt
         };
-    }).filter(p => p.productName && p.productName.trim() !== '-' && p.productName.trim() !== '').sort((a, b) => a.productName.localeCompare(b.productName));
+    }).filter(p => p !== null && p.productName && p.productName.trim() !== '-' && p.productName.trim() !== '').sort((a, b) => a.productName.localeCompare(b.productName));
 
     // Summary Calculations
     let tOpeningQty = 0; let tSaleQty = 0; let tInHouseQty = 0; let tShortageQty = 0;
