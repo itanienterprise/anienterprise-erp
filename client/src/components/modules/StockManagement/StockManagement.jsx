@@ -490,7 +490,7 @@ const StockManagement = ({
 
                     return {
                         ...decrypted,
-                        productName: decrypted.product,
+                        productName: decrypted.productName || decrypted.product || '',
                         inhousePkt,
                         inhouseQty,
                         whPkt,
@@ -531,7 +531,7 @@ const StockManagement = ({
 
             // 3. Normalize Stock records (treated as Warehouse rows)
             const decryptedStock = stockDataDecrypted.map(d => {
-                const rawWh = (d.warehouse || d.whName || '').trim();
+                const rawWh = (d.whName || d.warehouse || '').trim();
                 if (!rawWh) return null;
 
                 const key = `${(d.productName || d.product || '').trim()}_${(d.brand || '').trim()}`;

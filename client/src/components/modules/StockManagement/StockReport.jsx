@@ -523,7 +523,7 @@ const StockReport = ({
                                                                 {hasTotal && (
                                                                     <div className="mt-0 pt-0.5 border-t border-gray-900 font-bold leading-tight">
                                                                         {(() => {
-                                                                            const pktSize = item.brandList[0]?.packetSize || 0;
+                                                                            const pktSize = item.packetSize || item.brandList[0]?.packetSize || 30;
                                                                             const { whole, remainder } = calculatePktRemainder(item.totalInHouseQuantity, pktSize);
                                                                             return `${whole}${remainder !== 0 ? ` - ${Math.abs(remainder)} kg` : ''}`;
                                                                         })()}
@@ -565,7 +565,7 @@ const StockReport = ({
                                                     <td className="border-r border-gray-900 px-2 py-0.5 text-[14px] text-right text-gray-900 font-medium align-top whitespace-nowrap">
                                                         {hasAnyQ && <div className="leading-tight mb-0.5">&nbsp;</div>}
                                                         {renderList.map((ent, i) => {
-                                                            const { whole, remainder } = calculatePktRemainder(ent.inHouseQuantity, ent.packetSize);
+                                                            const { whole, remainder } = calculatePktRemainder(ent.inHouseQuantity, ent.packetSize || 30);
                                                             return (
                                                                 <div key={i} className={`leading-tight ${ent.type === 'subtotal' ? 'font-bold text-gray-600' : ''}`}>
                                                                     {whole}{remainder !== 0 ? ` - ${Math.abs(remainder)} kg` : ''}
@@ -575,7 +575,7 @@ const StockReport = ({
                                                         {hasTotal && (
                                                             <div className="mt-0 pt-0.5 border-t border-gray-900 font-bold leading-tight">
                                                                 {(() => {
-                                                                    const pktSize = item.brandList[0]?.packetSize || 0;
+                                                                    const pktSize = item.packetSize || item.brandList[0]?.packetSize || 30;
                                                                     const { whole, remainder } = calculatePktRemainder(item.inHouseQuantity, pktSize);
                                                                     return `${whole}${remainder !== 0 ? ` - ${Math.abs(remainder)} kg` : ''}`;
                                                                 })()}
@@ -677,7 +677,7 @@ const StockReport = ({
                                                             <div className="flex flex-col items-center justify-center w-full space-y-0.5">
                                                                 <p className="text-lg sm:text-xl font-black text-blue-600 text-center">
                                                                     {(() => {
-                                                                        const { whole, remainder } = calculatePktRemainder(ent.inHouseQuantity, ent.packetSize);
+                                                                        const { whole, remainder } = calculatePktRemainder(ent.inHouseQuantity, ent.packetSize || 30);
                                                                         return `${whole}${remainder !== 0 ? ` - ${Math.abs(remainder)} kg` : ''}`;
                                                                     })()} BAG
                                                                 </p>
