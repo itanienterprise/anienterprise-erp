@@ -51,6 +51,7 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
 
     const rawExpanded = [];
     const seenRecords = new Set();
+    const consumedSales = new Set(); // Track consumed sale entries to prevent double-counting across quality grades
 
     // 1. Process Primary Stock Records (LC Receive)
     stockRecords.forEach(item => {
@@ -214,15 +215,24 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
                 if (endDate && sDate > endDate) return;
 
                 const isBeforeSale = startDate && sDate < startDate;
-                (sale.items || []).forEach(si => {
+                (sale.items || []).forEach((si, siIdx) => {
                     const siName = (si.productName || si.product || '').trim().toLowerCase();
                     if (siName === key.toLowerCase()) {
-                        (si.brandEntries || []).forEach(be => {
-                            const beBrand = (be.brand || '').trim().toLowerCase();
+                        (si.brandEntries || []).forEach((be, beIdx) => {
+                            const beBrand = (be.brand || 'No Brand').trim().toLowerCase();
                             const rq = resolveQuality(siName, be.brand);
-                            const beQualityRaw = rq !== '-' ? rq : (be.quality || '-');
-                            const beQuality = beQualityRaw.trim().toLowerCase();
+                            let beQualityRaw = rq !== '-' ? rq : (be.quality || '-');
+                            let beQuality = beQualityRaw.trim().toLowerCase();
+
+                            // Fallback: If sale entry does not specify quality, map it to the current evaluating brandObj's quality
+                            if (beBrand === normBrand && beQuality === '-' && normQuality !== '-') {
+                                beQuality = normQuality;
+                            }
+
                             if (beBrand === normBrand && beQuality === normQuality) {
+                                const saleEntryId = `${sale._id}_${siIdx}_${beIdx}`;
+                                if (consumedSales.has(saleEntryId)) return; // Prevent double-counting if multiple quality buckets exist
+
                                 if (stockFilters.warehouse && (be.warehouseName || '').trim().toLowerCase() !== stockFilters.warehouse.toLowerCase()) return;
 
                                 const sq = safeParse(be.quantity);
@@ -233,6 +243,8 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
                                     const pSize = brandObj.packetSize || 30;
                                     sp = sq / pSize;
                                 }
+
+                                consumedSales.add(saleEntryId);
 
                                 if (isBeforeSale) {
                                     brandObj.openingQuantity -= sq;
@@ -292,7 +304,7 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
         if (sStatus !== 'accepted') return;
         if (endDate && (sale.date || '').split('T')[0] > endDate) return;
 
-        (sale.items || []).forEach(si => {
+        (sale.items || []).forEach((si, siIdx) => {
             const sProdName = (si.productName || '').trim();
             if (!sProdName) return;
 
@@ -316,13 +328,14 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
                 };
             }
             const group = groupedStock[sProdName];
-            (si.brandEntries || []).forEach(be => {
+            (si.brandEntries || []).forEach((be, beIdx) => {
                 if (stockFilters.warehouse && (be.warehouseName || '').trim().toLowerCase() !== stockFilters.warehouse.toLowerCase()) return;
                 const normBrand = (be.brand || 'No Brand').trim().toLowerCase();
                 const rq = resolveQuality(sProdName, be.brand);
                 const resolvedQ = rq !== '-' ? rq : (be.quality || '-');
                 const normQuality = resolvedQ.trim().toLowerCase();
                 const subKey = `${normQuality}_${normBrand}`;
+                
                 if (!group.brands[subKey]) {
                     group.brands[subKey] = {
                         brand: be.brand || 'No Brand',
@@ -334,7 +347,10 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
                     };
                 }
                 const brandObj = group.brands[subKey];
-                if (!brandObj._salesResolved) {
+                
+                const saleEntryId = `${sale._id}_${siIdx}_${beIdx}`;
+                if (!brandObj._salesResolved && !consumedSales.has(saleEntryId)) {
+                    consumedSales.add(saleEntryId);
                     const sDate = (sale.date || '').split('T')[0];
                     const isBefore = startDate && sDate < startDate;
                     const sq = safeParse(be.quantity);

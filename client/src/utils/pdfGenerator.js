@@ -461,11 +461,15 @@ export const generateStockReportPDF = (stockData, filters, reportType = 'short')
                     rowSpan: totalRowsForProduct,
                     styles: { valign: 'middle', halign: 'center', fontStyle: 'bold' }
                 });
-                // Product Name Header (Spans Product Name & Brand Columns)
+                // Product Name Header (Stays strictly in Product Name Column)
                 headRow.push({
                     content: (item.productName || '-').toUpperCase(),
-                    colSpan: 2,
-                    styles: { valign: 'middle', fontStyle: 'bold', halign: 'left', fillColor: [248, 248, 248] }
+                    styles: { valign: 'middle', fontStyle: 'bold', halign: 'center', fillColor: [248, 248, 248] }
+                });
+                // Empty Brand Column
+                headRow.push({
+                    content: '',
+                    styles: { fillColor: [248, 248, 248] }
                 });
                 // Numeric placeholders
                 const emptyDataColsCount = reportType === 'detailed' ? 6 : 2;
