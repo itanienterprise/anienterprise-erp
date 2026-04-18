@@ -88,16 +88,18 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
         } else {
             if (seenRecords.has(item._id)) return;
             seenRecords.add(item._id);
-            rawExpanded.push({
-                ...item,
-                recordType: 'stock',
-                quality: (() => {
+                const q = (() => {
                     const rq = resolveQuality(item.productName || item.product, item.brand);
                     return rq !== '-' ? rq : (item.quality || '-');
-                })(),
-                inHouseQuantity: safeParse(item.inHouseQuantity ?? item.inhouseQty ?? item.quantity),
-                inHousePacket: safeParse(item.inHousePacket ?? item.inhousePkt ?? item.packet)
-            });
+                })();
+                rawExpanded.push({
+                    ...item,
+                    recordType: 'stock',
+                    quality: q,
+                    // InHouse quantity is already net (Quantity - Shortage)
+                    inHouseQuantity: safeParse(item.inHouseQuantity ?? item.inhouseQty ?? item.quantity),
+                    inHousePacket: safeParse(item.inHousePacket ?? item.inhousePkt ?? item.packet)
+                });
         }
     });
 
@@ -381,9 +383,12 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
             const shortageQty = b.sweepedQuantity;
             const totalPkt = b.openingPacket + b.periodArrivalPacket;
 
-            // MATH: Opening = Arrival - Shortage, Closing = Opening - Sales
-            const openingAfterShortage = totalIn - shortageQty;
-            const openingPktAfterShortage = totalPkt - b.sweepedPacket;
+            // MATH: Opening = Arrival - Shortage (only if arrival is gross), Closing = Opening - Sales
+            // If arrivalQty already came from inHouseQuantity (Warehouse view), shortage is already subtracted.
+            const isGrossArrival = !stockFilters.warehouse;
+            const openingAfterShortage = isGrossArrival ? (totalIn - shortageQty) : totalIn;
+            const openingPktAfterShortage = isGrossArrival ? (totalPkt - b.sweepedPacket) : totalPkt;
+            
             const closingQty = openingAfterShortage - saleQty;
             const closingPkt = openingPktAfterShortage - b.salePacket;
 
