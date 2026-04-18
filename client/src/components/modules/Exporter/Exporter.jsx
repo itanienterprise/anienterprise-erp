@@ -89,6 +89,9 @@ const Exporter = ({
 
             // 1. Process Stock (LC Receive) - records are flat
             stockData.forEach(record => {
+                const status = (record.status || '').toLowerCase();
+                if (status.includes('requested') || status.includes('rejected')) return;
+
                 if ((record.exporter || '').toLowerCase().trim() === targetExporter) {
                     rows.push({
                         date: record.date,

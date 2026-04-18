@@ -126,7 +126,7 @@ const WarehouseManagement = ({ currentUser }) => {
                 try {
                     return { ...item, _id: item._id, createdAt: item.createdAt };
                 } catch { return null; }
-            }).filter(item => item && (item.status || '').toLowerCase() !== 'requested');
+            }).filter(item => item && !['requested', 'rejected'].includes((item.status || '').toLowerCase()));
 
             stockDataDecrypted.forEach(d => {
                 const key = `${(d.productName || d.product || '').trim().toLowerCase()}|${(d.brand || '').trim().toLowerCase()}`;
@@ -346,7 +346,7 @@ const WarehouseManagement = ({ currentUser }) => {
 
         salesRecords.forEach(sale => {
             const sStatus = (sale.status || '').toLowerCase();
-            if (sStatus !== 'accepted') return;
+            if (sStatus !== 'accepted' && sStatus !== 'pending') return;
             
             // Respect period filter: only include sales up to the selected end date
             if (warehouseFilters.endDate && sale.date) {
@@ -402,7 +402,7 @@ const WarehouseManagement = ({ currentUser }) => {
         // This pass discovery items that exist only in sales.
         salesRecords.forEach(sale => {
             const sStatus = (sale.status || '').toLowerCase();
-            if (sStatus !== 'accepted') return;
+            if (sStatus !== 'accepted' && sStatus !== 'pending') return;
 
             if (!sale.items || !Array.isArray(sale.items)) return;
             sale.items.forEach(si => {
@@ -550,7 +550,7 @@ const WarehouseManagement = ({ currentUser }) => {
     const getFilteredBrands = (search = '', productName) => {
         // Exclude "Requested" items from brand suggestions
         const dataToFilter = (productName ? warehouseData.filter(item => (item.productName || item.product) === productName) : warehouseData)
-            .filter(item => (item.status || '').toLowerCase() !== 'requested');
+            .filter(item => !['requested', 'rejected'].includes((item.status || '').toLowerCase()));
         const options = [...new Set(dataToFilter.map(item => item.brand).filter(Boolean))].sort();
         return options.filter(b => (b || '').toString().toLowerCase().includes((search || '').toString().toLowerCase()));
     };
@@ -637,7 +637,7 @@ const WarehouseManagement = ({ currentUser }) => {
         // 2. Subtract sales matching this specific warehouse + brand
         salesRecords.forEach(sale => {
             const sStatus = (sale.status || '').toLowerCase();
-            if (sStatus !== 'accepted') return;
+            if (sStatus !== 'accepted' && sStatus !== 'pending') return;
 
             // Respect period filter: only include sales up to the selected end date
             if (warehouseFilters.endDate && sale.date) {
@@ -701,7 +701,7 @@ const WarehouseManagement = ({ currentUser }) => {
         // --- SECOND PASS: Include sales for 'GENERAL' products that have NO warehouse stock records yet
         salesRecords.forEach(sale => {
             const sStatus = (sale.status || '').toLowerCase();
-            if (sStatus !== 'accepted') return;
+            if (sStatus !== 'accepted' && sStatus !== 'pending') return;
 
             if (!sale.items || !Array.isArray(sale.items)) return;
             sale.items.forEach(si => {

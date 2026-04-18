@@ -712,7 +712,7 @@ const SaleManagement = ({
                             const recBrand = (record.brand || '').toLowerCase().trim();
                             const targetBrand = (entry.brand || '').toLowerCase().trim();
 
-                            if ((record.status || '').toLowerCase().includes('requested')) return;
+                            if (['requested', 'rejected'].includes((record.status || '').toLowerCase())) return;
 
                             if (recName === targetName && recBrand === targetBrand) {
                                 totalInhouseQty += parseFloat(record.inHouseQuantity) || 0;
@@ -734,7 +734,7 @@ const SaleManagement = ({
                         // Subtract ALL matching sales to get REMAINING stock
                         allSalesRecords.forEach(s => {
                             const sStatus = (s.status || '').toLowerCase();
-                            if (sStatus !== 'accepted') return;
+                            if (sStatus !== 'accepted' && sStatus !== 'pending') return;
                             if (s.items) {
                                 s.items.forEach(si => {
                                     const sProdName = (si.productName || '').toLowerCase().trim();
@@ -758,7 +758,7 @@ const SaleManagement = ({
                     } else if (item.productName && !entry.brand) {
                         // Fallback: just product if no brand is selected yet
                         stockRecords.forEach(record => {
-                            if ((record.status || '').toLowerCase().includes('requested')) return;
+                            if (['requested', 'rejected'].includes((record.status || '').toLowerCase())) return;
                             const recName = (record.productName || record.product || '').toLowerCase().trim();
                             const targetName = (item.productName || '').toLowerCase().trim();
                             if (recName === targetName) {
@@ -777,7 +777,7 @@ const SaleManagement = ({
                         // Subtract ALL sales for this product
                         allSalesRecords.forEach(s => {
                             const sStatus = (s.status || '').toLowerCase();
-                            if (sStatus !== 'accepted') return;
+                            if (sStatus !== 'accepted' && sStatus !== 'pending') return;
                             if (s.items) {
                                 s.items.forEach(si => {
                                     const sProdName = (si.productName || '').toLowerCase().trim();
@@ -824,7 +824,7 @@ const SaleManagement = ({
                             const rBrand = (record.brand || '').toLowerCase().trim();
                             const targetBrand = (entry.brand || '').toLowerCase().trim();
 
-                            if ((record.status || '').toLowerCase().includes('requested')) return;
+                            if (['requested', 'rejected'].includes((record.status || '').toLowerCase())) return;
 
                             if (rName === targetWh && rProd === targetProd && rBrand === targetBrand) {
                                 totalWhQty += parseFloat(record.inHouseQuantity) || 0;
@@ -834,7 +834,7 @@ const SaleManagement = ({
                         // Subtract ALL matching sales for this specific warehouse
                         allSalesRecords.forEach(s => {
                             const sStatus = (s.status || '').toLowerCase();
-                            if (sStatus !== 'accepted') return;
+                            if (sStatus !== 'accepted' && sStatus !== 'pending') return;
                             if (s.items) {
                                 s.items.forEach(si => {
                                     const sProdName = (si.productName || '').toLowerCase().trim();
@@ -883,7 +883,7 @@ const SaleManagement = ({
                             const rProd = (record.productName || record.product || '').toLowerCase().trim();
                             const targetProd = (item.productName || '').toLowerCase().trim();
 
-                            if ((record.status || '').toLowerCase().includes('requested')) return;
+                            if (['requested', 'rejected'].includes((record.status || '').toLowerCase())) return;
 
                             if (rName === targetWh && rProd === targetProd) {
                                 totalWhQty += parseFloat(record.inHouseQuantity) || 0;
@@ -893,7 +893,7 @@ const SaleManagement = ({
                         // Subtract ALL matching sales for this warehouse (across all brands)
                         allSalesRecords.forEach(s => {
                             const sStatus = (s.status || '').toLowerCase();
-                            if (sStatus !== 'accepted') return;
+                            if (sStatus !== 'accepted' && sStatus !== 'pending') return;
                             if (s.items) {
                                 s.items.forEach(si => {
                                     const sProdName = (si.productName || '').toLowerCase().trim();

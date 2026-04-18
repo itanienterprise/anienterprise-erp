@@ -918,9 +918,12 @@ function App() {
         ...item, recordType: 'warehouse'
       }));
 
-      // 2. Extract Warehouse-Specific Stock from Stock Records
+      // 2. Extract Warehouse-Specific Stock from Stock Records (exclude requested/rejected)
       const decryptedStock = rawStockData.map(item => {
         try {
+          const itemStatus = (item.status || '').toLowerCase();
+          if (itemStatus.includes('requested') || itemStatus.includes('rejected')) return null;
+
           // item is already the decrypted object
           const rawWh = item.whName || item.warehouse || '';
 

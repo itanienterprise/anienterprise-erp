@@ -55,7 +55,8 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
 
     // 1. Process Primary Stock Records (LC Receive)
     stockRecords.forEach(item => {
-        if ((item.status || '').toLowerCase().includes('requested')) return;
+        const itemStatus = (item.status || '').toLowerCase();
+        if (itemStatus.includes('requested') || itemStatus.includes('rejected')) return;
 
         if (item.brandEntries && item.brandEntries.length > 0) {
             item.brandEntries.forEach((entry, idx) => {
@@ -211,7 +212,7 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
         if (!brandObj._salesResolved) {
             salesRecords.forEach(sale => {
                 const sStatus = (sale.status || '').toLowerCase();
-                if (sStatus !== 'accepted') return;
+                if (sStatus !== 'accepted' && sStatus !== 'pending') return;
 
                 const sDate = (sale.date || sale.createdAt || '').split('T')[0];
                 if (endDate && sDate > endDate) return;
@@ -304,7 +305,7 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
     // Only count 'accepted' and 'pending' sales — NOT 'requested'
     salesRecords.forEach(sale => {
         const sStatus = (sale.status || '').toLowerCase();
-        if (sStatus !== 'accepted') return;
+        if (sStatus !== 'accepted' && sStatus !== 'pending') return;
         if (endDate && (sale.date || '').split('T')[0] > endDate) return;
 
         (sale.items || []).forEach((si, siIdx) => {

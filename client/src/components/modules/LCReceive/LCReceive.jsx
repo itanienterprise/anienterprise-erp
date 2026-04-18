@@ -433,6 +433,9 @@ function LCReceive({
             stockData.forEach(item => {
                 try {
                     const d = item.data ? decryptData(item.data) : item;
+                    const status = (d.status || '').toLowerCase();
+                    if (status.includes('requested') || status.includes('rejected')) return;
+
                     const key = `${(d.productName || d.product || '').trim()}_${(d.brand || '').trim()}`;
                     if (!globalInHouseMap[key]) globalInHouseMap[key] = true;
                 } catch { }
@@ -472,6 +475,9 @@ function LCReceive({
             const decryptedStock = stockData.map(item => {
                 try {
                     const d = item.data ? decryptData(item.data) : item;
+                    const status = (d.status || '').toLowerCase();
+                    if (status.includes('requested') || status.includes('rejected')) return null;
+
                     const rawWh = (d.warehouse || '').trim();
                     if (!rawWh) return null;
                     return {

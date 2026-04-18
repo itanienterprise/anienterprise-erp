@@ -191,8 +191,8 @@ const CnF = ({
                             : (record.bdCnFUom || record.uom || cnf.uom || cnf.commissionType || 'QTY');
                         const uom = typeof rawUom === 'string' ? rawUom.toUpperCase() : 'QTY';
 
-                        const isAccepted = !record.status || record.status === 'In Stock';
-                        if (!isAccepted) return acc;
+                        const status = (record.status || '').toLowerCase();
+                        if (status.includes('requested') || status.includes('rejected')) return acc;
 
                         if (uom === 'QTY') {
                             const qty = !isNaN(parseFloat(record.quantity)) ? parseFloat(record.quantity) : (parseFloat(record.inHouseQuantity) || 0);
@@ -296,7 +296,8 @@ const CnF = ({
                         ? bdCnF === targetCnF
                         : (indCnF === targetCnF || bdCnF === targetCnF);
                         
-                const isAccepted = !record.status || record.status === 'In Stock';
+                const status = (record.status || '').toLowerCase();
+                const isAccepted = !status.includes('requested') && !status.includes('rejected');
                 const isMatch = isBaseMatch && isAccepted;
 
                 if (isMatch) {

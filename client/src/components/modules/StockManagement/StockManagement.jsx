@@ -462,7 +462,11 @@ const StockManagement = ({
                 try {
                     return { ...item, _id: item._id, createdAt: item.createdAt };
                 } catch { return null; }
-            }).filter(Boolean);
+            }).filter(item => {
+                if (!item) return false;
+                const status = (item.status || '').toLowerCase();
+                return !status.includes('requested') && !status.includes('rejected');
+            });
 
             stockDataDecrypted.forEach(d => {
                 const key = `${(d.productName || d.product || '').trim()}_${(d.brand || '').trim()}`;

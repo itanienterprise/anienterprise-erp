@@ -92,7 +92,8 @@ const WarehouseReport = ({
         
         // 1. Sum up all stock records up to the end date
         warehouseData.forEach(item => {
-            if ((item.status || '').toLowerCase().includes('requested')) return;
+            const itemStatus = (item.status || '').toLowerCase();
+            if (itemStatus.includes('requested') || itemStatus.includes('rejected')) return;
             
             // Respect end date for stock position
             if (filters.endDate && item.createdAt) {
@@ -123,7 +124,7 @@ const WarehouseReport = ({
         // 2. Subtract ALL sales up to the end date (this gives the unallocated balance)
         salesRecords.forEach(sale => {
             const sStatus = (sale.status || '').toLowerCase();
-            if (sStatus !== 'accepted') return;
+            if (sStatus !== 'accepted' && sStatus !== 'pending') return;
 
             if (filters.endDate && sale.date) {
                 const endLimit = new Date(filters.endDate);
@@ -184,7 +185,8 @@ const WarehouseReport = ({
 
         // PASS 1: Physical Stock from 'warehouseData'
         warehouseData.forEach(item => {
-            if ((item.status || '').toLowerCase().includes('requested')) return;
+            const itemStatus = (item.status || '').toLowerCase();
+            if (itemStatus.includes('requested') || itemStatus.includes('rejected')) return;
 
             // Date filtering: Position as of End Date (matches main Stock Summary)
             const itemDate = item.createdAt ? new Date(item.createdAt) : null;
@@ -232,7 +234,7 @@ const WarehouseReport = ({
         // PASS 2: Discovery pass for 'GENERAL' products in Sales records
         salesRecords.forEach(sale => {
             const sStatus = (sale.status || '').toLowerCase();
-            if (sStatus !== 'accepted') return;
+            if (sStatus !== 'accepted' && sStatus !== 'pending') return;
 
             // Date filtering for sales: subtract sales up to End Date
             const saleDate = sale.date ? new Date(sale.date) : null;
