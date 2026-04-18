@@ -189,8 +189,12 @@ const StockManagement = ({
         const searchLower = historySearchQuery.toLowerCase().trim();
         const productName = (viewRecord.data.productName || '').trim().toLowerCase();
 
-        const filteredRaw = stockRecords.filter(item => {
-            const matchesProduct = (item.productName || '').trim().toLowerCase() === productName;
+        const filteredRaw = (stockRecords || []).filter(item => {
+            const status = (item.status || '').toLowerCase();
+            if (status.includes('requested') || status.includes('rejected') || status.includes('deleted')) return false;
+
+            const productName = (viewRecord.data.productName || '').trim().toLowerCase();
+            const matchesProduct = (item.productName || item.product || '').trim().toLowerCase() === productName;
             if (!matchesProduct) return false;
 
             if (historyFilters.startDate && item.date < historyFilters.startDate) return false;
@@ -311,6 +315,9 @@ const StockManagement = ({
         const productName = (viewRecord.data.productName || '').trim().toLowerCase();
 
         const filteredSales = (salesRecords || []).filter(sale => {
+            const status = (sale.status || '').toLowerCase();
+            if (status !== 'accepted') return false;
+
             const hasMatchingProduct = (sale.items || []).some(item =>
                 (item.productName || '').trim().toLowerCase() === productName
             );

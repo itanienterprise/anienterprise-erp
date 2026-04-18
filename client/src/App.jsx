@@ -894,7 +894,11 @@ function App() {
       const response = await axios.get(`${API_BASE_URL}/api/stock`);
       // Stock data is now cleanly decrypted by the server/axios layer.
       if (Array.isArray(response.data)) {
-        setStockRecords(response.data);
+        const filteredStock = response.data.filter(item => {
+          const status = (item.status || '').toLowerCase();
+          return !status.includes('requested') && !status.includes('rejected') && !status.includes('deleted');
+        });
+        setStockRecords(filteredStock);
       }
     } catch (error) {
       console.error('Error fetching stock:', error);
