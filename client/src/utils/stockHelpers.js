@@ -372,41 +372,6 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
         });
     });
 
-    // 6. Inject shortage from original stock records when warehouse filter is active
-    // Warehouse records don't carry shortage data — it's stored on the LC Receive stock records
-    if (stockFilters.warehouse) {
-        const globalShortage = {};
-        rawExpanded.filter(r => r.recordType === 'stock').forEach(item => {
-            const key = (item.productName || item.product || 'Unknown').trim();
-            const normBrand = (item.brand || 'No Brand').trim().toLowerCase();
-            const normQuality = (item.quality || '-').trim().toLowerCase();
-            const subKey = `${normQuality}_${normBrand}`;
-            const gKey = `${key}|${subKey}`;
-
-            if (!globalShortage[gKey]) globalShortage[gKey] = { qty: 0, pkt: 0 };
-            globalShortage[gKey].qty += safeParse(item.sweepedQuantity);
-            globalShortage[gKey].pkt += safeParse(item.sweepedPacket);
-        });
-
-        Object.keys(groupedStock).forEach(key => {
-            Object.keys(groupedStock[key].brands).forEach(subKey => {
-                const gKey = `${key}|${subKey}`;
-                if (globalShortage[gKey] && (globalShortage[gKey].qty > 0 || globalShortage[gKey].pkt > 0)) {
-                    groupedStock[key].brands[subKey].sweepedQuantity = globalShortage[gKey].qty;
-                    groupedStock[key].brands[subKey].sweepedPacket = globalShortage[gKey].pkt;
-                }
-            });
-            // Recalculate group-level shortage totals
-            let totalShortageQty = 0, totalShortagePkt = 0;
-            Object.values(groupedStock[key].brands).forEach(b => {
-                totalShortageQty += b.sweepedQuantity;
-                totalShortagePkt += b.sweepedPacket;
-            });
-            groupedStock[key].sweepedQuantity = totalShortageQty;
-            groupedStock[key].sweepedPacket = totalShortagePkt;
-        });
-    }
-
     const displayRecords = Object.values(groupedStock).map(group => {
         const brandList = Object.values(group.brands).map(b => {
             // In this UI table, "Opening Stock" is the total arriving or starting balance
