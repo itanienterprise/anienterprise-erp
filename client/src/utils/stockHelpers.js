@@ -207,12 +207,20 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
 
         // Resolve Sales for this brand if not already done
         if (!brandObj._salesResolved) {
+            const debugProduct = key.toLowerCase().includes('chick peas');
+            if (debugProduct) console.log(`[STOCK-DEBUG] Resolving sales for product="${key}", brand="${normBrand}", quality="${normQuality}", subKey="${subKey}"`);
             salesRecords.forEach(sale => {
                 const sStatus = (sale.status || '').toLowerCase();
-                if (sStatus !== 'accepted' && sStatus !== 'pending' && sStatus !== 'requested') return;
+                if (sStatus !== 'accepted' && sStatus !== 'pending' && sStatus !== 'requested') {
+                    if (debugProduct && (sale.invoiceNo || '').includes('GS005')) console.log(`[STOCK-DEBUG] SKIPPED sale ${sale.invoiceNo} - status="${sale.status}"`);
+                    return;
+                }
 
                 const sDate = (sale.date || sale.createdAt || '').split('T')[0];
-                if (endDate && sDate > endDate) return;
+                if (endDate && sDate > endDate) {
+                    if (debugProduct && (sale.invoiceNo || '').includes('GS005')) console.log(`[STOCK-DEBUG] SKIPPED sale ${sale.invoiceNo} - date ${sDate} > endDate ${endDate}`);
+                    return;
+                }
 
                 const isBeforeSale = startDate && sDate < startDate;
                 (sale.items || []).forEach((si, siIdx) => {
@@ -224,16 +232,27 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
                             let beQualityRaw = rq !== '-' ? rq : (be.quality || '-');
                             let beQuality = beQualityRaw.trim().toLowerCase();
 
+                            if (debugProduct && (sale.invoiceNo || '').includes('GS005')) {
+                                console.log(`[STOCK-DEBUG] Sale ${sale.invoiceNo}: beBrand="${beBrand}", normBrand="${normBrand}", beQuality="${beQuality}", normQuality="${normQuality}", qty=${be.quantity}`);
+                            }
+
                             // Fallback: If sale entry does not specify quality, map it to the current evaluating brandObj's quality
                             if (beBrand === normBrand && beQuality === '-' && normQuality !== '-') {
                                 beQuality = normQuality;
+                                if (debugProduct && (sale.invoiceNo || '').includes('GS005')) console.log(`[STOCK-DEBUG] -> Quality fallback applied: beQuality now="${beQuality}"`);
                             }
 
                             if (beBrand === normBrand && beQuality === normQuality) {
                                 const saleEntryId = `${sale._id}_${siIdx}_${beIdx}`;
-                                if (consumedSales.has(saleEntryId)) return; // Prevent double-counting if multiple quality buckets exist
+                                if (consumedSales.has(saleEntryId)) {
+                                    if (debugProduct) console.log(`[STOCK-DEBUG] -> ALREADY CONSUMED: ${sale.invoiceNo} (${saleEntryId})`);
+                                    return;
+                                }
 
-                                if (stockFilters.warehouse && (be.warehouseName || '').trim().toLowerCase() !== stockFilters.warehouse.toLowerCase()) return;
+                                if (stockFilters.warehouse && (be.warehouseName || '').trim().toLowerCase() !== stockFilters.warehouse.toLowerCase()) {
+                                    if (debugProduct) console.log(`[STOCK-DEBUG] -> WAREHOUSE MISMATCH: ${sale.invoiceNo}`);
+                                    return;
+                                }
 
                                 const sq = safeParse(be.quantity);
                                 let sp = safeParse(be.packet);
@@ -245,6 +264,7 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
                                 }
 
                                 consumedSales.add(saleEntryId);
+                                if (debugProduct) console.log(`[STOCK-DEBUG] -> COUNTED: ${sale.invoiceNo}, qty=${sq}, pkt=${sp}`);
 
                                 if (isBeforeSale) {
                                     brandObj.openingQuantity -= sq;
@@ -257,12 +277,15 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
                                     acc[key].saleQuantity += sq;
                                     acc[key].salePacket += sp;
                                 }
+                            } else if (debugProduct && (sale.invoiceNo || '').includes('GS005')) {
+                                console.log(`[STOCK-DEBUG] -> NO MATCH: brand(${beBrand}==${normBrand}?${beBrand===normBrand}), quality(${beQuality}==${normQuality}?${beQuality===normQuality})`);
                             }
                         });
                     }
                 });
             });
             brandObj._salesResolved = true;
+            if (debugProduct) console.log(`[STOCK-DEBUG] Final for "${normBrand}": saleQty=${brandObj.saleQuantity}, salePkt=${brandObj.salePacket}`);
         }
 
         // Arrival Quantities: Use physical distributed stock if filtering by warehouse.
