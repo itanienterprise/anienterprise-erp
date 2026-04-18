@@ -378,21 +378,24 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
             const totalIn = b.openingQuantity + b.periodArrivalQuantity;
             const saleQty = b.saleQuantity;
             const shortageQty = b.sweepedQuantity;
+            const totalPkt = b.openingPacket + b.periodArrivalPacket;
 
-            // MATH: Closing = Arrival - Sales - Shortage
-            const closingQty = totalIn - saleQty - shortageQty;
-            const closingPkt = (b.openingPacket + b.periodArrivalPacket) - b.salePacket - b.sweepedPacket;
+            // MATH: Opening = Arrival - Shortage, Closing = Opening - Sales
+            const openingAfterShortage = totalIn - shortageQty;
+            const openingPktAfterShortage = totalPkt - b.sweepedPacket;
+            const closingQty = openingAfterShortage - saleQty;
+            const closingPkt = openingPktAfterShortage - b.salePacket;
 
             return {
                 ...b,
-                openingQuantity: totalIn,
-                openingPacket: b.openingPacket + b.periodArrivalPacket,
+                openingQuantity: openingAfterShortage,
+                openingPacket: openingPktAfterShortage,
                 closingQuantity: closingQty,
                 closingPacket: closingPkt,
                 inHouseQuantity: closingQty,
                 inHousePacket: closingPkt,
-                totalInHouseQuantity: totalIn,
-                totalInHousePacket: b.openingPacket + b.periodArrivalPacket
+                totalInHouseQuantity: openingAfterShortage,
+                totalInHousePacket: openingPktAfterShortage
             };
         }).sort((a, b) => {
             const qCmp = (a.quality || '-').localeCompare(b.quality || '-');
