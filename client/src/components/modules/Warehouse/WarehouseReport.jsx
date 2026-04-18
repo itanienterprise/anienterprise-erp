@@ -232,7 +232,7 @@ const WarehouseReport = ({
         // PASS 2: Discovery pass for 'GENERAL' products in Sales records
         salesRecords.forEach(sale => {
             const sStatus = (sale.status || '').toLowerCase();
-            if (sStatus !== 'accepted' && sStatus !== 'pending' && sStatus !== 'requested') return;
+            if (sStatus !== 'accepted' && sStatus !== 'pending') return;
 
             // Date filtering for sales: subtract sales up to End Date
             const saleDate = sale.date ? new Date(sale.date) : null;

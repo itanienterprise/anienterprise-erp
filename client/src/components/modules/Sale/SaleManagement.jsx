@@ -734,7 +734,7 @@ const SaleManagement = ({
                         // Subtract ALL matching sales to get REMAINING stock
                         allSalesRecords.forEach(s => {
                             const sStatus = (s.status || '').toLowerCase();
-                            if (sStatus !== 'accepted' && sStatus !== 'pending' && sStatus !== 'requested') return;
+                            if (sStatus !== 'accepted' && sStatus !== 'pending') return;
                             if (s.items) {
                                 s.items.forEach(si => {
                                     const sProdName = (si.productName || '').toLowerCase().trim();
@@ -777,7 +777,7 @@ const SaleManagement = ({
                         // Subtract ALL sales for this product
                         allSalesRecords.forEach(s => {
                             const sStatus = (s.status || '').toLowerCase();
-                            if (sStatus !== 'accepted' && sStatus !== 'pending' && sStatus !== 'requested') return;
+                            if (sStatus !== 'accepted' && sStatus !== 'pending') return;
                             if (s.items) {
                                 s.items.forEach(si => {
                                     const sProdName = (si.productName || '').toLowerCase().trim();
@@ -834,7 +834,7 @@ const SaleManagement = ({
                         // Subtract ALL matching sales for this specific warehouse
                         allSalesRecords.forEach(s => {
                             const sStatus = (s.status || '').toLowerCase();
-                            if (sStatus !== 'accepted' && sStatus !== 'pending' && sStatus !== 'requested') return;
+                            if (sStatus !== 'accepted' && sStatus !== 'pending') return;
                             if (s.items) {
                                 s.items.forEach(si => {
                                     const sProdName = (si.productName || '').toLowerCase().trim();
@@ -893,7 +893,7 @@ const SaleManagement = ({
                         // Subtract ALL matching sales for this warehouse (across all brands)
                         allSalesRecords.forEach(s => {
                             const sStatus = (s.status || '').toLowerCase();
-                            if (sStatus !== 'accepted' && sStatus !== 'pending' && sStatus !== 'requested') return;
+                            if (sStatus !== 'accepted' && sStatus !== 'pending') return;
                             if (s.items) {
                                 s.items.forEach(si => {
                                     const sProdName = (si.productName || '').toLowerCase().trim();

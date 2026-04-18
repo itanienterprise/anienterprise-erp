@@ -165,12 +165,13 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
 
     // 4. Aggregation
     const groupedStock = filteredRecords.reduce((acc, item) => {
-        const key = item.productName || item.product || 'Unknown';
+        const key = (item.productName || item.product || 'Unknown').trim();
+        const keyLower = key.toLowerCase();
         const itemDateOnly = (item.date || '').split('T')[0];
         const isBefore = startDate && itemDateOnly < startDate;
 
         if (!acc[key]) {
-            const product = products.find(p => (p.name || p.productName || '').trim().toLowerCase() === key.toLowerCase());
+            const product = products.find(p => (p.name || p.productName || '').trim().toLowerCase() === keyLower);
             acc[key] = {
                 productName: key,
                 productRef: product,
@@ -206,53 +207,35 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
         const brandObj = acc[key].brands[subKey];
 
         // Resolve Sales for this brand if not already done
+        // Only count 'accepted' and 'pending' sales — NOT 'requested'
         if (!brandObj._salesResolved) {
-            const debugProduct = key.toLowerCase().includes('chick peas');
-            if (debugProduct) console.log(`[STOCK-DEBUG] Resolving sales for product="${key}", brand="${normBrand}", quality="${normQuality}", subKey="${subKey}"`);
             salesRecords.forEach(sale => {
                 const sStatus = (sale.status || '').toLowerCase();
-                if (sStatus !== 'accepted' && sStatus !== 'pending' && sStatus !== 'requested') {
-                    if (debugProduct && (sale.invoiceNo || '').includes('GS005')) console.log(`[STOCK-DEBUG] SKIPPED sale ${sale.invoiceNo} - status="${sale.status}"`);
-                    return;
-                }
+                if (sStatus !== 'accepted' && sStatus !== 'pending') return;
 
                 const sDate = (sale.date || sale.createdAt || '').split('T')[0];
-                if (endDate && sDate > endDate) {
-                    if (debugProduct && (sale.invoiceNo || '').includes('GS005')) console.log(`[STOCK-DEBUG] SKIPPED sale ${sale.invoiceNo} - date ${sDate} > endDate ${endDate}`);
-                    return;
-                }
+                if (endDate && sDate > endDate) return;
 
                 const isBeforeSale = startDate && sDate < startDate;
                 (sale.items || []).forEach((si, siIdx) => {
                     const siName = (si.productName || si.product || '').trim().toLowerCase();
-                    if (siName === key.toLowerCase()) {
+                    if (siName === keyLower) {
                         (si.brandEntries || []).forEach((be, beIdx) => {
                             const beBrand = (be.brand || 'No Brand').trim().toLowerCase();
                             const rq = resolveQuality(siName, be.brand);
                             let beQualityRaw = rq !== '-' ? rq : (be.quality || '-');
                             let beQuality = beQualityRaw.trim().toLowerCase();
 
-                            if (debugProduct && (sale.invoiceNo || '').includes('GS005')) {
-                                console.log(`[STOCK-DEBUG] Sale ${sale.invoiceNo}: beBrand="${beBrand}", normBrand="${normBrand}", beQuality="${beQuality}", normQuality="${normQuality}", qty=${be.quantity}`);
-                            }
-
                             // Fallback: If sale entry does not specify quality, map it to the current evaluating brandObj's quality
                             if (beBrand === normBrand && beQuality === '-' && normQuality !== '-') {
                                 beQuality = normQuality;
-                                if (debugProduct && (sale.invoiceNo || '').includes('GS005')) console.log(`[STOCK-DEBUG] -> Quality fallback applied: beQuality now="${beQuality}"`);
                             }
 
                             if (beBrand === normBrand && beQuality === normQuality) {
                                 const saleEntryId = `${sale._id}_${siIdx}_${beIdx}`;
-                                if (consumedSales.has(saleEntryId)) {
-                                    if (debugProduct) console.log(`[STOCK-DEBUG] -> ALREADY CONSUMED: ${sale.invoiceNo} (${saleEntryId})`);
-                                    return;
-                                }
+                                if (consumedSales.has(saleEntryId)) return; // Prevent double-counting if multiple quality buckets exist
 
-                                if (stockFilters.warehouse && (be.warehouseName || '').trim().toLowerCase() !== stockFilters.warehouse.toLowerCase()) {
-                                    if (debugProduct) console.log(`[STOCK-DEBUG] -> WAREHOUSE MISMATCH: ${sale.invoiceNo}`);
-                                    return;
-                                }
+                                if (stockFilters.warehouse && (be.warehouseName || '').trim().toLowerCase() !== stockFilters.warehouse.toLowerCase()) return;
 
                                 const sq = safeParse(be.quantity);
                                 let sp = safeParse(be.packet);
@@ -264,7 +247,6 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
                                 }
 
                                 consumedSales.add(saleEntryId);
-                                if (debugProduct) console.log(`[STOCK-DEBUG] -> COUNTED: ${sale.invoiceNo}, qty=${sq}, pkt=${sp}`);
 
                                 if (isBeforeSale) {
                                     brandObj.openingQuantity -= sq;
@@ -277,15 +259,12 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
                                     acc[key].saleQuantity += sq;
                                     acc[key].salePacket += sp;
                                 }
-                            } else if (debugProduct && (sale.invoiceNo || '').includes('GS005')) {
-                                console.log(`[STOCK-DEBUG] -> NO MATCH: brand(${beBrand}==${normBrand}?${beBrand===normBrand}), quality(${beQuality}==${normQuality}?${beQuality===normQuality})`);
                             }
                         });
                     }
                 });
             });
             brandObj._salesResolved = true;
-            if (debugProduct) console.log(`[STOCK-DEBUG] Final for "${normBrand}": saleQty=${brandObj.saleQuantity}, salePkt=${brandObj.salePacket}`);
         }
 
         // Arrival Quantities: Use physical distributed stock if filtering by warehouse.
@@ -322,9 +301,10 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
     }, {});
 
     // 5. Second Pass: General Products (from sales)
+    // Only count 'accepted' and 'pending' sales — NOT 'requested'
     salesRecords.forEach(sale => {
         const sStatus = (sale.status || '').toLowerCase();
-        if (sStatus !== 'accepted' && sStatus !== 'pending' && sStatus !== 'requested') return;
+        if (sStatus !== 'accepted' && sStatus !== 'pending') return;
         if (endDate && (sale.date || '').split('T')[0] > endDate) return;
 
         (sale.items || []).forEach((si, siIdx) => {
@@ -372,7 +352,7 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
                 const brandObj = group.brands[subKey];
                 
                 const saleEntryId = `${sale._id}_${siIdx}_${beIdx}`;
-                if (!brandObj._salesResolved && !consumedSales.has(saleEntryId)) {
+                if (!consumedSales.has(saleEntryId)) {
                     consumedSales.add(saleEntryId);
                     const sDate = (sale.date || '').split('T')[0];
                     const isBefore = startDate && sDate < startDate;
@@ -387,7 +367,6 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
                         group.saleQuantity += sq;
                         group.salePacket += sp;
                     }
-                    brandObj._salesResolved = true;
                 }
             });
         });

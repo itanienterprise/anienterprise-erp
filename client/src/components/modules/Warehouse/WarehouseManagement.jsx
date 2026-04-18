@@ -402,7 +402,7 @@ const WarehouseManagement = ({ currentUser }) => {
         // This pass discovery items that exist only in sales.
         salesRecords.forEach(sale => {
             const sStatus = (sale.status || '').toLowerCase();
-            if (sStatus !== 'accepted' && sStatus !== 'pending' && sStatus !== 'requested') return;
+            if (sStatus !== 'accepted' && sStatus !== 'pending') return;
 
             if (!sale.items || !Array.isArray(sale.items)) return;
             sale.items.forEach(si => {
@@ -701,7 +701,7 @@ const WarehouseManagement = ({ currentUser }) => {
         // --- SECOND PASS: Include sales for 'GENERAL' products that have NO warehouse stock records yet
         salesRecords.forEach(sale => {
             const sStatus = (sale.status || '').toLowerCase();
-            if (sStatus !== 'accepted' && sStatus !== 'pending' && sStatus !== 'requested') return;
+            if (sStatus !== 'accepted' && sStatus !== 'pending') return;
 
             if (!sale.items || !Array.isArray(sale.items)) return;
             sale.items.forEach(si => {
