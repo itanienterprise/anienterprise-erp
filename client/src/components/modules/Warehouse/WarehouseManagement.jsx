@@ -346,7 +346,7 @@ const WarehouseManagement = ({ currentUser }) => {
 
         salesRecords.forEach(sale => {
             const sStatus = (sale.status || '').toLowerCase();
-            if (sStatus !== 'accepted' && sStatus !== 'pending') return;
+            if (sStatus !== 'accepted') return;
             
             // Respect period filter: only include sales up to the selected end date
             if (warehouseFilters.endDate && sale.date) {
@@ -402,7 +402,7 @@ const WarehouseManagement = ({ currentUser }) => {
         // This pass discovery items that exist only in sales.
         salesRecords.forEach(sale => {
             const sStatus = (sale.status || '').toLowerCase();
-            if (sStatus !== 'accepted' && sStatus !== 'pending') return;
+            if (sStatus !== 'accepted') return;
 
             if (!sale.items || !Array.isArray(sale.items)) return;
             sale.items.forEach(si => {
@@ -637,7 +637,7 @@ const WarehouseManagement = ({ currentUser }) => {
         // 2. Subtract sales matching this specific warehouse + brand
         salesRecords.forEach(sale => {
             const sStatus = (sale.status || '').toLowerCase();
-            if (sStatus !== 'accepted' && sStatus !== 'pending') return;
+            if (sStatus !== 'accepted') return;
 
             // Respect period filter: only include sales up to the selected end date
             if (warehouseFilters.endDate && sale.date) {
@@ -701,7 +701,7 @@ const WarehouseManagement = ({ currentUser }) => {
         // --- SECOND PASS: Include sales for 'GENERAL' products that have NO warehouse stock records yet
         salesRecords.forEach(sale => {
             const sStatus = (sale.status || '').toLowerCase();
-            if (sStatus !== 'accepted' && sStatus !== 'pending') return;
+            if (sStatus !== 'accepted') return;
 
             if (!sale.items || !Array.isArray(sale.items)) return;
             sale.items.forEach(si => {

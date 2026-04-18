@@ -211,7 +211,7 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
         if (!brandObj._salesResolved) {
             salesRecords.forEach(sale => {
                 const sStatus = (sale.status || '').toLowerCase();
-                if (sStatus !== 'accepted' && sStatus !== 'pending') return;
+                if (sStatus !== 'accepted') return;
 
                 const sDate = (sale.date || sale.createdAt || '').split('T')[0];
                 if (endDate && sDate > endDate) return;
@@ -304,7 +304,7 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
     // Only count 'accepted' and 'pending' sales — NOT 'requested'
     salesRecords.forEach(sale => {
         const sStatus = (sale.status || '').toLowerCase();
-        if (sStatus !== 'accepted' && sStatus !== 'pending') return;
+        if (sStatus !== 'accepted') return;
         if (endDate && (sale.date || '').split('T')[0] > endDate) return;
 
         (sale.items || []).forEach((si, siIdx) => {

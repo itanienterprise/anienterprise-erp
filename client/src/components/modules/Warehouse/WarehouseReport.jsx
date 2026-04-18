@@ -123,7 +123,7 @@ const WarehouseReport = ({
         // 2. Subtract ALL sales up to the end date (this gives the unallocated balance)
         salesRecords.forEach(sale => {
             const sStatus = (sale.status || '').toLowerCase();
-            if (sStatus !== 'accepted' && sStatus !== 'pending') return;
+            if (sStatus !== 'accepted') return;
 
             if (filters.endDate && sale.date) {
                 const endLimit = new Date(filters.endDate);
@@ -232,7 +232,7 @@ const WarehouseReport = ({
         // PASS 2: Discovery pass for 'GENERAL' products in Sales records
         salesRecords.forEach(sale => {
             const sStatus = (sale.status || '').toLowerCase();
-            if (sStatus !== 'accepted' && sStatus !== 'pending') return;
+            if (sStatus !== 'accepted') return;
 
             // Date filtering for sales: subtract sales up to End Date
             const saleDate = sale.date ? new Date(sale.date) : null;
