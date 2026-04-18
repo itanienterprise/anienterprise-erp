@@ -79,8 +79,8 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
                     packetSize: safeParse(entry.packetSize ?? item.packetSize),
                     inHousePacket: safeParse(entry.inHousePacket ?? entry.inhousePkt ?? item.inHousePacket),
                     inHouseQuantity: safeParse(entry.inHouseQuantity ?? entry.inhouseQty ?? item.inHouseQuantity),
-                    sweepedPacket: safeParse(entry.sweepedPacket ?? entry.shortagePkt ?? item.sweepedPacket),
-                    sweepedQuantity: safeParse(entry.sweepedQuantity ?? entry.shortageQty ?? item.sweepedQuantity),
+                    sweepedPacket: safeParse(entry.sweepedPacket) || safeParse(entry.shortagePkt) || safeParse(item.sweepedPacket),
+                    sweepedQuantity: safeParse(entry.sweepedQuantity) || safeParse(entry.shortageQty) || safeParse(item.sweepedQuantity),
                     unit: entry.unit || item.unit,
                     recordType: 'stock'
                 });

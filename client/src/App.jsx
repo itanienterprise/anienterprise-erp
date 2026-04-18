@@ -832,8 +832,8 @@ function App() {
               quantity: ent.quantity || '',
               inHousePacket: ent.inHousePacket || '',
               inHouseQuantity: ent.inHouseQuantity || '',
-              sweepedPacket: ent.sweepedPacket || '',
-              sweepedQuantity: ent.sweepedQuantity || '',
+              sweepedPacket: ent.sweepedPacket || ent.shortagePkt || '',
+              sweepedQuantity: ent.sweepedQuantity || ent.shortageQty || '',
               salePacket: ent.salePacket || '',
               saleQuantity: ent.saleQuantity || '',
               unit: ent.unit || 'kg'
@@ -946,8 +946,8 @@ function App() {
             whQty,
             salePacket,
             saleQuantity,
-            productName: dec.productName || dec.product,
-            packetSize: dec.packetSize || dec.size || 0,
+            productName: item.productName || item.product,
+            packetSize: item.packetSize || item.size || 0,
             recordType: 'stock',
           };
         } catch { return null; }
