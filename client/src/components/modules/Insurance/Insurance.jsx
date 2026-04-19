@@ -154,6 +154,34 @@ const Insurance = ({ onDeleteConfirm }) => {
         ).sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
     }, [insuranceRecords, searchQuery]);
 
+    const globalAggregates = useMemo(() => {
+        let totalPremium = 0;
+        let returnAmount = 0;
+        let paidPremium = 0;
+        let paidReturn = 0;
+
+        // Sum up aggregates from LCs
+        Object.values(insuranceTotals).forEach(co => {
+            totalPremium += co.totalPremium || 0;
+            returnAmount += co.returnAmount || 0;
+        });
+
+        // Sum up manual payments from insurance records
+        insuranceRecords.forEach(item => {
+            paidPremium += parseFloat(item.paidPremium || 0);
+            paidReturn += parseFloat(item.paidReturn || 0);
+        });
+
+        return {
+            totalPremium,
+            paidPremium,
+            premiumBalance: totalPremium - paidPremium,
+            returnAmount,
+            paidReturn,
+            returnBalance: returnAmount - paidReturn
+        };
+    }, [insuranceTotals, insuranceRecords]);
+
     return (
         <div className="space-y-4 md:space-y-6">
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -191,6 +219,53 @@ const Insurance = ({ onDeleteConfirm }) => {
                     </button>
                 </div>
             </div>
+
+            {!showForm && (
+                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+                    <div className="bg-white/40 backdrop-blur-md border border-white/40 p-4 rounded-2xl shadow-sm hover:shadow-md transition-all group overflow-hidden relative">
+                        <div className="absolute -right-2 -top-2 w-12 h-12 bg-blue-500/5 rounded-full blur-xl group-hover:bg-blue-500/10 transition-colors"></div>
+                        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Total Premium</p>
+                        <h3 className="text-lg font-black text-blue-600 group-hover:scale-105 transition-transform duration-300">
+                            ৳{globalAggregates.totalPremium.toLocaleString()}
+                        </h3>
+                    </div>
+                    <div className="bg-white/40 backdrop-blur-md border border-white/40 p-4 rounded-2xl shadow-sm hover:shadow-md transition-all group overflow-hidden relative">
+                        <div className="absolute -right-2 -top-2 w-12 h-12 bg-emerald-500/5 rounded-full blur-xl group-hover:bg-emerald-500/10 transition-colors"></div>
+                        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Paid Premium</p>
+                        <h3 className="text-lg font-black text-emerald-600 group-hover:scale-105 transition-transform duration-300">
+                            ৳{globalAggregates.paidPremium.toLocaleString()}
+                        </h3>
+                    </div>
+                    <div className="bg-white/40 backdrop-blur-md border border-white/40 p-4 rounded-2xl shadow-sm hover:shadow-md transition-all group overflow-hidden relative border-l-4 border-l-rose-400">
+                        <div className="absolute -right-2 -top-2 w-12 h-12 bg-rose-500/5 rounded-full blur-xl group-hover:bg-rose-500/10 transition-colors"></div>
+                        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Premium Balance</p>
+                        <h3 className="text-lg font-black text-rose-600 group-hover:scale-105 transition-transform duration-300">
+                            ৳{globalAggregates.premiumBalance.toLocaleString()}
+                        </h3>
+                    </div>
+                    <div className="bg-white/40 backdrop-blur-md border border-white/40 p-4 rounded-2xl shadow-sm hover:shadow-md transition-all group overflow-hidden relative">
+                        <div className="absolute -right-2 -top-2 w-12 h-12 bg-indigo-500/5 rounded-full blur-xl group-hover:bg-indigo-500/10 transition-colors"></div>
+                        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Return Amount</p>
+                        <h3 className="text-lg font-black text-indigo-600 group-hover:scale-105 transition-transform duration-300">
+                            ৳{globalAggregates.returnAmount.toLocaleString()}
+                        </h3>
+                    </div>
+                    <div className="bg-white/40 backdrop-blur-md border border-white/40 p-4 rounded-2xl shadow-sm hover:shadow-md transition-all group overflow-hidden relative">
+                        <div className="absolute -right-2 -top-2 w-12 h-12 bg-emerald-500/5 rounded-full blur-xl group-hover:bg-emerald-500/10 transition-colors"></div>
+                        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Paid Return</p>
+                        <h3 className="text-lg font-black text-emerald-600 group-hover:scale-105 transition-transform duration-300">
+                            ৳{globalAggregates.paidReturn.toLocaleString()}
+                        </h3>
+                    </div>
+                    <div className="bg-white/40 backdrop-blur-md border border-white/40 p-4 rounded-2xl shadow-sm hover:shadow-md transition-all group overflow-hidden relative border-l-4 border-l-orange-400">
+                        <div className="absolute -right-2 -top-2 w-12 h-12 bg-orange-500/5 rounded-full blur-xl group-hover:bg-orange-500/10 transition-colors"></div>
+                        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Return Balance</p>
+                        <h3 className="text-lg font-black text-orange-600 group-hover:scale-105 transition-transform duration-300">
+                            ৳{globalAggregates.returnBalance.toLocaleString()}
+                        </h3>
+                    </div>
+                </div>
+            )}
 
             {showForm && (
                 <div className="relative overflow-hidden bg-white/60 backdrop-blur-xl border border-white/40 rounded-2xl shadow-2xl p-5 md:p-8 animate-in fade-in slide-in-from-top-4 duration-500">
