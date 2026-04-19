@@ -3,11 +3,179 @@ import axios from '../../../utils/api';
 import {
     PlusIcon, XIcon, EditIcon, TrashIcon, SearchIcon,
     LCManagerIcon, ShieldIcon, BuildingIcon, GlobeIcon,
-    DollarSignIcon, CalendarIcon, ChevronDownIcon
+    DollarSignIcon, CalendarIcon, ChevronDownIcon, EyeIcon
 } from '../../Icons';
 import { formatDate, API_BASE_URL } from '../../../utils/helpers';
 import CustomDatePicker from '../../shared/CustomDatePicker';
-import './LCManagement.css';
+const ViewDetailsModal = ({ data, onClose }) => {
+    if (!data) return null;
+
+    return (
+        <div className="fixed inset-0 z-[2000] flex items-center justify-center p-4">
+            <div className="absolute inset-0 bg-gray-900/60 backdrop-blur-sm" onClick={onClose}></div>
+            <div className="relative bg-white border border-gray-100 rounded-2xl shadow-2xl w-full max-w-4xl overflow-hidden animate-in zoom-in duration-300">
+                {/* Header */}
+                <div className="flex items-center justify-between px-6 py-4 border-b border-gray-50 bg-gray-50/50">
+                    <div className="flex items-center gap-3">
+                        <div className="p-2 bg-blue-50 rounded-lg text-blue-600">
+                            <LCManagerIcon className="w-5 h-5" />
+                        </div>
+                        <div>
+                            <h3 className="text-lg font-bold text-gray-900">LC Record Details</h3>
+                            <p className="text-xs text-gray-500 font-bold uppercase tracking-widest">
+                                LC NO: <span className="text-sm font-black text-blue-600">{data.lcNo}</span> • {formatDate(data.openingDate)}
+                            </p>
+                        </div>
+                    </div>
+                    <button onClick={onClose} className="p-2 text-gray-400 hover:text-gray-600 rounded-full hover:bg-white transition-all">
+                        <XIcon className="w-5 h-5" />
+                    </button>
+                </div>
+
+                {/* Content */}
+                <div className="overflow-y-auto max-h-[80vh] p-8 custom-scrollbar">
+                    <div className="space-y-8">
+                        {/* Section 1: General Information */}
+                        <div>
+                            <div className="flex items-center gap-2 mb-4">
+                                <GlobeIcon className="w-4 h-4 text-gray-400" />
+                                <h4 className="text-xs font-black text-gray-400 uppercase tracking-widest">General Information</h4>
+                            </div>
+                            <div className="grid grid-cols-2 md:grid-cols-4 gap-6 px-2">
+                                <div className="space-y-1">
+                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">PI Number</span>
+                                    <p className="text-sm font-bold text-blue-600">{data.piNo || 'N/A'}</p>
+                                </div>
+                                <div className="space-y-1">
+                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">IP Number</span>
+                                    <p className="text-sm font-bold text-gray-800">{data.ipNo || 'N/A'}</p>
+                                </div>
+                                <div className="space-y-1">
+                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Opening Date</span>
+                                    <p className="text-sm font-bold text-gray-800 font-mono tracking-tight">{formatDate(data.openingDate)}</p>
+                                </div>
+                                <div className="space-y-1">
+                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider text-red-500">Expiry Date</span>
+                                    <p className="text-sm font-bold text-red-500 font-mono tracking-tight">{formatDate(data.expiryDate)}</p>
+                                </div>
+                                <div className="space-y-1 col-span-2">
+                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Bank Name</span>
+                                    <p className="text-sm font-bold text-gray-800 truncate" title={data.bankName}>{data.bankName}</p>
+                                </div>
+                                <div className="space-y-1">
+                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Importer</span>
+                                    <p className="text-sm font-bold text-gray-800 truncate">{data.importerName}</p>
+                                </div>
+                                <div className="space-y-1">
+                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Exporter</span>
+                                    <p className="text-sm font-bold text-gray-800 truncate">{data.exporterName}</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Section 2: Product & Financials */}
+                        <div className="pt-6 border-t border-gray-100">
+                            <div className="flex items-center gap-2 mb-4">
+                                <DollarSignIcon className="w-4 h-4 text-gray-400" />
+                                <h4 className="text-xs font-black text-gray-400 uppercase tracking-widest">Product & Financial Details</h4>
+                            </div>
+                            <div className="grid grid-cols-2 md:grid-cols-4 gap-6 px-2">
+                                <div className="space-y-1 col-span-2">
+                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Product Name</span>
+                                    <p className="text-sm font-black text-gray-900">{data.productName}</p>
+                                </div>
+                                <div className="space-y-1">
+                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">HS Code</span>
+                                    <p className="text-sm font-bold text-gray-800">{data.hsCode || '-'}</p>
+                                </div>
+                                <div className="space-y-1">
+                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Port</span>
+                                    <p className="text-sm font-bold text-gray-800">{data.port || '-'}</p>
+                                </div>
+                                <div className="space-y-1">
+                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Quantity</span>
+                                    <p className="text-sm font-black text-gray-900">
+                                        {parseFloat(data.quantity || 0).toLocaleString()} <span className="text-[10px] text-gray-400 font-normal">Ton</span>
+                                    </p>
+                                </div>
+                                <div className="space-y-1">
+                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Rate</span>
+                                    <p className="text-sm font-bold text-gray-800">
+                                        ${parseFloat(data.rate || 0).toLocaleString()} <span className="text-[10px] text-gray-400 font-normal">/Ton</span>
+                                    </p>
+                                </div>
+                                <div className="space-y-1">
+                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Total Dollar</span>
+                                    <p className="text-sm font-black text-blue-600">${parseFloat(data.totalDollar || 0).toLocaleString()}</p>
+                                </div>
+                                <div className="space-y-1">
+                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Dollar Rate</span>
+                                    <p className="text-sm font-bold text-gray-800">৳{parseFloat(data.dollarRate || 0).toLocaleString()}</p>
+                                </div>
+                            </div>
+                            <div className="mt-4 p-4 bg-gray-50 rounded-xl flex justify-between items-center">
+                                <span className="text-xs font-black text-gray-400 uppercase tracking-widest">Total LC Value</span>
+                                <span className="text-xl font-black text-gray-900">৳{parseFloat(data.totalAmount || 0).toLocaleString()}</span>
+                            </div>
+                        </div>
+
+                        {/* Section 3: Insurance Details */}
+                        <div className="pt-6 border-t border-gray-100">
+                            <div className="flex items-center gap-2 mb-4">
+                                <ShieldIcon className="w-4 h-4 text-gray-400" />
+                                <h4 className="text-xs font-black text-gray-400 uppercase tracking-widest">Insurance Information</h4>
+                            </div>
+                            <div className="grid grid-cols-2 md:grid-cols-4 gap-6 px-2">
+                                <div className="space-y-1 col-span-2">
+                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Insurance Company</span>
+                                    <p className="text-sm font-bold text-gray-800 truncate">{data.insuranceCo || '-'}</p>
+                                </div>
+                                <div className="space-y-1">
+                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Policy Type</span>
+                                    <p className="text-sm font-bold text-gray-800">{data.policyType || '-'}</p>
+                                </div>
+                                <div className="space-y-1">
+                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Extra %</span>
+                                    <p className="text-sm font-bold text-gray-800">{data.extraPercent}%</p>
+                                </div>
+                                <div className="space-y-1">
+                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Premium Rate</span>
+                                    <p className="text-sm font-bold text-gray-800">{data.premium}%</p>
+                                </div>
+                                <div className="space-y-1">
+                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Premium Return</span>
+                                    <p className="text-sm font-bold text-emerald-600">{data.premiumReturn || '0'}%</p>
+                                </div>
+                                <div className="space-y-1">
+                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Return Amount</span>
+                                    <p className="text-sm font-bold text-emerald-600">৳{parseFloat(data.expectedReturnAmount || 0).toLocaleString()}</p>
+                                </div>
+                                <div className="space-y-1">
+                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">VAT ({data.premiumVat}%)</span>
+                                    <p className="text-sm font-bold text-gray-800">
+                                        ৳{(parseFloat(data.netPremium || 0) * (parseFloat(data.premiumVat || 0) / 100)).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                    </p>
+                                </div>
+                                <div className="space-y-1">
+                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Stamp Duty</span>
+                                    <p className="text-sm font-bold text-gray-800">৳{parseFloat(data.stampCharge || 0).toLocaleString()}</p>
+                                </div>
+                                <div className="space-y-1">
+                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Gross Premium</span>
+                                    <p className="text-sm font-bold text-gray-800">৳{parseFloat(data.grossPremium || 0).toLocaleString()}</p>
+                                </div>
+                            </div>
+                            <div className="mt-4 p-4 bg-emerald-50 rounded-xl flex justify-between items-center border border-emerald-100">
+                                <span className="text-xs font-black text-emerald-600 uppercase tracking-widest">Net Payable Premium</span>
+                                <span className="text-lg font-black text-emerald-700">৳{parseFloat(data.netPremium || 0).toLocaleString()}</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
+};
 
 const LCManagement = ({ addNotification }) => {
     const [lcRecords, setLcRecords] = useState([]);
@@ -27,6 +195,8 @@ const LCManagement = ({ addNotification }) => {
     const [searchQuery, setSearchQuery] = useState('');
     const [activeDropdown, setActiveDropdown] = useState(null);
     const [highlightedIndex, setHighlightedIndex] = useState(-1);
+    const [viewData, setViewData] = useState(null);
+    const [isSaving, setIsSaving] = useState(false);
 
     const ipRef = useRef(null);
     const piRef = useRef(null);
@@ -63,7 +233,8 @@ const LCManagement = ({ addNotification }) => {
         premiumVat: '15',
         stampCharge: '',
         totalAmount: '',
-        status: 'Opened'
+        status: 'Opened',
+        port: ''
     });
 
     useEffect(() => {
@@ -105,6 +276,8 @@ const LCManagement = ({ addNotification }) => {
                     if (selectedPi.exporterName) newState.exporterName = selectedPi.exporterName;
                     if (selectedPi.hsCode) newState.hsCode = selectedPi.hsCode;
                     if (selectedPi.productName) newState.productName = selectedPi.productName;
+                    const piPort = selectedPi.port || selectedPi.portOfDischarge || selectedPi.portOfLoading;
+                    if (piPort) newState.port = piPort;
                 }
             }
 
@@ -192,7 +365,7 @@ const LCManagement = ({ addNotification }) => {
         setFormData(prev => {
             const newState = { ...prev, [name]: value };
 
-            if (['quantity', 'rate', 'totalDollar', 'dollarRate', 'extraPercent', 'premium', 'premiumReturn', 'totalAmount'].includes(name)) {
+            if (['quantity', 'rate', 'totalDollar', 'dollarRate', 'extraPercent', 'premium', 'premiumReturn', 'totalAmount', 'premiumVat', 'stampCharge'].includes(name)) {
                 let latestTotalAmount = parseFloat(prev.totalAmount) || 0;
 
                 if (['quantity', 'rate', 'totalDollar', 'dollarRate'].includes(name)) {
@@ -239,6 +412,7 @@ const LCManagement = ({ addNotification }) => {
 
     const handleSubmit = async (e) => {
         e.preventDefault();
+        setIsSaving(true);
         try {
             if (editingId) {
                 await axios.put(`${API_BASE_URL}/api/lc-management/${editingId}`, formData);
@@ -252,6 +426,8 @@ const LCManagement = ({ addNotification }) => {
         } catch (error) {
             console.error('Error saving LC record:', error);
             addNotification?.('Failed to save LC record', 'error');
+        } finally {
+            setIsSaving(false);
         }
     };
 
@@ -281,7 +457,9 @@ const LCManagement = ({ addNotification }) => {
             premiumVat: record.premiumVat || '',
             stampCharge: record.stampCharge || '',
             totalAmount: record.totalAmount || '',
-            status: record.status || 'Opened'
+            status: record.status || 'Opened',
+            piNo: record.piNo || '',
+            port: record.port || ''
         });
         setEditingId(record._id);
         setShowForm(true);
@@ -326,7 +504,9 @@ const LCManagement = ({ addNotification }) => {
             premiumVat: '15',
             stampCharge: '',
             totalAmount: '',
-            status: 'Opened'
+            status: 'Opened',
+            piNo: '',
+            port: ''
         });
         setEditingId(null);
         setShowForm(false);
@@ -576,6 +756,17 @@ const LCManagement = ({ addNotification }) => {
                                     ))}
                                 </div>
                             )}
+                        </div>
+                        <div className="space-y-1.5 text-left">
+                            <label className="text-sm font-semibold text-gray-600 ml-1">Port</label>
+                            <input
+                                type="text"
+                                name="port"
+                                value={formData.port}
+                                onChange={handleInputChange}
+                                placeholder="Enter Port Name"
+                                className="w-full px-4 py-2.5 bg-white/50 border border-gray-200/60 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all font-medium"
+                            />
                         </div>
 
                         <div className="space-y-1.5 text-left relative" ref={importerRef}>
@@ -827,8 +1018,8 @@ const LCManagement = ({ addNotification }) => {
                             </div>
                         </div>
 
-                        <div className="col-span-full grid grid-cols-1 md:grid-cols-3 lg:grid-cols-10 gap-6">
-                            <div className="space-y-1.5 text-left relative md:col-span-2 lg:col-span-2" ref={insuranceRef}>
+                        <div className="col-span-full grid grid-cols-1 md:grid-cols-3 lg:grid-cols-[2fr_0.8fr_0.8fr_0.8fr_1.5fr_2.2fr_0.8fr_1.5fr_1.5fr] gap-2">
+                            <div className="space-y-1.5 text-left relative md:col-span-2 lg:col-span-1" ref={insuranceRef}>
                                 <label className="text-sm font-semibold text-gray-600 ml-1">Insurance Company</label>
                                 <div className="relative">
                                     <input
@@ -932,16 +1123,27 @@ const LCManagement = ({ addNotification }) => {
 
                             <div className="space-y-1.5 text-left">
                                 <label className="text-sm font-semibold text-gray-600 ml-1">Premium VAT</label>
-                                <div className="relative">
-                                    <input
-                                        type="number"
-                                        name="premiumVat"
-                                        value={formData.premiumVat}
-                                        onChange={handleInputChange}
-                                        placeholder="15"
-                                        className="w-full px-4 py-2.5 pr-8 bg-white/50 border border-gray-200/60 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all font-medium"
-                                    />
-                                    <span className="absolute right-4 top-1/2 -translate-y-1/2 font-bold text-gray-400">%</span>
+                                <div className="grid grid-cols-[1.5fr_1fr] gap-1">
+                                    <div className="relative">
+                                        <span className="absolute left-3 top-1/2 -translate-y-1/2 font-bold text-gray-400">৳</span>
+                                        <input
+                                            type="text"
+                                            readOnly
+                                            value={(parseFloat(formData.netPremium || 0) * (parseFloat(formData.premiumVat || 0) / 100)).toFixed(2)}
+                                            className="w-full px-4 py-2.5 pl-8 bg-gray-50/50 border border-gray-200/60 rounded-xl outline-none font-medium text-gray-500 cursor-not-allowed"
+                                        />
+                                    </div>
+                                    <div className="relative">
+                                        <input
+                                            type="number"
+                                            name="premiumVat"
+                                            value={formData.premiumVat}
+                                            onChange={handleInputChange}
+                                            placeholder="15"
+                                            className="w-full px-4 py-2.5 pr-8 bg-white/50 border border-gray-200/60 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all font-medium"
+                                        />
+                                        <span className="absolute right-4 top-1/2 -translate-y-1/2 font-bold text-gray-400">%</span>
+                                    </div>
                                 </div>
                             </div>
 
@@ -994,9 +1196,10 @@ const LCManagement = ({ addNotification }) => {
                         <div className="md:col-span-2 lg:col-span-3 flex justify-end mt-4">
                             <button
                                 type="submit"
-                                className="px-10 py-3 bg-gradient-to-r from-gray-800 to-gray-900 hover:from-black hover:to-gray-800 text-white font-bold rounded-xl shadow-xl transition-all active:scale-95 transform"
+                                disabled={isSaving}
+                                className="w-full md:w-auto px-10 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold rounded-xl shadow-lg shadow-blue-500/30 transition-all transform hover:scale-105 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed text-sm uppercase tracking-wider"
                             >
-                                {editingId ? 'Update LC Record' : 'Complete Registration'}
+                                {isSaving ? 'Saving...' : editingId ? 'Update LC Record' : 'Complete Registration'}
                             </button>
                         </div>
                     </form>
@@ -1007,113 +1210,90 @@ const LCManagement = ({ addNotification }) => {
                 <div className="overflow-x-auto bg-white/50 backdrop-blur-xl border border-white/40 rounded-2xl shadow-xl">
                     <table className="w-full text-left border-collapse">
                         <thead>
-                            <tr className="bg-gray-50/50">
-                                <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider">IP / PI / LC Number</th>
-                                <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Status</th>
-                                <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Dates</th>
-                                <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Parties</th>
-                                <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Product / H.S Code</th>
-                                <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-right">LC Amount</th>
-                                <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-right">Actions</th>
+                            <tr className="bg-gray-50/50 border-b border-gray-100">
+                                <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-nowrap">Date</th>
+                                <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-nowrap">Expire Date</th>
+                                <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-nowrap">LC No</th>
+                                <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-nowrap">Importer</th>
+                                <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-nowrap">Exporter</th>
+                                <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-nowrap">Bank</th>
+                                <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-nowrap">Port</th>
+                                <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-nowrap">Product</th>
+                                <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-right text-nowrap">Quantity (Kg)</th>
+                                <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-right text-nowrap">Rate (/Kg)</th>
+                                <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-right text-nowrap">Total LC Value</th>
+                                <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-center text-nowrap">Action</th>
                             </tr>
                         </thead>
-                        <tbody className="divide-y divide-gray-100">
+                        <tbody className="divide-y divide-gray-50">
                             {isLoading ? (
                                 <tr>
-                                    <td colSpan="6" className="px-6 py-12 text-center">
+                                    <td colSpan="12" className="px-6 py-12 text-center text-sm text-gray-500">
                                         <div className="flex flex-col items-center gap-2">
                                             <div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
-                                            <span className="text-sm text-gray-500 font-medium">Loading records...</span>
+                                            <span className="font-medium text-gray-400">Loading records...</span>
                                         </div>
                                     </td>
                                 </tr>
                             ) : filteredRecords.length > 0 ? (
-                                filteredRecords.map((record) => (
-                                    <tr key={record._id} className="lc-table-row hover:bg-white/80 transition-all group">
-                                        <td className="px-6 py-4">
-                                            <div className="flex flex-col">
-                                                <div className="flex items-center gap-1.5">
-                                                    <span className="text-[10px] font-bold text-indigo-400 uppercase">IP:</span>
-                                                    <span className="text-sm font-bold text-gray-900">{record.ipNo || 'N/A'}</span>
+                                filteredRecords.map((record) => {
+                                    // Dynamic fallback for Port if empty in LC record
+                                    const linkedPi = record.piNo ? piRecordsRaw.find(p => p.piNumber === record.piNo) : null;
+                                    const displayPort = record.port || (linkedPi && (linkedPi.port || linkedPi.portOfDischarge || linkedPi.portOfLoading)) || '-';
+                                    
+                                    // Unit conversion for display (Data is in Tons, Table shows Kg)
+                                    const qtyKg = parseFloat(record.quantity || 0) * 1000;
+                                    const rateKg = parseFloat(record.rate || 0) / 1000;
+
+                                    return (
+                                        <tr key={record._id} className="hover:bg-gray-50/50 transition-colors border-b border-gray-50 group">
+                                            <td className="px-6 py-4 text-sm font-medium text-gray-600 whitespace-nowrap">{formatDate(record.openingDate)}</td>
+                                            <td className="px-6 py-4 text-sm font-medium text-gray-900 whitespace-nowrap">{formatDate(record.expiryDate)}</td>
+                                            <td className="px-6 py-4 text-sm font-bold text-gray-900 whitespace-nowrap">{record.lcNo}</td>
+                                            <td className="px-6 py-4 text-sm font-medium text-gray-700">{record.importerName}</td>
+                                            <td className="px-6 py-4 text-sm text-gray-600">{record.exporterName}</td>
+                                            <td className="px-6 py-4 text-sm text-gray-600 font-medium">{record.bankName}</td>
+                                            <td className="px-6 py-4 text-sm text-gray-600">{displayPort}</td>
+                                            <td className="px-6 py-4 text-sm font-bold text-gray-900">{record.productName || '-'}</td>
+                                            <td className="px-6 py-4 text-sm text-right text-gray-600 whitespace-nowrap">
+                                                <span className="font-bold text-gray-900">{qtyKg.toLocaleString()}</span> <span className="text-[10px] text-gray-400 font-normal">Kg</span>
+                                            </td>
+                                            <td className="px-6 py-4 text-sm text-right text-gray-600 whitespace-nowrap">
+                                                <span className="font-medium text-gray-900">${rateKg.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 4 })}</span> <span className="text-[10px] text-gray-400 font-normal">/Kg</span>
+                                            </td>
+                                            <td className="px-6 py-4 text-sm text-right font-black text-gray-900 whitespace-nowrap">৳{parseFloat(record.totalAmount || 0).toLocaleString()}</td>
+                                            <td className="px-4 py-4 text-center">
+                                                <div className="flex items-center justify-center gap-4">
+                                                    <button
+                                                        onClick={() => setViewData(record)}
+                                                        className="text-gray-400 hover:text-blue-600 transition-colors"
+                                                        title="View Details"
+                                                    >
+                                                        <EyeIcon className="w-5 h-5" />
+                                                    </button>
+                                                    <button
+                                                        onClick={() => handleEdit(record)}
+                                                        className="text-gray-400 hover:text-blue-600 transition-colors"
+                                                        title="Edit Record"
+                                                    >
+                                                        <EditIcon className="w-5 h-5" />
+                                                    </button>
+                                                    <button
+                                                        onClick={() => handleDelete(record._id)}
+                                                        className="text-gray-400 hover:text-red-600 transition-colors"
+                                                        title="Delete Record"
+                                                    >
+                                                        <TrashIcon className="w-5 h-5" />
+                                                    </button>
                                                 </div>
-                                                <div className="flex items-center gap-1.5">
-                                                    <span className="text-[10px] font-bold text-rose-400 uppercase">PI:</span>
-                                                    <span className="text-xs font-bold text-gray-700">{record.piNo || 'N/A'}</span>
-                                                </div>
-                                                <div className="flex items-center gap-1.5">
-                                                    <span className="text-[10px] font-bold text-blue-400 uppercase">LC:</span>
-                                                    <span className="text-xs font-bold text-gray-700">{record.lcNo}</span>
-                                                </div>
-                                                <span className="text-[11px] font-bold text-blue-500 uppercase mt-1">{record.bankName}</span>
-                                            </div>
-                                        </td>
-                                        <td className="px-6 py-4 text-sm font-medium">
-                                            <span className={`lc-status-badge status-${record.status?.toLowerCase().replace(' ', '-')}`}>
-                                                {record.status}
-                                            </span>
-                                        </td>
-                                        <td className="px-6 py-4">
-                                            <div className="space-y-1">
-                                                <div className="flex items-center gap-1.5 text-[11px]">
-                                                    <span className="text-gray-400 font-bold w-12">OPEN:</span>
-                                                    <span className="text-gray-700 font-medium">{formatDate(record.openingDate)}</span>
-                                                </div>
-                                                <div className="flex items-center gap-1.5 text-[11px]">
-                                                    <span className="text-gray-400 font-bold w-12">EXP:</span>
-                                                    <span className="text-red-500 font-bold">{formatDate(record.expiryDate)}</span>
-                                                </div>
-                                            </div>
-                                        </td>
-                                        <td className="px-6 py-4">
-                                            <div className="space-y-1">
-                                                <div className="flex items-center gap-2">
-                                                    <BuildingIcon className="w-3.5 h-3.5 text-indigo-400" />
-                                                    <span className="text-xs font-bold text-gray-700">{record.importerName}</span>
-                                                </div>
-                                                <div className="flex items-center gap-2">
-                                                    <GlobeIcon className="w-3.5 h-3.5 text-emerald-400" />
-                                                    <span className="text-[11px] font-semibold text-gray-500">{record.exporterName}</span>
-                                                </div>
-                                            </div>
-                                        </td>
-                                        <td className="px-6 py-4 text-right">
-                                            <div className="flex flex-col items-end">
-                                                <span className="text-sm font-bold text-gray-900">৳{parseFloat(record.totalAmount || 0).toLocaleString()}</span>
-                                            </div>
-                                        </td>
-                                        <td className="px-6 py-4">
-                                            <div className="flex flex-col">
-                                                <span className="text-sm font-bold text-gray-900 truncate">{record.productName || '-'}</span>
-                                                <span className="text-[10px] text-gray-500 font-semibold uppercase">{record.hsCode || 'No H.S Code'}</span>
-                                            </div>
-                                        </td>
-                                        <td className="px-6 py-4 text-right">
-                                            <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                                <button
-                                                    onClick={() => handleEdit(record)}
-                                                    className="p-2 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 transition-colors"
-                                                    title="Edit Record"
-                                                >
-                                                    <EditIcon className="w-4 h-4" />
-                                                </button>
-                                                <button
-                                                    onClick={() => handleDelete(record._id)}
-                                                    className="p-2 bg-red-50 text-red-600 rounded-lg hover:bg-red-100 transition-colors"
-                                                    title="Delete Record"
-                                                >
-                                                    <TrashIcon className="w-4 h-4" />
-                                                </button>
-                                            </div>
-                                        </td>
-                                    </tr>
-                                ))
+                                            </td>
+                                        </tr>
+                                    );
+                                })
                             ) : (
                                 <tr>
-                                    <td colSpan="6" className="px-6 py-16 text-center">
-                                        <div className="flex flex-col items-center gap-3">
-                                            <LCManagerIcon className="w-12 h-12 text-gray-200" />
-                                            <span className="text-gray-400 font-medium">No LC records found</span>
-                                        </div>
+                                    <td colSpan="12" className="px-6 py-12 text-center text-gray-400 font-medium whitespace-nowrap italic">
+                                        No LC records found
                                     </td>
                                 </tr>
                             )}
@@ -1121,6 +1301,7 @@ const LCManagement = ({ addNotification }) => {
                     </table>
                 </div>
             )}
+            {viewData && <ViewDetailsModal data={viewData} onClose={() => setViewData(null)} />}
         </div>
     );
 };

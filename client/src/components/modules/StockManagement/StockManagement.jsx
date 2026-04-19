@@ -3477,7 +3477,7 @@ const StockManagement = ({
                                                             ) : (
                                                                 flattenedSaleHistory.map((sale, sIdx) => (
                                                                     <tr key={sIdx} className="hover:bg-blue-50/20 transition-all group border-b border-gray-50">
-                                                                        <td className="px-3 py-3 text-sm text-gray-600">{sale.date}</td>
+                                                                        <td className="px-3 py-3 text-sm text-gray-600">{formatDate(sale.date)}</td>
                                                                         <td className="px-3 py-3 text-sm font-bold text-gray-900">{sale.invoiceNo}</td>
                                                                         <td className="px-3 py-3 text-sm font-bold text-gray-800 truncate max-w-[150px]" title={sale.companyName}>{sale.companyName}</td>
                                                                         {isFruitHistory ? (

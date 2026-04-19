@@ -2,37 +2,48 @@ const mongoose = require('mongoose');
 const dotenv = require('dotenv');
 const CryptoJS = require('crypto-js');
 
-dotenv.config({ path: './server/.env' });
+dotenv.config({ path: 'server/.env' });
 
-const decryptData = (ciphertext) => {
-    if (!ciphertext) return null;
-    try {
-        const bytes = CryptoJS.AES.decrypt(ciphertext, process.env.ENCRYPTION_KEY || 'ani_enterprise_erp_encryption_key_2024');
-        const decryptedData = JSON.parse(bytes.toString(CryptoJS.enc.Utf8));
-        return decryptedData;
-    } catch (error) {
-        return null;
-    }
-};
+const encryptionKey = process.env.ENCRYPTION_KEY || 'ani_enterprise_secret_key_2024';
 
-const PI = mongoose.model('PI', new mongoose.Schema({
-    data: String,
-    createdAt: Date
-}));
+function decryptData(ciphertext) {
+  if (!ciphertext) return null;
+  try {
+    const bytes = CryptoJS.AES.decrypt(ciphertext, encryptionKey);
+    const decryptedData = JSON.parse(bytes.toString(CryptoJS.enc.Utf8));
+    return decryptedData;
+  } catch (error) {
+    return null;
+  }
+}
 
-async function checkPIs() {
+const piSchema = new mongoose.Schema({
+    piNumber: String,
+    data: String
+}, { timestamps: true });
+
+const PI = mongoose.model('PI', piSchema);
+
+async function checkPiData() {
     try {
         await mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/erp_db');
-        const pis = await PI.find();
-        console.log(`Found ${pis.length} PI records.`);
-        for (const pi of pis) {
-            const data = decryptData(pi.data);
-            console.log(`ID: ${pi._id}, PI Number: ${data ? data.piNumber : 'N/A'}`);
-        }
+        console.log('Connected to MongoDB');
+
+        const records = await PI.find().limit(5);
+        console.log(`Found ${records.length} PI records`);
+
+        records.forEach((r, i) => {
+            const data = decryptData(r.data);
+            console.log(`\nRecord ${i+1} (PI: ${r.piNumber}):`);
+            console.log('Port:', data.port);
+            console.log('Port of Loading:', data.portOfLoading);
+            console.log('Port of Discharge:', data.portOfDischarge);
+        });
+
         await mongoose.disconnect();
     } catch (err) {
         console.error(err);
     }
 }
 
-checkPIs();
+checkPiData();

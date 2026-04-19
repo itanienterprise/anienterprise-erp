@@ -13,6 +13,8 @@ const Insurance = ({ onDeleteConfirm }) => {
     const [searchQuery, setSearchQuery] = useState('');
     const [editingId, setEditingId] = useState(null);
     const [expandedRowKey, setExpandedRowKey] = useState(null);
+    const [lcRecords, setLcRecords] = useState([]);
+    const [isInitialLoading, setIsInitialLoading] = useState(false);
     
     const [formData, setFormData] = useState({
         companyName: '',
@@ -24,6 +26,8 @@ const Insurance = ({ onDeleteConfirm }) => {
         premiumPercent: '',
         premiumReturnPercent: '',
         stampCharge: '',
+        paidPremium: '',
+        paidReturn: '',
         status: 'Active'
     });
 
@@ -32,14 +36,18 @@ const Insurance = ({ onDeleteConfirm }) => {
     }, []);
 
     const fetchInsurance = async () => {
-        setIsLoading(true);
+        setIsInitialLoading(true);
         try {
-            const response = await axios.get(`${API_BASE_URL}/api/insurance`);
-            setInsuranceRecords(Array.isArray(response.data) ? response.data : []);
+            const [insRes, lcRes] = await Promise.all([
+                axios.get(`${API_BASE_URL}/api/insurance`),
+                axios.get(`${API_BASE_URL}/api/lc-management`)
+            ]);
+            setInsuranceRecords(Array.isArray(insRes.data) ? insRes.data : []);
+            setLcRecords(Array.isArray(lcRes.data) ? lcRes.data : []);
         } catch (error) {
-            console.error('Error fetching insurance records:', error);
+            console.error('Error fetching insurance data:', error);
         } finally {
-            setIsLoading(false);
+            setIsInitialLoading(false);
         }
     };
 
@@ -90,6 +98,8 @@ const Insurance = ({ onDeleteConfirm }) => {
             premiumPercent: '',
             premiumReturnPercent: '',
             stampCharge: '',
+            paidPremium: '',
+            paidReturn: '',
             status: 'Active'
         });
         setEditingId(null);
@@ -107,6 +117,8 @@ const Insurance = ({ onDeleteConfirm }) => {
             premiumPercent: record.premiumPercent || '',
             premiumReturnPercent: record.premiumReturnPercent || '',
             stampCharge: record.stampCharge || '',
+            paidPremium: record.paidPremium || '',
+            paidReturn: record.paidReturn || '',
             status: record.status || 'Active'
         });
         setEditingId(record._id);
@@ -121,10 +133,24 @@ const Insurance = ({ onDeleteConfirm }) => {
         setExpandedRowKey(prev => prev === id ? null : id);
     };
 
+    const insuranceTotals = useMemo(() => {
+        const totals = {};
+        lcRecords.forEach(lc => {
+            const co = lc.insuranceCo;
+            if (!co) return;
+            if (!totals[co]) {
+                totals[co] = { totalPremium: 0, returnAmount: 0 };
+            }
+            // Use netPremium as the Total Premium payable
+            totals[co].totalPremium += parseFloat(lc.netPremium || 0);
+            totals[co].returnAmount += parseFloat(lc.expectedReturnAmount || 0);
+        });
+        return totals;
+    }, [lcRecords]);
+
     const displayRecords = useMemo(() => {
         return insuranceRecords.filter(item => 
-            (item.companyName || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
-            (item.policyType || '').toLowerCase().includes(searchQuery.toLowerCase())
+            (item.companyName || '').toLowerCase().includes(searchQuery.toLowerCase())
         ).sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
     }, [insuranceRecords, searchQuery]);
 
@@ -316,6 +342,42 @@ const Insurance = ({ onDeleteConfirm }) => {
                             </div>
                         </div>
 
+                        <div className="md:col-span-2 space-y-4 pt-4 border-t border-gray-50/50 mt-2">
+                            <h4 className="text-sm font-bold text-emerald-600 uppercase tracking-wider bg-emerald-50/50 p-2 rounded-lg">Financial Tracking</h4>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                <div className="space-y-2">
+                                    <label className="text-sm font-medium text-gray-700">Paid Premium (Manual)</label>
+                                    <div className="relative">
+                                        <span className="absolute left-3 top-1/2 -translate-y-1/2 font-bold text-gray-400">৳</span>
+                                        <input
+                                            type="number"
+                                            name="paidPremium"
+                                            value={formData.paidPremium}
+                                            onChange={handleInputChange}
+                                            placeholder="0.00"
+                                            className="w-full px-4 py-2 pl-8 bg-white/50 border border-gray-200/60 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-transparent outline-none transition-all font-bold"
+                                        />
+                                    </div>
+                                    <p className="text-[10px] text-gray-400">Enter total amount paid to this company for premiums</p>
+                                </div>
+                                <div className="space-y-2">
+                                    <label className="text-sm font-medium text-gray-700">Paid Return (Manual)</label>
+                                    <div className="relative">
+                                        <span className="absolute left-3 top-1/2 -translate-y-1/2 font-bold text-gray-400">৳</span>
+                                        <input
+                                            type="number"
+                                            name="paidReturn"
+                                            value={formData.paidReturn}
+                                            onChange={handleInputChange}
+                                            placeholder="0.00"
+                                            className="w-full px-4 py-2 pl-8 bg-white/50 border border-gray-200/60 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-transparent outline-none transition-all font-bold"
+                                        />
+                                    </div>
+                                    <p className="text-[10px] text-gray-400">Enter total return amount received from this company</p>
+                                </div>
+                            </div>
+                        </div>
+
                         <div className="col-span-1 md:col-span-2 flex flex-col md:flex-row md:items-center justify-between gap-4 pt-4 mt-4 border-t border-gray-100">
                             <div className="flex-1">
                                 {submitStatus === 'success' && (
@@ -353,50 +415,64 @@ const Insurance = ({ onDeleteConfirm }) => {
             {!showForm && (
                 <div className="space-y-4">
                     {/* Desktop View */}
-                    <div className="hidden md:block bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
+                    <div className="hidden md:block overflow-x-auto bg-white/50 backdrop-blur-xl border border-white/40 rounded-2xl shadow-xl">
                         <table className="w-full text-left border-collapse">
                             <thead>
-                                <tr className="bg-gray-50/50">
-                                    <th className="px-6 py-4 text-[10px] font-bold text-gray-400 uppercase tracking-widest border-b border-gray-100">Company</th>
-                                    <th className="px-6 py-4 text-[10px] font-bold text-gray-400 uppercase tracking-widest border-b border-gray-100">Phone</th>
-                                    <th className="px-6 py-4 text-[10px] font-bold text-gray-400 uppercase tracking-widest border-b border-gray-100">Email</th>
-                                    <th className="px-6 py-4 text-[10px] font-bold text-gray-400 uppercase tracking-widest border-b border-gray-100">Type</th>
-                                    <th className="px-6 py-4 text-[10px] font-bold text-gray-400 uppercase tracking-widest border-b border-gray-100 text-center">Premium (%)</th>
-                                    <th className="px-6 py-4 text-[10px] font-bold text-gray-400 uppercase tracking-widest border-b border-gray-100 text-center">Return (%)</th>
-                                    <th className="px-6 py-4 text-[10px] font-bold text-gray-400 uppercase tracking-widest border-b border-gray-100 text-center">Action</th>
+                                <tr className="bg-gray-50/50 border-b border-gray-100">
+                                    <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Company</th>
+                                    <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-nowrap">Email</th>
+                                    <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Phone</th>
+                                    <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-right">Total Premium</th>
+                                    <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-right">Paid Premium</th>
+                                    <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-right">Premium Balance</th>
+                                    <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-right">Return Amount</th>
+                                    <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-right">Paid Return</th>
+                                    <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-right">Return Balance</th>
+                                    <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-center">Action</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-50">
-                                {isLoading ? (
+                                {isInitialLoading ? (
                                     Array(5).fill(0).map((_, i) => (
                                         <tr key={i} className="animate-pulse">
-                                            <td colSpan="7" className="px-6 py-4"><div className="h-4 bg-gray-100 rounded w-full"></div></td>
+                                            <td colSpan="10" className="px-6 py-4"><div className="h-4 bg-gray-100 rounded w-full"></div></td>
                                         </tr>
                                     ))
                                 ) : displayRecords.length > 0 ? (
-                                    displayRecords.map((item) => (
-                                        <tr key={item._id} className="hover:bg-gray-50/50 transition-colors group">
-                                            <td className="px-6 py-4 text-[13px] font-bold text-gray-700">{item.companyName}</td>
-                                            <td className="px-6 py-4 text-[13px] font-medium text-gray-600">{item.phone || 'N/A'}</td>
-                                            <td className="px-6 py-4 text-[13px] font-medium text-blue-600">{item.email || 'N/A'}</td>
-                                            <td className="px-6 py-4 text-[13px] font-medium text-gray-600">{item.policyType}</td>
-                                            <td className="px-6 py-4 text-[13px] font-bold text-indigo-600 text-center">{item.premiumPercent || '0.00'}%</td>
-                                            <td className="px-6 py-4 text-[13px] font-bold text-emerald-600 text-center">{item.premiumReturnPercent || '0.00'}%</td>
-                                            <td className="px-6 py-4 text-center">
-                                                <div className="flex justify-center items-center gap-2">
-                                                    <button onClick={() => handleEdit(item)} className="p-1.5 hover:bg-blue-50 text-gray-400 hover:text-blue-600 rounded-lg transition-all" title="Edit">
-                                                        <EditIcon className="w-4 h-4" />
-                                                    </button>
-                                                    <button onClick={() => handleDelete(item._id)} className="p-1.5 hover:bg-red-50 text-gray-400 hover:text-red-500 rounded-lg transition-all" title="Delete">
-                                                        <TrashIcon className="w-4 h-4" />
-                                                    </button>
-                                                </div>
-                                            </td>
-                                        </tr>
-                                    ))
+                                    displayRecords.map((item) => {
+                                        const aggregates = insuranceTotals[item.companyName] || { totalPremium: 0, returnAmount: 0 };
+                                        const paidPremium = parseFloat(item.paidPremium || 0);
+                                        const paidReturn = parseFloat(item.paidReturn || 0);
+                                        const premiumBalance = aggregates.totalPremium - paidPremium;
+                                        const returnBalance = aggregates.returnAmount - paidReturn;
+
+                                        return (
+                                            <tr key={item._id} className="hover:bg-gray-50/50 transition-colors border-b border-gray-50 group">
+                                                <td className="px-6 py-4 text-sm font-bold text-gray-900">{item.companyName}</td>
+                                                <td className="px-6 py-4 text-sm font-medium text-blue-600 truncate max-w-[150px]">{item.email || 'N/A'}</td>
+                                                <td className="px-6 py-4 text-sm font-medium text-gray-600">{item.phone || 'N/A'}</td>
+                                                <td className="px-6 py-4 text-sm font-bold text-blue-600 text-right">৳{aggregates.totalPremium.toLocaleString()}</td>
+                                                <td className="px-6 py-4 text-sm font-bold text-emerald-600 text-right">৳{paidPremium.toLocaleString()}</td>
+                                                <td className="px-6 py-4 text-sm font-bold text-rose-600 text-right">৳{premiumBalance.toLocaleString()}</td>
+                                                <td className="px-6 py-4 text-sm font-bold text-indigo-600 text-right">৳{aggregates.returnAmount.toLocaleString()}</td>
+                                                <td className="px-6 py-4 text-sm font-bold text-emerald-600 text-right">৳{paidReturn.toLocaleString()}</td>
+                                                <td className="px-6 py-4 text-sm font-bold text-rose-600 text-right">৳{returnBalance.toLocaleString()}</td>
+                                                <td className="px-6 py-4 text-center">
+                                                    <div className="flex justify-center items-center gap-4">
+                                                        <button onClick={() => handleEdit(item)} className="text-gray-400 hover:text-blue-600 transition-colors" title="Edit">
+                                                            <EditIcon className="w-5 h-5" />
+                                                        </button>
+                                                        <button onClick={() => handleDelete(item._id)} className="text-gray-400 hover:text-red-500 transition-colors" title="Delete">
+                                                            <TrashIcon className="w-5 h-5" />
+                                                        </button>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        );
+                                    })
                                 ) : (
                                     <tr>
-                                        <td colSpan="7" className="px-6 py-12 text-center text-gray-500">No insurance policies found</td>
+                                        <td colSpan="10" className="px-6 py-12 text-center text-gray-500">No insurance policies found</td>
                                     </tr>
                                 )}
                             </tbody>
