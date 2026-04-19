@@ -850,11 +850,18 @@ apiRouter.get('/api/lc-management', async (req, res) => {
 // PI APIs
 apiRouter.post('/api/pi', async (req, res) => {
   try {
+    const { piNumber } = req.body;
     const encryptedData = encryptData(req.body);
-    const newRecord = new PI({ data: encryptedData });
+    const newRecord = new PI({ 
+      piNumber: piNumber ? piNumber.trim() : undefined,
+      data: encryptedData 
+    });
     const savedRecord = await newRecord.save();
     res.status(201).json({ ...req.body, _id: savedRecord._id, createdAt: savedRecord.createdAt });
   } catch (err) {
+    if (err.code === 11000) {
+      return res.status(400).json({ message: 'Duplicate PI Number detected! This number already exists in the system.' });
+    }
     res.status(400).json({ message: err.message });
   }
 });
@@ -871,11 +878,18 @@ apiRouter.delete('/api/pi/:id', async (req, res) => {
 
 apiRouter.put('/api/pi/:id', async (req, res) => {
   try {
+    const { piNumber } = req.body;
     const encryptedData = encryptData(req.body);
-    const updatedRecord = await PI.findByIdAndUpdate(req.params.id, { data: encryptedData }, { new: true });
+    const updateData = { data: encryptedData };
+    if (piNumber) updateData.piNumber = piNumber.trim();
+
+    const updatedRecord = await PI.findByIdAndUpdate(req.params.id, updateData, { new: true });
     if (!updatedRecord) return res.status(404).json({ message: 'PI record not found' });
     res.json({ ...req.body, _id: updatedRecord._id, createdAt: updatedRecord.createdAt });
   } catch (err) {
+    if (err.code === 11000) {
+      return res.status(400).json({ message: 'Duplicate PI Number detected! This number already exists in the system.' });
+    }
     res.status(400).json({ message: err.message });
   }
 });
@@ -892,6 +906,7 @@ apiRouter.get('/api/pi', async (req, res) => {
     res.status(500).json({ message: err.message });
   }
 });
+
 
 // Function to generate random password
 const generatePassword = (length = 8) => {

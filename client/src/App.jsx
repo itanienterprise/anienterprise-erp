@@ -352,7 +352,15 @@ function App() {
   });
 
   const [isLoading, setIsLoading] = useState(false);
-  const [stockRecords, setStockRecords] = useState([]);
+  const [allStockRecords, setAllStockRecords] = useState([]);
+  const stockRecords = useMemo(() => {
+    return allStockRecords.filter(item => {
+      const status = (item.status || '').toLowerCase();
+      // Keep only fully processed stock for inventory calculations
+      return !status.includes('requested') && !status.includes('rejected') && !status.includes('deleted');
+    });
+  }, [allStockRecords]);
+
   const [warehouseData, setWarehouseData] = useState([]);
   const [salesRecords, setSalesRecords] = useState([]);
   const [stockFilters, setStockFilters] = useState({
@@ -403,7 +411,7 @@ function App() {
 
   const lcReceiveRecords = useMemo(() => {
     const searchLower = lcSearchQuery.toLowerCase().trim();
-    return stockRecords.filter(item => {
+    return allStockRecords.filter(item => {
       // Apply Advanced Filters
       if (lcFilters.startDate && item.date < lcFilters.startDate) return false;
       if (lcFilters.endDate && item.date > lcFilters.endDate) return false;
@@ -441,7 +449,7 @@ function App() {
 
     // Count truckNo only once per unique product entry (date + lcNo + product + truck)
     const uniqueTrucksMap = lcReceiveRecords.reduce((acc, item) => {
-      const key = `${item.date}-${item.warehouse}-${item.productName}-${item.truckNo}`;
+      const key = `${item.date || ''}-${item.warehouse || ''}-${item.productName || ''}-${item.truckNo || ''}`;
       if (!acc[key]) {
         acc[key] = parseFloat(item.truckNo) || 0;
       }
@@ -894,11 +902,7 @@ function App() {
       const response = await axios.get(`${API_BASE_URL}/api/stock`);
       // Stock data is now cleanly decrypted by the server/axios layer.
       if (Array.isArray(response.data)) {
-        const filteredStock = response.data.filter(item => {
-          const status = (item.status || '').toLowerCase();
-          return !status.includes('requested') && !status.includes('rejected') && !status.includes('deleted');
-        });
-        setStockRecords(filteredStock);
+        setAllStockRecords(response.data);
       }
     } catch (error) {
       console.error('Error fetching stock:', error);
@@ -1074,7 +1078,7 @@ function App() {
         return (
           <LCReceive
             currentUser={currentUser}
-            stockRecords={stockRecords}
+            stockRecords={allStockRecords}
             addNotification={addNotification}
             fetchStockRecords={fetchStockRecords}
             importers={importers}
@@ -1252,7 +1256,6 @@ function App() {
         return (
           <StockManagement
             stockRecords={stockRecords}
-            setStockRecords={setStockRecords}
             products={products}
             deleteConfirm={deleteConfirm}
             setDeleteConfirm={setDeleteConfirm}

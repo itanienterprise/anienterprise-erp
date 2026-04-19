@@ -465,41 +465,41 @@ export const generatePIPDF = (record) => {
     doc.text("For,", margin + 2, y + 5);
 
     // Render Signatures if available
-    if (record.exporterSignature) {
-        try {
-            // Width 60, Height 20, positioned to match the 60mm line
-            doc.addImage(record.exporterSignature, 'PNG', margin + 5, y + 9, 60, 20);
-        } catch (e) {
-            console.error('Error adding exporter signature to PDF:', e);
-        }
-    }
-
     if (record.partySignature) {
         try {
-            // Width 60, Height 20, positioned to match the 60mm line
-            doc.addImage(record.partySignature, 'PNG', pageWidth - margin - 65, y + 14, 60, 12);
+            // Buyer signature on the left
+            doc.addImage(record.partySignature, 'PNG', margin + 5, y + 14, 60, 12);
         } catch (e) {
             console.error('Error adding importer signature to PDF:', e);
         }
     }
 
-    // Seller line
+    if (record.exporterSignature) {
+        try {
+            // Seller signature on the right
+            doc.addImage(record.exporterSignature, 'PNG', pageWidth - margin - 65, y + 9, 60, 20);
+        } catch (e) {
+            console.error('Error adding exporter signature to PDF:', e);
+        }
+    }
+
+    // Buyer line (Left)
     doc.line(margin + 5, y + 30, margin + 65, y + 30);
     doc.setFont("helvetica", "normal");
-    doc.setFontSize(8.5); // Increased
+    doc.setFontSize(8.5);
     doc.text("Signature", margin + 30, y + 35);
     doc.setFont("helvetica", "bold");
-    doc.setFontSize(11); // Increased
-    doc.text("Seller", margin + 31, y + 43);
+    doc.setFontSize(11);
+    doc.text("Buyer", margin + 31, y + 43);
 
-    // Buyer line
+    // Seller line (Right)
     doc.line(pageWidth - margin - 65, y + 30, pageWidth - margin - 5, y + 30);
     doc.setFont("helvetica", "normal");
-    doc.setFontSize(8.5); // Increased
+    doc.setFontSize(8.5);
     doc.text("Signature", pageWidth - margin - 40, y + 35);
     doc.setFont("helvetica", "bold");
-    doc.setFontSize(11); // Increased
-    doc.text("Buyer", pageWidth - margin - 40, y + 43);
+    doc.setFontSize(11);
+    doc.text("Seller", pageWidth - margin - 40, y + 43);
 
     // Opening in new tab instead of direct download
     const pdfOutput = doc.output('blob');

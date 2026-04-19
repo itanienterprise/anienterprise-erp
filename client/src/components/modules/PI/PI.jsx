@@ -32,6 +32,14 @@ function PI({
     const [countries, setCountries] = useState([]);
     const [activeDropdown, setActiveDropdown] = useState(null);
     const [highlightedIndex, setHighlightedIndex] = useState(-1);
+    const [toast, setToast] = useState(null);
+    const toastTimerRef = useRef(null);
+
+    const showToast = (message, type = 'success', duration = 3000) => {
+        if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+        setToast({ message, type });
+        toastTimerRef.current = setTimeout(() => setToast(null), duration);
+    };
 
     const [formData, setFormData] = useState({
         date: '',
@@ -174,7 +182,7 @@ function PI({
             }
         } catch (error) {
             console.error('Error adding quick port:', error);
-            alert('Failed to add port');
+            showToast('Failed to add port', 'error');
         }
     };
 
@@ -185,7 +193,7 @@ function PI({
             await fetchRecords();
         } catch (error) {
             console.error('Error adding quick bank:', error);
-            alert('Failed to add bank');
+            showToast('Failed to add bank', 'error');
         }
     };
 
@@ -212,7 +220,7 @@ function PI({
             else if (category === 'country') fetchMetaData(category, setCountries);
         } catch (error) {
             console.error(`Error deleting quick ${category}:`, error);
-            alert('Failed to delete option');
+            showToast('Failed to delete option', 'error');
         }
     };
 
@@ -223,7 +231,7 @@ function PI({
             await fetchRecords();
         } catch (error) {
             console.error('Error deleting quick bank:', error);
-            alert('Failed to delete bank');
+            showToast('Failed to delete bank', 'error');
         }
     };
 
@@ -236,7 +244,7 @@ function PI({
             }
         } catch (error) {
             console.error('Error deleting quick port:', error);
-            alert('Failed to delete port');
+            showToast('Failed to delete port', 'error');
         }
     };
 
@@ -304,7 +312,7 @@ function PI({
         );
 
         if (isDuplicate) {
-            alert("Duplicate PI Number detected! Each PI must have a unique number.");
+            showToast("Duplicate PI Number detected! Each PI must have a unique number.", "error");
             setIsSubmitting(false);
             return;
         }
@@ -323,6 +331,7 @@ function PI({
                 await axios.post(url, formData);
             }
             setSubmitStatus('success');
+            showToast(editingId ? 'PI updated successfully!' : 'PI created successfully!', 'success');
             setTimeout(() => {
                 setShowForm(false);
                 resetForm();
@@ -331,6 +340,8 @@ function PI({
         } catch (error) {
             console.error('Error saving PI record:', error);
             setSubmitStatus('error');
+            const errorMsg = error.response?.data?.message || 'Error saving PI record';
+            showToast(errorMsg, 'error');
         } finally {
             setIsSubmitting(false);
         }
@@ -606,7 +617,7 @@ function PI({
                                     autoComplete="off"
                                     className="w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-all pr-10"
                                 />
-                                {activeDropdown === 'Importer' && (
+                                {activeDropdown === 'party' && (
                                     <div className="absolute z-[60] w-full mt-1 bg-white border border-gray-100 rounded-xl shadow-xl max-h-48 overflow-y-auto">
                                         {importers.filter(imp => !formData.partyName || imp.name.toLowerCase().includes(formData.partyName.toLowerCase())).map((imp, idx) => (
                                             <button
@@ -1433,6 +1444,34 @@ function PI({
                             </tbody>
                         </table>
                     </div>
+                </div>
+            )}
+
+            {/* Premium Toast Notification */}
+            {toast && (
+                <div 
+                    className="fixed top-8 left-1/2 -translate-x-1/2 z-[9999] flex items-center gap-3 px-6 py-4 rounded-2xl shadow-2xl animate-in slide-in-from-top-10 duration-300 min-w-[300px] max-w-[90vw]"
+                    style={{
+                        background: toast.type === 'success' ? '#f0fdf4' : '#fef2f2',
+                        border: `1px solid ${toast.type === 'success' ? '#bbf7d0' : '#fecaca'}`,
+                        boxShadow: '0 25px 30px -5px rgb(0 0 0 / 0.15), 0 10px 15px -6px rgb(0 0 0 / 0.15)'
+                    }}
+                >
+                    <div className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 ${toast.type === 'success' ? 'bg-emerald-100 text-emerald-600' : 'bg-red-100 text-red-600'}`}>
+                        <span className="text-xl">{toast.type === 'success' ? '✅' : '❌'}</span>
+                    </div>
+                    <div className="flex-1">
+                        <p className="font-bold text-gray-900 text-sm m-0" style={{ lineHeight: 1.2 }}>{toast.type === 'success' ? 'Success' : 'Error'}</p>
+                        <p className="text-gray-600 text-[13px] mt-1 m-0" style={{
+                            color: toast.type === 'success' ? '#166534' : '#991b1b'
+                        }}>{toast.message}</p>
+                    </div>
+                    <button 
+                        onClick={() => setToast(null)}
+                        className="p-1 rounded-lg hover:bg-black/5 transition-colors shrink-0"
+                    >
+                        <XIcon className="w-4 h-4 text-gray-400" />
+                    </button>
                 </div>
             )}
         </div>
