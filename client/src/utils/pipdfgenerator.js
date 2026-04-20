@@ -233,7 +233,7 @@ export const generatePIPDF = (record) => {
     doc.setFont("helvetica", "bold");
     doc.setFontSize(9);
     doc.text(record.vesselFlightNo || '', margin + leftColWidth / 4, y + 44, { align: 'center' });
-    doc.text(record.portLoading || 'ANY PLACE OF INDIA', margin + (3 * leftColWidth / 4), y + 44, { align: 'center' });
+    doc.text(record.portOfLoading || 'ANY PLACE OF INDIA', margin + (3 * leftColWidth / 4), y + 44, { align: 'center' });
 
     // Shipping Section 3 (Compact)
     doc.line(margin, y + 45, margin + leftColWidth, y + 45);
@@ -244,7 +244,7 @@ export const generatePIPDF = (record) => {
 
     doc.setFont("helvetica", "bold");
     doc.setFontSize(9);
-    doc.text(record.portDischarge || 'HILI', margin + leftColWidth / 4, y + 53, { align: 'center' });
+    doc.text(record.portOfDischarge || record.port || 'HILI', margin + leftColWidth / 4, y + 53, { align: 'center' });
     doc.text(record.finalDestination || 'BANGLADESH', margin + (3 * leftColWidth / 4), y + 53, { align: 'center' });
     doc.line(margin + (leftColWidth / 2), y + 27, margin + (leftColWidth / 2), y + 55);
 

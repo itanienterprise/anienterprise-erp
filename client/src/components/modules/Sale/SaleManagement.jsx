@@ -58,6 +58,8 @@ const SaleManagement = ({
     const [sortConfig, setSortConfig] = useState({ key: 'date', direction: 'desc' });
 
     const [showBulkRateModal, setShowBulkRateModal] = useState(false);
+    const [lcRecords, setLcRecords] = useState([]);
+    const [lcSearch, setLcSearch] = useState('');
     const [bulkRate, setBulkRate] = useState('');
 
     const handleBulkRateUpdate = async () => {
@@ -420,6 +422,7 @@ const SaleManagement = ({
     const saleBdCnfFilterRef = useRef(null);
     const saleFromDateFilterRef = useRef(null);
     const saleToDateFilterRef = useRef(null);
+    const lcRef = useRef(null);
 
     const toggleRowExpansion = (saleId) => {
         setExpandedRows(prev =>
@@ -457,6 +460,7 @@ const SaleManagement = ({
                 const inBdCnf = saleBdCnfFilterRef.current?.contains(event.target);
                 const inFromDate = saleFromDateFilterRef.current?.contains(event.target);
                 const inToDate = saleToDateFilterRef.current?.contains(event.target);
+                const inLc = lcRef.current?.contains(event.target);
 
                 if (
                     (activeFilterDropdown === 'company' && !inCompany) ||
@@ -466,7 +470,8 @@ const SaleManagement = ({
                     (activeFilterDropdown === 'indCnf' && !inIndCnf) ||
                     (activeFilterDropdown === 'bdCnf' && !inBdCnf) ||
                     (activeFilterDropdown === 'from' && !inFromDate) ||
-                    (activeFilterDropdown === 'to' && !inToDate)
+                    (activeFilterDropdown === 'to' && !inToDate) ||
+                    (activeDropdown === 'lcNo' && !inLc)
                 ) {
                     setActiveFilterDropdown(null);
                 }
@@ -550,7 +555,19 @@ const SaleManagement = ({
         fetchImportersList();
         fetchPortsList();
         fetchCnfsList();
+        if (saleType === 'Border') {
+            fetchLCRecords();
+        }
     }, [saleType]); // Refetch if saleType changes
+
+    const fetchLCRecords = async () => {
+        try {
+            const response = await axios.get(`${API_BASE_URL}/api/lc-management`);
+            setLcRecords(Array.isArray(response.data) ? response.data : []);
+        } catch (error) {
+            console.error('Error fetching LC records:', error);
+        }
+    };
 
     // Reset filters when switching between General and Border sales
     useEffect(() => {
@@ -1565,7 +1582,8 @@ const SaleManagement = ({
             if (
                 (activeDropdown === 'port' && !e.target.closest('.port-dropdown-container')) ||
                 (activeDropdown === 'indianCnF' && !e.target.closest('.ind-cnf-dropdown-container')) ||
-                (activeDropdown === 'bdCnf' && !e.target.closest('.bd-cnf-dropdown-container'))
+                (activeDropdown === 'bdCnf' && !e.target.closest('.bd-cnf-dropdown-container')) ||
+                (activeDropdown === 'lcNo' && !e.target.closest('.lc-dropdown-container'))
             ) {
                 setActiveDropdown(null);
             }
@@ -1584,6 +1602,15 @@ const SaleManagement = ({
         return portsList
             .filter(p => p.status !== 'Inactive')
             .filter(p => (p.name || '').toLowerCase().includes(portSearch.toLowerCase()));
+    };
+
+    const getFilteredLCs = () => {
+        const query = (lcSearch || '').toLowerCase();
+        return lcRecords.filter(lc =>
+            (lc.lcNo || '').toLowerCase().includes(query) ||
+            (lc.importerName || '').toLowerCase().includes(query) ||
+            (lc.productName || '').toLowerCase().includes(query)
+        ).slice(0, 50);
     };
 
     const getFilteredCompanies = () => {
@@ -1720,6 +1747,46 @@ const SaleManagement = ({
         } else {
             setFormData(prev => ({ ...prev, port }));
             setPortSearch('');
+        }
+        setActiveDropdown(null);
+    };
+
+    const handleLcSelect = (lc) => {
+        if (!lc) {
+            setFormData(prev => ({
+                ...prev,
+                lcNo: ''
+            }));
+            setLcSearch('');
+        } else {
+            setFormData(prev => {
+                const newData = {
+                    ...prev,
+                    lcNo: lc.lcNo
+                };
+
+                // Auto-fill associated fields if they are empty
+                if (!newData.importer && lc.importerName) newData.importer = lc.importerName;
+                if (!newData.exporter && lc.exporterName) newData.exporter = lc.exporterName;
+                if (!newData.port && lc.port) newData.port = lc.port;
+
+                // If items array is empty or has only one empty item, populate the first item's product
+                if (newData.items.length === 1 && !newData.items[0].productId && lc.productName) {
+                    const productObj = products.find(p => p.name === lc.productName);
+                    if (productObj) {
+                        newData.items[0] = {
+                            ...newData.items[0],
+                            productId: productObj._id,
+                            productName: productObj.name
+                        };
+                    } else {
+                        newData.items[0].productName = lc.productName;
+                    }
+                }
+
+                return newData;
+            });
+            setLcSearch('');
         }
         setActiveDropdown(null);
     };
@@ -2627,9 +2694,63 @@ const SaleManagement = ({
                             )}
 
                             {saleType === 'Border' && (
-                                <div className="sale-mgmt-input-group">
+                                <div className="sale-mgmt-input-group relative lc-dropdown-container">
                                     <label className="sale-mgmt-label">LC No</label>
-                                    <input type="text" name="lcNo" value={formData.lcNo} onChange={handleInputChange} readOnly={isFieldReadOnly(originalData?.lcNo)} placeholder="LC-001" className={`sale-mgmt-input ${isFieldReadOnly(originalData?.lcNo) ? 'bg-gray-50' : ''}`} />
+                                    <div className="relative">
+                                        <input
+                                            type="text"
+                                            name="lcNo"
+                                            placeholder={formData.lcNo || "Search LC..."}
+                                            value={activeDropdown === 'lcNo' ? lcSearch : formData.lcNo}
+                                            readOnly={isFieldReadOnly(originalData?.lcNo)}
+                                            onChange={(e) => {
+                                                if (isFieldReadOnly(originalData?.lcNo)) return;
+                                                setLcSearch(e.target.value);
+                                                setActiveDropdown('lcNo');
+                                                setHighlightedIndex(-1);
+                                                handleInputChange(e);
+                                            }}
+                                            onFocus={() => {
+                                                if (isFieldReadOnly(originalData?.lcNo)) return;
+                                                setActiveDropdown('lcNo');
+                                                setHighlightedIndex(-1);
+                                            }}
+                                            onKeyDown={(e) => !isFieldReadOnly(originalData?.lcNo) && handleDropdownKeyDown(e, 'lcNo', getFilteredLCs(), handleLcSelect)}
+                                            className={`sale-mgmt-input pr-14 ${formData.lcNo ? 'placeholder:text-gray-900 placeholder:font-semibold' : 'placeholder:text-gray-400'} ${isFieldReadOnly(originalData?.lcNo) ? 'bg-gray-50' : ''}`}
+                                        />
+                                        <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-2">
+                                            {formData.lcNo && (
+                                                <button type="button" onClick={() => handleLcSelect(null)} className="text-gray-400 hover:text-red-500">
+                                                    <XIcon className="w-4 h-4" />
+                                                </button>
+                                            )}
+                                            <button
+                                                type="button"
+                                                onClick={() => setActiveDropdown(activeDropdown === 'lcNo' ? null : 'lcNo')}
+                                                className="text-gray-300 hover:text-blue-500 transition-colors"
+                                            >
+                                                <ChevronDownIcon className={`w-4 h-4 transition-transform duration-200 ${activeDropdown === 'lcNo' ? 'rotate-180' : ''}`} />
+                                            </button>
+                                        </div>
+                                    </div>
+                                    {activeDropdown === 'lcNo' && getFilteredLCs().length > 0 && (
+                                        <div className="absolute z-[60] w-full mt-1 bg-white border border-gray-100 rounded-xl shadow-xl max-h-48 overflow-y-auto py-1">
+                                            {getFilteredLCs().map((lc, idx) => (
+                                                <button
+                                                    key={lc._id || `lc-${idx}`}
+                                                    type="button"
+                                                    onClick={() => handleLcSelect(lc)}
+                                                    onMouseEnter={() => setHighlightedIndex(idx)}
+                                                    className={`w-full px-4 py-2 text-left text-sm transition-colors font-medium ${formData.lcNo === lc.lcNo ? 'bg-blue-50 text-blue-700' : highlightedIndex === idx ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-blue-50'}`}
+                                                >
+                                                    <div className="flex flex-col">
+                                                        <span className="font-bold">{lc.lcNo}</span>
+                                                        <span className="text-[10px] text-gray-500">{lc.importerName} | {lc.productName}</span>
+                                                    </div>
+                                                </button>
+                                            ))}
+                                        </div>
+                                    )}
                                 </div>
                             )}
 
@@ -3720,7 +3841,7 @@ const SaleManagement = ({
                                                                 <button onClick={(e) => { e.stopPropagation(); handleEdit(sale); }} className="text-gray-400 hover:text-blue-600 transition-colors" title="Edit"><EditIcon className="w-5 h-5" /></button>
                                                                 {canApprove && (
                                                                     <>
-                                                                        <button onClick={(e) => { e.stopPropagation(); handleStatusUpdate(sale, 'Pending'); }} className="text-gray-400 hover:text-emerald-600 transition-colors" title="Accept"><CheckIcon className="w-5 h-5" /></button>
+                                                                        <button onClick={(e) => { e.stopPropagation(); handleStatusUpdate(sale, 'accepted'); }} className="text-gray-400 hover:text-emerald-600 transition-colors" title="Accept"><CheckIcon className="w-5 h-5" /></button>
                                                                         <button onClick={(e) => { e.stopPropagation(); handleStatusUpdate(sale, 'Rejected'); }} className="text-gray-400 hover:text-red-600 transition-colors" title="Reject"><XIcon className="w-5 h-5" /></button>
                                                                     </>
                                                                 )}
@@ -3959,7 +4080,7 @@ const SaleManagement = ({
                                                             )}
                                                             {canApprove && (
                                                                 <>
-                                                                    <button onClick={(e) => { e.stopPropagation(); handleStatusUpdate(sale, 'Pending'); }} className="p-2 text-emerald-600 bg-emerald-50/50 rounded-lg transition-colors hover:bg-emerald-100" title="Accept"><CheckIcon className="w-4 h-4" /></button>
+                                                                    <button onClick={(e) => { e.stopPropagation(); handleStatusUpdate(sale, 'accepted'); }} className="p-2 text-emerald-600 bg-emerald-50/50 rounded-lg transition-colors hover:bg-emerald-100" title="Accept"><CheckIcon className="w-4 h-4" /></button>
                                                                     <button onClick={(e) => { e.stopPropagation(); handleStatusUpdate(sale, 'Rejected'); }} className="p-2 text-red-600 bg-red-50/50 rounded-lg transition-colors hover:bg-red-100" title="Reject"><XIcon className="w-4 h-4" /></button>
                                                                 </>
                                                             )}

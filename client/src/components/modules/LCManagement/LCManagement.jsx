@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import axios from '../../../utils/api';
 import {
     PlusIcon, XIcon, EditIcon, TrashIcon, SearchIcon,
@@ -6,171 +6,368 @@ import {
     DollarSignIcon, CalendarIcon, ChevronDownIcon, EyeIcon
 } from '../../Icons';
 import { formatDate, API_BASE_URL } from '../../../utils/helpers';
+import { decryptData } from '../../../utils/encryption';
 import CustomDatePicker from '../../shared/CustomDatePicker';
-const ViewDetailsModal = ({ data, onClose }) => {
+const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords = [] }) => {
+    const [showConsumption, setShowConsumption] = useState(true);
     if (!data) return null;
+
+    // Failsafe LC Matching helper
+    const cleanLc = (val) => String(val || '').replace(/\D/g, '');
+    const parseNum = (val) => {
+        if (val === null || val === undefined) return 0;
+        return parseFloat(String(val).replace(/[^0-9.]/g, '')) || 0;
+    };
+
+    const lcNoClean = cleanLc(data.lcNo);
+
+    // Calculate Consumptions
+    const relatedReceipts = allStockRecords
+        .filter(s => {
+            const recordLcNoClean = cleanLc(s.lcNo);
+            const status = (s.status || '').toLowerCase();
+            return recordLcNoClean === lcNoClean && (status === 'accepted' || status === 'in stock');
+        })
+        .map(s => {
+            const itemSubtotal = (s.entries || []).reduce((iSum, item) => iSum + parseNum(item.inHouseQuantity || item.quantity), 0);
+            // truckNo is a numeric count (number of trucks), not a plate number
+            const truckNumeric = parseFloat(s.truckNo) || 0;
+            return {
+                date: s.receiveDate || s.createdAt,
+                importer: s.importer || data.importer,
+                exporter: s.exporter || data.exporter,
+                product: s.productName || data.productName,
+                truck: s.truckNo || s.truck || '-',
+                truckCount: truckNumeric,
+                quantity: parseNum(s.totalLcQuantity) || parseNum(s.inHouseQuantity) || parseNum(s.quantity) || itemSubtotal,
+                source: 'LC Receive'
+            };
+        });
+
+    const relatedSales = allSalesRecords
+        .filter(s => {
+            const recordLcNoClean = cleanLc(s.lcNo);
+            const sTypeLow = (s.saleType || '').toLowerCase().trim();
+            const isBorder = sTypeLow.includes('border') || (s.invoiceNo || '').startsWith('BS') || (!s.saleType && !!(s.lcNo || s.port || s.importer)) || (recordLcNoClean === lcNoClean && !!(s.port || s.importer));
+            const status = (s.status || '').toLowerCase();
+            return recordLcNoClean === lcNoClean && status === 'accepted' && isBorder;
+        })
+        .map(s => {
+            const itemSubtotal = (s.items || []).reduce((iSum, item) => {
+                const brandSubtotal = (item.brandEntries || []).reduce((bSum, b) => bSum + parseNum(b.quantity), 0);
+                return iSum + (brandSubtotal || parseNum(item.quantity));
+            }, 0);
+            // truckNo for sales — check all possible locations matching the display truck field
+            const truckRaw = s.truckNo || s.truck || (s.items && s.items[0]?.brandEntries && s.items[0].brandEntries[0]?.truck) || 0;
+            const truckNumeric = parseFloat(truckRaw) || 0;
+            return {
+                date: s.date || s.createdAt,
+                importer: s.importer || data.importer,
+                exporter: s.exporter || data.exporter,
+                product: (s.items && s.items[0]?.productName) || s.productName || data.productName,
+                truck: s.truckNo || s.truck || (s.items && s.items[0]?.brandEntries && s.items[0].brandEntries[0]?.truck) || '-',
+                truckCount: truckNumeric,
+                quantity: parseNum(s.currentTotalQty) || parseNum(s.totalQuantity) || parseNum(s.totalQty) || parseNum(s.qty) || parseNum(s.quantity) || parseNum(s.total) || itemSubtotal,
+                source: 'Border sale'
+            };
+        });
+
+    const consumptionHistory = [...relatedReceipts, ...relatedSales].sort((a, b) => new Date(b.date) - new Date(a.date));
+
+    // Summary Calculations
+    const totalLcQtyKg = parseNum(data.quantity) * 1000;
+    const consumedQtyKg = consumptionHistory.reduce((sum, item) => sum + parseNum(item.quantity), 0);
+    const remQtyKg = totalLcQtyKg - consumedQtyKg;
+    // truckNo is a numeric count per entry — sum all values instead of counting unique strings
+    const truckCount = consumptionHistory.reduce((sum, item) => sum + (item.truckCount || 0), 0);
 
     return (
         <div className="fixed inset-0 z-[2000] flex items-center justify-center p-4">
             <div className="absolute inset-0 bg-gray-900/60 backdrop-blur-sm" onClick={onClose}></div>
-            <div className="relative bg-white border border-gray-100 rounded-2xl shadow-2xl w-full max-w-4xl overflow-hidden animate-in zoom-in duration-300">
+            <div className="relative bg-white border border-gray-100 rounded-2xl shadow-2xl w-full max-w-6xl overflow-hidden animate-in zoom-in duration-300">
                 {/* Header */}
                 <div className="flex items-center justify-between px-6 py-4 border-b border-gray-50 bg-gray-50/50">
                     <div className="flex items-center gap-3">
-                        <div className="p-2 bg-blue-50 rounded-lg text-blue-600">
+                        <div className={`p-2 rounded-lg ${showConsumption ? 'bg-blue-50 text-blue-600' : 'bg-blue-50 text-blue-600'}`}>
                             <LCManagerIcon className="w-5 h-5" />
                         </div>
                         <div>
-                            <h3 className="text-lg font-bold text-gray-900">LC Record Details</h3>
+                            <h3 className="text-lg font-bold text-gray-900">{showConsumption ? 'LC Consumption History' : 'LC Record Details'}</h3>
                             <p className="text-xs text-gray-500 font-bold uppercase tracking-widest">
-                                LC NO: <span className="text-sm font-black text-blue-600">{data.lcNo}</span> • {formatDate(data.openingDate)}
+                                LC NO: <span className={`text-sm font-black ${showConsumption ? 'text-blue-600' : 'text-blue-600'}`}>{data.lcNo}</span> • {formatDate(data.openingDate)}
                             </p>
                         </div>
                     </div>
-                    <button onClick={onClose} className="p-2 text-gray-400 hover:text-gray-600 rounded-full hover:bg-white transition-all">
-                        <XIcon className="w-5 h-5" />
-                    </button>
+                    <div className="flex items-center gap-2">
+                        <button
+                            onClick={() => setShowConsumption(!showConsumption)}
+                            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold transition-all border ${showConsumption
+                                ? 'bg-blue-50 text-blue-600 border-blue-100'
+                                : 'bg-gray-50 text-gray-600 border-gray-100 hover:bg-white'
+                                }`}
+                        >
+                            <LCManagerIcon className="w-4 h-4" />
+                            {showConsumption ? 'Show Details' : 'LC History'}
+                        </button>
+                        <button onClick={onClose} className="p-2 text-gray-400 hover:text-gray-600 rounded-full hover:bg-white transition-all">
+                            <XIcon className="w-5 h-5" />
+                        </button>
+                    </div>
                 </div>
 
                 {/* Content */}
                 <div className="overflow-y-auto max-h-[80vh] p-8 custom-scrollbar">
-                    <div className="space-y-8">
-                        {/* Section 1: General Information */}
-                        <div>
-                            <div className="flex items-center gap-2 mb-4">
-                                <GlobeIcon className="w-4 h-4 text-gray-400" />
-                                <h4 className="text-xs font-black text-gray-400 uppercase tracking-widest">General Information</h4>
-                            </div>
-                            <div className="grid grid-cols-2 md:grid-cols-4 gap-6 px-2">
-                                <div className="space-y-1">
-                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">PI Number</span>
-                                    <p className="text-sm font-bold text-blue-600">{data.piNo || 'N/A'}</p>
+                    {showConsumption ? (
+                        <div className="animate-in fade-in slide-in-from-bottom-2 duration-300">
+                            {/* Summary Cards */}
+                            <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
+                                <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm transition-all hover:shadow-md hover:border-blue-100 group">
+                                    <div className="flex items-center gap-3 mb-3">
+                                        <div className="p-2 bg-blue-50 text-blue-600 rounded-xl group-hover:bg-blue-600 group-hover:text-white transition-colors">
+                                            <LCManagerIcon className="w-5 h-5" />
+                                        </div>
+                                        <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">LC Quantity</span>
+                                    </div>
+                                    <div className="flex items-baseline gap-1">
+                                        <span className="text-2xl font-black text-gray-900">{totalLcQtyKg.toLocaleString()}</span>
+                                        <span className="text-xs font-bold text-gray-400">Kg</span>
+                                    </div>
                                 </div>
-                                <div className="space-y-1">
-                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">IP Number</span>
-                                    <p className="text-sm font-bold text-gray-800">{data.ipNo || 'N/A'}</p>
-                                </div>
-                                <div className="space-y-1">
-                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Opening Date</span>
-                                    <p className="text-sm font-bold text-gray-800 font-mono tracking-tight">{formatDate(data.openingDate)}</p>
-                                </div>
-                                <div className="space-y-1">
-                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider text-red-500">Expiry Date</span>
-                                    <p className="text-sm font-bold text-red-500 font-mono tracking-tight">{formatDate(data.expiryDate)}</p>
-                                </div>
-                                <div className="space-y-1 col-span-2">
-                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Bank Name</span>
-                                    <p className="text-sm font-bold text-gray-800 truncate" title={data.bankName}>{data.bankName}</p>
-                                </div>
-                                <div className="space-y-1">
-                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Importer</span>
-                                    <p className="text-sm font-bold text-gray-800 truncate">{data.importerName}</p>
-                                </div>
-                                <div className="space-y-1">
-                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Exporter</span>
-                                    <p className="text-sm font-bold text-gray-800 truncate">{data.exporterName}</p>
-                                </div>
-                            </div>
-                        </div>
 
-                        {/* Section 2: Product & Financials */}
-                        <div className="pt-6 border-t border-gray-100">
-                            <div className="flex items-center gap-2 mb-4">
-                                <DollarSignIcon className="w-4 h-4 text-gray-400" />
-                                <h4 className="text-xs font-black text-gray-400 uppercase tracking-widest">Product & Financial Details</h4>
-                            </div>
-                            <div className="grid grid-cols-2 md:grid-cols-4 gap-6 px-2">
-                                <div className="space-y-1 col-span-2">
-                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Product Name</span>
-                                    <p className="text-sm font-black text-gray-900">{data.productName}</p>
+                                <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm transition-all hover:shadow-md hover:border-indigo-100 group">
+                                    <div className="flex items-center gap-3 mb-3">
+                                        <div className="p-2 bg-indigo-50 text-indigo-600 rounded-xl group-hover:bg-indigo-600 group-hover:text-white transition-colors">
+                                            <GlobeIcon className="w-5 h-5" />
+                                        </div>
+                                        <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Total Consumption</span>
+                                    </div>
+                                    <div className="flex items-baseline gap-1">
+                                        <span className="text-2xl font-black text-gray-900">{consumedQtyKg.toLocaleString()}</span>
+                                        <span className="text-xs font-bold text-gray-400">Kg</span>
+                                    </div>
                                 </div>
-                                <div className="space-y-1">
-                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">HS Code</span>
-                                    <p className="text-sm font-bold text-gray-800">{data.hsCode || '-'}</p>
-                                </div>
-                                <div className="space-y-1">
-                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Port</span>
-                                    <p className="text-sm font-bold text-gray-800">{data.port || '-'}</p>
-                                </div>
-                                <div className="space-y-1">
-                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Quantity</span>
-                                    <p className="text-sm font-black text-gray-900">
-                                        {parseFloat(data.quantity || 0).toLocaleString()} <span className="text-[10px] text-gray-400 font-normal">Ton</span>
-                                    </p>
-                                </div>
-                                <div className="space-y-1">
-                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Rate</span>
-                                    <p className="text-sm font-bold text-gray-800">
-                                        ${parseFloat(data.rate || 0).toLocaleString()} <span className="text-[10px] text-gray-400 font-normal">/Ton</span>
-                                    </p>
-                                </div>
-                                <div className="space-y-1">
-                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Total Dollar</span>
-                                    <p className="text-sm font-black text-blue-600">${parseFloat(data.totalDollar || 0).toLocaleString()}</p>
-                                </div>
-                                <div className="space-y-1">
-                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Dollar Rate</span>
-                                    <p className="text-sm font-bold text-gray-800">৳{parseFloat(data.dollarRate || 0).toLocaleString()}</p>
-                                </div>
-                            </div>
-                            <div className="mt-4 p-4 bg-gray-50 rounded-xl flex justify-between items-center">
-                                <span className="text-xs font-black text-gray-400 uppercase tracking-widest">Total LC Value</span>
-                                <span className="text-xl font-black text-gray-900">৳{parseFloat(data.totalAmount || 0).toLocaleString()}</span>
-                            </div>
-                        </div>
 
-                        {/* Section 3: Insurance Details */}
-                        <div className="pt-6 border-t border-gray-100">
-                            <div className="flex items-center gap-2 mb-4">
-                                <ShieldIcon className="w-4 h-4 text-gray-400" />
-                                <h4 className="text-xs font-black text-gray-400 uppercase tracking-widest">Insurance Information</h4>
-                            </div>
-                            <div className="grid grid-cols-2 md:grid-cols-4 gap-6 px-2">
-                                <div className="space-y-1 col-span-2">
-                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Insurance Company</span>
-                                    <p className="text-sm font-bold text-gray-800 truncate">{data.insuranceCo || '-'}</p>
+                                <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm transition-all hover:shadow-md hover:border-emerald-100 group">
+                                    <div className="flex items-center gap-3 mb-3">
+                                        <div className="p-2 bg-emerald-50 text-emerald-600 rounded-xl group-hover:bg-emerald-600 group-hover:text-white transition-colors">
+                                            <ShieldIcon className="w-5 h-5" />
+                                        </div>
+                                        <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Rem. Quantity</span>
+                                    </div>
+                                    <div className="flex items-baseline gap-1">
+                                        <span className={`text-2xl font-black ${remQtyKg <= 0 ? 'text-emerald-600' : 'text-blue-600'}`}>
+                                            {remQtyKg.toLocaleString()}
+                                        </span>
+                                        <span className="text-xs font-bold text-gray-400">Kg</span>
+                                    </div>
                                 </div>
-                                <div className="space-y-1">
-                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Policy Type</span>
-                                    <p className="text-sm font-bold text-gray-800">{data.policyType || '-'}</p>
-                                </div>
-                                <div className="space-y-1">
-                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Extra %</span>
-                                    <p className="text-sm font-bold text-gray-800">{data.extraPercent}%</p>
-                                </div>
-                                <div className="space-y-1">
-                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Premium Rate</span>
-                                    <p className="text-sm font-bold text-gray-800">{data.premium}%</p>
-                                </div>
-                                <div className="space-y-1">
-                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Premium Return</span>
-                                    <p className="text-sm font-bold text-emerald-600">{data.premiumReturn || '0'}%</p>
-                                </div>
-                                <div className="space-y-1">
-                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Return Amount</span>
-                                    <p className="text-sm font-bold text-emerald-600">৳{parseFloat(data.expectedReturnAmount || 0).toLocaleString()}</p>
-                                </div>
-                                <div className="space-y-1">
-                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">VAT ({data.premiumVat}%)</span>
-                                    <p className="text-sm font-bold text-gray-800">
-                                        ৳{(parseFloat(data.netPremium || 0) * (parseFloat(data.premiumVat || 0) / 100)).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                                    </p>
-                                </div>
-                                <div className="space-y-1">
-                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Stamp Duty</span>
-                                    <p className="text-sm font-bold text-gray-800">৳{parseFloat(data.stampCharge || 0).toLocaleString()}</p>
-                                </div>
-                                <div className="space-y-1">
-                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Gross Premium</span>
-                                    <p className="text-sm font-bold text-gray-800">৳{parseFloat(data.grossPremium || 0).toLocaleString()}</p>
+
+                                <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm transition-all hover:shadow-md hover:border-gray-200 group">
+                                    <div className="flex items-center gap-3 mb-3">
+                                        <div className="p-2 bg-gray-50 text-gray-600 rounded-xl group-hover:bg-gray-800 group-hover:text-white transition-colors">
+                                            <BuildingIcon className="w-5 h-5" />
+                                        </div>
+                                        <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Total Truck</span>
+                                    </div>
+                                    <div className="flex items-baseline gap-1">
+                                        <span className="text-2xl font-black text-gray-900">{truckCount}</span>
+                                        <span className="text-xs font-bold text-gray-400">Units</span>
+                                    </div>
                                 </div>
                             </div>
-                            <div className="mt-4 p-4 bg-emerald-50 rounded-xl flex justify-between items-center border border-emerald-100">
-                                <span className="text-xs font-black text-emerald-600 uppercase tracking-widest">Net Payable Premium</span>
-                                <span className="text-lg font-black text-emerald-700">৳{parseFloat(data.netPremium || 0).toLocaleString()}</span>
+
+                            <div className="overflow-hidden border border-gray-100 rounded-2xl shadow-sm">
+                                <table className="w-full text-left border-collapse">
+                                    <thead>
+                                        <tr className="bg-gray-50/50 border-b border-gray-100">
+                                            <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Date</th>
+                                            <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Importer</th>
+                                            <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Exporter</th>
+                                            <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Product</th>
+                                            <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Truck</th>
+                                            <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-right">Quantity</th>
+                                            <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-center">Source</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-gray-50">
+                                        {consumptionHistory.length > 0 ? (
+                                            consumptionHistory.map((item, idx) => (
+                                                <tr key={idx} className="hover:bg-gray-50/50 transition-colors group">
+                                                    <td className="px-6 py-4 text-sm font-medium text-gray-600 whitespace-nowrap">{formatDate(item.date)}</td>
+                                                    <td className="px-6 py-4 text-sm font-medium text-gray-800 uppercase">{item.importer || '-'}</td>
+                                                    <td className="px-6 py-4 text-sm font-medium text-gray-800 uppercase">{item.exporter || '-'}</td>
+                                                    <td className="px-6 py-4 text-sm font-medium text-gray-900">{item.product || '-'}</td>
+                                                    <td className="px-6 py-4 text-sm font-medium text-blue-600 uppercase whitespace-nowrap">{item.truck || '-'}</td>
+                                                    <td className="px-6 py-4 text-sm font-medium text-right text-gray-900 whitespace-nowrap">
+                                                        {parseNum(item.quantity).toLocaleString()} <span className="text-[10px] text-gray-400 font-normal">Kg</span>
+                                                    </td>
+                                                    <td className="px-6 py-4 text-center">
+                                                        <span className={`px-3 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider border ${item.source === 'LC Receive'
+                                                            ? 'bg-blue-50 text-blue-600 border-blue-100/50'
+                                                            : 'bg-indigo-50 text-indigo-600 border-indigo-100/50'
+                                                            }`}>
+                                                            {item.source}
+                                                        </span>
+                                                    </td>
+                                                </tr>
+                                            ))
+                                        ) : (
+                                            <tr>
+                                                <td colSpan="4" className="px-6 py-12 text-center text-gray-400 font-bold">No consumption history found for this LC.</td>
+                                            </tr>
+                                        )}
+                                    </tbody>
+                                    <tfoot className="bg-gray-50/30">
+                                        <tr>
+                                            <td colSpan="5" className="px-6 py-4 text-right text-xs font-medium text-gray-400 uppercase tracking-wider">Total Consumption:</td>
+                                            <td className="px-6 py-4 text-sm font-medium text-right text-blue-600">
+                                                {consumptionHistory.reduce((sum, item) => sum + parseNum(item.quantity), 0).toLocaleString()} <span className="text-[10px] font-normal">Kg</span>
+                                            </td>
+                                            <td></td>
+                                        </tr>
+                                    </tfoot>
+                                </table>
                             </div>
                         </div>
-                    </div>
+                    ) : (
+                        <div className="space-y-8 animate-in fade-in slide-in-from-bottom-2 duration-300">
+                            {/* Section 1: General Information */}
+                            <div>
+                                <div className="flex items-center gap-2 mb-4">
+                                    <GlobeIcon className="w-4 h-4 text-gray-400" />
+                                    <h4 className="text-xs font-black text-gray-400 uppercase tracking-widest">General Information</h4>
+                                </div>
+                                <div className="grid grid-cols-2 md:grid-cols-4 gap-6 px-2">
+                                    <div className="space-y-1">
+                                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">PI Number</span>
+                                        <p className="text-sm font-bold text-blue-600">{data.piNo || 'N/A'}</p>
+                                    </div>
+                                    <div className="space-y-1">
+                                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">IP Number</span>
+                                        <p className="text-sm font-bold text-gray-800">{data.ipNo || 'N/A'}</p>
+                                    </div>
+                                    <div className="space-y-1">
+                                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Opening Date</span>
+                                        <p className="text-sm font-bold text-gray-800 font-mono tracking-tight">{formatDate(data.openingDate)}</p>
+                                    </div>
+                                    <div className="space-y-1">
+                                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider text-red-500">Expiry Date</span>
+                                        <p className="text-sm font-bold text-red-500 font-mono tracking-tight">{formatDate(data.expiryDate)}</p>
+                                    </div>
+                                    <div className="space-y-1 col-span-2">
+                                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Bank Name</span>
+                                        <p className="text-sm font-bold text-gray-800 truncate" title={data.bankName}>{data.bankName}</p>
+                                    </div>
+                                    <div className="space-y-1">
+                                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Importer</span>
+                                        <p className="text-sm font-bold text-gray-800 truncate">{data.importerName}</p>
+                                    </div>
+                                    <div className="space-y-1">
+                                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Exporter</span>
+                                        <p className="text-sm font-bold text-gray-800 truncate">{data.exporterName}</p>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Section 2: Product & Financials */}
+                            <div className="pt-6 border-t border-gray-100">
+                                <div className="flex items-center gap-2 mb-4">
+                                    <DollarSignIcon className="w-4 h-4 text-gray-400" />
+                                    <h4 className="text-xs font-black text-gray-400 uppercase tracking-widest">Product & Financial Details</h4>
+                                </div>
+                                <div className="grid grid-cols-2 md:grid-cols-4 gap-6 px-2">
+                                    <div className="space-y-1 col-span-2">
+                                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Product Name</span>
+                                        <p className="text-sm font-black text-gray-900">{data.productName}</p>
+                                    </div>
+                                    <div className="space-y-1">
+                                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">HS Code</span>
+                                        <p className="text-sm font-bold text-gray-800">{data.hsCode || '-'}</p>
+                                    </div>
+                                    <div className="space-y-1">
+                                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Port</span>
+                                        <p className="text-sm font-bold text-gray-800">{data.port || '-'}</p>
+                                    </div>
+                                    <div className="space-y-1">
+                                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Quantity</span>
+                                        <p className="text-sm font-black text-gray-900">
+                                            {parseFloat(data.quantity || 0).toLocaleString()} <span className="text-[10px] text-gray-400 font-normal">Ton</span>
+                                        </p>
+                                    </div>
+                                    <div className="space-y-1">
+                                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Rate</span>
+                                        <p className="text-sm font-bold text-gray-800">
+                                            ${parseFloat(data.rate || 0).toLocaleString()} <span className="text-[10px] text-gray-400 font-normal">/Ton</span>
+                                        </p>
+                                    </div>
+                                    <div className="space-y-1">
+                                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Total Dollar</span>
+                                        <p className="text-sm font-black text-blue-600">${parseFloat(data.totalDollar || 0).toLocaleString()}</p>
+                                    </div>
+                                    <div className="space-y-1">
+                                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Dollar Rate</span>
+                                        <p className="text-sm font-bold text-gray-800">৳{parseFloat(data.dollarRate || 0).toLocaleString()}</p>
+                                    </div>
+                                </div>
+                                <div className="mt-4 p-4 bg-gray-50 rounded-xl flex justify-between items-center">
+                                    <span className="text-xs font-black text-gray-400 uppercase tracking-widest">Total LC Value</span>
+                                    <span className="text-xl font-black text-gray-900">৳{parseFloat(data.totalAmount || 0).toLocaleString()}</span>
+                                </div>
+                            </div>
+
+                            {/* Section 3: Insurance Details */}
+                            <div className="pt-6 border-t border-gray-100">
+                                <div className="flex items-center gap-2 mb-4">
+                                    <ShieldIcon className="w-4 h-4 text-gray-400" />
+                                    <h4 className="text-xs font-black text-gray-400 uppercase tracking-widest">Insurance Information</h4>
+                                </div>
+                                <div className="grid grid-cols-2 md:grid-cols-4 gap-6 px-2">
+                                    <div className="space-y-1 col-span-2">
+                                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Insurance Company</span>
+                                        <p className="text-sm font-bold text-gray-800 truncate">{data.insuranceCo || '-'}</p>
+                                    </div>
+                                    <div className="space-y-1">
+                                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Policy Type</span>
+                                        <p className="text-sm font-bold text-gray-800">{data.policyType || '-'}</p>
+                                    </div>
+                                    <div className="space-y-1">
+                                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Extra %</span>
+                                        <p className="text-sm font-bold text-gray-800">{data.extraPercent}%</p>
+                                    </div>
+                                    <div className="space-y-1">
+                                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Premium Rate</span>
+                                        <p className="text-sm font-bold text-gray-800">{data.premium}%</p>
+                                    </div>
+                                    <div className="space-y-1">
+                                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Premium Return</span>
+                                        <p className="text-sm font-bold text-blue-600">{data.premiumReturn || '0'}%</p>
+                                    </div>
+                                    <div className="space-y-1">
+                                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Return Amount</span>
+                                        <p className="text-sm font-bold text-blue-600">৳{parseFloat(data.expectedReturnAmount || 0).toLocaleString()}</p>
+                                    </div>
+                                    <div className="space-y-1">
+                                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">VAT ({data.premiumVat}%)</span>
+                                        <p className="text-sm font-bold text-gray-800">
+                                            ৳{(parseFloat(data.netPremium || 0) * (parseFloat(data.premiumVat || 0) / 100)).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                        </p>
+                                    </div>
+                                    <div className="space-y-1">
+                                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Stamp Duty</span>
+                                        <p className="text-sm font-bold text-gray-800">৳{parseFloat(data.stampCharge || 0).toLocaleString()}</p>
+                                    </div>
+                                    <div className="space-y-1">
+                                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Gross Premium</span>
+                                        <p className="text-sm font-bold text-gray-800">৳{parseFloat(data.grossPremium || 0).toLocaleString()}</p>
+                                    </div>
+                                </div>
+                                <div className="mt-4 p-4 bg-blue-50 rounded-xl flex justify-between items-center border border-blue-100">
+                                    <span className="text-xs font-black text-blue-600 uppercase tracking-widest">Net Payable Premium</span>
+                                    <span className="text-lg font-black text-blue-700">৳{parseFloat(data.netPremium || 0).toLocaleString()}</span>
+                                </div>
+                            </div>
+                        </div>
+                    )}
                 </div>
             </div>
         </div>
@@ -197,6 +394,8 @@ const LCManagement = ({ addNotification }) => {
     const [highlightedIndex, setHighlightedIndex] = useState(-1);
     const [viewData, setViewData] = useState(null);
     const [isSaving, setIsSaving] = useState(false);
+    const [allStockRecords, setAllStockRecords] = useState([]);
+    const [allSalesRecords, setAllSalesRecords] = useState([]);
 
     const ipRef = useRef(null);
     const piRef = useRef(null);
@@ -206,6 +405,7 @@ const LCManagement = ({ addNotification }) => {
     const productRef = useRef(null);
     const insuranceRef = useRef(null);
     const statusRef = useRef(null);
+
 
     const [formData, setFormData] = useState({
         ipNo: '',
@@ -236,6 +436,23 @@ const LCManagement = ({ addNotification }) => {
         status: 'Opened',
         port: ''
     });
+
+    const informativeQuantities = useMemo(() => {
+        const selectedIp = ipRecordsRaw.find(ip => ip.ipNumber === formData.ipNo);
+        const selectedPi = piRecordsRaw.find(pi => pi.piNumber === formData.piNo);
+
+        let remIpQtyTon = 0;
+        if (selectedIp) {
+            const totalLcQtyOnThisIp = lcRecords
+                .filter(lc => lc.ipNo === selectedIp.ipNumber && lc._id !== editingId)
+                .reduce((sum, lc) => sum + (parseFloat(lc.quantity) || 0), 0);
+            remIpQtyTon = (parseFloat(selectedIp.quantity || 0) / 1000) - totalLcQtyOnThisIp;
+        }
+
+        const piQtyTon = selectedPi ? (parseFloat(selectedPi.quantity || 0) / 1000) : 0;
+
+        return { remIpQtyTon, piQtyTon };
+    }, [formData.ipNo, formData.piNo, ipRecordsRaw, piRecordsRaw, lcRecords, editingId]);
 
     useEffect(() => {
         fetchInitialData();
@@ -318,7 +535,7 @@ const LCManagement = ({ addNotification }) => {
     const fetchInitialData = async () => {
         setIsLoading(true);
         try {
-            const [lcRes, bankRes, impRes, expRes, insRes, ipRes, piRes, prodRes] = await Promise.all([
+            const [lcRes, bankRes, impRes, expRes, insRes, ipRes, piRes, prodRes, stockRes, saleRes] = await Promise.all([
                 axios.get(`${API_BASE_URL}/api/lc-management`),
                 axios.get(`${API_BASE_URL}/api/banks`),
                 axios.get(`${API_BASE_URL}/api/importers`),
@@ -326,10 +543,46 @@ const LCManagement = ({ addNotification }) => {
                 axios.get(`${API_BASE_URL}/api/insurance`),
                 axios.get(`${API_BASE_URL}/api/ip-records`),
                 axios.get(`${API_BASE_URL}/api/pi`),
-                axios.get(`${API_BASE_URL}/api/products`)
+                axios.get(`${API_BASE_URL}/api/products`),
+                axios.get(`${API_BASE_URL}/api/stock`),
+                axios.get(`${API_BASE_URL}/api/sales`)
             ]);
 
             setLcRecords(Array.isArray(lcRes.data) ? lcRes.data : []);
+
+            const rawStock = Array.isArray(stockRes.data) ? stockRes.data : [];
+            const decryptedStock = rawStock.map(item => {
+                try {
+                    let d = item.data ? decryptData(item.data) : item;
+                    // Robust Guard: If the result is a string or still has an inner 'data' string, decrypt again
+                    if (typeof d === 'string') {
+                        try { d = decryptData(d); } catch (e) { }
+                    } else if (d && d.data && typeof d.data === 'string' && !d.lcNo) {
+                        try { d = decryptData(d.data); } catch (e) { }
+                    }
+                    return d;
+                } catch {
+                    return item;
+                }
+            });
+            setAllStockRecords(decryptedStock);
+
+            const rawSales = Array.isArray(saleRes.data) ? saleRes.data : [];
+            const decryptedSales = rawSales.map(item => {
+                try {
+                    let d = item.data ? decryptData(item.data) : item;
+                    // Robust Guard: If the result is a string or still has an inner 'data' string, decrypt again
+                    if (typeof d === 'string') {
+                        try { d = decryptData(d); } catch (e) { }
+                    } else if (d && d.data && typeof d.data === 'string' && !d.lcNo && !d.saleType) {
+                        try { d = decryptData(d.data); } catch (e) { }
+                    }
+                    return d;
+                } catch {
+                    return item;
+                }
+            });
+            setAllSalesRecords(decryptedSales);
 
             // Filter banks to only show those NOT marked as Indian (from PI Module)
             const moduleBanks = Array.isArray(bankRes.data) ? bankRes.data.filter(b => !b.isIndian) : [];
@@ -674,6 +927,12 @@ const LCManagement = ({ addNotification }) => {
                                     ))}
                                 </div>
                             )}
+                            {formData.ipNo && (
+                                <div className="mt-1 px-2 py-1 bg-blue-50/50 rounded-lg flex items-center justify-between border border-blue-100/50">
+                                    <span className="text-[10px] font-bold text-blue-500 uppercase tracking-wider">Remaining IP Qty</span>
+                                    <span className="text-xs font-black text-blue-700">{informativeQuantities.remIpQtyTon.toLocaleString(undefined, { minimumFractionDigits: 3 })} <span className="text-[10px] font-bold opacity-60">Ton</span></span>
+                                </div>
+                            )}
                         </div>
 
                         <div className="space-y-1.5 text-left relative" ref={piRef}>
@@ -712,6 +971,12 @@ const LCManagement = ({ addNotification }) => {
                                             {pi}
                                         </button>
                                     ))}
+                                </div>
+                            )}
+                            {formData.piNo && (
+                                <div className="mt-1 px-2 py-1 bg-indigo-50/50 rounded-lg flex items-center justify-between border border-indigo-100/50">
+                                    <span className="text-[10px] font-bold text-indigo-500 uppercase tracking-wider">PI Quantity</span>
+                                    <span className="text-xs font-black text-indigo-700">{informativeQuantities.piQtyTon.toLocaleString(undefined, { minimumFractionDigits: 3 })} <span className="text-[10px] font-bold opacity-60">Ton</span></span>
                                 </div>
                             )}
                         </div>
@@ -1222,6 +1487,7 @@ const LCManagement = ({ addNotification }) => {
                                 <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-right text-nowrap">Quantity (Kg)</th>
                                 <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-right text-nowrap">Rate (/Kg)</th>
                                 <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-right text-nowrap">Total LC Value</th>
+                                <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-right text-nowrap">Rem. Qty</th>
                                 <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-center text-nowrap">Action</th>
                             </tr>
                         </thead>
@@ -1237,13 +1503,65 @@ const LCManagement = ({ addNotification }) => {
                                 </tr>
                             ) : filteredRecords.length > 0 ? (
                                 filteredRecords.map((record) => {
+                                    // Helper for sanitized numeric parsing
+                                    const parseNum = (val) => {
+                                        if (val === null || val === undefined) return 0;
+                                        return parseFloat(String(val).replace(/[^0-9.]/g, '')) || 0;
+                                    };
+
+                                    // Failsafe LC Matching: Compare only the numeric digits
+                                    const cleanLc = (val) => String(val || '').replace(/\D/g, '');
+
                                     // Dynamic fallback for Port if empty in LC record
                                     const linkedPi = record.piNo ? piRecordsRaw.find(p => p.piNumber === record.piNo) : null;
                                     const displayPort = record.port || (linkedPi && (linkedPi.port || linkedPi.portOfDischarge || linkedPi.portOfLoading)) || '-';
-                                    
+
                                     // Unit conversion for display (Data is in Tons, Table shows Kg)
-                                    const qtyKg = parseFloat(record.quantity || 0) * 1000;
-                                    const rateKg = parseFloat(record.rate || 0) / 1000;
+                                    const qtyKg = parseNum(record.quantity) * 1000;
+                                    const rateKg = parseNum(record.rate) / 1000;
+
+                                    // Calculate Remaining Quantities
+                                    // Received: From allStockRecords where lcNo matches and status is NOT requested/rejected
+                                    const lcNoClean = cleanLc(record.lcNo);
+
+                                    const receivedQtyKg = allStockRecords
+                                        .filter(s => {
+                                            const recordLcNoClean = cleanLc(s.lcNo);
+                                            const status = (s.status || '').toLowerCase();
+                                            return recordLcNoClean === lcNoClean && (status === 'accepted' || status === 'in stock');
+                                        })
+                                        .reduce((sum, s) => {
+                                            const itemSubtotal = (s.entries || []).reduce((iSum, item) => iSum + parseNum(item.inHouseQuantity || item.quantity), 0);
+                                            const qty = parseNum(s.totalLcQuantity) || parseNum(s.inHouseQuantity) || parseNum(s.quantity) || itemSubtotal;
+                                            return sum + qty;
+                                        }, 0);
+
+                                    // Border Sale: From allSalesRecords where lcNo matches and is a Border Sale
+                                    const borderSaleQtyKg = allSalesRecords
+                                        .filter(s => {
+                                            const recordLcNoClean = cleanLc(s.lcNo);
+
+                                            // Adopt robust Border Sale detection
+                                            const sTypeLow = (s.saleType || '').toLowerCase().trim();
+                                            // Permissive: Catch by BS prefix OR explicit sale type OR presence of matching LC + port details
+                                            const isBorder = sTypeLow.includes('border') || 
+                                                (s.invoiceNo || '').startsWith('BS') ||
+                                                (!s.saleType && !!(s.lcNo || s.port || s.importer)) ||
+                                                (recordLcNoClean === lcNoClean && !!(s.port || s.importer));
+
+                                            const status = (s.status || '').toLowerCase();
+                                            return recordLcNoClean === lcNoClean && status === 'accepted' && isBorder;
+                                        })
+                                        .reduce((sum, s) => {
+                                            const itemSubtotal = (s.items || []).reduce((iSum, item) => {
+                                                const brandSubtotal = (item.brandEntries || []).reduce((bSum, b) => bSum + parseNum(b.quantity), 0);
+                                                return iSum + (brandSubtotal || parseNum(item.quantity));
+                                            }, 0);
+                                            const qty = parseNum(s.currentTotalQty) || parseNum(s.totalQuantity) || parseNum(s.totalQty) || parseNum(s.qty) || parseNum(s.quantity) || parseNum(s.total) || itemSubtotal;
+                                            return sum + qty;
+                                        }, 0);
+
+                                    const combinedRemKg = qtyKg - (receivedQtyKg + borderSaleQtyKg);
 
                                     return (
                                         <tr key={record._id} className="hover:bg-gray-50/50 transition-colors border-b border-gray-50 group">
@@ -1262,6 +1580,11 @@ const LCManagement = ({ addNotification }) => {
                                                 <span className="font-medium text-gray-900">${rateKg.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 4 })}</span> <span className="text-[10px] text-gray-400 font-normal">/Kg</span>
                                             </td>
                                             <td className="px-6 py-4 text-sm text-right font-black text-gray-900 whitespace-nowrap">৳{parseFloat(record.totalAmount || 0).toLocaleString()}</td>
+                                            <td className="px-6 py-4 text-sm text-right whitespace-nowrap">
+                                                <span className={`font-black ${combinedRemKg <= 0 ? 'text-emerald-600' : 'text-blue-600'}`}>
+                                                    {combinedRemKg.toLocaleString()} <span className="text-[10px] text-gray-400 font-medium whitespace-nowrap">Kg</span>
+                                                </span>
+                                            </td>
                                             <td className="px-4 py-4 text-center">
                                                 <div className="flex items-center justify-center gap-4">
                                                     <button
@@ -1301,7 +1624,14 @@ const LCManagement = ({ addNotification }) => {
                     </table>
                 </div>
             )}
-            {viewData && <ViewDetailsModal data={viewData} onClose={() => setViewData(null)} />}
+            {viewData && (
+                <ViewDetailsModal 
+                    data={viewData} 
+                    onClose={() => setViewData(null)} 
+                    allStockRecords={allStockRecords}
+                    allSalesRecords={allSalesRecords}
+                />
+            )}
         </div>
     );
 };

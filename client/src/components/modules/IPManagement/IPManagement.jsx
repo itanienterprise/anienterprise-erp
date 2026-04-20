@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import {
     FunnelIcon, XIcon, ChevronDownIcon, EditIcon, TrashIcon, BoxIcon, ChevronUpIcon, SearchIcon
 } from '../../Icons';
@@ -26,6 +26,7 @@ function IPManagement({
 }) {
     const [showIpForm, setShowIpForm] = useState(false);
     const [ipRecords, setIpRecords] = useState([]);
+    const [lcRecords, setLcRecords] = useState([]);
     const [isLoading, setIsLoading] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [submitStatus, setSubmitStatus] = useState(null);
@@ -83,14 +84,34 @@ function IPManagement({
     const fetchIpRecords = async () => {
         setIsLoading(true);
         try {
-            const response = await axios.get(`${API_BASE_URL}/api/ip-records`);
-            setIpRecords(Array.isArray(response.data) ? response.data : []);
+            const [ipRes, lcRes] = await Promise.all([
+                axios.get(`${API_BASE_URL}/api/ip-records`),
+                axios.get(`${API_BASE_URL}/api/lc-management`)
+            ]);
+            setIpRecords(Array.isArray(ipRes.data) ? ipRes.data : []);
+            setLcRecords(Array.isArray(lcRes.data) ? lcRes.data : []);
         } catch (error) {
             console.error('Error fetching IP records:', error);
         } finally {
             setIsLoading(false);
         }
     };
+
+    // Calculate dynamic remaining quantity for each IP
+    const enrichedIpRecords = useMemo(() => {
+        return ipRecords.map(ip => {
+            const totalLcQtyInKg = lcRecords
+                .filter(lc => lc.ipNo === ip.ipNumber)
+                .reduce((sum, lc) => sum + (parseFloat(lc.quantity || 0) * 1000), 0);
+            
+            const calculatedRemQty = (parseFloat(ip.quantity) || 0) - totalLcQtyInKg;
+            
+            return {
+                ...ip,
+                remainingQuantity: calculatedRemQty
+            };
+        });
+    }, [ipRecords, lcRecords]);
 
     const handleInputChange = (e) => {
         const { name, value } = e.target;
@@ -267,7 +288,7 @@ function IPManagement({
         });
     };
 
-    const filteredIpRecords = ipRecords.filter(record => {
+    const filteredIpRecords = enrichedIpRecords.filter(record => {
         // Apply text search
         if (searchQuery) {
             const query = searchQuery.toLowerCase();
@@ -712,10 +733,10 @@ function IPManagement({
                                     type="number"
                                     name="remainingQuantity"
                                     value={formData.remainingQuantity}
-                                    onChange={handleInputChange}
+                                    readOnly
                                     placeholder="0.00"
                                     autoComplete="off"
-                                    className="w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm"
+                                    className="w-full px-4 py-2 bg-gray-50 border border-gray-200/60 rounded-lg focus:ring-0 outline-none transition-all backdrop-blur-sm cursor-not-allowed font-semibold text-blue-600"
                                 />
                                 <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
                                     <span className="text-gray-400 text-sm">kg</span>

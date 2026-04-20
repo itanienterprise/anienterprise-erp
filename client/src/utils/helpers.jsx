@@ -12,12 +12,9 @@ export const API_BASE_URL = '';
 export const formatDate = (dateString) => {
     if (!dateString) return '-';
     
-    // If it's a string in YYYY-MM-DD format, handle it directly
-    if (typeof dateString === 'string' && dateString.split('-').length === 3) {
-        const parts = dateString.split('-');
-        const day = parts[2].padStart(2, '0');
-        const month = parts[1].padStart(2, '0');
-        const year = parts[0];
+    // If it's a simple YYYY-MM-DD string, handle it directly
+    if (typeof dateString === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(dateString)) {
+        const [year, month, day] = dateString.split('-');
         return `${day}/${month}/${year}`;
     }
     

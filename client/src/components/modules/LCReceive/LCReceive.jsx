@@ -352,6 +352,7 @@ function LCReceive({
     const [activeDropdown, setActiveDropdown] = useState(null);
     const [highlightedIndex, setHighlightedIndex] = useState(-1);
     const [searchQuery, setSearchQuery] = useState('');
+    const [lcRecords, setLcRecords] = useState([]);
 
     const fetchCnFs = async () => {
         try {
@@ -364,7 +365,17 @@ function LCReceive({
 
     useEffect(() => {
         fetchCnFs();
+        fetchLCRecords();
     }, []);
+
+    const fetchLCRecords = async () => {
+        try {
+            const response = await axios.get(`${API_BASE_URL}/api/lc-management`);
+            setLcRecords(Array.isArray(response.data) ? response.data : []);
+        } catch (error) {
+            console.error('Error fetching LC records:', error);
+        }
+    };
 
     const [warehouses, setWarehouses] = useState([]);
     const [allWhRecords, setAllWhRecords] = useState([]);
@@ -415,6 +426,7 @@ function LCReceive({
     const indCnfRef = useRef(null);
     const bdCnfRef = useRef(null);
     const whSelectRef = useRef(null);
+    const lcRef = useRef(null);
 
     const fetchWarehouses = async () => {
         try {
@@ -526,12 +538,13 @@ function LCReceive({
                 const isPort = activeDropdown === 'lcr-port' && portRef.current && portRef.current.contains(e.target);
                 const isImporter = activeDropdown === 'lcr-importer' && importerRef.current && importerRef.current.contains(e.target);
                 const isExporter = activeDropdown === 'lcr-exporter' && exporterRef.current && exporterRef.current.contains(e.target);
+                const isLc = activeDropdown === 'lcr-lcno' && lcRef.current && lcRef.current.contains(e.target);
 
                 // For dynamic product/brand refs
                 const isProduct = activeDropdown.startsWith('lcr-product-') && productRefs.current.some(ref => ref && ref.contains(e.target));
                 const isBrand = activeDropdown.startsWith('lcr-brand-') && Object.values(brandRefs.current).some(ref => ref && ref.contains(e.target));
 
-                if (!isCnf && !isBdCnf && !isPort && !isImporter && !isExporter && !isProduct && !isBrand) {
+                if (!isCnf && !isBdCnf && !isPort && !isImporter && !isExporter && !isLc && !isProduct && !isBrand) {
                     setActiveDropdown(null);
                     setHighlightedIndex(-1);
                 }
@@ -922,6 +935,16 @@ function LCReceive({
         }
     };
 
+    const getFilteredLCs = (input) => {
+        if (!input) return lcRecords;
+        const lowInput = input.toLowerCase();
+        return lcRecords.filter(r =>
+            (r.lcNo || '').toLowerCase().includes(lowInput) ||
+            (r.importerName || '').toLowerCase().includes(lowInput) ||
+            (r.productName || '').toLowerCase().includes(lowInput)
+        );
+    };
+
     const getFilteredCnFs = (input, type) => {
         const typedCnfs = cnfs.filter(c => c.type === type && c.status === 'Active');
         if (!input) return typedCnfs;
@@ -935,9 +958,34 @@ function LCReceive({
         setStockFormData(prev => {
             const newData = { ...prev, [field]: value };
 
+            if (field === 'lcNo' && value) {
+                const selectedLc = lcRecords.find(lc => lc.lcNo === value);
+                if (selectedLc) {
+                    if (selectedLc.port) newData.port = selectedLc.port;
+                    if (selectedLc.importerName) newData.importer = selectedLc.importerName;
+                    if (selectedLc.exporterName) newData.exporter = selectedLc.exporterName;
+
+                    // Also auto-fill first product if empty
+                    if (selectedLc.productName && prev.productEntries.length === 1 && !prev.productEntries[0].productName) {
+                        const updatedProducts = [...prev.productEntries];
+                        updatedProducts[0] = {
+                            ...updatedProducts[0],
+                            productName: selectedLc.productName
+                        };
+                        // Standard logic: in single mode, auto-fill brand too
+                        if (!updatedProducts[0].isMultiBrand && updatedProducts[0].brandEntries[0]) {
+                            updatedProducts[0].brandEntries = [
+                                { ...updatedProducts[0].brandEntries[0], brand: selectedLc.productName }
+                            ];
+                        }
+                        newData.productEntries = updatedProducts;
+                    }
+                }
+            }
+
             // Re-calculate costs using the central logic
-            if (field === 'indianCnF' || field === 'bdCnF' || field === 'port' || field === 'importer' || field === 'exporter') {
-                const summaries = calculateSummaries(prev.productEntries, newData);
+            if (field === 'indianCnF' || field === 'bdCnF' || field === 'port' || field === 'importer' || field === 'exporter' || field === 'lcNo') {
+                const summaries = calculateSummaries(newData.productEntries, newData);
                 return { ...newData, ...summaries };
             }
 
@@ -1447,7 +1495,8 @@ function LCReceive({
 
         const allBrands = new Set();
 
-        // 1. Get brands defined in the product definition
+        // Only get brands currently defined in the product definition
+        // (Deleted brands are removed from product.brands, so they won't appear)
         if (products) {
             const product = products.find(p => p.name === productName);
             if (product && product.brands) {
@@ -1458,13 +1507,6 @@ function LCReceive({
                 allBrands.add(product.brand);
             }
         }
-
-        // 2. Get brands from existing stock records for this product only
-        stockRecords.forEach(r => {
-            if (r.productName === productName && r.brand && (r.status || '').toLowerCase() !== 'requested') {
-                allBrands.add(r.brand);
-            }
-        });
 
         const brandsArr = Array.from(allBrands).sort();
         if (!input) return brandsArr;
@@ -2098,12 +2140,55 @@ function LCReceive({
                                     required
                                     compact={true}
                                 />
-                                <div className="space-y-2">
+                                <div className="space-y-2 relative" ref={lcRef}>
                                     <label className="text-sm font-medium text-gray-700">LC No</label>
-                                    <input
-                                        type="text" name="lcNo" value={stockFormData.lcNo} onChange={handleStockInputChange} required
-                                        placeholder="LC Number" autoComplete="off" className="w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm"
-                                    />
+                                    <div className="relative">
+                                        <input
+                                            type="text"
+                                            name="lcNo"
+                                            value={stockFormData.lcNo}
+                                            onChange={(e) => { handleStockInputChange(e); setActiveDropdown('lcr-lcno'); setHighlightedIndex(-1); }}
+                                            onFocus={() => { setActiveDropdown('lcr-lcno'); setHighlightedIndex(-1); }}
+                                            onKeyDown={(e) => handleDropdownKeyDown(e, 'lcr-lcno', handleStockDropdownSelect, 'lcNo', getFilteredLCs(stockFormData.lcNo))}
+                                            placeholder="Search LC..."
+                                            autoComplete="off"
+                                            required
+                                            className={`w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm pr-14 ${stockFormData.lcNo ? 'placeholder:text-gray-900 placeholder:font-semibold' : 'placeholder:text-gray-400'}`}
+                                        />
+                                        <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-2">
+                                            {stockFormData.lcNo && (
+                                                <button type="button" onClick={() => handleStockDropdownSelect('lcNo', '')} className="text-gray-400 hover:text-gray-600">
+                                                    <XIcon className="w-4 h-4" />
+                                                </button>
+                                            )}
+                                            <SearchIcon className="w-4 h-4 text-gray-300 pointer-events-none" />
+                                        </div>
+                                    </div>
+                                    {activeDropdown === 'lcr-lcno' && (
+                                        <div className="absolute z-[60] w-full mt-1 bg-white border border-gray-100 rounded-xl shadow-xl max-h-48 overflow-y-auto py-1">
+                                            {getFilteredLCs(stockFormData.lcNo).map((lc, idx) => (
+                                                <button
+                                                    key={lc._id}
+                                                    type="button"
+                                                    onMouseDown={(e) => {
+                                                        e.preventDefault();
+                                                        e.stopPropagation();
+                                                        handleStockDropdownSelect('lcNo', lc.lcNo);
+                                                    }}
+                                                    onMouseEnter={() => setHighlightedIndex(idx)}
+                                                    className={`w-full px-4 py-2 text-left text-sm transition-colors font-medium ${stockFormData.lcNo === lc.lcNo ? 'bg-blue-50 text-blue-700' : highlightedIndex === idx ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-blue-50'}`}
+                                                >
+                                                    <div className="flex flex-col">
+                                                        <span className="font-bold">{lc.lcNo}</span>
+                                                        <span className="text-[10px] text-gray-500">{lc.importerName} • {lc.productName}</span>
+                                                    </div>
+                                                </button>
+                                            ))}
+                                            {getFilteredLCs(stockFormData.lcNo).length === 0 && (
+                                                <div className="px-4 py-3 text-sm text-gray-500 italic">No LCs found</div>
+                                            )}
+                                        </div>
+                                    )}
                                 </div>
                                 <div className="space-y-2 relative" ref={portRef}>
                                     <label className="text-sm font-medium text-gray-700">Port</label>
@@ -2373,13 +2458,13 @@ function LCReceive({
                                     />
                                 </div>
                                 <div className="space-y-2">
-                                    <label className="text-sm font-medium text-gray-700">Total LC Quantity</label>
+                                    <label className="text-sm font-medium text-gray-700">Total LC Receive Quantity</label>
                                     <input
                                         type="text"
                                         name="totalLcQuantity"
                                         value={stockFormData.totalLcQuantity && parseFloat(stockFormData.totalLcQuantity) !== 0 ? stockFormData.totalLcQuantity : ''}
                                         readOnly
-                                        placeholder="Total LC Quantity"
+                                        placeholder="Total LC Receive Quantity"
                                         autoComplete="off"
                                         className="w-full px-4 py-2 bg-gray-50/80 border border-gray-200/60 rounded-lg text-gray-600 font-semibold outline-none cursor-default backdrop-blur-sm"
                                     />

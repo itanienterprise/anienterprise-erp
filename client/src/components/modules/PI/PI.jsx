@@ -896,6 +896,20 @@ function PI({
                             </div>
                         </div>
 
+                        <div className="space-y-2">
+                            <label className="text-sm font-medium text-gray-700">Port (Final Port)</label>
+                            <div className="relative">
+                                <input
+                                    type="text"
+                                    name="port"
+                                    value={formData.port}
+                                    onChange={handleInputChange}
+                                    placeholder="e.g. BHOMRA, BANGLADESH"
+                                    className="w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-all"
+                                />
+                            </div>
+                        </div>
+
                         <div className="space-y-2 relative dropdown-container" ref={countryOriginRef}>
                             <label className="text-sm font-medium text-gray-700">Country of Origin</label>
                             <div className="relative">
@@ -1377,7 +1391,7 @@ function PI({
                                             <td className="px-6 py-4 text-sm text-gray-600 font-medium">${record.freight}</td>
                                             <td className="px-6 py-4 text-sm text-gray-800 font-bold">${record.totalFreight}</td>
                                             <td className="px-6 py-4 text-sm text-blue-700 font-bold">${record.grandTotal}</td>
-                                            <td className="px-6 py-4 text-sm text-gray-600">{record.port}</td>
+                                            <td className="px-6 py-4 text-sm text-gray-600">{record.port || record.portOfDischarge}</td>
                                             <td className="px-6 py-4">
                                                 <span className={`px-3 py-1 rounded-full text-xs font-bold ${record.status === 'Active' ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' :
                                                     record.status === 'Closed' ? 'bg-gray-100 text-gray-600 border border-gray-200' :

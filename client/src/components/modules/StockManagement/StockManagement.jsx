@@ -1909,7 +1909,7 @@ const StockManagement = ({
                                                             </div>
                                                         </div>
                                                         {filterDropdownOpen.warehouse && (() => {
-                                                            const options = [...new Set(stockRecords.map(r => r.warehouse).filter(Boolean))].sort();
+                                                            const options = [...new Set(uniqueWarehouses.map(w => w.whName).filter(Boolean))].sort();
                                                             const filtered = options.filter(wh => wh.toLowerCase().includes(filterSearchInputs.warehouseSearch.toLowerCase()));
                                                             return filtered.length > 0 ? (
                                                                 <div className="absolute z-[120] mt-1 w-full bg-white border border-gray-100 rounded-xl shadow-xl max-h-48 overflow-y-auto py-1">
