@@ -14,9 +14,14 @@ function PI({
     ports,
     products = [],
     fetchPorts,
-    onDeleteConfirm
+    onDeleteConfirm,
+    addNotification,
+    currentUser
 }) {
     const DEFAULT_DESC_GOODS = "Insurance to be covered by the opener.\nPartial Bill & Partial Payment be allowed.\nNegotiation any Bank in India.\nThe Importer or Bank will not hold the bill in any circumstances.\nAll Foreign Bank Charges outside India are on account of Importer.\nWeight and measurement are final which is taken by weighing bridge in India.\n\nTRANSHIPMENT: ALLOWED\nPARTIAL SHIPMENT: ALLOWED";
+    
+    // Authorization check for administrative actions
+    const canManage = ['admin', 'incharge', 'lc manager', 'border manager', 'data entry'].includes((currentUser?.role || '').toLowerCase());
 
     const [showForm, setShowForm] = useState(false);
     const [records, setRecords] = useState([]);
@@ -327,8 +332,26 @@ function PI({
 
             if (editingId) {
                 await axios.put(url, formData);
+                
+                // Add persistent notification for PI Update
+                if (addNotification) {
+                    addNotification(
+                        'PI Record Updated',
+                        `PI No: ${formData.piNumber} has been updated by ${currentUser?.name || currentUser?.username}.`,
+                        ['Admin', 'Incharge', 'Border Manager', 'LC Manager', 'Data Entry']
+                    );
+                }
             } else {
                 await axios.post(url, formData);
+                
+                // Add persistent notification for management roles
+                if (addNotification) {
+                    addNotification(
+                        'New PI Created',
+                        `A new Proforma Invoice (PI No: ${formData.piNumber}) has been created for ${formData.partyName || 'N/A'} by ${currentUser?.name || currentUser?.username}.`,
+                        ['Admin', 'Incharge', 'Border Manager', 'LC Manager', 'Data Entry']
+                    );
+                }
             }
             setSubmitStatus('success');
             showToast(editingId ? 'PI updated successfully!' : 'PI created successfully!', 'success');
@@ -482,12 +505,14 @@ function PI({
                     </div>
 
                     <div className="w-full md:w-1/4 flex justify-end z-10 gap-2 sm:gap-3">
-                        <button
-                            onClick={() => setShowForm(!showForm)}
-                            className="flex-1 md:flex-none px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-xl shadow-lg shadow-blue-500/30 transition-all transform hover:scale-105 flex items-center justify-center whitespace-nowrap"
-                        >
-                            <span className="mr-1.5 font-bold text-lg leading-none">+</span> Add New
-                        </button>
+                        {canManage && (
+                            <button
+                                onClick={() => setShowForm(!showForm)}
+                                className="flex-1 md:flex-none px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-xl shadow-lg shadow-blue-500/30 transition-all transform hover:scale-105 flex items-center justify-center whitespace-nowrap"
+                            >
+                                <span className="mr-1.5 font-bold text-lg leading-none">+</span> Add New
+                            </button>
+                        )}
                     </div>
                 </div>
             )}
@@ -1359,6 +1384,7 @@ function PI({
                                     <th className="px-6 py-4 text-[11px] font-bold text-gray-400 uppercase tracking-wider border-b border-gray-100">Date</th>
                                     <th className="px-6 py-4 text-[11px] font-bold text-gray-400 uppercase tracking-wider border-b border-gray-100">PI Number</th>
                                     <th className="px-6 py-4 text-[11px] font-bold text-gray-400 uppercase tracking-wider border-b border-gray-100">Importer</th>
+                                    <th className="px-6 py-4 text-[11px] font-bold text-gray-400 uppercase tracking-wider border-b border-gray-100">Exporter</th>
                                     <th className="px-6 py-4 text-[11px] font-bold text-gray-400 uppercase tracking-wider border-b border-gray-100">Product</th>
                                     <th className="px-6 py-4 text-[11px] font-bold text-gray-400 uppercase tracking-wider border-b border-gray-100">Qty</th>
                                     <th className="px-6 py-4 text-[11px] font-bold text-gray-400 uppercase tracking-wider border-b border-gray-100">Rate</th>
@@ -1375,7 +1401,7 @@ function PI({
                                 {isLoading ? (
                                     Array(3).fill(0).map((_, i) => (
                                         <tr key={i} className="animate-pulse">
-                                            <td colSpan="9" className="px-6 py-4"><div className="h-4 bg-gray-100 rounded w-full"></div></td>
+                                            <td colSpan="14" className="px-6 py-4"><div className="h-4 bg-gray-100 rounded w-full"></div></td>
                                         </tr>
                                     ))
                                 ) : filteredRecords.length > 0 ? (
@@ -1384,6 +1410,7 @@ function PI({
                                             <td className="px-6 py-4 text-sm text-gray-600 font-medium">{formatDate(record.date)}</td>
                                             <td className="px-6 py-4 text-sm font-bold text-blue-600">{record.piNumber}</td>
                                             <td className="px-6 py-4 text-sm text-gray-700 font-semibold">{record.partyName}</td>
+                                            <td className="px-6 py-4 text-sm text-gray-700 font-semibold">{record.exporterName}</td>
                                             <td className="px-6 py-4 text-sm text-gray-600">{record.productName}</td>
                                             <td className="px-6 py-4 text-sm text-gray-600 font-bold">{record.quantity}</td>
                                             <td className="px-6 py-4 text-sm text-gray-600 font-medium">${record.rate}</td>
@@ -1400,8 +1427,8 @@ function PI({
                                                     {record.status}
                                                 </span>
                                             </td>
-                                            <td className="px-4 py-4 text-center">
-                                                <div className="flex items-center justify-center gap-2">
+                                            <td className="px-6 py-4">
+                                                <div className="flex items-center justify-center gap-3">
                                                     <button
                                                         onClick={() => {
                                                             const enriched = { ...record };
@@ -1425,25 +1452,29 @@ function PI({
                                                             }
                                                             generatePIPDF(enriched);
                                                         }}
-                                                        className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50/50 rounded-lg transition-all"
+                                                        className="text-gray-400 hover:text-blue-600 transition-colors"
                                                         title="Generate PI PDF"
                                                     >
                                                         <PDFIcon className="w-5 h-5" />
                                                     </button>
-                                                    <button
-                                                        onClick={() => handleEdit(record)}
-                                                        className="p-1.5 text-gray-400 hover:text-amber-600 hover:bg-amber-50/50 rounded-lg transition-all"
-                                                        title="Edit Record"
-                                                    >
-                                                        <EditIcon className="w-5 h-5" />
-                                                    </button>
-                                                    <button
-                                                        onClick={() => handleDelete(record._id)}
-                                                        className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50/50 rounded-lg transition-all"
-                                                        title="Delete Record"
-                                                    >
-                                                        <TrashIcon className="w-5 h-5" />
-                                                    </button>
+                                                    {canManage && (
+                                                        <>
+                                                            <button
+                                                                onClick={() => handleEdit(record)}
+                                                                className="text-gray-400 hover:text-blue-600 transition-colors"
+                                                                title="Edit Record"
+                                                            >
+                                                                <EditIcon className="w-5 h-5" />
+                                                            </button>
+                                                            <button
+                                                                onClick={() => handleDelete(record._id)}
+                                                                className="text-gray-400 hover:text-red-600 transition-colors"
+                                                                title="Delete Record"
+                                                            >
+                                                                <TrashIcon className="w-5 h-5" />
+                                                            </button>
+                                                        </>
+                                                    )}
                                                 </div>
                                             </td>
                                         </tr>

@@ -66,6 +66,7 @@ const Exporter = require('./models/Exporter');
 const CnF = require('./models/CnF');
 const Insurance = require('./models/Insurance');
 const LCManagement = require('./models/LCManagement');
+const LCGatePass = require('./models/LCGatePass');
 const PI = require('./models/PI');
 const MetaData = require('./models/MetaData');
 const { encryptData, decryptData } = require('./utils/encryption');
@@ -842,6 +843,52 @@ apiRouter.get('/api/lc-management', async (req, res) => {
       return { ...d, _id: r._id, createdAt: r.createdAt };
     });
     res.json(decrypted);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// LC Gate Pass APIs
+apiRouter.get('/api/lc-gp', async (req, res) => {
+  try {
+    const records = await LCGatePass.find().sort({ createdAt: -1 });
+    const decrypted = records.map(r => {
+      const d = decryptData(r.data);
+      return { ...d, _id: r._id, createdAt: r.createdAt };
+    });
+    res.json(decrypted);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+apiRouter.post('/api/lc-gp', async (req, res) => {
+  try {
+    const encryptedData = encryptData(req.body);
+    const newRecord = new LCGatePass({ data: encryptedData });
+    const savedRecord = await newRecord.save();
+    res.status(201).json({ ...req.body, _id: savedRecord._id, createdAt: savedRecord.createdAt });
+  } catch (err) {
+    res.status(400).json({ message: err.message });
+  }
+});
+
+apiRouter.put('/api/lc-gp/:id', async (req, res) => {
+  try {
+    const encryptedData = encryptData(req.body);
+    const updatedRecord = await LCGatePass.findByIdAndUpdate(req.params.id, { data: encryptedData }, { new: true });
+    if (!updatedRecord) return res.status(404).json({ message: 'Gate Pass record not found' });
+    res.json({ ...req.body, _id: updatedRecord._id, createdAt: updatedRecord.createdAt });
+  } catch (err) {
+    res.status(400).json({ message: err.message });
+  }
+});
+
+apiRouter.delete('/api/lc-gp/:id', async (req, res) => {
+  try {
+    const deletedRecord = await LCGatePass.findByIdAndDelete(req.params.id);
+    if (!deletedRecord) return res.status(404).json({ message: 'Gate Pass record not found' });
+    res.json({ message: 'Gate Pass record deleted' });
   } catch (err) {
     res.status(500).json({ message: err.message });
   }

@@ -3,13 +3,15 @@ import axios from '../../../utils/api';
 import {
     PlusIcon, XIcon, EditIcon, TrashIcon, SearchIcon,
     LCManagerIcon, ShieldIcon, BuildingIcon, GlobeIcon,
-    DollarSignIcon, CalendarIcon, ChevronDownIcon, EyeIcon
+    DollarSignIcon, CalendarIcon, ChevronDownIcon, EyeIcon, FileTextIcon
 } from '../../Icons';
 import { formatDate, API_BASE_URL } from '../../../utils/helpers';
 import { decryptData } from '../../../utils/encryption';
 import CustomDatePicker from '../../shared/CustomDatePicker';
-const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords = [] }) => {
+const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords = [], gpRecords = [] }) => {
     const [showConsumption, setShowConsumption] = useState(true);
+    const [consumptionSearchQuery, setConsumptionSearchQuery] = useState('');
+    const [showGpList, setShowGpList] = useState(false);
     if (!data) return null;
 
     // Failsafe LC Matching helper
@@ -74,6 +76,41 @@ const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords
 
     const consumptionHistory = [...relatedReceipts, ...relatedSales].sort((a, b) => new Date(b.date) - new Date(a.date));
 
+    // G.P List for this LC
+    const relatedGpRecords = gpRecords.filter(gp => {
+        const gpLcClean = cleanLc(gp.lcNumber);
+        return gpLcClean === lcNoClean;
+    });
+
+    // Filter consumption history based on search query
+    const filteredConsumptionHistory = consumptionHistory.filter(item => {
+        if (!consumptionSearchQuery.trim()) return true;
+        const q = consumptionSearchQuery.toLowerCase().trim();
+        return (
+            (formatDate(item.date) || '').toLowerCase().includes(q) ||
+            (item.importer || '').toLowerCase().includes(q) ||
+            (item.exporter || '').toLowerCase().includes(q) ||
+            (item.product || '').toLowerCase().includes(q) ||
+            String(item.truck || '').toLowerCase().includes(q) ||
+            (item.source || '').toLowerCase().includes(q) ||
+            String(parseNum(item.quantity)).includes(q)
+        );
+    });
+
+    // Filter GP records based on search query
+    const filteredGpRecords = relatedGpRecords.filter(gp => {
+        if (!consumptionSearchQuery.trim()) return true;
+        const q = consumptionSearchQuery.toLowerCase().trim();
+        return (
+            (formatDate(gp.gpDate) || '').toLowerCase().includes(q) ||
+            (gp.partyName || '').toLowerCase().includes(q) ||
+            (gp.party || '').toLowerCase().includes(q) ||
+            (gp.productName || '').toLowerCase().includes(q) ||
+            String(parseNum(gp.gpQuantity)).includes(q) ||
+            (gp.remarks || '').toLowerCase().includes(q)
+        );
+    });
+
     // Summary Calculations
     const totalLcQtyKg = parseNum(data.quantity) * 1000;
     const consumedQtyKg = consumptionHistory.reduce((sum, item) => sum + parseNum(item.quantity), 0);
@@ -86,19 +123,71 @@ const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords
             <div className="absolute inset-0 bg-gray-900/60 backdrop-blur-sm" onClick={onClose}></div>
             <div className="relative bg-white border border-gray-100 rounded-2xl shadow-2xl w-full max-w-6xl overflow-hidden animate-in zoom-in duration-300">
                 {/* Header */}
-                <div className="flex items-center justify-between px-6 py-4 border-b border-gray-50 bg-gray-50/50">
-                    <div className="flex items-center gap-3">
-                        <div className={`p-2 rounded-lg ${showConsumption ? 'bg-blue-50 text-blue-600' : 'bg-blue-50 text-blue-600'}`}>
+                <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 bg-gray-50/50">
+                    {/* Left: LC Info */}
+                    <div className="flex items-center gap-3 min-w-0 shrink-0">
+                        <div className="p-2 rounded-lg bg-blue-50 text-blue-600">
                             <LCManagerIcon className="w-5 h-5" />
                         </div>
-                        <div>
-                            <h3 className="text-lg font-bold text-gray-900">{showConsumption ? 'LC Consumption History' : 'LC Record Details'}</h3>
+                        <div className="min-w-0">
+                            <h3 className="text-lg font-bold text-gray-900 truncate">{showConsumption ? 'LC Consumption History' : 'LC Record Details'}</h3>
                             <p className="text-xs text-gray-500 font-bold uppercase tracking-widest">
-                                LC NO: <span className={`text-sm font-black ${showConsumption ? 'text-blue-600' : 'text-blue-600'}`}>{data.lcNo}</span> • {formatDate(data.openingDate)}
+                                LC NO: <span className="text-sm font-black text-blue-600">{data.lcNo}</span>
                             </p>
                         </div>
                     </div>
-                    <div className="flex items-center gap-2">
+
+                    {/* Center: Search + Tabs (only in consumption view) */}
+                    {showConsumption && (
+                        <div className="flex flex-col items-center gap-2 flex-1 mx-6">
+                            {/* Search Bar */}
+                            <div className="relative group w-full max-w-md">
+                                <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
+                                    <SearchIcon className="h-4 w-4 text-gray-400 group-focus-within:text-blue-500 transition-colors" />
+                                </div>
+                                <input
+                                    type="text"
+                                    placeholder="Search consumption history..."
+                                    autoComplete="off"
+                                    className="block w-full pl-10 pr-4 py-2 bg-white/70 border border-gray-200 rounded-xl text-[13px] placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 focus:bg-white transition-all outline-none"
+                                    value={consumptionSearchQuery}
+                                    onChange={(e) => setConsumptionSearchQuery(e.target.value)}
+                                />
+                                {consumptionSearchQuery && (
+                                    <button
+                                        onClick={() => setConsumptionSearchQuery('')}
+                                        className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors"
+                                    >
+                                        <XIcon className="w-3.5 h-3.5" />
+                                    </button>
+                                )}
+                            </div>
+                            {/* Tab Buttons */}
+                            <div className="flex items-center gap-2">
+                                <button
+                                    onClick={() => { setShowGpList(false); setConsumptionSearchQuery(''); }}
+                                    className={`px-5 py-1.5 rounded-full text-xs font-bold transition-all whitespace-nowrap border ${!showGpList
+                                        ? 'bg-blue-600 text-white border-blue-600 shadow-sm'
+                                        : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50'
+                                    }`}
+                                >
+                                    LC History
+                                </button>
+                                <button
+                                    onClick={() => { setShowGpList(true); setConsumptionSearchQuery(''); }}
+                                    className={`px-5 py-1.5 rounded-full text-xs font-bold transition-all whitespace-nowrap border ${showGpList
+                                        ? 'bg-blue-600 text-white border-blue-600 shadow-sm'
+                                        : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50'
+                                    }`}
+                                >
+                                    G.P List
+                                </button>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Right: Action Buttons */}
+                    <div className="flex items-center gap-2 shrink-0">
                         <button
                             onClick={() => setShowConsumption(!showConsumption)}
                             className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold transition-all border ${showConsumption
@@ -176,6 +265,8 @@ const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords
                                 </div>
                             </div>
 
+                            {/* Consumption History Table or GP List */}
+                            {!showGpList ? (
                             <div className="overflow-hidden border border-gray-100 rounded-2xl shadow-sm">
                                 <table className="w-full text-left border-collapse">
                                     <thead>
@@ -190,8 +281,8 @@ const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords
                                         </tr>
                                     </thead>
                                     <tbody className="divide-y divide-gray-50">
-                                        {consumptionHistory.length > 0 ? (
-                                            consumptionHistory.map((item, idx) => (
+                                        {filteredConsumptionHistory.length > 0 ? (
+                                            filteredConsumptionHistory.map((item, idx) => (
                                                 <tr key={idx} className="hover:bg-gray-50/50 transition-colors group">
                                                     <td className="px-6 py-4 text-sm font-medium text-gray-600 whitespace-nowrap">{formatDate(item.date)}</td>
                                                     <td className="px-6 py-4 text-sm font-medium text-gray-800 uppercase">{item.importer || '-'}</td>
@@ -213,7 +304,9 @@ const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords
                                             ))
                                         ) : (
                                             <tr>
-                                                <td colSpan="4" className="px-6 py-12 text-center text-gray-400 font-bold">No consumption history found for this LC.</td>
+                                                <td colSpan="7" className="px-6 py-12 text-center text-gray-400 font-bold">
+                                                    {consumptionSearchQuery ? 'No results match your search.' : 'No consumption history found for this LC.'}
+                                                </td>
                                             </tr>
                                         )}
                                     </tbody>
@@ -221,13 +314,75 @@ const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords
                                         <tr>
                                             <td colSpan="5" className="px-6 py-4 text-right text-xs font-medium text-gray-400 uppercase tracking-wider">Total Consumption:</td>
                                             <td className="px-6 py-4 text-sm font-medium text-right text-blue-600">
-                                                {consumptionHistory.reduce((sum, item) => sum + parseNum(item.quantity), 0).toLocaleString()} <span className="text-[10px] font-normal">Kg</span>
+                                                {filteredConsumptionHistory.reduce((sum, item) => sum + parseNum(item.quantity), 0).toLocaleString()} <span className="text-[10px] font-normal">Kg</span>
                                             </td>
                                             <td></td>
                                         </tr>
                                     </tfoot>
                                 </table>
                             </div>
+                            ) : (
+                            /* G.P List Table */
+                            <div className="overflow-hidden border border-gray-100 rounded-2xl shadow-sm">
+                                <table className="w-full text-left border-collapse">
+                                    <thead>
+                                        <tr className="bg-gray-50/50 border-b border-gray-100">
+                                            <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Date</th>
+                                            <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Party Name</th>
+                                            <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Sold To</th>
+                                            <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Product</th>
+                                            <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-right">GP Qty (Kg)</th>
+                                            <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-right">GP Value</th>
+                                            <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-center">Status</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-gray-50">
+                                        {filteredGpRecords.length > 0 ? (
+                                            filteredGpRecords.map((gp, idx) => (
+                                                <tr key={gp._id || idx} className="hover:bg-gray-50/50 transition-colors group">
+                                                    <td className="px-6 py-4 text-sm font-medium text-gray-600 whitespace-nowrap">{formatDate(gp.gpDate)}</td>
+                                                    <td className="px-6 py-4 text-sm font-medium text-gray-800 uppercase">{gp.partyName || '-'}</td>
+                                                    <td className="px-6 py-4 text-sm font-medium text-gray-800 uppercase">{gp.party || '-'}</td>
+                                                    <td className="px-6 py-4 text-sm font-medium text-gray-900">{gp.productName || '-'}</td>
+                                                    <td className="px-6 py-4 text-sm font-medium text-right text-gray-900 whitespace-nowrap">
+                                                        {parseNum(gp.gpQuantity).toLocaleString()} <span className="text-[10px] text-gray-400 font-normal">Kg</span>
+                                                    </td>
+                                                    <td className="px-6 py-4 text-sm font-medium text-right text-gray-900 whitespace-nowrap">
+                                                        ৳{parseNum(gp.gpValue).toLocaleString()}
+                                                    </td>
+                                                    <td className="px-6 py-4 text-center">
+                                                        <span className={`px-3 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider border ${gp.status === 'Active'
+                                                            ? 'bg-blue-50 text-blue-600 border-blue-100/50'
+                                                            : 'bg-gray-100 text-gray-500 border-gray-200/50'
+                                                            }`}>
+                                                            {gp.status || 'Active'}
+                                                        </span>
+                                                    </td>
+                                                </tr>
+                                            ))
+                                        ) : (
+                                            <tr>
+                                                <td colSpan="7" className="px-6 py-12 text-center text-gray-400 font-bold">
+                                                    {consumptionSearchQuery ? 'No G.P records match your search.' : 'No Gate Pass records found for this LC.'}
+                                                </td>
+                                            </tr>
+                                        )}
+                                    </tbody>
+                                    <tfoot className="bg-gray-50/30">
+                                        <tr>
+                                            <td colSpan="4" className="px-6 py-4 text-right text-xs font-medium text-gray-400 uppercase tracking-wider">Total GP Qty:</td>
+                                            <td className="px-6 py-4 text-sm font-medium text-right text-blue-600">
+                                                {filteredGpRecords.reduce((sum, gp) => sum + parseNum(gp.gpQuantity), 0).toLocaleString()} <span className="text-[10px] font-normal">Kg</span>
+                                            </td>
+                                            <td className="px-6 py-4 text-sm font-medium text-right text-blue-600">
+                                                ৳{filteredGpRecords.reduce((sum, gp) => sum + parseNum(gp.gpValue), 0).toLocaleString()}
+                                            </td>
+                                            <td></td>
+                                        </tr>
+                                    </tfoot>
+                                </table>
+                            </div>
+                            )}
                         </div>
                     ) : (
                         <div className="space-y-8 animate-in fade-in slide-in-from-bottom-2 duration-300">
@@ -374,7 +529,7 @@ const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords
     );
 };
 
-const LCManagement = ({ addNotification }) => {
+const LCManagement = ({ addNotification, currentUser }) => {
     const [lcRecords, setLcRecords] = useState([]);
     const [banks, setBanks] = useState([]);
     const [importers, setImporters] = useState([]);
@@ -396,6 +551,8 @@ const LCManagement = ({ addNotification }) => {
     const [isSaving, setIsSaving] = useState(false);
     const [allStockRecords, setAllStockRecords] = useState([]);
     const [allSalesRecords, setAllSalesRecords] = useState([]);
+
+    const canManage = ['admin', 'incharge', 'lc manager', 'border manager', 'data entry'].includes((currentUser?.role || '').toLowerCase());
 
     const ipRef = useRef(null);
     const piRef = useRef(null);
@@ -436,6 +593,7 @@ const LCManagement = ({ addNotification }) => {
         status: 'Opened',
         port: ''
     });
+    const [gpRecords, setGpRecords] = useState([]);
 
     const informativeQuantities = useMemo(() => {
         const selectedIp = ipRecordsRaw.find(ip => ip.ipNumber === formData.ipNo);
@@ -506,6 +664,25 @@ const LCManagement = ({ addNotification }) => {
                     if (selectedIns.premiumPercent) newState.premium = selectedIns.premiumPercent;
                     if (selectedIns.premiumReturnPercent) newState.premiumReturn = selectedIns.premiumReturnPercent;
                     if (selectedIns.stampCharge) newState.stampCharge = selectedIns.stampCharge;
+
+                    // Auto-calculate Net Premium, Gross Premium, and Return Amount
+                    const totalAmount = parseFloat(newState.totalAmount || prev.totalAmount) || 0;
+                    const exPct = parseFloat(newState.extraPercent || prev.extraPercent) || 0;
+                    const prem = parseFloat(selectedIns.premiumPercent || newState.premium || prev.premium) || 0;
+                    const premRet = parseFloat(selectedIns.premiumReturnPercent || newState.premiumReturn || prev.premiumReturn) || 0;
+                    const pVat = parseFloat(newState.premiumVat || prev.premiumVat) || 0;
+                    const stamp = parseFloat(selectedIns.stampCharge || newState.stampCharge || prev.stampCharge) || 0;
+
+                    const baseNetPrem = (totalAmount * (prem / 100)) / 100;
+                    const netPrem = baseNetPrem + (baseNetPrem * (exPct / 100));
+                    newState.netPremium = netPrem > 0 ? netPrem.toFixed(2) : '';
+
+                    const expRet = netPrem * (premRet / 100);
+                    newState.expectedReturnAmount = expRet > 0 ? expRet.toFixed(2) : '';
+
+                    const vatAmount = netPrem * (pVat / 100);
+                    const gPrem = netPrem + vatAmount + stamp;
+                    newState.grossPremium = gPrem > 0 ? gPrem.toFixed(2) : '';
                 }
             }
 
@@ -535,7 +712,7 @@ const LCManagement = ({ addNotification }) => {
     const fetchInitialData = async () => {
         setIsLoading(true);
         try {
-            const [lcRes, bankRes, impRes, expRes, insRes, ipRes, piRes, prodRes, stockRes, saleRes] = await Promise.all([
+            const [lcRes, bankRes, impRes, expRes, insRes, ipRes, piRes, prodRes, stockRes, saleRes, gpRes] = await Promise.all([
                 axios.get(`${API_BASE_URL}/api/lc-management`),
                 axios.get(`${API_BASE_URL}/api/banks`),
                 axios.get(`${API_BASE_URL}/api/importers`),
@@ -545,8 +722,10 @@ const LCManagement = ({ addNotification }) => {
                 axios.get(`${API_BASE_URL}/api/pi`),
                 axios.get(`${API_BASE_URL}/api/products`),
                 axios.get(`${API_BASE_URL}/api/stock`),
-                axios.get(`${API_BASE_URL}/api/sales`)
+                axios.get(`${API_BASE_URL}/api/sales`),
+                axios.get(`${API_BASE_URL}/api/lc-gp`)
             ]);
+            setGpRecords(Array.isArray(gpRes.data) ? gpRes.data : []);
 
             setLcRecords(Array.isArray(lcRes.data) ? lcRes.data : []);
 
@@ -669,9 +848,29 @@ const LCManagement = ({ addNotification }) => {
         try {
             if (editingId) {
                 await axios.put(`${API_BASE_URL}/api/lc-management/${editingId}`, formData);
+
+                // Add persistent notification for LC Update
+                if (addNotification) {
+                    addNotification(
+                        'LC Record Updated',
+                        `LC No: ${formData.lcNo} has been updated by ${currentUser?.name || currentUser?.username}.`,
+                        ['Admin', 'Incharge', 'Border Manager', 'LC Manager', 'Data Entry']
+                    );
+                }
+
                 addNotification?.('LC record updated successfully', 'success');
             } else {
                 await axios.post(`${API_BASE_URL}/api/lc-management`, formData);
+
+                // Add persistent notification for management roles
+                if (addNotification) {
+                    addNotification(
+                        'New LC Opened',
+                        `A new LC (No: ${formData.lcNo}) has been opened for ${formData.importerName} by ${currentUser?.name || currentUser?.username}.`,
+                        ['Admin', 'Incharge', 'Border Manager', 'LC Manager', 'Data Entry']
+                    );
+                }
+
                 addNotification?.('New LC record created successfully', 'success');
             }
             resetForm();
@@ -800,14 +999,14 @@ const LCManagement = ({ addNotification }) => {
                     <div className="hidden md:block md:flex-1"></div>
                 )}
 
-                {!showForm && (
+                {!showForm && canManage && (
                     <div className="w-full md:w-1/4 flex justify-end gap-3 z-50">
                         <button
                             onClick={() => setShowForm(true)}
                             className="w-full md:w-auto px-4 py-2.5 md:py-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-medium rounded-xl shadow-lg shadow-blue-500/30 transition-all transform active:scale-95 md:hover:scale-105 flex items-center justify-center"
                         >
                             <PlusIcon className="w-5 h-5 mr-2" />
-                            <span>Register New LC</span>
+                            <span> New LC</span>
                         </button>
                     </div>
                 )}
@@ -1476,25 +1675,25 @@ const LCManagement = ({ addNotification }) => {
                     <table className="w-full text-left border-collapse">
                         <thead>
                             <tr className="bg-gray-50/50 border-b border-gray-100">
-                                <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-nowrap">Date</th>
-                                <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-nowrap">Expire Date</th>
-                                <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-nowrap">LC No</th>
-                                <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-nowrap">Importer</th>
-                                <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-nowrap">Exporter</th>
-                                <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-nowrap">Bank</th>
-                                <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-nowrap">Port</th>
-                                <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-nowrap">Product</th>
-                                <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-right text-nowrap">Quantity (Kg)</th>
-                                <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-right text-nowrap">Rate (/Kg)</th>
-                                <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-right text-nowrap">Total LC Value</th>
-                                <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-right text-nowrap">Rem. Qty</th>
-                                <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-center text-nowrap">Action</th>
+                                <th className="px-3 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-nowrap">Date</th>
+                                <th className="px-3 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-nowrap">Expire Date</th>
+                                <th className="px-3 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-nowrap">LC No</th>
+                                <th className="px-3 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-nowrap">Importer</th>
+                                <th className="px-3 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-nowrap">Exporter</th>
+                                <th className="px-3 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-nowrap">Bank</th>
+                                <th className="px-3 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-nowrap">Port</th>
+                                <th className="px-3 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-nowrap">Product</th>
+                                <th className="px-3 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-right text-nowrap">Quantity (Kg)</th>
+                                <th className="px-3 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-right text-nowrap">Total Value (৳)</th>
+                                <th className="px-3 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-right text-nowrap">Rem. Qty</th>
+                                <th className="px-3 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-right text-nowrap">Rem G.P</th>
+                                <th className="px-3 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-center text-nowrap">Action</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-50">
                             {isLoading ? (
                                 <tr>
-                                    <td colSpan="12" className="px-6 py-12 text-center text-sm text-gray-500">
+                                    <td colSpan="13" className="px-6 py-12 text-center text-sm text-gray-500">
                                         <div className="flex flex-col items-center gap-2">
                                             <div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
                                             <span className="font-medium text-gray-400">Loading records...</span>
@@ -1518,7 +1717,6 @@ const LCManagement = ({ addNotification }) => {
 
                                     // Unit conversion for display (Data is in Tons, Table shows Kg)
                                     const qtyKg = parseNum(record.quantity) * 1000;
-                                    const rateKg = parseNum(record.rate) / 1000;
 
                                     // Calculate Remaining Quantities
                                     // Received: From allStockRecords where lcNo matches and status is NOT requested/rejected
@@ -1544,7 +1742,7 @@ const LCManagement = ({ addNotification }) => {
                                             // Adopt robust Border Sale detection
                                             const sTypeLow = (s.saleType || '').toLowerCase().trim();
                                             // Permissive: Catch by BS prefix OR explicit sale type OR presence of matching LC + port details
-                                            const isBorder = sTypeLow.includes('border') || 
+                                            const isBorder = sTypeLow.includes('border') ||
                                                 (s.invoiceNo || '').startsWith('BS') ||
                                                 (!s.saleType && !!(s.lcNo || s.port || s.importer)) ||
                                                 (recordLcNoClean === lcNoClean && !!(s.port || s.importer));
@@ -1563,29 +1761,37 @@ const LCManagement = ({ addNotification }) => {
 
                                     const combinedRemKg = qtyKg - (receivedQtyKg + borderSaleQtyKg);
 
+                                    // Calculate Rem G.P
+                                    const totalGpQtyKg = gpRecords
+                                        .filter(gp => String(gp.lcNumber || '').replace(/\D/g, '') === lcNoClean)
+                                        .reduce((sum, gp) => sum + (parseFloat(gp.gpQuantity) || 0), 0);
+                                    const remGpKg = Math.max(0, qtyKg - totalGpQtyKg);
+
                                     return (
                                         <tr key={record._id} className="hover:bg-gray-50/50 transition-colors border-b border-gray-50 group">
-                                            <td className="px-6 py-4 text-sm font-medium text-gray-600 whitespace-nowrap">{formatDate(record.openingDate)}</td>
-                                            <td className="px-6 py-4 text-sm font-medium text-gray-900 whitespace-nowrap">{formatDate(record.expiryDate)}</td>
-                                            <td className="px-6 py-4 text-sm font-bold text-gray-900 whitespace-nowrap">{record.lcNo}</td>
-                                            <td className="px-6 py-4 text-sm font-medium text-gray-700">{record.importerName}</td>
-                                            <td className="px-6 py-4 text-sm text-gray-600">{record.exporterName}</td>
-                                            <td className="px-6 py-4 text-sm text-gray-600 font-medium">{record.bankName}</td>
-                                            <td className="px-6 py-4 text-sm text-gray-600">{displayPort}</td>
-                                            <td className="px-6 py-4 text-sm font-bold text-gray-900">{record.productName || '-'}</td>
-                                            <td className="px-6 py-4 text-sm text-right text-gray-600 whitespace-nowrap">
+                                            <td className="px-3 py-4 text-sm font-medium text-gray-600 whitespace-nowrap">{formatDate(record.openingDate)}</td>
+                                            <td className="px-3 py-4 text-sm font-medium text-gray-900 whitespace-nowrap">{formatDate(record.expiryDate)}</td>
+                                            <td className="px-3 py-4 text-sm font-bold text-gray-900 whitespace-nowrap">{record.lcNo}</td>
+                                            <td className="px-3 py-4 text-sm font-medium text-gray-700 whitespace-nowrap truncate max-w-[120px]" title={record.importerName}>{record.importerName}</td>
+                                            <td className="px-3 py-4 text-sm text-gray-600 whitespace-nowrap truncate max-w-[120px]" title={record.exporterName}>{record.exporterName}</td>
+                                            <td className="px-3 py-4 text-sm text-gray-600 font-medium whitespace-nowrap truncate max-w-[120px]" title={record.bankName}>{record.bankName}</td>
+                                            <td className="px-3 py-4 text-sm text-gray-600 whitespace-nowrap truncate max-w-[80px]" title={displayPort}>{displayPort}</td>
+                                            <td className="px-3 py-4 text-sm font-bold text-gray-900 whitespace-nowrap truncate max-w-[80px]" title={record.productName}>{record.productName || '-'}</td>
+                                            <td className="px-3 py-4 text-sm text-right text-gray-600 whitespace-nowrap">
                                                 <span className="font-bold text-gray-900">{qtyKg.toLocaleString()}</span> <span className="text-[10px] text-gray-400 font-normal">Kg</span>
                                             </td>
-                                            <td className="px-6 py-4 text-sm text-right text-gray-600 whitespace-nowrap">
-                                                <span className="font-medium text-gray-900">${rateKg.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 4 })}</span> <span className="text-[10px] text-gray-400 font-normal">/Kg</span>
-                                            </td>
-                                            <td className="px-6 py-4 text-sm text-right font-black text-gray-900 whitespace-nowrap">৳{parseFloat(record.totalAmount || 0).toLocaleString()}</td>
-                                            <td className="px-6 py-4 text-sm text-right whitespace-nowrap">
+                                            <td className="px-3 py-4 text-sm text-right font-black text-gray-900 whitespace-nowrap">৳{parseFloat(record.totalAmount || 0).toLocaleString()}</td>
+                                            <td className="px-3 py-4 text-sm text-right whitespace-nowrap">
                                                 <span className={`font-black ${combinedRemKg <= 0 ? 'text-emerald-600' : 'text-blue-600'}`}>
                                                     {combinedRemKg.toLocaleString()} <span className="text-[10px] text-gray-400 font-medium whitespace-nowrap">Kg</span>
                                                 </span>
                                             </td>
-                                            <td className="px-4 py-4 text-center">
+                                            <td className="px-3 py-4 text-sm text-right whitespace-nowrap">
+                                                <span className={`font-black ${remGpKg <= 0 ? 'text-emerald-600' : 'text-indigo-600'}`}>
+                                                    {remGpKg.toLocaleString()} <span className="text-[10px] text-gray-400 font-medium whitespace-nowrap">Kg</span>
+                                                </span>
+                                            </td>
+                                            <td className="px-3 py-4 text-center">
                                                 <div className="flex items-center justify-center gap-4">
                                                     <button
                                                         onClick={() => setViewData(record)}
@@ -1594,20 +1800,24 @@ const LCManagement = ({ addNotification }) => {
                                                     >
                                                         <EyeIcon className="w-5 h-5" />
                                                     </button>
-                                                    <button
-                                                        onClick={() => handleEdit(record)}
-                                                        className="text-gray-400 hover:text-blue-600 transition-colors"
-                                                        title="Edit Record"
-                                                    >
-                                                        <EditIcon className="w-5 h-5" />
-                                                    </button>
-                                                    <button
-                                                        onClick={() => handleDelete(record._id)}
-                                                        className="text-gray-400 hover:text-red-600 transition-colors"
-                                                        title="Delete Record"
-                                                    >
-                                                        <TrashIcon className="w-5 h-5" />
-                                                    </button>
+                                                    {canManage && (
+                                                        <>
+                                                            <button
+                                                                onClick={() => handleEdit(record)}
+                                                                className="text-gray-400 hover:text-blue-600 transition-colors"
+                                                                title="Edit Record"
+                                                            >
+                                                                <EditIcon className="w-5 h-5" />
+                                                            </button>
+                                                            <button
+                                                                onClick={() => handleDelete(record._id)}
+                                                                className="text-gray-400 hover:text-red-600 transition-colors"
+                                                                title="Delete Record"
+                                                            >
+                                                                <TrashIcon className="w-5 h-5" />
+                                                            </button>
+                                                        </>
+                                                    )}
                                                 </div>
                                             </td>
                                         </tr>
@@ -1625,11 +1835,12 @@ const LCManagement = ({ addNotification }) => {
                 </div>
             )}
             {viewData && (
-                <ViewDetailsModal 
-                    data={viewData} 
-                    onClose={() => setViewData(null)} 
+                <ViewDetailsModal
+                    data={viewData}
+                    onClose={() => setViewData(null)}
                     allStockRecords={allStockRecords}
                     allSalesRecords={allSalesRecords}
+                    gpRecords={gpRecords}
                 />
             )}
         </div>

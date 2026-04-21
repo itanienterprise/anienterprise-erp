@@ -31,6 +31,7 @@ import PaymentCollection from './components/modules/PaymentCollection/PaymentCol
 import Bank from './components/modules/Bank/Bank';
 import Insurance from './components/modules/Insurance/Insurance';
 import LCManagement from './components/modules/LCManagement/LCManagement';
+import LCGatePass from './components/modules/LCManagement/LCGatePass';
 import { calculateStockData } from './utils/stockHelpers';
 import LoginPage from './components/auth/LoginPage';
 import Profile from './components/modules/Profile/Profile';
@@ -79,7 +80,7 @@ function App() {
         const isTargetUser = n.targetUsers ? n.targetUsers.includes(currentUser?.username) : false;
         const isSelfCreated = n.createdBy === currentUser?.username;
 
-        return (isTargetRole || isTargetUser) && !isSelfCreated;
+        return (isTargetRole || isTargetUser) && (!isSelfCreated || n.isSystemic);
       }).map(n => ({
         ...n,
         isUnread: n.readByUsers ? !n.readByUsers.includes(currentUser?.username) : true
@@ -197,13 +198,14 @@ function App() {
     }
   };
 
-  const addNotification = async (title, message, targetRoles = ['admin', 'incharge', 'sales manager'], targetUsers = []) => {
+  const addNotification = async (title, message, targetRoles = ['admin', 'incharge', 'sales manager'], targetUsers = [], isSystemic = false) => {
     try {
       const newNotif = {
         title,
         message,
         targetRoles,
         targetUsers, // Added targetUsers for specific employee notifications
+        isSystemic,
         readByUsers: [],
         createdBy: currentUser?.username,
         createdByName: currentUser?.name || currentUser?.username
@@ -767,6 +769,29 @@ function App() {
         if (['employees', 'sales', 'customer', 'ip', 'cnf', 'bank', 'indian-bank', 'importer', 'exporter', 'port', 'pi'].includes(type) || type.includes('cnf')) {
           setRefreshKey(prev => prev + 1);
         }
+
+        // Send deletion notification
+        const labels = {
+          'sales': 'Sales Record',
+          'ip': 'IP Record',
+          'importer': 'Importer',
+          'exporter': 'Exporter',
+          'port': 'Port',
+          'product': 'Product',
+          'employees': 'Employee Account',
+          'customer': 'Customer',
+          'bank': 'Bank',
+          'indian-bank': 'Indian Bank',
+          'cnf': 'C&F Agent',
+          'pi': 'Proforma Invoice',
+          'stock': 'Stock Record'
+        };
+        const label = labels[type] || type.toUpperCase();
+        addNotification(
+          'Record Deleted',
+          `${isBulk ? 'Multiple ' + label + 's' : 'A ' + label} has been deleted by ${currentUser?.name || currentUser?.username}.`,
+          ['Admin', 'Incharge', 'Border Manager', 'LC Manager', 'Data Entry']
+        );
       }
     } catch (error) {
       console.error('Error deleting:', error);
@@ -1135,6 +1160,8 @@ function App() {
             importers={importers}
             ports={ports}
             products={products}
+            addNotification={addNotification}
+            currentUser={currentUser}
           />
         );
       case 'pi-section':
@@ -1147,6 +1174,8 @@ function App() {
             products={products}
             fetchPorts={fetchPorts}
             onDeleteConfirm={setDeleteConfirm}
+            addNotification={addNotification}
+            currentUser={currentUser}
           />
         );
       case 'importer-section':
@@ -1387,8 +1416,15 @@ function App() {
             onDeleteConfirm={(data) => handleDelete(data.type, data.id, data.isBulk, data.extraData)}
           />
         );
+      case 'lc-gp-section':
+        return (
+          <LCGatePass 
+            currentUser={currentUser}
+            addNotification={addNotification}
+          />
+        );
       case 'lc-management-section':
-        return <LCManagement addNotification={addNotification} />;
+        return <LCManagement addNotification={addNotification} currentUser={currentUser} />;
       default:
         return null;
     }
@@ -1582,7 +1618,7 @@ function App() {
           <div>
             <button
               onClick={() => setLcDropdownOpen(!lcDropdownOpen)}
-              className={`w-full flex items-center justify-between px-4 py-2 rounded-lg transition-all ${currentView === 'lc-management-section' ? 'bg-blue-50 text-blue-600 shadow-sm' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'}`}
+              className={`w-full flex items-center justify-between px-4 py-2 rounded-lg transition-all ${currentView === 'lc-management-section' || currentView === 'lc-gp-section' ? 'bg-blue-50 text-blue-600 shadow-sm' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'}`}
             >
               <div className="flex items-center">
                 <LCManagerIcon className="w-5 h-5 mr-3" />
@@ -1590,8 +1626,8 @@ function App() {
               </div>
               <ChevronDownIcon className={`w-4 h-4 transition-transform duration-200 ${lcDropdownOpen ? 'transform rotate-180' : ''}`} />
             </button>
-            <div className={`overflow-hidden transition-all duration-300 ease-in-out ${lcDropdownOpen ? 'max-h-48 opacity-100 mt-1' : 'max-h-0 opacity-0'}`}>
-              <div className="pl-7 pr-2 space-y-1">
+            {lcDropdownOpen && (
+              <div className="pl-7 pr-2 space-y-1 mt-1 transition-all duration-300">
                 <button
                   onClick={() => { setCurrentView('lc-management-section'); setSidebarOpen(false); }}
                   className={`w-full flex flex-row items-center py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'lc-management-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'}`}
@@ -1599,8 +1635,15 @@ function App() {
                   <LCManagerIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
                   <span>LC Open</span>
                 </button>
+                <button
+                  onClick={() => { setCurrentView('lc-gp-section'); setSidebarOpen(false); }}
+                  className={`w-full flex flex-row items-center py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'lc-gp-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'}`}
+                >
+                  <LayoutIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
+                  <span>LC G.P</span>
+                </button>
               </div>
-            </div>
+            )}
           </div>
           <button onClick={() => { setCurrentView('lc-entry-section'); setSidebarOpen(false); }} className={`w-full flex items-center px-4 py-2 rounded-lg transition-all ${currentView === 'lc-entry-section' ? 'bg-blue-50 text-blue-600 shadow-sm' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'}`}>
             <FileTextIcon className="w-5 h-5 mr-3" />
