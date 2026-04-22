@@ -418,6 +418,7 @@ export const generateStockReportPDF = (stockData, filters, reportType = 'short')
         // --- Data Preparation ---
         const tableRows = [];
         const boldBottomRowIndices = new Set();
+        const boldLinesToDraw = [];
 
         const calculatePktRemainder = (qty, size) => {
             const numQty = parseFloat(qty) || 0;
@@ -550,7 +551,11 @@ export const generateStockReportPDF = (stockData, filters, reportType = 'short')
                     row.push({ content: Math.round(rQty).toLocaleString(), styles: { halign: 'right' } });
 
                     if (bIdx === brands.length - 1) {
-                        boldBottomRowIndices.add(tableRows.length);
+                        const isLastQualityOfProduct = qIdx === qEntries.length - 1;
+                        if (!isLastQualityOfProduct || !hasSubTotal) {
+                            boldBottomRowIndices.add(tableRows.length);
+                        }
+                        row.isQualityEnd = true;
                     }
                     tableRows.push(row);
                     isFirstRowOfProduct = false;
@@ -586,6 +591,7 @@ export const generateStockReportPDF = (stockData, filters, reportType = 'short')
                 subRow.push({ content: Math.round(item.inHouseQuantity).toLocaleString(), styles: { fontStyle: 'bold', halign: 'right', fillColor: [248, 248, 248] } });
 
                 boldBottomRowIndices.add(tableRows.length);
+                subRow.isSubTotal = true;
                 tableRows.push(subRow);
             }
         });
@@ -625,6 +631,7 @@ export const generateStockReportPDF = (stockData, filters, reportType = 'short')
         grandTotalRow.push({ content: Math.round(stockData.totalInHouseQty).toString(), styles: { fontStyle: 'bold', halign: 'right', fillColor: [240, 240, 240] } });
 
         boldBottomRowIndices.add(tableRows.length);
+        grandTotalRow.isSubTotal = true;
         tableRows.push(grandTotalRow);
 
         // --- Table ---
@@ -671,20 +678,34 @@ export const generateStockReportPDF = (stockData, filters, reportType = 'short')
             },
             margin: { left: margin, right: margin },
             didDrawCell: (data) => {
-                const { doc, cell, row } = data;
-                // Draw bold bottom line for:
-                // 1. Subtotal/Summary rows (tracked by index)
-                // 2. Row-spanned cells (SL, Product, Quality)
-                // 3. Last row of a quality group (tracked by index)
-                const isBoldRow = boldBottomRowIndices.has(row.index);
-                const hasRowSpan = cell.rowSpan > 1;
+                const { cell, row } = data;
+                if (row.section !== 'body') return;
 
-                if (isBoldRow || hasRowSpan) {
-                    const oldLineWidth = doc.getLineWidth();
-                    doc.setLineWidth(0.5); // Thicker line for separator
+                // Identify if this cell needs a bold bottom border
+                // 1. It's a designated boundary row (end of quality, subtotal, or grand total)
+                // 2. It's a spanned cell (SL/Product) that ENDS on a boundary row
+                const isBoundaryRow = boldBottomRowIndices.has(row.index);
+                const endRowIndex = row.index + (cell.rowSpan || 1) - 1;
+                const endsOnBoundary = boldBottomRowIndices.has(endRowIndex);
+
+                if (isBoundaryRow || (cell.rowSpan > 1 && endsOnBoundary)) {
+                    boldLinesToDraw.push({
+                        x1: cell.x,
+                        y1: cell.y + cell.height,
+                        x2: cell.x + cell.width,
+                        y2: cell.y + cell.height
+                    });
+                }
+            },
+            didDrawPage: () => {
+                // Draw all collected bold lines at the end of the page to ensure they are on top
+                if (boldLinesToDraw.length > 0) {
+                    doc.setLineWidth(0.5);
                     doc.setDrawColor(0, 0, 0);
-                    doc.line(cell.x, cell.y + cell.height, cell.x + cell.width, cell.y + cell.height);
-                    doc.setLineWidth(oldLineWidth); // Reset
+                    boldLinesToDraw.forEach(line => {
+                        doc.line(line.x1, line.y1, line.x2, line.y2);
+                    });
+                    boldLinesToDraw.length = 0; // Clear for next page
                 }
             }
         });
