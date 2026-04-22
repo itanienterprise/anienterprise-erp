@@ -549,6 +549,9 @@ export const generateStockReportPDF = (stockData, filters, reportType = 'short')
                     row.push({ content: Math.round(rQty).toLocaleString(), styles: { halign: 'right' } });
 
                     tableRows.push(row);
+                    if (bIdx === brands.length - 1) {
+                        row.isQualityEnd = true;
+                    }
                     isFirstRowOfProduct = false;
                     isFirstRowOfQuality = false;
                 });
@@ -667,12 +670,16 @@ export const generateStockReportPDF = (stockData, filters, reportType = 'short')
             },
             margin: { left: margin, right: margin },
             didDrawCell: (data) => {
-                const { doc, cell, row, column } = data;
-                // Draw bold bottom line for subtotal/summary rows OR row-spanned product headers
+                const { doc, cell, row } = data;
+                // Draw bold bottom line for:
+                // 1. Subtotal/Summary rows
+                // 2. Row-spanned cells (SL, Product, Quality)
+                // 3. Last row of a quality group
                 const isSummaryRow = row.raw && row.raw.isSubTotal;
-                const isProductSpan = (column.index === 0 || column.index === 1) && cell.rowSpan > 1;
+                const isQualityEnd = row.raw && row.raw.isQualityEnd;
+                const hasRowSpan = cell.rowSpan > 1;
 
-                if (isSummaryRow || isProductSpan) {
+                if (isSummaryRow || isQualityEnd || hasRowSpan) {
                     const oldLineWidth = doc.getLineWidth();
                     doc.setLineWidth(0.5); // Thicker line for separator
                     doc.setDrawColor(0, 0, 0);
