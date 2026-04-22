@@ -169,7 +169,7 @@ const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords
                                     className={`px-5 py-1.5 rounded-full text-xs font-bold transition-all whitespace-nowrap border ${!showGpList
                                         ? 'bg-blue-600 text-white border-blue-600 shadow-sm'
                                         : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50'
-                                    }`}
+                                        }`}
                                 >
                                     LC History
                                 </button>
@@ -178,7 +178,7 @@ const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords
                                     className={`px-5 py-1.5 rounded-full text-xs font-bold transition-all whitespace-nowrap border ${showGpList
                                         ? 'bg-blue-600 text-white border-blue-600 shadow-sm'
                                         : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50'
-                                    }`}
+                                        }`}
                                 >
                                     G.P List
                                 </button>
@@ -267,121 +267,121 @@ const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords
 
                             {/* Consumption History Table or GP List */}
                             {!showGpList ? (
-                            <div className="overflow-hidden border border-gray-100 rounded-2xl shadow-sm">
-                                <table className="w-full text-left border-collapse">
-                                    <thead>
-                                        <tr className="bg-gray-50/50 border-b border-gray-100">
-                                            <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Date</th>
-                                            <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Importer</th>
-                                            <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Exporter</th>
-                                            <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Product</th>
-                                            <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Truck</th>
-                                            <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-right">Quantity</th>
-                                            <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-center">Source</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody className="divide-y divide-gray-50">
-                                        {filteredConsumptionHistory.length > 0 ? (
-                                            filteredConsumptionHistory.map((item, idx) => (
-                                                <tr key={idx} className="hover:bg-gray-50/50 transition-colors group">
-                                                    <td className="px-6 py-4 text-sm font-medium text-gray-600 whitespace-nowrap">{formatDate(item.date)}</td>
-                                                    <td className="px-6 py-4 text-sm font-medium text-gray-800 uppercase">{item.importer || '-'}</td>
-                                                    <td className="px-6 py-4 text-sm font-medium text-gray-800 uppercase">{item.exporter || '-'}</td>
-                                                    <td className="px-6 py-4 text-sm font-medium text-gray-900">{item.product || '-'}</td>
-                                                    <td className="px-6 py-4 text-sm font-medium text-blue-600 uppercase whitespace-nowrap">{item.truck || '-'}</td>
-                                                    <td className="px-6 py-4 text-sm font-medium text-right text-gray-900 whitespace-nowrap">
-                                                        {parseNum(item.quantity).toLocaleString()} <span className="text-[10px] text-gray-400 font-normal">Kg</span>
-                                                    </td>
-                                                    <td className="px-6 py-4 text-center">
-                                                        <span className={`px-3 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider border ${item.source === 'LC Receive'
-                                                            ? 'bg-blue-50 text-blue-600 border-blue-100/50'
-                                                            : 'bg-indigo-50 text-indigo-600 border-indigo-100/50'
-                                                            }`}>
-                                                            {item.source}
-                                                        </span>
+                                <div className="overflow-hidden border border-gray-100 rounded-2xl shadow-sm">
+                                    <table className="w-full text-left border-collapse">
+                                        <thead>
+                                            <tr className="bg-gray-50/50 border-b border-gray-100">
+                                                <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Date</th>
+                                                <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Importer</th>
+                                                <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Exporter</th>
+                                                <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Product</th>
+                                                <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Truck</th>
+                                                <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-right">Quantity</th>
+                                                <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-center">Source</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody className="divide-y divide-gray-50">
+                                            {filteredConsumptionHistory.length > 0 ? (
+                                                filteredConsumptionHistory.map((item, idx) => (
+                                                    <tr key={idx} className="hover:bg-gray-50/50 transition-colors group">
+                                                        <td className="px-6 py-4 text-sm font-medium text-gray-600 whitespace-nowrap">{formatDate(item.date)}</td>
+                                                        <td className="px-6 py-4 text-sm font-medium text-gray-800 uppercase">{item.importer || '-'}</td>
+                                                        <td className="px-6 py-4 text-sm font-medium text-gray-800 uppercase">{item.exporter || '-'}</td>
+                                                        <td className="px-6 py-4 text-sm font-medium text-gray-900">{item.product || '-'}</td>
+                                                        <td className="px-6 py-4 text-sm font-medium text-blue-600 uppercase whitespace-nowrap">{item.truck || '-'}</td>
+                                                        <td className="px-6 py-4 text-sm font-medium text-right text-gray-900 whitespace-nowrap">
+                                                            {parseNum(item.quantity).toLocaleString()} <span className="text-[10px] text-gray-400 font-normal">Kg</span>
+                                                        </td>
+                                                        <td className="px-6 py-4 text-center">
+                                                            <span className={`px-3 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider border ${item.source === 'LC Receive'
+                                                                ? 'bg-blue-50 text-blue-600 border-blue-100/50'
+                                                                : 'bg-indigo-50 text-indigo-600 border-indigo-100/50'
+                                                                }`}>
+                                                                {item.source}
+                                                            </span>
+                                                        </td>
+                                                    </tr>
+                                                ))
+                                            ) : (
+                                                <tr>
+                                                    <td colSpan="7" className="px-6 py-12 text-center text-gray-400 font-bold">
+                                                        {consumptionSearchQuery ? 'No results match your search.' : 'No consumption history found for this LC.'}
                                                     </td>
                                                 </tr>
-                                            ))
-                                        ) : (
+                                            )}
+                                        </tbody>
+                                        <tfoot className="bg-gray-50/30">
                                             <tr>
-                                                <td colSpan="7" className="px-6 py-12 text-center text-gray-400 font-bold">
-                                                    {consumptionSearchQuery ? 'No results match your search.' : 'No consumption history found for this LC.'}
+                                                <td colSpan="5" className="px-6 py-4 text-right text-xs font-medium text-gray-400 uppercase tracking-wider">Total Consumption:</td>
+                                                <td className="px-6 py-4 text-sm font-medium text-right text-blue-600">
+                                                    {filteredConsumptionHistory.reduce((sum, item) => sum + parseNum(item.quantity), 0).toLocaleString()} <span className="text-[10px] font-normal">Kg</span>
                                                 </td>
+                                                <td></td>
                                             </tr>
-                                        )}
-                                    </tbody>
-                                    <tfoot className="bg-gray-50/30">
-                                        <tr>
-                                            <td colSpan="5" className="px-6 py-4 text-right text-xs font-medium text-gray-400 uppercase tracking-wider">Total Consumption:</td>
-                                            <td className="px-6 py-4 text-sm font-medium text-right text-blue-600">
-                                                {filteredConsumptionHistory.reduce((sum, item) => sum + parseNum(item.quantity), 0).toLocaleString()} <span className="text-[10px] font-normal">Kg</span>
-                                            </td>
-                                            <td></td>
-                                        </tr>
-                                    </tfoot>
-                                </table>
-                            </div>
+                                        </tfoot>
+                                    </table>
+                                </div>
                             ) : (
-                            /* G.P List Table */
-                            <div className="overflow-hidden border border-gray-100 rounded-2xl shadow-sm">
-                                <table className="w-full text-left border-collapse">
-                                    <thead>
-                                        <tr className="bg-gray-50/50 border-b border-gray-100">
-                                            <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Date</th>
-                                            <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Party Name</th>
-                                            <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Sold To</th>
-                                            <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Product</th>
-                                            <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-right">GP Qty (Kg)</th>
-                                            <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-right">GP Value</th>
-                                            <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-center">Status</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody className="divide-y divide-gray-50">
-                                        {filteredGpRecords.length > 0 ? (
-                                            filteredGpRecords.map((gp, idx) => (
-                                                <tr key={gp._id || idx} className="hover:bg-gray-50/50 transition-colors group">
-                                                    <td className="px-6 py-4 text-sm font-medium text-gray-600 whitespace-nowrap">{formatDate(gp.gpDate)}</td>
-                                                    <td className="px-6 py-4 text-sm font-medium text-gray-800 uppercase">{gp.partyName || '-'}</td>
-                                                    <td className="px-6 py-4 text-sm font-medium text-gray-800 uppercase">{gp.party || '-'}</td>
-                                                    <td className="px-6 py-4 text-sm font-medium text-gray-900">{gp.productName || '-'}</td>
-                                                    <td className="px-6 py-4 text-sm font-medium text-right text-gray-900 whitespace-nowrap">
-                                                        {parseNum(gp.gpQuantity).toLocaleString()} <span className="text-[10px] text-gray-400 font-normal">Kg</span>
-                                                    </td>
-                                                    <td className="px-6 py-4 text-sm font-medium text-right text-gray-900 whitespace-nowrap">
-                                                        ৳{parseNum(gp.gpValue).toLocaleString()}
-                                                    </td>
-                                                    <td className="px-6 py-4 text-center">
-                                                        <span className={`px-3 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider border ${gp.status === 'Active'
-                                                            ? 'bg-blue-50 text-blue-600 border-blue-100/50'
-                                                            : 'bg-gray-100 text-gray-500 border-gray-200/50'
-                                                            }`}>
-                                                            {gp.status || 'Active'}
-                                                        </span>
+                                /* G.P List Table */
+                                <div className="overflow-hidden border border-gray-100 rounded-2xl shadow-sm">
+                                    <table className="w-full text-left border-collapse">
+                                        <thead>
+                                            <tr className="bg-gray-50/50 border-b border-gray-100">
+                                                <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Date</th>
+                                                <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Party Name</th>
+                                                <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Sold To</th>
+                                                <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Product</th>
+                                                <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-right">GP Qty (Kg)</th>
+                                                <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-right">GP Value</th>
+                                                <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-center">Status</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody className="divide-y divide-gray-50">
+                                            {filteredGpRecords.length > 0 ? (
+                                                filteredGpRecords.map((gp, idx) => (
+                                                    <tr key={gp._id || idx} className="hover:bg-gray-50/50 transition-colors group">
+                                                        <td className="px-6 py-4 text-sm font-medium text-gray-600 whitespace-nowrap">{formatDate(gp.gpDate)}</td>
+                                                        <td className="px-6 py-4 text-sm font-medium text-gray-800 uppercase">{gp.partyName || '-'}</td>
+                                                        <td className="px-6 py-4 text-sm font-medium text-gray-800 uppercase">{gp.party || '-'}</td>
+                                                        <td className="px-6 py-4 text-sm font-medium text-gray-900">{gp.productName || '-'}</td>
+                                                        <td className="px-6 py-4 text-sm font-medium text-right text-gray-900 whitespace-nowrap">
+                                                            {parseNum(gp.gpQuantity).toLocaleString()} <span className="text-[10px] text-gray-400 font-normal">Kg</span>
+                                                        </td>
+                                                        <td className="px-6 py-4 text-sm font-medium text-right text-gray-900 whitespace-nowrap">
+                                                            ৳{parseNum(gp.gpValue).toLocaleString()}
+                                                        </td>
+                                                        <td className="px-6 py-4 text-center">
+                                                            <span className={`px-3 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider border ${gp.status === 'Active'
+                                                                ? 'bg-blue-50 text-blue-600 border-blue-100/50'
+                                                                : 'bg-gray-100 text-gray-500 border-gray-200/50'
+                                                                }`}>
+                                                                {gp.status || 'Active'}
+                                                            </span>
+                                                        </td>
+                                                    </tr>
+                                                ))
+                                            ) : (
+                                                <tr>
+                                                    <td colSpan="7" className="px-6 py-12 text-center text-gray-400 font-bold">
+                                                        {consumptionSearchQuery ? 'No G.P records match your search.' : 'No Gate Pass records found for this LC.'}
                                                     </td>
                                                 </tr>
-                                            ))
-                                        ) : (
+                                            )}
+                                        </tbody>
+                                        <tfoot className="bg-gray-50/30">
                                             <tr>
-                                                <td colSpan="7" className="px-6 py-12 text-center text-gray-400 font-bold">
-                                                    {consumptionSearchQuery ? 'No G.P records match your search.' : 'No Gate Pass records found for this LC.'}
+                                                <td colSpan="4" className="px-6 py-4 text-right text-xs font-medium text-gray-400 uppercase tracking-wider">Total GP Qty:</td>
+                                                <td className="px-6 py-4 text-sm font-medium text-right text-blue-600">
+                                                    {filteredGpRecords.reduce((sum, gp) => sum + parseNum(gp.gpQuantity), 0).toLocaleString()} <span className="text-[10px] font-normal">Kg</span>
                                                 </td>
+                                                <td className="px-6 py-4 text-sm font-medium text-right text-blue-600">
+                                                    ৳{filteredGpRecords.reduce((sum, gp) => sum + parseNum(gp.gpValue), 0).toLocaleString()}
+                                                </td>
+                                                <td></td>
                                             </tr>
-                                        )}
-                                    </tbody>
-                                    <tfoot className="bg-gray-50/30">
-                                        <tr>
-                                            <td colSpan="4" className="px-6 py-4 text-right text-xs font-medium text-gray-400 uppercase tracking-wider">Total GP Qty:</td>
-                                            <td className="px-6 py-4 text-sm font-medium text-right text-blue-600">
-                                                {filteredGpRecords.reduce((sum, gp) => sum + parseNum(gp.gpQuantity), 0).toLocaleString()} <span className="text-[10px] font-normal">Kg</span>
-                                            </td>
-                                            <td className="px-6 py-4 text-sm font-medium text-right text-blue-600">
-                                                ৳{filteredGpRecords.reduce((sum, gp) => sum + parseNum(gp.gpValue), 0).toLocaleString()}
-                                            </td>
-                                            <td></td>
-                                        </tr>
-                                    </tfoot>
-                                </table>
-                            </div>
+                                        </tfoot>
+                                    </table>
+                                </div>
                             )}
                         </div>
                     ) : (
@@ -591,6 +591,10 @@ const LCManagement = ({ addNotification, currentUser }) => {
         stampCharge: '',
         totalAmount: '',
         status: 'Opened',
+        piOpeningDate: '',
+        latestShipmentDate: '',
+        marineCoverNote: '',
+        marineCNDate: '',
         port: ''
     });
     const [gpRecords, setGpRecords] = useState([]);
@@ -634,55 +638,81 @@ const LCManagement = ({ addNotification, currentUser }) => {
             const newState = { ...prev, [field]: value };
 
             // Auto-fill logic when IP Number is selected
-            if (field === 'ipNo' && value) {
-                const selectedIp = ipRecordsRaw.find(ip => ip.ipNumber === value);
-                if (selectedIp) {
-                    if (selectedIp.ipParty) newState.importerName = selectedIp.ipParty;
-                    if (selectedIp.exporterName) newState.exporterName = selectedIp.exporterName;
-                    if (selectedIp.productName) newState.productName = selectedIp.productName;
+            if (field === 'ipNo') {
+                if (value) {
+                    const selectedIp = ipRecordsRaw.find(ip => ip.ipNumber === value);
+                    if (selectedIp) {
+                        if (selectedIp.ipParty) newState.importerName = selectedIp.ipParty;
+                        if (selectedIp.exporterName) newState.exporterName = selectedIp.exporterName;
+                        if (selectedIp.productName) newState.productName = selectedIp.productName;
+                    }
+                } else {
+                    newState.importerName = '';
+                    newState.exporterName = '';
+                    newState.productName = '';
                 }
             }
 
             // Auto-fill logic when PI Number is selected
-            if (field === 'piNo' && value) {
-                const selectedPi = piRecordsRaw.find(pi => pi.piNumber === value);
-                if (selectedPi) {
-                    if (selectedPi.partyName) newState.importerName = selectedPi.partyName;
-                    if (selectedPi.exporterName) newState.exporterName = selectedPi.exporterName;
-                    if (selectedPi.hsCode) newState.hsCode = selectedPi.hsCode;
-                    if (selectedPi.productName) newState.productName = selectedPi.productName;
-                    const piPort = selectedPi.port || selectedPi.portOfDischarge || selectedPi.portOfLoading;
-                    if (piPort) newState.port = piPort;
+            if (field === 'piNo') {
+                if (value) {
+                    const selectedPi = piRecordsRaw.find(pi => pi.piNumber === value);
+                    if (selectedPi) {
+                        if (selectedPi.partyName) newState.importerName = selectedPi.partyName;
+                        if (selectedPi.exporterName) newState.exporterName = selectedPi.exporterName;
+                        if (selectedPi.hsCode) newState.hsCode = selectedPi.hsCode;
+                        if (selectedPi.productName) newState.productName = selectedPi.productName;
+                        if (selectedPi.date) newState.piOpeningDate = selectedPi.date;
+                        const piPort = selectedPi.port || selectedPi.portOfDischarge || selectedPi.portOfLoading;
+                        if (piPort) newState.port = piPort;
+                    }
+                } else {
+                    newState.importerName = '';
+                    newState.exporterName = '';
+                    newState.hsCode = '';
+                    newState.productName = '';
+                    newState.piOpeningDate = '';
+                    newState.port = '';
                 }
             }
 
             // Auto-fill logic when Insurance Company is selected
-            if (field === 'insuranceCo' && value) {
-                const selectedIns = insuranceRecordsRaw.find(ins => ins.companyName === value);
-                if (selectedIns) {
-                    if (selectedIns.policyType) newState.policyType = selectedIns.policyType;
-                    if (selectedIns.premiumPercent) newState.premium = selectedIns.premiumPercent;
-                    if (selectedIns.premiumReturnPercent) newState.premiumReturn = selectedIns.premiumReturnPercent;
-                    if (selectedIns.stampCharge) newState.stampCharge = selectedIns.stampCharge;
+            if (field === 'insuranceCo') {
+                if (value) {
+                    const selectedIns = insuranceRecordsRaw.find(ins => ins.companyName === value);
+                    if (selectedIns) {
+                        if (selectedIns.policyType) newState.policyType = selectedIns.policyType;
+                        if (selectedIns.premiumPercent) newState.premium = selectedIns.premiumPercent;
+                        if (selectedIns.premiumReturnPercent) newState.premiumReturn = selectedIns.premiumReturnPercent;
+                        if (selectedIns.stampCharge) newState.stampCharge = selectedIns.stampCharge;
 
-                    // Auto-calculate Net Premium, Gross Premium, and Return Amount
-                    const totalAmount = parseFloat(newState.totalAmount || prev.totalAmount) || 0;
-                    const exPct = parseFloat(newState.extraPercent || prev.extraPercent) || 0;
-                    const prem = parseFloat(selectedIns.premiumPercent || newState.premium || prev.premium) || 0;
-                    const premRet = parseFloat(selectedIns.premiumReturnPercent || newState.premiumReturn || prev.premiumReturn) || 0;
-                    const pVat = parseFloat(newState.premiumVat || prev.premiumVat) || 0;
-                    const stamp = parseFloat(selectedIns.stampCharge || newState.stampCharge || prev.stampCharge) || 0;
+                        // Auto-calculate Net Premium, Gross Premium, and Return Amount
+                        const totalAmount = parseFloat(newState.totalAmount || prev.totalAmount) || 0;
+                        const exPct = parseFloat(newState.extraPercent || prev.extraPercent) || 0;
+                        const prem = parseFloat(selectedIns.premiumPercent || newState.premium || prev.premium) || 0;
+                        const premRet = parseFloat(selectedIns.premiumReturnPercent || newState.premiumReturn || prev.premiumReturn) || 0;
+                        const pVat = parseFloat(newState.premiumVat || prev.premiumVat) || 0;
+                        const stamp = parseFloat(selectedIns.stampCharge || newState.stampCharge || prev.stampCharge) || 0;
 
-                    const baseNetPrem = (totalAmount * (prem / 100)) / 100;
-                    const netPrem = baseNetPrem + (baseNetPrem * (exPct / 100));
-                    newState.netPremium = netPrem > 0 ? netPrem.toFixed(2) : '';
+                        const baseNetPrem = (totalAmount * (prem / 100)) / 100;
+                        const netPrem = baseNetPrem + (baseNetPrem * (exPct / 100));
+                        newState.netPremium = netPrem > 0 ? netPrem.toFixed(2) : '';
 
-                    const expRet = netPrem * (premRet / 100);
-                    newState.expectedReturnAmount = expRet > 0 ? expRet.toFixed(2) : '';
+                        const expRet = netPrem * (premRet / 100);
+                        newState.expectedReturnAmount = expRet > 0 ? expRet.toFixed(2) : '';
 
-                    const vatAmount = netPrem * (pVat / 100);
-                    const gPrem = netPrem + vatAmount + stamp;
-                    newState.grossPremium = gPrem > 0 ? gPrem.toFixed(2) : '';
+                        const vatAmount = netPrem * (pVat / 100);
+                        const gPrem = netPrem + vatAmount + stamp;
+                        newState.grossPremium = gPrem > 0 ? gPrem.toFixed(2) : '';
+                    }
+                } else {
+                    newState.policyType = '';
+                    newState.premium = '';
+                    newState.premiumReturn = '';
+                    newState.stampCharge = '';
+                    newState.netPremium = '';
+                    newState.expectedReturnAmount = '';
+                    newState.grossPremium = '';
                 }
             }
 
@@ -911,6 +941,10 @@ const LCManagement = ({ addNotification, currentUser }) => {
             totalAmount: record.totalAmount || '',
             status: record.status || 'Opened',
             piNo: record.piNo || '',
+            piOpeningDate: record.piOpeningDate || '',
+            latestShipmentDate: record.latestShipmentDate || '',
+            marineCoverNote: record.marineCoverNote || '',
+            marineCNDate: record.marineCNDate || '',
             port: record.port || ''
         });
         setEditingId(record._id);
@@ -958,6 +992,10 @@ const LCManagement = ({ addNotification, currentUser }) => {
             totalAmount: '',
             status: 'Opened',
             piNo: '',
+            piOpeningDate: '',
+            latestShipmentDate: '',
+            marineCoverNote: '',
+            marineCNDate: '',
             port: ''
         });
         setEditingId(null);
@@ -1013,7 +1051,7 @@ const LCManagement = ({ addNotification, currentUser }) => {
             </div>
 
             {showForm && (
-                <div className="lc-form-container relative overflow-hidden bg-white/60 backdrop-blur-xl border border-white/40 rounded-2xl shadow-2xl p-5 md:p-8">
+                <div className="lc-form-container relative bg-white/60 backdrop-blur-xl border border-white/40 rounded-2xl shadow-2xl p-5 md:p-8 pb-10">
                     <div className="absolute -top-24 -right-24 w-64 h-64 bg-blue-500/10 rounded-full blur-3xl text-sm"></div>
                     <div className="absolute -bottom-24 -left-24 w-64 h-64 bg-indigo-500/10 rounded-full blur-3xl delay-1000"></div>
 
@@ -1037,7 +1075,7 @@ const LCManagement = ({ addNotification, currentUser }) => {
                                 e.preventDefault();
                             }
                         }}
-                        className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6 relative z-10"
+                        className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 relative z-10"
                     >
                         <div className="col-span-full mb-2">
                             <div className="bg-blue-50/30 border-l-4 border-blue-500 px-4 py-2 rounded-r-xl">
@@ -1054,7 +1092,7 @@ const LCManagement = ({ addNotification, currentUser }) => {
                                         const newState = { ...prev, openingDate: opening };
                                         if (opening) {
                                             const date = new Date(opening);
-                                            date.setDate(date.getDate() + 180);
+                                            date.setDate(date.getDate() + 90);
                                             newState.expiryDate = date.toISOString().split('T')[0];
                                         }
                                         return newState;
@@ -1087,99 +1125,6 @@ const LCManagement = ({ addNotification, currentUser }) => {
                                 className="w-full px-4 py-2.5 bg-white/50 border border-gray-200/60 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all font-medium"
                             />
                         </div>
-
-                        <div className="space-y-1.5 text-left relative" ref={ipRef}>
-                            <label className="text-sm font-semibold text-gray-600 ml-1">IP Number</label>
-                            <div className="relative">
-                                <input
-                                    type="text"
-                                    name="ipNo"
-                                    value={formData.ipNo}
-                                    onChange={handleInputChange}
-                                    onFocus={() => { setActiveDropdown('ipNo'); setHighlightedIndex(-1); }}
-                                    onKeyDown={(e) => handleDropdownKeyDown(e, 'ipNo', 'ipNo', ipList.filter(ip => !formData.ipNo || ip.toLowerCase().includes(formData.ipNo.toLowerCase())))}
-                                    placeholder="Select IP Number"
-                                    autoComplete="off"
-                                    className="w-full px-4 py-2.5 bg-white/50 border border-gray-200/60 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all font-medium pr-10"
-                                />
-                                <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-2">
-                                    {formData.ipNo && (
-                                        <button type="button" onClick={() => handleDropdownSelect('ipNo', '')} className="text-gray-400 hover:text-gray-600">
-                                            <XIcon className="w-4 h-4" />
-                                        </button>
-                                    )}
-                                    <SearchIcon className="w-4 h-4 text-gray-300 pointer-events-none" />
-                                </div>
-                            </div>
-                            {activeDropdown === 'ipNo' && (
-                                <div className="absolute z-[60] w-full mt-1 bg-white border border-gray-100 rounded-xl shadow-xl max-h-48 overflow-y-auto py-1">
-                                    {ipList.filter(ip => !formData.ipNo || ip.toLowerCase().includes(formData.ipNo.toLowerCase())).map((ip, idx) => (
-                                        <button
-                                            key={idx}
-                                            type="button"
-                                            onMouseDown={(e) => { e.preventDefault(); handleDropdownSelect('ipNo', ip); }}
-                                            onMouseEnter={() => setHighlightedIndex(idx)}
-                                            className={`w-full px-4 py-2 text-left text-sm transition-colors font-medium ${formData.ipNo === ip ? 'bg-blue-50 text-blue-700' : highlightedIndex === idx ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-blue-50'}`}
-                                        >
-                                            {ip}
-                                        </button>
-                                    ))}
-                                </div>
-                            )}
-                            {formData.ipNo && (
-                                <div className="mt-1 px-2 py-1 bg-blue-50/50 rounded-lg flex items-center justify-between border border-blue-100/50">
-                                    <span className="text-[10px] font-bold text-blue-500 uppercase tracking-wider">Remaining IP Qty</span>
-                                    <span className="text-xs font-black text-blue-700">{informativeQuantities.remIpQtyTon.toLocaleString(undefined, { minimumFractionDigits: 3 })} <span className="text-[10px] font-bold opacity-60">Ton</span></span>
-                                </div>
-                            )}
-                        </div>
-
-                        <div className="space-y-1.5 text-left relative" ref={piRef}>
-                            <label className="text-sm font-semibold text-gray-600 ml-1">PI Number</label>
-                            <div className="relative">
-                                <input
-                                    type="text"
-                                    name="piNo"
-                                    value={formData.piNo}
-                                    onChange={handleInputChange}
-                                    onFocus={() => { setActiveDropdown('piNo'); setHighlightedIndex(-1); }}
-                                    onKeyDown={(e) => handleDropdownKeyDown(e, 'piNo', 'piNo', piList.filter(pi => !formData.piNo || pi.toLowerCase().includes(formData.piNo.toLowerCase())))}
-                                    placeholder="Select PI Number"
-                                    autoComplete="off"
-                                    className="w-full px-4 py-2.5 bg-white/50 border border-gray-200/60 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all font-medium pr-10"
-                                />
-                                <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-2">
-                                    {formData.piNo && (
-                                        <button type="button" onClick={() => handleDropdownSelect('piNo', '')} className="text-gray-400 hover:text-gray-600">
-                                            <XIcon className="w-4 h-4" />
-                                        </button>
-                                    )}
-                                    <SearchIcon className="w-4 h-4 text-gray-300 pointer-events-none" />
-                                </div>
-                            </div>
-                            {activeDropdown === 'piNo' && (
-                                <div className="absolute z-[60] w-full mt-1 bg-white border border-gray-100 rounded-xl shadow-xl max-h-48 overflow-y-auto py-1">
-                                    {piList.filter(pi => !formData.piNo || pi.toLowerCase().includes(formData.piNo.toLowerCase())).map((pi, idx) => (
-                                        <button
-                                            key={idx}
-                                            type="button"
-                                            onMouseDown={(e) => { e.preventDefault(); handleDropdownSelect('piNo', pi); }}
-                                            onMouseEnter={() => setHighlightedIndex(idx)}
-                                            className={`w-full px-4 py-2 text-left text-sm transition-colors font-medium ${formData.piNo === pi ? 'bg-blue-50 text-blue-700' : highlightedIndex === idx ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-blue-50'}`}
-                                        >
-                                            {pi}
-                                        </button>
-                                    ))}
-                                </div>
-                            )}
-                            {formData.piNo && (
-                                <div className="mt-1 px-2 py-1 bg-indigo-50/50 rounded-lg flex items-center justify-between border border-indigo-100/50">
-                                    <span className="text-[10px] font-bold text-indigo-500 uppercase tracking-wider">PI Quantity</span>
-                                    <span className="text-xs font-black text-indigo-700">{informativeQuantities.piQtyTon.toLocaleString(undefined, { minimumFractionDigits: 3 })} <span className="text-[10px] font-bold opacity-60">Ton</span></span>
-                                </div>
-                            )}
-                        </div>
-
 
                         <div className="space-y-1.5 text-left relative" ref={bankRef}>
                             <label className="text-sm font-semibold text-gray-600 ml-1">Issuing Bank</label>
@@ -1221,6 +1166,118 @@ const LCManagement = ({ addNotification, currentUser }) => {
                                 </div>
                             )}
                         </div>
+
+                        <div className="space-y-1.5 text-left relative" ref={ipRef}>
+                            <label className="text-sm font-semibold text-gray-600 ml-1">IP Number</label>
+                            <div className="relative">
+                                <input
+                                    type="text"
+                                    name="ipNo"
+                                    value={formData.ipNo}
+                                    onChange={handleInputChange}
+                                    onFocus={() => { setActiveDropdown('ipNo'); setHighlightedIndex(-1); }}
+                                    onKeyDown={(e) => handleDropdownKeyDown(e, 'ipNo', 'ipNo', ipList.filter(ip => !formData.ipNo || ip.toLowerCase().includes(formData.ipNo.toLowerCase())))}
+                                    placeholder="Select IP Number"
+                                    autoComplete="off"
+                                    className="w-full px-4 py-2.5 bg-white/50 border border-gray-200/60 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all font-medium pr-10"
+                                />
+                                <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-2">
+                                    {formData.ipNo && (
+                                        <button type="button" onClick={() => handleDropdownSelect('ipNo', '')} className="text-gray-400 hover:text-gray-600">
+                                            <XIcon className="w-4 h-4" />
+                                        </button>
+                                    )}
+                                    <SearchIcon className="w-4 h-4 text-gray-300 pointer-events-none" />
+                                </div>
+                            </div>
+                            {activeDropdown === 'ipNo' && (
+                                <div className="absolute z-[60] w-full mt-1 bg-white border border-gray-100 rounded-xl shadow-xl max-h-48 overflow-y-auto py-1">
+                                    {ipList.filter(ip => !formData.ipNo || ip.toLowerCase().includes(formData.ipNo.toLowerCase())).map((ip, idx) => (
+                                        <button
+                                            key={idx}
+                                            type="button"
+                                            onMouseDown={(e) => { e.preventDefault(); handleDropdownSelect('ipNo', ip); }}
+                                            onMouseEnter={() => setHighlightedIndex(idx)}
+                                            className={`w-full px-4 py-2 text-left text-sm transition-colors font-medium ${formData.ipNo === ip ? 'bg-blue-50 text-blue-700' : highlightedIndex === idx ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-blue-50'}`}
+                                        >
+                                            {ip}
+                                        </button>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+
+                        <div className="space-y-1.5">
+                            <label className="text-sm font-semibold text-gray-600 ml-1">Remaining IP Qty (Ton)</label>
+                            <input
+                                type="text"
+                                readOnly
+                                value={formData.ipNo ? informativeQuantities.remIpQtyTon.toLocaleString(undefined, { minimumFractionDigits: 3 }) : ''}
+                                className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200/60 rounded-xl outline-none text-gray-500 font-bold"
+                            />
+                        </div>
+
+                        <div className="space-y-1.5 text-left relative" ref={piRef}>
+                            <label className="text-sm font-semibold text-gray-600 ml-1">PI Number</label>
+                            <div className="relative">
+                                <input
+                                    type="text"
+                                    name="piNo"
+                                    value={formData.piNo}
+                                    onChange={handleInputChange}
+                                    onFocus={() => { setActiveDropdown('piNo'); setHighlightedIndex(-1); }}
+                                    onKeyDown={(e) => handleDropdownKeyDown(e, 'piNo', 'piNo', piList.filter(pi => !formData.piNo || pi.toLowerCase().includes(formData.piNo.toLowerCase())))}
+                                    placeholder="Select PI Number"
+                                    autoComplete="off"
+                                    className="w-full px-4 py-2.5 bg-white/50 border border-gray-200/60 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all font-medium pr-10"
+                                />
+                                <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-2">
+                                    {formData.piNo && (
+                                        <button type="button" onClick={() => handleDropdownSelect('piNo', '')} className="text-gray-400 hover:text-gray-600">
+                                            <XIcon className="w-4 h-4" />
+                                        </button>
+                                    )}
+                                    <SearchIcon className="w-4 h-4 text-gray-300 pointer-events-none" />
+                                </div>
+                            </div>
+                            {activeDropdown === 'piNo' && (
+                                <div className="absolute z-[60] w-full mt-1 bg-white border border-gray-100 rounded-xl shadow-xl max-h-48 overflow-y-auto py-1">
+                                    {piList.filter(pi => !formData.piNo || pi.toLowerCase().includes(formData.piNo.toLowerCase())).map((pi, idx) => (
+                                        <button
+                                            key={idx}
+                                            type="button"
+                                            onMouseDown={(e) => { e.preventDefault(); handleDropdownSelect('piNo', pi); }}
+                                            onMouseEnter={() => setHighlightedIndex(idx)}
+                                            className={`w-full px-4 py-2 text-left text-sm transition-colors font-medium ${formData.piNo === pi ? 'bg-blue-50 text-blue-700' : highlightedIndex === idx ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-blue-50'}`}
+                                        >
+                                            {pi}
+                                        </button>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+
+                        <div className="space-y-1.5">
+                            <label className="text-sm font-semibold text-gray-600 ml-1">PI Quantity (Ton)</label>
+                            <input
+                                type="text"
+                                readOnly
+                                value={formData.piNo ? informativeQuantities.piQtyTon.toLocaleString(undefined, { minimumFractionDigits: 3 }) : ''}
+                                className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200/60 rounded-xl outline-none text-gray-500 font-bold"
+                            />
+                        </div>
+
+                        <div className="space-y-1.5">
+                            <CustomDatePicker
+                                label="PI Date"
+                                value={formData.piOpeningDate}
+                                onChange={(e) => setFormData(prev => ({ ...prev, piOpeningDate: e.target.value }))}
+                                compact={true}
+                                readOnly={true}
+                            />
+                        </div>
+
+
                         <div className="space-y-1.5 text-left">
                             <label className="text-sm font-semibold text-gray-600 ml-1">Port</label>
                             <input
@@ -1328,6 +1385,15 @@ const LCManagement = ({ addNotification, currentUser }) => {
                                     className="w-full px-4 py-2.5 pl-8 bg-white/50 border border-gray-200/60 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all font-medium"
                                 />
                             </div>
+                        </div>
+
+                        <div className="space-y-1.5">
+                            <CustomDatePicker
+                                label="Latest Shipment Date"
+                                value={formData.latestShipmentDate}
+                                onChange={(e) => setFormData(prev => ({ ...prev, latestShipmentDate: e.target.value }))}
+                                compact={true}
+                            />
                         </div>
 
                         <div className="space-y-1.5 text-left relative" ref={statusRef}>
@@ -1482,9 +1548,9 @@ const LCManagement = ({ addNotification, currentUser }) => {
                             </div>
                         </div>
 
-                        <div className="col-span-full grid grid-cols-1 md:grid-cols-3 lg:grid-cols-[2fr_0.8fr_0.8fr_0.8fr_1.5fr_2.2fr_0.8fr_1.5fr_1.5fr] gap-2">
+                        <div className="col-span-full grid grid-cols-1 md:grid-cols-3 lg:grid-cols-[2.2fr_0.9fr_1.2fr_1fr_1.2fr_2.2fr_1fr_1.2fr_1.2fr] gap-x-3 gap-y-4 items-end">
                             <div className="space-y-1.5 text-left relative md:col-span-2 lg:col-span-1" ref={insuranceRef}>
-                                <label className="text-sm font-semibold text-gray-600 ml-1">Insurance Company</label>
+                                <label className="text-sm font-semibold text-gray-600 ml-1 whitespace-nowrap">Insurance Company</label>
                                 <div className="relative">
                                     <input
                                         type="text"
@@ -1524,7 +1590,7 @@ const LCManagement = ({ addNotification, currentUser }) => {
                             </div>
 
                             <div className="space-y-1.5 text-left">
-                                <label className="text-sm font-semibold text-gray-600 ml-1">
+                                <label className="text-sm font-semibold text-gray-600 ml-1 whitespace-nowrap">
                                     {formData.policyType ? `${formData.policyType.replace(/insurance/i, '').trim()} Premium` : 'Premium'}
                                 </label>
                                 <div className="relative">
@@ -1541,7 +1607,7 @@ const LCManagement = ({ addNotification, currentUser }) => {
                             </div>
 
                             <div className="space-y-1.5 text-left">
-                                <label className="text-sm font-semibold text-gray-600 ml-1">Premium Return</label>
+                                <label className="text-sm font-semibold text-gray-600 ml-1 whitespace-nowrap">Premium Return</label>
                                 <div className="relative">
                                     <input
                                         type="number"
@@ -1556,7 +1622,7 @@ const LCManagement = ({ addNotification, currentUser }) => {
                             </div>
 
                             <div className="space-y-1.5 text-left">
-                                <label className="text-sm font-semibold text-gray-600 ml-1">Extra Percent</label>
+                                <label className="text-sm font-semibold text-gray-600 ml-1 whitespace-nowrap">Extra Percent</label>
                                 <div className="relative">
                                     <input
                                         type="number"
@@ -1571,7 +1637,7 @@ const LCManagement = ({ addNotification, currentUser }) => {
                             </div>
 
                             <div className="space-y-1.5 text-left">
-                                <label className="text-sm font-semibold text-gray-600 ml-1">Net Premium</label>
+                                <label className="text-sm font-semibold text-gray-600 ml-1 whitespace-nowrap">Net Premium</label>
                                 <div className="relative">
                                     <span className="absolute left-3 top-1/2 -translate-y-1/2 font-bold text-gray-400">৳</span>
                                     <input
@@ -1586,7 +1652,7 @@ const LCManagement = ({ addNotification, currentUser }) => {
                             </div>
 
                             <div className="space-y-1.5 text-left">
-                                <label className="text-sm font-semibold text-gray-600 ml-1">Premium VAT</label>
+                                <label className="text-sm font-semibold text-gray-600 ml-1 whitespace-nowrap">Premium VAT</label>
                                 <div className="grid grid-cols-[1.5fr_1fr] gap-1">
                                     <div className="relative">
                                         <span className="absolute left-3 top-1/2 -translate-y-1/2 font-bold text-gray-400">৳</span>
@@ -1612,7 +1678,7 @@ const LCManagement = ({ addNotification, currentUser }) => {
                             </div>
 
                             <div className="space-y-1.5 text-left">
-                                <label className="text-sm font-semibold text-gray-600 ml-1">Stamp Charge</label>
+                                <label className="text-sm font-semibold text-gray-600 ml-1 whitespace-nowrap">Stamp Charge</label>
                                 <div className="relative">
                                     <span className="absolute left-3 top-1/2 -translate-y-1/2 font-bold text-gray-400">৳</span>
                                     <input
@@ -1627,7 +1693,7 @@ const LCManagement = ({ addNotification, currentUser }) => {
                             </div>
 
                             <div className="space-y-1.5 text-left">
-                                <label className="text-sm font-semibold text-gray-600 ml-1">Gross Premium</label>
+                                <label className="text-sm font-semibold text-gray-600 ml-1 whitespace-nowrap">Gross Premium</label>
                                 <div className="relative">
                                     <span className="absolute left-3 top-1/2 -translate-y-1/2 font-bold text-gray-400">৳</span>
                                     <input
@@ -1642,7 +1708,7 @@ const LCManagement = ({ addNotification, currentUser }) => {
                             </div>
 
                             <div className="space-y-1.5 text-left">
-                                <label className="text-sm font-semibold text-gray-600 ml-1">Return Amount</label>
+                                <label className="text-sm font-semibold text-gray-600 ml-1 whitespace-nowrap">Return Amount</label>
                                 <div className="relative">
                                     <span className="absolute left-3 top-1/2 -translate-y-1/2 font-bold text-gray-400">৳</span>
                                     <input
@@ -1657,14 +1723,38 @@ const LCManagement = ({ addNotification, currentUser }) => {
                             </div>
                         </div>
 
-                        <div className="md:col-span-2 lg:col-span-3 flex justify-end mt-4">
-                            <button
-                                type="submit"
-                                disabled={isSaving}
-                                className="w-full md:w-auto px-10 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold rounded-xl shadow-lg shadow-blue-500/30 transition-all transform hover:scale-105 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed text-sm uppercase tracking-wider"
-                            >
-                                {isSaving ? 'Saving...' : editingId ? 'Update LC Record' : 'Complete Registration'}
-                            </button>
+                        <div className="col-span-full grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mt-4 relative z-10 items-end">
+                            <div className="space-y-1.5 text-left">
+                                <label className="text-sm font-semibold text-gray-600 ml-1">Marine Cover Note</label>
+                                <input
+                                    type="text"
+                                    name="marineCoverNote"
+                                    value={formData.marineCoverNote}
+                                    onChange={handleInputChange}
+                                    placeholder="Enter Cover Note No"
+                                    className="w-full px-4 py-2.5 bg-white/50 border border-gray-200/60 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all font-medium"
+                                />
+                            </div>
+
+                            <div className="space-y-1.5">
+                                <CustomDatePicker
+                                    label="Marine C.N Date"
+                                    value={formData.marineCNDate}
+                                    onChange={(e) => setFormData(prev => ({ ...prev, marineCNDate: e.target.value }))}
+                                    compact={true}
+                                    dropUp={true}
+                                />
+                            </div>
+
+                            <div className="lg:col-span-2 flex justify-end">
+                                <button
+                                    type="submit"
+                                    disabled={isSaving}
+                                    className="w-full md:w-auto px-10 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold rounded-xl shadow-lg shadow-blue-500/30 transition-all transform hover:scale-105 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed text-sm uppercase tracking-wider"
+                                >
+                                    {isSaving ? 'Saving...' : editingId ? 'Update LC Record' : 'Save '}
+                                </button>
+                            </div>
                         </div>
                     </form>
                 </div>

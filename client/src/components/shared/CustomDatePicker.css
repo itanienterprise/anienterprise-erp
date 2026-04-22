@@ -113,6 +113,12 @@
     right: 0;
 }
 
+.date-picker-dropdown.drop-up {
+    bottom: calc(100% + 0.5rem);
+    top: auto;
+    margin-top: 0;
+}
+
 .date-picker-header {
     display: flex;
     align-items: center;
@@ -228,4 +234,16 @@
     background-color: #eff6ff;
     color: #2563eb;
     font-weight: 600;
+}
+
+.date-picker-input.read-only-input {
+    background-color: #f9fafb;
+    border-color: #f3f4f6;
+    color: #6b7280;
+    cursor: default;
+    pointer-events: none;
+}
+
+.date-picker-container.read-only {
+    opacity: 0.8;
 }

@@ -32,12 +32,15 @@ const CustomDatePicker = ({
     isOpen: externalIsOpen,
     onToggle: externalOnToggle,
     onOpen,
-    onClose
+    onClose,
+    readOnly = false,
+    dropUp = false
 }) => {
     const [internalIsOpen, setInternalIsOpen] = useState(false);
     const isOpen = externalIsOpen !== undefined ? externalIsOpen : internalIsOpen;
 
     const setIsOpen = (val) => {
+        if (readOnly) return;
         if (val === isOpen) return;
         if (externalOnToggle) {
             externalOnToggle(val);
@@ -101,7 +104,7 @@ const CustomDatePicker = ({
     const blanks = Array.from({ length: firstDay }, (_, i) => i);
 
     return (
-        <div className="date-picker-container" ref={containerRef}>
+        <div className={`date-picker-container ${readOnly ? 'read-only' : ''}`} ref={containerRef}>
             {label && <label className={labelClassName}>{label}</label>}
             <div className="date-picker-input-wrapper">
                 <input
@@ -109,16 +112,17 @@ const CustomDatePicker = ({
                     readOnly
                     value={value ? formatDate(value) : ''}
                     onMouseDown={(e) => {
+                        if (readOnly) return;
                         e.preventDefault();
                         setIsOpen(!isOpen);
                     }}
                     placeholder={placeholder || 'Select Date'}
                     required={required}
                     autoComplete="off"
-                    className={`date-picker-input ${value ? 'has-value' : ''} ${compact ? 'compact' : ''}`}
+                    className={`date-picker-input ${value ? 'has-value' : ''} ${compact ? 'compact' : ''} ${readOnly ? 'read-only-input' : ''}`}
                 />
                 <div className="date-picker-icons-right">
-                    {value && (
+                    {value && !readOnly && (
                         <button
                             type="button"
                             onMouseDown={(e) => {
@@ -131,12 +135,12 @@ const CustomDatePicker = ({
                             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path></svg>
                         </button>
                     )}
-                    <CalendarIcon className="date-picker-icon" />
+                    <CalendarIcon className={`date-picker-icon ${readOnly ? 'opacity-50' : ''}`} />
                 </div>
             </div>
 
             {isOpen && (
-                <div className={`date-picker-dropdown ${compact ? 'compact' : ''} ${rightAlign ? 'right-align' : ''}`}>
+                <div className={`date-picker-dropdown ${compact ? 'compact' : ''} ${rightAlign ? 'right-align' : ''} ${dropUp ? 'drop-up' : ''}`}>
                     <div className="date-picker-header">
                         <button
                             type="button"
