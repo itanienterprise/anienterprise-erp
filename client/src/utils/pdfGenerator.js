@@ -417,6 +417,7 @@ export const generateStockReportPDF = (stockData, filters, reportType = 'short')
 
         // --- Data Preparation ---
         const tableRows = [];
+        const boldBottomRowIndices = new Set();
 
         const calculatePktRemainder = (qty, size) => {
             const numQty = parseFloat(qty) || 0;
@@ -548,10 +549,10 @@ export const generateStockReportPDF = (stockData, filters, reportType = 'short')
                     row.push({ content: `${rW}${rR !== 0 ? ` - ${Math.abs(rR)} kg` : ''}`, styles: { halign: 'right' } });
                     row.push({ content: Math.round(rQty).toLocaleString(), styles: { halign: 'right' } });
 
-                    tableRows.push(row);
                     if (bIdx === brands.length - 1) {
-                        row.isQualityEnd = true;
+                        boldBottomRowIndices.add(tableRows.length);
                     }
+                    tableRows.push(row);
                     isFirstRowOfProduct = false;
                     isFirstRowOfQuality = false;
                 });
@@ -584,7 +585,7 @@ export const generateStockReportPDF = (stockData, filters, reportType = 'short')
                 subRow.push({ content: `${rW}${rR !== 0 ? ` - ${Math.abs(rR)} kg` : ''}`, styles: { fontStyle: 'bold', halign: 'right', fillColor: [248, 248, 248] } });
                 subRow.push({ content: Math.round(item.inHouseQuantity).toLocaleString(), styles: { fontStyle: 'bold', halign: 'right', fillColor: [248, 248, 248] } });
 
-                subRow.isSubTotal = true;
+                boldBottomRowIndices.add(tableRows.length);
                 tableRows.push(subRow);
             }
         });
@@ -623,7 +624,7 @@ export const generateStockReportPDF = (stockData, filters, reportType = 'short')
         grandTotalRow.push({ content: inHousePktStr, styles: { fontStyle: 'bold', halign: 'right', fillColor: [240, 240, 240] } });
         grandTotalRow.push({ content: Math.round(stockData.totalInHouseQty).toString(), styles: { fontStyle: 'bold', halign: 'right', fillColor: [240, 240, 240] } });
 
-        grandTotalRow.isSubTotal = true;
+        boldBottomRowIndices.add(tableRows.length);
         tableRows.push(grandTotalRow);
 
         // --- Table ---
@@ -672,14 +673,13 @@ export const generateStockReportPDF = (stockData, filters, reportType = 'short')
             didDrawCell: (data) => {
                 const { doc, cell, row } = data;
                 // Draw bold bottom line for:
-                // 1. Subtotal/Summary rows
+                // 1. Subtotal/Summary rows (tracked by index)
                 // 2. Row-spanned cells (SL, Product, Quality)
-                // 3. Last row of a quality group
-                const isSummaryRow = row.raw && row.raw.isSubTotal;
-                const isQualityEnd = row.raw && row.raw.isQualityEnd;
+                // 3. Last row of a quality group (tracked by index)
+                const isBoldRow = boldBottomRowIndices.has(row.index);
                 const hasRowSpan = cell.rowSpan > 1;
 
-                if (isSummaryRow || isQualityEnd || hasRowSpan) {
+                if (isBoldRow || hasRowSpan) {
                     const oldLineWidth = doc.getLineWidth();
                     doc.setLineWidth(0.5); // Thicker line for separator
                     doc.setDrawColor(0, 0, 0);
