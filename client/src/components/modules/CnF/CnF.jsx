@@ -62,6 +62,9 @@ const CnF = ({
         commission: '',
         totalCommission: 0
     });
+    const [historyViewMode, setHistoryViewMode] = useState('earnings');
+    const [paymentRecords, setPaymentRecords] = useState([]);
+    const [paymentLoading, setPaymentLoading] = useState(false);
     const [formData, setFormData] = useState({
         cnfId: '',
         name: '',
@@ -132,6 +135,8 @@ const CnF = ({
         if (viewData) {
             document.body.style.overflow = 'hidden';
             fetchCnFHistory(viewData.name);
+            fetchCnFPayments(viewData._id);
+            setHistoryViewMode('earnings');
             setHistorySearchQuery('');
             setHistoryFilters({ startDate: '', endDate: '', lcNo: '', productName: '' });
             setExpandedHistoryIdx(null);
@@ -140,11 +145,27 @@ const CnF = ({
         } else {
             document.body.style.overflow = 'auto';
             setHistoryRecords([]);
+            setPaymentRecords([]);
         }
         return () => {
             document.body.style.overflow = 'auto';
         };
     }, [viewData]);
+
+    const fetchCnFPayments = async (cnfId) => {
+        setPaymentLoading(true);
+        try {
+            const response = await axios.get(`${API_BASE_URL}/api/cnf-payments`);
+            const allPayments = Array.isArray(response.data) ? response.data : [];
+            const filtered = allPayments.filter(p => p.cnfId === cnfId);
+            setPaymentRecords(filtered);
+        } catch (error) {
+            console.error('Error fetching C&F payments:', error);
+            setPaymentRecords([]);
+        } finally {
+            setPaymentLoading(false);
+        }
+    };
 
     const handlePrintHistory = () => {
         if (!viewData || filteredHistory.length === 0) return;
@@ -154,19 +175,21 @@ const CnF = ({
     const fetchCnFs = async () => {
         setIsLoading(true);
         try {
-            const [cnfsRes, stockRes, salesRes] = await Promise.all([
+            const [cnfsRes, stockRes, salesRes, paymentsRes] = await Promise.all([
                 axios.get(`${API_BASE_URL}/api/cnfs`),
                 axios.get(`${API_BASE_URL}/api/stock`),
-                axios.get(`${API_BASE_URL}/api/sales`)
+                axios.get(`${API_BASE_URL}/api/sales`),
+                axios.get(`${API_BASE_URL}/api/cnf-payments`)
             ]);
 
             const allCnfs = Array.isArray(cnfsRes.data) ? cnfsRes.data : [];
             const allStock = Array.isArray(stockRes.data) ? stockRes.data : [];
             const allSales = Array.isArray(salesRes.data) ? salesRes.data : [];
+            const allPayments = Array.isArray(paymentsRes.data) ? paymentsRes.data : [];
 
             const cnfsWithBalance = allCnfs.map(cnf => {
                 const targetName = (cnf.name || '').toLowerCase().trim();
-                
+
                 // 1. Earned from Stock (LC Arrivals)
                 const stockEarned = allStock.reduce((acc, record) => {
                     const recordIndCnF = (record.indianCnF || '').toLowerCase().trim();
@@ -258,7 +281,15 @@ const CnF = ({
                     return acc;
                 }, 0);
 
-                return { ...cnf, totalBalance: stockEarned + salesEarned };
+                // 3. Subtract Payments
+                const paid = allPayments.reduce((acc, payment) => {
+                    if (payment.cnfId === cnf._id) {
+                        return acc + (parseFloat(payment.amount) || 0);
+                    }
+                    return acc;
+                }, 0);
+
+                return { ...cnf, totalBalance: stockEarned + salesEarned - paid };
             });
 
             const filtered = moduleType
@@ -279,7 +310,7 @@ const CnF = ({
                 axios.get(`${API_BASE_URL}/api/stock`),
                 axios.get(`${API_BASE_URL}/api/sales`)
             ]);
-            
+
             const stockData = Array.isArray(stockRes.data) ? stockRes.data : [];
             const salesData = Array.isArray(salesRes.data) ? salesRes.data : [];
             const rows = [];
@@ -295,26 +326,26 @@ const CnF = ({
                     : moduleType === 'BD'
                         ? bdCnF === targetCnF
                         : (indCnF === targetCnF || bdCnF === targetCnF);
-                        
+
                 const status = (record.status || '').toLowerCase();
                 const isAccepted = !status.includes('requested') && !status.includes('rejected');
                 const isMatch = isBaseMatch && isAccepted;
 
                 if (isMatch) {
                     const qty = !isNaN(parseFloat(record.quantity)) ? parseFloat(record.quantity) : (parseFloat(record.inHouseQuantity) || 0);
-                    
+
                     let commissionRate = parseFloat(viewData?.commission) || 0;
                     if (indCnF === targetCnF && record.indCnFComm !== undefined && record.indCnFComm !== null && record.indCnFComm !== '') {
                         commissionRate = parseFloat(record.indCnFComm);
                     } else if (bdCnF === targetCnF && record.bdCnFComm !== undefined && record.bdCnFComm !== null && record.bdCnFComm !== '') {
                         commissionRate = parseFloat(record.bdCnFComm);
                     }
-                    
+
                     const rawUom = indCnF === targetCnF
                         ? (record.indCnFUom || record.uom || viewData?.uom || viewData?.commissionType || 'QTY')
                         : (record.bdCnFUom || record.uom || viewData?.uom || viewData?.commissionType || 'QTY');
                     const uom = typeof rawUom === 'string' ? rawUom.toUpperCase() : 'QTY';
-                    
+
                     let totalCommission = 0;
                     if (uom === 'QTY') {
                         totalCommission = qty * commissionRate;
@@ -431,10 +462,10 @@ const CnF = ({
 
     const handleEditHistory = (record) => {
         setEditRecord(record);
-        
+
         // record.uom is already resolved per C&F type by fetchCnFHistory (reads indCnFUom or bdCnFUom)
         const resolvedUom = record.uom || viewData?.uom || viewData?.commissionType || 'QTY';
-        
+
         setEditHistoryData({
             uom: (typeof resolvedUom === 'string' ? resolvedUom : 'QTY').toUpperCase(),
             commission: record.commission || 0,
@@ -444,13 +475,13 @@ const CnF = ({
 
     const handleEditHistoryChange = (e) => {
         const { name, value } = e.target;
-        
+
         setEditHistoryData(prev => {
             const newData = { ...prev, [name]: value };
             const currentUom = name === 'uom' ? value : prev.uom;
             const rate = name === 'commission' ? parseFloat(value) || 0 : parseFloat(prev.commission) || 0;
             const qty = parseFloat(editRecord?.qty) || 0;
-            
+
             if (currentUom === 'QTY') {
                 newData.totalCommission = qty * rate;
             } else {
@@ -470,12 +501,12 @@ const CnF = ({
                 const salesRes = await axios.get(`${API_BASE_URL}/api/sales`);
                 const allSales = Array.isArray(salesRes.data) ? salesRes.data : [];
                 const originalSale = allSales.find(s => s._id === saleId);
-                
+
                 if (!originalSale) throw new Error('Original sale not found');
 
                 const updatedSale = { ...originalSale };
                 const isIndian = editRecord.cnfType === 'Indian';
-                
+
                 if (isIndian) {
                     updatedSale.indCommissionRate = editHistoryData.commission;
                     updatedSale.indCommissionUom = editHistoryData.uom;
@@ -493,7 +524,7 @@ const CnF = ({
                 const totalQty = (updatedSale.items || []).reduce((sum, p) =>
                     sum + (p.brandEntries || []).reduce((eSum, e) => eSum + (parseFloat(e.quantity) || 0), 0)
                     , 0);
-                
+
                 const rate = parseFloat(editHistoryData.commission) || 0;
                 const uom = (editHistoryData.uom || '').toUpperCase();
                 const newTotal = (uom === 'TRUCK' ? totalTrucks : totalQty) * rate;
@@ -561,10 +592,10 @@ const CnF = ({
     const toggleHistorySelection = (id) => {
         const row = filteredHistory.find(r => r._id === id);
         if (!row) return;
-        
-        const isEditable = (row.source !== 'Sale' && (isAdmin || (!row.indCnFEdited && !row.bdCnFEdited && !row.indCnFBulkEdited && !row.bdCnFBulkEdited))) || 
-                          (row.source === 'Sale' && (isAdmin || (row.cnfType === 'Indian' ? !row.indCommissionEdited : !row.bdCommissionEdited)));
-        
+
+        const isEditable = (row.source !== 'Sale' && (isAdmin || (!row.indCnFEdited && !row.bdCnFEdited && !row.indCnFBulkEdited && !row.bdCnFBulkEdited))) ||
+            (row.source === 'Sale' && (isAdmin || (row.cnfType === 'Indian' ? !row.indCommissionEdited : !row.bdCommissionEdited)));
+
         if (!isEditable) return;
 
         setSelectedHistoryIds(prev => {
@@ -581,8 +612,8 @@ const CnF = ({
 
     const toggleSelectAllHistory = () => {
         const editableIds = filteredHistory
-            .filter(row => (row.source !== 'Sale' && (isAdmin || (!row.indCnFEdited && !row.bdCnFEdited && !row.indCnFBulkEdited && !row.bdCnFBulkEdited))) || 
-                            (row.source === 'Sale' && (isAdmin || (row.cnfType === 'Indian' ? !row.indCommissionEdited : !row.bdCommissionEdited))))
+            .filter(row => (row.source !== 'Sale' && (isAdmin || (!row.indCnFEdited && !row.bdCnFEdited && !row.indCnFBulkEdited && !row.bdCnFBulkEdited))) ||
+                (row.source === 'Sale' && (isAdmin || (row.cnfType === 'Indian' ? !row.indCommissionEdited : !row.bdCommissionEdited))))
             .map(row => row._id);
 
         if (selectedHistoryIds.size === editableIds.length && editableIds.length > 0) {
@@ -600,7 +631,7 @@ const CnF = ({
             const res = await axios.get('/api/stock');
             const targetCnF = (viewData?.name || '').toUpperCase();
             const selectedStocks = res.data.filter(r => selectedHistoryIds.has(r._id));
-            
+
             for (const originalRecord of selectedStocks) {
                 const updatedData = { ...originalRecord };
                 const indCnF = (originalRecord.indianCnF || '').toLowerCase().trim();
@@ -608,7 +639,7 @@ const CnF = ({
                 const targetCnF = (viewData?.name || '').toLowerCase().trim();
                 const commissionRate = parseFloat(bulkEditData.commission) || 0;
                 const qty = parseFloat(originalRecord.qty) || 0;
-                
+
                 let totalCommission = 0;
                 if (bulkEditData.uom === 'QTY') {
                     totalCommission = qty * commissionRate;
@@ -755,7 +786,7 @@ const CnF = ({
 
     const filteredHistory = historyRecords.filter(row => {
         const q = historySearchQuery.toLowerCase();
-        
+
         // Date Filtering
         if (historyFilters.startDate || historyFilters.endDate) {
             const rowDate = new Date(row.date);
@@ -770,6 +801,12 @@ const CnF = ({
         // Search Query Filtering
         if (!q) return true;
         return (row.date || '').toLowerCase().includes(q) || (row.lcNo || '').toLowerCase().includes(q) || (row.port || '').toLowerCase().includes(q) || (row.product || '').toLowerCase().includes(q) || (row.brand || '').toLowerCase().includes(q) || String(row.truck || '').toLowerCase().includes(q);
+    });
+
+    const filteredPayments = paymentRecords.filter(p => {
+        const q = historySearchQuery.toLowerCase();
+        if (!q) return true;
+        return (p.date || '').toLowerCase().includes(q) || (p.method || '').toLowerCase().includes(q) || (p.reference || '').toLowerCase().includes(q) || String(p.amount || '').toLowerCase().includes(q);
     });
 
     return (
@@ -800,7 +837,7 @@ const CnF = ({
                 <div className="w-full md:w-1/4 text-center md:text-left">
                     <h2 className="cnf-title whitespace-nowrap">{moduleType || 'C&F'} C&F Agent Management</h2>
                 </div>
-                
+
                 <div className="w-full md:flex-1 md:max-w-md md:mx-auto relative group px-2 md:px-0">
                     <div className="absolute inset-y-0 left-0 pl-5 md:pl-3.5 flex items-center pointer-events-none">
                         <SearchIcon className="h-4 w-4 text-gray-400 group-focus-within:text-blue-500 transition-colors" />
@@ -833,14 +870,14 @@ const CnF = ({
                         <h3 className="cnf-form-title">{editingId ? `Edit ${moduleType}` : `New ${moduleType} Registration`}</h3>
                         <button onClick={() => { setShowForm(false); resetForm(); }} className="cnf-form-close"><XIcon className="w-6 h-6" /></button>
                     </div>
-                    <form 
-                        onSubmit={handleSubmit} 
+                    <form
+                        onSubmit={handleSubmit}
                         onKeyDown={(e) => {
                             if (e.key === 'Enter' && e.target.tagName !== 'TEXTAREA') {
                                 e.preventDefault();
                             }
                         }}
-                        className="cnf-form" 
+                        className="cnf-form"
                         autoComplete="off"
                     >
                         <div className="cnf-form-field"><label className="cnf-form-label">ID</label><input type="text" name="cnfId" value={formData.cnfId} readOnly className="cnf-form-input bg-gray-50/50 cursor-not-allowed font-bold" /></div>
@@ -874,162 +911,162 @@ const CnF = ({
             )}
 
             {!showForm && (() => {
-                const filteredCnfs = cnfs.filter(cnf => 
-                    (cnf.name || '').toLowerCase().includes(searchQuery.toLowerCase()) || 
-                    (cnf.cnfId || '').toLowerCase().includes(searchQuery.toLowerCase()) || 
+                const filteredCnfs = cnfs.filter(cnf =>
+                    (cnf.name || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+                    (cnf.cnfId || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
                     (cnf.phone || '').includes(searchQuery)
                 );
 
                 return (
-                <div className="cnf-table-container">
-                    {selectedItems.size > 0 && (
-                        <div className="cnf-selection-bar flex items-center justify-between px-6 py-4 bg-gray-900 rounded-2xl mb-4 shadow-xl shadow-gray-900/20 animate-in slide-in-from-top-4 duration-300">
-                            <div className="flex items-center gap-3 font-black text-white">
-                                <div className="px-2 py-1 bg-white/20 rounded-md text-[10px]">{selectedItems.size}</div>
-                                <span className="text-sm">Items Selected</span>
+                    <div className="cnf-table-container">
+                        {selectedItems.size > 0 && (
+                            <div className="cnf-selection-bar flex items-center justify-between px-6 py-4 bg-gray-900 rounded-2xl mb-4 shadow-xl shadow-gray-900/20 animate-in slide-in-from-top-4 duration-300">
+                                <div className="flex items-center gap-3 font-black text-white">
+                                    <div className="px-2 py-1 bg-white/20 rounded-md text-[10px]">{selectedItems.size}</div>
+                                    <span className="text-sm">Items Selected</span>
+                                </div>
+                                <div className="flex gap-2">
+                                    <button onClick={() => { setSelectedItems(new Set()); setIsSelectionMode(false); }} className="px-4 py-2 text-xs font-bold text-gray-400 hover:text-white transition-colors">Cancel</button>
+                                    <button onClick={() => onDeleteConfirm({ show: true, type: 'cnf', id: null, isBulk: true })} className="px-4 py-2 bg-red-500 text-white rounded-xl text-xs font-black hover:bg-red-600 transition-all flex items-center gap-2">
+                                        <TrashIcon className="w-3.5 h-3.5" /> Delete Bulk
+                                    </button>
+                                </div>
                             </div>
-                            <div className="flex gap-2">
-                                <button onClick={() => { setSelectedItems(new Set()); setIsSelectionMode(false); }} className="px-4 py-2 text-xs font-bold text-gray-400 hover:text-white transition-colors">Cancel</button>
-                                <button onClick={() => onDeleteConfirm({ show: true, type: 'cnf', id: null, isBulk: true })} className="px-4 py-2 bg-red-500 text-white rounded-xl text-xs font-black hover:bg-red-600 transition-all flex items-center gap-2">
-                                    <TrashIcon className="w-3.5 h-3.5" /> Delete Bulk
-                                </button>
-                            </div>
-                        </div>
-                    )}
-                    {isLoading ? (
-                        <div className="cnf-loading"><div className="cnf-spinner"></div></div>
-                    ) : cnfs.length > 0 ? (
-                        <>
-                            <div className="hidden md:block overflow-x-auto">
-                                <table className="cnf-table">
-                                    <thead>
-                                        <tr className="cnf-table-header-row">
-                                            {isSelectionMode && <th className="cnf-table-checkbox-header"><input type="checkbox" checked={selectedItems.size === cnfs.length} onChange={toggleSelectAll} /></th>}
-                                            <th className="cnf-table-header !text-left px-6" onClick={() => requestSort('cnfId')}>
-                                                <div className="flex items-center gap-1">ID <SortIcon config={sortConfig.cnf} columnKey="cnfId" /></div>
-                                            </th>
-                                            <th className="cnf-table-header !text-left px-6" onClick={() => requestSort('name')}>
-                                                <div className="flex items-center gap-1">Name <SortIcon config={sortConfig.cnf} columnKey="name" /></div>
-                                            </th>
-                                            <th className="cnf-table-header !text-left px-6">Contact</th>
-                                            <th className="cnf-table-header !text-left px-6">Phone</th>
-                                            <th className="cnf-table-header !text-left px-6">UOM</th>
-                                            <th className="cnf-table-header !text-right px-6">Commission (Tk)</th>
-                                            <th className="cnf-table-header !text-right px-6">Balance (Tk)</th>
-                                            <th className="cnf-table-header !text-center px-6">Status</th>
-                                            <th className="cnf-table-header !text-right px-6">Actions</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody className="cnf-table-body">
-                                        {sortData(filteredCnfs).map((cnf) => (
-                                            <tr key={cnf._id} className="cnf-table-row" 
-                                            onMouseDown={() => startLongPress(cnf._id)} 
-                                            onMouseUp={endLongPress} 
-                                            onMouseLeave={endLongPress}
-                                            onTouchStart={(e) => startLongPress(cnf._id)} 
-                                            onTouchEnd={endLongPress}
-                                            onClick={(e) => {
-                                                if (isLongPressTriggered.current) {
-                                                    isLongPressTriggered.current = false;
-                                                    return;
-                                                }
-                                                if (isSelectionMode) toggleSelection(cnf._id);
-                                            }}>
-                                                {isSelectionMode && <td className="cnf-table-cell px-6"><input type="checkbox" checked={selectedItems.has(cnf._id)} readOnly /></td>}
-                                                <td className="cnf-table-cell px-6 font-bold !text-left">{cnf.cnfId}</td>
-                                                <td className="cnf-table-cell px-6 !text-left">{cnf.name}</td>
-                                                <td className="cnf-table-cell px-6 !text-left">{cnf.contactPerson}</td>
-                                                <td className="cnf-table-cell px-6 !text-left">{cnf.phone}</td>
-                                                <td className="cnf-table-cell px-6 !text-left">{cnf.uom || 'QTY'}</td>
-                                                <td className="cnf-table-cell px-6 font-bold !text-right">{cnf.commission}</td>
-                                                <td className="cnf-table-cell px-6 font-black !text-right">{(cnf.totalBalance || 0).toLocaleString()}</td>
-                                                <td className="cnf-table-cell px-6 !text-center"><span className={`cnf-status-badge ${cnf.status === 'Active' ? 'active' : 'inactive'}`}>{cnf.status}</span></td>
-                                                <td className="cnf-table-cell px-6">
-                                                    <div className="cnf-table-actions justify-end">
-                                                        <button onClick={(e) => { e.stopPropagation(); setViewData(cnf); }} className="cnf-action-btn hover:bg-gray-100 text-gray-400 hover:text-gray-600"><EyeIcon className="w-5 h-5" /></button>
-                                                        {isAdmin && (
-                                                            <>
-                                                                <button onClick={(e) => { e.stopPropagation(); handleEdit(cnf); }} className="cnf-action-btn cnf-action-edit"><EditIcon className="w-5 h-5" /></button>
-                                                                <button onClick={(e) => { e.stopPropagation(); handleDelete(cnf._id); }} className="cnf-action-btn cnf-action-delete"><TrashIcon className="w-5 h-5" /></button>
-                                                            </>
-                                                        )}
-                                                    </div>
-                                                </td>
+                        )}
+                        {isLoading ? (
+                            <div className="cnf-loading"><div className="cnf-spinner"></div></div>
+                        ) : cnfs.length > 0 ? (
+                            <>
+                                <div className="hidden md:block overflow-x-auto">
+                                    <table className="cnf-table">
+                                        <thead>
+                                            <tr className="cnf-table-header-row">
+                                                {isSelectionMode && <th className="cnf-table-checkbox-header"><input type="checkbox" checked={selectedItems.size === cnfs.length} onChange={toggleSelectAll} /></th>}
+                                                <th className="cnf-table-header !text-left px-6" onClick={() => requestSort('cnfId')}>
+                                                    <div className="flex items-center gap-1">ID <SortIcon config={sortConfig.cnf} columnKey="cnfId" /></div>
+                                                </th>
+                                                <th className="cnf-table-header !text-left px-6" onClick={() => requestSort('name')}>
+                                                    <div className="flex items-center gap-1">Name <SortIcon config={sortConfig.cnf} columnKey="name" /></div>
+                                                </th>
+                                                <th className="cnf-table-header !text-left px-6">Contact</th>
+                                                <th className="cnf-table-header !text-left px-6">Phone</th>
+                                                <th className="cnf-table-header !text-left px-6">UOM</th>
+                                                <th className="cnf-table-header !text-right px-6">Commission (Tk)</th>
+                                                <th className="cnf-table-header !text-right px-6">Balance (Tk)</th>
+                                                <th className="cnf-table-header !text-center px-6">Status</th>
+                                                <th className="cnf-table-header !text-right px-6">Actions</th>
                                             </tr>
-                                        ))}
-                                    </tbody>
-                                </table>
-                            </div>
-                            <div className="block md:hidden px-2 py-3 space-y-3">
-                                {sortData(filteredCnfs).map((cnf) => {
-                                    const isExpanded = expandedCnFId === cnf._id;
-                                    return (
-                                        <div
-                                            key={cnf._id}
-                                            className={`bg-white rounded-xl border transition-all duration-300 overflow-hidden ${selectedItems.has(cnf._id) ? 'border-blue-300 bg-blue-50/30' : 'border-gray-100 shadow-sm'} ${isExpanded ? 'ring-1 ring-blue-50 shadow-md border-blue-200' : 'hover:border-gray-200 shadow-sm'}`}
-                                            onMouseDown={() => startLongPress(cnf._id)} 
-                                            onMouseUp={endLongPress} 
-                                            onMouseLeave={endLongPress}
-                                            onTouchStart={(e) => startLongPress(cnf._id)}
-                                            onTouchEnd={endLongPress}
-                                            onClick={(e) => {
-                                                if (isLongPressTriggered.current) {
-                                                    isLongPressTriggered.current = false;
-                                                    return;
-                                                }
-                                                if (isSelectionMode) {
-                                                    toggleSelection(cnf._id);
-                                                } else {
-                                                    setExpandedCnFId(isExpanded ? null : cnf._id);
-                                                }
-                                            }}
-                                        >
-                                            <div className="flex justify-between items-center p-4">
-                                                <div className="flex items-center gap-3 flex-1 min-w-0">
-                                                    {isSelectionMode && (
-                                                        <input type="checkbox" checked={selectedItems.has(cnf._id)} readOnly className="w-5 h-5 accent-blue-600 shrink-0" />
-                                                    )}
-                                                    <div className="min-w-0">
-                                                        <p className="font-bold text-gray-900 text-sm truncate uppercase tracking-tight">{cnf.name}</p>
-                                                        <p className="text-[10px] font-bold text-gray-900 mt-0.5 tracking-wider uppercase opacity-80">{cnf.cnfId}</p>
-                                                    </div>
-                                                </div>
-                                                <div className="flex items-center gap-3">
-                                                    <span className={`cnf-status-badge ${cnf.status === 'Active' ? 'active' : 'inactive'} shrink-0 text-[10px] py-0.5 px-2`}>{cnf.status}</span>
-                                                    <div className={`p-1.5 rounded-lg transition-colors ${isExpanded ? 'bg-blue-50 text-blue-600' : 'text-gray-400'}`}>
-                                                        {isExpanded ? <ChevronUpIcon className="w-4 h-4" /> : <ChevronDownIcon className="w-4 h-4" />}
-                                                    </div>
-                                                </div>
-                                            </div>
-                                            {isExpanded && (
-                                                <div className="px-4 pb-4 animate-in slide-in-from-top-2 duration-300">
-                                                    <div className="space-y-2.5 pt-3 border-t border-gray-50 text-xs">
-                                                        <div className="flex justify-between items-center"><span className="text-gray-400 font-bold uppercase tracking-widest text-[9px]">Contact Person</span><span className="text-gray-900 font-black">{cnf.contactPerson}</span></div>
-                                                        <div className="flex justify-between items-center"><span className="text-gray-400 font-bold uppercase tracking-widest text-[9px]">Phone</span><span className="text-gray-900 font-black font-mono">{cnf.phone}</span></div>
-                                                        <div className="flex justify-between items-center bg-gray-50/50 p-2 rounded-lg border border-gray-100">
-                                                            <span className="text-gray-400 font-bold uppercase tracking-widest text-[9px]">Balance</span>
-                                                            <span className="text-gray-900 font-black">{(cnf.totalBalance || 0).toLocaleString()} Tk</span>
+                                        </thead>
+                                        <tbody className="cnf-table-body">
+                                            {sortData(filteredCnfs).map((cnf) => (
+                                                <tr key={cnf._id} className="cnf-table-row"
+                                                    onMouseDown={() => startLongPress(cnf._id)}
+                                                    onMouseUp={endLongPress}
+                                                    onMouseLeave={endLongPress}
+                                                    onTouchStart={(e) => startLongPress(cnf._id)}
+                                                    onTouchEnd={endLongPress}
+                                                    onClick={(e) => {
+                                                        if (isLongPressTriggered.current) {
+                                                            isLongPressTriggered.current = false;
+                                                            return;
+                                                        }
+                                                        if (isSelectionMode) toggleSelection(cnf._id);
+                                                    }}>
+                                                    {isSelectionMode && <td className="cnf-table-cell px-6"><input type="checkbox" checked={selectedItems.has(cnf._id)} readOnly /></td>}
+                                                    <td className="cnf-table-cell px-6 font-bold !text-left">{cnf.cnfId}</td>
+                                                    <td className="cnf-table-cell px-6 !text-left">{cnf.name}</td>
+                                                    <td className="cnf-table-cell px-6 !text-left">{cnf.contactPerson}</td>
+                                                    <td className="cnf-table-cell px-6 !text-left">{cnf.phone}</td>
+                                                    <td className="cnf-table-cell px-6 !text-left">{cnf.uom || 'QTY'}</td>
+                                                    <td className="cnf-table-cell px-6 font-bold !text-right">{cnf.commission}</td>
+                                                    <td className="cnf-table-cell px-6 font-black !text-right">{(cnf.totalBalance || 0).toLocaleString()}</td>
+                                                    <td className="cnf-table-cell px-6 !text-center"><span className={`cnf-status-badge ${cnf.status === 'Active' ? 'active' : 'inactive'}`}>{cnf.status}</span></td>
+                                                    <td className="cnf-table-cell px-6">
+                                                        <div className="cnf-table-actions justify-end">
+                                                            <button onClick={(e) => { e.stopPropagation(); setViewData(cnf); }} className="cnf-action-btn hover:bg-gray-100 text-gray-400 hover:text-gray-600"><EyeIcon className="w-5 h-5" /></button>
+                                                            {isAdmin && (
+                                                                <>
+                                                                    <button onClick={(e) => { e.stopPropagation(); handleEdit(cnf); }} className="cnf-action-btn cnf-action-edit"><EditIcon className="w-5 h-5" /></button>
+                                                                    <button onClick={(e) => { e.stopPropagation(); handleDelete(cnf._id); }} className="cnf-action-btn cnf-action-delete"><TrashIcon className="w-5 h-5" /></button>
+                                                                </>
+                                                            )}
+                                                        </div>
+                                                    </td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </div>
+                                <div className="block md:hidden px-2 py-3 space-y-3">
+                                    {sortData(filteredCnfs).map((cnf) => {
+                                        const isExpanded = expandedCnFId === cnf._id;
+                                        return (
+                                            <div
+                                                key={cnf._id}
+                                                className={`bg-white rounded-xl border transition-all duration-300 overflow-hidden ${selectedItems.has(cnf._id) ? 'border-blue-300 bg-blue-50/30' : 'border-gray-100 shadow-sm'} ${isExpanded ? 'ring-1 ring-blue-50 shadow-md border-blue-200' : 'hover:border-gray-200 shadow-sm'}`}
+                                                onMouseDown={() => startLongPress(cnf._id)}
+                                                onMouseUp={endLongPress}
+                                                onMouseLeave={endLongPress}
+                                                onTouchStart={(e) => startLongPress(cnf._id)}
+                                                onTouchEnd={endLongPress}
+                                                onClick={(e) => {
+                                                    if (isLongPressTriggered.current) {
+                                                        isLongPressTriggered.current = false;
+                                                        return;
+                                                    }
+                                                    if (isSelectionMode) {
+                                                        toggleSelection(cnf._id);
+                                                    } else {
+                                                        setExpandedCnFId(isExpanded ? null : cnf._id);
+                                                    }
+                                                }}
+                                            >
+                                                <div className="flex justify-between items-center p-4">
+                                                    <div className="flex items-center gap-3 flex-1 min-w-0">
+                                                        {isSelectionMode && (
+                                                            <input type="checkbox" checked={selectedItems.has(cnf._id)} readOnly className="w-5 h-5 accent-blue-600 shrink-0" />
+                                                        )}
+                                                        <div className="min-w-0">
+                                                            <p className="font-bold text-gray-900 text-sm truncate uppercase tracking-tight">{cnf.name}</p>
+                                                            <p className="text-[10px] font-bold text-gray-900 mt-0.5 tracking-wider uppercase opacity-80">{cnf.cnfId}</p>
                                                         </div>
                                                     </div>
-                                                    <div className="flex items-center gap-2 mt-4 pt-4 border-t border-gray-100">
-                                                        <button onClick={(e) => { e.stopPropagation(); setViewData(cnf); }} className="flex items-center justify-center gap-2 py-2.5 px-4 bg-gray-50 text-gray-700 rounded-xl text-xs font-black flex-1 hover:bg-gray-100 transition-all active:scale-95"><EyeIcon className="w-4 h-4" /> History</button>
-                                                        {isAdmin && (
-                                                            <>
-                                                                <button onClick={(e) => { e.stopPropagation(); handleEdit(cnf); }} className="flex items-center justify-center gap-2 py-2.5 px-4 bg-blue-50 text-blue-700 rounded-xl text-xs font-black flex-1 hover:bg-blue-100 transition-all active:scale-95"><EditIcon className="w-4 h-4" /> Edit</button>
-                                                                <button onClick={(e) => { e.stopPropagation(); handleDelete(cnf._id); }} className="p-2.5 bg-red-50 text-red-600 rounded-xl hover:bg-red-100 transition-all active:scale-95"><TrashIcon className="w-4 h-4" /></button>
-                                                            </>
-                                                        )}
+                                                    <div className="flex items-center gap-3">
+                                                        <span className={`cnf-status-badge ${cnf.status === 'Active' ? 'active' : 'inactive'} shrink-0 text-[10px] py-0.5 px-2`}>{cnf.status}</span>
+                                                        <div className={`p-1.5 rounded-lg transition-colors ${isExpanded ? 'bg-blue-50 text-blue-600' : 'text-gray-400'}`}>
+                                                            {isExpanded ? <ChevronUpIcon className="w-4 h-4" /> : <ChevronDownIcon className="w-4 h-4" />}
+                                                        </div>
                                                     </div>
                                                 </div>
-                                            )}
-                                        </div>
-                                    );
-                                })}
-                            </div>
-                        </>
-                    ) : <div className="cnf-empty"><p>{searchQuery ? 'No agents found matching your search.' : 'No agents found.'}</p></div>}
-                </div>
-            );
+                                                {isExpanded && (
+                                                    <div className="px-4 pb-4 animate-in slide-in-from-top-2 duration-300">
+                                                        <div className="space-y-2.5 pt-3 border-t border-gray-50 text-xs">
+                                                            <div className="flex justify-between items-center"><span className="text-gray-400 font-bold uppercase tracking-widest text-[9px]">Contact Person</span><span className="text-gray-900 font-black">{cnf.contactPerson}</span></div>
+                                                            <div className="flex justify-between items-center"><span className="text-gray-400 font-bold uppercase tracking-widest text-[9px]">Phone</span><span className="text-gray-900 font-black font-mono">{cnf.phone}</span></div>
+                                                            <div className="flex justify-between items-center bg-gray-50/50 p-2 rounded-lg border border-gray-100">
+                                                                <span className="text-gray-400 font-bold uppercase tracking-widest text-[9px]">Balance</span>
+                                                                <span className="text-gray-900 font-black">{(cnf.totalBalance || 0).toLocaleString()} Tk</span>
+                                                            </div>
+                                                        </div>
+                                                        <div className="flex items-center gap-2 mt-4 pt-4 border-t border-gray-100">
+                                                            <button onClick={(e) => { e.stopPropagation(); setViewData(cnf); }} className="flex items-center justify-center gap-2 py-2.5 px-4 bg-gray-50 text-gray-700 rounded-xl text-xs font-black flex-1 hover:bg-gray-100 transition-all active:scale-95"><EyeIcon className="w-4 h-4" /> History</button>
+                                                            {isAdmin && (
+                                                                <>
+                                                                    <button onClick={(e) => { e.stopPropagation(); handleEdit(cnf); }} className="flex items-center justify-center gap-2 py-2.5 px-4 bg-blue-50 text-blue-700 rounded-xl text-xs font-black flex-1 hover:bg-blue-100 transition-all active:scale-95"><EditIcon className="w-4 h-4" /> Edit</button>
+                                                                    <button onClick={(e) => { e.stopPropagation(); handleDelete(cnf._id); }} className="p-2.5 bg-red-50 text-red-600 rounded-xl hover:bg-red-100 transition-all active:scale-95"><TrashIcon className="w-4 h-4" /></button>
+                                                                </>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            </>
+                        ) : <div className="cnf-empty"><p>{searchQuery ? 'No agents found matching your search.' : 'No agents found.'}</p></div>}
+                    </div>
+                );
             })()}
 
             {viewData && (
@@ -1042,16 +1079,30 @@ const CnF = ({
                                 <p className="text-xs text-gray-500 mt-1">ID: {viewData.cnfId}</p>
                             </div>
                             {/* Search bar - centered */}
-                            <div className="flex-1 flex justify-center">
+                            <div className="flex-1 flex flex-col items-center gap-3">
                                 <div className="w-full max-w-sm relative">
                                     <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
                                     <input
                                         type="text"
-                                        placeholder="Search history..."
+                                        placeholder={historyViewMode === 'earnings' ? "Search history..." : "Search payments..."}
                                         value={historySearchQuery}
                                         onChange={(e) => setHistorySearchQuery(e.target.value)}
                                         className="w-full pl-9 pr-4 py-2 text-sm bg-gray-50 border border-gray-200 rounded-full focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 transition-all"
                                     />
+                                </div>
+                                <div className="flex bg-gray-100/80 p-1 rounded-xl">
+                                    <button
+                                        onClick={() => setHistoryViewMode('earnings')}
+                                        className={`px-4 py-1.5 text-[10px] font-black uppercase tracking-widest rounded-lg transition-all ${historyViewMode === 'earnings' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
+                                    >
+                                        Earnings
+                                    </button>
+                                    <button
+                                        onClick={() => setHistoryViewMode('payments')}
+                                        className={`px-4 py-1.5 text-[10px] font-black uppercase tracking-widest rounded-lg transition-all ${historyViewMode === 'payments' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
+                                    >
+                                        Payment History
+                                    </button>
                                 </div>
                             </div>
                             <div className="flex-1 flex items-center justify-end gap-2">
@@ -1214,237 +1265,346 @@ const CnF = ({
                                 <div className="space-y-6">
                                     {/* History Summary Cards */}
                                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                                        {/* Total Truck Card */}
-                                        <div className="bg-gradient-to-br from-blue-50 to-indigo-50 border border-blue-100/50 p-5 rounded-2xl shadow-sm group hover:shadow-md transition-all duration-300">
-                                            <div className="flex items-center justify-between">
-                                                <div className="space-y-1">
-                                                    <p className="text-[10px] font-bold text-blue-600 uppercase tracking-widest opacity-70">Total Trucks</p>
-                                                    <h3 className="text-2xl font-black text-gray-900 leading-none">
-                                                        {filteredHistory.reduce((acc, row) => acc + (parseFloat(row.truck) || 0), 0)}
-                                                    </h3>
-                                                </div>
-                                                <div className="w-12 h-12 rounded-xl bg-blue-100 flex items-center justify-center text-blue-600 group-hover:scale-110 transition-transform">
-                                                    <BoxIcon className="w-6 h-6" />
-                                                </div>
-                                            </div>
-                                        </div>
-
-                                        {/* Total Qty Card */}
-                                        <div className="bg-gradient-to-br from-amber-50 to-orange-50 border border-amber-100/50 p-5 rounded-2xl shadow-sm group hover:shadow-md transition-all duration-300">
-                                            <div className="flex items-center justify-between">
-                                                <div className="space-y-1">
-                                                    <p className="text-[10px] font-bold text-amber-600 uppercase tracking-widest opacity-70">Total Quantity</p>
-                                                    <h3 className="text-2xl font-black text-gray-900 leading-none">
-                                                        {filteredHistory.reduce((acc, row) => acc + (parseFloat(row.qty) || 0), 0).toLocaleString()}
-                                                    </h3>
-                                                </div>
-                                                <div className="w-12 h-12 rounded-xl bg-amber-100 flex items-center justify-center text-amber-600 group-hover:scale-110 transition-transform">
-                                                    <TrendingUpIcon className="w-6 h-6" />
-                                                </div>
-                                            </div>
-                                        </div>
-
-                                        {/* Total Commission Card */}
-                                        <div className="bg-gradient-to-br from-emerald-50 to-teal-50 border border-emerald-100/50 p-5 rounded-2xl shadow-sm group hover:shadow-md transition-all duration-300">
-                                            <div className="flex items-center justify-between">
-                                                <div className="space-y-1">
-                                                    <p className="text-[10px] font-bold text-emerald-600 uppercase tracking-widest opacity-70">Total Commission</p>
-                                                    <div className="flex items-baseline gap-1">
-                                                        <h3 className="text-2xl font-black text-gray-900 leading-none">
-                                                            {filteredHistory.reduce((acc, row) => acc + (parseFloat(row.totalCommission) || 0), 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                                                        </h3>
-                                                        <span className="text-[10px] font-bold text-gray-400">TK</span>
-                                                    </div>
-                                                </div>
-                                                <div className="w-12 h-12 rounded-xl bg-emerald-100 flex items-center justify-center text-emerald-600 group-hover:scale-110 transition-transform">
-                                                    <DollarSignIcon className="w-6 h-6" />
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
-
-                                    <div className="hidden md:block overflow-x-auto">
-                                        <table className="cnf-table">
-                                            <thead>
-                                                <tr className="cnf-table-header-row">
-                                                    {isHistorySelectionMode && <th className="cnf-table-checkbox-header"><input type="checkbox" checked={selectedHistoryIds.size === filteredHistory.length} onChange={toggleSelectAllHistory} /></th>}
-                                                    <th className="cnf-table-header">Date</th>
-                                                    <th className="cnf-table-header whitespace-nowrap">LC No</th>
-                                                    <th className="cnf-table-header">Importer</th>
-                                                    <th className="cnf-table-header">Exporter</th>
-                                                    <th className="cnf-table-header">Product</th>
-                                                    <th className="cnf-table-header">Port</th>
-                                                    <th className="cnf-table-header text-center">Truck</th>
-                                                    <th className="cnf-table-header text-right">Bag</th>
-                                                    <th className="cnf-table-header text-right">Qty</th>
-                                                    <th className="cnf-table-header text-right">Commission</th>
-                                                    <th className="cnf-table-header text-right">Total</th>
-                                                    <th className="cnf-table-header text-center whitespace-nowrap">Source</th>
-                                                    <th className="cnf-table-header text-center">Action</th>
-                                                </tr>
-                                            </thead>
-                                            <tbody className="cnf-table-body">
-                                                {filteredHistory.map((row, idx) => (
-                                                    <tr key={idx} className={`cnf-table-row cursor-pointer transition-colors ${selectedHistoryIds.has(row._id) ? 'bg-blue-50/50' : ''}`} 
-                                                    onMouseDown={() => startHistoryLongPress(row._id)} 
-                                                    onMouseUp={endHistoryLongPress} 
-                                                    onMouseLeave={endHistoryLongPress} 
-                                                    onTouchStart={(e) => startHistoryLongPress(row._id)} 
-                                                    onTouchEnd={endHistoryLongPress} 
-                                                    onClick={(e) => {
-                                                        if (isHistoryLongPressTriggered.current) { 
-                                                            isHistoryLongPressTriggered.current = false; 
-                                                            return; 
-                                                        }
-                                                        if (isHistorySelectionMode) {
-                                                            toggleHistorySelection(row._id);
-                                                        }
-                                                    }}>
-                                                        {isHistorySelectionMode && (
-                                                            <td className="cnf-table-cell">
-                                                                {((row.source !== 'Sale' && (isAdmin || (!row.indCnFEdited && !row.bdCnFEdited && !row.indCnFBulkEdited && !row.bdCnFBulkEdited))) || 
-                                                                  (row.source === 'Sale' && (isAdmin || (row.cnfType === 'Indian' ? !row.indCommissionEdited : !row.bdCommissionEdited)))) ? (
-                                                                    <input type="checkbox" checked={selectedHistoryIds.has(row._id)} readOnly />
-                                                                ) : null}
-                                                            </td>
-                                                        )}
-                                                        <td className="cnf-table-cell whitespace-nowrap">{formatDate(row.date)}</td>
-                                                        <td className="cnf-table-cell font-bold whitespace-nowrap">{row.lcNo}</td>
-                                                        <td className="cnf-table-cell truncate max-w-[200px]" title={row.importer || '-'}>{row.importer || '-'}</td>
-                                                        <td className="cnf-table-cell truncate max-w-[200px]" title={row.exporter || '-'}>{row.exporter || '-'}</td>
-                                                        <td className="cnf-table-cell font-medium">{row.product || '-'}</td>
-                                                        <td className="cnf-table-cell">{row.port || '-'}</td>
-                                                        <td className="cnf-table-cell text-center uppercase">{row.truck || '-'}</td>
-                                                        <td className="cnf-table-cell text-right font-bold">{(!isNaN(parseFloat(row.bag))) ? Math.round(row.bag).toLocaleString() : '-'}</td>
-                                                        <td className="cnf-table-cell text-right font-bold">{(!isNaN(parseFloat(row.qty))) ? Math.round(row.qty).toLocaleString() : '-'}</td>
-                                                        <td className="cnf-table-cell text-right">{row.commission}</td>
-                                                        <td className="cnf-table-cell text-right font-black">{(row.totalCommission || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-                                                        <td className="cnf-table-cell text-center">
-                                                            <span className={`px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-widest ${row.source === 'Sale' ? 'bg-amber-100 text-amber-700' : 'bg-blue-100 text-blue-700'} border ${row.source === 'Sale' ? 'border-amber-200' : 'border-blue-200'}`}>
-                                                                {row.source || 'LC'}
-                                                            </span>
-                                                        </td>
-                                                        <td className="cnf-table-cell text-center">
-                                                            {((row.source !== 'Sale' && (isAdmin || (!row.indCnFEdited && !row.bdCnFEdited && !row.indCnFBulkEdited && !row.bdCnFBulkEdited))) || 
-                                                              (row.source === 'Sale' && (isAdmin || (row.cnfType === 'Indian' ? !row.indCommissionEdited : !row.bdCommissionEdited)))) ? (
-                                                                <button onClick={(e) => { e.stopPropagation(); handleEditHistory(row); }} className="hover:bg-gray-100 p-1.5 rounded-md transition-colors">
-                                                                    <EditIcon className="w-4 h-4 text-gray-400 hover:text-gray-900" />
-                                                                </button>
-                                                            ) : (
-                                                                row.source === 'Sale' ? (
-                                                                    <span className="text-[8px] bg-amber-50 text-amber-500 px-1.5 py-0.5 rounded-md font-black uppercase tracking-tighter shadow-sm inline-block">Sale Edited</span>
-                                                                ) : (
-                                                                    <span className="text-[8px] bg-blue-50 text-blue-500 px-1.5 py-0.5 rounded-md font-black uppercase tracking-tighter shadow-sm inline-block">Edited</span>
-                                                                )
-                                                            )}
-                                                        </td>
-                                                    </tr>
-                                                ))}
-                                            </tbody>
-                                        </table>
-                                    </div>
-                                    <div className="block md:hidden space-y-3">
-                                        {filteredHistory.length > 0 ? (
-                                            filteredHistory.map((row, idx) => {
-                                                const isExpanded = expandedHistoryIdx === idx;
-                                                const isSelected = selectedHistoryIds.has(row._id);
-                                                return (
-                                                    <div 
-                                                        key={idx} 
-                                                        className={`bg-white rounded-xl border transition-all duration-300 overflow-hidden ${isSelected ? 'border-gray-900 shadow-md ring-1 ring-gray-900/10' : 'border-gray-100 shadow-sm hover:border-gray-200'} ${isExpanded ? 'border-gray-200' : ''}`}
-                                                        onMouseDown={() => startHistoryLongPress(row._id)} 
-                                                        onMouseUp={endHistoryLongPress} 
-                                                        onMouseLeave={endHistoryLongPress}
-                                                        onTouchStart={(e) => startHistoryLongPress(row._id)} 
-                                                        onTouchEnd={endHistoryLongPress}
-                                                        onClick={(e) => {
-                                                            if (isHistoryLongPressTriggered.current) { 
-                                                                isHistoryLongPressTriggered.current = false; 
-                                                                return; 
-                                                            }
-                                                            if (isHistorySelectionMode) {
-                                                                const isEditable = (row.source !== 'Sale' && (isAdmin || (!row.indCnFEdited && !row.bdCnFEdited && !row.indCnFBulkEdited && !row.bdCnFBulkEdited))) || 
-                                                                                  (row.source === 'Sale' && (isAdmin || (row.cnfType === 'Indian' ? !row.indCommissionEdited : !row.bdCommissionEdited)));
-                                                                if (isEditable) {
-                                                                    toggleHistorySelection(row._id);
-                                                                }
-                                                            } else {
-                                                                setExpandedHistoryIdx(isExpanded ? null : idx);
-                                                            }
-                                                        }}
-                                                    >
-                                                        <div className="flex justify-between items-center p-4 cursor-pointer select-none active:bg-gray-50 transition-colors">
-                                                            <div className="flex-1 min-w-0 pr-4 flex items-center gap-3">
-                                                                {isHistorySelectionMode && ((row.source !== 'Sale' && (isAdmin || (!row.indCnFEdited && !row.bdCnFEdited && !row.indCnFBulkEdited && !row.bdCnFBulkEdited))) || 
-                                                                                           (row.source === 'Sale' && (isAdmin || (row.cnfType === 'Indian' ? !row.indCommissionEdited : !row.bdCommissionEdited)))) && (
-                                                                    <input type="checkbox" checked={isSelected} readOnly className="w-5 h-5 accent-gray-900 shrink-0" onClick={(e) => e.stopPropagation()} />
-                                                                )}
-                                                                <div className="min-w-0">
-                                                                    <div className="flex items-center gap-2 mb-1">
-                                                                        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">{formatDate(row.date)}</p>
-                                                                        <span className="h-1 w-1 bg-gray-300 rounded-full"></span>
-                                                                        <span className={`px-1.5 py-0.5 rounded text-[8px] font-black uppercase tracking-widest ${row.source === 'Sale' ? 'bg-amber-100 text-amber-700 border border-amber-200' : 'bg-blue-100 text-blue-700 border border-blue-200'}`}>
-                                                                            {row.source || 'LC'}
-                                                                        </span>
-                                                                        <span className="h-1 w-1 bg-gray-300 rounded-full"></span>
-                                                                        <p className="text-xs font-bold text-gray-800 truncate">{row.product || '-'}</p>
-                                                                        {row.source === 'Sale' ? (
-                                                                            (row.cnfType === 'Indian' ? row.indCommissionEdited : row.bdCommissionEdited) && (
-                                                                                <span className="text-[8px] bg-amber-50 text-amber-500 px-1.5 py-0.5 rounded-md font-black uppercase tracking-tighter">Sale Edited</span>
-                                                                            )
-                                                                        ) : (
-                                                                            (row.indCnFEdited || row.bdCnFEdited || row.indCnFBulkEdited || row.bdCnFBulkEdited) && (
-                                                                                <span className="text-[8px] bg-blue-50 text-blue-500 px-1.5 py-0.5 rounded-md font-black uppercase tracking-tighter">Edited</span>
-                                                                            )
-                                                                        )}
-                                                                    </div>
-                                                                    <p className="text-sm font-black text-gray-900 truncate">{row.lcNo || '-'}</p>
-                                                                </div>
-                                                            </div>
-                                                            <div className={`p-2 rounded-lg transition-colors ${isExpanded ? 'bg-gray-50 text-gray-600' : 'bg-gray-50 text-gray-400'}`}>{isExpanded ? <ChevronUpIcon className="w-5 h-5" /> : <ChevronDownIcon className="w-5 h-5" />}</div>
+                                        {historyViewMode === 'earnings' ? (
+                                            <>
+                                                {/* Total Truck Card */}
+                                                <div className="bg-gradient-to-br from-blue-50 to-indigo-50 border border-blue-100/50 p-5 rounded-2xl shadow-sm group hover:shadow-md transition-all duration-300">
+                                                    <div className="flex items-center justify-between">
+                                                        <div className="space-y-1">
+                                                            <p className="text-[10px] font-bold text-blue-600 uppercase tracking-widest opacity-70">Total Trucks</p>
+                                                            <h3 className="text-2xl font-black text-gray-900 leading-none">
+                                                                {filteredHistory.reduce((acc, row) => acc + (parseFloat(row.truck) || 0), 0)}
+                                                            </h3>
                                                         </div>
-                                                        {isExpanded && (
-                                                            <div className="px-4 pb-4 space-y-3 animate-in slide-in-from-top-4 duration-300">
-                                                                <div className="grid grid-cols-2 gap-3 pt-3 border-t border-gray-50">
-                                                                    <div><p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-0.5">Port</p><p className="text-xs font-medium text-gray-700">{row.port || '-'}</p></div>
-                                                                </div>
-                                                                <div className="grid grid-cols-2 gap-3 py-2.5 bg-gray-50/70 rounded-xl px-4 mt-2">
-                                                                    <div className="space-y-1"><p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Importer</p><p className="text-xs font-medium text-gray-700 truncate" title={row.importer || '-'}>{row.importer || '-'}</p></div>
-                                                                    <div className="space-y-1 text-right"><p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Exporter</p><p className="text-xs font-medium text-gray-700 truncate" title={row.exporter || '-'}>{row.exporter || '-'}</p></div>
-                                                                </div>
-                                                                <div className="grid grid-cols-2 gap-3 py-2.5 bg-gray-50/70 rounded-xl px-4">
-                                                                    <div className="space-y-1"><p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Truck No</p><p className="text-xs font-semibold text-gray-700">{row.truck || '-'}</p></div>
-                                                                    <div className="space-y-1 text-right"><p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Bag / Qty</p><p className="text-xs font-bold text-gray-900">{row.bag ? Math.round(parseFloat(row.bag)).toLocaleString() : '0'} / {row.qty ? Math.round(parseFloat(row.qty)).toLocaleString() : '0'}</p></div>
-                                                                </div>
-                                                                <div className="grid grid-cols-2 gap-4 mt-4 pt-4 border-t border-gray-50">
-                                                                    <div>
-                                                                        <p className="text-[9px] font-bold text-gray-400 uppercase tracking-widest mb-1">Commission ({row.uom || viewData?.uom || 'QTY'})</p>
-                                                                        <p className="text-xs font-black text-gray-900 font-mono">{(row.commission || 0).toLocaleString()} Tk</p>
-                                                                    </div>
-                                                                    <div className="text-right">
-                                                                        <p className="text-[9px] font-bold text-gray-400 uppercase tracking-widest mb-1">Total Commission</p>
-                                                                        <p className="text-xs font-black text-gray-900 font-mono">{(row.totalCommission || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} Tk</p>
-                                                                    </div>
-                                                                </div>
-                                                                <div className="mt-4 pt-4 border-t border-gray-100 flex gap-2">
-                                                                    {((row.source !== 'Sale' && (isAdmin || (!row.indCnFEdited && !row.bdCnFEdited && !row.indCnFBulkEdited && !row.bdCnFBulkEdited))) || 
-                                                                      (row.source === 'Sale' && (isAdmin || (row.cnfType === 'Indian' ? !row.indCommissionEdited : !row.bdCommissionEdited)))) ? (
-                                                                        <button onClick={() => handleEditHistory(row)} className="flex items-center justify-center gap-2 py-2.5 bg-gray-900 text-white rounded-xl text-xs font-black flex-1 active:scale-95 shadow-lg shadow-gray-900/20"><EditIcon className="w-4 h-4" /> Edit Record</button>
-                                                                    ) : (
-                                                                        <div className="flex items-center justify-center gap-2 py-2.5 bg-blue-50 text-blue-500 rounded-xl text-[10px] font-black flex-1 uppercase tracking-widest">
-                                                                            <LockIcon className="w-4 h-4" /> {row.source === 'Sale' ? 'Sale Edited & Locked' : 'Edited & Locked'}
-                                                                        </div>
-                                                                    )}
-                                                                </div>
-                                                            </div>
-                                                        )}
+                                                        <div className="w-12 h-12 rounded-xl bg-blue-100 flex items-center justify-center text-blue-600 group-hover:scale-110 transition-transform">
+                                                            <BoxIcon className="w-6 h-6" />
+                                                        </div>
                                                     </div>
-                                                );
-                                            })
+                                                </div>
+
+                                                {/* Total Qty Card */}
+                                                <div className="bg-gradient-to-br from-amber-50 to-orange-50 border border-amber-100/50 p-5 rounded-2xl shadow-sm group hover:shadow-md transition-all duration-300">
+                                                    <div className="flex items-center justify-between">
+                                                        <div className="space-y-1">
+                                                            <p className="text-[10px] font-bold text-amber-600 uppercase tracking-widest opacity-70">Total Quantity</p>
+                                                            <h3 className="text-2xl font-black text-gray-900 leading-none">
+                                                                {filteredHistory.reduce((acc, row) => acc + (parseFloat(row.qty) || 0), 0).toLocaleString()}
+                                                            </h3>
+                                                        </div>
+                                                        <div className="w-12 h-12 rounded-xl bg-amber-100 flex items-center justify-center text-amber-600 group-hover:scale-110 transition-transform">
+                                                            <TrendingUpIcon className="w-6 h-6" />
+                                                        </div>
+                                                    </div>
+                                                </div>
+
+                                                {/* Total Commission Card */}
+                                                <div className="bg-gradient-to-br from-emerald-50 to-teal-50 border border-emerald-100/50 p-5 rounded-2xl shadow-sm group hover:shadow-md transition-all duration-300">
+                                                    <div className="flex items-center justify-between">
+                                                        <div className="space-y-1">
+                                                            <p className="text-[10px] font-bold text-emerald-600 uppercase tracking-widest opacity-70">Total Commission</p>
+                                                            <div className="flex items-baseline gap-1">
+                                                                <h3 className="text-2xl font-black text-gray-900 leading-none">
+                                                                    {filteredHistory.reduce((acc, row) => acc + (parseFloat(row.totalCommission) || 0), 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                                                </h3>
+                                                                <span className="text-[10px] font-bold text-gray-400">TK</span>
+                                                            </div>
+                                                        </div>
+                                                        <div className="w-12 h-12 rounded-xl bg-emerald-100 flex items-center justify-center text-emerald-600 group-hover:scale-110 transition-transform">
+                                                            <DollarSignIcon className="w-6 h-6" />
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </>
                                         ) : (
-                                            <div className="text-center py-12 text-gray-400"><BoxIcon className="w-8 h-8 mb-2 mx-auto opacity-20" /><p className="text-sm">No history results found</p></div>
+                                            <>
+                                                {/* Total Paid Card */}
+                                                <div className="bg-gradient-to-br from-blue-50 to-indigo-50 border border-blue-100/50 p-5 rounded-2xl shadow-sm group hover:shadow-md transition-all duration-300">
+                                                    <div className="flex items-center justify-between">
+                                                        <div className="space-y-1">
+                                                            <p className="text-[10px] font-bold text-blue-600 uppercase tracking-widest opacity-70">Total Paid</p>
+                                                            <h3 className="text-2xl font-black text-gray-900 leading-none">
+                                                                {filteredPayments.reduce((acc, p) => acc + (parseFloat(p.amount) || 0), 0).toLocaleString()}
+                                                            </h3>
+                                                        </div>
+                                                        <div className="w-12 h-12 rounded-xl bg-blue-100 flex items-center justify-center text-blue-600 group-hover:scale-110 transition-transform">
+                                                            <DollarSignIcon className="w-6 h-6" />
+                                                        </div>
+                                                    </div>
+                                                </div>
+
+                                                {/* Transaction Count Card */}
+                                                <div className="bg-gradient-to-br from-amber-50 to-orange-50 border border-amber-100/50 p-5 rounded-2xl shadow-sm group hover:shadow-md transition-all duration-300">
+                                                    <div className="flex items-center justify-between">
+                                                        <div className="space-y-1">
+                                                            <p className="text-[10px] font-bold text-amber-600 uppercase tracking-widest opacity-70">Transactions</p>
+                                                            <h3 className="text-2xl font-black text-gray-900 leading-none">
+                                                                {filteredPayments.length}
+                                                            </h3>
+                                                        </div>
+                                                        <div className="w-12 h-12 rounded-xl bg-amber-100 flex items-center justify-center text-amber-600 group-hover:scale-110 transition-transform">
+                                                            <BarChartIcon className="w-6 h-6" />
+                                                        </div>
+                                                    </div>
+                                                </div>
+
+                                                {/* Balance Card */}
+                                                <div className="bg-gradient-to-br from-emerald-50 to-teal-50 border border-emerald-100/50 p-5 rounded-2xl shadow-sm group hover:shadow-md transition-all duration-300">
+                                                    <div className="flex items-center justify-between">
+                                                        <div className="space-y-1">
+                                                            <p className="text-[10px] font-bold text-emerald-600 uppercase tracking-widest opacity-70">Current Balance</p>
+                                                            <div className="flex items-baseline gap-1">
+                                                                <h3 className="text-2xl font-black text-gray-900 leading-none">
+                                                                    {(viewData?.totalBalance || 0).toLocaleString()}
+                                                                </h3>
+                                                                <span className="text-[10px] font-bold text-gray-400">TK</span>
+                                                            </div>
+                                                        </div>
+                                                        <div className="w-12 h-12 rounded-xl bg-emerald-100 flex items-center justify-center text-emerald-600 group-hover:scale-110 transition-transform">
+                                                            <TrendingUpIcon className="w-6 h-6" />
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </>
                                         )}
                                     </div>
+
+                                    {historyViewMode === 'earnings' ? (
+                                        <>
+                                            <div className="hidden md:block overflow-x-auto">
+                                                <table className="cnf-table">
+                                                    <thead>
+                                                        <tr className="cnf-table-header-row">
+                                                            {isHistorySelectionMode && <th className="cnf-table-checkbox-header"><input type="checkbox" checked={selectedHistoryIds.size === filteredHistory.length} onChange={toggleSelectAllHistory} /></th>}
+                                                            <th className="cnf-table-header">Date</th>
+                                                            <th className="cnf-table-header whitespace-nowrap">LC No</th>
+                                                            <th className="cnf-table-header">Importer</th>
+                                                            <th className="cnf-table-header">Exporter</th>
+                                                            <th className="cnf-table-header">Product</th>
+                                                            <th className="cnf-table-header">Port</th>
+                                                            <th className="cnf-table-header text-center">Truck</th>
+                                                            <th className="cnf-table-header text-right">Bag</th>
+                                                            <th className="cnf-table-header text-right">Qty</th>
+                                                            <th className="cnf-table-header text-right">Commission</th>
+                                                            <th className="cnf-table-header text-right">Total</th>
+                                                            <th className="cnf-table-header text-center whitespace-nowrap">Source</th>
+                                                            <th className="cnf-table-header text-center">Action</th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody className="cnf-table-body">
+                                                        {filteredHistory.map((row, idx) => (
+                                                            <tr key={idx} className={`cnf-table-row cursor-pointer transition-colors ${selectedHistoryIds.has(row._id) ? 'bg-blue-50/50' : ''}`}
+                                                                onMouseDown={() => startHistoryLongPress(row._id)}
+                                                                onMouseUp={endHistoryLongPress}
+                                                                onMouseLeave={endHistoryLongPress}
+                                                                onTouchStart={(e) => startHistoryLongPress(row._id)}
+                                                                onTouchEnd={endHistoryLongPress}
+                                                                onClick={(e) => {
+                                                                    if (isHistoryLongPressTriggered.current) {
+                                                                        isHistoryLongPressTriggered.current = false;
+                                                                        return;
+                                                                    }
+                                                                    if (isHistorySelectionMode) {
+                                                                        toggleHistorySelection(row._id);
+                                                                    }
+                                                                }}>
+                                                                {isHistorySelectionMode && (
+                                                                    <td className="cnf-table-cell">
+                                                                        {((row.source !== 'Sale' && (isAdmin || (!row.indCnFEdited && !row.bdCnFEdited && !row.indCnFBulkEdited && !row.bdCnFBulkEdited))) ||
+                                                                            (row.source === 'Sale' && (isAdmin || (row.cnfType === 'Indian' ? !row.indCommissionEdited : !row.bdCommissionEdited)))) ? (
+                                                                            <input type="checkbox" checked={selectedHistoryIds.has(row._id)} readOnly />
+                                                                        ) : null}
+                                                                    </td>
+                                                                )}
+                                                                <td className="cnf-table-cell whitespace-nowrap">{formatDate(row.date)}</td>
+                                                                <td className="cnf-table-cell font-bold whitespace-nowrap">{row.lcNo}</td>
+                                                                <td className="cnf-table-cell truncate max-w-[200px]" title={row.importer || '-'}>{row.importer || '-'}</td>
+                                                                <td className="cnf-table-cell truncate max-w-[200px]" title={row.exporter || '-'}>{row.exporter || '-'}</td>
+                                                                <td className="cnf-table-cell font-medium">{row.product || '-'}</td>
+                                                                <td className="cnf-table-cell">{row.port || '-'}</td>
+                                                                <td className="cnf-table-cell text-center uppercase">{row.truck || '-'}</td>
+                                                                <td className="cnf-table-cell text-right font-bold">{(!isNaN(parseFloat(row.bag))) ? Math.round(row.bag).toLocaleString() : '-'}</td>
+                                                                <td className="cnf-table-cell text-right font-bold">{(!isNaN(parseFloat(row.qty))) ? Math.round(row.qty).toLocaleString() : '-'}</td>
+                                                                <td className="cnf-table-cell text-right">{row.commission}</td>
+                                                                <td className="cnf-table-cell text-right font-black">{(row.totalCommission || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                                                                <td className="cnf-table-cell text-center">
+                                                                    <span className={`px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-widest ${row.source === 'Sale' ? 'bg-amber-100 text-amber-700' : 'bg-blue-100 text-blue-700'} border ${row.source === 'Sale' ? 'border-amber-200' : 'border-blue-200'}`}>
+                                                                        {row.source || 'LC'}
+                                                                    </span>
+                                                                </td>
+                                                                <td className="cnf-table-cell text-center">
+                                                                    {((row.source !== 'Sale' && (isAdmin || (!row.indCnFEdited && !row.bdCnFEdited && !row.indCnFBulkEdited && !row.bdCnFBulkEdited))) ||
+                                                                        (row.source === 'Sale' && (isAdmin || (row.cnfType === 'Indian' ? !row.indCommissionEdited : !row.bdCommissionEdited)))) ? (
+                                                                        <button onClick={(e) => { e.stopPropagation(); handleEditHistory(row); }} className="hover:bg-gray-100 p-1.5 rounded-md transition-colors">
+                                                                            <EditIcon className="w-4 h-4 text-gray-400 hover:text-gray-900" />
+                                                                        </button>
+                                                                    ) : (
+                                                                        row.source === 'Sale' ? (
+                                                                            <span className="text-[8px] bg-amber-50 text-amber-500 px-1.5 py-0.5 rounded-md font-black uppercase tracking-tighter shadow-sm inline-block">Sale Edited</span>
+                                                                        ) : (
+                                                                            <span className="text-[8px] bg-blue-50 text-blue-500 px-1.5 py-0.5 rounded-md font-black uppercase tracking-tighter shadow-sm inline-block">Edited</span>
+                                                                        )
+                                                                    )}
+                                                                </td>
+                                                            </tr>
+                                                        ))}
+                                                    </tbody>
+                                                </table>
+                                            </div>
+                                            <div className="block md:hidden space-y-3">
+                                                {filteredHistory.length > 0 ? (
+                                                    filteredHistory.map((row, idx) => {
+                                                        const isExpanded = expandedHistoryIdx === idx;
+                                                        const isSelected = selectedHistoryIds.has(row._id);
+                                                        return (
+                                                            <div
+                                                                key={idx}
+                                                                className={`bg-white rounded-xl border transition-all duration-300 overflow-hidden ${isSelected ? 'border-gray-900 shadow-md ring-1 ring-gray-900/10' : 'border-gray-100 shadow-sm hover:border-gray-200'} ${isExpanded ? 'border-gray-200' : ''}`}
+                                                                onMouseDown={() => startHistoryLongPress(row._id)}
+                                                                onMouseUp={endHistoryLongPress}
+                                                                onMouseLeave={endHistoryLongPress}
+                                                                onTouchStart={(e) => startHistoryLongPress(row._id)}
+                                                                onTouchEnd={endHistoryLongPress}
+                                                                onClick={(e) => {
+                                                                    if (isHistoryLongPressTriggered.current) {
+                                                                        isHistoryLongPressTriggered.current = false;
+                                                                        return;
+                                                                    }
+                                                                    if (isHistorySelectionMode) {
+                                                                        const isEditable = (row.source !== 'Sale' && (isAdmin || (!row.indCnFEdited && !row.bdCnFEdited && !row.indCnFBulkEdited && !row.bdCnFBulkEdited))) ||
+                                                                            (row.source === 'Sale' && (isAdmin || (row.cnfType === 'Indian' ? !row.indCommissionEdited : !row.bdCommissionEdited)));
+                                                                        if (isEditable) {
+                                                                            toggleHistorySelection(row._id);
+                                                                        }
+                                                                    } else {
+                                                                        setExpandedHistoryIdx(isExpanded ? null : idx);
+                                                                    }
+                                                                }}
+                                                            >
+                                                                <div className="flex justify-between items-center p-4 cursor-pointer select-none active:bg-gray-50 transition-colors">
+                                                                    <div className="flex-1 min-w-0 pr-4 flex items-center gap-3">
+                                                                        {isHistorySelectionMode && ((row.source !== 'Sale' && (isAdmin || (!row.indCnFEdited && !row.bdCnFEdited && !row.indCnFBulkEdited && !row.bdCnFBulkEdited))) ||
+                                                                            (row.source === 'Sale' && (isAdmin || (row.cnfType === 'Indian' ? !row.indCommissionEdited : !row.bdCommissionEdited)))) && (
+                                                                                <input type="checkbox" checked={isSelected} readOnly className="w-5 h-5 accent-gray-900 shrink-0" onClick={(e) => e.stopPropagation()} />
+                                                                            )}
+                                                                        <div className="min-w-0">
+                                                                            <div className="flex items-center gap-2 mb-1">
+                                                                                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">{formatDate(row.date)}</p>
+                                                                                <span className="h-1 w-1 bg-gray-300 rounded-full"></span>
+                                                                                <span className={`px-1.5 py-0.5 rounded text-[8px] font-black uppercase tracking-widest ${row.source === 'Sale' ? 'bg-amber-100 text-amber-700 border border-amber-200' : 'bg-blue-100 text-blue-700 border border-blue-200'}`}>
+                                                                                    {row.source || 'LC'}
+                                                                                </span>
+                                                                                <span className="h-1 w-1 bg-gray-300 rounded-full"></span>
+                                                                                <p className="text-xs font-bold text-gray-800 truncate">{row.product || '-'}</p>
+                                                                                {row.source === 'Sale' ? (
+                                                                                    (row.cnfType === 'Indian' ? row.indCommissionEdited : row.bdCommissionEdited) && (
+                                                                                        <span className="text-[8px] bg-amber-50 text-amber-500 px-1.5 py-0.5 rounded-md font-black uppercase tracking-tighter">Sale Edited</span>
+                                                                                    )
+                                                                                ) : (
+                                                                                    (row.indCnFEdited || row.bdCnFEdited || row.indCnFBulkEdited || row.bdCnFBulkEdited) && (
+                                                                                        <span className="text-[8px] bg-blue-50 text-blue-500 px-1.5 py-0.5 rounded-md font-black uppercase tracking-tighter">Edited</span>
+                                                                                    )
+                                                                                )}
+                                                                            </div>
+                                                                            <p className="text-sm font-black text-gray-900 truncate">{row.lcNo || '-'}</p>
+                                                                        </div>
+                                                                    </div>
+                                                                    <div className={`p-2 rounded-lg transition-colors ${isExpanded ? 'bg-gray-50 text-gray-600' : 'bg-gray-50 text-gray-400'}`}>{isExpanded ? <ChevronUpIcon className="w-5 h-5" /> : <ChevronDownIcon className="w-5 h-5" />}</div>
+                                                                </div>
+                                                                {isExpanded && (
+                                                                    <div className="px-4 pb-4 space-y-3 animate-in slide-in-from-top-4 duration-300">
+                                                                        <div className="grid grid-cols-2 gap-3 pt-3 border-t border-gray-50">
+                                                                            <div><p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-0.5">Port</p><p className="text-xs font-medium text-gray-700">{row.port || '-'}</p></div>
+                                                                        </div>
+                                                                        <div className="grid grid-cols-2 gap-3 py-2.5 bg-gray-50/70 rounded-xl px-4 mt-2">
+                                                                            <div className="space-y-1"><p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Importer</p><p className="text-xs font-medium text-gray-700 truncate" title={row.importer || '-'}>{row.importer || '-'}</p></div>
+                                                                            <div className="space-y-1 text-right"><p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Exporter</p><p className="text-xs font-medium text-gray-700 truncate" title={row.exporter || '-'}>{row.exporter || '-'}</p></div>
+                                                                        </div>
+                                                                        <div className="grid grid-cols-2 gap-3 py-2.5 bg-gray-50/70 rounded-xl px-4">
+                                                                            <div className="space-y-1"><p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Truck No</p><p className="text-xs font-semibold text-gray-700">{row.truck || '-'}</p></div>
+                                                                            <div className="space-y-1 text-right"><p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Bag / Qty</p><p className="text-xs font-bold text-gray-900">{row.bag ? Math.round(parseFloat(row.bag)).toLocaleString() : '0'} / {row.qty ? Math.round(parseFloat(row.qty)).toLocaleString() : '0'}</p></div>
+                                                                        </div>
+                                                                        <div className="grid grid-cols-2 gap-4 mt-4 pt-4 border-t border-gray-50">
+                                                                            <div>
+                                                                                <p className="text-[9px] font-bold text-gray-400 uppercase tracking-widest mb-1">Commission ({row.uom || viewData?.uom || 'QTY'})</p>
+                                                                                <p className="text-xs font-black text-gray-900 font-mono">{(row.commission || 0).toLocaleString()} Tk</p>
+                                                                            </div>
+                                                                            <div className="text-right">
+                                                                                <p className="text-[9px] font-bold text-gray-400 uppercase tracking-widest mb-1">Total Commission</p>
+                                                                                <p className="text-xs font-black text-gray-900 font-mono">{(row.totalCommission || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} Tk</p>
+                                                                            </div>
+                                                                        </div>
+                                                                        <div className="mt-4 pt-4 border-t border-gray-100 flex gap-2">
+                                                                            {((row.source !== 'Sale' && (isAdmin || (!row.indCnFEdited && !row.bdCnFEdited && !row.indCnFBulkEdited && !row.bdCnFBulkEdited))) ||
+                                                                                (row.source === 'Sale' && (isAdmin || (row.cnfType === 'Indian' ? !row.indCommissionEdited : !row.bdCommissionEdited)))) ? (
+                                                                                <button onClick={() => handleEditHistory(row)} className="flex items-center justify-center gap-2 py-2.5 bg-gray-900 text-white rounded-xl text-xs font-black flex-1 active:scale-95 shadow-lg shadow-gray-900/20"><EditIcon className="w-4 h-4" /> Edit Record</button>
+                                                                            ) : (
+                                                                                <div className="flex items-center justify-center gap-2 py-2.5 bg-blue-50 text-blue-500 rounded-xl text-[10px] font-black flex-1 uppercase tracking-widest">
+                                                                                    <LockIcon className="w-4 h-4" /> {row.source === 'Sale' ? 'Sale Edited & Locked' : 'Edited & Locked'}
+                                                                                </div>
+                                                                            )}
+                                                                        </div>
+                                                                    </div>
+                                                                )}
+                                                            </div>
+                                                        );
+                                                    })
+                                                ) : (
+                                                    <div className="text-center py-12 text-gray-400"><BoxIcon className="w-8 h-8 mb-2 mx-auto opacity-20" /><p className="text-sm">No history results found</p></div>
+                                                )}
+                                            </div>
+                                        </>
+                                    ) : (
+                                        <>
+                                            <div className="hidden md:block overflow-x-auto">
+                                                <table className="cnf-table">
+                                                    <thead>
+                                                        <tr className="cnf-table-header-row">
+                                                            <th className="cnf-table-header">Date</th>
+                                                            <th className="cnf-table-header">Method</th>
+                                                            <th className="cnf-table-header">Reference</th>
+                                                            <th className="cnf-table-header text-right">Amount</th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody className="cnf-table-body">
+                                                        {filteredPayments.length > 0 ? (
+                                                            filteredPayments.map((p, idx) => (
+                                                                <tr key={idx} className="cnf-table-row">
+                                                                    <td className="cnf-table-cell">{formatDate(p.date)}</td>
+                                                                    <td className="cnf-table-cell font-bold">{p.method}</td>
+                                                                    <td className="cnf-table-cell truncate max-w-[400px]" title={p.reference || '-'}>{p.reference || '-'}</td>
+                                                                    <td className="cnf-table-cell text-right font-black">{(p.amount || 0).toLocaleString()} Tk</td>
+                                                                </tr>
+                                                            ))
+                                                        ) : (
+                                                            <tr><td colSpan="4" className="text-center py-12 text-gray-400"><DollarSignIcon className="w-8 h-8 mb-2 mx-auto opacity-20" /><p className="text-sm">No payment records found</p></td></tr>
+                                                        )}
+                                                    </tbody>
+                                                </table>
+                                            </div>
+                                            <div className="block md:hidden space-y-3">
+                                                {filteredPayments.length > 0 ? (
+                                                    filteredPayments.map((p, idx) => (
+                                                        <div key={idx} className="bg-white rounded-xl border border-gray-100 shadow-sm p-4 space-y-3">
+                                                            <div className="flex justify-between items-center">
+                                                                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">{formatDate(p.date)}</p>
+                                                                <span className="px-2 py-0.5 bg-blue-50 text-blue-600 rounded text-[10px] font-black uppercase tracking-widest">{p.method}</span>
+                                                            </div>
+                                                            <div>
+                                                                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-0.5">Reference</p>
+                                                                <p className="text-xs font-medium text-gray-700 truncate">{p.reference || '-'}</p>
+                                                            </div>
+                                                            <div className="flex justify-between items-center pt-2 border-t border-gray-50">
+                                                                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Amount</p>
+                                                                <p className="text-sm font-black text-gray-900">{(p.amount || 0).toLocaleString()} Tk</p>
+                                                            </div>
+                                                        </div>
+                                                    ))
+                                                ) : (
+                                                    <div className="text-center py-12 text-gray-400"><DollarSignIcon className="w-8 h-8 mb-2 mx-auto opacity-20" /><p className="text-sm">No payment history found</p></div>
+                                                )}
+                                            </div>
+                                        </>
+                                    )}
                                 </div>
                             )}
                         </div>
@@ -1458,12 +1618,12 @@ const CnF = ({
                     <div className="cnf-form-container w-full max-w-xl">
                         <div className="cnf-form-bg-orb cnf-form-bg-orb-1"></div>
                         <div className="cnf-form-bg-orb cnf-form-bg-orb-2"></div>
-                        
+
                         <div className="cnf-form-header">
                             <h3 className="cnf-form-title">Edit History Record</h3>
                             <button onClick={() => setEditRecord(null)} className="cnf-form-close"><XIcon className="w-6 h-6" /></button>
                         </div>
-                        
+
                         <div className="relative z-10 space-y-6">
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
                                 <div className="cnf-form-field">
@@ -1479,7 +1639,7 @@ const CnF = ({
                                     <input type="number" step="0.01" name="commission" value={editHistoryData.commission} onChange={handleEditHistoryChange} className="cnf-form-input" />
                                 </div>
                             </div>
-                            
+
                             <div className="flex gap-3">
                                 <button onClick={() => setEditRecord(null)} className="flex-1 py-3 bg-gray-100 hover:bg-gray-200 transition-colors rounded-xl font-bold text-gray-700">Cancel</button>
                                 <button onClick={handleSaveHistory} className="cnf-form-submit flex-[2] justify-center text-lg h-[50px]">Update Record</button>
@@ -1495,17 +1655,17 @@ const CnF = ({
                     <div className="cnf-form-container w-full max-w-xl">
                         <div className="cnf-form-bg-orb cnf-form-bg-orb-1"></div>
                         <div className="cnf-form-bg-orb cnf-form-bg-orb-2"></div>
-                        
+
                         <div className="cnf-form-header">
                             <h3 className="cnf-form-title">Bulk Edit History</h3>
                             <button onClick={() => setIsBulkEditModalOpen(false)} className="cnf-form-close"><XIcon className="w-6 h-6" /></button>
                         </div>
-                        
+
                         <div className="relative z-10 space-y-6">
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
                                 <div className="cnf-form-field">
                                     <label className="cnf-form-label">Calculation UOM</label>
-                                    <select value={bulkEditData.uom} onChange={(e) => setBulkEditData(p => ({...p, uom: e.target.value}))} className="cnf-form-select cursor-pointer">
+                                    <select value={bulkEditData.uom} onChange={(e) => setBulkEditData(p => ({ ...p, uom: e.target.value }))} className="cnf-form-select cursor-pointer">
                                         <option value="QTY">Based on QTY</option>
                                         <option value="BAG">Based on BAG</option>
                                         <option value="TRUCK">Based on TRUCK</option>
@@ -1513,10 +1673,10 @@ const CnF = ({
                                 </div>
                                 <div className="cnf-form-field">
                                     <label className="cnf-form-label">Commission Rate</label>
-                                    <input type="number" step="0.01" value={bulkEditData.commission} onChange={(e) => setBulkEditData(p => ({...p, commission: e.target.value}))} className="cnf-form-input" />
+                                    <input type="number" step="0.01" value={bulkEditData.commission} onChange={(e) => setBulkEditData(p => ({ ...p, commission: e.target.value }))} className="cnf-form-input" />
                                 </div>
                             </div>
-                            
+
                             <div className="flex gap-3">
                                 <button onClick={() => setIsBulkEditModalOpen(false)} className="flex-1 py-3 bg-gray-100 hover:bg-gray-200 transition-colors rounded-xl font-bold text-gray-700">Cancel</button>
                                 <button onClick={handleBulkUpdateHistory} className="cnf-form-submit flex-[2] justify-center text-lg h-[50px]">Apply to {selectedHistoryIds.size} Records</button>

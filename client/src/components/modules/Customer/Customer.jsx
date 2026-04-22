@@ -31,11 +31,13 @@ const Customer = ({
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [submitStatus, setSubmitStatus] = useState(null);
     const [customers, setCustomers] = useState([]);
+    const [gatePasses, setGatePasses] = useState([]);
+    const [lcRecords, setLcRecords] = useState([]);
     const [isLoading, setIsLoading] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
     const [viewData, setViewData] = useState(null);
     const [historySearchQuery, setHistorySearchQuery] = useState('');
-    const [activeHistoryTab, setActiveHistoryTab] = useState('sales'); // 'sales' or 'payment'
+    const [activeHistoryTab, setActiveHistoryTab] = useState('sales'); // 'sales', 'payment', or 'gp'
     const [historySortConfig, setHistorySortConfig] = useState({ key: 'date', direction: 'desc' });
     const [status, setStatus] = useState('Active'); // status state for form
     const [formData, setFormData] = useState({
@@ -169,6 +171,11 @@ const Customer = ({
                 if (type === 'bankName' && item.bankName) uniqueOptions.add(item.bankName);
                 if (type === 'mobileType' && item.mobileType) uniqueOptions.add(item.mobileType);
             });
+        } else if (activeHistoryTab === 'gp') {
+            (gatePasses || []).filter(item => item.party === viewData.companyName).forEach(item => {
+                if (type === 'lcNo' && item.lcNumber) uniqueOptions.add(item.lcNumber);
+                if (type === 'product' && item.productName) uniqueOptions.add(item.productName);
+            });
         } else {
             // All Tab
             (viewData.salesHistory || []).forEach(item => {
@@ -240,13 +247,26 @@ const Customer = ({
         return `${prefix}${nextNum.toString().padStart(4, '0')}`;
     };
 
+    const getLcPort = (lcNumber) => {
+        if (!lcNumber) return '-';
+        const cleanNo = String(lcNumber).replace(/\D/g, '');
+        const lc = lcRecords.find(l => String(l.lcNo || '').replace(/\D/g, '') === cleanNo);
+        return lc?.port || '-';
+    };
+
     const fetchCustomers = async () => {
         setIsLoading(true);
         try {
-            const decryptedCustomers = await api.get('/api/customers');
+            const [decryptedCustomers, gpRecords, lcData] = await Promise.all([
+                api.get('/api/customers'),
+                api.get('/api/lc-gp'),
+                api.get('/api/lc-management')
+            ]);
             setCustomers(decryptedCustomers);
+            setGatePasses(gpRecords);
+            setLcRecords(Array.isArray(lcData) ? lcData : []);
         } catch (error) {
-            console.error('Error fetching customers:', error);
+            console.error('Error fetching data:', error);
         } finally {
             setIsLoading(false);
         }
@@ -630,6 +650,53 @@ const Customer = ({
         });
     }, [viewData, historySearchQuery, historyFilters, historySortConfig]);
 
+    const filteredGatePasses = useMemo(() => {
+        if (!viewData) return [];
+        const filtered = (gatePasses || []).filter(item => {
+            // Filter by customer (party)
+            if (item.party !== viewData.companyName) return false;
+
+            const matchesSearch = !historySearchQuery ||
+                ((item.lcNumber || '').toLowerCase().includes(historySearchQuery.toLowerCase())) ||
+                ((item.productName || '').toLowerCase().includes(historySearchQuery.toLowerCase())) ||
+                ((item.remarks || '').toLowerCase().includes(historySearchQuery.toLowerCase()));
+
+            const matchesFilters =
+                (!historyFilters.startDate || new Date(item.gpDate) >= new Date(historyFilters.startDate)) &&
+                (!historyFilters.endDate || new Date(item.gpDate) <= new Date(historyFilters.endDate)) &&
+                (!historyFilters.lcNo || item.lcNumber === historyFilters.lcNo) &&
+                (!historyFilters.product || item.productName === historyFilters.product);
+
+            return matchesSearch && matchesFilters;
+        });
+
+        if (!historySortConfig.key) return filtered;
+
+        return [...filtered].sort((a, b) => {
+            const { key, direction } = historySortConfig;
+            let aVal = a[key === 'date' ? 'gpDate' : key];
+            let bVal = b[key === 'date' ? 'gpDate' : key];
+
+            if (key === 'date') {
+                aVal = new Date(a.gpDate);
+                bVal = new Date(b.gpDate);
+            } else if (key === 'quantity' || key === 'gpQuantity') {
+                aVal = parseFloat(a.gpQuantity) || 0;
+                bVal = parseFloat(b.gpQuantity) || 0;
+            } else if (key === 'rate' || key === 'gpRate') {
+                aVal = parseFloat(a.gpRate) || 0;
+                bVal = parseFloat(b.gpRate) || 0;
+            } else if (key === 'amount' || key === 'gpValue') {
+                aVal = parseFloat(a.gpValue) || 0;
+                bVal = parseFloat(b.gpValue) || 0;
+            }
+
+            if (aVal < bVal) return direction === 'asc' ? -1 : 1;
+            if (aVal > bVal) return direction === 'asc' ? 1 : -1;
+            return 0;
+        });
+    }, [viewData, gatePasses, historySearchQuery, historyFilters, historySortConfig]);
+
     // Summary Totals
     const totalAmount = filteredSalesHistory.reduce((sum, item) => sum + (parseFloat(item.amount) || 0), 0);
     const totalSalesPaid = filteredSalesHistory.reduce((sum, item) => sum + (parseFloat(item.paid) || 0), 0);
@@ -639,6 +706,10 @@ const Customer = ({
     const totalDueCalculated = Math.max(0, totalAmount - totalSalesPaid - totalDiscount - totalHistoryPaid);
     const totalTruck = filteredSalesHistory.reduce((sum, item) => sum + (parseFloat(item.truck) || 0), 0);
     const totalQuantity = filteredSalesHistory.reduce((sum, item) => sum + (parseFloat(item.quantity) || 0), 0);
+
+    // G.P Summaries
+    const totalGpQuantity = filteredGatePasses.reduce((sum, item) => sum + (parseFloat(item.gpQuantity) || 0), 0);
+    const totalGpValue = filteredGatePasses.reduce((sum, item) => sum + (parseFloat(item.gpValue) || 0), 0);
 
     return (
         <>
@@ -1086,7 +1157,7 @@ const Customer = ({
                                             </div>
                                             <input
                                                 type="text"
-                                                placeholder={activeHistoryTab === 'sales' ? 'Search sales history...' : activeHistoryTab === 'payment' ? 'Search payment history...' : 'Search all history...'}
+                                                placeholder={activeHistoryTab === 'sales' ? 'Search sales history...' : activeHistoryTab === 'payment' ? 'Search payment history...' : activeHistoryTab === 'gp' ? 'Search G.P history...' : 'Search all history...'}
                                                 value={historySearchQuery}
                                                 onChange={(e) => setHistorySearchQuery(e.target.value)}
                                                 className="block w-full pl-10 pr-4 py-2 bg-gray-50/50 border border-gray-200 rounded-xl text-xs focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
@@ -1095,6 +1166,15 @@ const Customer = ({
 
                                         {/* Tab Navigation */}
                                         <div className="flex gap-1.5 justify-center">
+                                            <button
+                                                onClick={() => setActiveHistoryTab('gp')}
+                                                className={`flex-1 md:flex-none px-3 py-1.5 text-xs font-semibold rounded-lg transition-all ${activeHistoryTab === 'gp'
+                                                    ? 'bg-blue-600 text-white shadow-sm'
+                                                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                                                    }`}
+                                            >
+                                                G.P List
+                                            </button>
                                             <button
                                                 onClick={() => setActiveHistoryTab('sales')}
                                                 className={`flex-1 md:flex-none px-3 py-1.5 text-xs font-semibold rounded-lg transition-all ${activeHistoryTab === 'sales'
@@ -1494,7 +1574,7 @@ const Customer = ({
 
                                 <div className="flex-1 overflow-auto p-4 md:p-8 pt-6 md:pt-8 min-h-0">
                                     {/* Global Summary Cards */}
-                                    <div className={`grid ${activeHistoryTab === 'all' ? 'grid-cols-2 md:grid-cols-4' : (activeHistoryTab === 'sales' ? 'grid-cols-2 md:grid-cols-6' : 'grid-cols-2 md:grid-cols-4')} gap-2 md:gap-3 mb-4 md:mb-8 summary-grid-mobile`}>
+                                    <div className={`grid ${activeHistoryTab === 'all' ? 'grid-cols-2 md:grid-cols-4' : (activeHistoryTab === 'sales' ? 'grid-cols-2 md:grid-cols-6' : (activeHistoryTab === 'gp' ? 'grid-cols-2 md:grid-cols-2' : 'grid-cols-2 md:grid-cols-4'))} gap-2 md:gap-3 mb-4 md:mb-8 summary-grid-mobile`}>
                                         {activeHistoryTab === 'sales' && (
                                             <>
                                                 {viewData.customerType?.includes('Party') && (
@@ -1509,23 +1589,149 @@ const Customer = ({
                                                 </div>
                                             </>
                                         )}
-                                        <div className="bg-violet-50/50 p-3 md:p-4 rounded-2xl border border-violet-100 shadow-sm transition-all hover:shadow-md">
-                                            <p className="text-[9px] md:text-[10px] text-violet-500 font-bold uppercase tracking-wider mb-1">Total Amount</p>
-                                            <p className="text-base md:text-lg font-black text-violet-700">৳{totalAmount.toLocaleString()}</p>
-                                        </div>
-                                        <div className="bg-teal-50/50 p-3 md:p-4 rounded-2xl border border-teal-100 shadow-sm transition-all hover:shadow-md">
-                                            <p className="text-[9px] md:text-[10px] text-teal-500 font-bold uppercase tracking-wider mb-1">Total Paid</p>
-                                            <p className="text-base md:text-lg font-black text-teal-700">৳{totalPaidCalculated.toLocaleString()}</p>
-                                        </div>
-                                        <div className="bg-pink-50/50 p-3 md:p-4 rounded-2xl border border-pink-100 shadow-sm transition-all hover:shadow-md">
-                                            <p className="text-[9px] md:text-[10px] text-pink-500 font-bold uppercase tracking-wider mb-1">Total Discount</p>
-                                            <p className="text-base md:text-lg font-black text-pink-700">৳{totalDiscount.toLocaleString()}</p>
-                                        </div>
-                                        <div className="bg-orange-50/50 p-3 md:p-4 rounded-2xl border border-orange-100 shadow-sm transition-all hover:shadow-md">
-                                            <p className="text-[9px] md:text-[10px] text-orange-500 font-bold uppercase tracking-wider mb-1">Total Balance</p>
-                                            <p className="text-base md:text-lg font-black text-orange-700">৳{totalDueCalculated.toLocaleString()}</p>
-                                        </div>
+                                        {activeHistoryTab === 'gp' && (
+                                            <>
+                                                <div className="bg-blue-50/50 p-3 md:p-4 rounded-2xl border border-blue-100 shadow-sm transition-all hover:shadow-md">
+                                                    <p className="text-[9px] md:text-[10px] text-blue-500 font-bold uppercase tracking-wider mb-1">Total G.P Qty</p>
+                                                    <p className="text-base md:text-lg font-black text-blue-700">{totalGpQuantity.toLocaleString()} Kg</p>
+                                                </div>
+                                                <div className="bg-emerald-50/50 p-3 md:p-4 rounded-2xl border border-emerald-100 shadow-sm transition-all hover:shadow-md">
+                                                    <p className="text-[9px] md:text-[10px] text-emerald-500 font-bold uppercase tracking-wider mb-1">Total G.P Value</p>
+                                                    <p className="text-base md:text-lg font-black text-emerald-700">৳{totalGpValue.toLocaleString()}</p>
+                                                </div>
+                                            </>
+                                        )}
+                                        {activeHistoryTab !== 'gp' && (
+                                            <>
+                                                <div className="bg-violet-50/50 p-3 md:p-4 rounded-2xl border border-violet-100 shadow-sm transition-all hover:shadow-md">
+                                                    <p className="text-[9px] md:text-[10px] text-violet-500 font-bold uppercase tracking-wider mb-1">Total Amount</p>
+                                                    <p className="text-base md:text-lg font-black text-violet-700">৳{totalAmount.toLocaleString()}</p>
+                                                </div>
+                                                <div className="bg-teal-50/50 p-3 md:p-4 rounded-2xl border border-teal-100 shadow-sm transition-all hover:shadow-md">
+                                                    <p className="text-[9px] md:text-[10px] text-teal-500 font-bold uppercase tracking-wider mb-1">Total Paid</p>
+                                                    <p className="text-base md:text-lg font-black text-teal-700">৳{totalPaidCalculated.toLocaleString()}</p>
+                                                </div>
+                                                <div className="bg-pink-50/50 p-3 md:p-4 rounded-2xl border border-pink-100 shadow-sm transition-all hover:shadow-md">
+                                                    <p className="text-[9px] md:text-[10px] text-pink-500 font-bold uppercase tracking-wider mb-1">Total Discount</p>
+                                                    <p className="text-base md:text-lg font-black text-pink-700">৳{totalDiscount.toLocaleString()}</p>
+                                                </div>
+                                                <div className="bg-orange-50/50 p-3 md:p-4 rounded-2xl border border-orange-100 shadow-sm transition-all hover:shadow-md">
+                                                    <p className="text-[9px] md:text-[10px] text-orange-500 font-bold uppercase tracking-wider mb-1">Total Balance</p>
+                                                    <p className="text-base md:text-lg font-black text-orange-700">৳{totalDueCalculated.toLocaleString()}</p>
+                                                </div>
+                                            </>
+                                        )}
                                     </div>
+
+                                    {/* G.P List Table */}
+                                    {activeHistoryTab === 'gp' && (
+                                        <>
+                                            <div className="flex items-center gap-4 mb-3 md:mb-4">
+                                                <h4 className="text-base md:text-lg font-bold text-gray-800">Gate Pass List</h4>
+                                            </div>
+                                            <div className="bg-gray-50 rounded-xl border border-gray-200 overflow-hidden">
+                                                {/* Desktop G.P List Table */}
+                                                <table className="w-full text-left text-sm hidden md:table">
+                                                    <thead className="bg-white border-b border-gray-200">
+                                                        <tr>
+                                                            <th className="px-4 py-3 font-semibold text-gray-600 cursor-pointer hover:bg-gray-100 transition-colors" onClick={() => requestHistorySort('date')}>
+                                                                <div className="flex items-center gap-2">
+                                                                    <div className="w-4" />
+                                                                    <span>Date</span>
+                                                                    <SortIcon config={historySortConfig} columnKey="date" />
+                                                                </div>
+                                                            </th>
+                                                            <th className="px-4 py-3 font-semibold text-gray-600 cursor-pointer hover:bg-gray-100 transition-colors" onClick={() => requestHistorySort('lcNo')}>
+                                                                <div className="flex items-center gap-1">
+                                                                    <span>LC Number</span>
+                                                                    <SortIcon config={historySortConfig} columnKey="lcNo" />
+                                                                </div>
+                                                            </th>
+                                                            <th className="px-4 py-3 font-semibold text-gray-600">Port</th>
+                                                            <th className="px-4 py-3 font-semibold text-gray-600 cursor-pointer hover:bg-gray-100 transition-colors" onClick={() => requestHistorySort('product')}>
+                                                                <div className="flex items-center gap-1">
+                                                                    <span>Product</span>
+                                                                    <SortIcon config={historySortConfig} columnKey="product" />
+                                                                </div>
+                                                            </th>
+                                                            <th className="px-4 py-3 font-semibold text-gray-600 cursor-pointer hover:bg-gray-100 transition-colors" onClick={() => requestHistorySort('quantity')}>
+                                                                <div className="flex items-center gap-1">
+                                                                    <span>G.P Qty</span>
+                                                                    <SortIcon config={historySortConfig} columnKey="quantity" />
+                                                                </div>
+                                                            </th>
+                                                            <th className="px-4 py-3 font-semibold text-gray-600 cursor-pointer hover:bg-gray-100 transition-colors" onClick={() => requestHistorySort('rate')}>
+                                                                <div className="flex items-center gap-1">
+                                                                    <span>G.P Rate</span>
+                                                                    <SortIcon config={historySortConfig} columnKey="rate" />
+                                                                </div>
+                                                            </th>
+                                                            <th className="px-4 py-3 font-semibold text-gray-600 cursor-pointer hover:bg-gray-100 transition-colors" onClick={() => requestHistorySort('amount')}>
+                                                                <div className="flex items-center gap-1">
+                                                                    <span>G.P Value</span>
+                                                                    <SortIcon config={historySortConfig} columnKey="amount" />
+                                                                </div>
+                                                            </th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody>
+                                                        {filteredGatePasses && filteredGatePasses.length > 0 ? (
+                                                            filteredGatePasses.map((item) => (
+                                                                <tr key={item._id} className="hover:bg-white border-b border-gray-200 transition-colors">
+                                                                    <td className="px-4 py-3 text-gray-600">{formatDate(item.gpDate)}</td>
+                                                                    <td className="px-4 py-3 font-bold text-gray-900">{item.lcNumber}</td>
+                                                                    <td className="px-4 py-3 text-xs font-bold text-blue-600 uppercase">{getLcPort(item.lcNumber)}</td>
+                                                                    <td className="px-4 py-3 text-gray-600">{item.productName}</td>
+                                                                    <td className="px-4 py-3 font-bold text-blue-600">{parseFloat(item.gpQuantity || 0).toLocaleString()} Kg</td>
+                                                                    <td className="px-4 py-3 text-gray-600">৳{parseFloat(item.gpRate || 0).toLocaleString()}</td>
+                                                                    <td className="px-4 py-3 font-bold text-gray-900">৳{parseFloat(item.gpValue || 0).toLocaleString()}</td>
+                                                                </tr>
+                                                            ))
+                                                        ) : (
+                                                            <tr>
+                                                                <td colSpan="7" className="px-4 py-8 text-left text-gray-400 font-medium italic">No gate pass records found</td>
+                                                            </tr>
+                                                        )}
+                                                    </tbody>
+                                                </table>
+
+                                                {/* Mobile G.P List Card View */}
+                                                <div className="block md:hidden p-3 space-y-3">
+                                                    {filteredGatePasses && filteredGatePasses.length > 0 ? (
+                                                        filteredGatePasses.map((item) => (
+                                                            <div key={item._id} className="bg-white p-4 rounded-xl border border-gray-100 shadow-sm space-y-3">
+                                                                <div className="flex justify-between items-start">
+                                                                    <div>
+                                                                        <div className="text-[10px] font-bold text-blue-500 uppercase tracking-wider">{formatDate(item.gpDate)}</div>
+                                                                        <div className="flex items-center gap-2 mt-0.5">
+                                                                            <span className="text-sm font-bold text-gray-900">{item.lcNumber}</span>
+                                                                            <span className="text-[10px] font-bold text-blue-600 uppercase bg-blue-50 px-1.5 py-0.5 rounded">{getLcPort(item.lcNumber)}</span>
+                                                                        </div>
+                                                                    </div>
+                                                                    <div className="text-left">
+                                                                        <div className="text-xs font-bold text-gray-900">৳{parseFloat(item.gpValue || 0).toLocaleString()}</div>
+                                                                        <div className="text-[10px] text-gray-400">G.P Value</div>
+                                                                    </div>
+                                                                </div>
+                                                                <div className="grid grid-cols-2 gap-4 py-2 border-y border-gray-50">
+                                                                    <div>
+                                                                        <div className="text-[10px] text-gray-400 uppercase">Product</div>
+                                                                        <div className="text-xs font-medium text-gray-700">{item.productName}</div>
+                                                                    </div>
+                                                                    <div className="text-left">
+                                                                        <div className="text-[10px] text-gray-400 uppercase">G.P Qty</div>
+                                                                        <div className="text-xs font-bold text-blue-600">{parseFloat(item.gpQuantity || 0).toLocaleString()} Kg</div>
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+                                                        ))
+                                                    ) : (
+                                                        <div className="py-8 text-left text-xs text-gray-400 font-medium italic">No gate pass records found</div>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        </>
+                                    )}
 
                                     {/* Sales History Table */}
                                     {activeHistoryTab === 'sales' && (
@@ -1540,7 +1746,8 @@ const Customer = ({
                                                         {viewData.customerType === 'Party Customer' ? (
                                                             <tr>
                                                                 <th className="px-4 py-3 font-semibold text-gray-600 cursor-pointer hover:bg-gray-100 transition-colors" onClick={() => requestHistorySort('date')}>
-                                                                    <div className="flex items-center gap-1">
+                                                                    <div className="flex items-center gap-2">
+                                                                        <div className="w-4" />
                                                                         <span>Date</span>
                                                                         <SortIcon config={historySortConfig} columnKey="date" />
                                                                     </div>
@@ -1557,8 +1764,8 @@ const Customer = ({
                                                                         <SortIcon config={historySortConfig} columnKey="product" />
                                                                     </div>
                                                                 </th>
-                                                                <th className="px-4 py-3 font-semibold text-gray-600 text-right cursor-pointer hover:bg-gray-100 transition-colors" onClick={() => requestHistorySort('quantity')}>
-                                                                    <div className="flex items-center justify-end gap-1">
+                                                                <th className="px-4 py-3 font-semibold text-gray-600 text-left cursor-pointer hover:bg-gray-100 transition-colors" onClick={() => requestHistorySort('quantity')}>
+                                                                    <div className="flex items-center justify-start gap-1">
                                                                         <span>Qty</span>
                                                                         <SortIcon config={historySortConfig} columnKey="quantity" />
                                                                     </div>
@@ -1569,31 +1776,32 @@ const Customer = ({
                                                                         <SortIcon config={historySortConfig} columnKey="truck" />
                                                                     </div>
                                                                 </th>
-                                                                <th className="px-4 py-3 font-semibold text-gray-600 text-right cursor-pointer hover:bg-gray-100 transition-colors" onClick={() => requestHistorySort('rate')}>
-                                                                    <div className="flex items-center justify-end gap-1">
+                                                                <th className="px-4 py-3 font-semibold text-gray-600 text-left cursor-pointer hover:bg-gray-100 transition-colors" onClick={() => requestHistorySort('rate')}>
+                                                                    <div className="flex items-center justify-start gap-1">
                                                                         <span>Rate</span>
                                                                         <SortIcon config={historySortConfig} columnKey="rate" />
                                                                     </div>
                                                                 </th>
-                                                                <th className="px-4 py-3 font-semibold text-gray-600 text-right cursor-pointer hover:bg-gray-100 transition-colors" onClick={() => requestHistorySort('amount')}>
-                                                                    <div className="flex items-center justify-end gap-1">
+                                                                <th className="px-4 py-3 font-semibold text-gray-600 text-left cursor-pointer hover:bg-gray-100 transition-colors" onClick={() => requestHistorySort('amount')}>
+                                                                    <div className="flex items-center justify-start gap-1">
                                                                         <span>Amount</span>
                                                                         <SortIcon config={historySortConfig} columnKey="amount" />
                                                                     </div>
                                                                 </th>
-                                                                <th className="px-4 py-3 font-semibold text-gray-600 text-right cursor-pointer hover:bg-gray-100 transition-colors" onClick={() => requestHistorySort('discount')}>
-                                                                    <div className="flex items-center justify-end gap-1">
+                                                                <th className="px-4 py-3 font-semibold text-gray-600 text-left cursor-pointer hover:bg-gray-100 transition-colors" onClick={() => requestHistorySort('discount')}>
+                                                                    <div className="flex items-center justify-start gap-1">
                                                                         <span>Discount</span>
                                                                         <SortIcon config={historySortConfig} columnKey="discount" />
                                                                     </div>
                                                                 </th>
-                                                                <th className="px-4 py-3 font-semibold text-gray-600 text-center">Action</th>
-                                                                <th className="px-4 py-3 font-semibold text-gray-600 text-center">Status</th>
+                                                                <th className="px-4 py-3 font-semibold text-gray-600 text-left">Action</th>
+                                                                <th className="px-4 py-3 font-semibold text-gray-600 text-left">Status</th>
                                                             </tr>
                                                         ) : (
                                                             <tr>
                                                                 <th className="px-4 py-3 font-semibold text-gray-600 cursor-pointer hover:bg-gray-100 transition-colors" onClick={() => requestHistorySort('date')}>
-                                                                    <div className="flex items-center gap-1">
+                                                                    <div className="flex items-center gap-2">
+                                                                        <div className="w-4" />
                                                                         <span>Date</span>
                                                                         <SortIcon config={historySortConfig} columnKey="date" />
                                                                     </div>
@@ -1616,32 +1824,32 @@ const Customer = ({
                                                                         <SortIcon config={historySortConfig} columnKey="brand" />
                                                                     </div>
                                                                 </th>
-                                                                <th className="px-4 py-3 font-semibold text-gray-600 text-right cursor-pointer hover:bg-gray-100 transition-colors" onClick={() => requestHistorySort('quantity')}>
-                                                                    <div className="flex items-center justify-end gap-1">
+                                                                <th className="px-4 py-3 font-semibold text-gray-600 text-left cursor-pointer hover:bg-gray-100 transition-colors" onClick={() => requestHistorySort('quantity')}>
+                                                                    <div className="flex items-center justify-start gap-1">
                                                                         <span>Qty</span>
                                                                         <SortIcon config={historySortConfig} columnKey="quantity" />
                                                                     </div>
                                                                 </th>
-                                                                <th className="px-4 py-3 font-semibold text-gray-600 text-right cursor-pointer hover:bg-gray-100 transition-colors" onClick={() => requestHistorySort('rate')}>
-                                                                    <div className="flex items-center justify-end gap-1">
+                                                                <th className="px-4 py-3 font-semibold text-gray-600 text-left cursor-pointer hover:bg-gray-100 transition-colors" onClick={() => requestHistorySort('rate')}>
+                                                                    <div className="flex items-center justify-start gap-1">
                                                                         <span>Rate</span>
                                                                         <SortIcon config={historySortConfig} columnKey="rate" />
                                                                     </div>
                                                                 </th>
-                                                                <th className="px-4 py-3 font-semibold text-gray-600 text-right cursor-pointer hover:bg-gray-100 transition-colors" onClick={() => requestHistorySort('amount')}>
-                                                                    <div className="flex items-center justify-end gap-1">
+                                                                <th className="px-4 py-3 font-semibold text-gray-600 text-left cursor-pointer hover:bg-gray-100 transition-colors" onClick={() => requestHistorySort('amount')}>
+                                                                    <div className="flex items-center justify-start gap-1">
                                                                         <span>Amount</span>
                                                                         <SortIcon config={historySortConfig} columnKey="amount" />
                                                                     </div>
                                                                 </th>
-                                                                <th className="px-4 py-3 font-semibold text-gray-600 text-right cursor-pointer hover:bg-gray-100 transition-colors" onClick={() => requestHistorySort('discount')}>
-                                                                    <div className="flex items-center justify-end gap-1">
+                                                                <th className="px-4 py-3 font-semibold text-gray-600 text-left cursor-pointer hover:bg-gray-100 transition-colors" onClick={() => requestHistorySort('discount')}>
+                                                                    <div className="flex items-center justify-start gap-1">
                                                                         <span>Discount</span>
                                                                         <SortIcon config={historySortConfig} columnKey="discount" />
                                                                     </div>
                                                                 </th>
-                                                                <th className="px-4 py-3 font-semibold text-gray-600 text-center">Action</th>
-                                                                <th className="px-4 py-3 font-semibold text-gray-600 text-center">Status</th>
+                                                                <th className="px-4 py-3 font-semibold text-gray-600 text-left">Action</th>
+                                                                <th className="px-4 py-3 font-semibold text-gray-600 text-left">Status</th>
                                                             </tr>
                                                         )}
                                                     </thead>
@@ -1716,7 +1924,7 @@ const Customer = ({
                                                                             </td>
                                                                             {/* Column 4: Qty (Party) or Brand (General) */}
                                                                             {isParty ? (
-                                                                                <td className="px-4 py-4 text-right font-bold text-gray-900">{group.totalQty.toLocaleString()}</td>
+                                                                                <td className="px-4 py-4 text-left font-bold text-gray-900">{group.totalQty.toLocaleString()}</td>
                                                                             ) : (
                                                                                 <td className="px-4 py-4">
                                                                                     {isMulti ? (
@@ -1730,23 +1938,23 @@ const Customer = ({
                                                                             )}
                                                                             {/* Column 5: Truck (Party) or Qty (General) */}
                                                                             {isParty ? (
-                                                                                <td className="px-4 py-4 text-center text-gray-900 font-bold">
+                                                                                <td className="px-4 py-4 text-left text-gray-900 font-bold">
                                                                                     {isMulti ? (group.trucks.size > 0 ? group.trucks.size : '-') : (group.items[0]?.truck || '-')}
                                                                                 </td>
                                                                             ) : (
-                                                                                <td className="px-4 py-4 text-right font-bold text-gray-900">{group.totalQty.toLocaleString()}</td>
+                                                                                <td className="px-4 py-4 text-left font-bold text-gray-900">{group.totalQty.toLocaleString()}</td>
                                                                             )}
                                                                             {/* Column 6: Rate */}
-                                                                            <td className="px-4 py-4 text-right font-bold text-gray-500">
+                                                                            <td className="px-4 py-4 text-left font-bold text-gray-500">
                                                                                 {isMulti ? (
                                                                                     <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold bg-gray-100 text-gray-700 uppercase tracking-wider">
                                                                                         Multiple
                                                                                     </span>
                                                                                 ) : (group.items[0]?.rate ? `৳${parseFloat(group.items[0].rate).toLocaleString()}` : (group.totalQty > 0 ? `৳${(group.totalAmount / group.totalQty).toFixed(2)}` : '-'))}
                                                                             </td>
-                                                                            <td className="px-4 py-4 text-right font-black text-violet-700">৳{group.totalAmount.toLocaleString()}</td>
-                                                                            <td className="px-4 py-4 text-right font-bold text-pink-600">৳{group.totalDiscount.toLocaleString()}</td>
-                                                                            <td className="px-4 py-4 text-center">
+                                                                            <td className="px-4 py-4 text-left font-black text-violet-700">৳{group.totalAmount.toLocaleString()}</td>
+                                                                            <td className="px-4 py-4 text-left font-bold text-pink-600">৳{group.totalDiscount.toLocaleString()}</td>
+                                                                            <td className="px-4 py-4 text-left">
                                                                                 <button
                                                                                     onClick={(e) => {
                                                                                         e.stopPropagation();
@@ -1775,7 +1983,7 @@ const Customer = ({
                                                                                      <FileTextIcon className="w-4 h-4" />
                                                                                  </button>
                                                                              </td>
-                                                                            <td className="px-4 py-4 text-center">
+                                                                            <td className="px-4 py-4 text-left">
                                                                                 <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${group.status === 'Completed' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
                                                                                     {group.status}
                                                                                 </span>
@@ -1789,20 +1997,20 @@ const Customer = ({
                                                                                 <td className="px-4 py-3 text-xs text-gray-500 italic">{item.lcNo || '-'}</td>
                                                                                 <td className="px-4 py-3 text-xs text-gray-900 font-medium">{item.product}</td>
                                                                                 {isParty ? (
-                                                                                    <td className="px-4 py-3 text-right text-xs font-bold text-gray-900">{parseFloat(item.quantity).toLocaleString()}</td>
+                                                                                    <td className="px-4 py-3 text-left text-xs font-bold text-gray-900">{parseFloat(item.quantity).toLocaleString()}</td>
                                                                                 ) : (
                                                                                     <td className="px-4 py-3 text-xs text-gray-600">{item.brand || '-'}</td>
                                                                                 )}
                                                                                 {isParty ? (
                                                                                     viewData.customerType?.includes('Party') ? (
-                                                                                        <td className="px-4 py-3 text-center text-xs text-gray-900 font-medium">{item.truck || '-'}</td>
+                                                                                        <td className="px-4 py-3 text-left text-xs text-gray-900 font-medium">{item.truck || '-'}</td>
                                                                                     ) : null
                                                                                 ) : (
-                                                                                    <td className="px-4 py-3 text-right text-xs font-bold text-gray-900">{parseFloat(item.quantity).toLocaleString()}</td>
+                                                                                    <td className="px-4 py-3 text-left text-xs font-bold text-gray-900">{parseFloat(item.quantity).toLocaleString()}</td>
                                                                                 )}
-                                                                                <td className="px-4 py-3 text-right text-xs text-gray-500">৳{parseFloat(item.rate).toLocaleString()}</td>
-                                                                                <td className="px-4 py-3 text-right text-xs font-bold text-violet-600">৳{parseFloat(item.amount).toLocaleString()}</td>
-                                                                                <td className="px-4 py-3 text-right text-xs font-bold text-pink-500">৳{parseFloat(item.discount || 0).toLocaleString()}</td>
+                                                                                <td className="px-4 py-3 text-left text-xs text-gray-500">৳{parseFloat(item.rate).toLocaleString()}</td>
+                                                                                <td className="px-4 py-3 text-left text-xs font-bold text-violet-600">৳{parseFloat(item.amount).toLocaleString()}</td>
+                                                                                <td className="px-4 py-3 text-left text-xs font-bold text-pink-500">৳{parseFloat(item.discount || 0).toLocaleString()}</td>
                                                                                 <td className="px-4 py-3"></td>
                                                                                 <td className="px-4 py-3"></td>
                                                                             </tr>
@@ -1812,7 +2020,7 @@ const Customer = ({
                                                             })
                                                         ) : (
                                                             <tr>
-                                                                <td colSpan="10" className="px-4 py-8 text-center text-gray-400 font-medium italic">No sales history found matching filters</td>
+                                                                <td colSpan="10" className="px-4 py-8 text-left text-gray-400 font-medium italic">No sales history found matching filters</td>
                                                             </tr>
                                                         )}
                                                     </tbody>
@@ -1915,7 +2123,7 @@ const Customer = ({
                                                                                     };
                                                                                     generateSaleInvoicePDF(saleObject);
                                                                                 }}
-                                                                                className="flex-1 flex items-center justify-center gap-1.5 py-1.5 bg-white border border-gray-200 text-gray-600 rounded-lg text-[10px] font-bold"
+                                                                                className="flex-1 flex items-center justify-start gap-1.5 py-1.5 bg-white border border-gray-200 text-gray-600 rounded-lg text-[10px] font-bold"
                                                                             >
                                                                                 <FileTextIcon className="w-3 h-3" /> Print Invoice
                                                                             </button>
@@ -1925,7 +2133,7 @@ const Customer = ({
                                                             );
                                                         })
                                                     ) : (
-                                                        <div className="py-8 text-center text-xs text-gray-400 font-medium italic">No sales history found matching filters</div>
+                                                        <div className="py-8 text-left text-xs text-gray-400 font-medium italic">No sales history found matching filters</div>
                                                     )}
                                                 </div>
                                             </div>
@@ -1945,7 +2153,8 @@ const Customer = ({
                                                     <thead className="bg-white border-b border-gray-200">
                                                         <tr>
                                                             <th className="px-4 py-3 font-semibold text-gray-600 cursor-pointer hover:bg-gray-100 transition-colors" onClick={() => requestHistorySort('date')}>
-                                                                <div className="flex items-center gap-1">
+                                                                <div className="flex items-center gap-2">
+                                                                    <div className="w-4" />
                                                                     <span>Date</span>
                                                                     <SortIcon config={historySortConfig} columnKey="date" />
                                                                 </div>
@@ -1974,13 +2183,13 @@ const Customer = ({
                                                                     <SortIcon config={historySortConfig} columnKey="accountNo" />
                                                                 </div>
                                                             </th>
-                                                            <th className="px-4 py-3 font-semibold text-gray-600 text-right cursor-pointer hover:bg-gray-100 transition-colors" onClick={() => requestHistorySort('amount')}>
-                                                                <div className="flex items-center justify-end gap-1">
+                                                            <th className="px-4 py-3 font-semibold text-gray-600 text-left cursor-pointer hover:bg-gray-100 transition-colors" onClick={() => requestHistorySort('amount')}>
+                                                                <div className="flex items-center justify-start gap-1">
                                                                     <span>Amount</span>
                                                                     <SortIcon config={historySortConfig} columnKey="amount" />
                                                                 </div>
                                                             </th>
-                                                            <th className="px-4 py-3 font-semibold text-gray-600 text-center">Status</th>
+                                                            <th className="px-4 py-3 font-semibold text-gray-600 text-left">Status</th>
                                                         </tr>
                                                     </thead>
                                                     <tbody>
@@ -2001,13 +2210,13 @@ const Customer = ({
                                                                     <td className="px-4 py-3 text-gray-600 text-xs">
                                                                         {payment.accountNo || '-'}
                                                                     </td>
-                                                                    <td className="px-4 py-3 text-right font-bold text-gray-900">
+                                                                    <td className="px-4 py-3 text-left font-bold text-gray-900">
                                                                         <div className="flex flex-col items-end">
                                                                             <span>৳{parseFloat(payment.amount).toLocaleString()}</span>
                                                                             {payment.reference && <span className="text-[9px] text-blue-500 font-normal">Ref: {payment.reference}</span>}
                                                                         </div>
                                                                     </td>
-                                                                    <td className="px-4 py-3 text-center">
+                                                                    <td className="px-4 py-3 text-left">
                                                                         <span className="px-2 py-0.5 bg-emerald-50 text-emerald-600 rounded text-[10px] font-bold">
                                                                             {payment.status || 'Received'}
                                                                         </span>
@@ -2016,7 +2225,7 @@ const Customer = ({
                                                             ))
                                                         ) : (
                                                             <tr>
-                                                                <td colSpan="7" className="px-4 py-8 text-center text-gray-400 font-medium italic">No payment history found matching filters</td>
+                                                                <td colSpan="7" className="px-4 py-8 text-left text-gray-400 font-medium italic">No payment history found matching filters</td>
                                                             </tr>
                                                         )}
                                                     </tbody>
@@ -2098,7 +2307,7 @@ const Customer = ({
                                                             );
                                                         })
                                                     ) : (
-                                                        <div className="py-8 text-center text-xs text-gray-400 font-medium italic">No payment history found</div>
+                                                        <div className="py-8 text-left text-xs text-gray-400 font-medium italic">No payment history found</div>
                                                     )}
                                                 </div>
                                             </div>
@@ -2118,7 +2327,8 @@ const Customer = ({
                                                         <thead className="bg-white border-b border-gray-200">
                                                             <tr>
                                                                 <th className="px-4 py-3 font-semibold text-gray-600 cursor-pointer hover:bg-gray-100 transition-colors" onClick={() => requestHistorySort('date')}>
-                                                                    <div className="flex items-center gap-1">
+                                                                    <div className="flex items-center gap-2">
+                                                                        <div className="w-4" />
                                                                         <span>Date</span>
                                                                         <SortIcon config={historySortConfig} columnKey="date" />
                                                                     </div>
@@ -2143,33 +2353,33 @@ const Customer = ({
                                                                         </div>
                                                                     </th>
                                                                 )}
-                                                                <th className="px-4 py-3 font-semibold text-gray-600 text-right cursor-pointer hover:bg-gray-100 transition-colors" onClick={() => requestHistorySort('quantity')}>
-                                                                    <div className="flex items-center justify-end gap-1">
+                                                                <th className="px-4 py-3 font-semibold text-gray-600 text-left cursor-pointer hover:bg-gray-100 transition-colors" onClick={() => requestHistorySort('quantity')}>
+                                                                    <div className="flex items-center justify-start gap-1">
                                                                         <span>Qty</span>
                                                                         <SortIcon config={historySortConfig} columnKey="quantity" />
                                                                     </div>
                                                                 </th>
-                                                                <th className="px-4 py-3 font-semibold text-gray-600 text-right cursor-pointer hover:bg-gray-100 transition-colors" onClick={() => requestHistorySort('rate')}>
-                                                                    <div className="flex items-center justify-end gap-1">
+                                                                <th className="px-4 py-3 font-semibold text-gray-600 text-left cursor-pointer hover:bg-gray-100 transition-colors" onClick={() => requestHistorySort('rate')}>
+                                                                    <div className="flex items-center justify-start gap-1">
                                                                         <span>Rate</span>
                                                                         <SortIcon config={historySortConfig} columnKey="rate" />
                                                                     </div>
                                                                 </th>
-                                                                <th className="px-4 py-3 font-semibold text-gray-600 text-right cursor-pointer hover:bg-gray-100 transition-colors" onClick={() => requestHistorySort('amount')}>
-                                                                    <div className="flex items-center justify-end gap-1">
+                                                                <th className="px-4 py-3 font-semibold text-gray-600 text-left cursor-pointer hover:bg-gray-100 transition-colors" onClick={() => requestHistorySort('amount')}>
+                                                                    <div className="flex items-center justify-start gap-1">
                                                                         <span>Amount</span>
                                                                         <SortIcon config={historySortConfig} columnKey="amount" />
                                                                     </div>
                                                                 </th>
                                                                 <th className="px-4 py-3 font-semibold text-gray-600">Payment Details</th>
-                                                                <th className="px-4 py-3 font-semibold text-gray-600 text-right cursor-pointer hover:bg-gray-100 transition-colors" onClick={() => requestHistorySort('paid')}>
-                                                                    <div className="flex items-center justify-end gap-1">
+                                                                <th className="px-4 py-3 font-semibold text-gray-600 text-left cursor-pointer hover:bg-gray-100 transition-colors" onClick={() => requestHistorySort('paid')}>
+                                                                    <div className="flex items-center justify-start gap-1">
                                                                         <span>Paid</span>
                                                                         <SortIcon config={historySortConfig} columnKey="paid" />
                                                                     </div>
                                                                 </th>
-                                                                <th className="px-4 py-3 font-semibold text-gray-600 text-right cursor-pointer hover:bg-gray-100 transition-colors" onClick={() => requestHistorySort('balance')}>
-                                                                    <div className="flex items-center justify-end gap-1">
+                                                                <th className="px-4 py-3 font-semibold text-gray-600 text-left cursor-pointer hover:bg-gray-100 transition-colors" onClick={() => requestHistorySort('balance')}>
+                                                                    <div className="flex items-center justify-start gap-1">
                                                                         <span>Balance</span>
                                                                         <SortIcon config={historySortConfig} columnKey="balance" />
                                                                     </div>
@@ -2238,9 +2448,9 @@ const Customer = ({
                                                                          {viewData.customerType?.includes('Party') && (
                                                                             <td className="px-4 py-3 text-gray-700">{item.truck || '—'}</td>
                                                                         )}
-                                                                        <td className="px-4 py-3 text-right text-gray-900 whitespace-pre-wrap">{item.quantity_display || (parseFloat(item.quantity || 0) > 0 ? parseFloat(item.quantity).toLocaleString() : '—')}</td>
-                                                                        <td className="px-4 py-3 text-right text-gray-500 whitespace-pre-wrap">{item.rate_display || (parseFloat(item.rate || 0) > 0 ? `৳${parseFloat(item.rate).toLocaleString()}` : '—')}</td>
-                                                                        <td className="px-4 py-3 text-right font-black text-violet-700">{item.type === 'sale' ? `৳${parseFloat(item.amount || 0).toLocaleString()}` : '—'}</td>
+                                                                        <td className="px-4 py-3 text-left text-gray-900 whitespace-pre-wrap">{item.quantity_display || (parseFloat(item.quantity || 0) > 0 ? parseFloat(item.quantity).toLocaleString() : '—')}</td>
+                                                                        <td className="px-4 py-3 text-left text-gray-500 whitespace-pre-wrap">{item.rate_display || (parseFloat(item.rate || 0) > 0 ? `৳${parseFloat(item.rate).toLocaleString()}` : '—')}</td>
+                                                                        <td className="px-4 py-3 text-left font-black text-violet-700">{item.type === 'sale' ? `৳${parseFloat(item.amount || 0).toLocaleString()}` : '—'}</td>
                                                                         <td className="px-4 py-3 text-gray-600 text-xs">
                                                                             {item.type === 'payment' ? (
                                                                                 <div className="flex flex-col">
@@ -2251,18 +2461,18 @@ const Customer = ({
                                                                                 </div>
                                                                             ) : '—'}
                                                                         </td>
-                                                                        <td className="px-4 py-3 text-right font-black text-emerald-600">
+                                                                        <td className="px-4 py-3 text-left font-black text-emerald-600">
                                                                             {item.type === 'sale' 
                                                                                 ? (parseFloat(item.paid || 0) > 0 ? `৳${parseFloat(item.paid).toLocaleString()}` : '—')
                                                                                 : `৳${parseFloat(item.amount || 0).toLocaleString()}`
                                                                             }
                                                                         </td>
-                                                                        <td className="px-4 py-3 text-right font-black text-orange-600">৳{item.runningBalance.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+                                                                        <td className="px-4 py-3 text-left font-black text-orange-600">৳{item.runningBalance.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
                                                                     </tr>
                                                                 ))
                                                             ) : (
                                                                 <tr>
-                                                                    <td colSpan="10" className="px-4 py-12 text-center text-gray-400 font-medium italic">No combined history found</td>
+                                                                    <td colSpan="10" className="px-4 py-12 text-left text-gray-400 font-medium italic">No combined history found</td>
                                                                 </tr>
                                                             )}
                                                         </tbody>
@@ -2338,7 +2548,7 @@ const Customer = ({
                                                                                     {item.type === 'sale' ? (item.invoiceNo || item.lcNo) : `Payment: ${item.method}`}
                                                                                 </div>
                                                                             </div>
-                                                                            <div className="text-right">
+                                                                            <div className="text-left">
                                                                                 <div className={`text-sm font-black ${item.type === 'sale' ? 'text-violet-700' : 'text-emerald-600'}`}>
                                                                                     {item.type === 'sale' ? `+৳${parseFloat(item.amount || 0).toLocaleString()}` : `-৳${parseFloat(item.amount || 0).toLocaleString()}`}
                                                                                 </div>
@@ -2352,15 +2562,15 @@ const Customer = ({
                                                                                     <>
                                                                                         <div className="flex justify-between items-start">
                                                                                             <span className="text-gray-500">Product:</span>
-                                                                                            <span className="font-bold text-right whitespace-pre-wrap">{item.product}</span>
+                                                                                            <span className="font-bold text-left whitespace-pre-wrap">{item.product}</span>
                                                                                         </div>
                                                                                         <div className="flex justify-between items-start">
                                                                                             <span className="text-gray-500">Qty:</span>
-                                                                                            <span className="font-bold text-right whitespace-pre-wrap">{item.quantity_display || (parseFloat(item.quantity || 0) > 0 ? parseFloat(item.quantity).toLocaleString() : '—')}</span>
+                                                                                            <span className="font-bold text-left whitespace-pre-wrap">{item.quantity_display || (parseFloat(item.quantity || 0) > 0 ? parseFloat(item.quantity).toLocaleString() : '—')}</span>
                                                                                         </div>
                                                                                         <div className="flex justify-between items-start">
                                                                                             <span className="text-gray-500">Rate:</span>
-                                                                                            <span className="font-bold text-right whitespace-pre-wrap">{item.rate_display || (parseFloat(item.rate || 0) > 0 ? `৳${parseFloat(item.rate).toLocaleString()}` : '—')}</span>
+                                                                                            <span className="font-bold text-left whitespace-pre-wrap">{item.rate_display || (parseFloat(item.rate || 0) > 0 ? `৳${parseFloat(item.rate).toLocaleString()}` : '—')}</span>
                                                                                         </div>
                                                                                         <div className="flex justify-between"><span className="text-gray-500">Paid:</span><span className="font-bold text-emerald-600">৳{parseFloat(item.paid || 0).toLocaleString()}</span></div>
                                                                                     </>
@@ -2377,7 +2587,7 @@ const Customer = ({
                                                                 );
                                                             })
                                                         ) : (
-                                                            <div className="py-8 text-center text-xs text-gray-400 font-medium italic">No transactions found</div>
+                                                            <div className="py-8 text-left text-xs text-gray-400 font-medium italic">No transactions found</div>
                                                         )}
                                                     </div>
                                                 </div>

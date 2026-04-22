@@ -19,6 +19,7 @@ import PI from './components/modules/PI/PI';
 import ProductManagement from './components/modules/Product/ProductManagement';
 import Customer from './components/modules/Customer/Customer';
 import LCReceive from './components/modules/LCReceive/LCReceive';
+import CnFPayment from './components/modules/CnF/CnFPayment';
 import WarehouseManagement from './components/modules/Warehouse/WarehouseManagement';
 import StockManagement from "./components/modules/StockManagement/StockManagement";
 import StockReport from './components/modules/StockManagement/StockReport';
@@ -296,7 +297,7 @@ function App() {
 
   const [cnfDropdownOpen, setCnfDropdownOpen] = useState(() => {
     const initialView = localStorage.getItem('currentView') || 'dashboard';
-    return initialView === 'indian-cnf-section' || initialView === 'bd-cnf-section';
+    return initialView === 'indian-cnf-section' || initialView === 'bd-cnf-section' || initialView === 'cnf-payment-section';
   });
 
   const [crmDropdownOpen, setCrmDropdownOpen] = useState(() => {
@@ -306,7 +307,7 @@ function App() {
 
   const [lcDropdownOpen, setLcDropdownOpen] = useState(() => {
     const initialView = localStorage.getItem('currentView') || 'dashboard';
-    return initialView === 'lc-management-section';
+    return initialView === 'lc-management-section' || initialView === 'lc-gp-section' || initialView === 'lc-entry-section';
   });
 
   const [ipDropdownOpen, setIpDropdownOpen] = useState(() => {
@@ -1141,6 +1142,8 @@ function App() {
         );
 
 
+      case 'cnf-payment-section':
+        return <CnFPayment />;
       case 'ip-section':
         return (
           <IPManagement
@@ -1553,7 +1556,7 @@ function App() {
           <div>
             <button
               onClick={() => setCnfDropdownOpen(!cnfDropdownOpen)}
-              className={`w-full flex items-center justify-between px-4 py-2 rounded-lg transition-all ${currentView === 'indian-cnf-section' || currentView === 'bd-cnf-section' ? 'bg-blue-50 text-blue-600 shadow-sm' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'}`}
+              className={`w-full flex items-center justify-between px-4 py-2 rounded-lg transition-all ${currentView === 'indian-cnf-section' || currentView === 'bd-cnf-section' || currentView === 'cnf-payment-section' ? 'bg-blue-50 text-blue-600 shadow-sm' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'}`}
             >
               <div className="flex items-center">
                 <LinkIcon className="w-5 h-5 mr-3" />
@@ -1576,6 +1579,13 @@ function App() {
                 >
                   <BuildingIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
                   <span>BD C&F</span>
+                </button>
+                <button
+                  onClick={() => { setCurrentView('cnf-payment-section'); setSidebarOpen(false); }}
+                  className={`w-full flex flex-row items-center py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'cnf-payment-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'}`}
+                >
+                  <DollarSignIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
+                  <span>C&F Payment</span>
                 </button>
               </div>
             </div>
@@ -1618,7 +1628,7 @@ function App() {
           <div>
             <button
               onClick={() => setLcDropdownOpen(!lcDropdownOpen)}
-              className={`w-full flex items-center justify-between px-4 py-2 rounded-lg transition-all ${currentView === 'lc-management-section' || currentView === 'lc-gp-section' ? 'bg-blue-50 text-blue-600 shadow-sm' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'}`}
+              className={`w-full flex items-center justify-between px-4 py-2 rounded-lg transition-all ${currentView === 'lc-management-section' || currentView === 'lc-gp-section' || currentView === 'lc-entry-section' ? 'bg-blue-50 text-blue-600 shadow-sm' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'}`}
             >
               <div className="flex items-center">
                 <LCManagerIcon className="w-5 h-5 mr-3" />
@@ -1642,13 +1652,16 @@ function App() {
                   <LayoutIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
                   <span>LC G.P</span>
                 </button>
+                <button
+                  onClick={() => { setCurrentView('lc-entry-section'); setSidebarOpen(false); }}
+                  className={`w-full flex flex-row items-center py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'lc-entry-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'}`}
+                >
+                  <FileTextIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
+                  <span>LC Receive</span>
+                </button>
               </div>
             )}
           </div>
-          <button onClick={() => { setCurrentView('lc-entry-section'); setSidebarOpen(false); }} className={`w-full flex items-center px-4 py-2 rounded-lg transition-all ${currentView === 'lc-entry-section' ? 'bg-blue-50 text-blue-600 shadow-sm' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'}`}>
-            <FileTextIcon className="w-5 h-5 mr-3" />
-            <span className="font-medium text-sm">LC Receive</span>
-          </button>
 
           <div>
             <button

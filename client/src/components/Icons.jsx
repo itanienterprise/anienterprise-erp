@@ -175,7 +175,7 @@ export const BuildingIcon = ({ className }) => (
 
 
 export const LayoutIcon = ({ className }) => (
-    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><rect width="18" height="18" x="3" y="3" rx="2" ry="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="21" x2="9" y2="9"/></svg>
+    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><rect width="18" height="18" x="3" y="3" rx="2" ry="2" /><line x1="3" y1="9" x2="21" y2="9" /><line x1="9" y1="21" x2="9" y2="9" /></svg>
 );
 
 export const LCManagerIcon = ({ className }) => (
@@ -188,7 +188,7 @@ export const LCManagerIcon = ({ className }) => (
         <path d="M14 6v3" />
         <path d="M11 7.5h2" />
         <path d="M12 6v3" />
-        
+
         {/* Envelope */}
         <path d="M2 12v8a2 2 0 002 2h16a2 2 0 002-2v-8" />
         <path d="M2 12l10 7 10-7" />

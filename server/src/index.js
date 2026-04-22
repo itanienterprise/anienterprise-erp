@@ -69,6 +69,7 @@ const LCManagement = require('./models/LCManagement');
 const LCGatePass = require('./models/LCGatePass');
 const PI = require('./models/PI');
 const MetaData = require('./models/MetaData');
+const CnFPayment = require('./models/CnFPayment');
 const { encryptData, decryptData } = require('./utils/encryption');
 const CryptoJS = require('crypto-js');
 
@@ -303,6 +304,52 @@ apiRouter.put('/api/cnfs/:id', adminOnly, async (req, res) => {
 apiRouter.get('/api/cnfs', async (req, res) => {
   try {
     const records = await CnF.find().sort({ createdAt: -1 });
+    const decrypted = records.map(r => {
+      const d = decryptData(r.data);
+      return { ...d, _id: r._id, createdAt: r.createdAt };
+    });
+    res.json(decrypted);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// C&F Payment APIs
+apiRouter.post('/api/cnf-payments', async (req, res) => {
+  try {
+    const encryptedData = encryptData(req.body);
+    const newRecord = new CnFPayment({ data: encryptedData });
+    const savedRecord = await newRecord.save();
+    res.status(201).json({ ...req.body, _id: savedRecord._id, createdAt: savedRecord.createdAt });
+  } catch (err) {
+    res.status(400).json({ message: err.message });
+  }
+});
+
+apiRouter.delete('/api/cnf-payments/:id', adminOnly, async (req, res) => {
+  try {
+    const deletedRecord = await CnFPayment.findByIdAndDelete(req.params.id);
+    if (!deletedRecord) return res.status(404).json({ message: 'Payment record not found' });
+    res.json({ message: 'Payment record deleted' });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+apiRouter.put('/api/cnf-payments/:id', adminOnly, async (req, res) => {
+  try {
+    const encryptedData = encryptData(req.body);
+    const updatedRecord = await CnFPayment.findByIdAndUpdate(req.params.id, { data: encryptedData }, { new: true });
+    if (!updatedRecord) return res.status(404).json({ message: 'Payment record not found' });
+    res.json({ ...req.body, _id: updatedRecord._id, createdAt: updatedRecord.createdAt });
+  } catch (err) {
+    res.status(400).json({ message: err.message });
+  }
+});
+
+apiRouter.get('/api/cnf-payments', async (req, res) => {
+  try {
+    const records = await CnFPayment.find().sort({ createdAt: -1 });
     const decrypted = records.map(r => {
       const d = decryptData(r.data);
       return { ...d, _id: r._id, createdAt: r.createdAt };

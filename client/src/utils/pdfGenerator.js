@@ -437,7 +437,7 @@ export const generateStockReportPDF = (stockData, filters, reportType = 'short')
             const qualityGroups = item.brandList.reduce((acc, ent) => {
                 const q = (ent.quality || '-').toUpperCase().trim();
                 // Ensure the entity visually reflects the properly capitalized string for display
-                if (q !== '-') ent.quality = q; 
+                if (q !== '-') ent.quality = q;
                 if (!acc[q]) acc[q] = [];
                 acc[q].push(ent);
                 return acc;
@@ -476,7 +476,7 @@ export const generateStockReportPDF = (stockData, filters, reportType = 'short')
                 for (let i = 0; i < emptyDataColsCount; i++) {
                     headRow.push({ content: '', styles: { fillColor: [248, 248, 248] } });
                 }
-                
+
                 tableRows.push(headRow);
                 isFirstRowOfProduct = false; // SL already pushed
             }
@@ -496,7 +496,7 @@ export const generateStockReportPDF = (stockData, filters, reportType = 'short')
                             rowSpan: totalRowsForProduct,
                             styles: { valign: 'middle', halign: 'center', fontStyle: 'bold' }
                         });
-                        
+
                         // Product Name without Qualities spans all the way through detail and subtotal rows
                         row.push({
                             content: (item.productName || '-').toUpperCase(),
@@ -559,10 +559,10 @@ export const generateStockReportPDF = (stockData, filters, reportType = 'short')
                 const subRow = [];
                 // If hasQuals, SUB TOTAL spans Product Name and Brand columns. 
                 // If !hasQuals, Product Name column is occupied, so SUB TOTAL only occupies Brand column.
-                subRow.push({ 
-                    content: 'SUB TOTAL', 
+                subRow.push({
+                    content: 'SUB TOTAL',
                     colSpan: hasQuals ? 2 : 1,
-                    styles: { fontStyle: 'bold', halign: 'center', fillColor: [248, 248, 248] } 
+                    styles: { fontStyle: 'bold', halign: 'center', fillColor: [248, 248, 248] }
                 });
 
                 if (reportType === 'detailed') {
@@ -581,6 +581,7 @@ export const generateStockReportPDF = (stockData, filters, reportType = 'short')
                 subRow.push({ content: `${rW}${rR !== 0 ? ` - ${Math.abs(rR)} kg` : ''}`, styles: { fontStyle: 'bold', halign: 'right', fillColor: [248, 248, 248] } });
                 subRow.push({ content: Math.round(item.inHouseQuantity).toLocaleString(), styles: { fontStyle: 'bold', halign: 'right', fillColor: [248, 248, 248] } });
 
+                subRow.isSubTotal = true;
                 tableRows.push(subRow);
             }
         });
@@ -606,8 +607,7 @@ export const generateStockReportPDF = (stockData, filters, reportType = 'short')
 
         // Append Grand Total Row
         const grandTotalRow = [
-            { content: '', styles: { fillColor: [240, 240, 240] } }, // SL
-            { content: 'GRAND TOTAL', colSpan: 2, styles: { fontStyle: 'bold', halign: 'center', fillColor: [240, 240, 240] } } // Product Name + Brand
+            { content: 'GRAND TOTAL', colSpan: 3, styles: { fontStyle: 'bold', halign: 'center', fillColor: [240, 240, 240] } } // SL + Product Name + Brand
         ];
 
         if (reportType === 'detailed') {
@@ -620,6 +620,7 @@ export const generateStockReportPDF = (stockData, filters, reportType = 'short')
         grandTotalRow.push({ content: inHousePktStr, styles: { fontStyle: 'bold', halign: 'right', fillColor: [240, 240, 240] } });
         grandTotalRow.push({ content: Math.round(stockData.totalInHouseQty).toString(), styles: { fontStyle: 'bold', halign: 'right', fillColor: [240, 240, 240] } });
 
+        grandTotalRow.isSubTotal = true;
         tableRows.push(grandTotalRow);
 
         // --- Table ---
@@ -664,7 +665,21 @@ export const generateStockReportPDF = (stockData, filters, reportType = 'short')
                 3: { cellWidth: 35, halign: 'right' }, // BAG
                 4: { cellWidth: 35, halign: 'right' }  // QUANTITY
             },
-            margin: { left: margin, right: margin }
+            margin: { left: margin, right: margin },
+            didDrawCell: (data) => {
+                const { doc, cell, row, column } = data;
+                // Draw bold bottom line for subtotal/summary rows OR row-spanned product headers
+                const isSummaryRow = row.raw && row.raw.isSubTotal;
+                const isProductSpan = (column.index === 0 || column.index === 1) && cell.rowSpan > 1;
+
+                if (isSummaryRow || isProductSpan) {
+                    const oldLineWidth = doc.getLineWidth();
+                    doc.setLineWidth(0.5); // Thicker line for separator
+                    doc.setDrawColor(0, 0, 0);
+                    doc.line(cell.x, cell.y + cell.height, cell.x + cell.width, cell.y + cell.height);
+                    doc.setLineWidth(oldLineWidth); // Reset
+                }
+            }
         });
 
         // --- Footer / Summary ---
