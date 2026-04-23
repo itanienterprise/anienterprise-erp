@@ -1589,11 +1589,11 @@ export const generateProductHistoryPDF = (productName, category, activeTab, purc
                 headStyles: { fillColor: [245, 245, 245], textColor: [0, 0, 0], fontStyle: 'bold', halign: 'center' },
                 footStyles: { fillColor: [245, 245, 245], textColor: [0, 0, 0], fontStyle: 'bold', lineWidth: 0.1 },
                 columnStyles: {
-                    0: { cellWidth: 18, halign: 'center' }, // Date
+                    0: { cellWidth: 20, halign: 'center' }, // Date
                     1: { cellWidth: 24, halign: 'center' }, // LC No
                     2: { cellWidth: 26, halign: 'left' },   // Exporter (Increased)
                     3: { cellWidth: 18, halign: 'center' }, // Invoice
-                    4: { cellWidth: 36, halign: 'left' },   // Party (Increased)
+                    4: { cellWidth: 34, halign: 'left' },   // Party (Increased)
                     5: { cellWidth: 21, halign: 'right' },  // Purchase
                     6: { cellWidth: 21, halign: 'right' },  // Sale
                     7: { cellWidth: 21, halign: 'right' },  // InHouse
@@ -1647,10 +1647,10 @@ export const generateProductHistoryPDF = (productName, category, activeTab, purc
                 headStyles: { fillColor: [245, 245, 245], textColor: [0, 0, 0], fontStyle: 'bold', halign: 'center' },
                 footStyles: { fillColor: [245, 245, 245], textColor: [0, 0, 0], fontStyle: 'bold', lineWidth: 0.1 },
                 columnStyles: {
-                    0: { cellWidth: 16, halign: 'center' }, // Date
+                    0: { cellWidth: 20, halign: 'center' }, // Date
                     1: { cellWidth: 20, halign: 'center' }, // LC No
                     2: { cellWidth: 28, halign: 'left' },   // Exporter (Increased)
-                    3: { cellWidth: 44, halign: 'left' },   // Brand
+                    3: { cellWidth: 40, halign: 'left' },   // Brand
                     4: { cellWidth: 16, halign: 'right' },  // Price
                     5: { cellWidth: 14, halign: 'right' },  // Bag
                     6: { cellWidth: 20, halign: 'right' },  // LC Qty
@@ -1718,9 +1718,9 @@ export const generateProductHistoryPDF = (productName, category, activeTab, purc
                     { content: `TK ${Math.round(saleTotals.amount).toLocaleString()}`, styles: { halign: 'right', fontStyle: 'bold', textColor: [0, 0, 0] } }
                 ]];
                 saleColumnStyles = {
-                    0: { cellWidth: 18, halign: 'center' }, // Date
+                    0: { cellWidth: 20, halign: 'center' }, // Date
                     1: { cellWidth: 16, halign: 'center' }, // Invoice
-                    2: { cellWidth: 38, halign: 'left' },   // Company (Increased)
+                    2: { cellWidth: 36, halign: 'left' },   // Company (Increased)
                     3: { cellWidth: 34, halign: 'left' },   // Brand
                     4: { cellWidth: 18, halign: 'right' },  // Packet
                     5: { cellWidth: 20, halign: 'right' },  // Qty
@@ -1972,8 +1972,8 @@ export const generateSalesReportPDF = (reportData, filters, summary, saleType = 
             },
             columnStyles: saleType === 'Border' ? {
                 0: { cellWidth: 7, halign: 'center' },     // SL
-                1: { cellWidth: 18, halign: 'center' },    // Date
-                2: { cellWidth: 26, halign: 'center' },    // LC No
+                1: { cellWidth: 20, halign: 'center' },    // Date
+                2: { cellWidth: 24, halign: 'center' },    // LC No
                 3: { cellWidth: 32, noWrap: true },        // Importer
                 4: { cellWidth: 22, noWrap: true },        // Port
                 5: { cellWidth: 30, noWrap: true },        // IND C&F
@@ -1986,9 +1986,9 @@ export const generateSalesReportPDF = (reportData, filters, summary, saleType = 
                 12: { cellWidth: 18, halign: 'right' }     // Total
             } : {
                 0: { cellWidth: 7, halign: 'center' },     // SL
-                1: { cellWidth: 18, halign: 'center' },    // Date
+                1: { cellWidth: 20, halign: 'center' },    // Date
                 2: { cellWidth: 18, halign: 'center' },    // Invoice
-                3: { cellWidth: 45 },                       // Company (Increased)
+                3: { cellWidth: 43 },                       // Company (Increased)
                 4: { cellWidth: 25, overflow: 'linebreak' }, // Product (Reduced)
                 5: { cellWidth: 35, noWrap: false, overflow: 'linebreak' }, // Brand (Reduced)
                 6: { cellWidth: 15, halign: 'right' },     // Qty
@@ -2311,8 +2311,8 @@ export const generatePaymentCollectionReportPDF = (payments, filters, dateStr) =
             },
             columnStyles: {
                 0: { cellWidth: 10, halign: 'center' }, // SL
-                1: { cellWidth: 19 },                   // Date
-                2: { cellWidth: 30 },                   // Partyadd 
+                1: { cellWidth: 20 },                   // Date
+                2: { cellWidth: 29 },                   // Partyadd 
                 3: { cellWidth: 24 },                   // Method
                 4: { cellWidth: 36 },                   // Bank
                 5: { cellWidth: 21 },                   // Branch

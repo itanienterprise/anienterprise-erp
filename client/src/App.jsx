@@ -31,6 +31,7 @@ import EmployeeManagement from './components/modules/Employee/EmployeeManagement
 import PaymentCollection from './components/modules/PaymentCollection/PaymentCollection';
 import Bank from './components/modules/Bank/Bank';
 import Insurance from './components/modules/Insurance/Insurance';
+import InsurancePayment from './components/modules/Insurance/InsurancePayment';
 import LCManagement from './components/modules/LCManagement/LCManagement';
 import LCGatePass from './components/modules/LCManagement/LCGatePass';
 import { calculateStockData } from './utils/stockHelpers';
@@ -304,10 +305,14 @@ function App() {
     const initialView = localStorage.getItem('currentView') || 'dashboard';
     return initialView === 'customer-section';
   });
-
   const [lcDropdownOpen, setLcDropdownOpen] = useState(() => {
     const initialView = localStorage.getItem('currentView') || 'dashboard';
     return initialView === 'lc-management-section' || initialView === 'lc-gp-section' || initialView === 'lc-entry-section';
+  });
+
+  const [insuranceDropdownOpen, setInsuranceDropdownOpen] = useState(() => {
+    const initialView = localStorage.getItem('currentView') || 'dashboard';
+    return initialView === 'insurance-section' || initialView === 'insurance-payment-section';
   });
 
   const [ipDropdownOpen, setIpDropdownOpen] = useState(() => {
@@ -1419,6 +1424,10 @@ function App() {
             onDeleteConfirm={(data) => handleDelete(data.type, data.id, data.isBulk, data.extraData)}
           />
         );
+      case 'insurance-payment-section':
+        return (
+          <InsurancePayment />
+        );
       case 'lc-gp-section':
         return (
           <LCGatePass 
@@ -1621,10 +1630,36 @@ function App() {
             <FileTextIcon className="w-5 h-5 mr-3" />
             <span className="font-medium text-sm">Proforma Invoice</span>
           </button>
-          <button onClick={() => { setCurrentView('insurance-section'); setSidebarOpen(false); }} className={`w-full flex items-center px-4 py-2 rounded-lg transition-all ${currentView === 'insurance-section' ? 'bg-blue-50 text-blue-600 shadow-sm' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'}`}>
-            <ShieldIcon className="w-5 h-5 mr-3" />
-            <span className="font-medium text-sm">Insurance</span>
-          </button>
+          <div>
+            <button
+              onClick={() => setInsuranceDropdownOpen(!insuranceDropdownOpen)}
+              className={`w-full flex items-center justify-between px-4 py-2 rounded-lg transition-all ${currentView === 'insurance-section' || currentView === 'insurance-payment-section' ? 'bg-blue-50 text-blue-600 shadow-sm' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'}`}
+            >
+              <div className="flex items-center">
+                <ShieldIcon className="w-5 h-5 mr-3" />
+                <span className="font-medium text-sm">Insurance</span>
+              </div>
+              <ChevronDownIcon className={`w-4 h-4 transition-transform duration-200 ${insuranceDropdownOpen ? 'transform rotate-180' : ''}`} />
+            </button>
+            <div className={`overflow-hidden transition-all duration-300 ease-in-out ${insuranceDropdownOpen ? 'max-h-48 opacity-100 mt-1' : 'max-h-0 opacity-0'}`}>
+              <div className="pl-7 pr-2 space-y-1">
+                <button
+                  onClick={() => { setCurrentView('insurance-section'); setSidebarOpen(false); }}
+                  className={`w-full flex flex-row items-center py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'insurance-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'}`}
+                >
+                  <ShieldIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
+                  <span>Insurance</span>
+                </button>
+                <button
+                  onClick={() => { setCurrentView('insurance-payment-section'); setSidebarOpen(false); }}
+                  className={`w-full flex flex-row items-center py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'insurance-payment-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'}`}
+                >
+                  <DollarSignIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
+                  <span>Insurance Payment</span>
+                </button>
+              </div>
+            </div>
+          </div>
           <div>
             <button
               onClick={() => setLcDropdownOpen(!lcDropdownOpen)}

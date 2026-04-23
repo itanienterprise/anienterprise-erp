@@ -70,6 +70,7 @@ const LCGatePass = require('./models/LCGatePass');
 const PI = require('./models/PI');
 const MetaData = require('./models/MetaData');
 const CnFPayment = require('./models/CnFPayment');
+const InsurancePayment = require('./models/InsurancePayment');
 const { encryptData, decryptData } = require('./utils/encryption');
 const CryptoJS = require('crypto-js');
 
@@ -800,6 +801,52 @@ apiRouter.put('/api/insurance/:id', async (req, res) => {
 apiRouter.get('/api/insurance', async (req, res) => {
   try {
     const records = await Insurance.find().sort({ createdAt: -1 });
+    const decrypted = records.map(r => {
+      const d = decryptData(r.data);
+      return { ...d, _id: r._id, createdAt: r.createdAt };
+    });
+    res.json(decrypted);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// Insurance Payment APIs
+apiRouter.post('/api/insurance-payments', async (req, res) => {
+  try {
+    const encryptedData = encryptData(req.body);
+    const newRecord = new InsurancePayment({ data: encryptedData });
+    const savedRecord = await newRecord.save();
+    res.status(201).json({ ...req.body, _id: savedRecord._id, createdAt: savedRecord.createdAt });
+  } catch (err) {
+    res.status(400).json({ message: err.message });
+  }
+});
+
+apiRouter.delete('/api/insurance-payments/:id', adminOnly, async (req, res) => {
+  try {
+    const deletedRecord = await InsurancePayment.findByIdAndDelete(req.params.id);
+    if (!deletedRecord) return res.status(404).json({ message: 'Payment record not found' });
+    res.json({ message: 'Payment record deleted' });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+apiRouter.put('/api/insurance-payments/:id', adminOnly, async (req, res) => {
+  try {
+    const encryptedData = encryptData(req.body);
+    const updatedRecord = await InsurancePayment.findByIdAndUpdate(req.params.id, { data: encryptedData }, { new: true });
+    if (!updatedRecord) return res.status(404).json({ message: 'Payment record not found' });
+    res.json({ ...req.body, _id: updatedRecord._id, createdAt: updatedRecord.createdAt });
+  } catch (err) {
+    res.status(400).json({ message: err.message });
+  }
+});
+
+apiRouter.get('/api/insurance-payments', async (req, res) => {
+  try {
+    const records = await InsurancePayment.find().sort({ createdAt: -1 });
     const decrypted = records.map(r => {
       const d = decryptData(r.data);
       return { ...d, _id: r._id, createdAt: r.createdAt };

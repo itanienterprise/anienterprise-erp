@@ -3,7 +3,7 @@ import axios from '../../../utils/api';
 import {
     PlusIcon, XIcon, EditIcon, TrashIcon, SearchIcon,
     LCManagerIcon, ShieldIcon, BuildingIcon, GlobeIcon,
-    DollarSignIcon, CalendarIcon, ChevronDownIcon, EyeIcon, FileTextIcon
+    DollarSignIcon, CalendarIcon, ChevronDownIcon, EyeIcon, FileTextIcon, CheckIcon
 } from '../../Icons';
 import { formatDate, API_BASE_URL } from '../../../utils/helpers';
 import { decryptData } from '../../../utils/encryption';
@@ -551,6 +551,9 @@ const LCManagement = ({ addNotification, currentUser }) => {
     const [isSaving, setIsSaving] = useState(false);
     const [allStockRecords, setAllStockRecords] = useState([]);
     const [allSalesRecords, setAllSalesRecords] = useState([]);
+    const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+    const [idToDelete, setIdToDelete] = useState(null);
+    const [deleteStatus, setDeleteStatus] = useState(null);
 
     const canManage = ['admin', 'incharge', 'lc manager', 'border manager', 'data entry'].includes((currentUser?.role || '').toLowerCase());
 
@@ -952,15 +955,27 @@ const LCManagement = ({ addNotification, currentUser }) => {
         window.scrollTo({ top: 0, behavior: 'smooth' });
     };
 
-    const handleDelete = async (id) => {
-        if (!window.confirm('Are you sure you want to delete this LC record?')) return;
+    const handleDelete = (id) => {
+        setIdToDelete(id);
+        setShowDeleteConfirm(true);
+    };
+
+    const confirmDelete = async () => {
+        if (!idToDelete) return;
+        setDeleteStatus('loading');
         try {
-            await axios.delete(`${API_BASE_URL}/api/lc-management/${id}`);
-            addNotification?.('LC record deleted', 'success');
+            await axios.delete(`${API_BASE_URL}/api/lc-management/${idToDelete}`);
+            setDeleteStatus('success');
             fetchInitialData();
+            setTimeout(() => {
+                setShowDeleteConfirm(false);
+                setDeleteStatus(null);
+                setIdToDelete(null);
+            }, 1500);
         } catch (error) {
             console.error('Error deleting LC record:', error);
-            addNotification?.('Failed to delete LC record', 'error');
+            setDeleteStatus('error');
+            setTimeout(() => setDeleteStatus(null), 3000);
         }
     };
 
@@ -1932,6 +1947,59 @@ const LCManagement = ({ addNotification, currentUser }) => {
                     allSalesRecords={allSalesRecords}
                     gpRecords={gpRecords}
                 />
+            )}
+
+            {/* Delete Confirmation Modal */}
+            {showDeleteConfirm && (
+                <div className="fixed inset-0 z-[3000] flex items-center justify-center p-4">
+                    <div className="absolute inset-0 bg-gray-900/60 backdrop-blur-sm transition-opacity animate-in fade-in duration-300"></div>
+                    <div className="relative bg-white border border-gray-100 rounded-3xl shadow-2xl w-full max-w-sm overflow-hidden animate-in zoom-in duration-300">
+                        {deleteStatus === 'success' ? (
+                            <div className="p-12 text-center">
+                                <div className="w-20 h-20 bg-emerald-50 rounded-full flex items-center justify-center mx-auto mb-6 animate-in zoom-in duration-500">
+                                    <CheckIcon className="w-10 h-10 text-emerald-500" />
+                                </div>
+                                <h3 className="text-xl font-black text-gray-900 mb-2">Deleted!</h3>
+                                <p className="text-sm text-gray-500">The LC record has been removed.</p>
+                            </div>
+                        ) : (
+                            <div className="p-8">
+                                <div className="w-16 h-16 bg-red-50 rounded-2xl flex items-center justify-center mb-6 mx-auto rotate-3">
+                                    <TrashIcon className="w-8 h-8 text-red-500" />
+                                </div>
+                                <h3 className="text-xl font-black text-gray-900 text-center mb-2">Delete Record?</h3>
+                                <p className="text-sm text-gray-500 text-center mb-8">Are you sure you want to delete this LC record? This action cannot be undone.</p>
+                                
+                                <div className="grid grid-cols-2 gap-3">
+                                    <button
+                                        onClick={() => {
+                                            setShowDeleteConfirm(false);
+                                            setIdToDelete(null);
+                                        }}
+                                        className="py-3.5 px-4 bg-gray-100 hover:bg-gray-200 text-gray-600 font-bold rounded-2xl transition-all active:scale-95"
+                                        disabled={deleteStatus === 'loading'}
+                                    >
+                                        Cancel
+                                    </button>
+                                    <button
+                                        onClick={confirmDelete}
+                                        className="py-3.5 px-4 bg-red-600 hover:bg-red-700 text-white font-bold rounded-2xl shadow-lg shadow-red-200 transition-all active:scale-95 flex items-center justify-center gap-2"
+                                        disabled={deleteStatus === 'loading'}
+                                    >
+                                        {deleteStatus === 'loading' ? (
+                                            <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                                        ) : (
+                                            'Delete Now'
+                                        )}
+                                    </button>
+                                </div>
+                                {deleteStatus === 'error' && (
+                                    <p className="text-center text-xs font-bold text-red-500 mt-4 animate-bounce">Failed to delete record. Please try again.</p>
+                                )}
+                            </div>
+                        )}
+                    </div>
+                </div>
             )}
         </div>
     );
