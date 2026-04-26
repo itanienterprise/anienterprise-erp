@@ -12,6 +12,9 @@ export default defineConfig(({ mode }) => ({
     legacy({
       targets: ['defaults', 'not IE 11', 'chrome 30'],
     }),
+    // TEMPORARILY DISABLED: The javascript-obfuscator is causing Docker to run out of memory (ResourceExhausted).
+    // If you need obfuscation in production, you must allocate more memory (e.g., 8GB) to your Docker Desktop VM.
+    /*
     mode === 'production' ? obfuscator({
       include: [/\.(js|ts|jsx|tsx)$/],
       exclude: [/node_modules/],
@@ -19,11 +22,9 @@ export default defineConfig(({ mode }) => ({
       debugger: true,
       options: {
         compact: true,
-        controlFlowFlattening: true,
-        controlFlowFlatteningThreshold: 0.5,
-        deadCodeInjection: false, // Turn off for now to see if it's the cause
+        controlFlowFlattening: false,
+        deadCodeInjection: false,
         debugProtection: true,
-        debugProtectionInterval: 4000,
         disableConsoleOutput: true,
         identifierNamesGenerator: 'hexadecimal',
         log: false,
@@ -31,25 +32,19 @@ export default defineConfig(({ mode }) => ({
         renameGlobals: false,
         selfDefending: true,
         simplify: true,
-        splitStrings: true,
-        splitStringsChunkLength: 10,
+        splitStrings: false,
         stringArray: true,
-        stringArrayCallsTransform: true,
-        stringArrayCallsTransformThreshold: 0.5,
+        stringArrayCallsTransform: false,
         stringArrayEncoding: ['base64'],
-        stringArrayIndexesType: ['hexadecimal-number'],
         stringArrayIndexShift: true,
         stringArrayRotate: true,
         stringArrayShuffle: true,
-        stringArrayWrappersCount: 2,
-        stringArrayWrappersChainedCalls: true,
-        stringArrayWrappersParametersMaxCount: 4,
-        stringArrayWrappersType: 'function',
-        stringArrayThreshold: 0.5,
+        stringArrayWrappersCount: 1,
         transformObjectKeys: true,
         unicodeEscapeSequence: false
       }
     }) : null
+    */
   ].filter(Boolean),
   server: {
     port: 3000,
@@ -73,15 +68,7 @@ export default defineConfig(({ mode }) => ({
       output: {
         entryFileNames: `s/[hash].js`,
         chunkFileNames: `s/[hash].js`,
-        assetFileNames: `s/[hash].[ext]`,
-        manualChunks(id) {
-          if (id.includes('node_modules')) {
-            if (id.includes('jspdf')) return 'vendor-jspdf';
-            if (id.includes('crypto-js')) return 'vendor-crypto';
-            if (id.includes('react')) return 'vendor-react';
-            return 'vendor'; // all other node_modules
-          }
-        }
+        assetFileNames: `s/[hash].[ext]`
       }
     }
   }

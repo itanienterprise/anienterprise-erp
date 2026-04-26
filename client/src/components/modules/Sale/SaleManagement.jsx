@@ -2657,7 +2657,7 @@ const SaleManagement = ({
                                 <div className="sale-mgmt-input-group relative importer-dropdown-container">
                                     <label className="sale-mgmt-label">Importer</label>
                                     <div className="relative">
-                                        <input autoComplete="off" 
+                                        <input 
                                             type="text"
                                             name="importer"
                                             placeholder={formData.importer || "Search importer..."}
@@ -2717,7 +2717,7 @@ const SaleManagement = ({
                                 <div className="sale-mgmt-input-group relative lc-dropdown-container">
                                     <label className="sale-mgmt-label">LC No</label>
                                     <div className="relative">
-                                        <input autoComplete="off" 
+                                        <input 
                                             type="text"
                                             name="lcNo"
                                             placeholder={formData.lcNo || "Search LC..."}
@@ -2841,7 +2841,7 @@ const SaleManagement = ({
                                 <div className="sale-mgmt-input-group relative ind-cnf-dropdown-container">
                                     <label className="sale-mgmt-label">IND C&F</label>
                                     <div className="relative">
-                                        <input autoComplete="off" 
+                                        <input 
                                             type="text"
                                             name="indianCnF"
                                             placeholder={formData.indianCnF || "Search IND C&F..."}
@@ -2902,7 +2902,7 @@ const SaleManagement = ({
                                 <div className="sale-mgmt-input-group relative bd-cnf-dropdown-container">
                                     <label className="sale-mgmt-label">BD C&F</label>
                                     <div className="relative">
-                                        <input autoComplete="off" 
+                                        <input 
                                             type="text"
                                             name="bdCnf"
                                             placeholder={formData.bdCnf || "Search BD C&F..."}
@@ -2963,7 +2963,7 @@ const SaleManagement = ({
                                 <div className="sale-mgmt-input-group relative port-dropdown-container">
                                     <label className="sale-mgmt-label">Port</label>
                                     <div className="relative">
-                                        <input autoComplete="off" 
+                                        <input 
                                             type="text"
                                             name="port"
                                             placeholder={formData.port || "Search port..."}
@@ -3023,7 +3023,7 @@ const SaleManagement = ({
                             <div className="sale-mgmt-input-group relative company-dropdown-container">
                                 <label className="sale-mgmt-label">Company Name</label>
                                 <div className="relative">
-                                    <input autoComplete="off" 
+                                    <input 
                                         type="text"
                                         placeholder={formData.companyName || "Search company..."}
                                         value={companyNameSearch}
@@ -3216,7 +3216,7 @@ const SaleManagement = ({
                                             <div className={`space-y-1.5 relative px-4 product-dropdown-container ${saleType === 'Border' ? 'flex-1' : 'max-w-sm'}`}>
                                                 <label className="sale-mgmt-item-label">Product</label>
                                                 <div className="relative">
-                                                    <input autoComplete="off" 
+                                                    <input 
                                                         type="text"
                                                         placeholder="Select Product"
                                                         value={activeDropdown === 'product' && activeItemIndex === index ? productSearch : (item.productName || '')}
@@ -3371,7 +3371,7 @@ const SaleManagement = ({
                                                         <div className="col-span-2 space-y-1 relative brand-dropdown-container">
                                                             <label className="md:hidden sale-mgmt-item-label mb-1 block">Brand</label>
                                                             <div className="relative">
-                                                                <input autoComplete="off" 
+                                                                <input 
                                                                     type="text"
                                                                     placeholder={entry.brandName || "Brand"}
                                                                     value={activeDropdown === 'brand' && activeItemIndex === index && activeEntryIndex === entryIndex ? brandSearch : ''}
@@ -3444,7 +3444,7 @@ const SaleManagement = ({
                                                             <div className="space-y-1 relative warehouse-dropdown-container">
                                                                 <label className="md:hidden sale-mgmt-item-label mb-1 block">Warehouse</label>
                                                                 <div className="relative">
-                                                                    <input autoComplete="off" 
+                                                                    <input 
                                                                         type="text"
                                                                         placeholder={entry.warehouseName || "Warehouse"}
                                                                         value={activeDropdown === 'warehouse' && activeItemIndex === index && activeEntryIndex === entryIndex ? warehouseSearch : ''}
