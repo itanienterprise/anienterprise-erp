@@ -1,0 +1,570 @@
+import React, { useState, useEffect } from 'react';
+import axios from '../../../utils/api';
+import { API_BASE_URL, formatDate } from '../../../utils/helpers';
+import { PlusIcon, SearchIcon, EditIcon, TrashIcon, XIcon, CalendarIcon, DollarSignIcon, FileTextIcon } from '../../Icons';
+import CustomDatePicker from '../../shared/CustomDatePicker';
+
+const LCExpense = ({ currentUser, addNotification }) => {
+    const [expenses, setExpenses] = useState([]);
+    const [isLoading, setIsLoading] = useState(false);
+    const [searchQuery, setSearchQuery] = useState('');
+    const [showAddModal, setShowAddModal] = useState(false);
+    const [isEditMode, setIsEditMode] = useState(false);
+    const [editingId, setEditingId] = useState(null);
+    const [isSubmitting, setIsSubmitting] = useState(false);
+    
+    // For dropdowns
+    const [lcs, setLcs] = useState([]);
+    const [activeDropdown, setActiveDropdown] = useState(null);
+    const [highlightedIndex, setHighlightedIndex] = useState(-1);
+    const lcRef = React.useRef(null);
+    const expenseHeadRef = React.useRef(null);
+
+    const initialFormData = {
+        date: '',
+        lcNo: '',
+        bankName: '',
+        expenseHead: '',
+        cnfAgent: '',
+        amount: '',
+        remarks: ''
+    };
+    const [formData, setFormData] = useState(initialFormData);
+
+    const expenseHeads = [
+        "Bank Charges",
+        "Customs Duty",
+        "C&F Commission",
+        "Port Demurrage",
+        "Transport Cost",
+        "Other"
+    ];
+
+    const [bdCnfs, setBdCnfs] = useState([]);
+    const cnfAgentRef = React.useRef(null);
+
+    useEffect(() => {
+        fetchExpenses();
+        fetchLCs();
+        fetchCnfs();
+    }, []);
+
+    useEffect(() => {
+        const handleClickOutside = (event) => {
+            if (lcRef.current && !lcRef.current.contains(event.target) && 
+                expenseHeadRef.current && !expenseHeadRef.current.contains(event.target) &&
+                (!cnfAgentRef.current || !cnfAgentRef.current.contains(event.target))) {
+                setActiveDropdown(null);
+            }
+        };
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, []);
+
+    const handleDropdownKeyDown = (e, list, field) => {
+        if (e.key === 'ArrowDown') {
+            e.preventDefault();
+            setHighlightedIndex(prev => (prev < list.length - 1 ? prev + 1 : prev));
+        } else if (e.key === 'ArrowUp') {
+            e.preventDefault();
+            setHighlightedIndex(prev => (prev > 0 ? prev - 1 : prev));
+        } else if (e.key === 'Enter' && highlightedIndex >= 0) {
+            e.preventDefault();
+            const selected = list[highlightedIndex];
+            
+            if (field === 'lcNo') {
+                setFormData(prev => ({ 
+                    ...prev, 
+                    lcNo: selected.value,
+                    bankName: selected.bankName || ''
+                }));
+            } else {
+                setFormData(prev => ({ ...prev, [field]: selected.value || selected }));
+            }
+            setActiveDropdown(null);
+        } else if (e.key === 'Escape') {
+            setActiveDropdown(null);
+        }
+    };
+
+    const fetchExpenses = async () => {
+        setIsLoading(true);
+        try {
+            const response = await axios.get(`${API_BASE_URL}/api/lc-expenses`);
+            setExpenses(Array.isArray(response.data) ? response.data : []);
+        } catch (error) {
+            console.error('Error fetching LC Expenses:', error);
+            addNotification?.('Failed to load expenses', 'error');
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    const fetchLCs = async () => {
+        try {
+            const response = await axios.get(`${API_BASE_URL}/api/lc-management`);
+            setLcs(Array.isArray(response.data) ? response.data : []);
+        } catch (error) {
+            console.error('Error fetching LCs:', error);
+        }
+    };
+
+    const fetchCnfs = async () => {
+        try {
+            const response = await axios.get(`${API_BASE_URL}/api/cnfs`);
+            const bdAgents = Array.isArray(response.data) ? response.data.filter(c => c.type !== 'Indian') : [];
+            const agentNames = Array.from(new Set(bdAgents.map(a => a.name).filter(Boolean)));
+            setBdCnfs(agentNames);
+        } catch (error) {
+            console.error('Error fetching C&F Agents:', error);
+        }
+    };
+
+    const handleInputChange = (e) => {
+        const { name, value } = e.target;
+        setFormData(prev => ({ ...prev, [name]: value }));
+    };
+
+    const handleSubmit = async (e) => {
+        e.preventDefault();
+        setIsSubmitting(true);
+        try {
+            const dataToSubmit = {
+                ...formData,
+                amount: parseFloat(formData.amount) || 0
+            };
+
+            if (isEditMode && editingId) {
+                await axios.put(`${API_BASE_URL}/api/lc-expenses/${editingId}`, dataToSubmit);
+                addNotification?.('Expense updated successfully', 'success');
+            } else {
+                await axios.post(`${API_BASE_URL}/api/lc-expenses`, dataToSubmit);
+                addNotification?.('Expense added successfully', 'success');
+            }
+            fetchExpenses();
+            closeModal();
+        } catch (error) {
+            console.error('Error saving LC Expense:', error);
+            addNotification?.('Failed to save expense', 'error');
+        } finally {
+            setIsSubmitting(false);
+        }
+    };
+
+    const handleEdit = (expense) => {
+        setFormData({
+            date: expense.date || '',
+            lcNo: expense.lcNo || '',
+            bankName: expense.bankName || '',
+            expenseHead: expense.expenseHead || '',
+            cnfAgent: expense.cnfAgent || '',
+            amount: expense.amount || '',
+            remarks: expense.remarks || ''
+        });
+        setEditingId(expense._id);
+        setIsEditMode(true);
+        setShowAddModal(true);
+    };
+
+    const handleDelete = async (id) => {
+        if (!window.confirm('Are you sure you want to delete this expense?')) return;
+        try {
+            await axios.delete(`${API_BASE_URL}/api/lc-expenses/${id}`);
+            addNotification?.('Expense deleted successfully', 'success');
+            fetchExpenses();
+        } catch (error) {
+            console.error('Error deleting expense:', error);
+            addNotification?.('Failed to delete expense', 'error');
+        }
+    };
+
+    const closeModal = () => {
+        setShowAddModal(false);
+        setIsEditMode(false);
+        setEditingId(null);
+        setFormData(initialFormData);
+    };
+
+    const filteredExpenses = expenses.filter(exp => {
+        const query = searchQuery.toLowerCase();
+        return (
+            (exp.lcNo || '').toLowerCase().includes(query) ||
+            (exp.expenseHead || '').toLowerCase().includes(query)
+        );
+    });
+
+    const totalAmount = filteredExpenses.reduce((sum, exp) => sum + (parseFloat(exp.amount) || 0), 0);
+
+    return (
+        <div className="space-y-4 md:space-y-6">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                {!showAddModal ? (
+                    <>
+                        <div className="w-full md:w-1/4 text-center md:text-left">
+                            <h2 className="text-2xl font-bold text-gray-800 tracking-tight">LC Expense</h2>
+                        </div>
+                        <div className="w-full md:flex-1 md:max-w-md md:mx-auto relative group px-2 md:px-0">
+                            <div className="absolute inset-y-0 left-0 pl-12 md:pl-3.5 flex items-center pointer-events-none">
+                                <SearchIcon className="h-4 w-4 text-gray-400 group-focus-within:text-blue-500 transition-colors" />
+                            </div>
+                            <input
+                                type="text"
+                                placeholder="Search expenses..."
+                                value={searchQuery}
+                                onChange={(e) => setSearchQuery(e.target.value)}
+                                className="block w-full pl-10 pr-4 py-2.5 md:py-2 bg-white/50 border border-gray-200 rounded-xl text-[13px] text-center md:text-left placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 focus:bg-white transition-all outline-none"
+                            />
+                        </div>
+                    </>
+                ) : (
+                    <div className="hidden md:block md:flex-1"></div>
+                )}
+                
+                {!showAddModal && (
+                    <div className="w-full md:w-1/4 flex justify-end gap-3 z-50">
+                        <button
+                            onClick={() => setShowAddModal(true)}
+                            className="w-full md:w-auto px-6 py-2.5 md:py-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-medium rounded-xl shadow-lg shadow-blue-500/30 transition-all transform active:scale-95 md:hover:scale-105 flex items-center justify-center whitespace-nowrap"
+                        >
+                            <PlusIcon className="w-5 h-5 mr-2" />
+                            <span>Add Expense</span>
+                        </button>
+                    </div>
+                )}
+            </div>
+
+            {!showAddModal && (
+                <>
+                    {/* Summary Cards */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="bg-white rounded-2xl p-5 border border-gray-100 shadow-sm flex items-center justify-between">
+                            <div>
+                                <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">Total Expenses</p>
+                                <h3 className="text-2xl font-black text-gray-800">{filteredExpenses.length}</h3>
+                            </div>
+                            <div className="w-12 h-12 bg-blue-50 rounded-xl flex items-center justify-center">
+                                <FileTextIcon className="w-6 h-6 text-blue-600" />
+                            </div>
+                        </div>
+                        <div className="bg-white rounded-2xl p-5 border border-gray-100 shadow-sm flex items-center justify-between">
+                            <div>
+                                <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">Total Amount</p>
+                                <h3 className="text-2xl font-black text-rose-600">৳{totalAmount.toLocaleString()}</h3>
+                            </div>
+                            <div className="w-12 h-12 bg-rose-50 rounded-xl flex items-center justify-center">
+                                <DollarSignIcon className="w-6 h-6 text-rose-600" />
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Table */}
+                    <div className="bg-white/70 backdrop-blur-sm rounded-3xl border border-white/60 shadow-sm overflow-hidden overflow-x-auto transition-all duration-500">
+                        <table className="w-full text-left min-w-[1000px]">
+                            <thead>
+                                <tr className="bg-gray-50/50 border-b border-gray-100">
+                                    <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-nowrap">Date</th>
+                                    <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-nowrap">LC No</th>
+                                    <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-nowrap">Expense Head</th>
+                                    <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-right text-nowrap">Amount</th>
+                                    <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-center text-nowrap">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-gray-50">
+                                {isLoading ? (
+                                    <tr><td colSpan="5" className="px-6 py-12 text-center text-gray-400">Loading expenses...</td></tr>
+                                ) : filteredExpenses.length === 0 ? (
+                                    <tr><td colSpan="5" className="px-6 py-12 text-center text-gray-400">No expenses found.</td></tr>
+                                ) : (
+                                    filteredExpenses.map((exp) => (
+                                        <tr key={exp._id} className="hover:bg-gray-50/50 transition-colors border-b border-gray-50 group">
+                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600 font-medium">{formatDate(exp.date)}</td>
+                                            <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-gray-900">{exp.lcNo || '-'}</td>
+                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-blue-600 font-medium">{exp.expenseHead}</td>
+                                            <td className="px-6 py-4 whitespace-nowrap text-sm font-black text-gray-900 text-right">
+                                                ৳{parseFloat(exp.amount || 0).toLocaleString()}
+                                            </td>
+                                            <td className="px-6 py-4 text-center">
+                                                <div className="flex items-center justify-center gap-4 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                    <button onClick={() => handleEdit(exp)} className="text-gray-400 hover:text-blue-600 transition-colors"><EditIcon className="w-5 h-5" /></button>
+                                                    <button onClick={() => handleDelete(exp._id)} className="text-gray-400 hover:text-red-600 transition-colors"><TrashIcon className="w-5 h-5" /></button>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    ))
+                                )}
+                            </tbody>
+                        </table>
+                    </div>
+                </>
+            )}
+
+            {/* In-Line Registration Form */}
+            {showAddModal && (
+                <div className="lc-form-container relative overflow-hidden bg-white/60 backdrop-blur-xl border border-white/40 rounded-2xl shadow-2xl p-5 md:p-8 animate-in slide-in-from-top-4 duration-300">
+                    <div className="absolute -top-24 -right-24 w-64 h-64 bg-blue-500/10 rounded-full blur-3xl"></div>
+                    <div className="absolute -bottom-24 -left-24 w-64 h-64 bg-indigo-500/10 rounded-full blur-3xl"></div>
+
+                    <div className="flex items-center justify-between mb-6 md:mb-8 relative z-10">
+                        <div>
+                            <h3 className="text-lg md:text-xl font-semibold text-gray-800">
+                                {isEditMode ? 'Edit LC Expense' : 'Add New LC Expense'}
+                            </h3>
+                            <p className="text-[11px] text-blue-500 font-bold uppercase tracking-widest mt-1">
+                                Expense Details
+                            </p>
+                        </div>
+                        <button
+                            onClick={closeModal}
+                            className="p-2 hover:bg-rose-50 hover:text-rose-600 rounded-xl transition-all group active:scale-95"
+                            title="Close Form"
+                        >
+                            <XIcon className="w-5 h-5 text-gray-400 group-hover:text-rose-500" />
+                        </button>
+                    </div>
+
+                    <form onSubmit={handleSubmit} className="relative z-10">
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
+                            <div className="space-y-1.5 text-left">
+                                <CustomDatePicker
+                                    label="Date"
+                                    value={formData.date}
+                                    onChange={(e) => setFormData(prev => ({ ...prev, date: e.target.value }))}
+                                    compact={true}
+                                    required
+                                />
+                            </div>
+                            
+                            <div className="space-y-1.5 text-left relative" ref={lcRef}>
+                                <label className="text-sm font-semibold text-gray-600 ml-1">LC No <span className="text-red-500">*</span></label>
+                                <div className="relative">
+                                    <input
+                                        type="text"
+                                        value={formData.lcNo}
+                                        onChange={(e) => {
+                                            setFormData(prev => ({ ...prev, lcNo: e.target.value }));
+                                            setActiveDropdown('lcNo');
+                                            setHighlightedIndex(-1);
+                                        }}
+                                        onFocus={() => { setActiveDropdown('lcNo'); setHighlightedIndex(-1); }}
+                                        onKeyDown={(e) => {
+                                            const filtered = lcs.filter(lc => !formData.lcNo || lc.lcNo.toLowerCase().includes(formData.lcNo.toLowerCase()));
+                                            handleDropdownKeyDown(e, filtered.map(lc => ({ value: lc.lcNo, bankName: lc.bankName })), 'lcNo');
+                                        }}
+                                        className="w-full px-4 py-2.5 bg-white/50 border border-gray-200/60 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all font-medium pr-10"
+                                        required
+                                        placeholder="Search LC No"
+                                        autoComplete="nope"
+                                    />
+                                    <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1.5">
+                                        {formData.lcNo && (
+                                            <button type="button" onClick={() => setFormData(prev => ({ ...prev, lcNo: '' }))} className="text-gray-400 hover:text-gray-600">
+                                                <XIcon className="w-4 h-4" />
+                                            </button>
+                                        )}
+                                        <SearchIcon className="w-4 h-4 text-gray-300" />
+                                    </div>
+                                </div>
+                                {activeDropdown === 'lcNo' && (
+                                    <div className="absolute z-[100] w-full mt-1 bg-white border border-gray-100 rounded-xl shadow-xl max-h-60 overflow-y-auto py-1">
+                                        {lcs.filter(lc => !formData.lcNo || lc.lcNo.toLowerCase().includes(formData.lcNo.toLowerCase())).map((lc, idx) => (
+                                            <button
+                                                key={lc._id}
+                                                type="button"
+                                                onMouseDown={(e) => { 
+                                                    e.preventDefault(); 
+                                                    setFormData(prev => ({ 
+                                                        ...prev, 
+                                                        lcNo: lc.lcNo,
+                                                        bankName: lc.bankName || ''
+                                                    }));
+                                                    setActiveDropdown(null);
+                                                }}
+                                                onMouseEnter={() => setHighlightedIndex(idx)}
+                                                className={`w-full px-4 py-2.5 text-left text-sm transition-colors flex items-center justify-between ${
+                                                    highlightedIndex === idx ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-blue-50'
+                                                }`}
+                                            >
+                                                <span className="font-bold">{lc.lcNo}</span>
+                                            </button>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+
+                            <div className="space-y-1.5 text-left relative" ref={expenseHeadRef}>
+                                <label className="text-sm font-semibold text-gray-600 ml-1">Expense Head <span className="text-red-500">*</span></label>
+                                <div className="relative">
+                                    <input
+                                        type="text"
+                                        value={formData.expenseHead}
+                                        onChange={(e) => {
+                                            setFormData(prev => ({ ...prev, expenseHead: e.target.value }));
+                                            setActiveDropdown('expenseHead');
+                                            setHighlightedIndex(-1);
+                                        }}
+                                        onFocus={() => { setActiveDropdown('expenseHead'); setHighlightedIndex(-1); }}
+                                        onKeyDown={(e) => {
+                                            const filtered = expenseHeads.filter(head => !formData.expenseHead || head.toLowerCase().includes(formData.expenseHead.toLowerCase()));
+                                            handleDropdownKeyDown(e, filtered, 'expenseHead');
+                                        }}
+                                        className="w-full px-4 py-2.5 bg-white/50 border border-gray-200/60 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all font-medium pr-10"
+                                        required
+                                        placeholder="Search Expense Head"
+                                        autoComplete="nope"
+                                    />
+                                    <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1.5">
+                                        {formData.expenseHead && (
+                                            <button type="button" onClick={() => setFormData(prev => ({ ...prev, expenseHead: '' }))} className="text-gray-400 hover:text-gray-600">
+                                                <XIcon className="w-4 h-4" />
+                                            </button>
+                                        )}
+                                        <SearchIcon className="w-4 h-4 text-gray-300" />
+                                    </div>
+                                </div>
+                                {activeDropdown === 'expenseHead' && (
+                                    <div className="absolute z-[100] w-full mt-1 bg-white border border-gray-100 rounded-xl shadow-xl max-h-60 overflow-y-auto py-1">
+                                        {expenseHeads.filter(head => !formData.expenseHead || head.toLowerCase().includes(formData.expenseHead.toLowerCase())).map((head, idx) => (
+                                            <button
+                                                key={head}
+                                                type="button"
+                                                onMouseDown={(e) => { 
+                                                    e.preventDefault(); 
+                                                    setFormData(prev => ({ ...prev, expenseHead: head }));
+                                                    setActiveDropdown(null);
+                                                }}
+                                                onMouseEnter={() => setHighlightedIndex(idx)}
+                                                className={`w-full px-4 py-2.5 text-left text-sm transition-colors flex items-center justify-between ${
+                                                    highlightedIndex === idx ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-blue-50'
+                                                }`}
+                                            >
+                                                <span className="font-medium">{head}</span>
+                                            </button>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+
+                            {formData.expenseHead === 'Bank Charges' && (
+                                <div className="space-y-1.5 text-left animate-in fade-in zoom-in duration-300">
+                                    <label className="text-sm font-semibold text-gray-600 ml-1">Bank Name</label>
+                                    <input
+                                        type="text"
+                                        value={formData.bankName}
+                                        readOnly
+                                        className="w-full px-4 py-2.5 bg-gray-50/80 border border-gray-200/60 rounded-xl outline-none transition-all font-semibold text-gray-500 cursor-not-allowed"
+                                        placeholder="Auto-filled from LC"
+                                    />
+                                </div>
+                            )}
+
+                            {formData.expenseHead === 'C&F Commission' && (
+                                <div className="space-y-1.5 text-left relative animate-in fade-in zoom-in duration-300" ref={cnfAgentRef}>
+                                    <label className="text-sm font-semibold text-gray-600 ml-1">C&F Agent (BD) <span className="text-red-500">*</span></label>
+                                    <div className="relative">
+                                        <input
+                                            type="text"
+                                            value={formData.cnfAgent}
+                                            onChange={(e) => {
+                                                setFormData(prev => ({ ...prev, cnfAgent: e.target.value }));
+                                                setActiveDropdown('cnfAgent');
+                                                setHighlightedIndex(-1);
+                                            }}
+                                            onFocus={() => { setActiveDropdown('cnfAgent'); setHighlightedIndex(-1); }}
+                                            onKeyDown={(e) => {
+                                                const filtered = bdCnfs.filter(cnf => !formData.cnfAgent || cnf.toLowerCase().includes(formData.cnfAgent.toLowerCase()));
+                                                handleDropdownKeyDown(e, filtered, 'cnfAgent');
+                                            }}
+                                            className="w-full px-4 py-2.5 bg-white/50 border border-gray-200/60 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all font-medium pr-10"
+                                            required={formData.expenseHead === 'C&F Commission'}
+                                            placeholder="Search C&F Agent"
+                                            autoComplete="nope"
+                                        />
+                                        <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1.5">
+                                            {formData.cnfAgent && (
+                                                <button type="button" onClick={() => setFormData(prev => ({ ...prev, cnfAgent: '' }))} className="text-gray-400 hover:text-gray-600">
+                                                    <XIcon className="w-4 h-4" />
+                                                </button>
+                                            )}
+                                            <SearchIcon className="w-4 h-4 text-gray-300" />
+                                        </div>
+                                    </div>
+                                    {activeDropdown === 'cnfAgent' && (
+                                        <div className="absolute z-[100] w-full mt-1 bg-white border border-gray-100 rounded-xl shadow-xl max-h-60 overflow-y-auto py-1">
+                                            {bdCnfs.filter(cnf => !formData.cnfAgent || cnf.toLowerCase().includes(formData.cnfAgent.toLowerCase())).map((cnf, idx) => (
+                                                <button
+                                                    key={cnf}
+                                                    type="button"
+                                                    onMouseDown={(e) => { 
+                                                        e.preventDefault(); 
+                                                        setFormData(prev => ({ ...prev, cnfAgent: cnf }));
+                                                        setActiveDropdown(null);
+                                                    }}
+                                                    onMouseEnter={() => setHighlightedIndex(idx)}
+                                                    className={`w-full px-4 py-2.5 text-left text-sm transition-colors flex items-center justify-between ${
+                                                        highlightedIndex === idx ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-blue-50'
+                                                    }`}
+                                                >
+                                                    <span className="font-medium">{cnf}</span>
+                                                </button>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+
+                            <div className="space-y-1.5 text-left">
+                                <label className="text-sm font-semibold text-gray-600 ml-1">Amount (৳) <span className="text-red-500">*</span></label>
+                                <input
+                                    type="number"
+                                    name="amount"
+                                    value={formData.amount}
+                                    onChange={handleInputChange}
+                                    required
+                                    min="0"
+                                    step="0.01"
+                                    placeholder="0.00"
+                                    className="w-full px-4 py-2.5 bg-white/50 border border-gray-200/60 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all font-bold"
+                                />
+                            </div>
+                        </div>
+                        
+                        <div className="mb-8 space-y-1.5 text-left">
+                            <label className="text-sm font-semibold text-gray-600 ml-1">Remarks</label>
+                            <textarea
+                                name="remarks"
+                                value={formData.remarks}
+                                onChange={handleInputChange}
+                                placeholder="Optional details..."
+                                rows="2"
+                                className="w-full px-4 py-2.5 bg-white/50 border border-gray-200/60 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all font-medium min-h-[100px]"
+                            />
+                        </div>
+
+                        <div className="flex gap-4 relative z-10">
+                            <button
+                                type="button"
+                                onClick={closeModal}
+                                className="flex-1 py-3 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl font-bold transition-all active:scale-95"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                type="submit"
+                                disabled={isSubmitting}
+                                className="flex-[2] py-3 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white rounded-xl font-bold shadow-lg shadow-blue-500/30 transition-all active:scale-95 flex items-center justify-center gap-2"
+                            >
+                                {isSubmitting ? 'Processing...' : isEditMode ? (
+                                    <>Update Record</>
+                                ) : (
+                                    <><PlusIcon className="w-5 h-5" /> Save Expense</>
+                                )}
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            )}
+        </div>
+    );
+};
+
+export default LCExpense;

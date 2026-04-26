@@ -762,9 +762,9 @@ const InsurancePayment = () => {
                                 </thead>
                                 <tbody className="divide-y divide-gray-100">
                                     {isLoading ? (
-                                        <tr><td colSpan="6" className="px-4 py-12 text-center text-gray-400">Loading payments...</td></tr>
+                                        <tr><td colSpan={isAdmin ? 8 : 7} className="px-4 py-12 text-center text-gray-400">Loading payments...</td></tr>
                                     ) : filteredPayments.length === 0 ? (
-                                        <tr><td colSpan="6" className="px-4 py-12 text-center text-gray-400">No payment records found.</td></tr>
+                                        <tr><td colSpan={isAdmin ? 8 : 7} className="px-4 py-12 text-center text-gray-400">No payment records found.</td></tr>
                                     ) : (
                                         filteredPayments.map((p) => (
                                             <tr key={p._id} className="hover:bg-gray-50/50 transition-colors group">

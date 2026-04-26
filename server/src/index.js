@@ -67,6 +67,7 @@ const CnF = require('./models/CnF');
 const Insurance = require('./models/Insurance');
 const LCManagement = require('./models/LCManagement');
 const LCGatePass = require('./models/LCGatePass');
+const LCExpense = require('./models/LCExpense');
 const PI = require('./models/PI');
 const MetaData = require('./models/MetaData');
 const CnFPayment = require('./models/CnFPayment');
@@ -625,6 +626,34 @@ apiRouter.post('/api/sales', async (req, res) => {
     const saleData = req.body;
     let rateMissing = false;
 
+    // Generate unique invoice number based on saleType
+    const sType = saleData.saleType || 'General';
+    const prefix = (sType === 'Border' || sType === 'Border Sale') ? 'BS' : 'GS';
+
+    const allSales = await Sale.find();
+    const numbers = [];
+    for (const s of allSales) {
+      let d;
+      try {
+        d = decryptData(s.data);
+        if (d && d.data && typeof d.data === 'string' && !d.invoiceNo) {
+          try { d = decryptData(d.data); } catch (e) { }
+        }
+      } catch (e) {
+        console.error('Error decrypting sale during invoice generation:', e);
+      }
+
+      const invNo = s.invoiceNo || (d ? d.invoiceNo : '');
+      if (invNo && invNo.startsWith(prefix)) {
+        const match = invNo.match(/\d+/);
+        if (match) numbers.push(parseInt(match[0]));
+      }
+    }
+
+    const nextNum = numbers.length > 0 ? Math.max(...numbers) + 1 : 1;
+    const newInvoiceNo = `${prefix}${nextNum.toString().padStart(4, '0')}`;
+    saleData.invoiceNo = newInvoiceNo;
+
     // Detect if rate is missing
     if (saleData.items && Array.isArray(saleData.items)) {
       saleData.items.forEach(item => {
@@ -646,10 +675,17 @@ apiRouter.post('/api/sales', async (req, res) => {
     if (rateMissing) saleData.rateMissing = true;
 
     const encryptedData = encryptData(saleData);
-    const newSale = new Sale({ data: encryptedData });
+    const newSale = new Sale({ 
+      invoiceNo: newInvoiceNo,
+      saleType: sType,
+      data: encryptedData 
+    });
     const savedSale = await newSale.save();
     res.status(201).json({ ...saleData, _id: savedSale._id, createdAt: savedSale.createdAt });
   } catch (err) {
+    if (err.code === 11000) {
+      return res.status(400).json({ message: 'Duplicate Invoice Number! Please try again.' });
+    }
     res.status(400).json({ message: err.message });
   }
 });
@@ -694,9 +730,16 @@ apiRouter.put('/api/sales/:id', async (req, res) => {
     }
 
     const encryptedData = encryptData(req.body);
-    const updatedSale = await Sale.findByIdAndUpdate(req.params.id, { data: encryptedData }, { new: true });
+    const updatedSale = await Sale.findByIdAndUpdate(req.params.id, { 
+      invoiceNo: req.body.invoiceNo,
+      saleType: req.body.saleType,
+      data: encryptedData 
+    }, { new: true });
     res.json({ ...req.body, _id: updatedSale._id, createdAt: updatedSale.createdAt });
   } catch (err) {
+    if (err.code === 11000) {
+      return res.status(400).json({ message: 'Duplicate Invoice Number detected!' });
+    }
     res.status(400).json({ message: err.message });
   }
 });
@@ -983,6 +1026,52 @@ apiRouter.delete('/api/lc-gp/:id', async (req, res) => {
     const deletedRecord = await LCGatePass.findByIdAndDelete(req.params.id);
     if (!deletedRecord) return res.status(404).json({ message: 'Gate Pass record not found' });
     res.json({ message: 'Gate Pass record deleted' });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// LC Expense APIs
+apiRouter.get('/api/lc-expenses', async (req, res) => {
+  try {
+    const records = await LCExpense.find().sort({ createdAt: -1 });
+    const decrypted = records.map(r => {
+      const d = decryptData(r.data);
+      return { ...d, _id: r._id, createdAt: r.createdAt };
+    });
+    res.json(decrypted);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+apiRouter.post('/api/lc-expenses', async (req, res) => {
+  try {
+    const encryptedData = encryptData(req.body);
+    const newRecord = new LCExpense({ data: encryptedData });
+    const savedRecord = await newRecord.save();
+    res.status(201).json({ ...req.body, _id: savedRecord._id, createdAt: savedRecord.createdAt });
+  } catch (err) {
+    res.status(400).json({ message: err.message });
+  }
+});
+
+apiRouter.put('/api/lc-expenses/:id', async (req, res) => {
+  try {
+    const encryptedData = encryptData(req.body);
+    const updatedRecord = await LCExpense.findByIdAndUpdate(req.params.id, { data: encryptedData }, { new: true });
+    if (!updatedRecord) return res.status(404).json({ message: 'LC Expense record not found' });
+    res.json({ ...req.body, _id: updatedRecord._id, createdAt: updatedRecord.createdAt });
+  } catch (err) {
+    res.status(400).json({ message: err.message });
+  }
+});
+
+apiRouter.delete('/api/lc-expenses/:id', async (req, res) => {
+  try {
+    const deletedRecord = await LCExpense.findByIdAndDelete(req.params.id);
+    if (!deletedRecord) return res.status(404).json({ message: 'LC Expense record not found' });
+    res.json({ message: 'LC Expense record deleted' });
   } catch (err) {
     res.status(500).json({ message: err.message });
   }

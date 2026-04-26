@@ -332,8 +332,6 @@ const SaleManagement = ({
     };
 
     const handleStatusUpdate = async (sale, newStatus) => {
-        console.log(`[handleStatusUpdate] Initiating status update to: ${newStatus} for sale ID:`, sale._id);
-        console.log(`[handleStatusUpdate] Current user:`, currentUser);
         try {
             setIsSubmitting(true);
             const actionBy = currentUser ? (currentUser.name || currentUser.username || '') : '';
@@ -346,26 +344,18 @@ const SaleManagement = ({
                 ...(newStatus === 'Rejected' ? { rejectedBy: actionBy } : {}),
             };
 
-            console.log(`[handleStatusUpdate] Sending PUT request with data:`, updatedData);
             const response = await axios.put(`${API_BASE_URL}/api/sales/${_id}`, updatedData);
-            console.log(`[handleStatusUpdate] Response status:`, response.status);
 
             if (response.status >= 200 && response.status < 300) {
-                // If accepted, trigger history and stock updates
                 if (newStatus === 'accepted') {
-                    console.log(`[handleStatusUpdate] Status is accepted. Triggering processSaleEffects...`);
                     try {
                         await processSaleEffects(updatedData, false);
-                        console.log(`[handleStatusUpdate] processSaleEffects successful.`);
                     } catch (err) {
-                        console.error(`[handleStatusUpdate] Error in processSaleEffects:`, err);
                         alert(`Successfully updated status, but failed to process warehouse/customer effects: ${err.message}`);
                     }
                 }
 
-                // Send notification
                 if (addNotification) {
-                    console.log(`[handleStatusUpdate] Target recipients: roles=["admin", "incharge", "sales manager"], users=[${sale.requestedByUsername}]`);
                     try {
                         const now = new Date();
                         const dateStr = formatDate(now);
@@ -600,11 +590,13 @@ const SaleManagement = ({
         return `${prefix}${nextNum.toString().padStart(4, '0')}`;
     };
 
+    /* Moved to backend for better uniqueness
     useEffect(() => {
         if (showForm && !editingId && allSalesRecords.length >= 0) {
             setFormData(prev => ({ ...prev, invoiceNo: generateInvoiceNo() }));
         }
     }, [showForm, editingId, saleType, allSalesRecords]);
+    */
 
     const fetchSales = async () => {
         setIsLoading(true);
@@ -1209,15 +1201,14 @@ const SaleManagement = ({
                     if (!targetUsers.includes('admin')) targetUsers.push('admin');
 
                     if (!editingId) {
-                        console.log(`[handleSubmit] Notifying for NEW ${sType} Request`);
+                        const finalInvoiceNo = response.data?.invoiceNo || formData.invoiceNo || 'No Invoice';
                         await addNotification(
                             `New ${sType} Requested`,
-                            `${dateStr} | ${timeStr} | ${employeeName} has requested a new ${sType.toLowerCase()} entry (${formData.invoiceNo || 'No Invoice'})`,
+                            `${dateStr} | ${timeStr} | ${employeeName} has requested a new ${sType.toLowerCase()} entry (${finalInvoiceNo})`,
                             targetRoles,
                             targetUsers
                         );
                     } else {
-                        console.log(`[handleSubmit] Notifying for UPDATED ${sType} Request`);
 
                         // Compare for detailed changes
                         const changedFields = [];
@@ -1557,6 +1548,7 @@ const SaleManagement = ({
     const [portSearch, setPortSearch] = useState('');
     const [indCnfSearch, setIndCnfSearch] = useState('');
     const [bdCnfSearch, setBdCnfSearch] = useState('');
+    const [exporterSearch, setExporterSearch] = useState('');
 
     // Handle outside clicks for dropdowns
     useEffect(() => {
@@ -1579,6 +1571,9 @@ const SaleManagement = ({
             if (activeDropdown === 'importer' && !e.target.closest('.importer-dropdown-container')) {
                 setActiveDropdown(null);
             }
+            if (activeDropdown === 'exporter' && !e.target.closest('.exporter-dropdown-container')) {
+                setActiveDropdown(null);
+            }
             if (
                 (activeDropdown === 'port' && !e.target.closest('.port-dropdown-container')) ||
                 (activeDropdown === 'indianCnF' && !e.target.closest('.ind-cnf-dropdown-container')) ||
@@ -1596,6 +1591,12 @@ const SaleManagement = ({
         return importersList
             .filter(imp => imp.status !== 'Inactive')
             .filter(imp => (imp.name || '').toLowerCase().includes(importerSearch.toLowerCase()));
+    };
+
+    const getFilteredExporters = () => {
+        return exportersList
+            .filter(exp => exp.status !== 'Inactive')
+            .filter(exp => (exp.name || '').toLowerCase().includes(exporterSearch.toLowerCase()));
     };
 
     const getFilteredPorts = () => {
@@ -1725,7 +1726,7 @@ const SaleManagement = ({
             setActiveDropdown(null);
             return;
         }
-        setCompanyNameSearch('');
+        setCompanyNameSearch(customer.companyName || '');
         handleCustomerSelect(customer);
     };
 
@@ -1738,6 +1739,19 @@ const SaleManagement = ({
             setImporterSearch('');
         }
         setActiveDropdown(null);
+        setHighlightedIndex(-1);
+    };
+
+    const handleExporterSelect = (exporterName) => {
+        if (exporterName === null) {
+            setFormData(prev => ({ ...prev, exporter: '' }));
+            setExporterSearch('');
+        } else {
+            setFormData(prev => ({ ...prev, exporter: exporterName }));
+            setExporterSearch('');
+        }
+        setActiveDropdown(null);
+        setHighlightedIndex(-1);
     };
 
     const handlePortSelect = (port) => {
@@ -2560,7 +2574,11 @@ const SaleManagement = ({
                         </button>
 
                         <button
-                            onClick={() => setShowForm(true)}
+                            onClick={() => {
+                                resetForm();
+                                setEditingId(null);
+                                setShowForm(true);
+                            }}
                             className="sale-mgmt-btn-action sale-mgmt-btn-blue"
                         >
                             <span className="flex items-center gap-2"><span className="text-xl leading-none">+</span> {saleType === 'Border' ? 'New G.P' : 'Add Sale'}</span>
@@ -2652,6 +2670,8 @@ const SaleManagement = ({
                                                 setHighlightedIndex(-1);
                                                 handleInputChange(e); // allow fallback text input
                                             }}
+                                            required
+                                            autoComplete="nope"
                                             onFocus={() => {
                                                 if (isFieldReadOnly(originalData?.importer)) return;
                                                 setActiveDropdown('importer');
@@ -2710,6 +2730,8 @@ const SaleManagement = ({
                                                 setHighlightedIndex(-1);
                                                 handleInputChange(e);
                                             }}
+                                            required
+                                            autoComplete="nope"
                                             onFocus={() => {
                                                 if (isFieldReadOnly(originalData?.lcNo)) return;
                                                 setActiveDropdown('lcNo');
@@ -2759,22 +2781,59 @@ const SaleManagement = ({
                                 <div className="sale-mgmt-input-group relative exporter-dropdown-container">
                                     <label className="sale-mgmt-label">Exporter</label>
                                     <div className="relative">
-                                        <select
+                                        <input
+                                            type="text"
                                             name="exporter"
-                                            value={formData.exporter || ''}
-                                            disabled={isFieldReadOnly(originalData?.exporter)}
-                                            onChange={handleInputChange}
-                                            className={`sale-mgmt-input appearance-none bg-white pr-10 ${isFieldReadOnly(originalData?.exporter) ? 'bg-gray-50' : ''}`}
-                                        >
-                                            <option value="">Select Exporter</option>
-                                            {exportersList.map(exp => (
-                                                <option key={exp._id} value={exp.name}>{exp.name}</option>
-                                            ))}
-                                        </select>
-                                        <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-gray-400">
-                                            <ChevronDownIcon className="w-4 h-4" />
+                                            placeholder={formData.exporter || "Search exporter..."}
+                                            value={activeDropdown === 'exporter' ? exporterSearch : formData.exporter}
+                                            readOnly={isFieldReadOnly(originalData?.exporter)}
+                                            onChange={(e) => {
+                                                if (isFieldReadOnly(originalData?.exporter)) return;
+                                                setExporterSearch(e.target.value);
+                                                setActiveDropdown('exporter');
+                                                setHighlightedIndex(-1);
+                                                handleInputChange(e); // allow fallback text input
+                                            }}
+                                            required
+                                            autoComplete="nope"
+                                            onFocus={() => {
+                                                if (isFieldReadOnly(originalData?.exporter)) return;
+                                                setActiveDropdown('exporter');
+                                                setHighlightedIndex(-1);
+                                            }}
+                                            onKeyDown={(e) => !isFieldReadOnly(originalData?.exporter) && handleDropdownKeyDown(e, 'exporter', getFilteredExporters(), handleExporterSelect)}
+                                            className={`sale-mgmt-input appearance-none pr-14 ${formData.exporter ? 'placeholder:text-gray-900 placeholder:font-semibold' : 'placeholder:text-gray-400'} ${isFieldReadOnly(originalData?.exporter) ? 'bg-gray-50' : ''}`}
+                                        />
+                                        <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-2">
+                                            {formData.exporter && (
+                                                <button type="button" onClick={() => handleExporterSelect(null)} className="text-gray-400 hover:text-red-500">
+                                                    <XIcon className="w-4 h-4" />
+                                                </button>
+                                            )}
+                                            <button
+                                                type="button"
+                                                onClick={() => setActiveDropdown(activeDropdown === 'exporter' ? null : 'exporter')}
+                                                className="text-gray-300 hover:text-blue-500 transition-colors"
+                                            >
+                                                <ChevronDownIcon className={`w-4 h-4 transition-transform duration-200 ${activeDropdown === 'exporter' ? 'rotate-180' : ''}`} />
+                                            </button>
                                         </div>
                                     </div>
+                                    {activeDropdown === 'exporter' && getFilteredExporters().length > 0 && (
+                                        <div className="absolute z-[60] w-full mt-1 bg-white border border-gray-100 rounded-xl shadow-xl max-h-48 overflow-y-auto py-1">
+                                            {getFilteredExporters().map((exp, idx) => (
+                                                <button
+                                                    key={exp._id || `exp-${idx}`}
+                                                    type="button"
+                                                    onClick={() => handleExporterSelect(exp.name)}
+                                                    onMouseEnter={() => setHighlightedIndex(idx)}
+                                                    className={`w-full px-4 py-2 text-left text-sm transition-colors font-medium ${formData.exporter === exp.name ? 'bg-blue-50 text-blue-700' : highlightedIndex === idx ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-blue-50'}`}
+                                                >
+                                                    {exp.name}
+                                                </button>
+                                            ))}
+                                        </div>
+                                    )}
                                 </div>
                             )}
 
@@ -2796,6 +2855,8 @@ const SaleManagement = ({
                                                 setHighlightedIndex(-1);
                                                 handleInputChange(e); // allow fallback text input
                                             }}
+                                            required
+                                            autoComplete="nope"
                                             onFocus={() => {
                                                 if (isFieldReadOnly(originalData?.indianCnF)) return;
                                                 setActiveDropdown('indianCnF');
@@ -2855,6 +2916,8 @@ const SaleManagement = ({
                                                 setHighlightedIndex(-1);
                                                 handleInputChange(e); // allow fallback text input
                                             }}
+                                            required
+                                            autoComplete="nope"
                                             onFocus={() => {
                                                 if (isFieldReadOnly(originalData?.bdCnf)) return;
                                                 setActiveDropdown('bdCnf');
@@ -2914,6 +2977,8 @@ const SaleManagement = ({
                                                 setHighlightedIndex(-1);
                                                 handleInputChange(e); // allow fallback text input
                                             }}
+                                            required
+                                            autoComplete="nope"
                                             onFocus={() => {
                                                 if (isFieldReadOnly(originalData?.port)) return;
                                                 setActiveDropdown('port');
@@ -2971,6 +3036,8 @@ const SaleManagement = ({
                                             setHighlightedIndex(-1);
                                             setFormData(prev => ({ ...prev, companyName: e.target.value }));
                                         }}
+                                        required
+                                        autoComplete="nope"
                                         onFocus={() => {
                                             if (isFieldReadOnly(originalData?.companyName)) return;
                                             setActiveDropdown('companyName');
@@ -3013,17 +3080,17 @@ const SaleManagement = ({
                             {saleType !== 'Border' && (
                                 <div className="sale-mgmt-input-group">
                                     <label className="sale-mgmt-label">Customer</label>
-                                    <input type="text" name="customerName" value={formData.customerName} readOnly placeholder="Customer" className="sale-mgmt-input sale-mgmt-input-readonly" />
+                                    <input type="text" name="customerName" value={formData.customerName} readOnly placeholder="Customer" className="sale-mgmt-input sale-mgmt-input-readonly" required />
                                 </div>
                             )}
                             <div className="sale-mgmt-input-group">
                                 <label className="sale-mgmt-label">Contact</label>
-                                <input type="text" name="contact" value={formData.contact} readOnly placeholder="Contact" className="sale-mgmt-input sale-mgmt-input-readonly" />
+                                <input type="text" name="contact" value={formData.contact} readOnly placeholder="Contact" className="sale-mgmt-input sale-mgmt-input-readonly" required />
                             </div>
                             {saleType !== 'Border' && (
                                 <div className="sale-mgmt-input-group">
                                     <label className="sale-mgmt-label">Address</label>
-                                    <input type="text" name="address" value={formData.address} readOnly placeholder="Address" className="sale-mgmt-input sale-mgmt-input-readonly" />
+                                    <input type="text" name="address" value={formData.address} readOnly placeholder="Address" className="sale-mgmt-input sale-mgmt-input-readonly" required />
                                 </div>
                             )}
 
@@ -3152,9 +3219,8 @@ const SaleManagement = ({
                                                 <div className="relative">
                                                     <input
                                                         type="text"
-                                                        placeholder={item.productName || "Select Product"}
-                                                        value={activeDropdown === 'product' && activeItemIndex === index ? productSearch : ''}
-                                                        autoComplete="off"
+                                                        placeholder="Select Product"
+                                                        value={activeDropdown === 'product' && activeItemIndex === index ? productSearch : (item.productName || '')}
                                                         readOnly={isFieldReadOnly(originalData?.items?.[index]?.productName)}
                                                         onChange={(e) => {
                                                             if (isFieldReadOnly(originalData?.items?.[index]?.productName)) return;
@@ -3163,6 +3229,8 @@ const SaleManagement = ({
                                                             setActiveItemIndex(index);
                                                             handleItemInputChange(index, null, { target: { name: 'productName', value: e.target.value } });
                                                         }}
+                                                        required
+                                                        autoComplete="nope"
                                                         onFocus={() => {
                                                             if (isFieldReadOnly(originalData?.items?.[index]?.productName)) return;
                                                             setActiveDropdown('product');
@@ -3248,7 +3316,7 @@ const SaleManagement = ({
                                                             </div>
                                                             <div>
                                                                 <label className="md:hidden sale-mgmt-item-label mb-1 block text-center">Qty</label>
-                                                                <input type="number" name="quantity" value={entry.quantity} onChange={(e) => handleItemInputChange(index, entryIndex, e)} readOnly={isFieldReadOnly(originalData?.items?.[index]?.brandEntries?.[entryIndex]?.quantity)} placeholder="0" className={`sale-mgmt-input !px-2 !text-[13px] font-black text-gray-900 text-center ${isFieldReadOnly(originalData?.items?.[index]?.brandEntries?.[entryIndex]?.quantity) ? 'bg-gray-50' : ''}`} />
+                                                                <input type="number" name="quantity" value={entry.quantity} onChange={(e) => handleItemInputChange(index, entryIndex, e)} readOnly={isFieldReadOnly(originalData?.items?.[index]?.brandEntries?.[entryIndex]?.quantity)} placeholder="0" required className={`sale-mgmt-input !px-2 !text-[13px] font-black text-gray-900 text-center ${isFieldReadOnly(originalData?.items?.[index]?.brandEntries?.[entryIndex]?.quantity) ? 'bg-gray-50' : ''}`} />
                                                             </div>
                                                             <div>
                                                                 <label className="md:hidden sale-mgmt-item-label mb-1 block text-center">Bag</label>
@@ -3256,7 +3324,7 @@ const SaleManagement = ({
                                                             </div>
                                                             <div>
                                                                 <label className="md:hidden sale-mgmt-item-label mb-1 block text-center">Truck</label>
-                                                                <input type="number" name="truck" value={entry.truck || ''} onChange={(e) => handleItemInputChange(index, entryIndex, e)} readOnly={isFieldReadOnly(originalData?.items?.[index]?.brandEntries?.[entryIndex]?.truck)} placeholder="0" className={`sale-mgmt-input !px-2 !text-[13px] font-bold text-gray-600 text-center ${isFieldReadOnly(originalData?.items?.[index]?.brandEntries?.[entryIndex]?.truck) ? 'bg-gray-50' : ''}`} />
+                                                                <input type="number" name="truck" value={entry.truck || ''} onChange={(e) => handleItemInputChange(index, entryIndex, e)} readOnly={isFieldReadOnly(originalData?.items?.[index]?.brandEntries?.[entryIndex]?.truck)} placeholder="0" required className={`sale-mgmt-input !px-2 !text-[13px] font-bold text-gray-600 text-center ${isFieldReadOnly(originalData?.items?.[index]?.brandEntries?.[entryIndex]?.truck) ? 'bg-gray-50' : ''}`} />
                                                             </div>
                                                             <div>
                                                                 <label className="md:hidden sale-mgmt-item-label mb-1 block text-center">Price</label>
@@ -3317,6 +3385,7 @@ const SaleManagement = ({
                                                                         setActiveEntryIndex(entryIndex);
                                                                         handleItemInputChange(index, entryIndex, { target: { name: 'brandName', value: e.target.value } });
                                                                     }}
+                                                                    autoComplete="nope"
                                                                     onFocus={() => {
                                                                         if (isFieldReadOnly(originalData?.items?.[index]?.brandEntries?.[entryIndex]?.brandName)) return;
                                                                         setActiveDropdown('brand');
@@ -3389,6 +3458,8 @@ const SaleManagement = ({
                                                                             setActiveEntryIndex(entryIndex);
                                                                             handleItemInputChange(index, entryIndex, { target: { name: 'warehouseName', value: e.target.value } });
                                                                         }}
+                                                                        required
+                                                                        autoComplete="nope"
                                                                         onFocus={() => {
                                                                             if (isFieldReadOnly(originalData?.items?.[index]?.brandEntries?.[entryIndex]?.warehouseName)) return;
                                                                             setActiveDropdown('warehouse');
@@ -3468,6 +3539,7 @@ const SaleManagement = ({
                                                                 readOnly={isFieldReadOnly(originalData?.items?.[index]?.brandEntries?.[entryIndex]?.quantity)}
                                                                 onChange={(e) => handleItemInputChange(index, entryIndex, e)}
                                                                 placeholder="0"
+                                                                required
                                                                 className={`sale-mgmt-input !px-2 !text-[13px] font-black text-gray-900 text-center ${isFieldReadOnly(originalData?.items?.[index]?.brandEntries?.[entryIndex]?.quantity) ? 'bg-gray-50' : ''}`}
                                                             />
                                                         </div>
@@ -3681,6 +3753,9 @@ const SaleManagement = ({
                                         <th className="sale-mgmt-th cursor-pointer group" onClick={() => handleSort('date')}>
                                             <div className="flex items-center">Date {renderSortIcon('date')}</div>
                                         </th>
+                                        <th className="sale-mgmt-th text-center cursor-pointer group" onClick={() => handleSort('invoiceNo')}>
+                                            <div className="flex items-center justify-center">Invoice {renderSortIcon('invoiceNo')}</div>
+                                        </th>
                                         <th className="sale-mgmt-th cursor-pointer group" onClick={() => handleSort('lcNo')}>
                                             <div className="flex items-center">LC No {renderSortIcon('lcNo')}</div>
                                         </th>
@@ -3744,7 +3819,9 @@ const SaleManagement = ({
                             </thead>
                             <tbody className="divide-y divide-gray-50">
                                 {isLoading ? (
-                                    <tr><td colSpan={saleType === 'Border' ? "12" : "12"} className="px-3 py-20 text-center text-gray-400 font-medium">No sales records found</td></tr>
+                                    <tr><td colSpan={saleType === 'Border' ? "15" : "12"} className="px-3 py-20 text-center text-gray-400 font-medium">Loading sales records...</td></tr>
+                                ) : getFilteredData().length === 0 ? (
+                                    <tr><td colSpan={saleType === 'Border' ? "15" : "12"} className="px-3 py-20 text-center text-gray-400 font-medium">No sales records found</td></tr>
                                 ) : getFilteredData().map((sale, index) => {
                                     const isExpanded = expandedRows.includes(sale._id);
                                     const isMultiple = (sale.items && sale.items.length > 0)
@@ -3796,6 +3873,7 @@ const SaleManagement = ({
                                                     )}
                                                 </td>
                                                 <td className="px-3 py-4 whitespace-nowrap text-gray-600">{formatDate(sale.date)}</td>
+                                                <td className="px-3 py-4 whitespace-nowrap text-center font-semibold text-gray-800">{sale.invoiceNo || '-'}</td>
                                                 <td className="px-3 py-4 whitespace-nowrap font-semibold text-gray-800">{sale.lcNo || '-'}</td>
                                                 <td className="px-3 py-4 whitespace-nowrap font-semibold text-gray-800">{getSafeString(sale.importer) || '-'}</td>
                                                 <td className="px-3 py-4 whitespace-nowrap font-semibold text-gray-800">{getSafeString(sale.port) || '-'}</td>
@@ -4047,7 +4125,7 @@ const SaleManagement = ({
                                             {/* Date & Inv */}
                                             <div className="flex-shrink-0">
                                                 <div className="sale-mgmt-mobile-label">{formatDate(sale.date)}</div>
-                                                <div className={`${!isExpanded ? 'text-[11px]' : 'text-sm'} font-black text-gray-900 truncate`}>{saleType === 'Border' ? (sale.lcNo || sale.importer || 'No ID') : (sale.invoiceNo || sale.importer || 'No ID')}</div>
+                                                <div className={`${!isExpanded ? 'text-[11px]' : 'text-sm'} font-black text-gray-900 truncate`}>{sale.invoiceNo || (saleType === 'Border' ? (sale.lcNo || sale.importer) : (sale.companyName || sale.customerName)) || 'No ID'}</div>
                                             </div>
 
                                             {!isExpanded && (
@@ -4105,7 +4183,11 @@ const SaleManagement = ({
                                     {isExpanded && (
                                         <>
                                             {/* Customer/Company Info */}
-                                            <div className="grid grid-cols-2 gap-4 text-xs mb-4">
+                                            <div className="grid grid-cols-3 gap-2 text-xs mb-4 px-1">
+                                                <div>
+                                                    <div className="sale-mgmt-mobile-label">Inv No</div>
+                                                    <div className="sale-mgmt-mobile-value">{sale.invoiceNo || '-'}</div>
+                                                </div>
                                                 <div>
                                                     <div className="sale-mgmt-mobile-label">Customer</div>
                                                     <div className="sale-mgmt-mobile-value">{getSafeString(sale.customerName) || '-'}</div>

@@ -8,10 +8,10 @@ import {
 import { formatDate, API_BASE_URL } from '../../../utils/helpers';
 import { decryptData } from '../../../utils/encryption';
 import CustomDatePicker from '../../shared/CustomDatePicker';
-const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords = [], gpRecords = [] }) => {
+const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords = [], gpRecords = [], lcExpenses = [] }) => {
     const [showConsumption, setShowConsumption] = useState(true);
     const [consumptionSearchQuery, setConsumptionSearchQuery] = useState('');
-    const [showGpList, setShowGpList] = useState(false);
+    const [activeTab, setActiveTab] = useState('history');
     if (!data) return null;
 
     // Failsafe LC Matching helper
@@ -164,24 +164,18 @@ const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords
                             </div>
                             {/* Tab Buttons */}
                             <div className="flex items-center gap-2">
-                                <button
-                                    onClick={() => { setShowGpList(false); setConsumptionSearchQuery(''); }}
-                                    className={`px-5 py-1.5 rounded-full text-xs font-bold transition-all whitespace-nowrap border ${!showGpList
-                                        ? 'bg-blue-600 text-white border-blue-600 shadow-sm'
-                                        : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50'
-                                        }`}
-                                >
-                                    LC History
-                                </button>
-                                <button
-                                    onClick={() => { setShowGpList(true); setConsumptionSearchQuery(''); }}
-                                    className={`px-5 py-1.5 rounded-full text-xs font-bold transition-all whitespace-nowrap border ${showGpList
-                                        ? 'bg-blue-600 text-white border-blue-600 shadow-sm'
-                                        : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50'
-                                        }`}
-                                >
-                                    G.P List
-                                </button>
+                                {['history', 'gp', 'expense'].map(tab => (
+                                    <button
+                                        key={tab}
+                                        onClick={() => { setActiveTab(tab); setConsumptionSearchQuery(''); }}
+                                        className={`px-5 py-1.5 rounded-full text-xs font-bold transition-all whitespace-nowrap border ${activeTab === tab
+                                            ? 'bg-blue-600 text-white border-blue-600 shadow-sm'
+                                            : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50'
+                                            }`}
+                                    >
+                                        {tab === 'history' ? 'LC History' : tab === 'gp' ? 'G.P List' : 'Expense'}
+                                    </button>
+                                ))}
                             </div>
                         </div>
                     )}
@@ -266,7 +260,7 @@ const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords
                             </div>
 
                             {/* Consumption History Table or GP List */}
-                            {!showGpList ? (
+                            {activeTab === 'history' ? (
                                 <div className="overflow-hidden border border-gray-100 rounded-2xl shadow-sm">
                                     <table className="w-full text-left border-collapse">
                                         <thead>
@@ -321,7 +315,7 @@ const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords
                                         </tfoot>
                                     </table>
                                 </div>
-                            ) : (
+                            ) : activeTab === 'gp' ? (
                                 /* G.P List Table */
                                 <div className="overflow-hidden border border-gray-100 rounded-2xl shadow-sm">
                                     <table className="w-full text-left border-collapse">
@@ -376,6 +370,52 @@ const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords
                                                 </td>
                                                 <td className="px-6 py-4 text-sm font-medium text-right text-blue-600">
                                                     ৳{filteredGpRecords.reduce((sum, gp) => sum + parseNum(gp.gpValue), 0).toLocaleString()}
+                                                </td>
+                                                <td></td>
+                                            </tr>
+                                        </tfoot>
+                                    </table>
+                                </div>
+                            ) : (
+                                /* Expense Table */
+                                <div className="overflow-hidden border border-gray-100 rounded-2xl shadow-sm">
+                                    <table className="w-full text-left border-collapse">
+                                        <thead>
+                                            <tr className="bg-gray-50/50 border-b border-gray-100">
+                                                <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Date</th>
+                                                <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Expense Head</th>
+                                                <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider">C&F Agent</th>
+                                                <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-right">Amount</th>
+                                                <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Remarks</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody className="divide-y divide-gray-50">
+                                            {(() => {
+                                                const filtered = lcExpenses.filter(exp => exp.lcNo === data.lcNo);
+                                                return filtered.length > 0 ? (
+                                                    filtered.map((exp, idx) => (
+                                                        <tr key={exp._id || idx} className="hover:bg-gray-50/50 transition-colors group">
+                                                            <td className="px-6 py-4 text-sm font-medium text-gray-600 whitespace-nowrap">{formatDate(exp.date)}</td>
+                                                            <td className="px-6 py-4 text-sm font-medium text-gray-900">{exp.expenseHead || '-'}</td>
+                                                            <td className="px-6 py-4 text-sm font-medium text-gray-800">{exp.cnfAgent || '-'}</td>
+                                                            <td className="px-6 py-4 text-sm font-bold text-right text-rose-600 whitespace-nowrap">৳{parseNum(exp.amount).toLocaleString()}</td>
+                                                            <td className="px-6 py-4 text-sm text-gray-500 truncate max-w-[200px]">{exp.remarks || '-'}</td>
+                                                        </tr>
+                                                    ))
+                                                ) : (
+                                                    <tr>
+                                                        <td colSpan="5" className="px-6 py-12 text-center text-gray-400 font-bold">
+                                                            No expense records found for this LC.
+                                                        </td>
+                                                    </tr>
+                                                );
+                                            })()}
+                                        </tbody>
+                                        <tfoot className="bg-gray-50/30">
+                                            <tr>
+                                                <td colSpan="3" className="px-6 py-4 text-right text-xs font-medium text-gray-400 uppercase tracking-wider">Total Expense:</td>
+                                                <td className="px-6 py-4 text-sm font-bold text-right text-rose-600">
+                                                    ৳{lcExpenses.filter(exp => exp.lcNo === data.lcNo).reduce((sum, exp) => sum + parseNum(exp.amount), 0).toLocaleString()}
                                                 </td>
                                                 <td></td>
                                             </tr>
@@ -601,6 +641,7 @@ const LCManagement = ({ addNotification, currentUser }) => {
         port: ''
     });
     const [gpRecords, setGpRecords] = useState([]);
+    const [lcExpenses, setLcExpenses] = useState([]);
 
     const informativeQuantities = useMemo(() => {
         const selectedIp = ipRecordsRaw.find(ip => ip.ipNumber === formData.ipNo);
@@ -745,7 +786,7 @@ const LCManagement = ({ addNotification, currentUser }) => {
     const fetchInitialData = async () => {
         setIsLoading(true);
         try {
-            const [lcRes, bankRes, impRes, expRes, insRes, ipRes, piRes, prodRes, stockRes, saleRes, gpRes] = await Promise.all([
+            const [lcRes, bankRes, impRes, expRes, insRes, ipRes, piRes, prodRes, stockRes, saleRes, gpRes, expenseRes] = await Promise.all([
                 axios.get(`${API_BASE_URL}/api/lc-management`),
                 axios.get(`${API_BASE_URL}/api/banks`),
                 axios.get(`${API_BASE_URL}/api/importers`),
@@ -756,9 +797,11 @@ const LCManagement = ({ addNotification, currentUser }) => {
                 axios.get(`${API_BASE_URL}/api/products`),
                 axios.get(`${API_BASE_URL}/api/stock`),
                 axios.get(`${API_BASE_URL}/api/sales`),
-                axios.get(`${API_BASE_URL}/api/lc-gp`)
+                axios.get(`${API_BASE_URL}/api/lc-gp`),
+                axios.get(`${API_BASE_URL}/api/lc-expenses`)
             ]);
             setGpRecords(Array.isArray(gpRes.data) ? gpRes.data : []);
+            setLcExpenses(Array.isArray(expenseRes.data) ? expenseRes.data : []);
 
             setLcRecords(Array.isArray(lcRes.data) ? lcRes.data : []);
 
@@ -1792,13 +1835,14 @@ const LCManagement = ({ addNotification, currentUser }) => {
                                 <th className="px-3 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-right text-nowrap">Total Value (৳)</th>
                                 <th className="px-3 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-right text-nowrap">Rem. Qty</th>
                                 <th className="px-3 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-right text-nowrap">Rem G.P</th>
+                                <th className="px-3 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-right text-nowrap">Expense</th>
                                 <th className="px-3 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-center text-nowrap">Action</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-50">
                             {isLoading ? (
                                 <tr>
-                                    <td colSpan="13" className="px-6 py-12 text-center text-sm text-gray-500">
+                                    <td colSpan="14" className="px-6 py-12 text-center text-sm text-gray-500">
                                         <div className="flex flex-col items-center gap-2">
                                             <div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
                                             <span className="font-medium text-gray-400">Loading records...</span>
@@ -1896,6 +1940,18 @@ const LCManagement = ({ addNotification, currentUser }) => {
                                                     {remGpKg.toLocaleString()} <span className="text-[10px] text-gray-400 font-medium whitespace-nowrap">Kg</span>
                                                 </span>
                                             </td>
+                                            <td className="px-3 py-4 text-sm text-right whitespace-nowrap">
+                                                {(() => {
+                                                    const totalExpense = lcExpenses
+                                                        .filter(exp => exp.lcNo === record.lcNo)
+                                                        .reduce((sum, exp) => sum + (parseFloat(exp.amount) || 0), 0);
+                                                    return (
+                                                        <span className={`font-black ${totalExpense > 0 ? 'text-rose-600' : 'text-gray-400'}`}>
+                                                            {totalExpense > 0 ? `৳${totalExpense.toLocaleString()}` : '—'}
+                                                        </span>
+                                                    );
+                                                })()}
+                                            </td>
                                             <td className="px-3 py-4 text-center">
                                                 <div className="flex items-center justify-center gap-4">
                                                     <button
@@ -1930,7 +1986,7 @@ const LCManagement = ({ addNotification, currentUser }) => {
                                 })
                             ) : (
                                 <tr>
-                                    <td colSpan="12" className="px-6 py-12 text-center text-gray-400 font-medium whitespace-nowrap italic">
+                                    <td colSpan="14" className="px-6 py-12 text-center text-gray-400 font-medium whitespace-nowrap italic">
                                         No LC records found
                                     </td>
                                 </tr>
@@ -1946,6 +2002,7 @@ const LCManagement = ({ addNotification, currentUser }) => {
                     allStockRecords={allStockRecords}
                     allSalesRecords={allSalesRecords}
                     gpRecords={gpRecords}
+                    lcExpenses={lcExpenses}
                 />
             )}
 

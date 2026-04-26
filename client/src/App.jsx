@@ -34,6 +34,7 @@ import Insurance from './components/modules/Insurance/Insurance';
 import InsurancePayment from './components/modules/Insurance/InsurancePayment';
 import LCManagement from './components/modules/LCManagement/LCManagement';
 import LCGatePass from './components/modules/LCManagement/LCGatePass';
+import LCExpense from './components/modules/LCManagement/LCExpense';
 import { calculateStockData } from './utils/stockHelpers';
 import LoginPage from './components/auth/LoginPage';
 import Profile from './components/modules/Profile/Profile';
@@ -1435,6 +1436,13 @@ function App() {
             addNotification={addNotification}
           />
         );
+      case 'lc-expense-section':
+        return (
+          <LCExpense 
+            currentUser={currentUser}
+            addNotification={addNotification}
+          />
+        );
       case 'lc-management-section':
         return <LCManagement addNotification={addNotification} currentUser={currentUser} />;
       default:
@@ -1686,6 +1694,13 @@ function App() {
                 >
                   <LayoutIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
                   <span>LC G.P</span>
+                </button>
+                <button
+                  onClick={() => { setCurrentView('lc-expense-section'); setSidebarOpen(false); }}
+                  className={`w-full flex flex-row items-center py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'lc-expense-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'}`}
+                >
+                  <DollarSignIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
+                  <span>LC Expense</span>
                 </button>
                 <button
                   onClick={() => { setCurrentView('lc-entry-section'); setSidebarOpen(false); }}
