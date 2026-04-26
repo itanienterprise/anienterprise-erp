@@ -1357,16 +1357,9 @@ function PI({
                             {submitStatus === 'success' && <span className="text-green-600 font-medium flex items-center">Saved!</span>}
                             {submitStatus === 'error' && <span className="text-red-600 font-medium flex items-center">Error saving</span>}
                             <button
-                                type="button"
-                                onClick={() => { setShowForm(false); resetForm(); }}
-                                className="px-6 py-2.5 bg-gray-100 text-gray-600 font-semibold rounded-xl hover:bg-gray-200 transition-all text-sm"
-                            >
-                                Cancel
-                            </button>
-                            <button
                                 type="submit"
                                 disabled={isSubmitting}
-                                className={`px-8 py-2.5 bg-blue-600 text-white font-semibold rounded-xl shadow-lg shadow-blue-500/30 hover:bg-blue-700 transition-all text-sm ${isSubmitting ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                className={`px-8 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-black rounded-xl shadow-lg shadow-blue-500/20 transition-all text-sm ${isSubmitting ? 'opacity-50 cursor-not-allowed' : ''}`}
                             >
                                 {isSubmitting ? 'Saving...' : editingId ? 'Update PI' : 'Save PI'}
                             </button>

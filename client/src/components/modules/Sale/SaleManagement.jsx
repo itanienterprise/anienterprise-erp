@@ -2169,7 +2169,7 @@ const SaleManagement = ({
                             <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
                                 <SearchIcon className="h-4 w-4 text-gray-400 group-focus-within:text-blue-500 transition-colors" />
                             </div>
-                            <input
+                            <input autoComplete="off" 
                                 type="text"
                                 placeholder="Search invoice, customer..."
                                 value={searchQuery}
@@ -2273,7 +2273,7 @@ const SaleManagement = ({
                                                             <div className="space-y-1.5 relative" ref={saleCompanyFilterRef}>
                                                                 <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider pl-1">PARTY NAME</label>
                                                                 <div className="relative">
-                                                                    <input
+                                                                    <input autoComplete="off" 
                                                                         type="text"
                                                                         value={saleFilterSearch.companySearch}
                                                                         onChange={(e) => {
@@ -2313,7 +2313,7 @@ const SaleManagement = ({
                                                             <div className="space-y-1.5 relative" ref={salePortFilterRef}>
                                                                 <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider pl-1">ENTRY PORT</label>
                                                                 <div className="relative">
-                                                                    <input
+                                                                    <input autoComplete="off" 
                                                                         type="text"
                                                                         value={saleFilterSearch.portSearch}
                                                                         onChange={(e) => {
@@ -2355,7 +2355,7 @@ const SaleManagement = ({
                                                             <div className="space-y-1.5 relative" ref={saleIndCnfFilterRef}>
                                                                 <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider pl-1">INDIAN C&F</label>
                                                                 <div className="relative">
-                                                                    <input
+                                                                    <input autoComplete="off" 
                                                                         type="text"
                                                                         value={saleFilterSearch.indCnfSearch}
                                                                         onChange={(e) => {
@@ -2394,7 +2394,7 @@ const SaleManagement = ({
                                                             <div className="space-y-1.5 relative" ref={saleBdCnfFilterRef}>
                                                                 <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider pl-1">BD C&F</label>
                                                                 <div className="relative">
-                                                                    <input
+                                                                    <input autoComplete="off" 
                                                                         type="text"
                                                                         value={saleFilterSearch.bdCnfSearch}
                                                                         onChange={(e) => {
@@ -2437,7 +2437,7 @@ const SaleManagement = ({
                                                         <div className="space-y-1.5 relative" ref={saleCompanyFilterRef}>
                                                             <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider pl-1">COMPANY NAME</label>
                                                             <div className="relative">
-                                                                <input
+                                                                <input autoComplete="off" 
                                                                     type="text"
                                                                     value={saleFilterSearch.companySearch}
                                                                     onChange={(e) => {
@@ -2477,7 +2477,7 @@ const SaleManagement = ({
                                                         <div className="space-y-1.5 relative" ref={saleInvoiceFilterRef}>
                                                             <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider pl-1">INVOICE NUMBER</label>
                                                             <div className="relative">
-                                                                <input
+                                                                <input autoComplete="off" 
                                                                     type="text"
                                                                     value={saleFilterSearch.invoiceSearch}
                                                                     onChange={(e) => {
@@ -2519,7 +2519,7 @@ const SaleManagement = ({
                                                 <div className="space-y-1.5 relative" ref={saleProductFilterRef}>
                                                     <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider pl-1">PRODUCT NAME</label>
                                                     <div className="relative">
-                                                        <input
+                                                        <input autoComplete="off" 
                                                             type="text"
                                                             value={saleFilterSearch.productSearch}
                                                             onChange={(e) => {
@@ -2649,7 +2649,7 @@ const SaleManagement = ({
                                 />
                             <div className="sale-mgmt-input-group">
                                 <label className="sale-mgmt-label">Invoice No</label>
-                                <input type="text" name="invoiceNo" value={formData.invoiceNo} readOnly placeholder="Auto-generated" className="sale-mgmt-input sale-mgmt-input-readonly cursor-default" required />
+                                <input autoComplete="off" type="text" name="invoiceNo" value={formData.invoiceNo} readOnly placeholder="Auto-generated" className="sale-mgmt-input sale-mgmt-input-readonly cursor-default" required />
                             </div>
 
                             {/* Border Field: Importer */}
@@ -2657,7 +2657,7 @@ const SaleManagement = ({
                                 <div className="sale-mgmt-input-group relative importer-dropdown-container">
                                     <label className="sale-mgmt-label">Importer</label>
                                     <div className="relative">
-                                        <input
+                                        <input autoComplete="off" 
                                             type="text"
                                             name="importer"
                                             placeholder={formData.importer || "Search importer..."}
@@ -2671,7 +2671,7 @@ const SaleManagement = ({
                                                 handleInputChange(e); // allow fallback text input
                                             }}
                                             required
-                                            autoComplete="nope"
+                                            autoComplete="off"
                                             onFocus={() => {
                                                 if (isFieldReadOnly(originalData?.importer)) return;
                                                 setActiveDropdown('importer');
@@ -2717,7 +2717,7 @@ const SaleManagement = ({
                                 <div className="sale-mgmt-input-group relative lc-dropdown-container">
                                     <label className="sale-mgmt-label">LC No</label>
                                     <div className="relative">
-                                        <input
+                                        <input autoComplete="off" 
                                             type="text"
                                             name="lcNo"
                                             placeholder={formData.lcNo || "Search LC..."}
@@ -2731,7 +2731,7 @@ const SaleManagement = ({
                                                 handleInputChange(e);
                                             }}
                                             required
-                                            autoComplete="nope"
+                                            autoComplete="off"
                                             onFocus={() => {
                                                 if (isFieldReadOnly(originalData?.lcNo)) return;
                                                 setActiveDropdown('lcNo');
@@ -2794,8 +2794,7 @@ const SaleManagement = ({
                                                 setHighlightedIndex(-1);
                                                 handleInputChange(e); // allow fallback text input
                                             }}
-                                            required
-                                            autoComplete="nope"
+                                            autoComplete="off"
                                             onFocus={() => {
                                                 if (isFieldReadOnly(originalData?.exporter)) return;
                                                 setActiveDropdown('exporter');
@@ -2842,7 +2841,7 @@ const SaleManagement = ({
                                 <div className="sale-mgmt-input-group relative ind-cnf-dropdown-container">
                                     <label className="sale-mgmt-label">IND C&F</label>
                                     <div className="relative">
-                                        <input
+                                        <input autoComplete="off" 
                                             type="text"
                                             name="indianCnF"
                                             placeholder={formData.indianCnF || "Search IND C&F..."}
@@ -2856,7 +2855,7 @@ const SaleManagement = ({
                                                 handleInputChange(e); // allow fallback text input
                                             }}
                                             required
-                                            autoComplete="nope"
+                                            autoComplete="off"
                                             onFocus={() => {
                                                 if (isFieldReadOnly(originalData?.indianCnF)) return;
                                                 setActiveDropdown('indianCnF');
@@ -2903,7 +2902,7 @@ const SaleManagement = ({
                                 <div className="sale-mgmt-input-group relative bd-cnf-dropdown-container">
                                     <label className="sale-mgmt-label">BD C&F</label>
                                     <div className="relative">
-                                        <input
+                                        <input autoComplete="off" 
                                             type="text"
                                             name="bdCnf"
                                             placeholder={formData.bdCnf || "Search BD C&F..."}
@@ -2917,7 +2916,7 @@ const SaleManagement = ({
                                                 handleInputChange(e); // allow fallback text input
                                             }}
                                             required
-                                            autoComplete="nope"
+                                            autoComplete="off"
                                             onFocus={() => {
                                                 if (isFieldReadOnly(originalData?.bdCnf)) return;
                                                 setActiveDropdown('bdCnf');
@@ -2964,7 +2963,7 @@ const SaleManagement = ({
                                 <div className="sale-mgmt-input-group relative port-dropdown-container">
                                     <label className="sale-mgmt-label">Port</label>
                                     <div className="relative">
-                                        <input
+                                        <input autoComplete="off" 
                                             type="text"
                                             name="port"
                                             placeholder={formData.port || "Search port..."}
@@ -2978,7 +2977,7 @@ const SaleManagement = ({
                                                 handleInputChange(e); // allow fallback text input
                                             }}
                                             required
-                                            autoComplete="nope"
+                                            autoComplete="off"
                                             onFocus={() => {
                                                 if (isFieldReadOnly(originalData?.port)) return;
                                                 setActiveDropdown('port');
@@ -3024,7 +3023,7 @@ const SaleManagement = ({
                             <div className="sale-mgmt-input-group relative company-dropdown-container">
                                 <label className="sale-mgmt-label">Company Name</label>
                                 <div className="relative">
-                                    <input
+                                    <input autoComplete="off" 
                                         type="text"
                                         placeholder={formData.companyName || "Search company..."}
                                         value={companyNameSearch}
@@ -3037,7 +3036,7 @@ const SaleManagement = ({
                                             setFormData(prev => ({ ...prev, companyName: e.target.value }));
                                         }}
                                         required
-                                        autoComplete="nope"
+                                        autoComplete="off"
                                         onFocus={() => {
                                             if (isFieldReadOnly(originalData?.companyName)) return;
                                             setActiveDropdown('companyName');
@@ -3080,17 +3079,17 @@ const SaleManagement = ({
                             {saleType !== 'Border' && (
                                 <div className="sale-mgmt-input-group">
                                     <label className="sale-mgmt-label">Customer</label>
-                                    <input type="text" name="customerName" value={formData.customerName} readOnly placeholder="Customer" className="sale-mgmt-input sale-mgmt-input-readonly" required />
+                                    <input autoComplete="off" type="text" name="customerName" value={formData.customerName} readOnly placeholder="Customer" className="sale-mgmt-input sale-mgmt-input-readonly" required />
                                 </div>
                             )}
                             <div className="sale-mgmt-input-group">
                                 <label className="sale-mgmt-label">Contact</label>
-                                <input type="text" name="contact" value={formData.contact} readOnly placeholder="Contact" className="sale-mgmt-input sale-mgmt-input-readonly" required />
+                                <input autoComplete="off" type="text" name="contact" value={formData.contact} readOnly placeholder="Contact" className="sale-mgmt-input sale-mgmt-input-readonly" required />
                             </div>
                             {saleType !== 'Border' && (
                                 <div className="sale-mgmt-input-group">
                                     <label className="sale-mgmt-label">Address</label>
-                                    <input type="text" name="address" value={formData.address} readOnly placeholder="Address" className="sale-mgmt-input sale-mgmt-input-readonly" required />
+                                    <input autoComplete="off" type="text" name="address" value={formData.address} readOnly placeholder="Address" className="sale-mgmt-input sale-mgmt-input-readonly" required />
                                 </div>
                             )}
 
@@ -3120,7 +3119,7 @@ const SaleManagement = ({
                                         </div>
                                         <div className="flex items-center gap-3">
                                             <div className="flex-1 relative">
-                                                <input
+                                                <input autoComplete="off" 
                                                     type="number"
                                                     name="indCommissionRate"
                                                     value={formData.indCommissionRate}
@@ -3160,7 +3159,7 @@ const SaleManagement = ({
                                         </div>
                                         <div className="flex items-center gap-3">
                                             <div className="flex-1 relative">
-                                                <input
+                                                <input autoComplete="off" 
                                                     type="number"
                                                     name="bdCommissionRate"
                                                     value={formData.bdCommissionRate}
@@ -3217,7 +3216,7 @@ const SaleManagement = ({
                                             <div className={`space-y-1.5 relative px-4 product-dropdown-container ${saleType === 'Border' ? 'flex-1' : 'max-w-sm'}`}>
                                                 <label className="sale-mgmt-item-label">Product</label>
                                                 <div className="relative">
-                                                    <input
+                                                    <input autoComplete="off" 
                                                         type="text"
                                                         placeholder="Select Product"
                                                         value={activeDropdown === 'product' && activeItemIndex === index ? productSearch : (item.productName || '')}
@@ -3230,7 +3229,7 @@ const SaleManagement = ({
                                                             handleItemInputChange(index, null, { target: { name: 'productName', value: e.target.value } });
                                                         }}
                                                         required
-                                                        autoComplete="nope"
+                                                        autoComplete="off"
                                                         onFocus={() => {
                                                             if (isFieldReadOnly(originalData?.items?.[index]?.productName)) return;
                                                             setActiveDropdown('product');
@@ -3316,19 +3315,19 @@ const SaleManagement = ({
                                                             </div>
                                                             <div>
                                                                 <label className="md:hidden sale-mgmt-item-label mb-1 block text-center">Qty</label>
-                                                                <input type="number" name="quantity" value={entry.quantity} onChange={(e) => handleItemInputChange(index, entryIndex, e)} readOnly={isFieldReadOnly(originalData?.items?.[index]?.brandEntries?.[entryIndex]?.quantity)} placeholder="0" required className={`sale-mgmt-input !px-2 !text-[13px] font-black text-gray-900 text-center ${isFieldReadOnly(originalData?.items?.[index]?.brandEntries?.[entryIndex]?.quantity) ? 'bg-gray-50' : ''}`} />
+                                                                <input autoComplete="off" type="number" name="quantity" value={entry.quantity} onChange={(e) => handleItemInputChange(index, entryIndex, e)} readOnly={isFieldReadOnly(originalData?.items?.[index]?.brandEntries?.[entryIndex]?.quantity)} placeholder="0" required className={`sale-mgmt-input !px-2 !text-[13px] font-black text-gray-900 text-center ${isFieldReadOnly(originalData?.items?.[index]?.brandEntries?.[entryIndex]?.quantity) ? 'bg-gray-50' : ''}`} />
                                                             </div>
                                                             <div>
                                                                 <label className="md:hidden sale-mgmt-item-label mb-1 block text-center">Bag</label>
-                                                                <input type="number" name="bag" value={entry.bag} onChange={(e) => handleItemInputChange(index, entryIndex, e)} readOnly={isFieldReadOnly(originalData?.items?.[index]?.brandEntries?.[entryIndex]?.bag)} placeholder="0" className={`sale-mgmt-input !px-2 !text-[13px] font-bold text-blue-600 text-center ${isFieldReadOnly(originalData?.items?.[index]?.brandEntries?.[entryIndex]?.bag) ? 'bg-gray-50' : ''}`} />
+                                                                <input autoComplete="off" type="number" name="bag" value={entry.bag} onChange={(e) => handleItemInputChange(index, entryIndex, e)} readOnly={isFieldReadOnly(originalData?.items?.[index]?.brandEntries?.[entryIndex]?.bag)} placeholder="0" className={`sale-mgmt-input !px-2 !text-[13px] font-bold text-blue-600 text-center ${isFieldReadOnly(originalData?.items?.[index]?.brandEntries?.[entryIndex]?.bag) ? 'bg-gray-50' : ''}`} />
                                                             </div>
                                                             <div>
                                                                 <label className="md:hidden sale-mgmt-item-label mb-1 block text-center">Truck</label>
-                                                                <input type="number" name="truck" value={entry.truck || ''} onChange={(e) => handleItemInputChange(index, entryIndex, e)} readOnly={isFieldReadOnly(originalData?.items?.[index]?.brandEntries?.[entryIndex]?.truck)} placeholder="0" required className={`sale-mgmt-input !px-2 !text-[13px] font-bold text-gray-600 text-center ${isFieldReadOnly(originalData?.items?.[index]?.brandEntries?.[entryIndex]?.truck) ? 'bg-gray-50' : ''}`} />
+                                                                <input autoComplete="off" type="number" name="truck" value={entry.truck || ''} onChange={(e) => handleItemInputChange(index, entryIndex, e)} readOnly={isFieldReadOnly(originalData?.items?.[index]?.brandEntries?.[entryIndex]?.truck)} placeholder="0" required className={`sale-mgmt-input !px-2 !text-[13px] font-bold text-gray-600 text-center ${isFieldReadOnly(originalData?.items?.[index]?.brandEntries?.[entryIndex]?.truck) ? 'bg-gray-50' : ''}`} />
                                                             </div>
                                                             <div>
                                                                 <label className="md:hidden sale-mgmt-item-label mb-1 block text-center">Price</label>
-                                                                <input type="number" name="unitPrice" value={entry.unitPrice} onChange={(e) => handleItemInputChange(index, entryIndex, e)} readOnly={isFieldReadOnly(originalData?.items?.[index]?.brandEntries?.[entryIndex]?.unitPrice)} placeholder="0" className={`sale-mgmt-input !px-2 !text-[13px] font-bold text-gray-600 text-center ${isFieldReadOnly(originalData?.items?.[index]?.brandEntries?.[entryIndex]?.unitPrice) ? 'bg-gray-50' : ''}`} />
+                                                                <input autoComplete="off" type="number" name="unitPrice" value={entry.unitPrice} onChange={(e) => handleItemInputChange(index, entryIndex, e)} readOnly={isFieldReadOnly(originalData?.items?.[index]?.brandEntries?.[entryIndex]?.unitPrice)} placeholder="0" className={`sale-mgmt-input !px-2 !text-[13px] font-bold text-gray-600 text-center ${isFieldReadOnly(originalData?.items?.[index]?.brandEntries?.[entryIndex]?.unitPrice) ? 'bg-gray-50' : ''}`} />
                                                             </div>
                                                             <div className="flex items-center gap-2">
                                                                 <div className="flex-1">
@@ -3372,7 +3371,7 @@ const SaleManagement = ({
                                                         <div className="col-span-2 space-y-1 relative brand-dropdown-container">
                                                             <label className="md:hidden sale-mgmt-item-label mb-1 block">Brand</label>
                                                             <div className="relative">
-                                                                <input
+                                                                <input autoComplete="off" 
                                                                     type="text"
                                                                     placeholder={entry.brandName || "Brand"}
                                                                     value={activeDropdown === 'brand' && activeItemIndex === index && activeEntryIndex === entryIndex ? brandSearch : ''}
@@ -3385,7 +3384,7 @@ const SaleManagement = ({
                                                                         setActiveEntryIndex(entryIndex);
                                                                         handleItemInputChange(index, entryIndex, { target: { name: 'brandName', value: e.target.value } });
                                                                     }}
-                                                                    autoComplete="nope"
+                                                                    autoComplete="off"
                                                                     onFocus={() => {
                                                                         if (isFieldReadOnly(originalData?.items?.[index]?.brandEntries?.[entryIndex]?.brandName)) return;
                                                                         setActiveDropdown('brand');
@@ -3445,7 +3444,7 @@ const SaleManagement = ({
                                                             <div className="space-y-1 relative warehouse-dropdown-container">
                                                                 <label className="md:hidden sale-mgmt-item-label mb-1 block">Warehouse</label>
                                                                 <div className="relative">
-                                                                    <input
+                                                                    <input autoComplete="off" 
                                                                         type="text"
                                                                         placeholder={entry.warehouseName || "Warehouse"}
                                                                         value={activeDropdown === 'warehouse' && activeItemIndex === index && activeEntryIndex === entryIndex ? warehouseSearch : ''}
@@ -3459,7 +3458,7 @@ const SaleManagement = ({
                                                                             handleItemInputChange(index, entryIndex, { target: { name: 'warehouseName', value: e.target.value } });
                                                                         }}
                                                                         required
-                                                                        autoComplete="nope"
+                                                                        autoComplete="off"
                                                                         onFocus={() => {
                                                                             if (isFieldReadOnly(originalData?.items?.[index]?.brandEntries?.[entryIndex]?.warehouseName)) return;
                                                                             setActiveDropdown('warehouse');
@@ -3518,7 +3517,7 @@ const SaleManagement = ({
                                                         {/* Bag */}
                                                         <div>
                                                             <label className="md:hidden sale-mgmt-item-label mb-1 block text-center">Bag</label>
-                                                            <input
+                                                            <input autoComplete="off" 
                                                                 type="number"
                                                                 name="bag"
                                                                 value={entry.bag}
@@ -3532,7 +3531,7 @@ const SaleManagement = ({
                                                         {/* Quantity */}
                                                         <div>
                                                             <label className="md:hidden sale-mgmt-item-label mb-1 block text-center">Qty</label>
-                                                            <input
+                                                            <input autoComplete="off" 
                                                                 type="number"
                                                                 name="quantity"
                                                                 value={entry.quantity}
@@ -3547,7 +3546,7 @@ const SaleManagement = ({
                                                         {/* Unit Price */}
                                                         <div>
                                                             <label className="md:hidden sale-mgmt-item-label mb-1 block text-center">Price</label>
-                                                            <input
+                                                            <input autoComplete="off" 
                                                                 type="number"
                                                                 name="unitPrice"
                                                                 value={entry.unitPrice}
@@ -3603,7 +3602,7 @@ const SaleManagement = ({
                                     <label className="text-sm font-bold text-gray-700">Discount</label>
                                     <div className="relative">
                                         <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 font-bold">৳</span>
-                                        <input
+                                        <input autoComplete="off" 
                                             type="number"
                                             name="discount"
                                             value={formData.discount}
@@ -3622,7 +3621,7 @@ const SaleManagement = ({
                                     <label className="text-sm font-bold text-gray-700">Paid Amount</label>
                                     <div className="relative">
                                         <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 font-bold">৳</span>
-                                        <input
+                                        <input autoComplete="off" 
                                             type="number"
                                             name="paidAmount"
                                             value={formData.paidAmount}
@@ -3639,8 +3638,8 @@ const SaleManagement = ({
                                         ৳ {parseFloat(formData.dueAmount).toLocaleString()}
                                     </div>
                                 </div>
-                                <div className="flex flex-col md:flex-row items-center gap-4 justify-end border-t border-gray-100 pt-4 mt-2">
-                                    <div className="flex-1 w-full text-center md:text-left">
+                                <div className="flex flex-col md:flex-row items-center justify-between border-t border-gray-100 pt-4 mt-2">
+                                    <div className="flex-1 w-full text-center md:text-left mb-4 md:mb-0">
                                         {submitStatus === 'success' && (
                                             <p className="text-green-600 font-medium flex items-center justify-center md:justify-start animate-bounce">
                                                 <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"></path></svg>
@@ -3654,18 +3653,11 @@ const SaleManagement = ({
                                             </p>
                                         )}
                                     </div>
-                                    <div className="flex flex-col sm:flex-row gap-3 w-full md:w-auto">
-                                        <button
-                                            type="button"
-                                            onClick={() => { setShowForm(false); resetForm(); }}
-                                            className="sale-mgmt-btn-secondary"
-                                        >
-                                            Cancel
-                                        </button>
+                                    <div className="flex justify-end w-full md:w-auto relative z-10">
                                         <button
                                             type="submit"
                                             disabled={isSubmitting}
-                                            className="sale-mgmt-btn-primary"
+                                            className={`px-8 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-black rounded-xl shadow-lg shadow-blue-500/20 transition-all text-sm flex items-center justify-center gap-2 ${isSubmitting ? 'opacity-50 cursor-not-allowed' : ''}`}
                                         >
                                             {isSubmitting ? (
                                                 <span className="flex items-center">
@@ -3734,7 +3726,7 @@ const SaleManagement = ({
                                     <tr>
                                         <th className="sale-mgmt-th text-center">
                                             {isSelectionMode ? (
-                                                <input
+                                                <input autoComplete="off" 
                                                     type="checkbox"
                                                     checked={selectedItems.size === getFilteredData().length && getFilteredData().length > 0}
                                                     onChange={() => {
@@ -3859,7 +3851,7 @@ const SaleManagement = ({
                                                 <td className="px-3 py-4 text-center" onClick={(e) => e.stopPropagation()}>
                                                     {isSelectionMode ? (
                                                         (isFullAdmin || canUserEditSale(sale)) ? (
-                                                            <input
+                                                            <input autoComplete="off" 
                                                                 type="checkbox"
                                                                 checked={selectedItems.has(sale._id)}
                                                                 onChange={() => toggleSelection(sale._id)}
@@ -4111,7 +4103,7 @@ const SaleManagement = ({
                                             {isSelectionMode && saleType === 'Border' && (
                                                 <div className="flex-shrink-0 pr-1" onClick={(e) => e.stopPropagation()}>
                                                     {(isFullAdmin || canUserEditSale(sale)) ? (
-                                                        <input
+                                                        <input autoComplete="off" 
                                                             type="checkbox"
                                                             checked={selectedItems.has(sale._id)}
                                                             onChange={() => toggleSelection(sale._id)}
@@ -4299,7 +4291,7 @@ const SaleManagement = ({
                                 <label className="text-sm font-bold text-gray-700">New Rate (৳)</label>
                                 <div className="relative">
                                     <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 font-bold">৳</span>
-                                    <input
+                                    <input autoComplete="off" 
                                         type="number"
                                         value={bulkRate}
                                         onChange={(e) => setBulkRate(e.target.value)}

@@ -540,23 +540,16 @@ const LCExpense = ({ currentUser, addNotification }) => {
                             />
                         </div>
 
-                        <div className="flex gap-4 relative z-10">
-                            <button
-                                type="button"
-                                onClick={closeModal}
-                                className="flex-1 py-3 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl font-bold transition-all active:scale-95"
-                            >
-                                Cancel
-                            </button>
+                        <div className="flex justify-end gap-3 pt-4 border-t border-gray-50 mt-6 relative z-10">
                             <button
                                 type="submit"
                                 disabled={isSubmitting}
-                                className="flex-[2] py-3 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white rounded-xl font-bold shadow-lg shadow-blue-500/30 transition-all active:scale-95 flex items-center justify-center gap-2"
+                                className={`px-8 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-black rounded-xl shadow-lg shadow-blue-500/20 transition-all text-sm flex items-center justify-center gap-2 ${isSubmitting ? 'opacity-50 cursor-not-allowed' : ''}`}
                             >
                                 {isSubmitting ? 'Processing...' : isEditMode ? (
                                     <>Update Record</>
                                 ) : (
-                                    <><PlusIcon className="w-5 h-5" /> Save Expense</>
+                                    <><PlusIcon className="w-4 h-4" /> Save Expense</>
                                 )}
                             </button>
                         </div>

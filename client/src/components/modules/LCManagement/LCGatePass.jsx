@@ -41,6 +41,7 @@ const LCGatePass = ({ currentUser, addNotification }) => {
     });
     const [lcRecordsRaw, setLcRecordsRaw] = useState([]);
     const [customerRecordsRaw, setCustomerRecordsRaw] = useState([]);
+    const [salesRecordsRaw, setSalesRecordsRaw] = useState([]);
     const [activeDropdown, setActiveDropdown] = useState(null);
     const [highlightedIndex, setHighlightedIndex] = useState(-1);
     const lcRef = useRef(null);
@@ -51,14 +52,16 @@ const LCGatePass = ({ currentUser, addNotification }) => {
     const fetchRecords = async () => {
         setIsLoading(true);
         try {
-            const [gpRes, lcRes, custRes] = await Promise.all([
+            const [gpRes, lcRes, custRes, salesRes] = await Promise.all([
                 axios.get(`${API_BASE_URL}/api/lc-gp`),
                 axios.get(`${API_BASE_URL}/api/lc-management`),
-                axios.get(`${API_BASE_URL}/api/customers`)
+                axios.get(`${API_BASE_URL}/api/customers`),
+                axios.get(`${API_BASE_URL}/api/sales`)
             ]);
             setRecords(gpRes.data);
             setLcRecordsRaw(lcRes.data);
             setCustomerRecordsRaw(custRes.data);
+            setSalesRecordsRaw(salesRes.data);
         } catch (error) {
             console.error('Error fetching records:', error);
             addNotification?.('Failed to fetch records', 'error');
@@ -271,6 +274,7 @@ const LCGatePass = ({ currentUser, addNotification }) => {
                             <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-nowrap">Product</th>
                             <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-right text-nowrap">LC Qty</th>
                             <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-right text-nowrap">G.P Qty</th>
+                            <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-right text-nowrap">Border Sale</th>
                             <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-right text-nowrap">Rem. G.P</th>
                             <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-right text-nowrap">G.P Value</th>
                             <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-center text-nowrap">Actions</th>
@@ -280,14 +284,14 @@ const LCGatePass = ({ currentUser, addNotification }) => {
                         {isLoading ? (
                             Array(5).fill(0).map((_, i) => (
                                 <tr key={i} className="animate-pulse">
-                                    {Array(10).fill(0).map((_, j) => (
+                                    {Array(11).fill(0).map((_, j) => (
                                         <td key={j} className="px-6 py-4"><div className="h-4 bg-gray-100 rounded w-full" /></td>
                                     ))}
                                 </tr>
                             ))
                         ) : filteredRecords.length === 0 ? (
                             <tr>
-                                <td colSpan="10" className="px-6 py-32 text-center">
+                                <td colSpan="11" className="px-6 py-32 text-center">
                                     <div className="flex flex-col items-center gap-4">
                                         <div className="p-6 bg-gray-50 rounded-full">
                                             <FileTextIcon className="w-12 h-12 text-gray-300" />
@@ -325,12 +329,50 @@ const LCGatePass = ({ currentUser, addNotification }) => {
                                     </td>
                                     <td className="px-6 py-4 text-right">
                                         {(() => {
-                                            const totalGpForThisLc = records
-                                                .filter(r => r.lcNumber === record.lcNumber)
-                                                .reduce((sum, r) => sum + (parseFloat(r.gpQuantity) || 0), 0);
-                                            const lc = lcRecordsRaw.find(l => l.lcNo === record.lcNumber);
-                                            const lcTotalKg = lc ? (parseFloat(lc.quantity) * 1000) : (parseFloat(record.lcQuantity) || 0);
-                                            const remGp = Math.max(0, lcTotalKg - totalGpForThisLc);
+                                            const borderSaleForThisRow = salesRecordsRaw
+                                                .filter(s => {
+                                                    const sTypeLow = (s.saleType || '').toLowerCase().trim();
+                                                    const isBorder = sTypeLow === 'border' || sTypeLow === 'border sale' || (s.invoiceNo || '').startsWith('BS');
+                                                    const sCompany = (s.companyName || '').toLowerCase().trim();
+                                                    const sCustomer = (s.customerName || '').toLowerCase().trim();
+                                                    const rParty = (record.party || '').toLowerCase().trim();
+                                                    const isSameParty = sCompany === rParty || sCustomer === rParty;
+                                                    return isBorder && s.lcNo === record.lcNumber && isSameParty && s.status !== 'Rejected';
+                                                })
+                                                .reduce((sum, sale) => {
+                                                    const saleQty = (sale.items || []).reduce((itemSum, item) => {
+                                                        const brandQty = (item.brandEntries || []).reduce((entrySum, entry) => entrySum + (parseFloat(entry.quantity) || 0), 0);
+                                                        return itemSum + (brandQty > 0 ? brandQty : (parseFloat(item.quantity) || 0));
+                                                    }, 0);
+                                                    return sum + saleQty;
+                                                }, 0);
+                                            return (
+                                                <span className="text-sm font-bold text-orange-600">
+                                                    {borderSaleForThisRow.toLocaleString()} <span className="text-[10px] text-gray-400 font-normal">Kg</span>
+                                                </span>
+                                            );
+                                        })()}
+                                    </td>
+                                    <td className="px-6 py-4 text-right">
+                                        {(() => {
+                                            const borderSaleForThisRow = salesRecordsRaw
+                                                .filter(s => {
+                                                    const sTypeLow = (s.saleType || '').toLowerCase().trim();
+                                                    const isBorder = sTypeLow === 'border' || sTypeLow === 'border sale' || (s.invoiceNo || '').startsWith('BS');
+                                                    const sCompany = (s.companyName || '').toLowerCase().trim();
+                                                    const sCustomer = (s.customerName || '').toLowerCase().trim();
+                                                    const rParty = (record.party || '').toLowerCase().trim();
+                                                    const isSameParty = sCompany === rParty || sCustomer === rParty;
+                                                    return isBorder && s.lcNo === record.lcNumber && isSameParty && s.status !== 'Rejected';
+                                                })
+                                                .reduce((sum, sale) => {
+                                                    const saleQty = (sale.items || []).reduce((itemSum, item) => {
+                                                        const brandQty = (item.brandEntries || []).reduce((entrySum, entry) => entrySum + (parseFloat(entry.quantity) || 0), 0);
+                                                        return itemSum + (brandQty > 0 ? brandQty : (parseFloat(item.quantity) || 0));
+                                                    }, 0);
+                                                    return sum + saleQty;
+                                                }, 0);
+                                            const remGp = Math.max(0, parseFloat(record.gpQuantity || 0) - borderSaleForThisRow);
                                             return (
                                                 <span className={`text-sm font-bold ${remGp <= 0 ? 'text-emerald-600' : 'text-indigo-600'}`}>
                                                     {remGp.toLocaleString()} <span className="text-[10px] text-gray-400 font-normal">Kg</span>
@@ -497,6 +539,31 @@ const LCGatePass = ({ currentUser, addNotification }) => {
                                     />
                                 </div>
                                 <div className="space-y-1.5 text-left">
+                                    <label className="text-sm font-semibold text-gray-600 ml-1">Rem G.P</label>
+                                    {(() => {
+                                        let remGpForModal = 0;
+                                        if (formData.lcNumber) {
+                                            const lc = lcRecordsRaw.find(l => l.lcNo === formData.lcNumber);
+                                            const lcTotalKg = lc ? (parseFloat(lc.quantity) * 1000) : (parseFloat(formData.lcQuantity) || 0);
+                                            
+                                            const totalGp = records
+                                                .filter(r => r.lcNumber === formData.lcNumber && r.status !== 'Rejected' && r._id !== editingId)
+                                                .reduce((sum, r) => sum + (parseFloat(r.gpQuantity) || 0), 0);
+                                                
+                                            remGpForModal = Math.max(0, lcTotalKg - totalGp);
+                                        }
+                                        return (
+                                            <input
+                                                type="text"
+                                                value={formData.lcNumber ? remGpForModal.toLocaleString() : '0'}
+                                                readOnly
+                                                className={`w-full px-4 py-2.5 bg-gray-50 border border-gray-200/60 rounded-xl outline-none font-bold cursor-not-allowed ${remGpForModal <= 0 && formData.lcNumber ? 'text-emerald-600' : 'text-blue-600'}`}
+                                                placeholder="0"
+                                            />
+                                        );
+                                    })()}
+                                </div>
+                                <div className="space-y-1.5 text-left">
                                     <label className="text-sm font-semibold text-gray-600 ml-1">LC Rate</label>
                                     <input
                                         type="number"
@@ -625,24 +692,13 @@ const LCGatePass = ({ currentUser, addNotification }) => {
                                 />
                             </div>
 
-                            <div className="flex gap-4 relative z-10">
-                                <button
-                                    type="button"
-                                    onClick={() => { setShowForm(false); setEditingId(null); }}
-                                    className="flex-1 py-3 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl font-bold transition-all active:scale-95"
-                                >
-                                    Cancel
-                                </button>
+                            <div className="flex justify-end relative z-10">
                                 <button
                                     type="submit"
                                     disabled={isSubmitting}
-                                    className="flex-[2] py-3 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white rounded-xl font-bold shadow-lg shadow-blue-500/30 transition-all active:scale-95 flex items-center justify-center gap-2"
+                                    className="w-full md:w-auto px-10 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold rounded-xl shadow-lg shadow-blue-500/30 transition-all transform hover:scale-105 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed text-sm uppercase tracking-wider"
                                 >
-                                    {isSubmitting ? 'Processing...' : editingId ? (
-                                        <><CheckIcon className="w-5 h-5" /> Update Record</>
-                                    ) : (
-                                        <><PlusIcon className="w-5 h-5" /> Create Gate Pass</>
-                                    )}
+                                    {isSubmitting ? 'Saving...' : editingId ? 'Update Record' : 'Save'}
                                 </button>
                             </div>
                         </form>

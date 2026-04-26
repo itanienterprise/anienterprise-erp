@@ -195,15 +195,17 @@ const Bank = ({ onDeleteConfirm }) => {
                     <div className="hidden md:block md:flex-1"></div>
                 )}
 
-                <div className={`${showForm ? 'w-full md:w-auto flex justify-end' : 'w-full md:w-1/4 flex justify-end'} gap-3 z-50`}>
-                    <button 
-                        onClick={() => setShowForm(!showForm)}
-                        className="w-full md:w-auto px-4 py-2.5 md:py-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-medium rounded-xl shadow-lg shadow-blue-500/30 transition-all transform active:scale-95 md:hover:scale-105 flex items-center justify-center"
-                    >
-                        <span className="mr-2 text-xl font-bold">+</span>
-                        <span>{showForm ? 'Cancel Registration' : 'Add New Bank'}</span>
-                    </button>
-                </div>
+                {!showForm && (
+                    <div className="w-full md:w-1/4 flex justify-end gap-3 z-50">
+                        <button 
+                            onClick={() => setShowForm(true)}
+                            className="w-full md:w-auto px-4 py-2.5 md:py-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-medium rounded-xl shadow-lg shadow-blue-500/30 transition-all transform active:scale-95 md:hover:scale-105 flex items-center justify-center"
+                        >
+                            <span className="mr-2 text-xl font-bold">+</span>
+                            <span>Add New Bank</span>
+                        </button>
+                    </div>
+                )}
             </div>
 
             {showForm && (
@@ -335,13 +337,7 @@ const Bank = ({ onDeleteConfirm }) => {
                                 )}
                             </div>
                             <div className="flex gap-3">
-                                <button
-                                    type="button"
-                                    onClick={() => { setShowForm(false); resetForm(); }}
-                                    className="flex-1 md:flex-none px-6 py-2.5 bg-gray-100 text-gray-600 font-bold rounded-xl hover:bg-gray-200 transition-all text-sm"
-                                >
-                                    Cancel
-                                </button>
+
                                 <button
                                     type="submit"
                                     disabled={isSubmitting}

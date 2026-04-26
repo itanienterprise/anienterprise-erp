@@ -44,11 +44,15 @@ const InsurancePayment = () => {
     const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
     const [paymentToDelete, setPaymentToDelete] = useState(null);
     const [insuranceSearchQuery, setInsuranceSearchQuery] = useState('');
+    const [lcSearchQuery, setLcSearchQuery] = useState('');
     const insuranceDropdownRef = useRef(null);
     const methodDropdownRef = useRef(null);
+    const lcDropdownRef = useRef(null);
+    const [lcs, setLcs] = useState([]);
 
     const [newPayment, setNewPayment] = useState({
         insuranceId: '',
+        lcNo: '',
         type: 'Premium Payment',
         isAdjustReturn: true,
         date: new Date().toISOString().split('T')[0],
@@ -114,6 +118,7 @@ const InsurancePayment = () => {
             });
 
             setInsurances(insurancesWithBalance);
+            setLcs(allLc);
         } catch (error) {
             console.error('Error fetching insurance companies:', error);
         }
@@ -141,6 +146,9 @@ const InsurancePayment = () => {
                 setActiveDropdown(null);
             }
             if (activeDropdown === 'method' && methodDropdownRef.current && !methodDropdownRef.current.contains(event.target)) {
+                setActiveDropdown(null);
+            }
+            if (activeDropdown === 'lc' && lcDropdownRef.current && !lcDropdownRef.current.contains(event.target)) {
                 setActiveDropdown(null);
             }
         };
@@ -207,6 +215,7 @@ const InsurancePayment = () => {
     const resetNewPayment = () => {
         setNewPayment({
             insuranceId: '',
+            lcNo: '',
             type: 'Premium Payment',
             isAdjustReturn: true,
             date: new Date().toISOString().split('T')[0],
@@ -216,6 +225,7 @@ const InsurancePayment = () => {
             remarks: ''
         });
         setInsuranceSearchQuery('');
+        setLcSearchQuery('');
         setIsEditMode(false);
         setEditingPayment(null);
     };
@@ -225,6 +235,7 @@ const InsurancePayment = () => {
         setEditingPayment(payment);
         setNewPayment({
             insuranceId: payment.insuranceId,
+            lcNo: payment.lcNo || '',
             type: payment.type || 'Premium Payment',
             isAdjustReturn: payment.isAdjustReturn !== undefined ? payment.isAdjustReturn : true,
             date: payment.date,
@@ -297,6 +308,36 @@ const InsurancePayment = () => {
     const totalPaid = filteredPayments.reduce((sum, p) => sum + p.amount, 0);
     const transactionCount = filteredPayments.length;
 
+    let displayPremiumBalance = 0;
+    let displayReturnBalance = 0;
+
+    if (newPayment.lcNo) {
+        const selectedLc = lcs.find(lc => lc.lcNo === newPayment.lcNo);
+        if (selectedLc) {
+            let premiumPaid = 0;
+            let returnCollected = 0;
+            
+            payments.forEach(payment => {
+                if (payment.lcNo === newPayment.lcNo) {
+                    if (payment.type === 'Return Collection') {
+                        returnCollected += (parseFloat(payment.amount) || 0);
+                    } else {
+                        premiumPaid += (parseFloat(payment.amount) || 0);
+                    }
+                }
+            });
+
+            displayPremiumBalance = (parseFloat(selectedLc.netPremium) || 0) - premiumPaid;
+            displayReturnBalance = (parseFloat(selectedLc.expectedReturnAmount) || 0) - returnCollected;
+        }
+    } else if (newPayment.insuranceId) {
+        const selectedIns = insurances.find(i => i._id === newPayment.insuranceId);
+        if (selectedIns) {
+            displayPremiumBalance = selectedIns.premiumBalance || 0;
+            displayReturnBalance = selectedIns.returnBalance || 0;
+        }
+    }
+
     return (
         <div className="space-y-6">
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -358,11 +399,140 @@ const InsurancePayment = () => {
                         </div>
 
                         <form onSubmit={handleAddPayment} className="p-8 space-y-8">
-                        <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+                            {/* Adjustment & Type Selection (Moved to Top) */}
+                            <div className="flex items-center gap-8 py-4 border border-blue-50 bg-blue-50/30 px-5 rounded-2xl shadow-sm">
+                                <div className="flex items-center gap-6">
+                                    <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Adjustment:</label>
+                                    <div className="flex items-center gap-4">
+                                        <label className="flex items-center gap-2 cursor-pointer group">
+                                            <div className="relative flex items-center justify-center">
+                                                <input 
+                                                    type="radio" 
+                                                    name="isAdjustReturn"
+                                                    checked={newPayment.isAdjustReturn}
+                                                    onChange={() => setNewPayment(prev => ({ ...prev, isAdjustReturn: true, type: 'Premium Payment' }))}
+                                                    className="peer appearance-none w-5 h-5 border-2 border-gray-200 rounded-full checked:border-blue-600 transition-all"
+                                                />
+                                                <div className="absolute w-2.5 h-2.5 bg-blue-600 rounded-full scale-0 peer-checked:scale-100 transition-all" />
+                                            </div>
+                                            <span className={`text-xs font-bold transition-colors ${newPayment.isAdjustReturn ? 'text-blue-600' : 'text-gray-400'}`}>Adjust Return Balance</span>
+                                        </label>
+                                        <label className="flex items-center gap-2 cursor-pointer group">
+                                            <div className="relative flex items-center justify-center">
+                                                <input 
+                                                    type="radio" 
+                                                    name="isAdjustReturn"
+                                                    checked={!newPayment.isAdjustReturn}
+                                                    onChange={() => setNewPayment(prev => ({ ...prev, isAdjustReturn: false }))}
+                                                    className="peer appearance-none w-5 h-5 border-2 border-gray-200 rounded-full checked:border-rose-600 transition-all"
+                                                />
+                                                <div className="absolute w-2.5 h-2.5 bg-rose-600 rounded-full scale-0 peer-checked:scale-100 transition-all" />
+                                            </div>
+                                            <span className={`text-xs font-bold transition-colors ${!newPayment.isAdjustReturn ? 'text-rose-600' : 'text-gray-400'}`}>Direct Payment</span>
+                                        </label>
+                                    </div>
+                                </div>
+
+                                <div className="flex items-center gap-4 flex-1">
+                                    <label className={`text-[10px] font-bold uppercase tracking-wider transition-colors ${newPayment.isAdjustReturn ? 'text-gray-300' : 'text-gray-500'}`}>
+                                        Payment Type:
+                                    </label>
+                                    <div className="flex gap-2">
+                                        {['Premium Payment', 'Return Collection'].map((t) => (
+                                            <button
+                                                key={t}
+                                                type="button"
+                                                disabled={newPayment.isAdjustReturn}
+                                                onClick={() => setNewPayment(prev => ({ ...prev, type: t }))}
+                                                className={`px-4 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${
+                                                    newPayment.isAdjustReturn 
+                                                        ? 'bg-gray-100 text-gray-300 cursor-not-allowed border-transparent' 
+                                                        : newPayment.type === t
+                                                            ? t === 'Premium Payment' ? 'bg-rose-600 text-white shadow-lg shadow-rose-200' : 'bg-emerald-600 text-white shadow-lg shadow-emerald-200'
+                                                            : 'bg-white border border-gray-200 text-gray-400 hover:border-gray-300'
+                                                }`}
+                                            >
+                                                {t.split(' ')[0]}
+                                            </button>
+                                        ))}
+                                    </div>
+                                </div>
+                            </div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-5 gap-6">
                             {/* Row 1: Primary Info */}
                             <div className="space-y-1.5">
                                 <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider ml-1">Payment Date</label>
                                 <CustomDatePicker value={newPayment.date} onChange={(e) => setNewPayment({ ...newPayment, date: e.target.value })} compact />
+                            </div>
+
+                            <div className="space-y-1.5 relative">
+                                <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider ml-1">LC No</label>
+                                <div ref={lcDropdownRef} className="relative">
+                                    <button
+                                        type="button"
+                                        onClick={() => setActiveDropdown(activeDropdown === 'lc' ? null : 'lc')}
+                                        className="w-full flex items-center justify-between px-4 py-2.5 bg-white border border-gray-100 rounded-xl text-sm shadow-sm hover:border-gray-200 transition-all focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 outline-none"
+                                    >
+                                        <span className={`truncate ${!newPayment.lcNo ? 'text-gray-400' : 'text-gray-900'}`}>
+                                            {newPayment.lcNo || 'Select LC'}
+                                        </span>
+                                        <div className="flex items-center gap-2">
+                                            {newPayment.lcNo && (
+                                                <div 
+                                                    className="p-0.5 hover:bg-gray-100 rounded-full transition-colors cursor-pointer"
+                                                    onMouseDown={(e) => {
+                                                        e.preventDefault();
+                                                        e.stopPropagation();
+                                                        setNewPayment({ ...newPayment, lcNo: '' });
+                                                    }}
+                                                >
+                                                    <XIcon className="w-4 h-4 text-gray-400 hover:text-red-500 transition-colors" />
+                                                </div>
+                                            )}
+                                            <ChevronDownIcon className="w-4 h-4 text-gray-400" />
+                                        </div>
+                                    </button>
+                                    {activeDropdown === 'lc' && (
+                                        <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-xl shadow-xl z-[110] max-h-60 flex flex-col animate-in fade-in slide-in-from-top-2 duration-200">
+                                            <div className="p-2 border-b border-gray-100 sticky top-0 bg-white">
+                                                <input
+                                                    type="text"
+                                                    placeholder="Search LC..."
+                                                    value={lcSearchQuery}
+                                                    onChange={(e) => setLcSearchQuery(e.target.value)}
+                                                    className="w-full px-3 py-1.5 text-sm bg-gray-50 border border-gray-200 rounded-lg outline-none focus:border-blue-500"
+                                                />
+                                            </div>
+                                            <div className="overflow-y-auto">
+                                                {lcs.filter(lc => (lc.lcNo || '').toLowerCase().includes(lcSearchQuery.toLowerCase())).map(lc => (
+                                                    <button
+                                                        key={lc._id}
+                                                        type="button"
+                                                        onClick={() => { 
+                                                            const insCoName = (lc.insuranceCo || '').toLowerCase().trim();
+                                                            const matchingIns = insurances.find(i => (i.companyName || '').toLowerCase().trim() === insCoName);
+                                                            
+                                                            setNewPayment({ 
+                                                                ...newPayment, 
+                                                                lcNo: lc.lcNo,
+                                                                insuranceId: matchingIns ? matchingIns._id : newPayment.insuranceId
+                                                            }); 
+                                                            setActiveDropdown(null); 
+                                                        }}
+                                                        className="w-full px-4 py-2.5 text-left text-sm hover:bg-blue-50 transition-colors flex items-center justify-between"
+                                                    >
+                                                        <div>
+                                                            <div className="font-bold text-gray-900">{lc.lcNo}</div>
+                                                            <div className="text-[10px] text-gray-500">{lc.importer}</div>
+                                                        </div>
+                                                        {newPayment.lcNo === lc.lcNo && <CheckIcon className="w-4 h-4 text-blue-600" />}
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
                             </div>
 
                             <div className="space-y-1.5 relative">
@@ -373,8 +543,24 @@ const InsurancePayment = () => {
                                         onClick={() => setActiveDropdown(activeDropdown === 'insurance' ? null : 'insurance')}
                                         className="w-full flex items-center justify-between px-4 py-2.5 bg-white border border-gray-100 rounded-xl text-sm shadow-sm hover:border-gray-200 transition-all focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 outline-none"
                                     >
-                                        <span className="truncate">{insurances.find(i => i._id === newPayment.insuranceId)?.companyName || 'Select Company'}</span>
-                                        <ChevronDownIcon className="w-4 h-4 text-gray-400" />
+                                        <span className={`truncate ${!newPayment.insuranceId ? 'text-gray-400' : 'text-gray-900'}`}>
+                                            {insurances.find(i => i._id === newPayment.insuranceId)?.companyName || 'Select Company'}
+                                        </span>
+                                        <div className="flex items-center gap-2">
+                                            {newPayment.insuranceId && (
+                                                <div 
+                                                    className="p-0.5 hover:bg-gray-100 rounded-full transition-colors cursor-pointer"
+                                                    onMouseDown={(e) => {
+                                                        e.preventDefault();
+                                                        e.stopPropagation();
+                                                        setNewPayment({ ...newPayment, insuranceId: '' });
+                                                    }}
+                                                >
+                                                    <XIcon className="w-4 h-4 text-gray-400 hover:text-red-500 transition-colors" />
+                                                </div>
+                                            )}
+                                            <ChevronDownIcon className="w-4 h-4 text-gray-400" />
+                                        </div>
                                     </button>
                                     {activeDropdown === 'insurance' && (
                                         <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-xl shadow-xl z-[110] max-h-60 flex flex-col animate-in fade-in slide-in-from-top-2 duration-200">
@@ -449,65 +635,7 @@ const InsurancePayment = () => {
                             </div>
                         </div>
 
-                        {/* Row 1.5: Adjustment & Type */}
-                        <div className="flex items-center gap-8 py-4 border-y border-gray-50 bg-gray-50/30 px-4 rounded-xl">
-                            <div className="flex items-center gap-6">
-                                <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Adjustment:</label>
-                                <div className="flex items-center gap-4">
-                                    <label className="flex items-center gap-2 cursor-pointer group">
-                                        <div className="relative flex items-center justify-center">
-                                            <input 
-                                                type="radio" 
-                                                name="isAdjustReturn"
-                                                checked={newPayment.isAdjustReturn}
-                                                onChange={() => setNewPayment(prev => ({ ...prev, isAdjustReturn: true, type: 'Premium Payment' }))}
-                                                className="peer appearance-none w-5 h-5 border-2 border-gray-200 rounded-full checked:border-blue-600 transition-all"
-                                            />
-                                            <div className="absolute w-2.5 h-2.5 bg-blue-600 rounded-full scale-0 peer-checked:scale-100 transition-all" />
-                                        </div>
-                                        <span className={`text-xs font-bold transition-colors ${newPayment.isAdjustReturn ? 'text-blue-600' : 'text-gray-400'}`}>Adjust Return Balance</span>
-                                    </label>
-                                    <label className="flex items-center gap-2 cursor-pointer group">
-                                        <div className="relative flex items-center justify-center">
-                                            <input 
-                                                type="radio" 
-                                                name="isAdjustReturn"
-                                                checked={!newPayment.isAdjustReturn}
-                                                onChange={() => setNewPayment(prev => ({ ...prev, isAdjustReturn: false }))}
-                                                className="peer appearance-none w-5 h-5 border-2 border-gray-200 rounded-full checked:border-rose-600 transition-all"
-                                            />
-                                            <div className="absolute w-2.5 h-2.5 bg-rose-600 rounded-full scale-0 peer-checked:scale-100 transition-all" />
-                                        </div>
-                                        <span className={`text-xs font-bold transition-colors ${!newPayment.isAdjustReturn ? 'text-rose-600' : 'text-gray-400'}`}>Direct Payment</span>
-                                    </label>
-                                </div>
-                            </div>
 
-                            <div className="flex items-center gap-4 flex-1">
-                                <label className={`text-[10px] font-bold uppercase tracking-wider transition-colors ${newPayment.isAdjustReturn ? 'text-gray-300' : 'text-gray-500'}`}>
-                                    Payment Type:
-                                </label>
-                                <div className="flex gap-2">
-                                    {['Premium Payment', 'Return Collection'].map((t) => (
-                                        <button
-                                            key={t}
-                                            type="button"
-                                            disabled={newPayment.isAdjustReturn}
-                                            onClick={() => setNewPayment(prev => ({ ...prev, type: t }))}
-                                            className={`px-4 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${
-                                                newPayment.isAdjustReturn 
-                                                    ? 'bg-gray-100 text-gray-300 cursor-not-allowed border-transparent' 
-                                                    : newPayment.type === t
-                                                        ? t === 'Premium Payment' ? 'bg-rose-600 text-white shadow-lg shadow-rose-200' : 'bg-emerald-600 text-white shadow-lg shadow-emerald-200'
-                                                        : 'bg-white border border-gray-200 text-gray-400 hover:border-gray-300'
-                                            }`}
-                                        >
-                                            {t.split(' ')[0]}
-                                        </button>
-                                    ))}
-                                </div>
-                            </div>
-                        </div>
 
                         <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-start pt-4 border-t border-gray-50">
                             {/* Dynamic Balance Section */}
@@ -523,7 +651,7 @@ const InsurancePayment = () => {
                                             <input
                                                 type="text"
                                                 readOnly
-                                                value={newPayment.insuranceId ? (insurances.find(i => i._id === newPayment.insuranceId)?.premiumBalance || 0).toLocaleString() : '0.00'}
+                                                value={(newPayment.lcNo || newPayment.insuranceId) ? displayPremiumBalance.toLocaleString() : '0.00'}
                                                 className="w-full pl-6 pr-3 py-2.5 bg-white border border-gray-100 rounded-xl text-sm font-black text-gray-900 shadow-sm outline-none cursor-not-allowed"
                                             />
                                         </div>
@@ -537,7 +665,7 @@ const InsurancePayment = () => {
                                             <input
                                                 type="text"
                                                 readOnly
-                                                value={newPayment.insuranceId ? (insurances.find(i => i._id === newPayment.insuranceId)?.returnBalance || 0).toLocaleString() : '0.00'}
+                                                value={(newPayment.lcNo || newPayment.insuranceId) ? displayReturnBalance.toLocaleString() : '0.00'}
                                                 className="w-full pl-6 pr-3 py-2.5 bg-white border border-gray-100 rounded-xl text-sm font-black text-gray-900 shadow-sm outline-none cursor-not-allowed"
                                             />
                                         </div>
@@ -551,7 +679,7 @@ const InsurancePayment = () => {
                                             <input
                                                 type="text"
                                                 readOnly
-                                                value={newPayment.insuranceId ? ((insurances.find(i => i._id === newPayment.insuranceId)?.premiumBalance || 0) - (insurances.find(i => i._id === newPayment.insuranceId)?.returnBalance || 0)).toLocaleString() : '0.00'}
+                                                value={(newPayment.lcNo || newPayment.insuranceId) ? (displayPremiumBalance - displayReturnBalance).toLocaleString() : '0.00'}
                                                 className="w-full pl-6 pr-3 py-2.5 bg-white border border-gray-100 rounded-xl text-sm font-black text-gray-900 shadow-sm outline-none cursor-not-allowed"
                                             />
                                         </div>
@@ -568,6 +696,7 @@ const InsurancePayment = () => {
                                                 value={newPayment.amount}
                                                 onChange={(e) => setNewPayment({ ...newPayment, amount: e.target.value })}
                                                 placeholder="0.00"
+                                                required
                                                 className="w-full pl-8 pr-4 py-2.5 bg-white border border-gray-100 rounded-xl text-sm font-bold shadow-sm hover:border-gray-200 transition-all focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 outline-none"
                                             />
                                         </div>
@@ -587,7 +716,7 @@ const InsurancePayment = () => {
                                             <input
                                                 type="text"
                                                 readOnly
-                                                value={newPayment.insuranceId ? (newPayment.type === 'Premium Payment' ? (insurances.find(i => i._id === newPayment.insuranceId)?.premiumBalance || 0) : (insurances.find(i => i._id === newPayment.insuranceId)?.returnBalance || 0)).toLocaleString() : '0.00'}
+                                                value={(newPayment.lcNo || newPayment.insuranceId) ? (newPayment.type === 'Premium Payment' ? displayPremiumBalance : displayReturnBalance).toLocaleString() : '0.00'}
                                                 className="w-full pl-6 pr-3 py-2.5 bg-white border border-gray-100 rounded-xl text-sm font-black text-gray-900 shadow-sm outline-none cursor-not-allowed"
                                             />
                                         </div>
@@ -604,6 +733,7 @@ const InsurancePayment = () => {
                                                 value={newPayment.amount}
                                                 onChange={(e) => setNewPayment({ ...newPayment, amount: e.target.value })}
                                                 placeholder="0.00"
+                                                required
                                                 className="w-full pl-8 pr-4 py-2.5 bg-white border border-gray-100 rounded-xl text-sm font-bold shadow-sm hover:border-gray-200 transition-all focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 outline-none"
                                             />
                                         </div>
@@ -616,13 +746,7 @@ const InsurancePayment = () => {
                         </div>
 
                     <div className="flex items-center justify-end gap-3 pt-4 border-t border-gray-50">
-                            <button
-                                type="button"
-                                onClick={() => { setShowAddModal(false); resetNewPayment(); }}
-                                className="px-6 py-2.5 text-sm font-bold text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-xl transition-all"
-                            >
-                                Cancel
-                            </button>
+
                             <button
                                 type="submit"
                                 disabled={isSubmitting}

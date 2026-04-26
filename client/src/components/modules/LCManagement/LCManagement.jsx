@@ -1133,6 +1133,7 @@ const LCManagement = ({ addNotification, currentUser }) => {
                                 e.preventDefault();
                             }
                         }}
+                        autoComplete="off"
                         className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 relative z-10"
                     >
                         <div className="col-span-full mb-2">
@@ -1179,6 +1180,7 @@ const LCManagement = ({ addNotification, currentUser }) => {
                                 value={formData.lcNo}
                                 onChange={handleInputChange}
                                 required
+                                autoComplete="off"
                                 placeholder="Enter LC Number"
                                 className="w-full px-4 py-2.5 bg-white/50 border border-gray-200/60 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all font-medium"
                             />

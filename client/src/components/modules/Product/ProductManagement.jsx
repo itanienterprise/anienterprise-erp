@@ -123,14 +123,16 @@ const ProductManagement = ({ products, fetchProducts }) => {
         <div className="product-management space-y-6">
             <div className="flex items-center justify-between">
                 <h2 className="text-xl md:text-2xl font-bold text-gray-800">Products Management</h2>
-                <button
-                    onClick={() => setShowProductForm(!showProductForm)}
-                    className="flex items-center px-4 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-medium rounded-xl shadow-lg shadow-blue-500/30 transition-all transform active:scale-95 text-sm md:text-base"
-                >
-                    <span className="text-lg font-light mr-1 md:mr-2">+</span>
-                    <span className="hidden sm:inline">Add New Product</span>
-                    <span className="sm:hidden">Add</span>
-                </button>
+                {!showProductForm && (
+                    <button
+                        onClick={() => setShowProductForm(true)}
+                        className="flex items-center px-4 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-medium rounded-xl shadow-lg shadow-blue-500/30 transition-all transform active:scale-95 text-sm md:text-base"
+                    >
+                        <span className="text-lg font-light mr-1 md:mr-2">+</span>
+                        <span className="hidden sm:inline">Add New Product</span>
+                        <span className="sm:hidden">Add</span>
+                    </button>
+                )}
             </div>
 
             {/* Add/Edit Modal */}
@@ -305,30 +307,21 @@ const ProductManagement = ({ products, fetchProducts }) => {
                                 </div>
 
                                 {/* Row 3: Action Buttons */}
-                                <div className="flex justify-center md:justify-end pt-4 border-t border-gray-100/50 w-full">
-                                    <div className="flex items-center space-x-3 w-full md:w-auto">
-                                        <button
-                                            type="button"
-                                            onClick={() => { setShowProductForm(false); resetProductForm(); }}
-                                            className="flex-1 md:flex-none px-6 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors text-sm font-medium"
-                                        >
-                                            Cancel
-                                        </button>
-                                        <button
-                                            type="submit"
-                                            disabled={isSubmitting}
-                                            className="flex-1 md:flex-none justify-center px-8 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors shadow-sm disabled:opacity-70 disabled:cursor-not-allowed flex items-center text-sm font-semibold"
-                                        >
-                                            {isSubmitting ? (
-                                                <svg className="animate-spin h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                                                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                                                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                                                </svg>
-                                            ) : (
-                                                <span className="text-center">{editingId ? 'Update Product' : 'Add Product'}</span>
-                                            )}
-                                        </button>
-                                    </div>
+                                <div className="flex justify-end pt-4 border-t border-gray-100/50 w-full mt-2 relative z-10">
+                                    <button
+                                        type="submit"
+                                        disabled={isSubmitting}
+                                        className={`px-8 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-black rounded-xl shadow-lg shadow-blue-500/20 transition-all text-sm flex items-center justify-center gap-2 ${isSubmitting ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                    >
+                                        {isSubmitting ? (
+                                            <svg className="animate-spin h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                            </svg>
+                                        ) : (
+                                            <span className="text-center">{editingId ? 'Update Product' : 'Add Product'}</span>
+                                        )}
+                                    </button>
                                 </div>
                             </div>
                         </form>

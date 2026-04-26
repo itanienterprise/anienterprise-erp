@@ -279,15 +279,17 @@ const Insurance = ({ onDeleteConfirm }) => {
                     <div className="hidden md:block md:flex-1"></div>
                 )}
 
-                <div className={`${showForm ? 'w-full md:w-auto flex justify-end' : 'w-full md:w-1/4 flex justify-end'} gap-3 z-50`}>
-                    <button 
-                        onClick={() => { setShowForm(!showForm); if(showForm) resetForm(); }}
-                        className="w-full md:w-auto px-4 py-2.5 md:py-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-medium rounded-xl shadow-lg shadow-blue-500/30 transition-all transform active:scale-95 md:hover:scale-105 flex items-center justify-center"
-                    >
-                        <span className="mr-2 text-xl font-bold">+</span>
-                        <span>{showForm ? 'Cancel Policy' : 'New Company'}</span>
-                    </button>
-                </div>
+                {!showForm && (
+                    <div className="w-full md:w-1/4 flex justify-end gap-3 z-50">
+                        <button 
+                            onClick={() => { setShowForm(true); }}
+                            className="w-full md:w-auto px-4 py-2.5 md:py-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-medium rounded-xl shadow-lg shadow-blue-500/30 transition-all transform active:scale-95 md:hover:scale-105 flex items-center justify-center"
+                        >
+                            <span className="mr-2 text-xl font-bold">+</span>
+                            <span>New Company</span>
+                        </button>
+                    </div>
+                )}
             </div>
 
             {!showForm && (
@@ -325,6 +327,12 @@ const Insurance = ({ onDeleteConfirm }) => {
                         <div className="flex items-center space-x-3">
                             <h3 className="text-lg md:text-xl font-semibold text-gray-800">{editingId ? 'Edit Insurance Policy' : 'New Insurance Company'}</h3>
                         </div>
+                        <button 
+                            onClick={() => { setShowForm(false); resetForm(); }}
+                            className="p-1.5 md:p-2 hover:bg-gray-100/80 text-gray-400 hover:text-rose-500 rounded-xl transition-all"
+                        >
+                            <XIcon className="w-5 h-5 md:w-6 md:h-6" />
+                        </button>
                     </div>
 
                     <form 
@@ -502,8 +510,7 @@ const Insurance = ({ onDeleteConfirm }) => {
                                 {submitStatus === 'error' && <div className="text-red-600 font-bold text-sm animate-in fade-in slide-in-from-left-4">Failed to save record.</div>}
                             </div>
                             <div className="flex gap-3">
-                                <button type="button" onClick={() => { setShowForm(false); resetForm(); }} className="px-6 py-2.5 bg-gray-100 text-gray-600 font-bold rounded-xl hover:bg-gray-200 transition-all text-sm">Cancel</button>
-                                <button type="submit" disabled={isSubmitting} className={`px-8 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-bold rounded-xl shadow-lg shadow-blue-500/20 hover:from-blue-700 hover:to-indigo-700 transition-all text-sm ${isSubmitting ? 'opacity-50 cursor-not-allowed' : ''}`}>
+                                <button type="submit" disabled={isSubmitting} className={`px-8 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-black rounded-xl shadow-lg shadow-blue-500/20 transition-all text-sm ${isSubmitting ? 'opacity-50 cursor-not-allowed' : ''}`}>
                                     {isSubmitting ? 'Saving...' : editingId ? 'Update Policy' : 'Save Policy'}
                                 </button>
                             </div>

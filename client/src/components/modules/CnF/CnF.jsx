@@ -64,6 +64,7 @@ const CnF = ({
     });
     const [historyViewMode, setHistoryViewMode] = useState('earnings');
     const [paymentRecords, setPaymentRecords] = useState([]);
+    const [expenseRecords, setExpenseRecords] = useState([]);
     const [paymentLoading, setPaymentLoading] = useState(false);
     const [formData, setFormData] = useState({
         cnfId: '',
@@ -175,17 +176,19 @@ const CnF = ({
     const fetchCnFs = async () => {
         setIsLoading(true);
         try {
-            const [cnfsRes, stockRes, salesRes, paymentsRes] = await Promise.all([
+            const [cnfsRes, stockRes, salesRes, paymentsRes, expenseRes] = await Promise.all([
                 axios.get(`${API_BASE_URL}/api/cnfs`),
                 axios.get(`${API_BASE_URL}/api/stock`),
                 axios.get(`${API_BASE_URL}/api/sales`),
-                axios.get(`${API_BASE_URL}/api/cnf-payments`)
+                axios.get(`${API_BASE_URL}/api/cnf-payments`),
+                axios.get(`${API_BASE_URL}/api/lc-expenses`)
             ]);
 
             const allCnfs = Array.isArray(cnfsRes.data) ? cnfsRes.data : [];
             const allStock = Array.isArray(stockRes.data) ? stockRes.data : [];
             const allSales = Array.isArray(salesRes.data) ? salesRes.data : [];
             const allPayments = Array.isArray(paymentsRes.data) ? paymentsRes.data : [];
+            const allExpenses = Array.isArray(expenseRes.data) ? expenseRes.data : [];
 
             const cnfsWithBalance = allCnfs.map(cnf => {
                 const targetName = (cnf.name || '').toLowerCase().trim();
@@ -202,6 +205,15 @@ const CnF = ({
                             : (recordIndCnF === targetName || recordBdCnF === targetName);
 
                     if (isMatch) {
+                        const status = (record.status || '').toLowerCase();
+                        if (status.includes('requested') || status.includes('rejected')) return acc;
+
+                        if (recordIndCnF === targetName && record.indCnFCost !== undefined && record.indCnFCost !== null && record.indCnFCost !== '') {
+                            return acc + (parseFloat(record.indCnFCost) || 0);
+                        } else if (recordBdCnF === targetName && record.bdCnFCost !== undefined && record.bdCnFCost !== null && record.bdCnFCost !== '') {
+                            return acc + (parseFloat(record.bdCnFCost) || 0);
+                        }
+
                         let commission = parseFloat(cnf.commission) || 0;
                         if (recordIndCnF === targetName && record.indCnFComm !== undefined && record.indCnFComm !== null && record.indCnFComm !== '') {
                             commission = parseFloat(record.indCnFComm);
@@ -214,17 +226,14 @@ const CnF = ({
                             : (record.bdCnFUom || record.uom || cnf.uom || cnf.commissionType || 'QTY');
                         const uom = typeof rawUom === 'string' ? rawUom.toUpperCase() : 'QTY';
 
-                        const status = (record.status || '').toLowerCase();
-                        if (status.includes('requested') || status.includes('rejected')) return acc;
-
                         if (uom === 'QTY') {
-                            const qty = !isNaN(parseFloat(record.quantity)) ? parseFloat(record.quantity) : (parseFloat(record.inHouseQuantity) || 0);
+                            const qty = !isNaN(parseFloat(record.totalLcQuantity)) ? parseFloat(record.totalLcQuantity) : (!isNaN(parseFloat(record.quantity)) ? parseFloat(record.quantity) : (parseFloat(record.inHouseQuantity) || 0));
                             return acc + (qty * commission);
                         } else if (uom === 'BAG') {
-                            const bag = !isNaN(parseFloat(record.packet)) ? parseFloat(record.packet) : (parseFloat(record.inHousePacket) || 0);
+                            const bag = !isNaN(parseFloat(record.totalLcPacket)) ? parseFloat(record.totalLcPacket) : (!isNaN(parseFloat(record.packet)) ? parseFloat(record.packet) : (parseFloat(record.inHousePacket) || 0));
                             return acc + (bag * commission);
                         } else if (uom === 'TRUCK') {
-                            const truckCount = parseFloat(record.truckNo) || 1;
+                            const truckCount = !isNaN(parseFloat(record.totalLcTruck)) ? parseFloat(record.totalLcTruck) : (parseFloat(record.truckNo) || 1);
                             return acc + (truckCount * commission);
                         } else {
                             return acc + commission;
@@ -289,7 +298,16 @@ const CnF = ({
                     return acc;
                 }, 0);
 
-                return { ...cnf, totalBalance: stockEarned + salesEarned - paid };
+                // 4. Earned from LC Expenses
+                const expenseEarned = allExpenses.reduce((acc, exp) => {
+                    const expCnF = (exp.cnfAgent || '').toLowerCase().trim();
+                    if (expCnF === targetName) {
+                        return acc + (parseFloat(exp.amount) || 0);
+                    }
+                    return acc;
+                }, 0);
+
+                return { ...cnf, totalBalance: stockEarned + salesEarned + expenseEarned - paid };
             });
 
             const filtered = moduleType
@@ -306,14 +324,19 @@ const CnF = ({
     const fetchCnFHistory = async (cnfName) => {
         setHistoryLoading(true);
         try {
-            const [stockRes, salesRes] = await Promise.all([
+            const [stockRes, salesRes, expenseRes, lcRes] = await Promise.all([
                 axios.get(`${API_BASE_URL}/api/stock`),
-                axios.get(`${API_BASE_URL}/api/sales`)
+                axios.get(`${API_BASE_URL}/api/sales`),
+                axios.get(`${API_BASE_URL}/api/lc-expenses`),
+                axios.get(`${API_BASE_URL}/api/lc-management`)
             ]);
 
             const stockData = Array.isArray(stockRes.data) ? stockRes.data : [];
             const salesData = Array.isArray(salesRes.data) ? salesRes.data : [];
+            const expenseData = Array.isArray(expenseRes.data) ? expenseRes.data : [];
+            const lcData = Array.isArray(lcRes.data) ? lcRes.data : [];
             const rows = [];
+            const expenseRows = [];
             const targetCnF = (cnfName || '').toLowerCase().trim();
 
             // 1. Process Stock (LC) Records
@@ -332,7 +355,7 @@ const CnF = ({
                 const isMatch = isBaseMatch && isAccepted;
 
                 if (isMatch) {
-                    const qty = !isNaN(parseFloat(record.quantity)) ? parseFloat(record.quantity) : (parseFloat(record.inHouseQuantity) || 0);
+                    const qty = !isNaN(parseFloat(record.totalLcQuantity)) ? parseFloat(record.totalLcQuantity) : (!isNaN(parseFloat(record.quantity)) ? parseFloat(record.quantity) : (parseFloat(record.inHouseQuantity) || 0));
 
                     let commissionRate = parseFloat(viewData?.commission) || 0;
                     if (indCnF === targetCnF && record.indCnFComm !== undefined && record.indCnFComm !== null && record.indCnFComm !== '') {
@@ -347,16 +370,22 @@ const CnF = ({
                     const uom = typeof rawUom === 'string' ? rawUom.toUpperCase() : 'QTY';
 
                     let totalCommission = 0;
-                    if (uom === 'QTY') {
-                        totalCommission = qty * commissionRate;
-                    } else if (uom === 'BAG') {
-                        const bagQty = !isNaN(parseFloat(record.packet)) ? parseFloat(record.packet) : (record.inHousePacket || 0);
-                        totalCommission = bagQty * commissionRate;
-                    } else if (uom === 'TRUCK') {
-                        const truckCount = parseFloat(record.truckNo) || 1;
-                        totalCommission = truckCount * commissionRate;
+                    if (indCnF === targetCnF && record.indCnFCost !== undefined && record.indCnFCost !== null && record.indCnFCost !== '') {
+                        totalCommission = parseFloat(record.indCnFCost);
+                    } else if (bdCnF === targetCnF && record.bdCnFCost !== undefined && record.bdCnFCost !== null && record.bdCnFCost !== '') {
+                        totalCommission = parseFloat(record.bdCnFCost);
                     } else {
-                        totalCommission = commissionRate;
+                        if (uom === 'QTY') {
+                            totalCommission = qty * commissionRate;
+                        } else if (uom === 'BAG') {
+                            const bagQty = !isNaN(parseFloat(record.totalLcPacket)) ? parseFloat(record.totalLcPacket) : (!isNaN(parseFloat(record.packet)) ? parseFloat(record.packet) : (record.inHousePacket || 0));
+                            totalCommission = bagQty * commissionRate;
+                        } else if (uom === 'TRUCK') {
+                            const truckCount = !isNaN(parseFloat(record.totalLcTruck)) ? parseFloat(record.totalLcTruck) : (parseFloat(record.truckNo) || 1);
+                            totalCommission = truckCount * commissionRate;
+                        } else {
+                            totalCommission = commissionRate;
+                        }
                     }
                     totalCommission = parseFloat(totalCommission.toFixed(2));
 
@@ -370,9 +399,9 @@ const CnF = ({
                         product: record.productName,
                         brand: record.brand,
                         rate: record.purchasedPrice,
-                        bag: !isNaN(parseFloat(record.packet)) ? parseFloat(record.packet) : (record.inHousePacket || 0),
+                        bag: !isNaN(parseFloat(record.totalLcPacket)) ? parseFloat(record.totalLcPacket) : (!isNaN(parseFloat(record.packet)) ? parseFloat(record.packet) : (record.inHousePacket || 0)),
                         qty: qty,
-                        truck: record.truckNo || record.truck || record.itemTruck || '-',
+                        truck: !isNaN(parseFloat(record.totalLcTruck)) ? record.totalLcTruck : (record.truckNo || record.truck || record.itemTruck || '-'),
                         commission: commissionRate,
                         uom: uom,
                         totalCommission: totalCommission,
@@ -410,18 +439,41 @@ const CnF = ({
                     ? (sale.indCommissionUom || (typeof viewData?.uom === 'string' ? viewData.uom : (viewData?.commissionType || 'QTY'))).toUpperCase()
                     : (sale.bdCommissionUom || (typeof viewData?.uom === 'string' ? viewData.uom : (viewData?.commissionType || 'QTY'))).toUpperCase();
 
+                const savedTotalComm = isIndianAgent ? (parseFloat(sale.indCommissionTotal) || 0) : (parseFloat(sale.bdCommissionTotal) || 0);
+
+                let rawTotalMath = 0;
+                (sale.items || []).forEach(item => {
+                    (item.brandEntries || []).forEach(entry => {
+                        const qty = parseFloat(entry.quantity) || 0;
+                        const truck = parseFloat(entry.truck) || 0;
+                        if (uom === 'QTY') rawTotalMath += qty;
+                        else if (uom === 'TRUCK') rawTotalMath += truck || 0;
+                        else rawTotalMath += 1;
+                    });
+                });
+
                 (sale.items || []).forEach(item => {
                     (item.brandEntries || []).forEach(entry => {
                         let totalEntryComm = 0;
+                        let rateToDisplay = commissionFactor;
                         const qty = parseFloat(entry.quantity) || 0;
                         const truck = parseFloat(entry.truck) || 0;
 
-                        if (uom === 'QTY') {
-                            totalEntryComm = qty * commissionFactor;
-                        } else if (uom === 'TRUCK') {
-                            totalEntryComm = (truck || 1) * commissionFactor;
-                        } else {
-                            totalEntryComm = commissionFactor;
+                        let mathVal = 0;
+                        if (uom === 'QTY') mathVal = qty;
+                        else if (uom === 'TRUCK') mathVal = truck || 0;
+                        else mathVal = 1;
+
+                        if (savedTotalComm > 0 && rawTotalMath > 0) {
+                             totalEntryComm = (mathVal / rawTotalMath) * savedTotalComm;
+                             rateToDisplay = mathVal > 0 ? parseFloat((totalEntryComm / mathVal).toFixed(2)) : 0;
+                        } else if (savedTotalComm > 0 && rawTotalMath === 0) {
+                             totalEntryComm = savedTotalComm; 
+                        } else if (savedTotalComm === 0 && sale.indCommissionTotal === undefined && sale.bdCommissionTotal === undefined) {
+                             if (uom === 'QTY') totalEntryComm = qty * commissionFactor;
+                             else if (uom === 'TRUCK') totalEntryComm = (truck || 1) * commissionFactor;
+                             else totalEntryComm = commissionFactor;
+                             rateToDisplay = commissionFactor;
                         }
 
                         rows.push({
@@ -437,7 +489,7 @@ const CnF = ({
                             bag: '-',
                             qty: qty,
                             truck: truck || '-',
-                            commission: commissionFactor,
+                            commission: rateToDisplay,
                             uom: uom,
                             totalCommission: parseFloat(totalEntryComm.toFixed(2)),
                             cnfType: isIndianAgent ? 'Indian' : 'BD',
@@ -450,8 +502,39 @@ const CnF = ({
                 });
             });
 
+            // 3. Process LC Expense Records
+            expenseData.forEach(exp => {
+                const expCnF = (exp.cnfAgent || '').toLowerCase().trim();
+                if (expCnF === targetCnF) {
+                    let importer = '-';
+                    let product = '-';
+                    let port = '-';
+                    
+                    if (exp.lcNo) {
+                        const relatedLc = lcData.find(l => l.lcNo === exp.lcNo);
+                        if (relatedLc) {
+                            importer = relatedLc.importerName || '-';
+                            product = relatedLc.productName || '-';
+                            port = relatedLc.port || '-';
+                        }
+                    }
+
+                    expenseRows.push({
+                        _id: exp._id,
+                        date: exp.date || exp.createdAt,
+                        lcNo: exp.lcNo || '-',
+                        importer: importer,
+                        product: product,
+                        port: port,
+                        amount: parseFloat(exp.amount) || 0
+                    });
+                }
+            });
+
             rows.sort((a, b) => new Date(b.date) - new Date(a.date));
+            expenseRows.sort((a, b) => new Date(b.date) - new Date(a.date));
             setHistoryRecords(rows);
+            setExpenseRecords(expenseRows);
         } catch (error) {
             console.error('Error fetching C&F history:', error);
             setHistoryRecords([]);
@@ -838,30 +921,34 @@ const CnF = ({
                     <h2 className="cnf-title whitespace-nowrap">{moduleType || 'C&F'} C&F Agent Management</h2>
                 </div>
 
-                <div className="w-full md:flex-1 md:max-w-md md:mx-auto relative group px-2 md:px-0">
-                    <div className="absolute inset-y-0 left-0 pl-5 md:pl-3.5 flex items-center pointer-events-none">
-                        <SearchIcon className="h-4 w-4 text-gray-400 group-focus-within:text-blue-500 transition-colors" />
+                {!showForm && (
+                    <div className="w-full md:flex-1 md:max-w-md md:mx-auto relative group px-2 md:px-0">
+                        <div className="absolute inset-y-0 left-0 pl-5 md:pl-3.5 flex items-center pointer-events-none">
+                            <SearchIcon className="h-4 w-4 text-gray-400 group-focus-within:text-blue-500 transition-colors" />
+                        </div>
+                        <input
+                            type="text"
+                            placeholder="Search agents..."
+                            value={searchQuery}
+                            onChange={(e) => setSearchQuery(e.target.value)}
+                            className="block w-full pl-12 md:pl-10 pr-4 py-2.5 md:py-2 bg-white/50 border border-gray-200 rounded-xl text-[13px] md:text-[13px] text-center md:text-left placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 focus:bg-white transition-all outline-none shadow-sm"
+                        />
                     </div>
-                    <input
-                        type="text"
-                        placeholder="Search agents..."
-                        value={searchQuery}
-                        onChange={(e) => setSearchQuery(e.target.value)}
-                        className="block w-full pl-12 md:pl-10 pr-4 py-2.5 md:py-2 bg-white/50 border border-gray-200 rounded-xl text-[13px] md:text-[13px] text-center md:text-left placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 focus:bg-white transition-all outline-none shadow-sm"
-                    />
-                </div>
+                )}
 
-                <div className="w-full md:w-1/4 flex justify-end gap-2 z-10">
-                    <button
-                        onClick={() => setIsReportModalOpen(true)}
-                        className="w-full md:w-auto flex items-center justify-center gap-2 h-10 px-5 bg-white border border-gray-200 text-gray-700 rounded-xl text-[13px] font-bold shadow-sm hover:bg-gray-50 active:scale-95 transition-all whitespace-nowrap"
-                        title={`View ${moduleType} C&F Agent Report`}
-                    >
-                        <BarChartIcon className="w-5 h-5 text-gray-500" />
-                        <span>Report</span>
-                    </button>
-                    <button onClick={() => { resetForm(); setShowForm(true); }} className="w-full md:w-auto cnf-add-btn whitespace-nowrap">+ Add New</button>
-                </div>
+                {!showForm && (
+                    <div className="w-full md:w-1/4 flex justify-end gap-2 z-10">
+                        <button
+                            onClick={() => setIsReportModalOpen(true)}
+                            className="w-full md:w-auto flex items-center justify-center gap-2 h-10 px-5 bg-white border border-gray-200 text-gray-700 rounded-xl text-[13px] font-bold shadow-sm hover:bg-gray-50 active:scale-95 transition-all whitespace-nowrap"
+                            title={`View ${moduleType} C&F Agent Report`}
+                        >
+                            <BarChartIcon className="w-5 h-5 text-gray-500" />
+                            <span>Report</span>
+                        </button>
+                        <button onClick={() => { resetForm(); setShowForm(true); }} className="w-full md:w-auto cnf-add-btn whitespace-nowrap">+ Add New</button>
+                    </div>
+                )}
             </div>
 
             {showForm && (
@@ -902,9 +989,12 @@ const CnF = ({
                             </select>
                         </div>
                         <div className="cnf-form-footer">
-                            {submitStatus === 'success' && <p className="cnf-form-success">C&F saved successfully!</p>}
-                            {submitStatus === 'error' && <p className="cnf-form-error">Failed to save C&F.</p>}
-                            <button type="submit" disabled={isSubmitting} className="cnf-form-submit">{isSubmitting ? 'Saving...' : 'Save Record'}</button>
+                            <div className="flex items-center gap-4">
+                                {submitStatus === 'success' && <p className="cnf-form-success">C&F saved successfully!</p>}
+                                {submitStatus === 'error' && <p className="cnf-form-error">Failed to save C&F.</p>}
+                            </div>
+                            <div className="cnf-form-spacer"></div>
+                            <button type="submit" disabled={isSubmitting} className="px-8 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white text-sm font-black rounded-xl shadow-lg shadow-blue-500/20 transition-all disabled:opacity-50">{isSubmitting ? 'Saving...' : 'Save Record'}</button>
                         </div>
                     </form>
                 </div>
@@ -1090,20 +1180,35 @@ const CnF = ({
                                         className="w-full pl-9 pr-4 py-2 text-sm bg-gray-50 border border-gray-200 rounded-full focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 transition-all"
                                     />
                                 </div>
-                                <div className="flex bg-gray-100/80 p-1 rounded-xl">
-                                    <button
-                                        onClick={() => setHistoryViewMode('earnings')}
-                                        className={`px-4 py-1.5 text-[10px] font-black uppercase tracking-widest rounded-lg transition-all ${historyViewMode === 'earnings' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
-                                    >
-                                        Earnings
-                                    </button>
-                                    <button
-                                        onClick={() => setHistoryViewMode('payments')}
-                                        className={`px-4 py-1.5 text-[10px] font-black uppercase tracking-widest rounded-lg transition-all ${historyViewMode === 'payments' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
-                                    >
-                                        Payment History
-                                    </button>
-                                </div>
+                                <div className="flex items-center gap-2">
+                                        <button
+                                            onClick={() => setHistoryViewMode('earnings')}
+                                            className={`px-5 py-1.5 rounded-full text-[11px] font-black uppercase tracking-widest transition-all whitespace-nowrap border ${historyViewMode === 'earnings'
+                                                ? 'bg-blue-600 text-white border-blue-600 shadow-sm'
+                                                : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50'
+                                                }`}
+                                        >
+                                            Earnings
+                                        </button>
+                                        <button
+                                            onClick={() => setHistoryViewMode('expense')}
+                                            className={`px-5 py-1.5 rounded-full text-[11px] font-black uppercase tracking-widest transition-all whitespace-nowrap border ${historyViewMode === 'expense'
+                                                ? 'bg-blue-600 text-white border-blue-600 shadow-sm'
+                                                : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50'
+                                                }`}
+                                        >
+                                            LC Expense
+                                        </button>
+                                        <button
+                                            onClick={() => setHistoryViewMode('payments')}
+                                            className={`px-5 py-1.5 rounded-full text-[11px] font-black uppercase tracking-widest transition-all whitespace-nowrap border ${historyViewMode === 'payments'
+                                                ? 'bg-blue-600 text-white border-blue-600 shadow-sm'
+                                                : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50'
+                                                }`}
+                                        >
+                                            Payment History
+                                        </button>
+                                    </div>
                             </div>
                             <div className="flex-1 flex items-center justify-end gap-2">
                                 <div className="relative">
@@ -1263,8 +1368,7 @@ const CnF = ({
                         <div className="flex-1 overflow-auto p-4 md:p-8 pt-6 md:pt-8 hide-scrollbar min-h-0">
                             {historyLoading ? <div className="flex justify-center p-12"><div className="w-8 h-8 border-2 border-t-blue-600 rounded-full animate-spin"></div></div> : (
                                 <div className="space-y-6">
-                                    {/* History Summary Cards */}
-                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                    <div className={`grid grid-cols-1 gap-4 ${historyViewMode === 'earnings' ? 'md:grid-cols-5' : 'md:grid-cols-3'}`}>
                                         {historyViewMode === 'earnings' ? (
                                             <>
                                                 {/* Total Truck Card */}
@@ -1304,13 +1408,102 @@ const CnF = ({
                                                             <p className="text-[10px] font-bold text-emerald-600 uppercase tracking-widest opacity-70">Total Commission</p>
                                                             <div className="flex items-baseline gap-1">
                                                                 <h3 className="text-2xl font-black text-gray-900 leading-none">
-                                                                    {filteredHistory.reduce((acc, row) => acc + (parseFloat(row.totalCommission) || 0), 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                                                    {(
+                                                                        filteredHistory.reduce((acc, row) => acc + (parseFloat(row.totalCommission) || 0), 0) +
+                                                                        expenseRecords.filter(exp => !historySearchQuery || exp.lcNo?.toLowerCase().includes(historySearchQuery.toLowerCase()) || exp.importer?.toLowerCase().includes(historySearchQuery.toLowerCase())).reduce((acc, exp) => acc + (parseFloat(exp.amount) || 0), 0)
+                                                                    ).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                                                 </h3>
                                                                 <span className="text-[10px] font-bold text-gray-400">TK</span>
                                                             </div>
                                                         </div>
                                                         <div className="w-12 h-12 rounded-xl bg-emerald-100 flex items-center justify-center text-emerald-600 group-hover:scale-110 transition-transform">
                                                             <DollarSignIcon className="w-6 h-6" />
+                                                        </div>
+                                                    </div>
+                                                </div>
+
+                                                {/* Total Paid Card */}
+                                                <div className="bg-gradient-to-br from-indigo-50 to-purple-50 border border-indigo-100/50 p-5 rounded-2xl shadow-sm group hover:shadow-md transition-all duration-300">
+                                                    <div className="flex items-center justify-between">
+                                                        <div className="space-y-1">
+                                                            <p className="text-[10px] font-bold text-indigo-600 uppercase tracking-widest opacity-70">Total Paid</p>
+                                                            <h3 className="text-2xl font-black text-gray-900 leading-none">
+                                                                {paymentRecords.reduce((acc, p) => acc + (parseFloat(p.amount) || 0), 0).toLocaleString()}
+                                                            </h3>
+                                                        </div>
+                                                        <div className="w-12 h-12 rounded-xl bg-indigo-100 flex items-center justify-center text-indigo-600 group-hover:scale-110 transition-transform">
+                                                            <DollarSignIcon className="w-6 h-6" />
+                                                        </div>
+                                                    </div>
+                                                </div>
+
+                                                {/* Balance Card */}
+                                                <div className="bg-gradient-to-br from-emerald-50 to-teal-50 border border-emerald-100/50 p-5 rounded-2xl shadow-sm group hover:shadow-md transition-all duration-300">
+                                                    <div className="flex items-center justify-between">
+                                                        <div className="space-y-1">
+                                                            <p className="text-[10px] font-bold text-emerald-600 uppercase tracking-widest opacity-70">Current Balance</p>
+                                                            <div className="flex items-baseline gap-1">
+                                                                <h3 className="text-2xl font-black text-gray-900 leading-none">
+                                                                    {(viewData?.totalBalance || 0).toLocaleString()}
+                                                                </h3>
+                                                                <span className="text-[10px] font-bold text-gray-400">TK</span>
+                                                            </div>
+                                                        </div>
+                                                        <div className="w-12 h-12 rounded-xl bg-emerald-100 flex items-center justify-center text-emerald-600 group-hover:scale-110 transition-transform">
+                                                            <TrendingUpIcon className="w-6 h-6" />
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </>
+                                        ) : historyViewMode === 'expense' ? (
+                                            <>
+                                                {/* Total Expense Card */}
+                                                <div className="bg-gradient-to-br from-rose-50 to-red-50 border border-rose-100/50 p-5 rounded-2xl shadow-sm group hover:shadow-md transition-all duration-300">
+                                                    <div className="flex items-center justify-between">
+                                                        <div className="space-y-1">
+                                                            <p className="text-[10px] font-bold text-rose-600 uppercase tracking-widest opacity-70">Total Expenses</p>
+                                                            <div className="flex items-baseline gap-1">
+                                                                <h3 className="text-2xl font-black text-gray-900 leading-none">
+                                                                    {expenseRecords.filter(exp => !historySearchQuery || exp.lcNo?.toLowerCase().includes(historySearchQuery.toLowerCase()) || exp.importer?.toLowerCase().includes(historySearchQuery.toLowerCase())).reduce((acc, exp) => acc + (parseFloat(exp.amount) || 0), 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                                                </h3>
+                                                                <span className="text-[10px] font-bold text-gray-400">TK</span>
+                                                            </div>
+                                                        </div>
+                                                        <div className="w-12 h-12 rounded-xl bg-rose-100 flex items-center justify-center text-rose-600 group-hover:scale-110 transition-transform">
+                                                            <DollarSignIcon className="w-6 h-6" />
+                                                        </div>
+                                                    </div>
+                                                </div>
+
+                                                {/* Transaction Count Card */}
+                                                <div className="bg-gradient-to-br from-amber-50 to-orange-50 border border-amber-100/50 p-5 rounded-2xl shadow-sm group hover:shadow-md transition-all duration-300">
+                                                    <div className="flex items-center justify-between">
+                                                        <div className="space-y-1">
+                                                            <p className="text-[10px] font-bold text-amber-600 uppercase tracking-widest opacity-70">Transactions</p>
+                                                            <h3 className="text-2xl font-black text-gray-900 leading-none">
+                                                                {expenseRecords.filter(exp => !historySearchQuery || exp.lcNo?.toLowerCase().includes(historySearchQuery.toLowerCase()) || exp.importer?.toLowerCase().includes(historySearchQuery.toLowerCase())).length}
+                                                            </h3>
+                                                        </div>
+                                                        <div className="w-12 h-12 rounded-xl bg-amber-100 flex items-center justify-center text-amber-600 group-hover:scale-110 transition-transform">
+                                                            <BarChartIcon className="w-6 h-6" />
+                                                        </div>
+                                                    </div>
+                                                </div>
+
+                                                {/* Balance Card (Optional or placeholder to keep layout) */}
+                                                <div className="bg-gradient-to-br from-emerald-50 to-teal-50 border border-emerald-100/50 p-5 rounded-2xl shadow-sm group hover:shadow-md transition-all duration-300">
+                                                    <div className="flex items-center justify-between">
+                                                        <div className="space-y-1">
+                                                            <p className="text-[10px] font-bold text-emerald-600 uppercase tracking-widest opacity-70">Current Balance</p>
+                                                            <div className="flex items-baseline gap-1">
+                                                                <h3 className="text-2xl font-black text-gray-900 leading-none">
+                                                                    {(viewData?.totalBalance || 0).toLocaleString()}
+                                                                </h3>
+                                                                <span className="text-[10px] font-bold text-gray-400">TK</span>
+                                                            </div>
+                                                        </div>
+                                                        <div className="w-12 h-12 rounded-xl bg-emerald-100 flex items-center justify-center text-emerald-600 group-hover:scale-110 transition-transform">
+                                                            <TrendingUpIcon className="w-6 h-6" />
                                                         </div>
                                                     </div>
                                                 </div>
@@ -1553,6 +1746,45 @@ const CnF = ({
                                                 )}
                                             </div>
                                         </>
+                                    ) : historyViewMode === 'expense' ? (
+                                        <div className="hidden md:block overflow-x-auto">
+                                            <table className="cnf-table">
+                                                <thead>
+                                                    <tr className="cnf-table-header-row">
+                                                        <th className="cnf-table-header">Billing Date</th>
+                                                        <th className="cnf-table-header whitespace-nowrap">LC No</th>
+                                                        <th className="cnf-table-header">Importer</th>
+                                                        <th className="cnf-table-header">Product</th>
+                                                        <th className="cnf-table-header">Port</th>
+                                                        <th className="cnf-table-header text-right">Amount</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody className="cnf-table-body">
+                                                    {expenseRecords.filter(exp => !historySearchQuery || exp.lcNo?.toLowerCase().includes(historySearchQuery.toLowerCase()) || exp.importer?.toLowerCase().includes(historySearchQuery.toLowerCase())).map((row, idx) => (
+                                                        <tr key={idx} className="cnf-table-row transition-colors">
+                                                            <td className="cnf-table-cell whitespace-nowrap">{formatDate(row.date)}</td>
+                                                            <td className="cnf-table-cell font-bold whitespace-nowrap text-blue-600">{row.lcNo}</td>
+                                                            <td className="cnf-table-cell truncate max-w-[150px]">{row.importer}</td>
+                                                            <td className="cnf-table-cell">{row.product}</td>
+                                                            <td className="cnf-table-cell">{row.port}</td>
+                                                            <td className="cnf-table-cell text-right font-black text-rose-600">
+                                                                {parseFloat(row.amount).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                                            </td>
+                                                        </tr>
+                                                    ))}
+                                                    {expenseRecords.filter(exp => !historySearchQuery || exp.lcNo?.toLowerCase().includes(historySearchQuery.toLowerCase()) || exp.importer?.toLowerCase().includes(historySearchQuery.toLowerCase())).length === 0 && (
+                                                        <tr>
+                                                            <td colSpan="6" className="py-12 text-center text-gray-400">
+                                                                <div className="flex flex-col items-center justify-center">
+                                                                    <DollarSignIcon className="w-12 h-12 mb-3 text-gray-200" />
+                                                                    <p>No expense records found</p>
+                                                                </div>
+                                                            </td>
+                                                        </tr>
+                                                    )}
+                                                </tbody>
+                                            </table>
+                                        </div>
                                     ) : (
                                         <>
                                             <div className="hidden md:block overflow-x-auto">
@@ -1642,7 +1874,7 @@ const CnF = ({
 
                             <div className="flex gap-3">
                                 <button onClick={() => setEditRecord(null)} className="flex-1 py-3 bg-gray-100 hover:bg-gray-200 transition-colors rounded-xl font-bold text-gray-700">Cancel</button>
-                                <button onClick={handleSaveHistory} className="cnf-form-submit flex-[2] justify-center text-lg h-[50px]">Update Record</button>
+                                <button onClick={handleSaveHistory} className="px-8 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white text-sm font-black rounded-xl shadow-lg shadow-blue-500/20 transition-all flex-[2] justify-center text-lg h-[50px]">Update Record</button>
                             </div>
                         </div>
                     </div>
@@ -1679,7 +1911,7 @@ const CnF = ({
 
                             <div className="flex gap-3">
                                 <button onClick={() => setIsBulkEditModalOpen(false)} className="flex-1 py-3 bg-gray-100 hover:bg-gray-200 transition-colors rounded-xl font-bold text-gray-700">Cancel</button>
-                                <button onClick={handleBulkUpdateHistory} className="cnf-form-submit flex-[2] justify-center text-lg h-[50px]">Apply to {selectedHistoryIds.size} Records</button>
+                                <button onClick={handleBulkUpdateHistory} className="px-8 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white text-sm font-black rounded-xl shadow-lg shadow-blue-500/20 transition-all flex-[2] justify-center text-lg h-[50px]">Apply to {selectedHistoryIds.size} Records</button>
                             </div>
                         </div>
                     </div>

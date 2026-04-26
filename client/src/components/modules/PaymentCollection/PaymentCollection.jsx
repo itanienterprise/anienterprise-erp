@@ -1410,30 +1410,20 @@ const PaymentCollection = () => {
                         )}
 
                         {/* Footer Buttons */}
-                        <div className="md:col-span-2 flex items-center justify-end gap-4 pt-6 border-t border-gray-100 mt-2">
-                            <button
-                                type="button"
-                                onClick={() => {
-                                    setShowAddModal(false);
-                                    resetNewPayment();
-                                }}
-                                className="px-6 py-2.5 bg-gray-100 text-gray-600 rounded-lg text-sm font-bold hover:bg-gray-200 transition-all active:scale-95"
-                            >
-                                Cancel
-                            </button>
+                        <div className="md:col-span-2 flex items-center justify-end gap-3 pt-4 border-t border-gray-50 mt-6 relative z-10">
                             <button
                                 type="submit"
                                 disabled={isSubmitting || !newPayment.customerId || totalCollection <= 0}
-                                className="payment-form-submit disabled:opacity-50 disabled:grayscale disabled:scale-100"
+                                className={`px-8 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-black rounded-xl shadow-lg shadow-blue-500/20 transition-all text-sm flex items-center justify-center gap-2 ${(isSubmitting || !newPayment.customerId || totalCollection <= 0) ? 'opacity-50 cursor-not-allowed' : ''}`}
                             >
                                 {isSubmitting ? (
                                     <>
-                                        <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin mr-2"></div>
+                                        <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
                                         <span>Saving...</span>
                                     </>
                                 ) : (
                                     <>
-                                        <DollarSignIcon className="w-4 h-4 mr-2" />
+                                        <DollarSignIcon className="w-4 h-4" />
                                         <span>Save Collection</span>
                                     </>
                                 )}

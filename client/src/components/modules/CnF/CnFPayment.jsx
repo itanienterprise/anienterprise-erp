@@ -69,17 +69,19 @@ const CnFPayment = () => {
 
     const fetchCnFs = async () => {
         try {
-            const [cnfsRes, stockRes, salesRes, paymentsRes] = await Promise.all([
+            const [cnfsRes, stockRes, salesRes, paymentsRes, expenseRes] = await Promise.all([
                 axios.get(`${API_BASE_URL}/api/cnfs`),
                 axios.get(`${API_BASE_URL}/api/stock`),
                 axios.get(`${API_BASE_URL}/api/sales`),
-                axios.get(`${API_BASE_URL}/api/cnf-payments`)
+                axios.get(`${API_BASE_URL}/api/cnf-payments`),
+                axios.get(`${API_BASE_URL}/api/lc-expenses`)
             ]);
 
             const allCnfs = Array.isArray(cnfsRes.data) ? cnfsRes.data : [];
             const allStock = Array.isArray(stockRes.data) ? stockRes.data : [];
             const allSales = Array.isArray(salesRes.data) ? salesRes.data : [];
             const allPayments = Array.isArray(paymentsRes.data) ? paymentsRes.data : [];
+            const allExpenses = Array.isArray(expenseRes.data) ? expenseRes.data : [];
 
             const cnfsWithBalance = allCnfs.map(cnf => {
                 const targetName = (cnf.name || '').toLowerCase().trim();
@@ -181,7 +183,16 @@ const CnFPayment = () => {
                     return acc;
                 }, 0);
 
-                return { ...cnf, totalBalance: stockEarned + salesEarned - paid };
+                // 4. Earned from LC Expenses
+                const expenseEarned = allExpenses.reduce((acc, exp) => {
+                    const expCnF = (exp.cnfAgent || '').toLowerCase().trim();
+                    if (expCnF === targetName) {
+                        return acc + (parseFloat(exp.amount) || 0);
+                    }
+                    return acc;
+                }, 0);
+
+                return { ...cnf, totalBalance: stockEarned + salesEarned + expenseEarned - paid };
             });
 
             setCnfs(cnfsWithBalance);
@@ -537,13 +548,6 @@ const CnFPayment = () => {
                         </div>
 
                         <div className="flex items-center justify-end gap-3 pt-4 border-t border-gray-50">
-                            <button
-                                type="button"
-                                onClick={() => { setShowAddModal(false); resetNewPayment(); }}
-                                className="px-6 py-2.5 text-sm font-bold text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-xl transition-all"
-                            >
-                                Cancel
-                            </button>
                             <button
                                 type="submit"
                                 disabled={isSubmitting}
