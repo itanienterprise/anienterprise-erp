@@ -3374,7 +3374,7 @@ const SaleManagement = ({
                                                                 <input 
                                                                     type="text"
                                                                     placeholder={entry.brandName || "Brand"}
-                                                                    value={activeDropdown === 'brand' && activeItemIndex === index && activeEntryIndex === entryIndex ? brandSearch : ''}
+                                                                    value={activeDropdown === 'brand' && activeItemIndex === index && activeEntryIndex === entryIndex ? brandSearch : (entry.brandName || '')}
                                                                     readOnly={isFieldReadOnly(originalData?.items?.[index]?.brandEntries?.[entryIndex]?.brandName)}
                                                                     onChange={(e) => {
                                                                         if (isFieldReadOnly(originalData?.items?.[index]?.brandEntries?.[entryIndex]?.brandName)) return;
@@ -3447,7 +3447,7 @@ const SaleManagement = ({
                                                                     <input 
                                                                         type="text"
                                                                         placeholder={entry.warehouseName || "Warehouse"}
-                                                                        value={activeDropdown === 'warehouse' && activeItemIndex === index && activeEntryIndex === entryIndex ? warehouseSearch : ''}
+                                                                        value={activeDropdown === 'warehouse' && activeItemIndex === index && activeEntryIndex === entryIndex ? warehouseSearch : (entry.warehouseName || '')}
                                                                         readOnly={isFieldReadOnly(originalData?.items?.[index]?.brandEntries?.[entryIndex]?.warehouseName)}
                                                                         onChange={(e) => {
                                                                             if (isFieldReadOnly(originalData?.items?.[index]?.brandEntries?.[entryIndex]?.warehouseName)) return;
@@ -3457,7 +3457,6 @@ const SaleManagement = ({
                                                                             setActiveEntryIndex(entryIndex);
                                                                             handleItemInputChange(index, entryIndex, { target: { name: 'warehouseName', value: e.target.value } });
                                                                         }}
-                                                                        required
                                                                         autoComplete="off"
                                                                         onFocus={() => {
                                                                             if (isFieldReadOnly(originalData?.items?.[index]?.brandEntries?.[entryIndex]?.warehouseName)) return;
