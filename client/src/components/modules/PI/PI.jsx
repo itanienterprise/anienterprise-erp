@@ -19,7 +19,7 @@ function PI({
     currentUser
 }) {
     const DEFAULT_DESC_GOODS = "Insurance to be covered by the opener.\nPartial Bill & Partial Payment be allowed.\nNegotiation any Bank in India.\nThe Importer or Bank will not hold the bill in any circumstances.\nAll Foreign Bank Charges outside India are on account of Importer.\nWeight and measurement are final which is taken by weighing bridge in India.\n\nTRANSHIPMENT: ALLOWED\nPARTIAL SHIPMENT: ALLOWED";
-    
+
     // Authorization check for administrative actions
     const canManage = ['admin', 'incharge', 'lc manager', 'border manager', 'data entry'].includes((currentUser?.role || '').toLowerCase());
 
@@ -31,6 +31,7 @@ function PI({
     const [searchQuery, setSearchQuery] = useState('');
     const [editingId, setEditingId] = useState(null);
     const [banks, setBanks] = useState([]);
+    const [ipRecords, setIpRecords] = useState([]);
     const [preCarriages, setPreCarriages] = useState([]);
     const [receiptPlaces, setReceiptPlaces] = useState([]);
     const [vessels, setVessels] = useState([]);
@@ -80,6 +81,9 @@ function PI({
         countryFinalDest: 'BANGLADESH',
         finalDestination: 'BANGLADESH',
         hsCode: '',
+        ipNumber: '',
+        ipQuantity: '',
+        ipDate: '',
         marksNo: '',
         noKindPackage: '',
         descriptionGoods: DEFAULT_DESC_GOODS,
@@ -88,6 +92,7 @@ function PI({
         status: 'Active'
     });
 
+    const ipNumberRef = useRef(null);
     const partyRef = useRef(null);
     const exporterRef = useRef(null);
     const productRef = useRef(null);
@@ -131,12 +136,14 @@ function PI({
     const fetchRecords = async () => {
         setIsLoading(true);
         try {
-            const [piRes, bankRes] = await Promise.all([
+            const [piRes, bankRes, ipRes] = await Promise.all([
                 axios.get(`${API_BASE_URL}/api/pi`),
-                axios.get(`${API_BASE_URL}/api/banks`)
+                axios.get(`${API_BASE_URL}/api/banks`),
+                axios.get(`${API_BASE_URL}/api/ip-records`)
             ]);
             setRecords(Array.isArray(piRes.data) ? piRes.data : []);
             setBanks(Array.isArray(bankRes.data) ? bankRes.data : []);
+            setIpRecords(Array.isArray(ipRes.data) ? ipRes.data : []);
         } catch (error) {
             console.error('Error fetching data:', error);
         } finally {
@@ -165,7 +172,7 @@ function PI({
             if (name === 'date' && value) {
                 const selectedDate = new Date(value);
                 if (!isNaN(selectedDate.getTime())) {
-                    selectedDate.setDate(selectedDate.getDate() + 30);
+                    selectedDate.setDate(selectedDate.getDate() + 90);
                     updated.validityDate = selectedDate.toISOString().split('T')[0];
                 }
             }
@@ -257,6 +264,29 @@ function PI({
         setFormData(prev => {
             const updated = { ...prev, [field]: value };
 
+            if (field === 'ipNumber') {
+                const ip = ipRecords.find(i => i.ipNumber === value);
+                if (ip) {
+                    updated.ipQuantity = ip.quantity || '';
+                    updated.ipDate = ip.closeDate || '';
+                    updated.productName = ip.productName || '';
+                    updated.partyName = ip.ipParty || '';
+
+                    // Auto-fill Importer details
+                    const importer = importers.find(i => i.name === ip.ipParty);
+                    if (importer) {
+                        updated.partyAddress = importer.address || '';
+                        updated.partyContact = importer.phone || '';
+                    }
+
+                    // Also try to find HS Code from the product list if product name matches
+                    const product = products.find(p => p.name === ip.productName);
+                    if (product) {
+                        updated.hsCode = product.hsCode || '';
+                    }
+                }
+            }
+
             if (field === 'exporterName') {
                 const exporter = exporters.find(e => e.name === value);
                 if (exporter) {
@@ -332,7 +362,7 @@ function PI({
 
             if (editingId) {
                 await axios.put(url, formData);
-                
+
                 // Add persistent notification for PI Update
                 if (addNotification) {
                     addNotification(
@@ -343,7 +373,7 @@ function PI({
                 }
             } else {
                 await axios.post(url, formData);
-                
+
                 // Add persistent notification for management roles
                 if (addNotification) {
                     addNotification(
@@ -405,6 +435,9 @@ function PI({
             countryFinalDest: 'BANGLADESH',
             finalDestination: 'BANGLADESH',
             hsCode: '0806.10.90',
+            ipNumber: '',
+            ipQuantity: '',
+            ipDate: '',
             marksNo: '',
             noKindPackage: '',
             descriptionGoods: DEFAULT_DESC_GOODS,
@@ -451,6 +484,9 @@ function PI({
             countryFinalDest: record.countryFinalDest || 'BANGLADESH',
             finalDestination: record.finalDestination || 'BANGLADESH',
             hsCode: record.hsCode || '0806.10.90',
+            ipNumber: record.ipNumber || '',
+            ipQuantity: record.ipQuantity || '',
+            ipDate: record.ipDate || '',
             marksNo: record.marksNo || '',
             noKindPackage: record.noKindPackage || '',
             descriptionGoods: record.descriptionGoods || '',
@@ -533,7 +569,64 @@ function PI({
                         onSubmit={handleSubmit}
                         className="grid grid-cols-1 md:grid-cols-3 gap-6 relative z-10"
                     >
-                        {/* --- Basic Info --- */}
+                        {/* --- IP Section --- */}
+                        <div className="space-y-2 relative dropdown-container" ref={ipNumberRef}>
+                            <label className="text-sm font-medium text-gray-700">IP Number</label>
+                            <div className="relative">
+                                <input
+                                    type="text"
+                                    name="ipNumber"
+                                    value={formData.ipNumber}
+                                    onChange={(e) => { handleInputChange(e); setActiveDropdown('ipNumber'); setHighlightedIndex(-1); }}
+                                    onFocus={() => { setActiveDropdown('ipNumber'); setHighlightedIndex(-1); }}
+                                    onKeyDown={(e) => handleDropdownKeyDown(e, 'ipNumber', ipRecords.filter(ip => !formData.ipNumber || ip.ipNumber.toLowerCase().includes(formData.ipNumber.toLowerCase())), 'ipNumber')}
+                                    placeholder="Search IP Number..."
+                                    autoComplete="off"
+                                    className="w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-all"
+                                />
+                                {activeDropdown === 'ipNumber' && (
+                                    <div className="absolute z-[60] w-full mt-1 bg-white border border-gray-100 rounded-xl shadow-xl max-h-48 overflow-y-auto">
+                                        {ipRecords.filter(ip => !formData.ipNumber || ip.ipNumber.toLowerCase().includes(formData.ipNumber.toLowerCase())).map((ip, idx) => (
+                                            <button
+                                                key={ip._id}
+                                                type="button"
+                                                onMouseDown={() => handleDropdownSelect('ipNumber', ip.ipNumber)}
+                                                onMouseEnter={() => setHighlightedIndex(idx)}
+                                                className={`w-full px-4 py-2 text-left text-sm ${highlightedIndex === idx || formData.ipNumber === ip.ipNumber ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-blue-50'}`}
+                                            >
+                                                <div className="flex flex-col">
+                                                    <span className="font-bold">{ip.ipNumber}</span>
+                                                    <span className="text-[10px] text-gray-500">{ip.ipParty} • {ip.productName}</span>
+                                                </div>
+                                            </button>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+
+                        <div className="space-y-2">
+                            <label className="text-sm font-medium text-gray-700">IP Quantity</label>
+                            <input
+                                type="text"
+                                name="ipQuantity"
+                                value={formData.ipQuantity}
+                                readOnly
+                                placeholder="Auto-filled"
+                                className="w-full px-4 py-2 bg-gray-50 border border-gray-200/60 rounded-lg outline-none transition-all cursor-not-allowed"
+                            />
+                        </div>
+
+                        <CustomDatePicker
+                            label="IP Closing Date"
+                            name="ipDate"
+                            value={formData.ipDate}
+                            onChange={() => { }} // Read-only
+                            compact={true}
+                            readOnly={true}
+                        />
+
+                        {/* --- PI Info --- */}
                         <CustomDatePicker
                             label="Date"
                             name="date"
@@ -1487,7 +1580,7 @@ function PI({
 
             {/* Premium Toast Notification */}
             {toast && (
-                <div 
+                <div
                     className="fixed top-8 left-1/2 -translate-x-1/2 z-[9999] flex items-center gap-3 px-6 py-4 rounded-2xl shadow-2xl animate-in slide-in-from-top-10 duration-300 min-w-[300px] max-w-[90vw]"
                     style={{
                         background: toast.type === 'success' ? '#f0fdf4' : '#fef2f2',
@@ -1504,7 +1597,7 @@ function PI({
                             color: toast.type === 'success' ? '#166534' : '#991b1b'
                         }}>{toast.message}</p>
                     </div>
-                    <button 
+                    <button
                         onClick={() => setToast(null)}
                         className="p-1 rounded-lg hover:bg-black/5 transition-colors shrink-0"
                     >

@@ -231,8 +231,8 @@ const PDFViewerModal = ({ pdfData, fileName, onClose, onDownload }) => {
                         </div>
                     </div>
                     <div className="flex items-center gap-3">
-                        <button 
-                            onClick={() => onDownload(pdfData, fileName)} 
+                        <button
+                            onClick={() => onDownload(pdfData, fileName)}
                             className="flex items-center gap-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition-all shadow-lg shadow-blue-500/20 active:scale-95"
                         >
                             Download PDF
@@ -245,13 +245,13 @@ const PDFViewerModal = ({ pdfData, fileName, onClose, onDownload }) => {
 
                 {/* PDF Content */}
                 <div className="flex-1 bg-gray-100 relative">
-                    <iframe 
-                        src={pdfData} 
-                        className="w-full h-full border-none shadow-inner" 
+                    <iframe
+                        src={pdfData}
+                        className="w-full h-full border-none shadow-inner"
                         title="PDF Viewer"
                     />
                 </div>
-                
+
                 {/* Footer Tip */}
                 <div className="px-8 py-3 bg-gray-50 border-t border-gray-100 text-center">
                     <p className="text-[10px] font-bold text-gray-400 uppercase tracking-[0.2em]">Press ESC or click outside to close viewer</p>
@@ -297,7 +297,8 @@ function IPManagement({
     const [viewingPdfName, setViewingPdfName] = useState("");
     const [allStockRecords, setAllStockRecords] = useState([]);
     const [allSalesRecords, setAllSalesRecords] = useState([]);
-    
+    const [piRecords, setPiRecords] = useState([]);
+
     // Authorization check for administrative actions
     const canManage = ['admin', 'incharge', 'lc manager', 'border manager', 'data entry'].includes((currentUser?.role || '').toLowerCase());
 
@@ -351,14 +352,16 @@ function IPManagement({
     const fetchIpRecords = async () => {
         setIsLoading(true);
         try {
-            const [ipRes, lcRes, stockRes, saleRes] = await Promise.all([
+            const [ipRes, lcRes, stockRes, saleRes, piRes] = await Promise.all([
                 axios.get(`${API_BASE_URL}/api/ip-records`),
                 axios.get(`${API_BASE_URL}/api/lc-management`),
                 axios.get(`${API_BASE_URL}/api/stock`),
-                axios.get(`${API_BASE_URL}/api/sales`)
+                axios.get(`${API_BASE_URL}/api/sales`),
+                axios.get(`${API_BASE_URL}/api/pi`)
             ]);
             setIpRecords(Array.isArray(ipRes.data) ? ipRes.data : []);
             setLcRecords(Array.isArray(lcRes.data) ? lcRes.data : []);
+            setPiRecords(Array.isArray(piRes.data) ? piRes.data : []);
 
             const rawStock = Array.isArray(stockRes.data) ? stockRes.data : [];
             const decryptedStock = rawStock.map(item => {
@@ -388,13 +391,56 @@ function IPManagement({
         }
     };
 
+    // Helpers for robust calculations
+    const cleanLc = (val) => String(val || '').replace(/\D/g, '');
+    const parseNum = (val) => {
+        if (val === null || val === undefined) return 0;
+        return parseFloat(String(val).replace(/[^0-9.]/g, '')) || 0;
+    };
+
     // Calculate dynamic remaining quantity for each IP
     const enrichedIpRecords = useMemo(() => {
         return ipRecords.map(ip => {
-            const relatedLcs = lcRecords.filter(lc => lc.ipNo === ip.ipNumber);
-            const totalLcQtyInKg = relatedLcs.reduce((sum, lc) => sum + (parseFloat(lc.quantity || 0) * 1000), 0);
+            const ipNoClean = cleanLc(ip.ipNumber);
+            const relatedLcs = lcRecords.filter(lc => cleanLc(lc.ipNo) === ipNoClean);
+            const lcNumbers = relatedLcs.map(lc => cleanLc(lc.lcNo));
 
-            const calculatedRemQty = (parseFloat(ip.quantity) || 0) - totalLcQtyInKg;
+            // 1. LC Rem (kg) - Based on LC commitments
+            const totalLcQtyInKg = relatedLcs.reduce((sum, lc) => sum + (parseNum(lc.quantity) * 1000), 0);
+            const calculatedRemQty = (parseNum(ip.quantity) || 0) - totalLcQtyInKg;
+
+            // 2. IP Balance - Based on actual consumption (LC Receive + Border Sale)
+            let totalConsumption = 0;
+
+            // Related Receipts (Stock)
+            allStockRecords.forEach(s => {
+                const sLcClean = cleanLc(s.lcNo);
+                const status = (s.status || '').toLowerCase();
+                if (lcNumbers.includes(sLcClean) && (status === 'accepted' || status === 'in stock')) {
+                    const itemSubtotal = (s.entries || []).reduce((iSum, item) => iSum + parseNum(item.inHouseQuantity || item.quantity), 0);
+                    const qty = parseNum(s.totalLcQuantity) || parseNum(s.inHouseQuantity) || parseNum(s.quantity) || itemSubtotal;
+                    totalConsumption += qty;
+                }
+            });
+
+            // Related Border Sales
+            allSalesRecords.forEach(s => {
+                const sLcClean = cleanLc(s.lcNo);
+                const status = (s.status || '').toLowerCase();
+                const sTypeLow = (s.saleType || '').toLowerCase().trim();
+                const isBorder = sTypeLow.includes('border') || (s.invoiceNo || '').startsWith('BS') || (!s.saleType && !!(s.lcNo || s.port || s.importer));
+                
+                if (lcNumbers.includes(sLcClean) && status === 'accepted' && isBorder) {
+                    const itemSubtotal = (s.items || []).reduce((iSum, item) => {
+                        const brandSubtotal = (item.brandEntries || []).reduce((bSum, b) => bSum + parseNum(b.quantity), 0);
+                        return iSum + (brandSubtotal || parseNum(item.quantity));
+                    }, 0);
+                    const qty = parseNum(s.currentTotalQty) || parseNum(s.totalQuantity) || parseNum(s.totalQty) || parseNum(s.qty) || parseNum(s.quantity) || parseNum(s.total) || itemSubtotal;
+                    totalConsumption += qty;
+                }
+            });
+
+            const calculatedIpBalance = (parseNum(ip.quantity) || 0) - totalConsumption;
 
             // Calculate automated status based on closeDate
             let computedStatus = "Active";
@@ -415,11 +461,12 @@ function IPManagement({
             return {
                 ...ip,
                 remainingQuantity: calculatedRemQty,
+                ipBalance: calculatedIpBalance,
                 totalLcCount: relatedLcs.length,
                 computedStatus
             };
         });
-    }, [ipRecords, lcRecords]);
+    }, [ipRecords, lcRecords, piRecords, allStockRecords, allSalesRecords]);
 
     useEffect(() => {
         if (!addNotification || !currentUser || enrichedIpRecords.length === 0) return;
@@ -434,7 +481,7 @@ function IPManagement({
         enrichedIpRecords.forEach(record => {
             const hasSentExpireSoon = record.notificationSent?.expireSoon;
             const hasSentExpired = record.notificationSent?.expired;
-            
+
             // Check session cache to prevent rapid-fire duplicates
             const expireSoonKey = `${record.ipNumber}_expireSoon`;
             const expiredKey = `${record.ipNumber}_expired`;
@@ -442,7 +489,7 @@ function IPManagement({
             if (record.computedStatus === 'Expire Soon' && !hasSentExpireSoon && !sentNotificationsRef.current.has(expireSoonKey)) {
                 // Add to session cache immediately
                 sentNotificationsRef.current.add(expireSoonKey);
-                
+
                 addNotification(
                     'IP Expiring Soon',
                     `IP No: ${record.ipNumber} (${record.ipParty}) is expiring soon on ${formatDate(record.closeDate)}.`,
@@ -450,11 +497,11 @@ function IPManagement({
                     [],
                     true
                 );
-                
+
                 // Mark as sent in DB
-                const updatedData = { 
-                    ...record, 
-                    notificationSent: { ...(record.notificationSent || {}), expireSoon: true } 
+                const updatedData = {
+                    ...record,
+                    notificationSent: { ...(record.notificationSent || {}), expireSoon: true }
                 };
                 const { _id, computedStatus, remainingQuantity, totalLcCount, createdAt, ...dataToSave } = updatedData;
                 axios.put(`${API_BASE_URL}/api/ip-records/${_id}`, dataToSave).catch(err => {
@@ -465,7 +512,7 @@ function IPManagement({
             } else if (record.computedStatus === 'Expired' && !hasSentExpired && !sentNotificationsRef.current.has(expiredKey)) {
                 // Add to session cache immediately
                 sentNotificationsRef.current.add(expiredKey);
-                
+
                 addNotification(
                     'IP Expired',
                     `IP No: ${record.ipNumber} (${record.ipParty}) has expired on ${formatDate(record.closeDate)}.`,
@@ -473,11 +520,11 @@ function IPManagement({
                     [],
                     true
                 );
-                
+
                 // Mark as sent in DB
-                const updatedData = { 
-                    ...record, 
-                    notificationSent: { ...(record.notificationSent || {}), expired: true } 
+                const updatedData = {
+                    ...record,
+                    notificationSent: { ...(record.notificationSent || {}), expired: true }
                 };
                 const { _id, computedStatus, remainingQuantity, totalLcCount, createdAt, ...dataToSave } = updatedData;
                 axios.put(`${API_BASE_URL}/api/ip-records/${_id}`, dataToSave).catch(err => {
@@ -491,7 +538,7 @@ function IPManagement({
             // No need to fetch immediately as the axios.put is async and fetchIpRecords 
             // might run before DB is updated. The session cache handles it for now.
             // But we call it to sync eventually.
-            setTimeout(fetchIpRecords, 1000); 
+            setTimeout(fetchIpRecords, 1000);
         }
     }, [enrichedIpRecords, addNotification, currentUser]);
 
@@ -500,12 +547,12 @@ function IPManagement({
         setFormData(prev => {
             const newData = { ...prev, [name]: value };
 
-            // Auto matich add 4 mont from opending date
+            // Auto matich add 120 days from opening date
             if (name === 'openingDate' && value) {
                 const openDate = new Date(value);
                 if (!isNaN(openDate.getTime())) {
                     const closeDate = new Date(openDate);
-                    closeDate.setMonth(closeDate.getMonth() + 4);
+                    closeDate.setDate(closeDate.getDate() + 121);
                     newData.closeDate = closeDate.toISOString().split('T')[0];
                 }
             }
@@ -564,7 +611,7 @@ function IPManagement({
 
             if (editingId) {
                 await axios.put(url, formData);
-                
+
                 // Add notification for IP Update
                 if (addNotification) {
                     addNotification(
@@ -1284,9 +1331,9 @@ function IPManagement({
                                             <p className="text-sm font-bold text-gray-700 group-hover:text-blue-700 mb-1">Click to upload IP PDF</p>
                                             <p className="text-[10px] text-gray-400 font-medium uppercase tracking-widest">Only PDF files are allowed • Max 500KB</p>
                                         </div>
-                                        <input 
-                                            type="file" 
-                                            className="hidden" 
+                                        <input
+                                            type="file"
+                                            className="hidden"
                                             accept="application/pdf"
                                             onChange={handleFileChange}
                                         />
@@ -1396,7 +1443,10 @@ function IPManagement({
                                                 <div className="flex items-center">Quantity (kg) <SortIcon config={sortConfig.ip} columnKey="quantity" /></div>
                                             </th>
                                             <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors" onClick={() => requestSort('remainingQuantity')}>
-                                                <div className="flex items-center">Rem. Qty (kg) <SortIcon config={sortConfig.ip} columnKey="remainingQuantity" /></div>
+                                                <div className="flex items-center">LC Rem (kg) <SortIcon config={sortConfig.ip} columnKey="remainingQuantity" /></div>
+                                            </th>
+                                            <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors" onClick={() => requestSort('ipBalance')}>
+                                                <div className="flex items-center">IP Balance <SortIcon config={sortConfig.ip} columnKey="ipBalance" /></div>
                                             </th>
                                             <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors" onClick={() => requestSort('totalLcCount')}>
                                                 <div className="flex items-center">Total LC <SortIcon config={sortConfig.ip} columnKey="totalLcCount" /></div>
@@ -1444,6 +1494,7 @@ function IPManagement({
                                                 <td className="px-6 py-4 text-sm text-gray-500">{record.productName}</td>
                                                 <td className="px-6 py-4 text-sm font-medium text-gray-900">{record.quantity} kg</td>
                                                 <td className="px-6 py-4 text-sm font-medium text-black">{record.remainingQuantity || '0'} kg</td>
+                                                <td className="px-6 py-4 text-sm font-bold text-blue-700">{(record.ipBalance || 0).toLocaleString()} kg</td>
                                                 <td className="px-6 py-4 text-sm font-bold text-indigo-600">{record.totalLcCount || 0}</td>
                                                 <td className="px-6 py-4">
                                                     <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border ${record.computedStatus === 'Active' ? 'bg-green-50 text-green-700 border-green-100' :
@@ -1458,17 +1509,17 @@ function IPManagement({
                                                         <button onClick={(e) => { e.stopPropagation(); setViewIpLcData(record); }} className="text-gray-400 hover:text-indigo-600 transition-colors" title="View LCs">
                                                             <EyeIcon className="w-5 h-5" />
                                                         </button>
-                                                        <button 
-                                                            onClick={(e) => { 
-                                                                e.stopPropagation(); 
+                                                        <button
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
                                                                 if (record.ipAttachment) {
-                                                                    setViewingPdf(record.ipAttachment); 
-                                                                    setViewingPdfName(record.ipAttachmentName); 
+                                                                    setViewingPdf(record.ipAttachment);
+                                                                    setViewingPdfName(record.ipAttachmentName);
                                                                 } else {
                                                                     alert("No PDF document has been uploaded for this IP record.");
                                                                 }
-                                                            }} 
-                                                            className={`${record.ipAttachment ? 'text-blue-500 hover:text-blue-700' : 'text-gray-200 cursor-not-allowed'} transition-colors`} 
+                                                            }}
+                                                            className={`${record.ipAttachment ? 'text-blue-500 hover:text-blue-700' : 'text-gray-200 cursor-not-allowed'} transition-colors`}
                                                             title={record.ipAttachment ? `View ${record.ipAttachmentName || 'PDF'}` : 'No PDF attached'}
                                                         >
                                                             <PDFIcon className="w-5 h-5" />
@@ -1591,11 +1642,11 @@ function IPManagement({
                                                             <EyeIcon className="w-5 h-5" /> View LCs
                                                         </button>
                                                         <button
-                                                            onClick={(e) => { 
-                                                                e.stopPropagation(); 
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
                                                                 if (record.ipAttachment) {
-                                                                    setViewingPdf(record.ipAttachment); 
-                                                                    setViewingPdfName(record.ipAttachmentName); 
+                                                                    setViewingPdf(record.ipAttachment);
+                                                                    setViewingPdfName(record.ipAttachmentName);
                                                                 } else {
                                                                     alert("No PDF document has been uploaded for this IP record.");
                                                                 }
@@ -1651,9 +1702,9 @@ function IPManagement({
                 />
             )}
             {viewingPdf && (
-                <PDFViewerModal 
-                    pdfData={viewingPdf} 
-                    fileName={viewingPdfName} 
+                <PDFViewerModal
+                    pdfData={viewingPdf}
+                    fileName={viewingPdfName}
                     onClose={() => { setViewingPdf(null); setViewingPdfName(""); }}
                     onDownload={downloadPDF}
                 />

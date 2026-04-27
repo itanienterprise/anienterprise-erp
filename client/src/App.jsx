@@ -660,6 +660,7 @@ function App() {
                         type === 'indian-bank' ? 'indian-banks' :
                           type === 'cnf' ? 'cnfs' :
                             type === 'pi' ? 'pi' :
+                            type === 'lc-expense' ? 'lc-expenses' :
                               'stock';
 
 
@@ -773,7 +774,7 @@ function App() {
         else if (type === 'product') fetchProducts();
         else if (type === 'stock') fetchStockRecords();
 
-        if (['employees', 'sales', 'customer', 'ip', 'cnf', 'bank', 'indian-bank', 'importer', 'exporter', 'port', 'pi'].includes(type) || type.includes('cnf')) {
+        if (['employees', 'sales', 'customer', 'ip', 'cnf', 'bank', 'indian-bank', 'importer', 'exporter', 'port', 'pi', 'lc-expense'].includes(type) || type.includes('cnf')) {
           setRefreshKey(prev => prev + 1);
         }
 
@@ -791,6 +792,7 @@ function App() {
           'indian-bank': 'Indian Bank',
           'cnf': 'C&F Agent',
           'pi': 'Proforma Invoice',
+          'lc-expense': 'LC Expense',
           'stock': 'Stock Record'
         };
         const label = labels[type] || type.toUpperCase();
@@ -1441,6 +1443,8 @@ function App() {
           <LCExpense 
             currentUser={currentUser}
             addNotification={addNotification}
+            onDeleteConfirm={handleDelete}
+            refreshKey={refreshKey}
           />
         );
       case 'lc-management-section':

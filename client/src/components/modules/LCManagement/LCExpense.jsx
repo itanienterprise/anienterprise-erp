@@ -4,7 +4,7 @@ import { API_BASE_URL, formatDate } from '../../../utils/helpers';
 import { PlusIcon, SearchIcon, EditIcon, TrashIcon, XIcon, CalendarIcon, DollarSignIcon, FileTextIcon } from '../../Icons';
 import CustomDatePicker from '../../shared/CustomDatePicker';
 
-const LCExpense = ({ currentUser, addNotification }) => {
+const LCExpense = ({ currentUser, addNotification, onDeleteConfirm, refreshKey }) => {
     const [expenses, setExpenses] = useState([]);
     const [isLoading, setIsLoading] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
@@ -47,7 +47,7 @@ const LCExpense = ({ currentUser, addNotification }) => {
         fetchExpenses();
         fetchLCs();
         fetchCnfs();
-    }, []);
+    }, [refreshKey]);
 
     useEffect(() => {
         const handleClickOutside = (event) => {
@@ -166,16 +166,8 @@ const LCExpense = ({ currentUser, addNotification }) => {
         setShowAddModal(true);
     };
 
-    const handleDelete = async (id) => {
-        if (!window.confirm('Are you sure you want to delete this expense?')) return;
-        try {
-            await axios.delete(`${API_BASE_URL}/api/lc-expenses/${id}`);
-            addNotification?.('Expense deleted successfully', 'success');
-            fetchExpenses();
-        } catch (error) {
-            console.error('Error deleting expense:', error);
-            addNotification?.('Failed to delete expense', 'error');
-        }
+    const handleDelete = (id) => {
+        onDeleteConfirm({ show: true, type: 'lc-expense', id, isBulk: false });
     };
 
     const closeModal = () => {
@@ -284,9 +276,21 @@ const LCExpense = ({ currentUser, addNotification }) => {
                                                 ৳{parseFloat(exp.amount || 0).toLocaleString()}
                                             </td>
                                             <td className="px-6 py-4 text-center">
-                                                <div className="flex items-center justify-center gap-4 opacity-0 group-hover:opacity-100 transition-opacity">
-                                                    <button onClick={() => handleEdit(exp)} className="text-gray-400 hover:text-blue-600 transition-colors"><EditIcon className="w-5 h-5" /></button>
-                                                    <button onClick={() => handleDelete(exp._id)} className="text-gray-400 hover:text-red-600 transition-colors"><TrashIcon className="w-5 h-5" /></button>
+                                                <div className="flex items-center justify-center gap-2">
+                                                    <button 
+                                                        onClick={() => handleEdit(exp)} 
+                                                        className="p-2 hover:bg-blue-50 text-gray-400 hover:text-blue-600 rounded-xl transition-all active:scale-90"
+                                                        title="Edit Expense"
+                                                    >
+                                                        <EditIcon className="w-4 h-4" />
+                                                    </button>
+                                                    <button 
+                                                        onClick={() => handleDelete(exp._id)} 
+                                                        className="p-2 hover:bg-rose-50 text-gray-400 hover:text-rose-600 rounded-xl transition-all active:scale-90"
+                                                        title="Delete Expense"
+                                                    >
+                                                        <TrashIcon className="w-4 h-4" />
+                                                    </button>
                                                 </div>
                                             </td>
                                         </tr>

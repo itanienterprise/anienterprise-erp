@@ -1,3 +1,5 @@
+@reference "../../../App.css";
+
 .payment-collection-container {
     padding: 1.5rem;
     color: #111827;
@@ -124,66 +126,61 @@
     transform: scale(1);
 }
 
-/* Mobile Responsiveness */
+/* Responsive Table & Mobile Cards */
 @media (max-width: 768px) {
-    /* Card View for Mobile */
-    .mobile-card {
-        background: white;
-        border-radius: 1rem;
-        padding: 1rem 1.15rem;
-        margin-bottom: 0.85rem;
-        border: 1px solid #f3f4f6;
-        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
-        cursor: pointer;
-        transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    .payment-collection-container .overflow-x-auto {
+        margin: 0 -1rem;
+        padding: 0 1rem;
     }
 
-    .mobile-card.collapsed:active {
-        transform: scale(0.98);
-        background: #f9fafb;
+    .payment-collection-container table {
+        min-width: 800px;
+    }
+
+    /* Card View for Mobile */
+    .mobile-card {
+        @apply bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden p-4 mb-3 space-y-3 relative active:border-blue-200 transition-all;
+        cursor: pointer;
     }
 
     .mobile-card.expanded {
-        border-color: #dbeafe;
-        box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+        @apply border-blue-200 shadow-lg shadow-blue-500/5;
     }
 
     .mobile-card-header {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        margin-bottom: 0.75rem;
+        @apply flex justify-between items-start border-b border-gray-50 pb-2;
     }
 
     .mobile-card-title {
-        font-weight: 700;
-        color: #111827;
-        font-size: 0.95rem;
+        @apply text-[13px] font-bold text-gray-800 truncate;
     }
 
     .mobile-card-row {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        margin-bottom: 0.5rem;
-        font-size: 0.85rem;
+        @apply flex justify-between items-center text-[13px];
     }
 
     .mobile-card-label {
-        color: #6b7280;
+        @apply text-gray-500;
     }
 
     .mobile-card-value {
-        color: #374151;
-        font-weight: 500;
+        @apply text-gray-800 font-semibold;
     }
 
     .mobile-card-actions {
-        display: flex;
-        justify-content: flex-end;
-        gap: 0.75rem;
-        margin-top: 1rem;
-        padding-top: 0.75rem;
-        border-top: 1px solid #f3f4f6;
+        @apply flex gap-2 pt-3 border-t border-gray-50;
     }
+}
+
+/* Sale Management Table styles integration */
+.sale-mgmt-table-container {
+    @apply bg-transparent md:bg-white md:rounded-2xl md:shadow-sm md:border md:border-gray-100 overflow-hidden;
+}
+
+.sale-mgmt-table {
+    @apply w-full text-left;
+}
+
+.sale-mgmt-th {
+    @apply px-3 py-4 whitespace-nowrap bg-gray-50 text-gray-500 text-xs font-bold uppercase tracking-wider;
 }

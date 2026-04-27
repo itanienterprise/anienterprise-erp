@@ -1835,7 +1835,7 @@ const LCManagement = ({ addNotification, currentUser }) => {
                                 <th className="px-3 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-nowrap">Product</th>
                                 <th className="px-3 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-right text-nowrap">Quantity (Kg)</th>
                                 <th className="px-3 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-right text-nowrap">Total Value (৳)</th>
-                                <th className="px-3 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-right text-nowrap">Rem. Qty</th>
+                                <th className="px-3 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-right text-nowrap">LC Balance</th>
                                 <th className="px-3 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-right text-nowrap">Rem G.P</th>
                                 <th className="px-3 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-right text-nowrap">Expense</th>
                                 <th className="px-3 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-center text-nowrap">Action</th>

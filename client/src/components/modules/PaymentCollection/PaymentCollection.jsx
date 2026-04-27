@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { SearchIcon, FunnelIcon, DollarSignIcon, EyeIcon, PlusIcon, XIcon, ChevronDownIcon, TrashIcon, EditIcon, UserIcon, BarChartIcon, CalendarIcon, CheckIcon } from '../../Icons';
+import { SearchIcon, FunnelIcon, DollarSignIcon, EyeIcon, PlusIcon, XIcon, ChevronDownIcon, TrashIcon, EditIcon, UserIcon, BarChartIcon, CalendarIcon, CheckIcon, FileTextIcon } from '../../Icons';
 import { API_BASE_URL, formatDate, SortIcon } from '../../../utils/helpers';
+import { generateMoneyReceiptPDF } from '../../../utils/pdfGenerator';
 import { decryptData, encryptData } from '../../../utils/encryption';
 import CustomDatePicker from '../../shared/CustomDatePicker';
 import axios from '../../../utils/api';
@@ -51,6 +52,17 @@ const PaymentCollection = () => {
     const [expandedMobileCards, setExpandedMobileCards] = useState(null);
     const [rawCustomers, setRawCustomers] = useState([]);
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const [expandedRows, setExpandedRows] = useState(new Set());
+
+    const toggleRowExpansion = (groupKey) => {
+        const newExpanded = new Set(expandedRows);
+        if (newExpanded.has(groupKey)) {
+            newExpanded.delete(groupKey);
+        } else {
+            newExpanded.add(groupKey);
+        }
+        setExpandedRows(newExpanded);
+    };
     const [submitStatus, setSubmitStatus] = useState(null);
     const [activeDropdown, setActiveDropdown] = useState(null);
     const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
@@ -99,7 +111,8 @@ const PaymentCollection = () => {
                 }];
                 return { ...bank, branches };
             });
-            setBanks(decryptedBanks);
+            const filteredBanks = decryptedBanks.filter(bank => !bank.isIndian);
+            setBanks(filteredBanks);
         } catch (error) {
             console.error('Error fetching banks:', error);
         }
@@ -220,6 +233,34 @@ const PaymentCollection = () => {
         }
     };
 
+    const handleGenerateReceipt = (payment, customAmount = null) => {
+        const customer = rawCustomers.find(c => c._id === payment.customerId);
+        
+        // Calculate historic balance
+        const paidAmount = customAmount !== null ? customAmount : (parseFloat(payment.amount) || 0);
+        
+        const salesUpTo = (customer?.salesHistory || []).filter(s => s.date <= payment.date);
+        const paymentsUpTo = (customer?.paymentHistory || []).filter(p => p.date <= payment.date);
+        
+        const totalSales = salesUpTo.reduce((sum, item) => sum + (parseFloat(item.amount) || 0), 0);
+        const totalSalesPaid = salesUpTo.reduce((sum, item) => sum + (parseFloat(item.paid) || 0), 0);
+        const totalDiscount = salesUpTo.reduce((sum, item) => sum + (parseFloat(item.discount) || 0), 0);
+        const totalHistoryPaid = paymentsUpTo.reduce((sum, item) => sum + (parseFloat(item.amount) || 0), 0);
+        
+        const balanceDue = Math.max(0, totalSales - totalSalesPaid - totalDiscount - totalHistoryPaid);
+        const previousBalance = balanceDue + paidAmount;
+
+        const receiptData = {
+            ...payment,
+            amount: paidAmount,
+            address: customer?.address || '',
+            phone: customer?.phone || '',
+            previousBalance: previousBalance,
+            balanceDue: balanceDue
+        };
+        generateMoneyReceiptPDF(receiptData);
+    };
+
     const addPaymentItem = () => {
         setNewPayment(prev => ({
             ...prev,
@@ -320,9 +361,16 @@ const PaymentCollection = () => {
             const custRes = await axios.get(`${API_BASE_URL}/api/customers/${newPayment.customerId}`);
             const customer = custRes.data;
 
+            const lastReceiptNo = payments.reduce((max, p) => {
+                const no = parseInt(p.receiptNo?.split('-')[1]);
+                return !isNaN(no) && no > max ? no : max;
+            }, 0);
+
+            const nextReceiptNo = `RC-${String(lastReceiptNo + 1).padStart(4, '0')}`;
             const paymentEntries = newPayment.items
                 .filter(item => parseFloat(item.amount) > 0)
-                .map(item => ({
+                .map((item, idx) => ({
+                    receiptNo: nextReceiptNo,
                     date: newPayment.date,
                     method: item.method,
                     bankName: item.bankName,
@@ -426,6 +474,15 @@ const PaymentCollection = () => {
         setEditingPayment(null);
     };
 
+    const renderSortIcon = (key) => {
+        if (sortConfig.key !== key) {
+            return <ChevronDownIcon className="w-3 h-3 ml-1 text-gray-300 opacity-0 group-hover:opacity-100 transition-opacity" />;
+        }
+        return sortConfig.direction === 'desc' ?
+            <ChevronDownIcon className="w-3 h-3 ml-1 text-blue-600" /> :
+            <ChevronUpIcon className="w-3 h-3 ml-1 text-blue-600" />;
+    };
+
     const handleSort = (key) => {
         let direction = 'desc';
         if (sortConfig.key === key && sortConfig.direction === 'desc') {
@@ -440,12 +497,22 @@ const PaymentCollection = () => {
                 ? new Date(b.date) - new Date(a.date)
                 : new Date(a.date) - new Date(b.date);
         }
-        const valA = a[sortConfig.key] || '';
-        const valB = b[sortConfig.key] || '';
-        if (sortConfig.direction === 'desc') {
-            return valB < valA ? -1 : 1;
+        
+        let valA, valB;
+        if (sortConfig.key === 'customerName') {
+            valA = (a.companyName || a.customerName || '').toLowerCase();
+            valB = (b.companyName || b.customerName || '').toLowerCase();
+        } else {
+            valA = (a[sortConfig.key] || '');
+            valB = (b[sortConfig.key] || '');
+            if (typeof valA === 'string') valA = valA.toLowerCase();
+            if (typeof valB === 'string') valB = valB.toLowerCase();
         }
-        return valA < valB ? -1 : 1;
+
+        if (sortConfig.direction === 'desc') {
+            return valB < valA ? -1 : (valB > valA ? 1 : 0);
+        }
+        return valA < valB ? -1 : (valA > valB ? 1 : 0);
     });
 
     const filteredPayments = sortedPayments.filter(p => {
@@ -783,18 +850,27 @@ const PaymentCollection = () => {
                 <div className="bg-white/60 backdrop-blur-xl border border-white/50 rounded-2xl shadow-sm overflow-hidden">
                     {/* Table Header Row */}
                     <div className="overflow-x-auto">
-                        <table className="w-full hidden md:table">
-                            <thead className="bg-gray-50/50 border-b border-gray-100">
+                        <table className="sale-mgmt-table hidden md:table">
+                            <thead>
                                 <tr>
-                                    <th className="px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase tracking-wider hover:bg-gray-100/50 transition-colors">Date</th>
-                                    <th className="px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase tracking-wider hover:bg-gray-100/50 transition-colors">Party</th>
-                                    <th className="px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase tracking-wider hover:bg-gray-100/50 transition-colors">Payment Method</th>
-                                    <th className="px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase tracking-wider hover:bg-gray-100/50 transition-colors">Bank Name</th>
-                                    <th className="px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase tracking-wider hover:bg-gray-100/50 transition-colors">Branch</th>
-                                    <th className="px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase tracking-wider hover:bg-gray-100/50 transition-colors">Account Number</th>
-                                    <th className="px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase tracking-wider text-right">Amount</th>
+                                    <th className="sale-mgmt-th cursor-pointer group" onClick={() => handleSort('date')}>
+                                        <div className="flex items-center">Date {renderSortIcon('date')}</div>
+                                    </th>
+                                    <th className="sale-mgmt-th cursor-pointer group" onClick={() => handleSort('receiptNo')}>
+                                        <div className="flex items-center">Receipt No {renderSortIcon('receiptNo')}</div>
+                                    </th>
+                                    <th className="sale-mgmt-th cursor-pointer group" onClick={() => handleSort('customerName')}>
+                                        <div className="flex items-center">Party {renderSortIcon('customerName')}</div>
+                                    </th>
+                                    <th className="sale-mgmt-th">Payment Method</th>
+                                    <th className="sale-mgmt-th">Bank Name</th>
+                                    <th className="sale-mgmt-th">Branch</th>
+                                    <th className="sale-mgmt-th">Account Number</th>
+                                    <th className="sale-mgmt-th text-center cursor-pointer group" onClick={() => handleSort('amount')}>
+                                        <div className="flex items-center justify-center">Amount {renderSortIcon('amount')}</div>
+                                    </th>
                                     {isAdmin && (
-                                        <th className="px-6 py-4 text-center text-xs font-bold text-gray-500 uppercase tracking-wider hover:bg-gray-100/50 transition-colors">Actions</th>
+                                        <th className="sale-mgmt-th text-center">Actions</th>
                                     )}
                                 </tr>
                             </thead>
@@ -813,43 +889,174 @@ const PaymentCollection = () => {
                                         </tr>
                                     ))
                                 ) : filteredPayments.length > 0 ? (
-                                    filteredPayments.map((payment, index) => (
-                                        <tr key={index} className="hover:bg-gray-50 transition-colors duration-200">
-                                            <td className="px-6 py-4 text-sm font-medium text-gray-900 whitespace-nowrap">{formatDate(payment.date)}</td>
-                                            <td className="px-6 py-4 text-sm font-medium text-gray-900">{payment.companyName || payment.customerName}</td>
-                                            <td className="px-6 py-4 text-sm text-gray-600">{payment.method || '—'}</td>
-                                            <td className="px-6 py-4 text-sm text-gray-600">
-                                                {payment.method === 'Cash' ? (payment.receiveBy || '—') : (payment.bankName || '—')}
-                                            </td>
-                                            <td className="px-6 py-4 text-sm text-gray-600">
-                                                {payment.method === 'Cash' ? (payment.place || '—') : (payment.branch || '—')}
-                                            </td>
-                                            <td className="px-6 py-4 text-sm text-gray-600 font-mono">{payment.accountNo || '—'}</td>
-                                            <td className="px-6 py-4 text-sm font-bold text-blue-600 text-right">
-                                                ৳{(payment.amount || 0).toLocaleString()}
-                                            </td>
-                                            {isAdmin && (
-                                                <td className="px-6 py-4">
-                                                    <div className="flex items-center justify-center gap-2">
-                                                        <button
-                                                            onClick={() => handleEditInitiation(payment)}
-                                                            className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                                                            title="Edit Payment"
-                                                        >
-                                                            <EditIcon className="w-4 h-4" />
-                                                        </button>
-                                                        <button
-                                                            onClick={() => handleDeletePayment(payment)}
-                                                            className="p-1.5 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                                                            title="Delete Payment"
-                                                        >
-                                                            <TrashIcon className="w-4 h-4" />
-                                                        </button>
-                                                    </div>
-                                                </td>
-                                            )}
-                                        </tr>
-                                    ))
+                                    (() => {
+                                        const groups = [];
+                                        filteredPayments.forEach(payment => {
+                                            const groupKey = `${payment.date}-${payment.receiptNo}-${payment.customerId}`;
+                                            let group = groups.find(g => g.key === groupKey);
+                                            if (!group) {
+                                                group = {
+                                                    key: groupKey,
+                                                    date: payment.date,
+                                                    receiptNo: payment.receiptNo,
+                                                    companyName: payment.companyName,
+                                                    customerName: payment.customerName,
+                                                    customerId: payment.customerId,
+                                                    items: []
+                                                };
+                                                groups.push(group);
+                                            }
+                                            group.items.push(payment);
+                                        });
+
+                                        return groups.map((group, groupIdx) => {
+                                            const isMultiple = group.items.length > 1;
+                                            const isExpanded = expandedRows.has(group.key);
+                                            const totalAmount = group.items.reduce((sum, item) => sum + (item.amount || 0), 0);
+
+                                            return (
+                                                <tr 
+                                                    key={group.key} 
+                                                    onClick={() => isMultiple && toggleRowExpansion(group.key)}
+                                                    className={`hover:bg-blue-50/50 transition-all group border-b border-gray-50 last:border-0 align-middle ${isMultiple ? 'cursor-pointer' : ''} ${isExpanded ? 'bg-blue-50/30' : ''}`}
+                                                >
+                                                    <td className={`px-3 ${!isExpanded ? 'py-1.5' : 'py-3'} whitespace-nowrap`}>
+                                                        <div className="text-[13px] font-medium text-gray-600 leading-tight">{formatDate(group.date)}</div>
+                                                    </td>
+                                                    <td className={`px-3 ${!isExpanded ? 'py-1.5' : 'py-3'} whitespace-nowrap`}>
+                                                        <div className="text-[13px] font-semibold text-blue-600 leading-tight">{group.receiptNo || '—'}</div>
+                                                    </td>
+                                                    <td className={`px-3 ${!isExpanded ? 'py-1.5' : 'py-3'} whitespace-nowrap`}>
+                                                        <div className="text-[13px] font-semibold text-gray-800 leading-tight truncate max-w-[200px]">{group.companyName || group.customerName}</div>
+                                                    </td>
+                                                    <td className={`px-3 ${!isExpanded ? 'py-1.5' : 'py-3'} whitespace-nowrap`}>
+                                                        {isMultiple && !isExpanded ? (
+                                                            <span className="px-1.5 py-0.5 bg-blue-50 text-blue-600 border border-blue-100/50 rounded text-[9px] font-bold uppercase tracking-wider">Multiple</span>
+                                                        ) : (
+                                                            <div className="flex flex-col gap-1">
+                                                                {group.items.map((item, idx) => (
+                                                                    <div key={idx} className={`text-[13px] text-gray-800 font-bold leading-tight ${idx < group.items.length - 1 ? 'border-b border-gray-100 pb-1' : ''}`}>
+                                                                        {item.method || '—'}
+                                                                    </div>
+                                                                ))}
+                                                            </div>
+                                                        )}
+                                                    </td>
+                                                    <td className={`px-3 ${!isExpanded ? 'py-1.5' : 'py-3'} whitespace-nowrap`}>
+                                                        {isMultiple && !isExpanded ? (
+                                                            <span className="px-1.5 py-0.5 bg-gray-50 text-gray-500 border border-gray-100 rounded text-[9px] font-bold uppercase tracking-wider">Multiple</span>
+                                                        ) : (
+                                                            <div className="flex flex-col gap-1">
+                                                                {group.items.map((item, idx) => (
+                                                                    <div key={idx} className={`text-[13px] font-semibold text-gray-700 leading-tight ${idx < group.items.length - 1 ? 'border-b border-gray-100 pb-1' : ''}`}>
+                                                                        {item.method === 'Cash' ? (item.receiveBy || '—') : (item.bankName || '—')}
+                                                                    </div>
+                                                                ))}
+                                                            </div>
+                                                        )}
+                                                    </td>
+                                                    <td className={`px-3 ${!isExpanded ? 'py-1.5' : 'py-3'} whitespace-nowrap`}>
+                                                        {isMultiple && !isExpanded ? (
+                                                            <span className="text-[13px] font-semibold text-gray-400">—</span>
+                                                        ) : (
+                                                            <div className="flex flex-col gap-1">
+                                                                {group.items.map((item, idx) => (
+                                                                    <div key={idx} className={`text-[13px] font-semibold text-gray-800 leading-tight ${idx < group.items.length - 1 ? 'border-b border-gray-100 pb-1' : ''}`}>
+                                                                        {item.method === 'Cash' ? (item.place || '—') : (item.branch || '—')}
+                                                                    </div>
+                                                                ))}
+                                                            </div>
+                                                        )}
+                                                    </td>
+                                                    <td className={`px-3 ${!isExpanded ? 'py-1.5' : 'py-3'} whitespace-nowrap`}>
+                                                        {isMultiple && !isExpanded ? (
+                                                            <span className="text-[13px] font-semibold text-gray-400">—</span>
+                                                        ) : (
+                                                            <div className="flex flex-col gap-1">
+                                                                {group.items.map((item, idx) => (
+                                                                    <div key={idx} className={`text-[13px] font-semibold text-gray-800 font-mono leading-tight ${idx < group.items.length - 1 ? 'border-b border-gray-100 pb-1' : ''}`}>
+                                                                        {item.accountNo || '—'}
+                                                                    </div>
+                                                                ))}
+                                                            </div>
+                                                        )}
+                                                    </td>
+                                                    <td className={`px-3 ${!isExpanded ? 'py-1.5' : 'py-3'} whitespace-nowrap text-center`}>
+                                                        {isMultiple && !isExpanded ? (
+                                                            <div className="inline-block px-3 py-0.5 bg-blue-50 text-blue-700 rounded-lg border border-blue-100/50 text-[13px] font-black">
+                                                                ৳{totalAmount.toLocaleString()}
+                                                            </div>
+                                                        ) : (
+                                                            <div className="flex flex-col gap-1">
+                                                                {group.items.map((item, idx) => (
+                                                                    <div key={idx} className={`text-[13px] font-black text-gray-900 leading-tight ${idx < group.items.length - 1 ? 'border-b border-gray-100 pb-1' : ''}`}>
+                                                                        ৳{(item.amount || 0).toLocaleString()}
+                                                                    </div>
+                                                                ))}
+                                                            </div>
+                                                        )}
+                                                    </td>
+                                                    {isAdmin && (
+                                                        <td className={`px-3 ${!isExpanded ? 'py-1.5' : 'py-3'} text-center`} onClick={(e) => e.stopPropagation()}>
+                                                            {isMultiple && !isExpanded ? (
+                                                                <div className="flex items-center justify-center gap-1.5">
+                                                                    <button
+                                                                        onClick={() => handleGenerateReceipt(group.items[0], totalAmount)}
+                                                                        className="p-2 hover:bg-emerald-100 text-emerald-600 rounded-xl transition-all"
+                                                                        title="Money Receipt"
+                                                                    >
+                                                                        <FileTextIcon className="w-4 h-4" />
+                                                                    </button>
+                                                                    <button
+                                                                        onClick={() => handleEditInitiation(group.items[0])}
+                                                                        className="p-2 hover:bg-blue-100 text-blue-600 rounded-xl transition-all"
+                                                                        title="Edit Receipt"
+                                                                    >
+                                                                        <EditIcon className="w-4 h-4" />
+                                                                    </button>
+                                                                    <button
+                                                                        onClick={() => handleDeletePayment(group.items[0])}
+                                                                        className="p-2 hover:bg-red-100 text-red-600 rounded-xl transition-all"
+                                                                        title="Delete Receipt"
+                                                                    >
+                                                                        <TrashIcon className="w-4 h-4" />
+                                                                    </button>
+                                                                </div>
+                                                            ) : (
+                                                                <div className="flex flex-col gap-1">
+                                                                    {group.items.map((item, idx) => (
+                                                                        <div key={idx} className={`flex items-center justify-center gap-1.5 ${idx < group.items.length - 1 ? 'border-b border-gray-100 pb-1' : ''}`}>
+                                                                            <button
+                                                                                onClick={() => handleGenerateReceipt(item)}
+                                                                                className="p-2 hover:bg-emerald-100 text-emerald-600 rounded-xl transition-all"
+                                                                                title="Money Receipt"
+                                                                            >
+                                                                                <FileTextIcon className="w-4 h-4" />
+                                                                            </button>
+                                                                            <button
+                                                                                onClick={() => handleEditInitiation(item)}
+                                                                                className="p-2 hover:bg-blue-100 text-blue-600 rounded-xl transition-all"
+                                                                                title="Edit Payment"
+                                                                            >
+                                                                                <EditIcon className="w-4 h-4" />
+                                                                            </button>
+                                                                            <button
+                                                                                onClick={() => handleDeletePayment(item)}
+                                                                                className="p-2 hover:bg-red-100 text-red-600 rounded-xl transition-all"
+                                                                                title="Delete Payment"
+                                                                            >
+                                                                                <TrashIcon className="w-4 h-4" />
+                                                                            </button>
+                                                                        </div>
+                                                                    ))}
+                                                                </div>
+                                                            )}
+                                                        </td>
+                                                    )}
+                                                </tr>
+                                            );
+                                        });
+                                    })()
                                 ) : (
                                     <tr>
                                         <td colSpan={isAdmin ? 8 : 7} className="px-6 py-12 text-center">
@@ -875,80 +1082,113 @@ const PaymentCollection = () => {
                                         <div className="h-4 bg-gray-200 rounded w-1/2"></div>
                                     </div>
                                 ))
-                            ) : filteredPayments.length > 0 ? (
-                                filteredPayments.map((payment, index) => {
-                                    const itemId = payment.id || index;
-                                    const isExpanded = expandedMobileCards === itemId;
+                            ) : (() => {
+                                const groups = [];
+                                filteredPayments.forEach(payment => {
+                                    const groupKey = `${payment.date}-${payment.receiptNo}-${payment.customerId}`;
+                                    let group = groups.find(g => g.key === groupKey);
+                                    if (!group) {
+                                        group = {
+                                            key: groupKey,
+                                            date: payment.date,
+                                            receiptNo: payment.receiptNo,
+                                            companyName: payment.companyName,
+                                            customerName: payment.customerName,
+                                            customerId: payment.customerId,
+                                            items: []
+                                        };
+                                        groups.push(group);
+                                    }
+                                    group.items.push(payment);
+                                });
+
+                                return groups.length > 0 ? groups.map((group, index) => {
+                                    const isExpanded = expandedMobileCards === group.key;
+                                    const totalAmount = group.items.reduce((sum, item) => sum + (item.amount || 0), 0);
+
                                     return (
                                         <div 
-                                            key={itemId}
+                                            key={group.key}
                                             className={`mobile-card transition-all duration-300 ${isExpanded ? 'expanded' : 'collapsed'}`}
-                                            onClick={() => setExpandedMobileCards(isExpanded ? null : itemId)}
+                                            onClick={() => setExpandedMobileCards(isExpanded ? null : group.key)}
                                         >
                                             <div className="mobile-card-header">
                                                 <div className="flex-1 min-w-0 pr-2">
-                                                    <div className="mobile-card-title truncate">{payment.companyName || payment.customerName}</div>
+                                                    <div className="mobile-card-title truncate">{group.companyName || group.customerName}</div>
                                                     <div className="text-[10px] text-gray-500 truncate mt-0.5">
-                                                        {formatDate(payment.date)} | {payment.method || '—'}
+                                                        {formatDate(group.date)} | {group.receiptNo || '—'}
                                                     </div>
                                                 </div>
                                                 <div className="flex flex-col items-end gap-1 shrink-0">
                                                     <span className="font-bold text-blue-600">
-                                                        ৳{(payment.amount || 0).toLocaleString()}
+                                                        ৳{totalAmount.toLocaleString()}
                                                     </span>
+                                                    {group.items.length > 1 && (
+                                                        <span className="text-[9px] px-1.5 py-0.5 bg-blue-50 text-blue-600 rounded-full font-bold">
+                                                            {group.items.length} Items
+                                                        </span>
+                                                    )}
                                                 </div>
                                             </div>
                                             
                                             {isExpanded && (
                                                 <div className="animate-in slide-in-from-top-2 duration-300">
-                                                    <div className="space-y-2 mt-4 text-sm">
-                                                        <div className="mobile-card-row">
-                                                            <span className="mobile-card-label">Method:</span>
-                                                            <span className="mobile-card-value">{payment.method || '—'}</span>
-                                                        </div>
-                                                        <div className="mobile-card-row">
-                                                            <span className="mobile-card-label">{payment.method === 'Cash' ? 'Receive By' : 'Bank Name'}:</span>
-                                                            <span className="mobile-card-value line-clamp-1">{payment.method === 'Cash' ? (payment.receiveBy || '—') : (payment.bankName || '—')}</span>
-                                                        </div>
-                                                        <div className="mobile-card-row">
-                                                            <span className="mobile-card-label">{payment.method === 'Cash' ? 'Place' : 'Branch'}:</span>
-                                                            <span className="mobile-card-value line-clamp-1">{payment.method === 'Cash' ? (payment.place || '—') : (payment.branch || '—')}</span>
-                                                        </div>
-                                                        <div className="mobile-card-row">
-                                                            <span className="mobile-card-label">Account No:</span>
-                                                            <span className="mobile-card-value font-mono">{payment.accountNo || '—'}</span>
-                                                        </div>
-                                                    </div>
+                                                    <div className="space-y-4 mt-4">
+                                                        {group.items.map((item, idx) => (
+                                                            <div key={idx} className={`space-y-2 ${idx < group.items.length - 1 ? 'border-b border-gray-100 pb-4' : ''}`}>
+                                                                <div className="mobile-card-row">
+                                                                    <span className="mobile-card-label">Method:</span>
+                                                                    <span className="mobile-card-value font-bold text-gray-900">{item.method || '—'}</span>
+                                                                </div>
+                                                                <div className="mobile-card-row">
+                                                                    <span className="mobile-card-label">{item.method === 'Cash' ? 'Receive By' : 'Bank Name'}:</span>
+                                                                    <span className="mobile-card-value line-clamp-1">{item.method === 'Cash' ? (item.receiveBy || '—') : (item.bankName || '—')}</span>
+                                                                </div>
+                                                                <div className="mobile-card-row">
+                                                                    <span className="mobile-card-label">{item.method === 'Cash' ? 'Place' : 'Branch'}:</span>
+                                                                    <span className="mobile-card-value line-clamp-1">{item.method === 'Cash' ? (item.place || '—') : (item.branch || '—')}</span>
+                                                                </div>
+                                                                <div className="mobile-card-row">
+                                                                    <span className="mobile-card-label">Account No:</span>
+                                                                    <span className="mobile-card-value font-mono">{item.accountNo || '—'}</span>
+                                                                </div>
+                                                                <div className="mobile-card-row">
+                                                                    <span className="mobile-card-label text-blue-600">Amount:</span>
+                                                                    <span className="mobile-card-value font-black text-blue-600">৳{(item.amount || 0).toLocaleString()}</span>
+                                                                </div>
 
-                                                    {isAdmin && (
-                                                        <div className="mobile-card-actions">
-                                                            <button 
-                                                                onClick={(e) => { e.stopPropagation(); handleEditInitiation(payment); }}
-                                                                className="flex items-center justify-center gap-1.5 py-2 bg-blue-50 text-blue-600 rounded-lg text-xs font-bold flex-1 hover:bg-blue-100 transition-colors"
-                                                            >
-                                                                <EditIcon className="w-4 h-4" /> Edit
-                                                            </button>
-                                                            <button 
-                                                                onClick={(e) => { e.stopPropagation(); handleDeletePayment(payment); }}
-                                                                className="flex items-center justify-center gap-1.5 py-2 bg-red-50 text-red-600 rounded-lg text-xs font-bold px-4 hover:bg-red-100 transition-colors"
-                                                            >
-                                                                <TrashIcon className="w-4 h-4" />
-                                                            </button>
-                                                        </div>
-                                                    )}
+                                                                {isAdmin && (
+                                                                    <div className="mobile-card-actions pt-2">
+                                                                        <button 
+                                                                            onClick={(e) => { e.stopPropagation(); handleEditInitiation(item); }}
+                                                                            className="flex items-center justify-center gap-1.5 py-2 bg-blue-50 text-blue-600 rounded-lg text-xs font-bold flex-1 hover:bg-blue-100 transition-colors"
+                                                                        >
+                                                                            <EditIcon className="w-4 h-4" /> Edit
+                                                                        </button>
+                                                                        <button 
+                                                                            onClick={(e) => { e.stopPropagation(); handleDeletePayment(item); }}
+                                                                            className="flex items-center justify-center gap-1.5 py-2 bg-red-50 text-red-600 rounded-lg text-xs font-bold px-4 hover:bg-red-100 transition-colors"
+                                                                        >
+                                                                            <TrashIcon className="w-4 h-4" />
+                                                                        </button>
+                                                                    </div>
+                                                                )}
+                                                            </div>
+                                                        ))}
+                                                    </div>
                                                 </div>
                                             )}
                                         </div>
                                     );
-                                })
-                            ) : (
-                                <div className="text-center py-8">
-                                    <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-gray-50 mb-3">
-                                        <SearchIcon className="w-6 h-6 text-gray-400" />
+                                }) : (
+                                    <div className="text-center py-8">
+                                        <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-gray-50 mb-3">
+                                            <SearchIcon className="w-6 h-6 text-gray-400" />
+                                        </div>
+                                        <p className="text-gray-500 font-medium">No payments found</p>
                                     </div>
-                                    <p className="text-gray-500 font-medium">No payments found</p>
-                                </div>
-                            )}
+                                );
+                            })()}
                         </div>
                     </div>
                 </div>

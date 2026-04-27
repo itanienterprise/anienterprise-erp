@@ -16,6 +16,7 @@ const Bank = ({ onDeleteConfirm }) => {
     const [formData, setFormData] = useState({
         bankName: '',
         branches: [{ branch: '', accountName: '', accountNo: '' }],
+        isIndian: false,
         status: 'Active'
     });
 
@@ -97,6 +98,7 @@ const Bank = ({ onDeleteConfirm }) => {
         setFormData({
             bankName: '',
             branches: [{ branch: '', accountName: '', accountNo: '' }],
+            isIndian: false,
             status: 'Active'
         });
         setEditingId(null);
@@ -116,6 +118,7 @@ const Bank = ({ onDeleteConfirm }) => {
         setFormData({
             bankName: bank.bankName || '',
             branches: branches,
+            isIndian: bank.isIndian || false,
             status: bank.status || 'Active'
         });
         setEditingId(bank._id);
@@ -144,7 +147,7 @@ const Bank = ({ onDeleteConfirm }) => {
                 ...branch,
                 uniqueRowKey: `${bank._id}-${idx}`
             }));
-        }).filter(item => !item.isIndian)
+        })
         .filter(item => 
             (item.bankName || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
             (item.accountNo || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -247,6 +250,21 @@ const Bank = ({ onDeleteConfirm }) => {
                                 autoComplete="off"
                                 className="w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm shadow-sm"
                             />
+                        </div>
+
+                        <div className="col-span-1 md:col-span-2 flex items-center space-x-3 bg-white/50 p-4 rounded-xl border border-gray-100">
+                            <input
+                                type="checkbox"
+                                id="isIndian"
+                                name="isIndian"
+                                checked={formData.isIndian}
+                                onChange={(e) => setFormData(prev => ({ ...prev, isIndian: e.target.checked }))}
+                                className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                            />
+                            <label htmlFor="isIndian" className="text-sm font-medium text-gray-700 flex items-center cursor-pointer">
+                                <span className="mr-2">🇮🇳</span> Is Indian Bank?
+                                <span className="ml-2 text-[10px] text-gray-400 font-normal">(Will be hidden in local collection modules)</span>
+                            </label>
                         </div>
 
                         <div className="col-span-1 md:col-span-2 space-y-4">
