@@ -464,8 +464,21 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
         });
     });
 
+    // Final Filter: Hide "Out of Stock" (zero stock) items from display
+    // We do this AFTER summary calculations so totals remain accurate
+    const filteredDisplayRecords = displayRecords.map(group => {
+        const filteredBrands = group.brandList.filter(b => Math.abs(b.inHouseQuantity) > 0.01);
+        if (filteredBrands.length === 0 && Math.abs(group.inHouseQuantity) <= 0.01) {
+            return null;
+        }
+        return {
+            ...group,
+            brandList: filteredBrands.length > 0 ? filteredBrands : group.brandList // keep original if group has total stock but brands are weirdly zero
+        };
+    }).filter(Boolean);
+
     return {
-        displayRecords,
+        displayRecords: filteredDisplayRecords,
         totalQuantity: tOpeningQty,
         totalSaleQty: tSaleQty,
         totalInHouseQty: tInHouseQty,
