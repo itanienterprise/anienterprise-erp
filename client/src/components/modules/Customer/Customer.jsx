@@ -995,7 +995,7 @@ const Customer = ({
                                                 const totalSalesDiscount = custSales.reduce((sum, item) => sum + (parseFloat(item.discount) || 0), 0);
                                                 const totalHistoryPaid = custPayments.reduce((sum, item) => sum + (parseFloat(item.amount) || 0), 0);
 
-                                                const custTotalDue = Math.max(0, totalSalesAmount - totalSalesPaid - totalSalesDiscount - totalHistoryPaid);
+                                                const custTotalDue = totalSalesAmount - totalSalesPaid - totalSalesDiscount - totalHistoryPaid;
 
                                                 return (
                                                     <tr
@@ -1016,7 +1016,7 @@ const Customer = ({
                                                                 {c.customerType}
                                                             </span>
                                                         </td>
-                                                        <td className="px-6 py-4 text-sm font-bold text-red-600 text-right">
+                                                        <td className={`px-6 py-4 text-sm font-bold text-right ${custTotalDue < 0 ? 'text-green-600' : 'text-red-600'}`}>
                                                             {Math.round(custTotalDue).toLocaleString('en-IN')}
                                                         </td>
                                                         <td className="px-6 py-4 text-sm text-gray-600"><span className={`customer-status-badge ${c.status === 'Active' ? 'active' : 'inactive'}`}>{c.status}</span></td>
@@ -1046,7 +1046,7 @@ const Customer = ({
                                             const totalSalesDiscount = custSales.reduce((sum, item) => sum + (parseFloat(item.discount) || 0), 0);
                                             const totalHistoryPaid = custPayments.reduce((sum, item) => sum + (parseFloat(item.amount) || 0), 0);
 
-                                            const custTotalDue = Math.max(0, totalSalesAmount - totalSalesPaid - totalSalesDiscount - totalHistoryPaid);
+                                            const custTotalDue = totalSalesAmount - totalSalesPaid - totalSalesDiscount - totalHistoryPaid;
                                             const isExpanded = expandedMobileCards === c._id;
 
                                             return (

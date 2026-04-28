@@ -81,51 +81,71 @@ const numberToWords = (amount) => {
     return words.replace(/\s+/g, ' ').trim();
 };
 
-export const generateMoneyReceiptPDF = (payment) => {
+export const generateMoneyReceiptPDF = async (payment) => {
     try {
         const doc = new jsPDF({ orientation: 'p', unit: 'mm', format: 'a4' });
         const pageWidth = doc.internal.pageSize.width;
         const pageHeight = doc.internal.pageSize.height;
-        const margin = 15;
+        const margin = 10;
         const contentWidth = pageWidth - (margin * 2);
 
         // --- Background Patterns (Organic Waves - Adjusted for Portrait) ---
         doc.setFillColor(255, 247, 237);
         doc.circle(0, 0, 35, 'F');
         doc.setFillColor(254, 215, 170);
-        doc.circle(pageWidth, 0, 50, 'F');
+
         doc.setFillColor(255, 247, 237);
         doc.circle(pageWidth, pageHeight, 45, 'F');
         doc.setFillColor(254, 215, 170);
         doc.circle(0, pageHeight, 30, 'F');
 
-        // Header Section
-        doc.setFillColor(249, 115, 22);
-        doc.roundedRect(margin, margin, 16, 16, 3, 3, 'F');
-        doc.setTextColor(255, 255, 255);
-        doc.setFontSize(18);
-        doc.setFont('helvetica', 'bold');
-        doc.text("A", margin + 8, margin + 11, { align: 'center' });
+        // Load and embed company logo
+        const logoImg = await new Promise((resolve) => {
+            const img = new Image();
+            img.crossOrigin = 'anonymous';
+            img.onload = () => {
+                const canvas = document.createElement('canvas');
+                canvas.width = img.width;
+                canvas.height = img.height;
+                const ctx = canvas.getContext('2d');
+                ctx.drawImage(img, 0, 0);
+                resolve(canvas.toDataURL('image/png'));
+            };
+            img.onerror = () => resolve(null);
+            img.src = '/logo.png';
+        });
 
-        doc.setTextColor(30, 41, 59);
-        doc.setFontSize(26);
-        doc.text("ANI ENTERPRISE", margin + 22, margin + 11.5);
+        if (logoImg) {
+            doc.addImage(logoImg, 'PNG', margin, margin, 22, 22);
+        } else {
+            doc.setFillColor(249, 115, 22);
+            doc.roundedRect(margin, margin, 20, 20, 3, 3, 'F');
+            doc.setTextColor(255, 255, 255);
+            doc.setFontSize(18);
+            doc.setFont('helvetica', 'bold');
+            doc.text("A", margin + 10, margin + 13, { align: 'center' });
+        }
+
+        doc.setTextColor(20, 25, 35);
+        doc.setFontSize(28);
+        doc.setFont('helvetica', 'bold');
+        doc.text("ANI ENTERPRISE", margin + 24, margin + 13);
 
         // Contact Info (Company) - Structured Multi-line
-        doc.setFontSize(9.5);
+        doc.setFontSize(10);
         doc.setFont('helvetica', 'normal');
-        doc.setTextColor(71, 85, 105);
+        doc.setTextColor(0, 0, 0);
         doc.text([
             "766, H.M Tower, Level-06",
             "Borogola, Bogura, Bangladesh",
             "Tel: +8802588813057",
             "Email: anienterprise051@gmail.com"
-        ], pageWidth - margin, margin + 4.5, { align: 'right', lineHeightFactor: 1.15 });
+        ], pageWidth - margin, margin + 3, { align: 'right', lineHeightFactor: 1.15 });
 
         // --- Body Section ---
-        let y = margin + 45;
+        let y = margin + 40;
         doc.setFontSize(12);
-        doc.setTextColor(71, 85, 105);
+        doc.setTextColor(0, 0, 0);
         doc.setFont('helvetica', 'bold');
 
         // Helper for dotted lines
@@ -140,78 +160,116 @@ export const generateMoneyReceiptPDF = (payment) => {
         const labelWidth = 40;
         const rightColStart = margin + 105;
 
-        // Line 1: Received from (Left) | Receipt No (Right)
-        doc.text("Received from", margin, y);
+        // Line 1: Date (Left) | Receipt No (Right)
+        doc.text("Date", margin, y);
         doc.text(":", margin + labelWidth - 5, y);
         doc.setFont('helvetica', 'normal');
-        doc.setTextColor(30, 41, 59);
-        doc.text(payment.companyName || payment.customerName || 'N/A', margin + labelWidth, y);
+        doc.setTextColor(0, 0, 0);
+        doc.text(formatDate(payment.date), margin + labelWidth, y);
         drawDottedLine(margin + labelWidth, y + 1, rightColStart - 5);
 
         doc.setFont('helvetica', 'bold');
-        doc.setTextColor(71, 85, 105);
+        doc.setTextColor(0, 0, 0);
         doc.text("Receipt No :", rightColStart, y);
         doc.setFont('helvetica', 'normal');
-        doc.setTextColor(30, 41, 59);
+        doc.setTextColor(0, 0, 0);
         doc.text(payment.receiptNo || '000000', rightColStart + 28, y);
         drawDottedLine(rightColStart + 28, y + 1, pageWidth - margin);
 
         y += 12;
-        // Line 2: Address (Left) | Date (Right)
+        // Line 2: Received from (Left) | Address (Right)
         doc.setFont('helvetica', 'bold');
-        doc.setTextColor(71, 85, 105);
-        doc.text("Address", margin, y);
+        doc.setTextColor(0, 0, 0);
+        doc.text("Party Name", margin, y);
         doc.text(":", margin + labelWidth - 5, y);
         doc.setFont('helvetica', 'normal');
-        doc.setTextColor(30, 41, 59);
-        doc.text(payment.address || '—', margin + labelWidth, y);
+        doc.setTextColor(0, 0, 0);
+        doc.text(payment.companyName || payment.customerName || 'N/A', margin + labelWidth, y);
         drawDottedLine(margin + labelWidth, y + 1, rightColStart - 5);
 
         doc.setFont('helvetica', 'bold');
-        doc.setTextColor(71, 85, 105);
-        doc.text("Date :", rightColStart, y);
-        doc.setFont('helvetica', 'normal');
-        doc.setTextColor(30, 41, 59);
-        doc.text(formatDate(payment.date), rightColStart + 28, y);
-        drawDottedLine(rightColStart + 28, y + 1, pageWidth - margin);
-
-        y += 12;
-        // Line 3: Amount Words (Left) | Contact (Right)
-        doc.setFont('helvetica', 'bold');
-        doc.setTextColor(71, 85, 105);
-        doc.text("Amount", margin, y);
-        doc.text(":", margin + labelWidth - 5, y);
-        doc.setFont('helvetica', 'normal');
-        doc.setTextColor(30, 41, 59);
-        const amountWords = numberToWords(parseFloat(payment.amount) || 0);
-        doc.text(amountWords, margin + labelWidth, y);
-        drawDottedLine(margin + labelWidth, y + 1, rightColStart - 5);
-
-        doc.setFont('helvetica', 'bold');
-        doc.setTextColor(71, 85, 105);
+        doc.setTextColor(0, 0, 0);
         doc.text("Contact :", rightColStart, y);
         doc.setFont('helvetica', 'normal');
-        doc.setTextColor(30, 41, 59);
+        doc.setTextColor(0, 0, 0);
         doc.text(payment.phone || '—', rightColStart + 28, y);
         drawDottedLine(rightColStart + 28, y + 1, pageWidth - margin);
 
         y += 12;
+        // Line 3: Address (Full Width)
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(0, 0, 0);
+        doc.text("Address", margin, y);
+        doc.text(":", margin + labelWidth - 5, y);
+        doc.setFont('helvetica', 'normal');
+        doc.setTextColor(0, 0, 0);
+        doc.text(payment.address || '—', margin + labelWidth, y);
+        drawDottedLine(margin + labelWidth, y + 1, pageWidth - margin);
+
+        y += 14;
+        // --- Payment Details Table ---
+        const tableItems = payment.items || [payment];
+        const tableBody = tableItems.map((item, idx) => [
+            (idx + 1).toString(),
+            item.method || '—',
+            item.bankName || '—',
+            item.branch || '—',
+            item.accountNo || '—',
+            'TK. ' + (parseFloat(item.amount) || 0).toLocaleString()
+        ]);
+
+        autoTable(doc, {
+            startY: y,
+            head: [['#', 'Payment Method', 'Bank Name', 'Branch', 'Account No', 'Amount']],
+            body: tableBody,
+            theme: 'grid',
+            styles: {
+                fontSize: 9.5,
+                cellPadding: 3,
+                textColor: [0, 0, 0],
+                lineColor: [226, 232, 240],
+                lineWidth: 0.2,
+            },
+            headStyles: {
+                fillColor: [249, 115, 22],
+                textColor: [255, 255, 255],
+                fontStyle: 'bold',
+                fontSize: 9,
+                halign: 'center',
+            },
+            columnStyles: {
+                0: { halign: 'center', cellWidth: 10 },
+                1: { halign: 'center' },
+                2: { halign: 'center' },
+                3: { halign: 'center' },
+                4: { halign: 'center' },
+                5: { halign: 'right', fontStyle: 'bold' },
+            },
+            margin: { left: margin, right: margin },
+        });
+
+        y = doc.lastAutoTable.finalY + 10;
+
         // Numeric Amount Box (Centered in Portrait)
         doc.setFillColor(241, 245, 249);
-        doc.roundedRect(margin, y - 7, contentWidth, 16, 8, 8, 'F');
-        doc.setFontSize(24);
-        doc.setTextColor(30, 41, 59);
+        doc.roundedRect(margin + 25, y - 4, contentWidth - 50, 15, 5, 5, 'F');
+        doc.setFontSize(16);
+        doc.setTextColor(0, 0, 0);
         doc.setFont('helvetica', 'bold');
-        doc.text("TK.   " + parseFloat(payment.amount).toLocaleString(), pageWidth / 2, y + 3.5, { align: 'center' });
+        doc.text("TK.   " + parseFloat(payment.amount).toLocaleString(), pageWidth / 2, y + 1.5, { align: 'center' });
+        const amountWords = numberToWords(parseFloat(payment.amount) || 0);
+        doc.setFontSize(9);
+        doc.setFont('helvetica', 'normal');
+        doc.text("Amount :  " + amountWords, pageWidth / 2, y + 7.5, { align: 'center' });
 
         // --- Bottom Section ---
         y += 25;
-        
+
         // Financial Summary (Left)
         doc.setFontSize(10.5);
         doc.setFont('helvetica', 'normal');
-        doc.setTextColor(100);
-        
+        doc.setTextColor(0, 0, 0);
+
         const prevBal = payment.previousBalance || 0;
         const dueBal = payment.balanceDue || 0;
 
@@ -226,57 +284,55 @@ export const generateMoneyReceiptPDF = (payment) => {
         doc.text(":", margin + labelWidth, y);
         doc.text("TK.", margin + labelWidth + 3, y);
         doc.setFont('helvetica', 'bold');
-        doc.setTextColor(30, 41, 59);
+        doc.setTextColor(0, 0, 0);
         doc.text(parseFloat(payment.amount).toLocaleString(), margin + labelWidth + 12, y);
         drawDottedLine(margin + labelWidth + 12, y + 1, margin + 75);
 
         y += 10;
         doc.setFont('helvetica', 'normal');
-        doc.setTextColor(100);
+        doc.setTextColor(0, 0, 0);
         doc.text("Balance Due", margin, y);
         doc.text(":", margin + labelWidth, y);
         doc.text("TK.", margin + labelWidth + 3, y);
         doc.text(dueBal.toLocaleString(), margin + labelWidth + 12, y);
         drawDottedLine(margin + labelWidth + 12, y + 1, margin + 75);
 
-        // Payment Method Checkboxes (Middle-Right)
-        const methods = ['Cash', 'Cheque', 'Online Banking', 'Other'];
+        // Payment Method Checkboxes (Middle-Right) - Compact Layout
+        const allUsedMethods = (payment.items || [payment]).map(item => item.method);
         const methodYStart = y - 20;
         const methodX = margin + 90;
-        methods.forEach((m, i) => {
-            const mY = methodYStart + (i * 7);
+        const col2X = methodX + 45;
+
+        // Row layout: [method, x, y]
+        const methodLayout = [
+            ['Cash', methodX, methodYStart],
+            ['Bank Deposit', methodX, methodYStart + 7],
+            ['Online Banking', col2X, methodYStart + 7],
+            ['Mobile Banking', methodX, methodYStart + 14],
+            ['Cheque', methodX, methodYStart + 21],
+        ];
+
+        methodLayout.forEach(([m, mx, my]) => {
             doc.setDrawColor(200);
             doc.setLineWidth(0.2);
-            doc.circle(methodX, mY - 1, 1.8, 'S');
-            if (payment.method === m || (payment.method === 'Bank Transfer' && m === 'Online Banking')) {
+            doc.circle(mx, my - 1, 1.8, 'S');
+            if (allUsedMethods.includes(m)) {
                 doc.setFillColor(249, 115, 22);
-                doc.circle(methodX, mY - 1, 1.0, 'FD');
+                doc.circle(mx, my - 1, 1.0, 'FD');
             }
             doc.setFontSize(10);
-            doc.setTextColor(100);
-            doc.text(m, methodX + 6, mY);
+            doc.setTextColor(0, 0, 0);
+            doc.text(m, mx + 6, my);
         });
 
-        // QR Code Placeholder (Right)
-        const qrSize = 24;
-        const qrX = pageWidth - margin - qrSize;
-        const qrY = methodYStart - 3;
-        doc.setDrawColor(230);
-        doc.setLineWidth(0.1);
-        doc.rect(qrX, qrY, qrSize, qrSize);
-        doc.setFillColor(50);
-        for(let i=0; i<8; i++) {
-            for(let j=0; j<8; j++) {
-                if(Math.random() > 0.4) doc.rect(qrX + (i*3) + 0.5, qrY + (j*3) + 0.5, 2, 2, 'F');
-            }
-        }
+
 
         // Signature (Bottom Right)
         doc.setDrawColor(180);
         doc.setLineWidth(0.5);
         doc.line(pageWidth - margin - 60, pageHeight - margin - 20, pageWidth - margin, pageHeight - margin - 20);
         doc.setFontSize(11);
-        doc.setTextColor(100);
+        doc.setTextColor(0, 0, 0);
         doc.setFont('helvetica', 'normal');
         doc.text("Authorized Signature", pageWidth - margin - 30, pageHeight - margin - 14, { align: 'center' });
 
@@ -2312,7 +2368,7 @@ export const generateCustomerReportPDF = (customers, typeFilter, grandTotalDue, 
             const totalDiscount = salesHistory.reduce((s, i) => s + (parseFloat(i.discount) || 0), 0);
             const totalHistoryPaid = paymentHistory.reduce((s, i) => s + (parseFloat(i.amount) || 0), 0);
 
-            return Math.max(0, totalAmount - totalPaid - totalDiscount - totalHistoryPaid);
+            return totalAmount - totalPaid - totalDiscount - totalHistoryPaid;
         };
 
         const pageWidth = doc.internal.pageSize.width;

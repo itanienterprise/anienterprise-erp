@@ -19,7 +19,7 @@ const CustomerReport = ({ isOpen, onClose, customers = [] }) => {
         const totalDiscount = salesHistory.reduce((s, i) => s + (parseFloat(i.discount) || 0), 0);
         const totalHistoryPaid = paymentHistory.reduce((s, i) => s + (parseFloat(i.amount) || 0), 0);
 
-        return Math.max(0, totalAmount - totalPaid - totalDiscount - totalHistoryPaid);
+        return totalAmount - totalPaid - totalDiscount - totalHistoryPaid;
     };
 
     const getLastTransDay = (customer) => {
@@ -62,7 +62,7 @@ const CustomerReport = ({ isOpen, onClose, customers = [] }) => {
         return idA.localeCompare(idB, undefined, { numeric: true, sensitivity: 'base' });
     });
 
-    const grandTotalDue = filtered.reduce((s, c) => s + computeDue(c), 0);
+    const grandTotalDue = filtered.reduce((s, c) => s + Math.max(0, computeDue(c)), 0);
 
     const handlePrint = () => {
         generateCustomerReportPDF(filtered, typeFilter, grandTotalDue, formatDate(new Date().toISOString().split('T')[0]));

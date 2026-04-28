@@ -233,7 +233,7 @@ const PaymentCollection = () => {
         }
     };
 
-    const handleGenerateReceipt = (payment, customAmount = null) => {
+    const handleGenerateReceipt = (payment, customAmount = null, items = null) => {
         const customer = rawCustomers.find(c => c._id === payment.customerId);
         
         // Calculate historic balance
@@ -250,13 +250,17 @@ const PaymentCollection = () => {
         const balanceDue = Math.max(0, totalSales - totalSalesPaid - totalDiscount - totalHistoryPaid);
         const previousBalance = balanceDue + paidAmount;
 
+        // Build items array for the table
+        const tableItems = items || [payment];
+
         const receiptData = {
             ...payment,
             amount: paidAmount,
             address: customer?.address || '',
             phone: customer?.phone || '',
             previousBalance: previousBalance,
-            balanceDue: balanceDue
+            balanceDue: balanceDue,
+            items: tableItems
         };
         generateMoneyReceiptPDF(receiptData);
     };
@@ -869,9 +873,7 @@ const PaymentCollection = () => {
                                     <th className="sale-mgmt-th text-center cursor-pointer group" onClick={() => handleSort('amount')}>
                                         <div className="flex items-center justify-center">Amount {renderSortIcon('amount')}</div>
                                     </th>
-                                    {isAdmin && (
-                                        <th className="sale-mgmt-th text-center">Actions</th>
-                                    )}
+                                    <th className="sale-mgmt-th text-center">Actions</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-100">
@@ -996,63 +998,35 @@ const PaymentCollection = () => {
                                                             </div>
                                                         )}
                                                     </td>
-                                                    {isAdmin && (
-                                                        <td className={`px-3 ${!isExpanded ? 'py-1.5' : 'py-3'} text-center`} onClick={(e) => e.stopPropagation()}>
-                                                            {isMultiple && !isExpanded ? (
-                                                                <div className="flex items-center justify-center gap-1.5">
+                                                    <td className={`px-3 ${!isExpanded ? 'py-1.5' : 'py-3'} text-center`} onClick={(e) => e.stopPropagation()}>
+                                                            <div className="flex items-center justify-center gap-1.5">
                                                                     <button
-                                                                        onClick={() => handleGenerateReceipt(group.items[0], totalAmount)}
+                                                                        onClick={() => handleGenerateReceipt(group.items[0], totalAmount, group.items)}
                                                                         className="p-2 hover:bg-emerald-100 text-emerald-600 rounded-xl transition-all"
                                                                         title="Money Receipt"
                                                                     >
                                                                         <FileTextIcon className="w-4 h-4" />
                                                                     </button>
-                                                                    <button
-                                                                        onClick={() => handleEditInitiation(group.items[0])}
-                                                                        className="p-2 hover:bg-blue-100 text-blue-600 rounded-xl transition-all"
-                                                                        title="Edit Receipt"
-                                                                    >
-                                                                        <EditIcon className="w-4 h-4" />
-                                                                    </button>
-                                                                    <button
-                                                                        onClick={() => handleDeletePayment(group.items[0])}
-                                                                        className="p-2 hover:bg-red-100 text-red-600 rounded-xl transition-all"
-                                                                        title="Delete Receipt"
-                                                                    >
-                                                                        <TrashIcon className="w-4 h-4" />
-                                                                    </button>
-                                                                </div>
-                                                            ) : (
-                                                                <div className="flex flex-col gap-1">
-                                                                    {group.items.map((item, idx) => (
-                                                                        <div key={idx} className={`flex items-center justify-center gap-1.5 ${idx < group.items.length - 1 ? 'border-b border-gray-100 pb-1' : ''}`}>
+                                                                    {isAdmin && (
+                                                                        <>
                                                                             <button
-                                                                                onClick={() => handleGenerateReceipt(item)}
-                                                                                className="p-2 hover:bg-emerald-100 text-emerald-600 rounded-xl transition-all"
-                                                                                title="Money Receipt"
-                                                                            >
-                                                                                <FileTextIcon className="w-4 h-4" />
-                                                                            </button>
-                                                                            <button
-                                                                                onClick={() => handleEditInitiation(item)}
+                                                                                onClick={() => handleEditInitiation(group.items[0])}
                                                                                 className="p-2 hover:bg-blue-100 text-blue-600 rounded-xl transition-all"
-                                                                                title="Edit Payment"
+                                                                                title="Edit Receipt"
                                                                             >
                                                                                 <EditIcon className="w-4 h-4" />
                                                                             </button>
                                                                             <button
-                                                                                onClick={() => handleDeletePayment(item)}
+                                                                                onClick={() => handleDeletePayment(group.items[0])}
                                                                                 className="p-2 hover:bg-red-100 text-red-600 rounded-xl transition-all"
-                                                                                title="Delete Payment"
+                                                                                title="Delete Receipt"
                                                                             >
                                                                                 <TrashIcon className="w-4 h-4" />
                                                                             </button>
-                                                                        </div>
-                                                                    ))}
+                                                                        </>
+                                                                    )}
                                                                 </div>
-                                                            )}
                                                         </td>
-                                                    )}
                                                 </tr>
                                             );
                                         });
