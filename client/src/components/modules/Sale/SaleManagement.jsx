@@ -2643,13 +2643,12 @@ const SaleManagement = ({
                                     name="date"
                                     value={formData.date}
                                     onChange={handleInputChange}
-                                    required
                                     compact={true}
                                     readOnly={isFieldReadOnly(originalData?.date)}
                                 />
                             <div className="sale-mgmt-input-group">
                                 <label className="sale-mgmt-label">Invoice No</label>
-                                <input autoComplete="off" type="text" name="invoiceNo" value={formData.invoiceNo} readOnly placeholder="Auto-generated" className="sale-mgmt-input sale-mgmt-input-readonly cursor-default" required />
+                                <input autoComplete="off" type="text" name="invoiceNo" value={formData.invoiceNo} readOnly placeholder="Auto-generated" className="sale-mgmt-input sale-mgmt-input-readonly cursor-default" />
                             </div>
 
                             {/* Border Field: Importer */}
@@ -2670,7 +2669,6 @@ const SaleManagement = ({
                                                 setHighlightedIndex(-1);
                                                 handleInputChange(e); // allow fallback text input
                                             }}
-                                            required
                                             autoComplete="off"
                                             onFocus={() => {
                                                 if (isFieldReadOnly(originalData?.importer)) return;
@@ -2730,7 +2728,6 @@ const SaleManagement = ({
                                                 setHighlightedIndex(-1);
                                                 handleInputChange(e);
                                             }}
-                                            required
                                             autoComplete="off"
                                             onFocus={() => {
                                                 if (isFieldReadOnly(originalData?.lcNo)) return;
@@ -2854,7 +2851,6 @@ const SaleManagement = ({
                                                 setHighlightedIndex(-1);
                                                 handleInputChange(e); // allow fallback text input
                                             }}
-                                            required
                                             autoComplete="off"
                                             onFocus={() => {
                                                 if (isFieldReadOnly(originalData?.indianCnF)) return;
@@ -2915,7 +2911,6 @@ const SaleManagement = ({
                                                 setHighlightedIndex(-1);
                                                 handleInputChange(e); // allow fallback text input
                                             }}
-                                            required
                                             autoComplete="off"
                                             onFocus={() => {
                                                 if (isFieldReadOnly(originalData?.bdCnf)) return;
@@ -2976,7 +2971,6 @@ const SaleManagement = ({
                                                 setHighlightedIndex(-1);
                                                 handleInputChange(e); // allow fallback text input
                                             }}
-                                            required
                                             autoComplete="off"
                                             onFocus={() => {
                                                 if (isFieldReadOnly(originalData?.port)) return;
@@ -3035,7 +3029,6 @@ const SaleManagement = ({
                                             setHighlightedIndex(-1);
                                             setFormData(prev => ({ ...prev, companyName: e.target.value }));
                                         }}
-                                        required
                                         autoComplete="off"
                                         onFocus={() => {
                                             if (isFieldReadOnly(originalData?.companyName)) return;
@@ -3079,17 +3072,17 @@ const SaleManagement = ({
                             {saleType !== 'Border' && (
                                 <div className="sale-mgmt-input-group">
                                     <label className="sale-mgmt-label">Customer</label>
-                                    <input autoComplete="off" type="text" name="customerName" value={formData.customerName} readOnly placeholder="Customer" className="sale-mgmt-input sale-mgmt-input-readonly" required />
+                                    <input autoComplete="off" type="text" name="customerName" value={formData.customerName} readOnly placeholder="Customer" className="sale-mgmt-input sale-mgmt-input-readonly" />
                                 </div>
                             )}
                             <div className="sale-mgmt-input-group">
                                 <label className="sale-mgmt-label">Contact</label>
-                                <input autoComplete="off" type="text" name="contact" value={formData.contact} readOnly placeholder="Contact" className="sale-mgmt-input sale-mgmt-input-readonly" required />
+                                <input autoComplete="off" type="text" name="contact" value={formData.contact} readOnly placeholder="Contact" className="sale-mgmt-input sale-mgmt-input-readonly" />
                             </div>
                             {saleType !== 'Border' && (
                                 <div className="sale-mgmt-input-group">
                                     <label className="sale-mgmt-label">Address</label>
-                                    <input autoComplete="off" type="text" name="address" value={formData.address} readOnly placeholder="Address" className="sale-mgmt-input sale-mgmt-input-readonly" required />
+                                    <input autoComplete="off" type="text" name="address" value={formData.address} readOnly placeholder="Address" className="sale-mgmt-input sale-mgmt-input-readonly" />
                                 </div>
                             )}
 

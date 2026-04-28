@@ -14,11 +14,12 @@ const ViewDetailsModal = ({ data, onClose }) => {
     const uniqueEntriesMap = data.entries.reduce((acc, item) => {
         const key = `${item.productName}-${item.brand}-${item.truckNo}-${item.unit}`;
         if (!acc[key]) {
-            acc[key] = { ...item, quantity: 0, sweepedQuantity: 0, inHouseQuantity: 0 };
+            acc[key] = { ...item, quantity: 0, sweepedQuantity: 0, inHouseQuantity: 0, packet: 0 };
         }
         acc[key].quantity += (parseFloat(item.quantity) || 0);
         acc[key].sweepedQuantity += (parseFloat(item.sweepedQuantity) || 0);
         acc[key].inHouseQuantity += (parseFloat(item.inHouseQuantity) || 0);
+        acc[key].packet += (parseFloat(item.packet) || 0);
         return acc;
     }, {});
     const uniqueEntries = Object.values(uniqueEntriesMap);
@@ -26,7 +27,7 @@ const ViewDetailsModal = ({ data, onClose }) => {
     return (
         <div className="fixed inset-0 z-[2000] flex items-center justify-center p-4">
             <div className="absolute inset-0 bg-gray-900/60 backdrop-blur-sm" onClick={onClose}></div>
-            <div className="relative bg-white border border-gray-100 rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden animate-in zoom-in duration-300">
+            <div className="relative bg-white border border-gray-100 rounded-2xl shadow-2xl w-full max-w-4xl overflow-hidden animate-in zoom-in duration-300">
                 <div className="flex items-center justify-between px-6 py-4 border-b border-gray-50 bg-gray-50/50">
                     <div>
                         <h3 className="text-lg font-bold text-gray-900">LC Receive Details</h3>
@@ -100,12 +101,13 @@ const ViewDetailsModal = ({ data, onClose }) => {
                             <table className="w-full text-left border-collapse">
                                 <thead>
                                     <tr className="bg-gray-100/50">
-                                        <th className="px-4 py-2 text-[9px] font-black text-gray-500 uppercase tracking-tighter">Product</th>
-                                        <th className="px-4 py-2 text-[9px] font-black text-gray-500 uppercase tracking-tighter">Brand</th>
-                                        <th className="px-4 py-2 text-[9px] font-black text-gray-500 uppercase tracking-tighter text-center">Truck</th>
-                                        <th className="px-4 py-2 text-[9px] font-black text-gray-500 uppercase tracking-tighter text-right">Arrival Qty</th>
-                                        <th className="px-4 py-2 text-[9px] font-black text-gray-500 uppercase tracking-tighter text-right text-red-500">Short</th>
-                                        <th className="px-4 py-2 text-[9px] font-black text-gray-500 uppercase tracking-tighter text-right text-blue-600">In Qty</th>
+                                        <th className="px-4 py-3 text-[11px] font-black text-gray-500 uppercase tracking-tighter">Product</th>
+                                        <th className="px-4 py-3 text-[11px] font-black text-gray-500 uppercase tracking-tighter">Brand</th>
+                                        <th className="px-4 py-3 text-[11px] font-black text-gray-500 uppercase tracking-tighter text-center">Truck</th>
+                                        <th className="px-4 py-3 text-[11px] font-black text-gray-500 uppercase tracking-tighter text-center">Bag</th>
+                                        <th className="px-4 py-3 text-[11px] font-black text-gray-500 uppercase tracking-tighter text-right">Arrival Qty</th>
+                                        <th className="px-4 py-3 text-[11px] font-black text-gray-500 uppercase tracking-tighter text-right text-red-500">Short</th>
+                                        <th className="px-4 py-3 text-[11px] font-black text-gray-500 uppercase tracking-tighter text-right text-blue-600">In Qty</th>
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-gray-100">
@@ -141,29 +143,31 @@ const ViewDetailsModal = ({ data, onClose }) => {
                                         return rows.map(({ item, isProductFirst, productSpan, isTruckFirst, truckSpan }, idx) => (
                                             <tr key={idx} className="hover:bg-white transition-colors">
                                                 {isProductFirst && (
-                                                    <td rowSpan={productSpan} className="px-4 py-2 text-xs font-bold text-gray-800 align-middle border-r border-gray-100">
+                                                    <td rowSpan={productSpan} className="px-4 py-3 text-sm font-bold text-gray-800 align-middle border-r border-gray-100">
                                                         {item.productName}
                                                     </td>
                                                 )}
-                                                <td className="px-4 py-2 text-xs text-purple-700 font-semibold">{item.brand || '-'}</td>
+                                                <td className="px-4 py-3 text-sm text-purple-700 font-semibold">{item.brand || '-'}</td>
                                                 {isTruckFirst && (
-                                                    <td rowSpan={truckSpan} className="px-4 py-2 text-xs text-gray-600 text-center font-medium align-middle border-l border-gray-100">
+                                                    <td rowSpan={truckSpan} className="px-4 py-3 text-sm text-gray-600 text-center font-medium align-middle border-l border-gray-100">
                                                         {item.truckNo}
                                                     </td>
                                                 )}
-                                                <td className="px-4 py-2 text-xs text-gray-900 text-right font-bold">{Math.round(item.quantity).toLocaleString('en-BD')} kg</td>
-                                                <td className="px-4 py-2 text-xs text-red-500 text-right font-bold">{Math.round(item.sweepedQuantity).toLocaleString('en-BD')} kg</td>
-                                                <td className="px-4 py-2 text-xs text-blue-600 text-right font-black">{Math.round(item.inHouseQuantity).toLocaleString('en-BD')} kg</td>
+                                                <td className="px-4 py-3 text-sm text-gray-800 text-center font-bold">{Math.round(item.packet).toLocaleString('en-BD')}</td>
+                                                <td className="px-4 py-3 text-sm text-gray-900 text-right font-bold">{Math.round(item.quantity).toLocaleString('en-BD')} kg</td>
+                                                <td className="px-4 py-3 text-sm text-red-500 text-right font-bold">{Math.round(item.sweepedQuantity).toLocaleString('en-BD')} kg</td>
+                                                <td className="px-4 py-3 text-sm text-blue-600 text-right font-black">{Math.round(item.inHouseQuantity).toLocaleString('en-BD')} kg</td>
                                             </tr>
                                         ));
                                     })()}
                                 </tbody>
                                 <tfoot>
                                     <tr className="bg-white/80 border-t border-gray-200">
-                                        <td colSpan="3" className="px-4 py-2 text-[10px] font-black text-gray-400 uppercase text-right">Grand Totals</td>
-                                        <td className="px-4 py-2 text-xs text-gray-900 text-right font-black">{Math.round(data.totalQuantity).toLocaleString('en-BD')} kg</td>
-                                        <td className="px-4 py-2 text-xs text-red-600 text-right font-black">{Math.round(data.entries.reduce((sum, e) => sum + (parseFloat(e.sweepedQuantity) || 0), 0)).toLocaleString('en-BD')} kg</td>
-                                        <td className="px-4 py-2 text-xs text-blue-700 text-right font-black">{Math.round(data.entries.reduce((sum, e) => sum + (parseFloat(e.inHouseQuantity) || 0), 0)).toLocaleString('en-BD')} kg</td>
+                                        <td colSpan="3" className="px-4 py-3 text-xs font-black text-gray-400 uppercase text-right">Grand Totals</td>
+                                        <td className="px-4 py-3 text-sm text-gray-900 text-center font-black">{Math.round(data.entries.reduce((sum, e) => sum + (parseFloat(e.packet) || 0), 0)).toLocaleString('en-BD')}</td>
+                                        <td className="px-4 py-3 text-sm text-gray-900 text-right font-black">{Math.round(data.totalQuantity).toLocaleString('en-BD')} kg</td>
+                                        <td className="px-4 py-3 text-sm text-red-600 text-right font-black">{Math.round(data.entries.reduce((sum, e) => sum + (parseFloat(e.sweepedQuantity) || 0), 0)).toLocaleString('en-BD')} kg</td>
+                                        <td className="px-4 py-3 text-sm text-blue-700 text-right font-black">{Math.round(data.entries.reduce((sum, e) => sum + (parseFloat(e.inHouseQuantity) || 0), 0)).toLocaleString('en-BD')} kg</td>
                                     </tr>
                                 </tfoot>
                             </table>
@@ -215,18 +219,22 @@ const ViewDetailsModal = ({ data, onClose }) => {
                                                         {tg.brands.map((item, idx) => (
                                                             <div key={idx} className="p-3 space-y-2">
                                                                 {item.brand && <p className="text-xs text-purple-700 font-semibold">{item.brand}</p>}
-                                                                <div className="grid grid-cols-3 gap-2 pt-1 border-t border-gray-100">
+                                                                <div className="grid grid-cols-4 gap-2 pt-1 border-t border-gray-100">
                                                                     <div className="text-center">
-                                                                        <p className="text-[9px] font-black text-gray-400 uppercase tracking-wider mb-0.5">Arrival</p>
-                                                                        <p className="text-xs font-bold text-gray-800">{Math.round(item.quantity).toLocaleString('en-BD')} kg</p>
+                                                                        <p className="text-[10px] font-black text-gray-400 uppercase tracking-wider mb-0.5">Bag</p>
+                                                                        <p className="text-sm font-bold text-gray-800">{Math.round(item.packet).toLocaleString('en-BD')}</p>
                                                                     </div>
                                                                     <div className="text-center">
-                                                                        <p className="text-[9px] font-black text-red-400 uppercase tracking-wider mb-0.5">Short</p>
-                                                                        <p className="text-xs font-bold text-red-500">{Math.round(item.sweepedQuantity).toLocaleString('en-BD')} kg</p>
+                                                                        <p className="text-[10px] font-black text-gray-400 uppercase tracking-wider mb-0.5">Arrival</p>
+                                                                        <p className="text-sm font-bold text-gray-800">{Math.round(item.quantity).toLocaleString('en-BD')} kg</p>
                                                                     </div>
                                                                     <div className="text-center">
-                                                                        <p className="text-[9px] font-black text-blue-500 uppercase tracking-wider mb-0.5">In Qty</p>
-                                                                        <p className="text-xs font-black text-blue-600">{Math.round(item.inHouseQuantity).toLocaleString('en-BD')} kg</p>
+                                                                        <p className="text-[10px] font-black text-red-400 uppercase tracking-wider mb-0.5">Short</p>
+                                                                        <p className="text-sm font-bold text-red-500">{Math.round(item.sweepedQuantity).toLocaleString('en-BD')} kg</p>
+                                                                    </div>
+                                                                    <div className="text-center">
+                                                                        <p className="text-[10px] font-black text-blue-500 uppercase tracking-wider mb-0.5">In Qty</p>
+                                                                        <p className="text-sm font-black text-blue-600">{Math.round(item.inHouseQuantity).toLocaleString('en-BD')} kg</p>
                                                                     </div>
                                                                 </div>
                                                             </div>
@@ -241,18 +249,22 @@ const ViewDetailsModal = ({ data, onClose }) => {
                             {/* Mobile Grand Totals */}
                             <div className="bg-white rounded-xl border border-gray-200 p-3">
                                 <p className="text-[9px] font-black text-gray-400 uppercase tracking-wider mb-2">Grand Totals</p>
-                                <div className="grid grid-cols-3 gap-2">
+                                <div className="grid grid-cols-4 gap-2">
                                     <div className="text-center">
-                                        <p className="text-[9px] font-black text-gray-400 uppercase tracking-wider mb-0.5">Arrival</p>
-                                        <p className="text-xs font-black text-gray-900">{Math.round(data.totalQuantity).toLocaleString('en-BD')} kg</p>
+                                        <p className="text-[10px] font-black text-gray-400 uppercase tracking-wider mb-0.5">Bag</p>
+                                        <p className="text-sm font-black text-gray-900">{Math.round(data.entries.reduce((sum, e) => sum + (parseFloat(e.packet) || 0), 0)).toLocaleString('en-BD')}</p>
                                     </div>
                                     <div className="text-center">
-                                        <p className="text-[9px] font-black text-red-400 uppercase tracking-wider mb-0.5">Short</p>
-                                        <p className="text-xs font-black text-red-600">{Math.round(data.entries.reduce((sum, e) => sum + (parseFloat(e.sweepedQuantity) || 0), 0)).toLocaleString('en-BD')} kg</p>
+                                        <p className="text-[10px] font-black text-gray-400 uppercase tracking-wider mb-0.5">Arrival</p>
+                                        <p className="text-sm font-black text-gray-900">{Math.round(data.totalQuantity).toLocaleString('en-BD')} kg</p>
                                     </div>
                                     <div className="text-center">
-                                        <p className="text-[9px] font-black text-blue-500 uppercase tracking-wider mb-0.5">In Qty</p>
-                                        <p className="text-xs font-black text-blue-700">{Math.round(data.entries.reduce((sum, e) => sum + (parseFloat(e.inHouseQuantity) || 0), 0)).toLocaleString('en-BD')} kg</p>
+                                        <p className="text-[10px] font-black text-red-400 uppercase tracking-wider mb-0.5">Short</p>
+                                        <p className="text-sm font-black text-red-600">{Math.round(data.entries.reduce((sum, e) => sum + (parseFloat(e.sweepedQuantity) || 0), 0)).toLocaleString('en-BD')} kg</p>
+                                    </div>
+                                    <div className="text-center">
+                                        <p className="text-[10px] font-black text-blue-500 uppercase tracking-wider mb-0.5">In Qty</p>
+                                        <p className="text-sm font-black text-blue-700">{Math.round(data.entries.reduce((sum, e) => sum + (parseFloat(e.inHouseQuantity) || 0), 0)).toLocaleString('en-BD')} kg</p>
                                     </div>
                                 </div>
                             </div>

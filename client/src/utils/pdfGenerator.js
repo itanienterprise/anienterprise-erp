@@ -76,7 +76,7 @@ const numberToWords = (amount) => {
     if (cents > 0) {
         words += 'And Paisa ' + convertChunk(cents) + ' ';
     }
-    
+
     words += 'Only';
 
     return (amount < 0 ? 'Negative ' : '') + words.replace(/\s+/g, ' ').trim();
