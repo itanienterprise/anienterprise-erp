@@ -486,7 +486,7 @@ const CnFPayment = () => {
                                     <input
                                         type="text"
                                         readOnly
-                                        value={newPayment.cnfId ? (cnfs.find(c => c._id === newPayment.cnfId)?.totalBalance || 0).toLocaleString() : '0.00'}
+                                        value={newPayment.cnfId ? (cnfs.find(c => c._id === newPayment.cnfId)?.totalBalance || 0).toLocaleString('en-BD') : '0.00'}
                                         className={`w-full pl-8 pr-4 py-2.5 bg-gray-50 border border-gray-100 rounded-xl text-sm font-black shadow-sm outline-none cursor-not-allowed transition-colors ${newPayment.cnfId ? ((cnfs.find(c => c._id === newPayment.cnfId)?.totalBalance || 0) > 0 ? 'text-amber-600' : 'text-emerald-600') : 'text-gray-400'}`}
                                     />
                                 </div>
@@ -579,7 +579,7 @@ const CnFPayment = () => {
                                 </div>
                                 <span className="text-sm font-bold text-gray-500 uppercase tracking-wider">Total Paid</span>
                             </div>
-                            <div className="text-2xl font-black text-gray-900">৳{totalPaid.toLocaleString()}</div>
+                            <div className="text-2xl font-black text-gray-900">৳{totalPaid.toLocaleString('en-BD')}</div>
                             <div className="text-[10px] text-gray-400 mt-1 italic">Across filtered records</div>
                         </div>
 
@@ -676,7 +676,7 @@ const CnFPayment = () => {
                                                 <td className="px-4 py-3 whitespace-nowrap text-gray-500">{p.cnfType}</td>
                                                 <td className="px-4 py-3 whitespace-nowrap text-gray-500">{p.method}</td>
                                                 <td className="px-4 py-3 whitespace-nowrap text-gray-500">{p.reference || '-'}</td>
-                                                <td className="px-4 py-3 whitespace-nowrap text-right font-black text-gray-900">৳{p.amount.toLocaleString()}</td>
+                                                <td className="px-4 py-3 whitespace-nowrap text-right font-black text-gray-900">৳{p.amount.toLocaleString('en-BD')}</td>
                                                 {isAdmin && (
                                                     <td className="px-4 py-3 whitespace-nowrap text-center">
                                                         <div className="flex items-center justify-center gap-2">

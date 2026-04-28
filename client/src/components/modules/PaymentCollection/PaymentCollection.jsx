@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { SearchIcon, FunnelIcon, DollarSignIcon, EyeIcon, PlusIcon, XIcon, ChevronDownIcon, TrashIcon, EditIcon, UserIcon, BarChartIcon, CalendarIcon, CheckIcon, FileTextIcon } from '../../Icons';
+import { SearchIcon, FunnelIcon, DollarSignIcon, EyeIcon, PlusIcon, XIcon, ChevronDownIcon, ChevronUpIcon, TrashIcon, EditIcon, UserIcon, BarChartIcon, CalendarIcon, CheckIcon, FileTextIcon } from '../../Icons';
 import { API_BASE_URL, formatDate, SortIcon } from '../../../utils/helpers';
 import { generateMoneyReceiptPDF } from '../../../utils/pdfGenerator';
 import { decryptData, encryptData } from '../../../utils/encryption';
@@ -986,13 +986,13 @@ const PaymentCollection = () => {
                                                     <td className={`px-3 ${!isExpanded ? 'py-4' : 'py-3'} whitespace-nowrap text-center`}>
                                                         {isMultiple && !isExpanded ? (
                                                             <div className="inline-block px-3 py-0.5 bg-blue-50 text-blue-700 rounded-lg border border-blue-100/50 text-sm font-black">
-                                                                ৳{totalAmount.toLocaleString()}
+                                                                ৳{totalAmount.toLocaleString('en-BD')}
                                                             </div>
                                                         ) : (
                                                             <div className="flex flex-col gap-1">
                                                                 {group.items.map((item, idx) => (
                                                                     <div key={idx} className={`text-sm font-black text-gray-900 leading-tight ${idx < group.items.length - 1 ? 'border-b border-gray-100 pb-1' : ''}`}>
-                                                                        ৳{(item.amount || 0).toLocaleString()}
+                                                                        ৳{(item.amount || 0).toLocaleString('en-BD')}
                                                                     </div>
                                                                 ))}
                                                             </div>
@@ -1095,7 +1095,7 @@ const PaymentCollection = () => {
                                                 </div>
                                                 <div className="flex flex-col items-end gap-1 shrink-0">
                                                     <span className="font-bold text-blue-600">
-                                                        ৳{totalAmount.toLocaleString()}
+                                                        ৳{totalAmount.toLocaleString('en-BD')}
                                                     </span>
                                                     {group.items.length > 1 && (
                                                         <span className="text-[9px] px-1.5 py-0.5 bg-blue-50 text-blue-600 rounded-full font-bold">
@@ -1128,7 +1128,7 @@ const PaymentCollection = () => {
                                                                 </div>
                                                                 <div className="mobile-card-row">
                                                                     <span className="mobile-card-label text-blue-600">Amount:</span>
-                                                                    <span className="mobile-card-value font-black text-blue-600">৳{(item.amount || 0).toLocaleString()}</span>
+                                                                    <span className="mobile-card-value font-black text-blue-600">৳{(item.amount || 0).toLocaleString('en-BD')}</span>
                                                                 </div>
 
                                                                 {isAdmin && (
@@ -1297,7 +1297,7 @@ const PaymentCollection = () => {
                                     <input
                                         type="text"
                                         readOnly
-                                        value={currentBalance.toLocaleString()}
+                                        value={currentBalance.toLocaleString('en-BD')}
                                         className="payment-form-input pl-9 font-bold bg-orange-50/30 text-orange-700 border-orange-100 cursor-default"
                                     />
                                     <div className="absolute inset-y-0 right-0 pr-4 flex items-center">
@@ -1315,7 +1315,7 @@ const PaymentCollection = () => {
                                     <input
                                         type="text"
                                         readOnly
-                                        value={totalCollection.toLocaleString()}
+                                        value={totalCollection.toLocaleString('en-BD')}
                                         className="payment-form-input pl-9 font-bold bg-blue-50/30 text-blue-700 border-blue-100 cursor-default"
                                     />
                                     <div className="absolute inset-y-0 right-0 pr-4 flex items-center">
@@ -1683,7 +1683,7 @@ const PaymentCollection = () => {
                         <p className="text-gray-500 text-center mb-8 leading-relaxed font-medium">
                             {submitStatus === 'success' 
                                 ? 'The payment record has been removed from the system.' 
-                                : `Are you sure you want to delete the payment of ৳${paymentToDelete?.amount?.toLocaleString()} from ${paymentToDelete?.companyName || paymentToDelete?.customerName}? This action cannot be undone.`
+                                : `Are you sure you want to delete the payment of ৳${paymentToDelete?.amount?.toLocaleString('en-BD')} from ${paymentToDelete?.companyName || paymentToDelete?.customerName}? This action cannot be undone.`
                             }
                         </p>
 

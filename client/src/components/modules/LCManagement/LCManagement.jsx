@@ -212,7 +212,7 @@ const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords
                                         <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">LC Quantity</span>
                                     </div>
                                     <div className="flex items-baseline gap-1">
-                                        <span className="text-2xl font-black text-gray-900">{totalLcQtyKg.toLocaleString()}</span>
+                                        <span className="text-2xl font-black text-gray-900">{totalLcQtyKg.toLocaleString('en-BD')}</span>
                                         <span className="text-xs font-bold text-gray-400">Kg</span>
                                     </div>
                                 </div>
@@ -225,7 +225,7 @@ const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords
                                         <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Total Consumption</span>
                                     </div>
                                     <div className="flex items-baseline gap-1">
-                                        <span className="text-2xl font-black text-gray-900">{consumedQtyKg.toLocaleString()}</span>
+                                        <span className="text-2xl font-black text-gray-900">{consumedQtyKg.toLocaleString('en-BD')}</span>
                                         <span className="text-xs font-bold text-gray-400">Kg</span>
                                     </div>
                                 </div>
@@ -239,7 +239,7 @@ const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords
                                     </div>
                                     <div className="flex items-baseline gap-1">
                                         <span className={`text-2xl font-black ${remQtyKg <= 0 ? 'text-emerald-600' : 'text-blue-600'}`}>
-                                            {remQtyKg.toLocaleString()}
+                                            {remQtyKg.toLocaleString('en-BD')}
                                         </span>
                                         <span className="text-xs font-bold text-gray-400">Kg</span>
                                     </div>
@@ -284,7 +284,7 @@ const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords
                                                         <td className="px-6 py-4 text-sm font-medium text-gray-900">{item.product || '-'}</td>
                                                         <td className="px-6 py-4 text-sm font-medium text-blue-600 uppercase whitespace-nowrap">{item.truck || '-'}</td>
                                                         <td className="px-6 py-4 text-sm font-medium text-right text-gray-900 whitespace-nowrap">
-                                                            {parseNum(item.quantity).toLocaleString()} <span className="text-[10px] text-gray-400 font-normal">Kg</span>
+                                                            {parseNum(item.quantity).toLocaleString('en-BD')} <span className="text-[10px] text-gray-400 font-normal">Kg</span>
                                                         </td>
                                                         <td className="px-6 py-4 text-center">
                                                             <span className={`px-3 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider border ${item.source === 'LC Receive'
@@ -308,7 +308,7 @@ const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords
                                             <tr>
                                                 <td colSpan="5" className="px-6 py-4 text-right text-xs font-medium text-gray-400 uppercase tracking-wider">Total Consumption:</td>
                                                 <td className="px-6 py-4 text-sm font-medium text-right text-blue-600">
-                                                    {filteredConsumptionHistory.reduce((sum, item) => sum + parseNum(item.quantity), 0).toLocaleString()} <span className="text-[10px] font-normal">Kg</span>
+                                                    {filteredConsumptionHistory.reduce((sum, item) => sum + parseNum(item.quantity), 0).toLocaleString('en-BD')} <span className="text-[10px] font-normal">Kg</span>
                                                 </td>
                                                 <td></td>
                                             </tr>
@@ -339,10 +339,10 @@ const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords
                                                         <td className="px-6 py-4 text-sm font-medium text-gray-800 uppercase">{gp.party || '-'}</td>
                                                         <td className="px-6 py-4 text-sm font-medium text-gray-900">{gp.productName || '-'}</td>
                                                         <td className="px-6 py-4 text-sm font-medium text-right text-gray-900 whitespace-nowrap">
-                                                            {parseNum(gp.gpQuantity).toLocaleString()} <span className="text-[10px] text-gray-400 font-normal">Kg</span>
+                                                            {parseNum(gp.gpQuantity).toLocaleString('en-BD')} <span className="text-[10px] text-gray-400 font-normal">Kg</span>
                                                         </td>
                                                         <td className="px-6 py-4 text-sm font-medium text-right text-gray-900 whitespace-nowrap">
-                                                            ৳{parseNum(gp.gpValue).toLocaleString()}
+                                                            ৳{parseNum(gp.gpValue).toLocaleString('en-BD')}
                                                         </td>
                                                         <td className="px-6 py-4 text-center">
                                                             <span className={`px-3 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider border ${gp.status === 'Active'
@@ -366,10 +366,10 @@ const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords
                                             <tr>
                                                 <td colSpan="4" className="px-6 py-4 text-right text-xs font-medium text-gray-400 uppercase tracking-wider">Total GP Qty:</td>
                                                 <td className="px-6 py-4 text-sm font-medium text-right text-blue-600">
-                                                    {filteredGpRecords.reduce((sum, gp) => sum + parseNum(gp.gpQuantity), 0).toLocaleString()} <span className="text-[10px] font-normal">Kg</span>
+                                                    {filteredGpRecords.reduce((sum, gp) => sum + parseNum(gp.gpQuantity), 0).toLocaleString('en-BD')} <span className="text-[10px] font-normal">Kg</span>
                                                 </td>
                                                 <td className="px-6 py-4 text-sm font-medium text-right text-blue-600">
-                                                    ৳{filteredGpRecords.reduce((sum, gp) => sum + parseNum(gp.gpValue), 0).toLocaleString()}
+                                                    ৳{filteredGpRecords.reduce((sum, gp) => sum + parseNum(gp.gpValue), 0).toLocaleString('en-BD')}
                                                 </td>
                                                 <td></td>
                                             </tr>
@@ -398,7 +398,7 @@ const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords
                                                             <td className="px-6 py-4 text-sm font-medium text-gray-600 whitespace-nowrap">{formatDate(exp.date)}</td>
                                                             <td className="px-6 py-4 text-sm font-medium text-gray-900">{exp.expenseHead || '-'}</td>
                                                             <td className="px-6 py-4 text-sm font-medium text-gray-800">{exp.cnfAgent || '-'}</td>
-                                                            <td className="px-6 py-4 text-sm font-bold text-right text-rose-600 whitespace-nowrap">৳{parseNum(exp.amount).toLocaleString()}</td>
+                                                            <td className="px-6 py-4 text-sm font-bold text-right text-rose-600 whitespace-nowrap">৳{parseNum(exp.amount).toLocaleString('en-BD')}</td>
                                                             <td className="px-6 py-4 text-sm text-gray-500 truncate max-w-[200px]">{exp.remarks || '-'}</td>
                                                         </tr>
                                                     ))
@@ -415,7 +415,7 @@ const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords
                                             <tr>
                                                 <td colSpan="3" className="px-6 py-4 text-right text-xs font-medium text-gray-400 uppercase tracking-wider">Total Expense:</td>
                                                 <td className="px-6 py-4 text-sm font-bold text-right text-rose-600">
-                                                    ৳{lcExpenses.filter(exp => exp.lcNo === data.lcNo).reduce((sum, exp) => sum + parseNum(exp.amount), 0).toLocaleString()}
+                                                    ৳{lcExpenses.filter(exp => exp.lcNo === data.lcNo).reduce((sum, exp) => sum + parseNum(exp.amount), 0).toLocaleString('en-BD')}
                                                 </td>
                                                 <td></td>
                                             </tr>
@@ -486,27 +486,27 @@ const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords
                                     <div className="space-y-1">
                                         <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Quantity</span>
                                         <p className="text-sm font-black text-gray-900">
-                                            {parseFloat(data.quantity || 0).toLocaleString()} <span className="text-[10px] text-gray-400 font-normal">Ton</span>
+                                            {parseFloat(data.quantity || 0).toLocaleString('en-BD')} <span className="text-[10px] text-gray-400 font-normal">Ton</span>
                                         </p>
                                     </div>
                                     <div className="space-y-1">
                                         <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Rate</span>
                                         <p className="text-sm font-bold text-gray-800">
-                                            ${parseFloat(data.rate || 0).toLocaleString()} <span className="text-[10px] text-gray-400 font-normal">/Ton</span>
+                                            ${parseFloat(data.rate || 0).toLocaleString('en-BD')} <span className="text-[10px] text-gray-400 font-normal">/Ton</span>
                                         </p>
                                     </div>
                                     <div className="space-y-1">
                                         <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Total Dollar</span>
-                                        <p className="text-sm font-black text-blue-600">${parseFloat(data.totalDollar || 0).toLocaleString()}</p>
+                                        <p className="text-sm font-black text-blue-600">${parseFloat(data.totalDollar || 0).toLocaleString('en-BD')}</p>
                                     </div>
                                     <div className="space-y-1">
                                         <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Dollar Rate</span>
-                                        <p className="text-sm font-bold text-gray-800">৳{parseFloat(data.dollarRate || 0).toLocaleString()}</p>
+                                        <p className="text-sm font-bold text-gray-800">৳{parseFloat(data.dollarRate || 0).toLocaleString('en-BD')}</p>
                                     </div>
                                 </div>
                                 <div className="mt-4 p-4 bg-gray-50 rounded-xl flex justify-between items-center">
                                     <span className="text-xs font-black text-gray-400 uppercase tracking-widest">Total LC Value</span>
-                                    <span className="text-xl font-black text-gray-900">৳{parseFloat(data.totalAmount || 0).toLocaleString()}</span>
+                                    <span className="text-xl font-black text-gray-900">৳{parseFloat(data.totalAmount || 0).toLocaleString('en-BD')}</span>
                                 </div>
                             </div>
 
@@ -539,7 +539,7 @@ const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords
                                     </div>
                                     <div className="space-y-1">
                                         <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Return Amount</span>
-                                        <p className="text-sm font-bold text-blue-600">৳{parseFloat(data.expectedReturnAmount || 0).toLocaleString()}</p>
+                                        <p className="text-sm font-bold text-blue-600">৳{parseFloat(data.expectedReturnAmount || 0).toLocaleString('en-BD')}</p>
                                     </div>
                                     <div className="space-y-1">
                                         <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">VAT ({data.premiumVat}%)</span>
@@ -549,16 +549,16 @@ const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords
                                     </div>
                                     <div className="space-y-1">
                                         <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Stamp Duty</span>
-                                        <p className="text-sm font-bold text-gray-800">৳{parseFloat(data.stampCharge || 0).toLocaleString()}</p>
+                                        <p className="text-sm font-bold text-gray-800">৳{parseFloat(data.stampCharge || 0).toLocaleString('en-BD')}</p>
                                     </div>
                                     <div className="space-y-1">
                                         <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Gross Premium</span>
-                                        <p className="text-sm font-bold text-gray-800">৳{parseFloat(data.grossPremium || 0).toLocaleString()}</p>
+                                        <p className="text-sm font-bold text-gray-800">৳{parseFloat(data.grossPremium || 0).toLocaleString('en-BD')}</p>
                                     </div>
                                 </div>
                                 <div className="mt-4 p-4 bg-blue-50 rounded-xl flex justify-between items-center border border-blue-100">
                                     <span className="text-xs font-black text-blue-600 uppercase tracking-widest">Net Payable Premium</span>
-                                    <span className="text-lg font-black text-blue-700">৳{parseFloat(data.netPremium || 0).toLocaleString()}</span>
+                                    <span className="text-lg font-black text-blue-700">৳{parseFloat(data.netPremium || 0).toLocaleString('en-BD')}</span>
                                 </div>
                             </div>
                         </div>
@@ -1929,17 +1929,17 @@ const LCManagement = ({ addNotification, currentUser }) => {
                                             <td className="px-3 py-4 text-sm text-gray-600 whitespace-nowrap truncate max-w-[80px]" title={displayPort}>{displayPort}</td>
                                             <td className="px-3 py-4 text-sm font-bold text-gray-900 whitespace-nowrap truncate max-w-[80px]" title={record.productName}>{record.productName || '-'}</td>
                                             <td className="px-3 py-4 text-sm text-right text-gray-600 whitespace-nowrap">
-                                                <span className="font-bold text-gray-900">{qtyKg.toLocaleString()}</span> <span className="text-[10px] text-gray-400 font-normal">Kg</span>
+                                                <span className="font-bold text-gray-900">{qtyKg.toLocaleString('en-BD')}</span> <span className="text-[10px] text-gray-400 font-normal">Kg</span>
                                             </td>
-                                            <td className="px-3 py-4 text-sm text-right font-black text-gray-900 whitespace-nowrap">৳{parseFloat(record.totalAmount || 0).toLocaleString()}</td>
+                                            <td className="px-3 py-4 text-sm text-right font-black text-gray-900 whitespace-nowrap">৳{parseFloat(record.totalAmount || 0).toLocaleString('en-BD')}</td>
                                             <td className="px-3 py-4 text-sm text-right whitespace-nowrap">
                                                 <span className={`font-black ${combinedRemKg <= 0 ? 'text-emerald-600' : 'text-blue-600'}`}>
-                                                    {combinedRemKg.toLocaleString()} <span className="text-[10px] text-gray-400 font-medium whitespace-nowrap">Kg</span>
+                                                    {combinedRemKg.toLocaleString('en-BD')} <span className="text-[10px] text-gray-400 font-medium whitespace-nowrap">Kg</span>
                                                 </span>
                                             </td>
                                             <td className="px-3 py-4 text-sm text-right whitespace-nowrap">
                                                 <span className={`font-black ${remGpKg <= 0 ? 'text-emerald-600' : 'text-indigo-600'}`}>
-                                                    {remGpKg.toLocaleString()} <span className="text-[10px] text-gray-400 font-medium whitespace-nowrap">Kg</span>
+                                                    {remGpKg.toLocaleString('en-BD')} <span className="text-[10px] text-gray-400 font-medium whitespace-nowrap">Kg</span>
                                                 </span>
                                             </td>
                                             <td className="px-3 py-4 text-sm text-right whitespace-nowrap">
@@ -1949,7 +1949,7 @@ const LCManagement = ({ addNotification, currentUser }) => {
                                                         .reduce((sum, exp) => sum + (parseFloat(exp.amount) || 0), 0);
                                                     return (
                                                         <span className={`font-black ${totalExpense > 0 ? 'text-rose-600' : 'text-gray-400'}`}>
-                                                            {totalExpense > 0 ? `৳${totalExpense.toLocaleString()}` : '—'}
+                                                            {totalExpense > 0 ? `৳${totalExpense.toLocaleString('en-BD')}` : '—'}
                                                         </span>
                                                     );
                                                 })()}

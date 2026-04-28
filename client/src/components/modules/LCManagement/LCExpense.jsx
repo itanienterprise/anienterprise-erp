@@ -241,7 +241,7 @@ const LCExpense = ({ currentUser, addNotification, onDeleteConfirm, refreshKey }
                         <div className="bg-white rounded-2xl p-5 border border-gray-100 shadow-sm flex items-center justify-between">
                             <div>
                                 <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">Total Amount</p>
-                                <h3 className="text-2xl font-black text-rose-600">৳{totalAmount.toLocaleString()}</h3>
+                                <h3 className="text-2xl font-black text-rose-600">৳{totalAmount.toLocaleString('en-BD')}</h3>
                             </div>
                             <div className="w-12 h-12 bg-rose-50 rounded-xl flex items-center justify-center">
                                 <DollarSignIcon className="w-6 h-6 text-rose-600" />
@@ -273,7 +273,7 @@ const LCExpense = ({ currentUser, addNotification, onDeleteConfirm, refreshKey }
                                             <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-gray-900">{exp.lcNo || '-'}</td>
                                             <td className="px-6 py-4 whitespace-nowrap text-sm text-blue-600 font-medium">{exp.expenseHead}</td>
                                             <td className="px-6 py-4 whitespace-nowrap text-sm font-black text-gray-900 text-right">
-                                                ৳{parseFloat(exp.amount || 0).toLocaleString()}
+                                                ৳{parseFloat(exp.amount || 0).toLocaleString('en-BD')}
                                             </td>
                                             <td className="px-6 py-4 text-center">
                                                 <div className="flex items-center justify-center gap-2">

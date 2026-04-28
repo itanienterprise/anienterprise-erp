@@ -858,13 +858,13 @@ export const generateStockReportPDF = (stockData, filters, reportType = 'short')
                         const tSize = parseFloat(ent.packetSize) || 0;
                         const { whole: tW, remainder: tR } = calculatePktRemainder(tQty, tSize);
                         row.push({ content: `${tW}${tR !== 0 ? ` - ${Math.abs(tR)} kg` : ''}`, styles: { halign: 'right' } });
-                        row.push({ content: Math.round(tQty).toLocaleString(), styles: { halign: 'right' } });
+                        row.push({ content: Math.round(tQty).toLocaleString('en-BD'), styles: { halign: 'right' } });
 
                         const sQty = parseFloat(ent.saleQuantity) || 0;
                         const sSize = parseFloat(ent.packetSize) || 0;
                         const { whole: sW, remainder: sR } = calculatePktRemainder(sQty, sSize);
                         row.push({ content: `${sW}${sR !== 0 ? ` - ${Math.abs(sR)} kg` : ''}`, styles: { halign: 'right' } });
-                        row.push({ content: Math.round(sQty).toLocaleString(), styles: { halign: 'right' } });
+                        row.push({ content: Math.round(sQty).toLocaleString('en-BD'), styles: { halign: 'right' } });
                     }
 
                     // Closing Data
@@ -872,7 +872,7 @@ export const generateStockReportPDF = (stockData, filters, reportType = 'short')
                     const rSize = parseFloat(ent.packetSize) || 0;
                     const { whole: rW, remainder: rR } = calculatePktRemainder(rQty, rSize);
                     row.push({ content: `${rW}${rR !== 0 ? ` - ${Math.abs(rR)} kg` : ''}`, styles: { halign: 'right' } });
-                    row.push({ content: Math.round(rQty).toLocaleString(), styles: { halign: 'right' } });
+                    row.push({ content: Math.round(rQty).toLocaleString('en-BD'), styles: { halign: 'right' } });
 
                     if (bIdx === brands.length - 1) {
                         const isLastQualityOfProduct = qIdx === qEntries.length - 1;
@@ -902,17 +902,17 @@ export const generateStockReportPDF = (stockData, filters, reportType = 'short')
                     const tSize = item.brandList[0]?.packetSize || 0;
                     const { whole: tW, remainder: tR } = calculatePktRemainder(item.totalInHouseQuantity, tSize);
                     subRow.push({ content: `${tW}${tR !== 0 ? ` - ${Math.abs(tR)} kg` : ''}`, styles: { fontStyle: 'bold', halign: 'right', fillColor: [248, 248, 248] } });
-                    subRow.push({ content: Math.round(item.totalInHouseQuantity).toLocaleString(), styles: { fontStyle: 'bold', halign: 'right', fillColor: [248, 248, 248] } });
+                    subRow.push({ content: Math.round(item.totalInHouseQuantity).toLocaleString('en-BD'), styles: { fontStyle: 'bold', halign: 'right', fillColor: [248, 248, 248] } });
 
                     const { whole: sW, remainder: sR } = calculatePktRemainder(item.saleQuantity, tSize);
                     subRow.push({ content: `${sW}${sR !== 0 ? ` - ${Math.abs(sR)} kg` : ''}`, styles: { fontStyle: 'bold', halign: 'right', fillColor: [248, 248, 248] } });
-                    subRow.push({ content: Math.round(item.saleQuantity).toLocaleString(), styles: { fontStyle: 'bold', halign: 'right', fillColor: [248, 248, 248] } });
+                    subRow.push({ content: Math.round(item.saleQuantity).toLocaleString('en-BD'), styles: { fontStyle: 'bold', halign: 'right', fillColor: [248, 248, 248] } });
                 }
 
                 const tSize = item.brandList[0]?.packetSize || 0;
                 const { whole: rW, remainder: rR } = calculatePktRemainder(item.inHouseQuantity, tSize);
                 subRow.push({ content: `${rW}${rR !== 0 ? ` - ${Math.abs(rR)} kg` : ''}`, styles: { fontStyle: 'bold', halign: 'right', fillColor: [248, 248, 248] } });
-                subRow.push({ content: Math.round(item.inHouseQuantity).toLocaleString(), styles: { fontStyle: 'bold', halign: 'right', fillColor: [248, 248, 248] } });
+                subRow.push({ content: Math.round(item.inHouseQuantity).toLocaleString('en-BD'), styles: { fontStyle: 'bold', halign: 'right', fillColor: [248, 248, 248] } });
 
                 boldBottomRowIndices.add(tableRows.length);
                 subRow.isSubTotal = true;
@@ -1085,7 +1085,7 @@ export const generateStockReportPDF = (stockData, filters, reportType = 'short')
             doc.text(pktValStr, pktLineX + pktLabelWidth, y + 15);
 
             // Row 2: QTY
-            const qtyStrVal = `${Math.round(qtyVal).toLocaleString()} kg`;
+            const qtyStrVal = `${Math.round(qtyVal).toLocaleString('en-BD')} kg`;
             doc.setFont('helvetica', 'normal');
             doc.setTextColor(0);
             const qtyLabelWidth = doc.getTextWidth("QTY: ");
@@ -1233,11 +1233,11 @@ export const generateWarehouseReportPDF = (displayGroups, filters, totals) => {
                             const size = parseFloat(brandItem.packetSize || brandItem.size || 0);
                             const whole = Math.floor(pkt);
                             const rem = Math.round(qty - (whole * size));
-                            return `${whole.toLocaleString()}${rem > 0 ? ` - ${rem.toLocaleString()} kg` : ''}`;
+                            return `${whole.toLocaleString('en-BD')}${rem > 0 ? ` - ${rem.toLocaleString('en-BD')} kg` : ''}`;
                         })(),
                         styles: { halign: 'right', valign: 'top' }
                     });
-                    row.push({ content: `${Math.round(parseFloat(brandItem.inhouseQty) || 0).toLocaleString()} kg`, styles: { halign: 'right', valign: 'top' } });
+                    row.push({ content: `${Math.round(parseFloat(brandItem.inhouseQty) || 0).toLocaleString('en-BD')} kg`, styles: { halign: 'right', valign: 'top' } });
                     row.push({
                         content: (() => {
                             const pkt = parseFloat(brandItem.whPkt) || 0;
@@ -1245,11 +1245,11 @@ export const generateWarehouseReportPDF = (displayGroups, filters, totals) => {
                             const size = parseFloat(brandItem.packetSize || brandItem.size || 0);
                             const whole = Math.floor(pkt);
                             const rem = Math.round(qty - (whole * size));
-                            return `${whole.toLocaleString()}${rem > 0 ? ` - ${rem.toLocaleString()} kg` : ''}`;
+                            return `${whole.toLocaleString('en-BD')}${rem > 0 ? ` - ${rem.toLocaleString('en-BD')} kg` : ''}`;
                         })(),
                         styles: { halign: 'right', valign: 'top', fontStyle: 'bold' }
                     });
-                    row.push({ content: `${Math.round(parseFloat(brandItem.whQty) || 0).toLocaleString()} kg`, styles: { halign: 'right', valign: 'top', fontStyle: 'bold' } });
+                    row.push({ content: `${Math.round(parseFloat(brandItem.whQty) || 0).toLocaleString('en-BD')} kg`, styles: { halign: 'right', valign: 'top', fontStyle: 'bold' } });
 
                     tableRows.push(row);
                 });
@@ -1267,12 +1267,12 @@ export const generateWarehouseReportPDF = (displayGroups, filters, totals) => {
                                     const size = parseFloat(b.packetSize || b.size || 0);
                                     return sum + (qty - (Math.floor(pkt) * size));
                                 }, 0));
-                                return `${totalWhole.toLocaleString()}${totalRem > 0 ? ` - ${totalRem.toLocaleString()} kg` : ''}`;
+                                return `${totalWhole.toLocaleString('en-BD')}${totalRem > 0 ? ` - ${totalRem.toLocaleString('en-BD')} kg` : ''}`;
                             })(),
                             styles: { halign: 'right', fontStyle: 'bold', fillColor: [250, 250, 250], textColor: [0, 0, 0] }
                         },
                         {
-                            content: `${Math.round(pGroup.brands.reduce((sum, b) => sum + Math.max(0, parseFloat(b.inhouseQty) || 0), 0)).toLocaleString()} kg`,
+                            content: `${Math.round(pGroup.brands.reduce((sum, b) => sum + Math.max(0, parseFloat(b.inhouseQty) || 0), 0)).toLocaleString('en-BD')} kg`,
                             styles: { halign: 'right', fontStyle: 'bold', fillColor: [250, 250, 250] }
                         },
                         {
@@ -1284,12 +1284,12 @@ export const generateWarehouseReportPDF = (displayGroups, filters, totals) => {
                                     const size = parseFloat(b.packetSize || b.size || 0);
                                     return sum + (qty - (Math.floor(pkt) * size));
                                 }, 0));
-                                return `${totalWhole.toLocaleString()}${totalRem > 0 ? ` - ${totalRem.toLocaleString()} kg` : ''}`;
+                                return `${totalWhole.toLocaleString('en-BD')}${totalRem > 0 ? ` - ${totalRem.toLocaleString('en-BD')} kg` : ''}`;
                             })(),
                             styles: { halign: 'right', fontStyle: 'bold', fillColor: [250, 250, 250], textColor: [0, 0, 0] }
                         },
                         {
-                            content: `${Math.round(pGroup.brands.reduce((sum, b) => sum + Math.max(0, parseFloat(b.whQty) || 0), 0)).toLocaleString()} kg`,
+                            content: `${Math.round(pGroup.brands.reduce((sum, b) => sum + Math.max(0, parseFloat(b.whQty) || 0), 0)).toLocaleString('en-BD')} kg`,
                             styles: { halign: 'right', fontStyle: 'bold', fillColor: [250, 250, 250] }
                         }
                     ]);
@@ -1302,18 +1302,18 @@ export const generateWarehouseReportPDF = (displayGroups, filters, totals) => {
             { content: 'GRAND TOTAL', styles: { fontStyle: 'bold', halign: 'right', fillColor: [240, 240, 240] }, colSpan: 4 },
             {
                 content: (() => {
-                    return `${totals.totalInHouseWhole.toLocaleString()}${totals.totalInHouseRem > 0 ? ` - ${totals.totalInHouseRem.toLocaleString()} kg` : ''}`;
+                    return `${totals.totalInHouseWhole.toLocaleString('en-BD')}${totals.totalInHouseRem > 0 ? ` - ${totals.totalInHouseRem.toLocaleString('en-BD')} kg` : ''}`;
                 })(),
                 styles: { halign: 'right', fontStyle: 'bold', fillColor: [240, 240, 240] }
             },
-            { content: `${Math.round(totals.totalInHouseQty).toLocaleString()} kg`, styles: { halign: 'right', fontStyle: 'bold', fillColor: [240, 240, 240] } },
+            { content: `${Math.round(totals.totalInHouseQty).toLocaleString('en-BD')} kg`, styles: { halign: 'right', fontStyle: 'bold', fillColor: [240, 240, 240] } },
             {
                 content: (() => {
-                    return `${totals.totalWhWhole.toLocaleString()}${totals.totalWhRem > 0 ? ` - ${totals.totalWhRem.toLocaleString()} kg` : ''}`;
+                    return `${totals.totalWhWhole.toLocaleString('en-BD')}${totals.totalWhRem > 0 ? ` - ${totals.totalWhRem.toLocaleString('en-BD')} kg` : ''}`;
                 })(),
                 styles: { halign: 'right', fontStyle: 'bold', fillColor: [240, 240, 240] }
             },
-            { content: `${Math.round(totals.totalWhQty).toLocaleString()} kg`, styles: { halign: 'right', fontStyle: 'bold', fillColor: [240, 240, 240] } }
+            { content: `${Math.round(totals.totalWhQty).toLocaleString('en-BD')} kg`, styles: { halign: 'right', fontStyle: 'bold', fillColor: [240, 240, 240] } }
         ]);
 
         // --- Table ---
@@ -1408,7 +1408,7 @@ export const generateWarehouseReportPDF = (displayGroups, filters, totals) => {
             doc.text(pktValStr, pktLineX + pktLabelWidth, y + 15);
 
             // Row 2: QTY (centered)
-            const qtyStrVal = `${Math.round(qtyVal).toLocaleString()} kg`;
+            const qtyStrVal = `${Math.round(qtyVal).toLocaleString('en-BD')} kg`;
             doc.setFont('helvetica', 'normal');
             doc.setTextColor(0);
             const qtyLabelWidth = doc.getTextWidth("QTY: ");
@@ -1430,13 +1430,13 @@ export const generateWarehouseReportPDF = (displayGroups, filters, totals) => {
 
         // Card 1: TOTAL INHOUSE STOCK
         drawSummaryCard(cardX, finalY, "TOTAL STOCK", (() => {
-            return `${totals.totalInHouseWhole.toLocaleString()}${totals.totalInHouseRem > 0 ? ` - ${totals.totalInHouseRem.toLocaleString()} kg` : ''}`;
+            return `${totals.totalInHouseWhole.toLocaleString('en-BD')}${totals.totalInHouseRem > 0 ? ` - ${totals.totalInHouseRem.toLocaleString('en-BD')} kg` : ''}`;
         })(), totals.totalInHouseQty, false);
         cardX += cardWidth + cardGap;
 
         // Card 2: WAREHOUSE STOCK
         drawSummaryCard(cardX, finalY, "WAREHOUSE STOCK", (() => {
-            return `${totals.totalWhWhole.toLocaleString()}${totals.totalWhRem > 0 ? ` - ${totals.totalWhRem.toLocaleString()} kg` : ''}`;
+            return `${totals.totalWhWhole.toLocaleString('en-BD')}${totals.totalWhRem > 0 ? ` - ${totals.totalWhRem.toLocaleString('en-BD')} kg` : ''}`;
         })(), totals.totalWhQty, true);
 
         // --- Signatures ---
@@ -1618,7 +1618,7 @@ export const generateSaleInvoicePDF = (sale, allCustomers = []) => {
                 sl,
                 productName,
                 brandName,
-                quantity.toLocaleString(),
+                quantity.toLocaleString('en-BD'),
                 displayRate.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
                 parseFloat(total).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
             ];
@@ -1890,17 +1890,17 @@ export const generateProductHistoryPDF = (productName, category, activeTab, purc
                 item.itemExporter || '-',
                 item.invoiceNo || '-',
                 item.type === 'purchase' ? '-' : (item.companyName || '-'),
-                item.type === 'purchase' ? `${Math.round(item.itemQty).toLocaleString()} kg` : '-',
-                item.type === 'sale' ? `${Math.round(item.itemQty).toLocaleString()} kg` : '-',
-                `${Math.round(item.runningInHouse).toLocaleString()} kg`,
-                item.type === 'purchase' ? `${Math.round(item.itemShortageQty || 0).toLocaleString()} kg` : '-'
+                item.type === 'purchase' ? `${Math.round(item.itemQty).toLocaleString('en-BD')} kg` : '-',
+                item.type === 'sale' ? `${Math.round(item.itemQty).toLocaleString('en-BD')} kg` : '-',
+                `${Math.round(item.runningInHouse).toLocaleString('en-BD')} kg`,
+                item.type === 'purchase' ? `${Math.round(item.itemShortageQty || 0).toLocaleString('en-BD')} kg` : '-'
             ]);
             const unifiedFoot = [[
                 { content: 'TOTAL HISTORY', colSpan: 5, styles: { halign: 'right', fontStyle: 'bold' } },
-                { content: `${Math.round(purchaseTotals.qty).toLocaleString()} kg`, styles: { halign: 'right', fontStyle: 'bold' } },
-                { content: `${Math.round(saleTotals.qty).toLocaleString()} kg`, styles: { halign: 'right', fontStyle: 'bold', textColor: [0, 0, 0] } },
-                { content: `${Math.round(unifiedData[unifiedData.length - 1]?.runningInHouse || 0).toLocaleString()} kg`, styles: { halign: 'right', fontStyle: 'bold', textColor: [0, 0, 0] } },
-                { content: `${Math.round(purchaseTotals.shortage).toLocaleString()} kg`, styles: { halign: 'right', fontStyle: 'bold', textColor: [0, 0, 0] } }
+                { content: `${Math.round(purchaseTotals.qty).toLocaleString('en-BD')} kg`, styles: { halign: 'right', fontStyle: 'bold' } },
+                { content: `${Math.round(saleTotals.qty).toLocaleString('en-BD')} kg`, styles: { halign: 'right', fontStyle: 'bold', textColor: [0, 0, 0] } },
+                { content: `${Math.round(unifiedData[unifiedData.length - 1]?.runningInHouse || 0).toLocaleString('en-BD')} kg`, styles: { halign: 'right', fontStyle: 'bold', textColor: [0, 0, 0] } },
+                { content: `${Math.round(purchaseTotals.shortage).toLocaleString('en-BD')} kg`, styles: { halign: 'right', fontStyle: 'bold', textColor: [0, 0, 0] } }
             ]];
 
             autoTable(doc, {
@@ -1946,19 +1946,19 @@ export const generateProductHistoryPDF = (productName, category, activeTab, purc
                 item.lcNo || '-',
                 item.itemExporter || '-',
                 item.itemBrand || '-',
-                `TK ${parseFloat(item.itemPurchasedPrice || 0).toLocaleString()}`,
-                item.itemPacket.toLocaleString(),
-                `${Math.round(item.itemQty).toLocaleString()} kg`,
-                `${Math.round(item.itemInHouseQty).toLocaleString()} kg`,
-                `${Math.round(item.itemShortageQty || 0).toLocaleString()} kg`
+                `TK ${parseFloat(item.itemPurchasedPrice || 0).toLocaleString('en-BD')}`,
+                item.itemPacket.toLocaleString('en-BD'),
+                `${Math.round(item.itemQty).toLocaleString('en-BD')} kg`,
+                `${Math.round(item.itemInHouseQty).toLocaleString('en-BD')} kg`,
+                `${Math.round(item.itemShortageQty || 0).toLocaleString('en-BD')} kg`
             ]);
             const purchaseFoot = [[
                 { content: 'TOTAL PURCHASE', colSpan: 4, styles: { halign: 'right', fontStyle: 'bold' } },
-                { content: `TK ${Math.round(purchaseTotals.totalValue).toLocaleString()}`, styles: { halign: 'right', fontStyle: 'bold', textColor: [0, 0, 0] } },
-                { content: purchaseTotals.pkt.toLocaleString(), styles: { halign: 'right', fontStyle: 'bold' } },
-                { content: `${Math.round(purchaseTotals.qty).toLocaleString()} kg`, styles: { halign: 'right', fontStyle: 'bold' } },
-                { content: `${Math.round(purchaseTotals.inHouse).toLocaleString()} kg`, styles: { halign: 'right', fontStyle: 'bold', textColor: [0, 0, 0] } },
-                { content: `${Math.round(purchaseTotals.shortage).toLocaleString()} kg`, styles: { halign: 'right', fontStyle: 'bold', textColor: [0, 0, 0] } }
+                { content: `TK ${Math.round(purchaseTotals.totalValue).toLocaleString('en-BD')}`, styles: { halign: 'right', fontStyle: 'bold', textColor: [0, 0, 0] } },
+                { content: purchaseTotals.pkt.toLocaleString('en-BD'), styles: { halign: 'right', fontStyle: 'bold' } },
+                { content: `${Math.round(purchaseTotals.qty).toLocaleString('en-BD')} kg`, styles: { halign: 'right', fontStyle: 'bold' } },
+                { content: `${Math.round(purchaseTotals.inHouse).toLocaleString('en-BD')} kg`, styles: { halign: 'right', fontStyle: 'bold', textColor: [0, 0, 0] } },
+                { content: `${Math.round(purchaseTotals.shortage).toLocaleString('en-BD')} kg`, styles: { halign: 'right', fontStyle: 'bold', textColor: [0, 0, 0] } }
             ]];
 
             autoTable(doc, {
@@ -2001,16 +2001,16 @@ export const generateProductHistoryPDF = (productName, category, activeTab, purc
                     sale.companyName || '-',
                     sale.customerName || '-',
                     sale.phone || '-',
-                    `${sale.itemQty.toLocaleString()} kg`,
+                    `${sale.itemQty.toLocaleString('en-BD')} kg`,
                     sale.itemTruck || '-',
-                    `TK ${sale.itemPrice.toLocaleString()}`,
-                    `TK ${sale.itemTotal.toLocaleString()}`
+                    `TK ${sale.itemPrice.toLocaleString('en-BD')}`,
+                    `TK ${sale.itemTotal.toLocaleString('en-BD')}`
                 ]);
                 saleFoot = [[
                     { content: 'TOTAL SALE', colSpan: 5, styles: { halign: 'right', fontStyle: 'bold' } },
-                    { content: `${Math.round(saleTotals.qty).toLocaleString()} kg`, styles: { halign: 'right', fontStyle: 'bold' } },
+                    { content: `${Math.round(saleTotals.qty).toLocaleString('en-BD')} kg`, styles: { halign: 'right', fontStyle: 'bold' } },
                     { content: '-', colSpan: 2, styles: { halign: 'right' } },
-                    { content: `TK ${Math.round(saleTotals.amount).toLocaleString()}`, styles: { halign: 'right', fontStyle: 'bold', textColor: [0, 0, 0] } }
+                    { content: `TK ${Math.round(saleTotals.amount).toLocaleString('en-BD')}`, styles: { halign: 'right', fontStyle: 'bold', textColor: [0, 0, 0] } }
                 ]];
                 saleColumnStyles = {
                     0: { cellWidth: 20, halign: 'center' }, // Date (increased from 16)
@@ -2030,16 +2030,16 @@ export const generateProductHistoryPDF = (productName, category, activeTab, purc
                     sale.invoiceNo || '-',
                     sale.companyName || '-',
                     sale.itemBrand || '-',
-                    sale.itemPacket.toLocaleString(),
-                    `${sale.itemQty.toLocaleString()} kg`,
-                    `TK ${sale.itemPrice.toLocaleString()}`,
-                    `TK ${sale.itemTotal.toLocaleString()}`
+                    sale.itemPacket.toLocaleString('en-BD'),
+                    `${sale.itemQty.toLocaleString('en-BD')} kg`,
+                    `TK ${sale.itemPrice.toLocaleString('en-BD')}`,
+                    `TK ${sale.itemTotal.toLocaleString('en-BD')}`
                 ]);
                 saleFoot = [[
                     { content: 'TOTAL SALE', colSpan: 5, styles: { halign: 'right', fontStyle: 'bold' } },
-                    { content: `${Math.round(saleTotals.qty).toLocaleString()} kg`, styles: { halign: 'right', fontStyle: 'bold' } },
+                    { content: `${Math.round(saleTotals.qty).toLocaleString('en-BD')} kg`, styles: { halign: 'right', fontStyle: 'bold' } },
                     { content: '-', styles: { halign: 'right' } },
-                    { content: `TK ${Math.round(saleTotals.amount).toLocaleString()}`, styles: { halign: 'right', fontStyle: 'bold', textColor: [0, 0, 0] } }
+                    { content: `TK ${Math.round(saleTotals.amount).toLocaleString('en-BD')}`, styles: { halign: 'right', fontStyle: 'bold', textColor: [0, 0, 0] } }
                 ]];
                 saleColumnStyles = {
                     0: { cellWidth: 20, halign: 'center' }, // Date
@@ -2217,7 +2217,7 @@ export const generateSalesReportPDF = (reportData, filters, summary, saleType = 
                     row.push(item.brand);
                 }
 
-                row.push(parseFloat(item.quantity).toLocaleString());
+                row.push(parseFloat(item.quantity).toLocaleString('en-BD'));
 
                 if (saleType === 'Border') {
                     row.push(item.truck || sale.truck || '-');
@@ -2257,8 +2257,8 @@ export const generateSalesReportPDF = (reportData, filters, summary, saleType = 
 
         const footRow = [[
             { content: 'GRAND TOTAL', colSpan: saleType === 'Border' ? 9 : 6, styles: { halign: 'right', fontStyle: 'bold' } },
-            { content: saleType === 'Border' ? '-' : summary.totalQty.toLocaleString(), styles: { halign: 'right', fontStyle: 'bold' } },
-            { content: saleType === 'Border' ? totalTrucks.toLocaleString() : '', styles: { halign: 'center', fontStyle: 'bold' } },
+            { content: saleType === 'Border' ? '-' : summary.totalQty.toLocaleString('en-BD'), styles: { halign: 'right', fontStyle: 'bold' } },
+            { content: saleType === 'Border' ? totalTrucks.toLocaleString('en-BD') : '', styles: { halign: 'center', fontStyle: 'bold' } },
             ...(saleType === 'Border' ? [
                 { content: '', styles: { halign: 'right', fontStyle: 'bold' } }
             ] : []),
@@ -2804,8 +2804,8 @@ export const generateCustomerHistoryPDF = (customer, historyData, summary, filte
 
                     // Rebuild display properties (PDF uses clean numbers without Taka symbol)
                     existing.product = existing.items.map(si => si.product || '—').join('\n');
-                    existing.quantity_display = existing.items.map(si => (si.quantity || 0).toLocaleString()).join('\n');
-                    existing.rate_display = existing.items.map(si => (si.rate || 0) > 0 ? si.rate.toLocaleString() : '—').join('\n');
+                    existing.quantity_display = existing.items.map(si => (si.quantity || 0).toLocaleString('en-BD')).join('\n');
+                    existing.rate_display = existing.items.map(si => (si.rate || 0) > 0 ? si.rate.toLocaleString('en-BD') : '—').join('\n');
 
                     existing.quantity = (parseFloat(existing.quantity || 0)) + (parseFloat(item.quantity || 0));
                     existing.runningBalance = item.runningBalance;
@@ -2850,8 +2850,8 @@ export const generateCustomerHistoryPDF = (customer, historyData, summary, filte
                 }
 
                 row.push(
-                    item.type === 'sale' ? (item.quantity_display || (qty > 0 ? qty.toLocaleString() : '-')) : '-',
-                    item.type === 'sale' ? (item.rate_display || (parseFloat(item.rate || 0) > 0 ? parseFloat(item.rate || 0).toLocaleString() : '-')) : '-',
+                    item.type === 'sale' ? (item.quantity_display || (qty > 0 ? qty.toLocaleString('en-BD') : '-')) : '-',
+                    item.type === 'sale' ? (item.rate_display || (parseFloat(item.rate || 0) > 0 ? parseFloat(item.rate || 0).toLocaleString('en-BD') : '-')) : '-',
                     amt > 0 ? `${amt.toLocaleString(undefined, { maximumFractionDigits: 0 })}` : '-',
                     details,
                     paid > 0 ? `${paid.toLocaleString(undefined, { maximumFractionDigits: 0 })}` : '-',
@@ -2868,10 +2868,10 @@ export const generateCustomerHistoryPDF = (customer, historyData, summary, filte
                 { content: 'GRAND TOTAL', colSpan: 4, styles: { halign: 'right', fontStyle: 'bold', fillColor: [240, 240, 240] } },
             ];
             if (isParty) {
-                foot.push({ content: grandTrucks.toLocaleString(), styles: { halign: 'center', fontStyle: 'bold', fillColor: [240, 240, 240] } });
+                foot.push({ content: grandTrucks.toLocaleString('en-BD'), styles: { halign: 'center', fontStyle: 'bold', fillColor: [240, 240, 240] } });
             }
             foot.push(
-                { content: grandQty.toLocaleString(), styles: { halign: 'right', fontStyle: 'bold', fillColor: [240, 240, 240] } },
+                { content: grandQty.toLocaleString('en-BD'), styles: { halign: 'right', fontStyle: 'bold', fillColor: [240, 240, 240] } },
                 { content: '', styles: { fillColor: [240, 240, 240] } },
                 { content: grandAmt.toLocaleString(undefined, { maximumFractionDigits: 0 }), styles: { halign: 'right', fontStyle: 'bold', fillColor: [240, 240, 240] } },
                 { content: '', styles: { fillColor: [240, 240, 240] } },
@@ -2976,7 +2976,7 @@ export const generateCustomerHistoryPDF = (customer, historyData, summary, filte
                         }
 
                         row.push(
-                            { content: qty.toLocaleString(), styles: { halign: 'right' } },
+                            { content: qty.toLocaleString('en-BD'), styles: { halign: 'right' } },
                             { content: `${parseFloat(item.rate || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}`, styles: { halign: 'right' } },
                             { content: `${amt.toLocaleString(undefined, { minimumFractionDigits: 2 })}`, styles: { halign: 'right' } },
                             { content: `${disc.toLocaleString(undefined, { minimumFractionDigits: 2 })}`, styles: { halign: 'right' } }
@@ -2993,8 +2993,8 @@ export const generateCustomerHistoryPDF = (customer, historyData, summary, filte
             // Add Grand Total row
             tableRows.push([
                 { content: 'GRAND TOTAL', colSpan: 4, styles: { halign: 'right', fontStyle: 'bold', fillColor: [240, 240, 240] } },
-                { content: isParty ? totalTrucksCount.toLocaleString() : '', styles: { halign: 'center', fontStyle: 'bold', fillColor: [240, 240, 240] } },
-                { content: totalQty.toLocaleString(), styles: { halign: 'right', fontStyle: 'bold', fillColor: [240, 240, 240] } },
+                { content: isParty ? totalTrucksCount.toLocaleString('en-BD') : '', styles: { halign: 'center', fontStyle: 'bold', fillColor: [240, 240, 240] } },
+                { content: totalQty.toLocaleString('en-BD'), styles: { halign: 'right', fontStyle: 'bold', fillColor: [240, 240, 240] } },
                 { content: '', styles: { fillColor: [240, 240, 240] } },
                 { content: totalAmt.toLocaleString(undefined, { minimumFractionDigits: 2 }), styles: { halign: 'right', fontStyle: 'bold', fillColor: [240, 240, 240] } },
                 { content: totalDisc.toLocaleString(undefined, { minimumFractionDigits: 2 }), styles: { halign: 'right', fontStyle: 'bold', fillColor: [240, 240, 240] } }
@@ -3172,7 +3172,7 @@ export const generateCnFHistoryReportPDF = (reportData, agentInfo, filters) => {
             row.port || '-',
             row.uom || '-',
             row.truck || '0',
-            parseFloat(row.qty || 0).toLocaleString(),
+            parseFloat(row.qty || 0).toLocaleString('en-BD'),
             parseFloat(row.commission || 0).toLocaleString(undefined, { minimumFractionDigits: 2 }),
             parseFloat(row.totalCommission || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })
         ]);
@@ -3190,7 +3190,7 @@ export const generateCnFHistoryReportPDF = (reportData, agentInfo, filters) => {
             foot: [[
                 { content: 'GRAND TOTAL', colSpan: 7, styles: { halign: 'right', fontStyle: 'bold' } }, // Date, LC, Importer, Exporter, Product, Port, UOM
                 { content: totalTrucks.toString(), styles: { halign: 'center', fontStyle: 'bold' } },
-                { content: totalQty.toLocaleString(), styles: { halign: 'right', fontStyle: 'bold' } },
+                { content: totalQty.toLocaleString('en-BD'), styles: { halign: 'right', fontStyle: 'bold' } },
                 '', // Commission rate col
                 { content: totalCommissionVal.toLocaleString(undefined, { minimumFractionDigits: 2 }), styles: { halign: 'right', fontStyle: 'bold' } }
             ]],

@@ -611,7 +611,7 @@ const StockReport = ({
                                                         {(() => {
                                                             const totalWhole = filteredRecords.reduce((accWhole, item) => accWhole + item.brandList.reduce((sum, ent) => sum + calculatePktRemainder(Math.max(0, ent.totalInHouseQuantity || 0), ent.packetSize).whole, 0), 0);
                                                             const totalRem = filteredRecords.reduce((accRem, item) => accRem + item.brandList.reduce((sum, ent) => sum + calculatePktRemainder(Math.max(0, ent.totalInHouseQuantity || 0), ent.packetSize).remainder, 0), 0);
-                                                            return `${totalWhole}${totalRem !== 0 ? ` - ${Math.abs(totalRem).toLocaleString()} kg` : ''}`;
+                                                            return `${totalWhole}${totalRem !== 0 ? ` - ${Math.abs(totalRem).toLocaleString('en-BD')} kg` : ''}`;
                                                         })()}
                                                     </td>
                                                     <td className="px-2 py-1.5 text-[14px] text-right font-black text-gray-900 border-r border-gray-900">
@@ -629,7 +629,7 @@ const StockReport = ({
                                                 {(() => {
                                                     const totalWhole = filteredRecords.reduce((accWhole, item) => accWhole + item.brandList.reduce((sum, ent) => sum + calculatePktRemainder(Math.max(0, ent.inHouseQuantity || 0), ent.packetSize).whole, 0), 0);
                                                     const totalRem = filteredRecords.reduce((accRem, item) => accRem + item.brandList.reduce((sum, ent) => sum + calculatePktRemainder(Math.max(0, ent.inHouseQuantity || 0), ent.packetSize).remainder, 0), 0);
-                                                    return `${totalWhole}${totalRem !== 0 ? ` - ${Math.abs(totalRem).toLocaleString()} kg` : ''}`;
+                                                    return `${totalWhole}${totalRem !== 0 ? ` - ${Math.abs(totalRem).toLocaleString('en-BD')} kg` : ''}`;
                                                 })()}
                                             </td>
                                             <td className="px-2 py-1.5 text-[14px] text-right font-black text-gray-900">
@@ -664,14 +664,14 @@ const StockReport = ({
                                                                     return `${whole}${remainder !== 0 ? ` - ${Math.abs(remainder)} kg` : ''}`;
                                                                 })()} BAG
                                                             </p>
-                                                            <p className="text-sm font-black text-gray-900">{Math.round(ent.totalInHouseQuantity).toLocaleString()} kg</p>
+                                                            <p className="text-sm font-black text-gray-900">{Math.round(ent.totalInHouseQuantity).toLocaleString('en-BD')} kg</p>
                                                         </div>
                                                         <div className="space-y-0.5 text-right">
                                                             <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Sale</p>
                                                             <p className="text-xs font-bold text-gray-700">
                                                                 {Number.isInteger(parseFloat(ent.salePacket)) ? parseFloat(ent.salePacket) : (parseFloat(ent.salePacket) || 0).toFixed(2)} BAG
                                                             </p>
-                                                            <p className="text-sm font-black text-gray-900">{Math.round(ent.saleQuantity).toLocaleString()} kg</p>
+                                                            <p className="text-sm font-black text-gray-900">{Math.round(ent.saleQuantity).toLocaleString('en-BD')} kg</p>
                                                         </div>
                                                         <div className="col-span-full w-full pt-3 pb-2 border-t border-gray-100 flex flex-col items-center justify-center text-center">
                                                             <p className="text-[10px] sm:text-xs font-bold text-blue-400 uppercase tracking-[0.1em] mb-1">Remaining Inhouse</p>
@@ -683,7 +683,7 @@ const StockReport = ({
                                                                     })()} BAG
                                                                 </p>
                                                                 <p className="text-lg sm:text-xl font-black text-blue-600 text-center">
-                                                                    {Math.round(ent.inHouseQuantity).toLocaleString()} kg
+                                                                    {Math.round(ent.inHouseQuantity).toLocaleString('en-BD')} kg
                                                                 </p>
                                                             </div>
                                                         </div>
@@ -696,11 +696,11 @@ const StockReport = ({
                                                     <div className="grid grid-cols-2 gap-4">
                                                         <div>
                                                             <p className="text-[10px] font-bold text-gray-400">Total Inhouse</p>
-                                                            <p className="text-sm font-black text-gray-900">{Math.round(item.totalInHouseQuantity).toLocaleString()} kg</p>
+                                                            <p className="text-sm font-black text-gray-900">{Math.round(item.totalInHouseQuantity).toLocaleString('en-BD')} kg</p>
                                                         </div>
                                                         <div className="text-right">
                                                             <p className="text-[10px] font-bold text-blue-500">Net Stock</p>
-                                                            <p className="text-sm font-black text-blue-600">{Math.round(item.inHouseQuantity).toLocaleString()} kg</p>
+                                                            <p className="text-sm font-black text-blue-600">{Math.round(item.inHouseQuantity).toLocaleString('en-BD')} kg</p>
                                                         </div>
                                                     </div>
                                                 </div>
@@ -721,15 +721,15 @@ const StockReport = ({
                                     <div className="grid grid-cols-2 gap-y-6 gap-x-4">
                                         <div className="space-y-1">
                                             <p className="text-[10px] font-bold text-gray-500 uppercase tracking-wider text-center">Total Inhouse</p>
-                                            <p className="text-xl font-black text-white text-center">{Math.round(totals.totalTotalInHouseQty).toLocaleString()}<span className="text-[10px] ml-1 text-gray-400 uppercase">kg</span></p>
+                                            <p className="text-xl font-black text-white text-center">{Math.round(totals.totalTotalInHouseQty).toLocaleString('en-BD')}<span className="text-[10px] ml-1 text-gray-400 uppercase">kg</span></p>
                                         </div>
                                         <div className="space-y-1">
                                             <p className="text-[10px] font-bold text-gray-500 uppercase tracking-wider text-center">Total Sale</p>
-                                            <p className="text-xl font-black text-white text-center">{Math.round(totals.totalSaleQty).toLocaleString()}<span className="text-[10px] ml-1 text-gray-400 uppercase">kg</span></p>
+                                            <p className="text-xl font-black text-white text-center">{Math.round(totals.totalSaleQty).toLocaleString('en-BD')}<span className="text-[10px] ml-1 text-gray-400 uppercase">kg</span></p>
                                         </div>
                                         <div className="col-span-full pt-4 border-t border-gray-800 flex flex-col items-center">
                                             <p className="text-[10px] font-bold text-blue-400 uppercase tracking-[0.2em] mb-1 text-center">Net Inhouse Stock</p>
-                                            <p className="text-4xl font-black text-blue-500 tracking-tighter text-center">{Math.round(totals.totalInHouseQty).toLocaleString()}<span className="text-sm ml-2 text-blue-400 uppercase">kg</span></p>
+                                            <p className="text-4xl font-black text-blue-500 tracking-tighter text-center">{Math.round(totals.totalInHouseQty).toLocaleString('en-BD')}<span className="text-sm ml-2 text-blue-400 uppercase">kg</span></p>
                                         </div>
                                     </div>
                                 </div>
@@ -744,7 +744,7 @@ const StockReport = ({
                                     BAG: {(() => {
                                         const totalWhole = filteredRecords.reduce((accWhole, item) => accWhole + item.brandList.reduce((sum, ent) => sum + calculatePktRemainder(Math.max(0, ent.totalInHouseQuantity || 0), ent.packetSize).whole, 0), 0);
                                         const totalRem = filteredRecords.reduce((accRem, item) => accRem + item.brandList.reduce((sum, ent) => sum + calculatePktRemainder(Math.max(0, ent.totalInHouseQuantity || 0), ent.packetSize).remainder, 0), 0);
-                                        return `${totalWhole}${totalRem !== 0 ? ` - ${Math.abs(totalRem).toLocaleString()} kg` : ''}`;
+                                        return `${totalWhole}${totalRem !== 0 ? ` - ${Math.abs(totalRem).toLocaleString('en-BD')} kg` : ''}`;
                                     })()}
                                 </div>
                                 <div className="text-xl sm:text-2xl font-black text-gray-900">
@@ -770,7 +770,7 @@ const StockReport = ({
                                     BAG: {(() => {
                                         const totalWhole = filteredRecords.reduce((accWhole, item) => accWhole + item.brandList.reduce((sum, ent) => sum + calculatePktRemainder(ent.inHouseQuantity, ent.packetSize).whole, 0), 0);
                                         const totalRem = filteredRecords.reduce((accRem, item) => accRem + item.brandList.reduce((sum, ent) => sum + calculatePktRemainder(ent.inHouseQuantity, ent.packetSize).remainder, 0), 0);
-                                        return `${totalWhole}${totalRem !== 0 ? ` - ${Math.abs(totalRem).toLocaleString()} kg` : ''}`;
+                                        return `${totalWhole}${totalRem !== 0 ? ` - ${Math.abs(totalRem).toLocaleString('en-BD')} kg` : ''}`;
                                     })()}
                                 </div>
                                 <div className="text-2xl sm:text-3xl font-black text-blue-600">

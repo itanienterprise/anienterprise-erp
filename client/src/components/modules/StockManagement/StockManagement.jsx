@@ -2120,27 +2120,27 @@ const StockManagement = ({
                         {[
                             { 
                                 label: 'TOTAL BAG', 
-                                value: `${((totalOpeningPktWhole || 0) + (totalArrivalPktWhole || 0)).toLocaleString()}`, 
+                                value: `${((totalOpeningPktWhole || 0) + (totalArrivalPktWhole || 0)).toLocaleString('en-BD')}`, 
                                 bgColor: 'bg-blue-50/50', borderColor: 'border-blue-100', textColor: 'text-blue-700', labelColor: 'text-blue-600' 
                             },
                             { 
                                 label: 'TOTAL QUANTITY', 
-                                value: `${Math.round((totalTotalInHouseQty || 0) + (totalArrivalQty || 0)).toLocaleString()} ${unit}`, 
+                                value: `${Math.round((totalTotalInHouseQty || 0) + (totalArrivalQty || 0)).toLocaleString('en-BD')} ${unit}`, 
                                 bgColor: 'bg-blue-50/50', borderColor: 'border-blue-100', textColor: 'text-blue-700', labelColor: 'text-blue-600' 
                             },
                             { 
                                 label: 'TOTAL SALE BAG', 
-                                value: `${(totalSalePktWhole || 0).toLocaleString()} - ${(totalSalePktDecimalKg || 0).toLocaleString()} ${unit}`, 
+                                value: `${(totalSalePktWhole || 0).toLocaleString('en-BD')} - ${(totalSalePktDecimalKg || 0).toLocaleString('en-BD')} ${unit}`, 
                                 bgColor: 'bg-orange-50/50', borderColor: 'border-orange-100', textColor: 'text-orange-700', labelColor: 'text-orange-600' 
                             },
                             { 
                                 label: 'TOTAL SALE QTY', 
-                                value: `${Math.round(totalSaleQty || 0).toLocaleString()} ${unit}`, 
+                                value: `${Math.round(totalSaleQty || 0).toLocaleString('en-BD')} ${unit}`, 
                                 bgColor: 'bg-orange-50/50', borderColor: 'border-orange-100', textColor: 'text-orange-700', labelColor: 'text-orange-600' 
                             },
                             { 
                                 label: 'INHOUSE BAG', 
-                                value: `${(totalInHousePktWhole || 0).toLocaleString()} - ${Math.round(totalInHousePktDecimalKg || 0).toLocaleString()} ${unit}`, 
+                                value: `${(totalInHousePktWhole || 0).toLocaleString('en-BD')} - ${Math.round(totalInHousePktDecimalKg || 0).toLocaleString('en-BD')} ${unit}`, 
                                 bgColor: (totalInHouseQty || 0) < 0 ? 'bg-blue-50/50' : 'bg-emerald-50/50', 
                                 borderColor: (totalInHouseQty || 0) < 0 ? 'border-blue-100' : 'border-emerald-100', 
                                 textColor: (totalInHouseQty || 0) < 0 ? 'text-blue-700' : 'text-emerald-700', 
@@ -2148,7 +2148,7 @@ const StockManagement = ({
                             },
                             { 
                                 label: 'INHOUSE QTY', 
-                                value: `${Math.round(totalInHouseQty || 0).toLocaleString()} ${unit}`, 
+                                value: `${Math.round(totalInHouseQty || 0).toLocaleString('en-BD')} ${unit}`, 
                                 bgColor: (totalInHouseQty || 0) < 0 ? 'bg-blue-50/50' : 'bg-emerald-50/50', 
                                 borderColor: (totalInHouseQty || 0) < 0 ? 'border-blue-100' : 'border-emerald-100', 
                                 textColor: (totalInHouseQty || 0) < 0 ? 'text-blue-700' : 'text-emerald-700', 
@@ -2156,7 +2156,7 @@ const StockManagement = ({
                             },
                             { 
                                 label: 'SHORTAGE', 
-                                value: `${Math.round(totalShortage || 0).toLocaleString()} ${unit}`, 
+                                value: `${Math.round(totalShortage || 0).toLocaleString('en-BD')} ${unit}`, 
                                 bgColor: 'bg-rose-50/50', borderColor: 'border-rose-100', textColor: 'text-rose-700', labelColor: 'text-rose-600' 
                             },
                         ].map((card, i) => (
@@ -2701,7 +2701,7 @@ const StockManagement = ({
                                                     <div className="flex items-center flex-wrap gap-2 mt-2">
                                                         {group.totalInHouseQuantity > 0 && (
                                                             <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-bold bg-gray-100 text-gray-700 border border-gray-200">
-                                                                {Math.round(group.inHousePacket).toLocaleString()} BAG • {Math.round(group.inHouseQuantity).toLocaleString()} {group.unit}
+                                                                {Math.round(group.inHousePacket).toLocaleString('en-BD')} BAG • {Math.round(group.inHouseQuantity).toLocaleString('en-BD')} {group.unit}
                                                             </span>
                                                         )}
                                                     </div>
@@ -2729,22 +2729,22 @@ const StockManagement = ({
                                                     <div className="bg-blue-50 text-blue-700 p-2 rounded-xl border border-blue-100 flex flex-col items-center justify-center">
                                                         <span className="text-[11px] font-bold opacity-70 mb-1.5 uppercase tracking-tighter">OPENING</span>
                                                         <div className="flex flex-col items-center leading-none gap-1.5">
-                                                            <span className="text-[12.5px] font-black">{Math.round(group.openingPacket).toLocaleString()} <span className="text-[9px] opacity-60 font-bold">BAG</span></span>
-                                                            <span className="text-[12.5px] font-bold opacity-80">{Math.round(group.openingQuantity).toLocaleString()} <span className="text-[9px] opacity-60">{group.unit}</span></span>
+                                                            <span className="text-[12.5px] font-black">{Math.round(group.openingPacket).toLocaleString('en-BD')} <span className="text-[9px] opacity-60 font-bold">BAG</span></span>
+                                                            <span className="text-[12.5px] font-bold opacity-80">{Math.round(group.openingQuantity).toLocaleString('en-BD')} <span className="text-[9px] opacity-60">{group.unit}</span></span>
                                                         </div>
                                                     </div>
                                                     <div className="bg-orange-50 text-orange-700 p-2 rounded-xl border border-orange-100 flex flex-col items-center justify-center">
                                                         <span className="text-[11px] font-bold opacity-70 mb-1.5 uppercase tracking-tighter">SALE</span>
                                                         <div className="flex flex-col items-center leading-none gap-1.5">
-                                                            <span className="text-[12.5px] font-black">{Math.round(group.salePacket).toLocaleString()} <span className="text-[9px] opacity-60 font-bold">BAG</span></span>
-                                                            <span className="text-[12.5px] font-bold opacity-80">{Math.round(group.saleQuantity).toLocaleString()} <span className="text-[9px] opacity-60">{group.unit}</span></span>
+                                                            <span className="text-[12.5px] font-black">{Math.round(group.salePacket).toLocaleString('en-BD')} <span className="text-[9px] opacity-60 font-bold">BAG</span></span>
+                                                            <span className="text-[12.5px] font-bold opacity-80">{Math.round(group.saleQuantity).toLocaleString('en-BD')} <span className="text-[9px] opacity-60">{group.unit}</span></span>
                                                         </div>
                                                     </div>
                                                     <div className="bg-emerald-50 text-emerald-700 p-2 rounded-xl border border-emerald-100 flex flex-col items-center justify-center underline decoration-emerald-200/50 underline-offset-[5px]">
                                                         <span className="text-[11px] font-bold opacity-70 mb-1.5 uppercase tracking-tighter">CLOSING</span>
                                                         <div className="flex flex-col items-center leading-none gap-1.5">
-                                                            <span className="text-[12.5px] font-black">{Math.round(group.inHousePacket).toLocaleString()} <span className="text-[9px] opacity-60 font-bold">BAG</span></span>
-                                                            <span className="text-[12.5px] font-bold opacity-80">{Math.round(group.inHouseQuantity).toLocaleString()} <span className="text-[9px] opacity-60">{group.unit}</span></span>
+                                                            <span className="text-[12.5px] font-black">{Math.round(group.inHousePacket).toLocaleString('en-BD')} <span className="text-[9px] opacity-60 font-bold">BAG</span></span>
+                                                            <span className="text-[12.5px] font-bold opacity-80">{Math.round(group.inHouseQuantity).toLocaleString('en-BD')} <span className="text-[9px] opacity-60">{group.unit}</span></span>
                                                         </div>
                                                     </div>
                                                 </div>
@@ -2765,7 +2765,7 @@ const StockManagement = ({
                                                                         <div className="flex items-center flex-wrap gap-2 mt-1">
                                                                             {brand.totalInHouseQuantity > 0 && (
                                                                                 <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-bold bg-white text-gray-700 border border-gray-200 shadow-sm">
-                                                                                    {Math.round(brand.inHousePacket).toLocaleString()} BAG • {Math.round(brand.inHouseQuantity).toLocaleString()} {group.unit}
+                                                                                    {Math.round(brand.inHousePacket).toLocaleString('en-BD')} BAG • {Math.round(brand.inHouseQuantity).toLocaleString('en-BD')} {group.unit}
                                                                                 </span>
                                                                             )}
                                                                         </div>
@@ -2784,22 +2784,22 @@ const StockManagement = ({
                                                                 <div className="bg-blue-50/50 text-blue-700 py-1.5 rounded-xl border border-blue-100 flex flex-col items-center">
                                                                     <span className="text-[9px] font-bold opacity-60 mb-0.5 uppercase tracking-tighter">OPN</span>
                                                                     <div className="flex flex-col items-center leading-none gap-1">
-                                                                        <span className="text-[11px] font-bold">{Math.round(brand.openingPacket).toLocaleString()} <span className="text-[8.5px]">B</span></span>
-                                                                        <span className="text-[11px] font-medium opacity-80">{Math.round(brand.openingQuantity).toLocaleString()} <span className="text-[8.5px]">kg</span></span>
+                                                                        <span className="text-[11px] font-bold">{Math.round(brand.openingPacket).toLocaleString('en-BD')} <span className="text-[8.5px]">B</span></span>
+                                                                        <span className="text-[11px] font-medium opacity-80">{Math.round(brand.openingQuantity).toLocaleString('en-BD')} <span className="text-[8.5px]">kg</span></span>
                                                                     </div>
                                                                 </div>
                                                                 <div className="bg-orange-50/50 text-orange-700 py-1.5 rounded-xl border border-orange-100 flex flex-col items-center">
                                                                     <span className="text-[9px] font-bold opacity-60 mb-0.5 uppercase tracking-tighter">SALE</span>
                                                                     <div className="flex flex-col items-center leading-none gap-1">
-                                                                        <span className="text-[11px] font-bold">{Math.round(brand.salePacket).toLocaleString()} <span className="text-[8.5px]">B</span></span>
-                                                                        <span className="text-[11px] font-medium opacity-80">{Math.round(brand.saleQuantity).toLocaleString()} <span className="text-[8.5px]">kg</span></span>
+                                                                        <span className="text-[11px] font-bold">{Math.round(brand.salePacket).toLocaleString('en-BD')} <span className="text-[8.5px]">B</span></span>
+                                                                        <span className="text-[11px] font-medium opacity-80">{Math.round(brand.saleQuantity).toLocaleString('en-BD')} <span className="text-[8.5px]">kg</span></span>
                                                                     </div>
                                                                 </div>
                                                                 <div className="bg-emerald-50/50 text-emerald-700 py-1.5 rounded-xl border border-emerald-100 flex flex-col items-center">
                                                                     <span className="text-[9px] font-bold opacity-60 mb-0.5 uppercase tracking-tighter">CLS</span>
                                                                     <div className="flex flex-col items-center leading-none gap-1 underline decoration-emerald-200/50 underline-offset-[3px]">
-                                                                        <span className="text-[11px] font-bold">{Math.round(brand.inHousePacket).toLocaleString()} <span className="text-[8.5px]">B</span></span>
-                                                                        <span className="text-[11px] font-medium opacity-80">{Math.round(brand.inHouseQuantity).toLocaleString()} <span className="text-[8.5px]">kg</span></span>
+                                                                        <span className="text-[11px] font-bold">{Math.round(brand.inHousePacket).toLocaleString('en-BD')} <span className="text-[8.5px]">B</span></span>
+                                                                        <span className="text-[11px] font-medium opacity-80">{Math.round(brand.inHouseQuantity).toLocaleString('en-BD')} <span className="text-[8.5px]">kg</span></span>
                                                                     </div>
                                                                 </div>
                                                             </div>
@@ -2859,33 +2859,33 @@ const StockManagement = ({
                                                             <div className="text-sm text-blue-800 bg-blue-50/50 px-2 py-1 rounded-lg text-center font-bold">
                                                                 {(() => {
                                                                     const { whole, remainder } = calculatePktRemainder(brand.openingQuantity, brand.packetSize);
-                                                                    return `${whole.toLocaleString()} - ${Math.abs(remainder).toLocaleString()} kg`;
+                                                                    return `${whole.toLocaleString('en-BD')} - ${Math.abs(remainder).toLocaleString('en-BD')} kg`;
                                                                 })()}
                                                             </div>
                                                             <div className="text-sm text-blue-900 text-center font-medium">
-                                                                {Math.round(brand.openingQuantity || 0).toLocaleString()}
+                                                                {Math.round(brand.openingQuantity || 0).toLocaleString('en-BD')}
                                                             </div>
 
                                                             {/* Sale Stock */}
                                                             <div className="text-sm text-orange-800 bg-orange-50/50 px-2 py-1 rounded-lg text-center font-bold">
                                                                 {(() => {
                                                                     const { whole, remainder } = calculatePktRemainder(brand.saleQuantity, brand.packetSize);
-                                                                    return `${whole.toLocaleString()} - ${Math.abs(remainder).toLocaleString()} kg`;
+                                                                    return `${whole.toLocaleString('en-BD')} - ${Math.abs(remainder).toLocaleString('en-BD')} kg`;
                                                                 })()}
                                                             </div>
                                                             <div className="text-sm text-orange-900 text-center font-medium">
-                                                                {Math.round(brand.saleQuantity || 0).toLocaleString()}
+                                                                {Math.round(brand.saleQuantity || 0).toLocaleString('en-BD')}
                                                             </div>
 
                                                             {/* Closing Stock */}
                                                             <div className="text-sm text-green-800 bg-green-50/50 px-2 py-1 rounded-lg text-center font-bold border border-green-100/50">
                                                                 {(() => {
                                                                     const { whole, remainder } = calculatePktRemainder(brand.inHouseQuantity, brand.packetSize);
-                                                                    return `${whole.toLocaleString()} - ${Math.abs(remainder).toLocaleString()} kg`;
+                                                                    return `${whole.toLocaleString('en-BD')} - ${Math.abs(remainder).toLocaleString('en-BD')} kg`;
                                                                 })()}
                                                             </div>
                                                             <div className="text-sm text-green-900 text-center font-black">
-                                                                {Math.round(brand.inHouseQuantity).toLocaleString()}
+                                                                {Math.round(brand.inHouseQuantity).toLocaleString('en-BD')}
                                                             </div>
 
                                                             <div className="text-center overflow-hidden">
@@ -2904,33 +2904,33 @@ const StockManagement = ({
                                                             {(() => {
                                                                 const pktSize = group.brandList?.[0]?.packetSize || 0;
                                                                 const { whole, remainder } = calculatePktRemainder(group.openingQuantity, pktSize);
-                                                                return `${whole.toLocaleString()} - ${Math.abs(remainder).toLocaleString()} kg`;
+                                                                return `${whole.toLocaleString('en-BD')} - ${Math.abs(remainder).toLocaleString('en-BD')} kg`;
                                                             })()}
                                                         </div>
                                                         <div className="text-sm text-blue-900 font-black text-center">
-                                                            {Math.round(group.openingQuantity).toLocaleString()}
+                                                            {Math.round(group.openingQuantity).toLocaleString('en-BD')}
                                                         </div>
                                                         {/* Total Sale */}
                                                         <div className="text-sm text-orange-900 font-black text-center">
                                                             {(() => {
                                                                 const pktSize = group.brandList?.[0]?.packetSize || 0;
                                                                 const { whole, remainder } = calculatePktRemainder(group.saleQuantity, pktSize);
-                                                                return `${whole.toLocaleString()} - ${Math.abs(remainder).toLocaleString()} kg`;
+                                                                return `${whole.toLocaleString('en-BD')} - ${Math.abs(remainder).toLocaleString('en-BD')} kg`;
                                                             })()}
                                                         </div>
                                                         <div className="text-sm text-orange-900 font-black text-center">
-                                                            {Math.round(group.saleQuantity).toLocaleString()}
+                                                            {Math.round(group.saleQuantity).toLocaleString('en-BD')}
                                                         </div>
                                                         {/* Total Closing */}
                                                         <div className="text-sm text-green-900 font-black text-center underline decoration-green-200">
                                                             {(() => {
                                                                 const pktSize = group.brandList?.[0]?.packetSize || 0;
                                                                 const { whole, remainder = 0 } = calculatePktRemainder(group.inHouseQuantity, pktSize);
-                                                                return `${whole.toLocaleString()} - ${Math.abs(remainder).toLocaleString()} kg`;
+                                                                return `${whole.toLocaleString('en-BD')} - ${Math.abs(remainder).toLocaleString('en-BD')} kg`;
                                                             })()}
                                                         </div>
                                                         <div className="text-sm text-green-900 font-black text-center underline decoration-green-200">
-                                                            {Math.round(group.inHouseQuantity).toLocaleString()}
+                                                            {Math.round(group.inHouseQuantity).toLocaleString('en-BD')}
                                                         </div>
                                                         <div className="text-center"></div>
                                                     </div>
@@ -3212,11 +3212,11 @@ const StockManagement = ({
                                         <div className="space-y-6">
                                             <div className="grid grid-cols-2 md:flex md:flex-row gap-3 sm:gap-4 w-full">
                                                 {[
-                                                    { label: 'TOTAL BAG', value: tPkts.toLocaleString(), bgColor: 'bg-white', borderColor: 'border-gray-200', textColor: 'text-gray-900', labelColor: 'text-gray-400' },
-                                                    { label: 'TOTAL QTY', value: `${Math.round(tQty).toLocaleString()} ${unit}`, bgColor: 'bg-emerald-50/10', borderColor: 'border-emerald-100', textColor: 'text-emerald-700', labelColor: 'text-emerald-600' },
-                                                    { label: 'INHOUSE BAG', value: tIHPkt.toLocaleString(), bgColor: 'bg-amber-50/10', borderColor: 'border-amber-100', textColor: 'text-amber-700', labelColor: 'text-amber-600' },
-                                                    { label: 'INHOUSE QTY', value: `${Math.round(tIHQty).toLocaleString()} ${unit}`, bgColor: 'bg-blue-50/10', borderColor: 'border-blue-100', textColor: 'text-blue-700', labelColor: 'text-blue-600' },
-                                                    { label: 'SHORTAGE', value: `${Math.round(tShort).toLocaleString()} ${unit}`, bgColor: 'bg-rose-50/10', borderColor: 'border-rose-100', textColor: 'text-rose-700', labelColor: 'text-rose-600', span: 'col-span-2 md:col-auto' },
+                                                    { label: 'TOTAL BAG', value: tPkts.toLocaleString('en-BD'), bgColor: 'bg-white', borderColor: 'border-gray-200', textColor: 'text-gray-900', labelColor: 'text-gray-400' },
+                                                    { label: 'TOTAL QTY', value: `${Math.round(tQty).toLocaleString('en-BD')} ${unit}`, bgColor: 'bg-emerald-50/10', borderColor: 'border-emerald-100', textColor: 'text-emerald-700', labelColor: 'text-emerald-600' },
+                                                    { label: 'INHOUSE BAG', value: tIHPkt.toLocaleString('en-BD'), bgColor: 'bg-amber-50/10', borderColor: 'border-amber-100', textColor: 'text-amber-700', labelColor: 'text-amber-600' },
+                                                    { label: 'INHOUSE QTY', value: `${Math.round(tIHQty).toLocaleString('en-BD')} ${unit}`, bgColor: 'bg-blue-50/10', borderColor: 'border-blue-100', textColor: 'text-blue-700', labelColor: 'text-blue-600' },
+                                                    { label: 'SHORTAGE', value: `${Math.round(tShort).toLocaleString('en-BD')} ${unit}`, bgColor: 'bg-rose-50/10', borderColor: 'border-rose-100', textColor: 'text-rose-700', labelColor: 'text-rose-600', span: 'col-span-2 md:col-auto' },
                                                 ].map((card, i) => (
                                                     <div key={i} className={`bg-white border ${card.bgColor} ${card.borderColor} p-3 sm:p-4 rounded-xl shadow-sm transition-all hover:shadow-md ${card.span || ''} md:flex-1 min-w-[120px]`}>
                                                         <div className={`text-[10px] sm:text-[11px] font-bold ${card.labelColor} uppercase tracking-wider mb-0.5 sm:mb-1`}>{card.label}</div>
@@ -3281,7 +3281,7 @@ const StockManagement = ({
                                                                         <td className="px-3 py-3 align-top">
                                                                             <div className="space-y-1">
                                                                                 {item.entries.map((entry, eIdx) => (
-                                                                                    <div key={eIdx} className="text-sm text-gray-600">৳{parseFloat(entry.purchasedPrice || 0).toLocaleString()}</div>
+                                                                                    <div key={eIdx} className="text-sm text-gray-600">৳{parseFloat(entry.purchasedPrice || 0).toLocaleString('en-BD')}</div>
                                                                                 ))}
                                                                             </div>
                                                                         </td>
@@ -3295,7 +3295,7 @@ const StockManagement = ({
                                                                         <td className="px-3 py-3 align-top font-bold">
                                                                             <div className="space-y-1">
                                                                                 {item.entries.map((entry, eIdx) => (
-                                                                                    <div key={eIdx} className="text-sm text-gray-900">{Math.round(parseFloat(entry.quantity || 0)).toLocaleString()} {entry.unit}</div>
+                                                                                    <div key={eIdx} className="text-sm text-gray-900">{Math.round(parseFloat(entry.quantity || 0)).toLocaleString('en-BD')} {entry.unit}</div>
                                                                                 ))}
                                                                             </div>
                                                                         </td>
@@ -3309,14 +3309,14 @@ const StockManagement = ({
                                                                         <td className="px-3 py-3 align-top">
                                                                             <div className="space-y-1">
                                                                                 {item.entries.map((entry, eIdx) => (
-                                                                                    <div key={eIdx} className="text-sm text-blue-600 font-bold">{Math.round(parseFloat(entry.inHouseQuantity || 0)).toLocaleString()} {entry.unit}</div>
+                                                                                    <div key={eIdx} className="text-sm text-blue-600 font-bold">{Math.round(parseFloat(entry.inHouseQuantity || 0)).toLocaleString('en-BD')} {entry.unit}</div>
                                                                                 ))}
                                                                             </div>
                                                                         </td>
                                                                         <td className="px-3 py-3 align-top text-rose-600 font-black">
                                                                             <div className="space-y-1">
                                                                                 {item.entries.map((entry, eIdx) => (
-                                                                                    <div key={eIdx} className="text-sm">{Math.round(parseFloat(entry.sweepedQuantity || 0)).toLocaleString()} {entry.unit}</div>
+                                                                                    <div key={eIdx} className="text-sm">{Math.round(parseFloat(entry.sweepedQuantity || 0)).toLocaleString('en-BD')} {entry.unit}</div>
                                                                                 ))}
                                                                             </div>
                                                                         </td>
@@ -3397,28 +3397,28 @@ const StockManagement = ({
                                                                                     <div key={eIdx} className={`${eIdx !== 0 ? 'border-t border-gray-100 pt-3' : ''}`}>
                                                                                         <div className="flex justify-between items-center mb-2">
                                                                                             <span className="text-sm font-bold text-gray-900">{entry.brand}</span>
-                                                                                            <span className="text-xs font-medium text-gray-500">৳{parseFloat(entry.purchasedPrice || 0).toLocaleString()}</span>
+                                                                                            <span className="text-xs font-medium text-gray-500">৳{parseFloat(entry.purchasedPrice || 0).toLocaleString('en-BD')}</span>
                                                                                         </div>
                                                                                         <div className="grid grid-cols-2 gap-3">
                                                                                             <div className="flex flex-col bg-white p-2 rounded-lg border border-gray-100">
                                                                                                 <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Total LC Amount</span>
                                                                                                 <div className="flex flex-col gap-1">
                                                                                                     <span className="text-xs font-bold text-gray-900">{entry.packet} PKT</span>
-                                                                                                    <span className="text-xs font-bold text-gray-600">{Math.round(parseFloat(entry.quantity || 0)).toLocaleString()} {entry.unit}</span>
+                                                                                                    <span className="text-xs font-bold text-gray-600">{Math.round(parseFloat(entry.quantity || 0)).toLocaleString('en-BD')} {entry.unit}</span>
                                                                                                 </div>
                                                                                             </div>
                                                                                             <div className="flex flex-col bg-white p-2 rounded-lg border border-gray-100">
                                                                                                 <span className="text-[10px] font-bold text-blue-400 uppercase tracking-wider">InHouse</span>
                                                                                                 <div className="flex flex-col gap-1">
                                                                                                     <span className="text-xs font-bold text-blue-600">{entry.inHousePacket} BAG</span>
-                                                                                                    <span className="text-xs font-bold text-blue-500">{Math.round(parseFloat(entry.inHouseQuantity || 0)).toLocaleString()} {entry.unit}</span>
+                                                                                                    <span className="text-xs font-bold text-blue-500">{Math.round(parseFloat(entry.inHouseQuantity || 0)).toLocaleString('en-BD')} {entry.unit}</span>
                                                                                                 </div>
                                                                                             </div>
                                                                                         </div>
                                                                                         {parseFloat(entry.sweepedQuantity || 0) > 0 && (
                                                                                             <div className="mt-2 flex items-center gap-2 bg-rose-50 px-2 py-1 rounded-md">
                                                                                                 <span className="text-[10px] font-bold text-rose-400 uppercase tracking-wider">Shortage:</span>
-                                                                                                <span className="text-xs font-bold text-rose-600">{Math.round(parseFloat(entry.sweepedQuantity || 0)).toLocaleString()} {entry.unit}</span>
+                                                                                                <span className="text-xs font-bold text-rose-600">{Math.round(parseFloat(entry.sweepedQuantity || 0)).toLocaleString('en-BD')} {entry.unit}</span>
                                                                                             </div>
                                                                                         )}
                                                                                     </div>
@@ -3447,11 +3447,11 @@ const StockManagement = ({
                                             <div className="grid grid-cols-2 gap-4 max-w-2xl">
                                                 <div className="bg-emerald-50/10 border border-emerald-100 p-4 sm:p-6 rounded-2xl shadow-sm transition-all hover:shadow-md">
                                                     <div className="text-[11px] font-bold text-emerald-600 uppercase tracking-wider mb-1">Total Sale Quantity</div>
-                                                    <div className="text-lg sm:text-2xl font-black text-emerald-700">{totalSaleQty.toLocaleString()} {unit}</div>
+                                                    <div className="text-lg sm:text-2xl font-black text-emerald-700">{totalSaleQty.toLocaleString('en-BD')} {unit}</div>
                                                 </div>
                                                 <div className="bg-blue-50/10 border border-blue-100 p-4 sm:p-6 rounded-2xl shadow-sm transition-all hover:shadow-md">
                                                     <div className="text-[11px] font-bold text-blue-600 uppercase tracking-wider mb-1">Total Sale Amount</div>
-                                                    <div className="text-lg sm:text-2xl font-black text-blue-700">৳ {totalSaleAmount.toLocaleString()}</div>
+                                                    <div className="text-lg sm:text-2xl font-black text-blue-700">৳ {totalSaleAmount.toLocaleString('en-BD')}</div>
                                                 </div>
                                             </div>
 
@@ -3491,21 +3491,21 @@ const StockManagement = ({
                                                                                     <div className="text-sm font-medium text-blue-600">{sale.itemBrand}</div>
                                                                                 </td>
                                                                                 <td className={`px-3 py-3 text-right ${!isFruitHistory ? 'text-right' : ''}`}>
-                                                                                    <div className="text-sm font-bold text-gray-900">{sale.itemPacket.toLocaleString()}</div>
+                                                                                    <div className="text-sm font-bold text-gray-900">{sale.itemPacket.toLocaleString('en-BD')}</div>
                                                                                 </td>
                                                                             </>
                                                                         )}
                                                                         <td className="px-3 py-3 text-right">
-                                                                            <div className="text-sm font-bold text-gray-900">{sale.itemQty.toLocaleString()} {unit}</div>
+                                                                            <div className="text-sm font-bold text-gray-900">{sale.itemQty.toLocaleString('en-BD')} {unit}</div>
                                                                         </td>
                                                                         {isFruitHistory && (
                                                                             <td className="px-3 py-3 text-sm text-gray-600 font-medium text-right">{sale.itemTruck || '-'}</td>
                                                                         )}
                                                                         <td className="px-3 py-3 text-right">
-                                                                            <div className="text-sm font-medium text-gray-600">৳{sale.itemPrice.toLocaleString()}</div>
+                                                                            <div className="text-sm font-medium text-gray-600">৳{sale.itemPrice.toLocaleString('en-BD')}</div>
                                                                         </td>
                                                                         <td className="px-3 py-3 text-right">
-                                                                            <div className="text-sm font-black text-blue-600 group-hover:text-blue-700">৳{sale.itemTotal.toLocaleString()}</div>
+                                                                            <div className="text-sm font-black text-blue-600 group-hover:text-blue-700">৳{sale.itemTotal.toLocaleString('en-BD')}</div>
                                                                         </td>
                                                                     </tr>
                                                                 ))
@@ -3575,22 +3575,22 @@ const StockManagement = ({
                                                                                 </div>
                                                                                 <div className="text-right">
                                                                                     <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-0.5">{isFruitHistory ? "Phone" : "BAG"}</div>
-                                                                                    <div className="text-sm font-bold text-gray-900 truncate">{isFruitHistory ? (sale.contact || '-') : `${sale.itemPacket.toLocaleString()} BAG`}</div>
+                                                                                    <div className="text-sm font-bold text-gray-900 truncate">{isFruitHistory ? (sale.contact || '-') : `${sale.itemPacket.toLocaleString('en-BD')} BAG`}</div>
                                                                                 </div>
                                                                             </div>
 
                                                                             <div className="flex items-end justify-between pt-1">
                                                                                 <div className="flex flex-col">
                                                                                     <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Quantity</span>
-                                                                                    <span className="text-sm font-black text-gray-900">{sale.itemQty.toLocaleString()} {unit}</span>
+                                                                                    <span className="text-sm font-black text-gray-900">{sale.itemQty.toLocaleString('en-BD')} {unit}</span>
                                                                                 </div>
                                                                                 <div className="flex flex-col items-center">
                                                                                     <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Price</span>
-                                                                                    <span className="text-xs font-bold text-gray-600">৳{sale.itemPrice.toLocaleString()}</span>
+                                                                                    <span className="text-xs font-bold text-gray-600">৳{sale.itemPrice.toLocaleString('en-BD')}</span>
                                                                                 </div>
                                                                                 <div className="flex flex-col items-end">
                                                                                     <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Total Amount</span>
-                                                                                    <span className="text-lg font-black text-blue-600">৳{sale.itemTotal.toLocaleString()}</span>
+                                                                                    <span className="text-lg font-black text-blue-600">৳{sale.itemTotal.toLocaleString('en-BD')}</span>
                                                                                 </div>
                                                                             </div>
 

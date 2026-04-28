@@ -320,7 +320,7 @@ export const generatePIPDF = (record) => {
             rowSpan: hasFreight ? 2 : 1,
             styles: { halign: 'left', fontStyle: 'normal', cellPadding: { top: 28, left: 1.5, right: 1.5, bottom: 1.5 } }
         },
-        { content: record.quantity ? parseFloat(record.quantity).toLocaleString() : '0', styles: { halign: 'center', fontStyle: 'bold' } },
+        { content: record.quantity ? parseFloat(record.quantity).toLocaleString('en-BD') : '0', styles: { halign: 'center', fontStyle: 'bold' } },
         { content: record.rate ? parseFloat(record.rate).toFixed(3) : '0.000', styles: { halign: 'center', fontStyle: 'bold' } },
         { content: record.amount ? parseFloat(record.amount).toLocaleString(undefined, { minimumFractionDigits: 2 }) : '0.00', styles: { halign: 'center', fontStyle: 'bold' } }
     ]);

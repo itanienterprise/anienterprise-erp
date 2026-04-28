@@ -1597,11 +1597,11 @@ const Customer = ({
                                             <>
                                                 <div className="bg-blue-50/50 p-3 md:p-4 rounded-2xl border border-blue-100 shadow-sm transition-all hover:shadow-md">
                                                     <p className="text-[9px] md:text-[10px] text-blue-500 font-bold uppercase tracking-wider mb-1">Total G.P Qty</p>
-                                                    <p className="text-base md:text-lg font-black text-blue-700">{totalGpQuantity.toLocaleString()} Kg</p>
+                                                    <p className="text-base md:text-lg font-black text-blue-700">{totalGpQuantity.toLocaleString('en-BD')} Kg</p>
                                                 </div>
                                                 <div className="bg-emerald-50/50 p-3 md:p-4 rounded-2xl border border-emerald-100 shadow-sm transition-all hover:shadow-md">
                                                     <p className="text-[9px] md:text-[10px] text-emerald-500 font-bold uppercase tracking-wider mb-1">Total G.P Value</p>
-                                                    <p className="text-base md:text-lg font-black text-emerald-700">৳{totalGpValue.toLocaleString()}</p>
+                                                    <p className="text-base md:text-lg font-black text-emerald-700">৳{totalGpValue.toLocaleString('en-BD')}</p>
                                                 </div>
                                             </>
                                         )}
@@ -1609,19 +1609,19 @@ const Customer = ({
                                             <>
                                                 <div className="bg-violet-50/50 p-3 md:p-4 rounded-2xl border border-violet-100 shadow-sm transition-all hover:shadow-md">
                                                     <p className="text-[9px] md:text-[10px] text-violet-500 font-bold uppercase tracking-wider mb-1">Total Amount</p>
-                                                    <p className="text-base md:text-lg font-black text-violet-700">৳{totalAmount.toLocaleString()}</p>
+                                                    <p className="text-base md:text-lg font-black text-violet-700">৳{totalAmount.toLocaleString('en-BD')}</p>
                                                 </div>
                                                 <div className="bg-teal-50/50 p-3 md:p-4 rounded-2xl border border-teal-100 shadow-sm transition-all hover:shadow-md">
                                                     <p className="text-[9px] md:text-[10px] text-teal-500 font-bold uppercase tracking-wider mb-1">Total Paid</p>
-                                                    <p className="text-base md:text-lg font-black text-teal-700">৳{totalPaidCalculated.toLocaleString()}</p>
+                                                    <p className="text-base md:text-lg font-black text-teal-700">৳{totalPaidCalculated.toLocaleString('en-BD')}</p>
                                                 </div>
                                                 <div className="bg-pink-50/50 p-3 md:p-4 rounded-2xl border border-pink-100 shadow-sm transition-all hover:shadow-md">
                                                     <p className="text-[9px] md:text-[10px] text-pink-500 font-bold uppercase tracking-wider mb-1">Total Discount</p>
-                                                    <p className="text-base md:text-lg font-black text-pink-700">৳{totalDiscount.toLocaleString()}</p>
+                                                    <p className="text-base md:text-lg font-black text-pink-700">৳{totalDiscount.toLocaleString('en-BD')}</p>
                                                 </div>
                                                 <div className="bg-orange-50/50 p-3 md:p-4 rounded-2xl border border-orange-100 shadow-sm transition-all hover:shadow-md">
                                                     <p className="text-[9px] md:text-[10px] text-orange-500 font-bold uppercase tracking-wider mb-1">Total Balance</p>
-                                                    <p className="text-base md:text-lg font-black text-orange-700">৳{totalDueCalculated.toLocaleString()}</p>
+                                                    <p className="text-base md:text-lg font-black text-orange-700">৳{totalDueCalculated.toLocaleString('en-BD')}</p>
                                                 </div>
                                             </>
                                         )}
@@ -1686,9 +1686,9 @@ const Customer = ({
                                                                     <td className="px-4 py-3 font-bold text-gray-900">{item.lcNumber}</td>
                                                                     <td className="px-4 py-3 text-xs font-bold text-blue-600 uppercase">{getLcPort(item.lcNumber)}</td>
                                                                     <td className="px-4 py-3 text-gray-600">{item.productName}</td>
-                                                                    <td className="px-4 py-3 font-bold text-blue-600">{parseFloat(item.gpQuantity || 0).toLocaleString()} Kg</td>
-                                                                    <td className="px-4 py-3 text-gray-600">৳{parseFloat(item.gpRate || 0).toLocaleString()}</td>
-                                                                    <td className="px-4 py-3 font-bold text-gray-900">৳{parseFloat(item.gpValue || 0).toLocaleString()}</td>
+                                                                    <td className="px-4 py-3 font-bold text-blue-600">{parseFloat(item.gpQuantity || 0).toLocaleString('en-BD')} Kg</td>
+                                                                    <td className="px-4 py-3 text-gray-600">৳{parseFloat(item.gpRate || 0).toLocaleString('en-BD')}</td>
+                                                                    <td className="px-4 py-3 font-bold text-gray-900">৳{parseFloat(item.gpValue || 0).toLocaleString('en-BD')}</td>
                                                                 </tr>
                                                             ))
                                                         ) : (
@@ -1713,7 +1713,7 @@ const Customer = ({
                                                                         </div>
                                                                     </div>
                                                                     <div className="text-left">
-                                                                        <div className="text-xs font-bold text-gray-900">৳{parseFloat(item.gpValue || 0).toLocaleString()}</div>
+                                                                        <div className="text-xs font-bold text-gray-900">৳{parseFloat(item.gpValue || 0).toLocaleString('en-BD')}</div>
                                                                         <div className="text-[10px] text-gray-400">G.P Value</div>
                                                                     </div>
                                                                 </div>
@@ -1724,7 +1724,7 @@ const Customer = ({
                                                                     </div>
                                                                     <div className="text-left">
                                                                         <div className="text-[10px] text-gray-400 uppercase">G.P Qty</div>
-                                                                        <div className="text-xs font-bold text-blue-600">{parseFloat(item.gpQuantity || 0).toLocaleString()} Kg</div>
+                                                                        <div className="text-xs font-bold text-blue-600">{parseFloat(item.gpQuantity || 0).toLocaleString('en-BD')} Kg</div>
                                                                     </div>
                                                                 </div>
                                                             </div>
@@ -1928,7 +1928,7 @@ const Customer = ({
                                                                             </td>
                                                                             {/* Column 4: Qty (Party) or Brand (General) */}
                                                                             {isParty ? (
-                                                                                <td className="px-4 py-4 text-left font-bold text-gray-900">{group.totalQty.toLocaleString()}</td>
+                                                                                <td className="px-4 py-4 text-left font-bold text-gray-900">{group.totalQty.toLocaleString('en-BD')}</td>
                                                                             ) : (
                                                                                 <td className="px-4 py-4">
                                                                                     {isMulti ? (
@@ -1946,7 +1946,7 @@ const Customer = ({
                                                                                     {isMulti ? (group.trucks.size > 0 ? group.trucks.size : '-') : (group.items[0]?.truck || '-')}
                                                                                 </td>
                                                                             ) : (
-                                                                                <td className="px-4 py-4 text-left font-bold text-gray-900">{group.totalQty.toLocaleString()}</td>
+                                                                                <td className="px-4 py-4 text-left font-bold text-gray-900">{group.totalQty.toLocaleString('en-BD')}</td>
                                                                             )}
                                                                             {/* Column 6: Rate */}
                                                                             <td className="px-4 py-4 text-left font-bold text-gray-500">
@@ -1954,10 +1954,10 @@ const Customer = ({
                                                                                     <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold bg-gray-100 text-gray-700 uppercase tracking-wider">
                                                                                         Multiple
                                                                                     </span>
-                                                                                ) : (group.items[0]?.rate ? `৳${parseFloat(group.items[0].rate).toLocaleString()}` : (group.totalQty > 0 ? `৳${(group.totalAmount / group.totalQty).toFixed(2)}` : '-'))}
+                                                                                ) : (group.items[0]?.rate ? `৳${parseFloat(group.items[0].rate).toLocaleString('en-BD')}` : (group.totalQty > 0 ? `৳${(group.totalAmount / group.totalQty).toFixed(2)}` : '-'))}
                                                                             </td>
-                                                                            <td className="px-4 py-4 text-left font-black text-violet-700">৳{group.totalAmount.toLocaleString()}</td>
-                                                                            <td className="px-4 py-4 text-left font-bold text-pink-600">৳{group.totalDiscount.toLocaleString()}</td>
+                                                                            <td className="px-4 py-4 text-left font-black text-violet-700">৳{group.totalAmount.toLocaleString('en-BD')}</td>
+                                                                            <td className="px-4 py-4 text-left font-bold text-pink-600">৳{group.totalDiscount.toLocaleString('en-BD')}</td>
                                                                             <td className="px-4 py-4 text-left">
                                                                                 <button
                                                                                     onClick={(e) => {
@@ -2001,7 +2001,7 @@ const Customer = ({
                                                                                 <td className="px-4 py-3 text-xs text-gray-500 italic">{item.lcNo || '-'}</td>
                                                                                 <td className="px-4 py-3 text-xs text-gray-900 font-medium">{item.product}</td>
                                                                                 {isParty ? (
-                                                                                    <td className="px-4 py-3 text-left text-xs font-bold text-gray-900">{parseFloat(item.quantity).toLocaleString()}</td>
+                                                                                    <td className="px-4 py-3 text-left text-xs font-bold text-gray-900">{parseFloat(item.quantity).toLocaleString('en-BD')}</td>
                                                                                 ) : (
                                                                                     <td className="px-4 py-3 text-xs text-gray-600">{item.brand || '-'}</td>
                                                                                 )}
@@ -2010,11 +2010,11 @@ const Customer = ({
                                                                                         <td className="px-4 py-3 text-left text-xs text-gray-900 font-medium">{item.truck || '-'}</td>
                                                                                     ) : null
                                                                                 ) : (
-                                                                                    <td className="px-4 py-3 text-left text-xs font-bold text-gray-900">{parseFloat(item.quantity).toLocaleString()}</td>
+                                                                                    <td className="px-4 py-3 text-left text-xs font-bold text-gray-900">{parseFloat(item.quantity).toLocaleString('en-BD')}</td>
                                                                                 )}
-                                                                                <td className="px-4 py-3 text-left text-xs text-gray-500">৳{parseFloat(item.rate).toLocaleString()}</td>
-                                                                                <td className="px-4 py-3 text-left text-xs font-bold text-violet-600">৳{parseFloat(item.amount).toLocaleString()}</td>
-                                                                                <td className="px-4 py-3 text-left text-xs font-bold text-pink-500">৳{parseFloat(item.discount || 0).toLocaleString()}</td>
+                                                                                <td className="px-4 py-3 text-left text-xs text-gray-500">৳{parseFloat(item.rate).toLocaleString('en-BD')}</td>
+                                                                                <td className="px-4 py-3 text-left text-xs font-bold text-violet-600">৳{parseFloat(item.amount).toLocaleString('en-BD')}</td>
+                                                                                <td className="px-4 py-3 text-left text-xs font-bold text-pink-500">৳{parseFloat(item.discount || 0).toLocaleString('en-BD')}</td>
                                                                                 <td className="px-4 py-3"></td>
                                                                                 <td className="px-4 py-3"></td>
                                                                             </tr>
@@ -2096,11 +2096,11 @@ const Customer = ({
                                                                             </div>
                                                                             <div className="flex justify-between text-xs">
                                                                                 <span className="text-gray-500">Total Qty:</span>
-                                                                                <span className="font-bold text-gray-900">{group.totalQty.toLocaleString()}</span>
+                                                                                <span className="font-bold text-gray-900">{group.totalQty.toLocaleString('en-BD')}</span>
                                                                             </div>
                                                                             <div className="flex justify-between text-xs pt-1 border-t border-gray-100 mt-1">
                                                                                 <span className="text-gray-500">Amount:</span>
-                                                                                <span className="font-black text-violet-700">৳{group.totalAmount.toLocaleString()}</span>
+                                                                                <span className="font-black text-violet-700">৳{group.totalAmount.toLocaleString('en-BD')}</span>
                                                                             </div>
                                                                         </div>
 
@@ -2216,7 +2216,7 @@ const Customer = ({
                                                                     </td>
                                                                     <td className="px-4 py-3 text-left font-bold text-gray-900">
                                                                         <div className="flex flex-col items-end">
-                                                                            <span>৳{parseFloat(payment.amount).toLocaleString()}</span>
+                                                                            <span>৳{parseFloat(payment.amount).toLocaleString('en-BD')}</span>
                                                                             {payment.reference && <span className="text-[9px] text-blue-500 font-normal">Ref: {payment.reference}</span>}
                                                                         </div>
                                                                     </td>
@@ -2298,7 +2298,7 @@ const Customer = ({
                                                                             )}
                                                                             <div className="flex justify-between text-xs pt-1 border-t border-gray-100 mt-1">
                                                                                 <span className="text-gray-500">Amount:</span>
-                                                                                <span className="font-black text-emerald-600">৳{parseFloat(payment.amount).toLocaleString()}</span>
+                                                                                <span className="font-black text-emerald-600">৳{parseFloat(payment.amount).toLocaleString('en-BD')}</span>
                                                                             </div>
                                                                             {payment.reference && (
                                                                                 <div className="text-[10px] text-blue-500 italic mt-1">
@@ -2429,8 +2429,8 @@ const Customer = ({
                                                                         
                                                                         // Rebuild display properties
                                                                         existing.product = existing.items.map(si => si.product || '—').join('\n');
-                                                                        existing.quantity_display = existing.items.map(si => si.quantity.toLocaleString()).join('\n');
-                                                                        existing.rate_display = existing.items.map(si => si.rate > 0 ? `৳${si.rate.toLocaleString()}` : '—').join('\n');
+                                                                        existing.quantity_display = existing.items.map(si => si.quantity.toLocaleString('en-BD')).join('\n');
+                                                                        existing.rate_display = existing.items.map(si => si.rate > 0 ? `৳${si.rate.toLocaleString('en-BD')}` : '—').join('\n');
                                                                         
                                                                         existing.quantity = (parseFloat(existing.quantity || 0)) + (parseFloat(item.quantity || 0));
                                                                         existing.runningBalance = item.runningBalance;
@@ -2452,9 +2452,9 @@ const Customer = ({
                                                                          {viewData.customerType?.includes('Party') && (
                                                                             <td className="px-4 py-3 text-gray-700">{item.truck || '—'}</td>
                                                                         )}
-                                                                        <td className="px-4 py-3 text-left text-gray-900 whitespace-pre-wrap">{item.quantity_display || (parseFloat(item.quantity || 0) > 0 ? parseFloat(item.quantity).toLocaleString() : '—')}</td>
-                                                                        <td className="px-4 py-3 text-left text-gray-500 whitespace-pre-wrap">{item.rate_display || (parseFloat(item.rate || 0) > 0 ? `৳${parseFloat(item.rate).toLocaleString()}` : '—')}</td>
-                                                                        <td className="px-4 py-3 text-left font-black text-violet-700">{item.type === 'sale' ? `৳${parseFloat(item.amount || 0).toLocaleString()}` : '—'}</td>
+                                                                        <td className="px-4 py-3 text-left text-gray-900 whitespace-pre-wrap">{item.quantity_display || (parseFloat(item.quantity || 0) > 0 ? parseFloat(item.quantity).toLocaleString('en-BD') : '—')}</td>
+                                                                        <td className="px-4 py-3 text-left text-gray-500 whitespace-pre-wrap">{item.rate_display || (parseFloat(item.rate || 0) > 0 ? `৳${parseFloat(item.rate).toLocaleString('en-BD')}` : '—')}</td>
+                                                                        <td className="px-4 py-3 text-left font-black text-violet-700">{item.type === 'sale' ? `৳${parseFloat(item.amount || 0).toLocaleString('en-BD')}` : '—'}</td>
                                                                         <td className="px-4 py-3 text-gray-600 text-xs">
                                                                             {item.type === 'payment' ? (
                                                                                 <div className="flex flex-col">
@@ -2467,8 +2467,8 @@ const Customer = ({
                                                                         </td>
                                                                         <td className="px-4 py-3 text-left font-black text-emerald-600">
                                                                             {item.type === 'sale' 
-                                                                                ? (parseFloat(item.paid || 0) > 0 ? `৳${parseFloat(item.paid).toLocaleString()}` : '—')
-                                                                                : `৳${parseFloat(item.amount || 0).toLocaleString()}`
+                                                                                ? (parseFloat(item.paid || 0) > 0 ? `৳${parseFloat(item.paid).toLocaleString('en-BD')}` : '—')
+                                                                                : `৳${parseFloat(item.amount || 0).toLocaleString('en-BD')}`
                                                                             }
                                                                         </td>
                                                                         <td className="px-4 py-3 text-left font-black text-orange-600">৳{item.runningBalance.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
@@ -2522,8 +2522,8 @@ const Customer = ({
                                                                     
                                                                     // Rebuild display properties
                                                                     existing.product = existing.items.map(si => si.product || '—').join('\n');
-                                                                    existing.quantity_display = existing.items.map(si => si.quantity.toLocaleString()).join('\n');
-                                                                    existing.rate_display = existing.items.map(si => si.rate > 0 ? `৳${si.rate.toLocaleString()}` : '—').join('\n');
+                                                                    existing.quantity_display = existing.items.map(si => si.quantity.toLocaleString('en-BD')).join('\n');
+                                                                    existing.rate_display = existing.items.map(si => si.rate > 0 ? `৳${si.rate.toLocaleString('en-BD')}` : '—').join('\n');
                                                                     
                                                                     existing.quantity = (parseFloat(existing.quantity || 0)) + (parseFloat(item.quantity || 0));
                                                                     existing.runningBalance = item.runningBalance;
@@ -2554,9 +2554,9 @@ const Customer = ({
                                                                             </div>
                                                                             <div className="text-left">
                                                                                 <div className={`text-sm font-black ${item.type === 'sale' ? 'text-violet-700' : 'text-emerald-600'}`}>
-                                                                                    {item.type === 'sale' ? `+৳${parseFloat(item.amount || 0).toLocaleString()}` : `-৳${parseFloat(item.amount || 0).toLocaleString()}`}
+                                                                                    {item.type === 'sale' ? `+৳${parseFloat(item.amount || 0).toLocaleString('en-BD')}` : `-৳${parseFloat(item.amount || 0).toLocaleString('en-BD')}`}
                                                                                 </div>
-                                                                                <div className="text-[10px] font-bold text-orange-600">Balance: ৳{item.runningBalance.toLocaleString()}</div>
+                                                                                <div className="text-[10px] font-bold text-orange-600">Balance: ৳{item.runningBalance.toLocaleString('en-BD')}</div>
                                                                             </div>
                                                                         </div>
                                                                         
@@ -2570,13 +2570,13 @@ const Customer = ({
                                                                                         </div>
                                                                                         <div className="flex justify-between items-start">
                                                                                             <span className="text-gray-500">Qty:</span>
-                                                                                            <span className="font-bold text-left whitespace-pre-wrap">{item.quantity_display || (parseFloat(item.quantity || 0) > 0 ? parseFloat(item.quantity).toLocaleString() : '—')}</span>
+                                                                                            <span className="font-bold text-left whitespace-pre-wrap">{item.quantity_display || (parseFloat(item.quantity || 0) > 0 ? parseFloat(item.quantity).toLocaleString('en-BD') : '—')}</span>
                                                                                         </div>
                                                                                         <div className="flex justify-between items-start">
                                                                                             <span className="text-gray-500">Rate:</span>
-                                                                                            <span className="font-bold text-left whitespace-pre-wrap">{item.rate_display || (parseFloat(item.rate || 0) > 0 ? `৳${parseFloat(item.rate).toLocaleString()}` : '—')}</span>
+                                                                                            <span className="font-bold text-left whitespace-pre-wrap">{item.rate_display || (parseFloat(item.rate || 0) > 0 ? `৳${parseFloat(item.rate).toLocaleString('en-BD')}` : '—')}</span>
                                                                                         </div>
-                                                                                        <div className="flex justify-between"><span className="text-gray-500">Paid:</span><span className="font-bold text-emerald-600">৳{parseFloat(item.paid || 0).toLocaleString()}</span></div>
+                                                                                        <div className="flex justify-between"><span className="text-gray-500">Paid:</span><span className="font-bold text-emerald-600">৳{parseFloat(item.paid || 0).toLocaleString('en-BD')}</span></div>
                                                                                     </>
                                                                                 ) : (
                                                                                     <>

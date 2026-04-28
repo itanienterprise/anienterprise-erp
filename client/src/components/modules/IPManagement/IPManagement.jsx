@@ -99,7 +99,7 @@ const ViewIPLCsModal = ({ ipRecord, lcRecords, allStockRecords = [], allSalesRec
                                 <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">IP Quantity</span>
                             </div>
                             <div className="flex items-baseline gap-1">
-                                <span className="text-xl font-black text-gray-900">{ipQtyKg.toLocaleString()}</span>
+                                <span className="text-xl font-black text-gray-900">{ipQtyKg.toLocaleString('en-BD')}</span>
                                 <span className="text-xs font-bold text-gray-400">Kg</span>
                             </div>
                         </div>
@@ -112,7 +112,7 @@ const ViewIPLCsModal = ({ ipRecord, lcRecords, allStockRecords = [], allSalesRec
                                 <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Total LC Qty</span>
                             </div>
                             <div className="flex items-baseline gap-1">
-                                <span className="text-xl font-black text-gray-900">{totalLcQtyKg.toLocaleString()}</span>
+                                <span className="text-xl font-black text-gray-900">{totalLcQtyKg.toLocaleString('en-BD')}</span>
                                 <span className="text-xs font-bold text-gray-400">Kg</span>
                             </div>
                         </div>
@@ -125,7 +125,7 @@ const ViewIPLCsModal = ({ ipRecord, lcRecords, allStockRecords = [], allSalesRec
                                 <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Remaining Qty</span>
                             </div>
                             <div className="flex items-baseline gap-1">
-                                <span className={`text-xl font-black ${ipRemQtyKg <= 0 ? 'text-emerald-600' : 'text-blue-600'}`}>{ipRemQtyKg.toLocaleString()}</span>
+                                <span className={`text-xl font-black ${ipRemQtyKg <= 0 ? 'text-emerald-600' : 'text-blue-600'}`}>{ipRemQtyKg.toLocaleString('en-BD')}</span>
                                 <span className="text-xs font-bold text-gray-400">Kg</span>
                             </div>
                         </div>
@@ -160,10 +160,10 @@ const ViewIPLCsModal = ({ ipRecord, lcRecords, allStockRecords = [], allSalesRec
                                                 <td className="px-5 py-3.5 text-sm font-black text-blue-600 whitespace-nowrap">{lc.lcNo || '-'}</td>
                                                 <td className="px-5 py-3.5 text-sm font-medium text-gray-800 uppercase">{lc.bankName || '-'}</td>
                                                 <td className="px-5 py-3.5 text-sm font-medium text-right text-gray-900 whitespace-nowrap">
-                                                    {lcQtyKg.toLocaleString()} <span className="text-[10px] text-gray-400 font-normal">Kg</span>
+                                                    {lcQtyKg.toLocaleString('en-BD')} <span className="text-[10px] text-gray-400 font-normal">Kg</span>
                                                 </td>
                                                 <td className="px-5 py-3.5 text-sm font-medium text-right whitespace-nowrap">
-                                                    <span className={`font-black ${lcRemQtyKg <= 0 ? 'text-emerald-600' : 'text-blue-600'}`}>{lcRemQtyKg.toLocaleString()}</span> <span className="text-[10px] text-gray-400 font-normal">Kg</span>
+                                                    <span className={`font-black ${lcRemQtyKg <= 0 ? 'text-emerald-600' : 'text-blue-600'}`}>{lcRemQtyKg.toLocaleString('en-BD')}</span> <span className="text-[10px] text-gray-400 font-normal">Kg</span>
                                                 </td>
                                                 <td className="px-5 py-3.5 text-center whitespace-nowrap">
                                                     {(() => {
@@ -1494,7 +1494,7 @@ function IPManagement({
                                                 <td className="px-6 py-4 text-sm text-gray-500">{record.productName}</td>
                                                 <td className="px-6 py-4 text-sm font-medium text-gray-900">{record.quantity} kg</td>
                                                 <td className="px-6 py-4 text-sm font-medium text-black">{record.remainingQuantity || '0'} kg</td>
-                                                <td className="px-6 py-4 text-sm font-bold text-blue-700">{(record.ipBalance || 0).toLocaleString()} kg</td>
+                                                <td className="px-6 py-4 text-sm font-bold text-blue-700">{(record.ipBalance || 0).toLocaleString('en-BD')} kg</td>
                                                 <td className="px-6 py-4 text-sm font-bold text-indigo-600">{record.totalLcCount || 0}</td>
                                                 <td className="px-6 py-4">
                                                     <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border ${record.computedStatus === 'Active' ? 'bg-green-50 text-green-700 border-green-100' :

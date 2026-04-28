@@ -651,7 +651,7 @@ const InsurancePayment = () => {
                                             <input
                                                 type="text"
                                                 readOnly
-                                                value={(newPayment.lcNo || newPayment.insuranceId) ? displayPremiumBalance.toLocaleString() : '0.00'}
+                                                value={(newPayment.lcNo || newPayment.insuranceId) ? displayPremiumBalance.toLocaleString('en-BD') : '0.00'}
                                                 className="w-full pl-6 pr-3 py-2.5 bg-white border border-gray-100 rounded-xl text-sm font-black text-gray-900 shadow-sm outline-none cursor-not-allowed"
                                             />
                                         </div>
@@ -665,7 +665,7 @@ const InsurancePayment = () => {
                                             <input
                                                 type="text"
                                                 readOnly
-                                                value={(newPayment.lcNo || newPayment.insuranceId) ? displayReturnBalance.toLocaleString() : '0.00'}
+                                                value={(newPayment.lcNo || newPayment.insuranceId) ? displayReturnBalance.toLocaleString('en-BD') : '0.00'}
                                                 className="w-full pl-6 pr-3 py-2.5 bg-white border border-gray-100 rounded-xl text-sm font-black text-gray-900 shadow-sm outline-none cursor-not-allowed"
                                             />
                                         </div>
@@ -679,7 +679,7 @@ const InsurancePayment = () => {
                                             <input
                                                 type="text"
                                                 readOnly
-                                                value={(newPayment.lcNo || newPayment.insuranceId) ? (displayPremiumBalance - displayReturnBalance).toLocaleString() : '0.00'}
+                                                value={(newPayment.lcNo || newPayment.insuranceId) ? (displayPremiumBalance - displayReturnBalance).toLocaleString('en-BD') : '0.00'}
                                                 className="w-full pl-6 pr-3 py-2.5 bg-white border border-gray-100 rounded-xl text-sm font-black text-gray-900 shadow-sm outline-none cursor-not-allowed"
                                             />
                                         </div>
@@ -716,7 +716,7 @@ const InsurancePayment = () => {
                                             <input
                                                 type="text"
                                                 readOnly
-                                                value={(newPayment.lcNo || newPayment.insuranceId) ? (newPayment.type === 'Premium Payment' ? displayPremiumBalance : displayReturnBalance).toLocaleString() : '0.00'}
+                                                value={(newPayment.lcNo || newPayment.insuranceId) ? (newPayment.type === 'Premium Payment' ? displayPremiumBalance : displayReturnBalance).toLocaleString('en-BD') : '0.00'}
                                                 className="w-full pl-6 pr-3 py-2.5 bg-white border border-gray-100 rounded-xl text-sm font-black text-gray-900 shadow-sm outline-none cursor-not-allowed"
                                             />
                                         </div>
@@ -784,7 +784,7 @@ const InsurancePayment = () => {
                                 <span className="text-2xl font-black text-gray-900">৳{filteredPayments.reduce((sum, p) => {
                                     if (p.type === 'Return Collection') return sum;
                                     return sum + (p.amount || 0) + (p.adjustedAmount || 0);
-                                }, 0).toLocaleString()}</span>
+                                }, 0).toLocaleString('en-BD')}</span>
                             </div>
                         </div>
 
@@ -801,7 +801,7 @@ const InsurancePayment = () => {
                                     const amount = p.type === 'Return Collection' ? (p.amount || 0) : 0;
                                     const adjustment = p.adjustedAmount || 0;
                                     return sum + amount + adjustment;
-                                }, 0).toLocaleString()}</span>
+                                }, 0).toLocaleString('en-BD')}</span>
                             </div>
                         </div>
 
@@ -899,11 +899,11 @@ const InsurancePayment = () => {
                                                 <td className="px-4 py-3 whitespace-nowrap text-gray-500">{p.method}</td>
                                                 <td className="px-4 py-3 whitespace-nowrap text-gray-500 truncate max-w-[150px]" title={p.reference}>{p.reference || '-'}</td>
                                                 <td className="px-4 py-3 whitespace-nowrap text-right font-bold text-blue-600">
-                                                    {p.adjustedAmount > 0 ? `৳${p.adjustedAmount.toLocaleString()}` : '-'}
+                                                    {p.adjustedAmount > 0 ? `৳${p.adjustedAmount.toLocaleString('en-BD')}` : '-'}
                                                 </td>
-                                                <td className="px-4 py-3 whitespace-nowrap text-right font-bold text-gray-700">৳{p.amount.toLocaleString()}</td>
+                                                <td className="px-4 py-3 whitespace-nowrap text-right font-bold text-gray-700">৳{p.amount.toLocaleString('en-BD')}</td>
                                                 <td className="px-4 py-3 whitespace-nowrap text-right font-black text-gray-900 bg-gray-50/30">
-                                                    ৳{((p.amount || 0) + (p.adjustedAmount || 0)).toLocaleString()}
+                                                    ৳{((p.amount || 0) + (p.adjustedAmount || 0)).toLocaleString('en-BD')}
                                                 </td>
                                                 {isAdmin && (
                                                     <td className="px-4 py-3 whitespace-nowrap text-center">

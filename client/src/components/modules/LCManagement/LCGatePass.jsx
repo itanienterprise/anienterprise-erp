@@ -319,12 +319,12 @@ const LCGatePass = ({ currentUser, addNotification }) => {
                                     <td className="px-6 py-4 font-bold text-sm text-gray-900">{record.productName}</td>
                                     <td className="px-6 py-4 text-right">
                                         <span className="text-sm font-bold text-gray-900">
-                                            {parseFloat(record.lcQuantity || 0).toLocaleString()} <span className="text-[10px] text-gray-400 font-normal">Kg</span>
+                                            {parseFloat(record.lcQuantity || 0).toLocaleString('en-BD')} <span className="text-[10px] text-gray-400 font-normal">Kg</span>
                                         </span>
                                     </td>
                                     <td className="px-6 py-4 text-right">
                                         <span className="text-sm font-bold text-blue-600">
-                                            {parseFloat(record.gpQuantity || 0).toLocaleString()} <span className="text-[10px] text-gray-400 font-normal">Kg</span>
+                                            {parseFloat(record.gpQuantity || 0).toLocaleString('en-BD')} <span className="text-[10px] text-gray-400 font-normal">Kg</span>
                                         </span>
                                     </td>
                                     <td className="px-6 py-4 text-right">
@@ -348,7 +348,7 @@ const LCGatePass = ({ currentUser, addNotification }) => {
                                                 }, 0);
                                             return (
                                                 <span className="text-sm font-bold text-orange-600">
-                                                    {borderSaleForThisRow.toLocaleString()} <span className="text-[10px] text-gray-400 font-normal">Kg</span>
+                                                    {borderSaleForThisRow.toLocaleString('en-BD')} <span className="text-[10px] text-gray-400 font-normal">Kg</span>
                                                 </span>
                                             );
                                         })()}
@@ -375,13 +375,13 @@ const LCGatePass = ({ currentUser, addNotification }) => {
                                             const remGp = Math.max(0, parseFloat(record.gpQuantity || 0) - borderSaleForThisRow);
                                             return (
                                                 <span className={`text-sm font-bold ${remGp <= 0 ? 'text-emerald-600' : 'text-indigo-600'}`}>
-                                                    {remGp.toLocaleString()} <span className="text-[10px] text-gray-400 font-normal">Kg</span>
+                                                    {remGp.toLocaleString('en-BD')} <span className="text-[10px] text-gray-400 font-normal">Kg</span>
                                                 </span>
                                             );
                                         })()}
                                     </td>
                                     <td className="px-6 py-4 text-right whitespace-nowrap">
-                                        <p className="text-sm font-black text-gray-900">৳{parseFloat(record.gpValue || 0).toLocaleString()}</p>
+                                        <p className="text-sm font-black text-gray-900">৳{parseFloat(record.gpValue || 0).toLocaleString('en-BD')}</p>
                                     </td>
                                     <td className="px-6 py-4">
                                         <div className="flex items-center justify-center gap-4">
@@ -555,7 +555,7 @@ const LCGatePass = ({ currentUser, addNotification }) => {
                                         return (
                                             <input
                                                 type="text"
-                                                value={formData.lcNumber ? remGpForModal.toLocaleString() : '0'}
+                                                value={formData.lcNumber ? remGpForModal.toLocaleString('en-BD') : '0'}
                                                 readOnly
                                                 className={`w-full px-4 py-2.5 bg-gray-50 border border-gray-200/60 rounded-xl outline-none font-bold cursor-not-allowed ${remGpForModal <= 0 && formData.lcNumber ? 'text-emerald-600' : 'text-blue-600'}`}
                                                 placeholder="0"

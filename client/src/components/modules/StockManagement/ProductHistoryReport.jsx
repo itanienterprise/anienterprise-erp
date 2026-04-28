@@ -398,10 +398,10 @@ const ProductHistoryReport = ({
                                                     <td className="border-r border-gray-900 px-2 py-1 text-[12px] text-gray-900 whitespace-nowrap">{item.itemExporter || '-'}</td>
                                                     <td className="border-r border-gray-900 px-2 py-1 text-[12px] text-gray-900 text-center">{item.invoiceNo || '-'}</td>
                                                     <td className="border-r border-gray-900 px-2 py-1 text-[12px] text-gray-900 font-medium whitespace-nowrap">{item.type === 'purchase' ? '-' : (item.companyName || '-')}</td>
-                                                    <td className="border-r border-gray-900 px-2 py-1 text-[12px] text-right text-gray-900 font-bold">{item.type === 'purchase' ? `${Math.round(item.itemQty).toLocaleString()} kg` : '-'}</td>
-                                                    <td className="border-r border-gray-900 px-2 py-1 text-[12px] text-right text-blue-600 font-bold">{item.type === 'sale' ? `${Math.round(item.itemQty).toLocaleString()} kg` : '-'}</td>
-                                                    <td className="border-r border-gray-900 px-2 py-1 text-[12px] text-right text-blue-700 font-black">{Math.round(item.runningInHouse).toLocaleString()} kg</td>
-                                                    <td className="px-2 py-1 text-[12px] text-right text-rose-600 font-bold">{item.type === 'purchase' ? `${Math.round(item.itemShortageQty || 0).toLocaleString()} kg` : '-'}</td>
+                                                    <td className="border-r border-gray-900 px-2 py-1 text-[12px] text-right text-gray-900 font-bold">{item.type === 'purchase' ? `${Math.round(item.itemQty).toLocaleString('en-BD')} kg` : '-'}</td>
+                                                    <td className="border-r border-gray-900 px-2 py-1 text-[12px] text-right text-blue-600 font-bold">{item.type === 'sale' ? `${Math.round(item.itemQty).toLocaleString('en-BD')} kg` : '-'}</td>
+                                                    <td className="border-r border-gray-900 px-2 py-1 text-[12px] text-right text-blue-700 font-black">{Math.round(item.runningInHouse).toLocaleString('en-BD')} kg</td>
+                                                    <td className="px-2 py-1 text-[12px] text-right text-rose-600 font-bold">{item.type === 'purchase' ? `${Math.round(item.itemShortageQty || 0).toLocaleString('en-BD')} kg` : '-'}</td>
                                                 </tr>
                                             ))}
                                         </tbody>
@@ -409,16 +409,16 @@ const ProductHistoryReport = ({
                                             <tr className="bg-gray-100 border-t-2 border-gray-900 font-black text-center">
                                                 <td colSpan="5" className="px-2 py-1.5 text-[12px] text-right uppercase border-r border-gray-900">Total History</td>
                                                 <td className="px-2 py-1.5 text-[12px] text-right border-r border-gray-900">
-                                                    {Math.round(purchaseHistory.reduce((sum, i) => sum + (parseFloat(i.itemQty) || 0), 0)).toLocaleString()} kg
+                                                    {Math.round(purchaseHistory.reduce((sum, i) => sum + (parseFloat(i.itemQty) || 0), 0)).toLocaleString('en-BD')} kg
                                                 </td>
                                                 <td className="px-2 py-1.5 text-[12px] text-right border-r border-gray-900 text-blue-600">
-                                                    {Math.round(saleHistory.reduce((sum, s) => sum + (parseFloat(s.itemQty) || 0), 0)).toLocaleString()} kg
+                                                    {Math.round(saleHistory.reduce((sum, s) => sum + (parseFloat(s.itemQty) || 0), 0)).toLocaleString('en-BD')} kg
                                                 </td>
                                                 <td className="px-2 py-1.5 text-[12px] text-right border-r border-gray-900 text-blue-700">
-                                                    {Math.round(unifiedHistory[unifiedHistory.length - 1]?.runningInHouse || 0).toLocaleString()} kg
+                                                    {Math.round(unifiedHistory[unifiedHistory.length - 1]?.runningInHouse || 0).toLocaleString('en-BD')} kg
                                                 </td>
                                                 <td className="px-2 py-1.5 text-[12px] text-right text-rose-600">
-                                                    {Math.round(purchaseHistory.reduce((sum, i) => sum + (parseFloat(i.itemShortageQty) || 0), 0)).toLocaleString()} kg
+                                                    {Math.round(purchaseHistory.reduce((sum, i) => sum + (parseFloat(i.itemShortageQty) || 0), 0)).toLocaleString('en-BD')} kg
                                                 </td>
                                             </tr>
                                         </tfoot>
@@ -435,23 +435,23 @@ const ProductHistoryReport = ({
                                             <div className="grid grid-cols-2 gap-x-3 gap-y-1">
                                                 {item.type === 'purchase' && <><div className="text-gray-500">LC No</div><div className="font-bold text-gray-900 text-right">{item.lcNo || '-'}</div>
                                                     <div className="text-gray-500">Exporter</div><div className="font-medium text-gray-800 text-right truncate">{item.itemExporter || '-'}</div>
-                                                    <div className="text-gray-500">Purchase Qty</div><div className="font-bold text-gray-900 text-right">{Math.round(item.itemQty).toLocaleString()} kg</div>
-                                                    {item.itemShortageQty > 0 && <><div className="text-rose-500">Shortage</div><div className="font-bold text-rose-600 text-right">{Math.round(item.itemShortageQty).toLocaleString()} kg</div></>}</>
+                                                    <div className="text-gray-500">Purchase Qty</div><div className="font-bold text-gray-900 text-right">{Math.round(item.itemQty).toLocaleString('en-BD')} kg</div>
+                                                    {item.itemShortageQty > 0 && <><div className="text-rose-500">Shortage</div><div className="font-bold text-rose-600 text-right">{Math.round(item.itemShortageQty).toLocaleString('en-BD')} kg</div></>}</>
                                                 }
                                                 {item.type === 'sale' && <><div className="text-gray-500">Invoice</div><div className="font-bold text-gray-900 text-right">{item.invoiceNo || '-'}</div>
                                                     <div className="text-gray-500">Party</div><div className="font-medium text-gray-800 text-right truncate">{item.companyName || '-'}</div>
-                                                    <div className="text-gray-500">Sale Qty</div><div className="font-bold text-blue-600 text-right">{Math.round(item.itemQty).toLocaleString()} kg</div></>
+                                                    <div className="text-gray-500">Sale Qty</div><div className="font-bold text-blue-600 text-right">{Math.round(item.itemQty).toLocaleString('en-BD')} kg</div></>
                                                 }
-                                                <div className="text-gray-500">InHouse Balance</div><div className="font-black text-blue-700 text-right">{Math.round(item.runningInHouse).toLocaleString()} kg</div>
+                                                <div className="text-gray-500">InHouse Balance</div><div className="font-black text-blue-700 text-right">{Math.round(item.runningInHouse).toLocaleString('en-BD')} kg</div>
                                             </div>
                                         </div>
                                     ))}
                                     <div className="rounded-xl border-2 border-gray-900 bg-gray-100 p-3 text-xs font-black">
                                         <div className="grid grid-cols-2 gap-x-3 gap-y-1">
-                                            <div className="text-gray-700 uppercase">Total Purchase</div><div className="text-right">{Math.round(purchaseHistory.reduce((sum, i) => sum + (parseFloat(i.itemQty) || 0), 0)).toLocaleString()} kg</div>
-                                            <div className="text-blue-600 uppercase">Total Sale</div><div className="text-blue-600 text-right">{Math.round(saleHistory.reduce((sum, s) => sum + (parseFloat(s.itemQty) || 0), 0)).toLocaleString()} kg</div>
-                                            <div className="text-blue-700 uppercase">InHouse</div><div className="text-blue-700 text-right">{Math.round(unifiedHistory[unifiedHistory.length - 1]?.runningInHouse || 0).toLocaleString()} kg</div>
-                                            <div className="text-rose-600 uppercase">Shortage</div><div className="text-rose-600 text-right">{Math.round(purchaseHistory.reduce((sum, i) => sum + (parseFloat(i.itemShortageQty) || 0), 0)).toLocaleString()} kg</div>
+                                            <div className="text-gray-700 uppercase">Total Purchase</div><div className="text-right">{Math.round(purchaseHistory.reduce((sum, i) => sum + (parseFloat(i.itemQty) || 0), 0)).toLocaleString('en-BD')} kg</div>
+                                            <div className="text-blue-600 uppercase">Total Sale</div><div className="text-blue-600 text-right">{Math.round(saleHistory.reduce((sum, s) => sum + (parseFloat(s.itemQty) || 0), 0)).toLocaleString('en-BD')} kg</div>
+                                            <div className="text-blue-700 uppercase">InHouse</div><div className="text-blue-700 text-right">{Math.round(unifiedHistory[unifiedHistory.length - 1]?.runningInHouse || 0).toLocaleString('en-BD')} kg</div>
+                                            <div className="text-rose-600 uppercase">Shortage</div><div className="text-rose-600 text-right">{Math.round(purchaseHistory.reduce((sum, i) => sum + (parseFloat(i.itemShortageQty) || 0), 0)).toLocaleString('en-BD')} kg</div>
                                         </div>
                                     </div>
                                 </div>
@@ -484,11 +484,11 @@ const ProductHistoryReport = ({
                                                     <td className="border-r border-gray-900 px-2 py-1 text-[12px] font-bold text-gray-900">{item.lcNo}</td>
                                                     <td className="border-r border-gray-900 px-2 py-1 text-[12px] text-gray-900">{item.itemExporter || '-'}</td>
                                                     <td className="border-r border-gray-900 px-2 py-1 text-[12px] text-gray-900 whitespace-nowrap">{item.itemBrand}</td>
-                                                    <td className="border-r border-gray-900 px-2 py-1 text-[12px] text-right text-gray-900">৳{parseFloat(item.itemPurchasedPrice || 0).toLocaleString()}</td>
+                                                    <td className="border-r border-gray-900 px-2 py-1 text-[12px] text-right text-gray-900">৳{parseFloat(item.itemPurchasedPrice || 0).toLocaleString('en-BD')}</td>
                                                     <td className="border-r border-gray-900 px-2 py-1 text-[12px] text-right text-gray-900">{item.itemPacket}</td>
-                                                    <td className="border-r border-gray-900 px-2 py-1 text-[12px] text-right text-gray-900 font-bold">{Math.round(item.itemQty).toLocaleString()} {item.unit}</td>
-                                                    <td className="border-r border-gray-900 px-2 py-1 text-[12px] text-right text-blue-600 font-bold">{Math.round(item.itemInHouseQty).toLocaleString()} {item.unit}</td>
-                                                    <td className="px-2 py-1 text-[12px] text-right text-rose-600 font-bold">{Math.round(item.itemShortageQty || 0).toLocaleString()} {item.unit}</td>
+                                                    <td className="border-r border-gray-900 px-2 py-1 text-[12px] text-right text-gray-900 font-bold">{Math.round(item.itemQty).toLocaleString('en-BD')} {item.unit}</td>
+                                                    <td className="border-r border-gray-900 px-2 py-1 text-[12px] text-right text-blue-600 font-bold">{Math.round(item.itemInHouseQty).toLocaleString('en-BD')} {item.unit}</td>
+                                                    <td className="px-2 py-1 text-[12px] text-right text-rose-600 font-bold">{Math.round(item.itemShortageQty || 0).toLocaleString('en-BD')} {item.unit}</td>
                                                 </tr>
                                             ))}
                                         </tbody>
@@ -496,19 +496,19 @@ const ProductHistoryReport = ({
                                             <tr className="bg-gray-100 border-t-2 border-gray-900 font-black">
                                                 <td colSpan="4" className="px-2 py-1.5 text-[12px] text-right uppercase border-r border-gray-900">Total Purchase</td>
                                                 <td className="px-2 py-1.5 text-[12px] text-right border-r border-gray-900 text-blue-700">
-                                                    ৳{Math.round(purchaseHistory.reduce((sum, i) => sum + ((parseFloat(i.itemPurchasedPrice) || 0) * (parseFloat(i.itemQty) || 0)), 0)).toLocaleString()}
+                                                    ৳{Math.round(purchaseHistory.reduce((sum, i) => sum + ((parseFloat(i.itemPurchasedPrice) || 0) * (parseFloat(i.itemQty) || 0)), 0)).toLocaleString('en-BD')}
                                                 </td>
                                                 <td className="px-2 py-1.5 text-[12px] text-right border-r border-gray-900">
-                                                    {purchaseHistory.reduce((sum, i) => sum + (parseInt(i.itemPacket) || 0), 0).toLocaleString()}
+                                                    {purchaseHistory.reduce((sum, i) => sum + (parseInt(i.itemPacket) || 0), 0).toLocaleString('en-BD')}
                                                 </td>
                                                 <td className="px-2 py-1.5 text-[12px] text-right border-r border-gray-900">
-                                                    {Math.round(purchaseHistory.reduce((sum, i) => sum + (parseFloat(i.itemQty) || 0), 0)).toLocaleString()} {purchaseHistory[0]?.unit}
+                                                    {Math.round(purchaseHistory.reduce((sum, i) => sum + (parseFloat(i.itemQty) || 0), 0)).toLocaleString('en-BD')} {purchaseHistory[0]?.unit}
                                                 </td>
                                                 <td className="px-2 py-1.5 text-[12px] text-right border-r border-gray-900 text-blue-600">
-                                                    {Math.round(purchaseHistory.reduce((sum, i) => sum + (parseFloat(i.itemInHouseQty) || 0), 0)).toLocaleString()} {purchaseHistory[0]?.unit}
+                                                    {Math.round(purchaseHistory.reduce((sum, i) => sum + (parseFloat(i.itemInHouseQty) || 0), 0)).toLocaleString('en-BD')} {purchaseHistory[0]?.unit}
                                                 </td>
                                                 <td className="px-2 py-1.5 text-[12px] text-right text-rose-600">
-                                                    {Math.round(purchaseHistory.reduce((sum, i) => sum + (parseFloat(i.itemShortageQty) || 0), 0)).toLocaleString()} {purchaseHistory[0]?.unit}
+                                                    {Math.round(purchaseHistory.reduce((sum, i) => sum + (parseFloat(i.itemShortageQty) || 0), 0)).toLocaleString('en-BD')} {purchaseHistory[0]?.unit}
                                                 </td>
                                             </tr>
                                         </tfoot>
@@ -525,20 +525,20 @@ const ProductHistoryReport = ({
                                             <div className="grid grid-cols-2 gap-x-3 gap-y-1">
                                                 <div className="text-gray-500">Exporter</div><div className="font-medium text-gray-800 text-right truncate">{item.itemExporter || '-'}</div>
                                                 <div className="text-gray-500">Brand</div><div className="font-bold text-gray-900 text-right">{item.itemBrand}</div>
-                                                <div className="text-gray-500">Price</div><div className="font-medium text-gray-800 text-right">৳{parseFloat(item.itemPurchasedPrice || 0).toLocaleString()}</div>
+                                                <div className="text-gray-500">Price</div><div className="font-medium text-gray-800 text-right">৳{parseFloat(item.itemPurchasedPrice || 0).toLocaleString('en-BD')}</div>
                                                 <div className="text-gray-500">BAG</div><div className="font-bold text-gray-900 text-right">{item.itemPacket}</div>
-                                                <div className="text-gray-500">LC Qty</div><div className="font-bold text-gray-900 text-right">{Math.round(item.itemQty).toLocaleString()} {item.unit}</div>
-                                                <div className="text-blue-500">InHouse</div><div className="font-bold text-blue-600 text-right">{Math.round(item.itemInHouseQty).toLocaleString()} {item.unit}</div>
-                                                {(item.itemShortageQty || 0) > 0 && <><div className="text-rose-500">Shortage</div><div className="font-bold text-rose-600 text-right">{Math.round(item.itemShortageQty).toLocaleString()} {item.unit}</div></>}
+                                                <div className="text-gray-500">LC Qty</div><div className="font-bold text-gray-900 text-right">{Math.round(item.itemQty).toLocaleString('en-BD')} {item.unit}</div>
+                                                <div className="text-blue-500">InHouse</div><div className="font-bold text-blue-600 text-right">{Math.round(item.itemInHouseQty).toLocaleString('en-BD')} {item.unit}</div>
+                                                {(item.itemShortageQty || 0) > 0 && <><div className="text-rose-500">Shortage</div><div className="font-bold text-rose-600 text-right">{Math.round(item.itemShortageQty).toLocaleString('en-BD')} {item.unit}</div></>}
                                             </div>
                                         </div>
                                     ))}
                                     <div className="rounded-xl border-2 border-gray-900 bg-gray-100 p-3 text-xs font-black">
                                         <div className="text-[10px] uppercase tracking-wider text-gray-500 mb-2">Total Purchase</div>
                                         <div className="grid grid-cols-2 gap-x-3 gap-y-1">
-                                            <div className="text-gray-700">LC Qty</div><div className="text-right">{Math.round(purchaseHistory.reduce((sum, i) => sum + (parseFloat(i.itemQty) || 0), 0)).toLocaleString()} {purchaseHistory[0]?.unit}</div>
-                                            <div className="text-blue-600">InHouse</div><div className="text-blue-600 text-right">{Math.round(purchaseHistory.reduce((sum, i) => sum + (parseFloat(i.itemInHouseQty) || 0), 0)).toLocaleString()} {purchaseHistory[0]?.unit}</div>
-                                            <div className="text-rose-600">Shortage</div><div className="text-rose-600 text-right">{Math.round(purchaseHistory.reduce((sum, i) => sum + (parseFloat(i.itemShortageQty) || 0), 0)).toLocaleString()} {purchaseHistory[0]?.unit}</div>
+                                            <div className="text-gray-700">LC Qty</div><div className="text-right">{Math.round(purchaseHistory.reduce((sum, i) => sum + (parseFloat(i.itemQty) || 0), 0)).toLocaleString('en-BD')} {purchaseHistory[0]?.unit}</div>
+                                            <div className="text-blue-600">InHouse</div><div className="text-blue-600 text-right">{Math.round(purchaseHistory.reduce((sum, i) => sum + (parseFloat(i.itemInHouseQty) || 0), 0)).toLocaleString('en-BD')} {purchaseHistory[0]?.unit}</div>
+                                            <div className="text-rose-600">Shortage</div><div className="text-rose-600 text-right">{Math.round(purchaseHistory.reduce((sum, i) => sum + (parseFloat(i.itemShortageQty) || 0), 0)).toLocaleString('en-BD')} {purchaseHistory[0]?.unit}</div>
                                         </div>
                                     </div>
                                 </div>
@@ -574,10 +574,10 @@ const ProductHistoryReport = ({
                                                             <td className="border-r border-gray-900 px-2 py-1 text-[12px] text-gray-900 font-medium">{sale.companyName || '-'}</td>
                                                             <td className="border-r border-gray-900 px-2 py-1 text-[12px] text-gray-900">{sale.customerName || '-'}</td>
                                                             <td className="border-r border-gray-900 px-2 py-1 text-[12px] text-gray-900">{sale.phone || '-'}</td>
-                                                            <td className="border-r border-gray-900 px-2 py-1 text-[12px] text-right text-gray-900 font-bold">{sale.itemQty.toLocaleString()} kg</td>
+                                                            <td className="border-r border-gray-900 px-2 py-1 text-[12px] text-right text-gray-900 font-bold">{sale.itemQty.toLocaleString('en-BD')} kg</td>
                                                             <td className="border-r border-gray-900 px-2 py-1 text-[12px] text-right text-gray-900">{sale.itemTruck || '-'}</td>
-                                                            <td className="border-r border-gray-900 px-2 py-1 text-[12px] text-right text-gray-900">৳{sale.itemPrice.toLocaleString()}</td>
-                                                            <td className="px-2 py-1 text-[12px] text-right text-blue-600 font-bold">৳{sale.itemTotal.toLocaleString()}</td>
+                                                            <td className="border-r border-gray-900 px-2 py-1 text-[12px] text-right text-gray-900">৳{sale.itemPrice.toLocaleString('en-BD')}</td>
+                                                            <td className="px-2 py-1 text-[12px] text-right text-blue-600 font-bold">৳{sale.itemTotal.toLocaleString('en-BD')}</td>
                                                         </tr>
                                                     ))}
                                                 </tbody>
@@ -585,12 +585,12 @@ const ProductHistoryReport = ({
                                                     <tr className="bg-gray-100 border-t-2 border-gray-900 font-black">
                                                         <td colSpan="5" className="px-2 py-1.5 text-[12px] text-right uppercase border-r border-gray-900">Total Sale</td>
                                                         <td className="px-2 py-1.5 text-[12px] text-right border-r border-gray-900">
-                                                            {saleHistory.reduce((sum, s) => sum + s.itemQty, 0).toLocaleString()} kg
+                                                            {saleHistory.reduce((sum, s) => sum + s.itemQty, 0).toLocaleString('en-BD')} kg
                                                         </td>
                                                         <td className="px-2 py-1.5 text-[12px] text-right border-r border-gray-900">-</td>
                                                         <td className="px-2 py-1.5 text-[12px] text-right border-r border-gray-900">-</td>
                                                         <td className="px-2 py-1.5 text-[12px] text-right text-blue-700 font-bold">
-                                                            ৳{saleHistory.reduce((sum, s) => sum + s.itemTotal, 0).toLocaleString()}
+                                                            ৳{saleHistory.reduce((sum, s) => sum + s.itemTotal, 0).toLocaleString('en-BD')}
                                                         </td>
                                                     </tr>
                                                 </tfoot>
@@ -616,10 +616,10 @@ const ProductHistoryReport = ({
                                                             <td className="border-r border-gray-900 px-2 py-1 text-[12px] font-bold text-gray-900">{sale.invoiceNo}</td>
                                                             <td className="border-r border-gray-900 px-2 py-1 text-[12px] text-gray-900 font-medium">{sale.companyName || '-'}</td>
                                                             <td className="border-r border-gray-900 px-2 py-1 text-[12px] text-gray-900 whitespace-nowrap">{sale.itemBrand}</td>
-                                                            <td className="border-r border-gray-900 px-2 py-1 text-[12px] text-right text-gray-900">{sale.itemPacket.toLocaleString()}</td>
-                                                            <td className="border-r border-gray-900 px-2 py-1 text-[12px] text-right text-gray-900 font-bold">{sale.itemQty.toLocaleString()} kg</td>
-                                                            <td className="border-r border-gray-900 px-2 py-1 text-[12px] text-right text-gray-900">৳{sale.itemPrice.toLocaleString()}</td>
-                                                            <td className="px-2 py-1 text-[12px] text-right text-blue-600 font-bold">৳{sale.itemTotal.toLocaleString()}</td>
+                                                            <td className="border-r border-gray-900 px-2 py-1 text-[12px] text-right text-gray-900">{sale.itemPacket.toLocaleString('en-BD')}</td>
+                                                            <td className="border-r border-gray-900 px-2 py-1 text-[12px] text-right text-gray-900 font-bold">{sale.itemQty.toLocaleString('en-BD')} kg</td>
+                                                            <td className="border-r border-gray-900 px-2 py-1 text-[12px] text-right text-gray-900">৳{sale.itemPrice.toLocaleString('en-BD')}</td>
+                                                            <td className="px-2 py-1 text-[12px] text-right text-blue-600 font-bold">৳{sale.itemTotal.toLocaleString('en-BD')}</td>
                                                         </tr>
                                                     ))}
                                                 </tbody>
@@ -627,11 +627,11 @@ const ProductHistoryReport = ({
                                                     <tr className="bg-gray-100 border-t-2 border-gray-900 font-black">
                                                         <td colSpan="5" className="px-2 py-1.5 text-[12px] text-right uppercase border-r border-gray-900">Total Sale</td>
                                                         <td className="px-2 py-1.5 text-[12px] text-right border-r border-gray-900">
-                                                            {saleHistory.reduce((sum, s) => sum + s.itemQty, 0).toLocaleString()} kg
+                                                            {saleHistory.reduce((sum, s) => sum + s.itemQty, 0).toLocaleString('en-BD')} kg
                                                         </td>
                                                         <td className="px-2 py-1.5 text-[12px] text-right border-r border-gray-900">-</td>
                                                         <td className="px-2 py-1.5 text-[12px] text-right text-blue-700">
-                                                            ৳{saleHistory.reduce((sum, s) => sum + s.itemTotal, 0).toLocaleString()}
+                                                            ৳{saleHistory.reduce((sum, s) => sum + s.itemTotal, 0).toLocaleString('en-BD')}
                                                         </td>
                                                     </tr>
                                                 </tfoot>
@@ -655,19 +655,19 @@ const ProductHistoryReport = ({
                                                     {sale.itemTruck && <><div className="text-gray-500">Truck</div><div className="font-medium text-gray-800 text-right">{sale.itemTruck}</div></>}
                                                 </>) : (<>
                                                     <div className="text-gray-500">Brand</div><div className="font-medium text-gray-800 text-right">{sale.itemBrand}</div>
-                                                    <div className="text-gray-500">BAG</div><div className="font-medium text-gray-800 text-right">{sale.itemPacket?.toLocaleString()}</div>
+                                                    <div className="text-gray-500">BAG</div><div className="font-medium text-gray-800 text-right">{sale.itemPacket?.toLocaleString('en-BD')}</div>
                                                 </>)}
-                                                <div className="text-gray-500">Qty</div><div className="font-bold text-gray-900 text-right">{sale.itemQty?.toLocaleString()} kg</div>
-                                                <div className="text-gray-500">Price</div><div className="font-medium text-gray-600 text-right">৳{sale.itemPrice?.toLocaleString()}</div>
-                                                <div className="text-blue-600 font-bold">Total</div><div className="font-black text-blue-700 text-right">৳{sale.itemTotal?.toLocaleString()}</div>
+                                                <div className="text-gray-500">Qty</div><div className="font-bold text-gray-900 text-right">{sale.itemQty?.toLocaleString('en-BD')} kg</div>
+                                                <div className="text-gray-500">Price</div><div className="font-medium text-gray-600 text-right">৳{sale.itemPrice?.toLocaleString('en-BD')}</div>
+                                                <div className="text-blue-600 font-bold">Total</div><div className="font-black text-blue-700 text-right">৳{sale.itemTotal?.toLocaleString('en-BD')}</div>
                                             </div>
                                         </div>
                                     ))}
                                     <div className="rounded-xl border-2 border-gray-900 bg-gray-100 p-3 text-xs font-black">
                                         <div className="text-[10px] uppercase tracking-wider text-gray-500 mb-2">Total Sale</div>
                                         <div className="grid grid-cols-2 gap-x-3 gap-y-1">
-                                            <div className="text-gray-700">Qty</div><div className="text-right">{saleHistory.reduce((sum, s) => sum + s.itemQty, 0).toLocaleString()} kg</div>
-                                            <div className="text-blue-700">Amount</div><div className="text-blue-700 text-right">৳{saleHistory.reduce((sum, s) => sum + s.itemTotal, 0).toLocaleString()}</div>
+                                            <div className="text-gray-700">Qty</div><div className="text-right">{saleHistory.reduce((sum, s) => sum + s.itemQty, 0).toLocaleString('en-BD')} kg</div>
+                                            <div className="text-blue-700">Amount</div><div className="text-blue-700 text-right">৳{saleHistory.reduce((sum, s) => sum + s.itemTotal, 0).toLocaleString('en-BD')}</div>
                                         </div>
                                     </div>
                                 </div>
@@ -682,22 +682,22 @@ const ProductHistoryReport = ({
                                     <div className="space-y-1">
                                         <div className="flex justify-between text-xs md:text-sm">
                                             <span className="text-gray-600">Total Purchase:</span>
-                                            <span className="font-bold">{Math.round(purchaseHistory.reduce((sum, i) => sum + (parseFloat(i.itemQty) || 0), 0)).toLocaleString()} kg</span>
+                                            <span className="font-bold">{Math.round(purchaseHistory.reduce((sum, i) => sum + (parseFloat(i.itemQty) || 0), 0)).toLocaleString('en-BD')} kg</span>
                                         </div>
                                         <div className="flex justify-between text-xs md:text-sm">
                                             <span className="text-gray-600">Total Short:</span>
-                                            <span className="font-bold text-rose-600">{Math.round(purchaseHistory.reduce((sum, i) => sum + (parseFloat(i.itemShortageQty) || 0), 0)).toLocaleString()} kg</span>
+                                            <span className="font-bold text-rose-600">{Math.round(purchaseHistory.reduce((sum, i) => sum + (parseFloat(i.itemShortageQty) || 0), 0)).toLocaleString('en-BD')} kg</span>
                                         </div>
                                         {activeTab === 'total' && (
                                             <div className="flex justify-between text-xs md:text-sm">
                                                 <span className="text-gray-600">Total Sale:</span>
-                                                <span className="font-bold">{saleHistory.reduce((sum, s) => sum + s.itemQty, 0).toLocaleString()} kg</span>
+                                                <span className="font-bold">{saleHistory.reduce((sum, s) => sum + s.itemQty, 0).toLocaleString('en-BD')} kg</span>
                                             </div>
                                         )}
                                         <div className="border-t border-gray-300 pt-1 mt-1 flex justify-between text-sm md:text-base font-black">
                                             <span className="text-blue-600 uppercase">InHouse:</span>
                                             <span className="text-blue-700">
-                                                {Math.round(purchaseHistory.reduce((sum, i) => sum + (parseFloat(i.itemInHouseQty) || 0), 0)).toLocaleString()} kg
+                                                {Math.round(purchaseHistory.reduce((sum, i) => sum + (parseFloat(i.itemInHouseQty) || 0), 0)).toLocaleString('en-BD')} kg
                                             </span>
                                         </div>
                                     </div>
@@ -710,7 +710,7 @@ const ProductHistoryReport = ({
                                     <div className="space-y-1">
                                         <div className="flex justify-between text-xs md:text-sm">
                                             <span className="text-gray-600">Total Sales Value:</span>
-                                            <span className="font-bold text-blue-700">৳{saleHistory.reduce((sum, s) => sum + s.itemTotal, 0).toLocaleString()}</span>
+                                            <span className="font-bold text-blue-700">৳{saleHistory.reduce((sum, s) => sum + s.itemTotal, 0).toLocaleString('en-BD')}</span>
                                         </div>
                                         <p className="text-[9px] md:text-[10px] text-gray-400 mt-4 leading-tight italic text-center md:text-left">
                                             * Comprehensive overview of product movement.
