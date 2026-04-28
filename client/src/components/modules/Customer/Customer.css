@@ -180,8 +180,8 @@ select:focus option:checked {
 }
 
 .customer-status-badge.inactive {
-    background: #f3f4f6;
-    color: #4b5563;
+    background: #fef2f2;
+    color: #991b1b;
 }
 
 .customer-type-badge {

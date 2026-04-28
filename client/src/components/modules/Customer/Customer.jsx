@@ -1016,7 +1016,7 @@ const Customer = ({
                                                                 {c.customerType}
                                                             </span>
                                                         </td>
-                                                        <td className={`px-6 py-4 text-sm font-bold text-right ${custTotalDue < 0 ? 'text-green-600' : 'text-red-600'}`}>
+                                                        <td className={`px-6 py-4 text-sm font-bold text-right ${custTotalDue > 0 ? 'text-red-600' : 'text-green-600'}`}>
                                                             {Math.round(custTotalDue).toLocaleString('en-IN')}
                                                         </td>
                                                         <td className="px-6 py-4 text-sm text-gray-600"><span className={`customer-status-badge ${c.status === 'Active' ? 'active' : 'inactive'}`}>{c.status}</span></td>
@@ -1065,7 +1065,11 @@ const Customer = ({
                                                             </div>
                                                         </div>
                                                         <div className="flex items-center gap-2">
-                                                            <span className={`customer-status-badge ${c.status === 'Active' ? 'active' : 'inactive'} flex items-center justify-center`}>
+                                                            <span className={`customer-status-badge ${
+                                                                isExpanded 
+                                                                    ? (c.status === 'Active' ? 'active' : 'inactive') 
+                                                                    : (custTotalDue > 0 ? 'inactive' : 'active')
+                                                            } flex items-center justify-center`}>
                                                                 {isExpanded ? (
                                                                     <span className="shrink-0">{c.status}</span>
                                                                 ) : (
@@ -1094,7 +1098,7 @@ const Customer = ({
                                                                 </div>
                                                                 <div className="mobile-card-row">
                                                                     <span className="mobile-card-label">Balance:</span>
-                                                                    <span className="mobile-card-value text-red-600 font-bold">
+                                                                    <span className={`mobile-card-value font-bold ${custTotalDue > 0 ? 'text-red-600' : 'text-green-600'}`}>
                                                                         ৳{Math.round(custTotalDue).toLocaleString('en-IN')}
                                                                     </span>
                                                                 </div>
