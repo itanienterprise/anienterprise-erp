@@ -2375,6 +2375,12 @@ export const generateCustomerReportPDF = (customers, typeFilter, grandTotalDue, 
         const pageWidth = doc.internal.pageSize.width;
         const pageHeight = doc.internal.pageSize.height;
         const margin = 10;
+        
+        // Filter out customers with zero balance
+        const activeCustomers = customers.filter(c => {
+            const due = computeDue(c);
+            return Math.abs(due) > 0.01; // Avoid floating point issues with zero
+        });
 
         // --- Header ---
         doc.setFontSize(22);
@@ -2416,7 +2422,7 @@ export const generateCustomerReportPDF = (customers, typeFilter, grandTotalDue, 
         doc.setFont('helvetica', 'bold');
         doc.text("Total Records:", margin, yPos);
         doc.setFont('helvetica', 'normal');
-        doc.text(customers.length.toString(), margin + 30, yPos);
+        doc.text(activeCustomers.length.toString(), margin + 30, yPos);
 
         doc.text(`Printed on: ${dateStr}`, pageWidth - margin, 55, { align: 'right' });
 
@@ -2445,7 +2451,7 @@ export const generateCustomerReportPDF = (customers, typeFilter, grandTotalDue, 
 
         // --- Table ---
         const tableRows = [];
-        customers.forEach((c, idx) => {
+        activeCustomers.forEach((c, idx) => {
             const due = computeDue(c);
             tableRows.push([
                 idx + 1,

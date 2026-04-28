@@ -7,7 +7,7 @@ const CustomerReport = ({ isOpen, onClose, customers = [] }) => {
     if (!isOpen) return null;
 
     const [searchQuery, setSearchQuery] = useState('');
-    const [typeFilter, setTypeFilter] = useState('All Customer');
+    const [typeFilter, setTypeFilter] = useState('General Customer');
 
     // --- Calculate due per customer from salesHistory & paymentHistory ---
     const computeDue = (customer) => {
