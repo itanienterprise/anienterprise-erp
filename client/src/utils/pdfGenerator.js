@@ -26,7 +26,6 @@ const numberToWords = (amount) => {
     const units = ['', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine'];
     const teens = ['Ten', 'Eleven', 'Twelve', 'Thirteen', 'Fourteen', 'Fifteen', 'Sixteen', 'Seventeen', 'Eighteen', 'Nineteen'];
     const tens = ['', '', 'Twenty', 'Thirty', 'Forty', 'Fifty', 'Sixty', 'Seventy', 'Eighty', 'Ninety'];
-    const scales = ['', 'Thousand', 'Million', 'Billion'];
 
     const convertChunk = (num) => {
         let chunkStr = '';
@@ -50,35 +49,37 @@ const numberToWords = (amount) => {
 
     if (amount === 0) return 'Zero Taka Only';
 
-    const parts = amount.toFixed(2).split('.');
-    let dollars = parseInt(parts[0]);
+    const parts = Math.abs(amount).toFixed(2).split('.');
+    let num = parseInt(parts[0]);
     let cents = parseInt(parts[1]);
 
     let words = '';
-    let scaleIndex = 0;
 
-    if (dollars === 0) {
-        words = 'Zero ';
-    } else {
-        let dollarWords = '';
-        while (dollars > 0) {
-            let chunk = dollars % 1000;
-            if (chunk > 0) {
-                dollarWords = convertChunk(chunk) + (scales[scaleIndex] ? scales[scaleIndex] + ' ' : '') + dollarWords;
-            }
-            dollars = Math.floor(dollars / 1000);
-            scaleIndex++;
-        }
-        words = dollarWords;
+    if (num >= 10000000) {
+        words += convertChunk(Math.floor(num / 10000000)) + 'Crore ';
+        num %= 10000000;
     }
+    if (num >= 100000) {
+        words += convertChunk(Math.floor(num / 100000)) + 'Lac ';
+        num %= 100000;
+    }
+    if (num >= 1000) {
+        words += convertChunk(Math.floor(num / 1000)) + 'Thousand ';
+        num %= 1000;
+    }
+    if (num > 0) {
+        words += convertChunk(num);
+    }
+
+    words += 'Taka ';
 
     if (cents > 0) {
-        words += 'And Paisa ' + convertChunk(cents) + 'Only';
-    } else {
-        words += 'Only';
+        words += 'And Paisa ' + convertChunk(cents) + ' ';
     }
+    
+    words += 'Only';
 
-    return words.replace(/\s+/g, ' ').trim();
+    return (amount < 0 ? 'Negative ' : '') + words.replace(/\s+/g, ' ').trim();
 };
 
 export const generateMoneyReceiptPDF = async (payment) => {
@@ -215,7 +216,7 @@ export const generateMoneyReceiptPDF = async (payment) => {
             item.bankName || '—',
             item.branch || '—',
             item.accountNo || '—',
-            'TK. ' + (parseFloat(item.amount) || 0).toLocaleString()
+            'TK. ' + (parseFloat(item.amount) || 0).toLocaleString('en-BD')
         ]);
 
         autoTable(doc, {
@@ -256,7 +257,7 @@ export const generateMoneyReceiptPDF = async (payment) => {
         doc.setFontSize(16);
         doc.setTextColor(0, 0, 0);
         doc.setFont('helvetica', 'bold');
-        doc.text("TK.   " + parseFloat(payment.amount).toLocaleString(), pageWidth / 2, y + 1.5, { align: 'center' });
+        doc.text("TK.   " + parseFloat(payment.amount).toLocaleString('en-BD'), pageWidth / 2, y + 1.5, { align: 'center' });
         const amountWords = numberToWords(parseFloat(payment.amount) || 0);
         doc.setFontSize(9);
         doc.setFont('helvetica', 'normal');
@@ -276,7 +277,7 @@ export const generateMoneyReceiptPDF = async (payment) => {
         doc.text("Amount of Balance", margin, y);
         doc.text(":", margin + labelWidth, y);
         doc.text("TK.", margin + labelWidth + 3, y);
-        doc.text(prevBal.toLocaleString(), margin + labelWidth + 12, y);
+        doc.text(prevBal.toLocaleString('en-BD'), margin + labelWidth + 12, y);
         drawDottedLine(margin + labelWidth + 12, y + 1, margin + 75);
 
         y += 10;
@@ -285,7 +286,7 @@ export const generateMoneyReceiptPDF = async (payment) => {
         doc.text("TK.", margin + labelWidth + 3, y);
         doc.setFont('helvetica', 'bold');
         doc.setTextColor(0, 0, 0);
-        doc.text(parseFloat(payment.amount).toLocaleString(), margin + labelWidth + 12, y);
+        doc.text(parseFloat(payment.amount).toLocaleString('en-BD'), margin + labelWidth + 12, y);
         drawDottedLine(margin + labelWidth + 12, y + 1, margin + 75);
 
         y += 10;
@@ -294,7 +295,7 @@ export const generateMoneyReceiptPDF = async (payment) => {
         doc.text("Balance Due", margin, y);
         doc.text(":", margin + labelWidth, y);
         doc.text("TK.", margin + labelWidth + 3, y);
-        doc.text(dueBal.toLocaleString(), margin + labelWidth + 12, y);
+        doc.text(dueBal.toLocaleString('en-BD'), margin + labelWidth + 12, y);
         drawDottedLine(margin + labelWidth + 12, y + 1, margin + 75);
 
         // Payment Method Checkboxes (Middle-Right) - Compact Layout
