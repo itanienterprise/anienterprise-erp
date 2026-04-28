@@ -922,106 +922,106 @@ const PaymentCollection = () => {
                                                     onClick={() => isMultiple && toggleRowExpansion(group.key)}
                                                     className={`hover:bg-blue-50/50 transition-all group border-b border-gray-50 last:border-0 align-middle ${isMultiple ? 'cursor-pointer' : ''} ${isExpanded ? 'bg-blue-50/30' : ''}`}
                                                 >
-                                                    <td className={`px-3 ${!isExpanded ? 'py-1.5' : 'py-3'} whitespace-nowrap`}>
-                                                        <div className="text-[13px] font-medium text-gray-600 leading-tight">{formatDate(group.date)}</div>
+                                                    <td className={`px-3 ${!isExpanded ? 'py-4' : 'py-3'} whitespace-nowrap`}>
+                                                        <div className="text-sm font-medium text-gray-600 leading-tight">{formatDate(group.date)}</div>
                                                     </td>
-                                                    <td className={`px-3 ${!isExpanded ? 'py-1.5' : 'py-3'} whitespace-nowrap`}>
-                                                        <div className="text-[13px] font-semibold text-blue-600 leading-tight">{group.receiptNo || '—'}</div>
+                                                    <td className={`px-3 ${!isExpanded ? 'py-4' : 'py-3'} whitespace-nowrap`}>
+                                                        <div className="text-sm font-semibold text-blue-600 leading-tight">{group.receiptNo || '—'}</div>
                                                     </td>
-                                                    <td className={`px-3 ${!isExpanded ? 'py-1.5' : 'py-3'} whitespace-nowrap`}>
-                                                        <div className="text-[13px] font-semibold text-gray-800 leading-tight truncate max-w-[200px]">{group.companyName || group.customerName}</div>
+                                                    <td className={`px-3 ${!isExpanded ? 'py-4' : 'py-3'} whitespace-nowrap`}>
+                                                        <div className="text-sm font-semibold text-gray-800 leading-tight truncate max-w-[200px]">{group.companyName || group.customerName}</div>
                                                     </td>
-                                                    <td className={`px-3 ${!isExpanded ? 'py-1.5' : 'py-3'} whitespace-nowrap`}>
+                                                    <td className={`px-3 ${!isExpanded ? 'py-4' : 'py-3'} whitespace-nowrap`}>
                                                         {isMultiple && !isExpanded ? (
                                                             <span className="px-1.5 py-0.5 bg-blue-50 text-blue-600 border border-blue-100/50 rounded text-[9px] font-bold uppercase tracking-wider">Multiple</span>
                                                         ) : (
                                                             <div className="flex flex-col gap-1">
                                                                 {group.items.map((item, idx) => (
-                                                                    <div key={idx} className={`text-[13px] text-gray-800 font-bold leading-tight ${idx < group.items.length - 1 ? 'border-b border-gray-100 pb-1' : ''}`}>
+                                                                    <div key={idx} className={`text-sm text-gray-800 font-bold leading-tight ${idx < group.items.length - 1 ? 'border-b border-gray-100 pb-1' : ''}`}>
                                                                         {item.method || '—'}
                                                                     </div>
                                                                 ))}
                                                             </div>
                                                         )}
                                                     </td>
-                                                    <td className={`px-3 ${!isExpanded ? 'py-1.5' : 'py-3'} whitespace-nowrap`}>
+                                                    <td className={`px-3 ${!isExpanded ? 'py-4' : 'py-3'} whitespace-nowrap`}>
                                                         {isMultiple && !isExpanded ? (
                                                             <span className="px-1.5 py-0.5 bg-gray-50 text-gray-500 border border-gray-100 rounded text-[9px] font-bold uppercase tracking-wider">Multiple</span>
                                                         ) : (
                                                             <div className="flex flex-col gap-1">
                                                                 {group.items.map((item, idx) => (
-                                                                    <div key={idx} className={`text-[13px] font-semibold text-gray-700 leading-tight ${idx < group.items.length - 1 ? 'border-b border-gray-100 pb-1' : ''}`}>
+                                                                    <div key={idx} className={`text-sm font-semibold text-gray-700 leading-tight ${idx < group.items.length - 1 ? 'border-b border-gray-100 pb-1' : ''}`}>
                                                                         {item.method === 'Cash' ? (item.receiveBy || '—') : (item.bankName || '—')}
                                                                     </div>
                                                                 ))}
                                                             </div>
                                                         )}
                                                     </td>
-                                                    <td className={`px-3 ${!isExpanded ? 'py-1.5' : 'py-3'} whitespace-nowrap`}>
+                                                    <td className={`px-3 ${!isExpanded ? 'py-4' : 'py-3'} whitespace-nowrap`}>
                                                         {isMultiple && !isExpanded ? (
                                                             <span className="text-[13px] font-semibold text-gray-400">—</span>
                                                         ) : (
                                                             <div className="flex flex-col gap-1">
                                                                 {group.items.map((item, idx) => (
-                                                                    <div key={idx} className={`text-[13px] font-semibold text-gray-800 leading-tight ${idx < group.items.length - 1 ? 'border-b border-gray-100 pb-1' : ''}`}>
+                                                                    <div key={idx} className={`text-sm font-semibold text-gray-800 leading-tight ${idx < group.items.length - 1 ? 'border-b border-gray-100 pb-1' : ''}`}>
                                                                         {item.method === 'Cash' ? (item.place || '—') : (item.branch || '—')}
                                                                     </div>
                                                                 ))}
                                                             </div>
                                                         )}
                                                     </td>
-                                                    <td className={`px-3 ${!isExpanded ? 'py-1.5' : 'py-3'} whitespace-nowrap`}>
+                                                    <td className={`px-3 ${!isExpanded ? 'py-4' : 'py-3'} whitespace-nowrap`}>
                                                         {isMultiple && !isExpanded ? (
                                                             <span className="text-[13px] font-semibold text-gray-400">—</span>
                                                         ) : (
                                                             <div className="flex flex-col gap-1">
                                                                 {group.items.map((item, idx) => (
-                                                                    <div key={idx} className={`text-[13px] font-semibold text-gray-800 font-mono leading-tight ${idx < group.items.length - 1 ? 'border-b border-gray-100 pb-1' : ''}`}>
+                                                                    <div key={idx} className={`text-sm font-semibold text-gray-800 font-mono leading-tight ${idx < group.items.length - 1 ? 'border-b border-gray-100 pb-1' : ''}`}>
                                                                         {item.accountNo || '—'}
                                                                     </div>
                                                                 ))}
                                                             </div>
                                                         )}
                                                     </td>
-                                                    <td className={`px-3 ${!isExpanded ? 'py-1.5' : 'py-3'} whitespace-nowrap text-center`}>
+                                                    <td className={`px-3 ${!isExpanded ? 'py-4' : 'py-3'} whitespace-nowrap text-center`}>
                                                         {isMultiple && !isExpanded ? (
-                                                            <div className="inline-block px-3 py-0.5 bg-blue-50 text-blue-700 rounded-lg border border-blue-100/50 text-[13px] font-black">
+                                                            <div className="inline-block px-3 py-0.5 bg-blue-50 text-blue-700 rounded-lg border border-blue-100/50 text-sm font-black">
                                                                 ৳{totalAmount.toLocaleString()}
                                                             </div>
                                                         ) : (
                                                             <div className="flex flex-col gap-1">
                                                                 {group.items.map((item, idx) => (
-                                                                    <div key={idx} className={`text-[13px] font-black text-gray-900 leading-tight ${idx < group.items.length - 1 ? 'border-b border-gray-100 pb-1' : ''}`}>
+                                                                    <div key={idx} className={`text-sm font-black text-gray-900 leading-tight ${idx < group.items.length - 1 ? 'border-b border-gray-100 pb-1' : ''}`}>
                                                                         ৳{(item.amount || 0).toLocaleString()}
                                                                     </div>
                                                                 ))}
                                                             </div>
                                                         )}
                                                     </td>
-                                                    <td className={`px-3 ${!isExpanded ? 'py-1.5' : 'py-3'} text-center`} onClick={(e) => e.stopPropagation()}>
+                                                    <td className={`px-3 ${!isExpanded ? 'py-4' : 'py-3'} text-center`} onClick={(e) => e.stopPropagation()}>
                                                             <div className="flex items-center justify-center gap-1.5">
                                                                     <button
                                                                         onClick={() => handleGenerateReceipt(group.items[0], totalAmount, group.items)}
-                                                                        className="p-2 hover:bg-emerald-100 text-emerald-600 rounded-xl transition-all"
+                                                                        className="p-1 hover:bg-emerald-50 text-gray-400 hover:text-emerald-600 rounded transition-colors"
                                                                         title="Money Receipt"
                                                                     >
-                                                                        <FileTextIcon className="w-4 h-4" />
+                                                                        <FileTextIcon className="w-5 h-5" />
                                                                     </button>
                                                                     {isAdmin && (
                                                                         <>
                                                                             <button
                                                                                 onClick={() => handleEditInitiation(group.items[0])}
-                                                                                className="p-2 hover:bg-blue-100 text-blue-600 rounded-xl transition-all"
+                                                                                className="p-1 hover:bg-blue-50 text-gray-400 hover:text-blue-600 rounded transition-colors"
                                                                                 title="Edit Receipt"
                                                                             >
-                                                                                <EditIcon className="w-4 h-4" />
+                                                                                <EditIcon className="w-5 h-5" />
                                                                             </button>
                                                                             <button
                                                                                 onClick={() => handleDeletePayment(group.items[0])}
-                                                                                className="p-2 hover:bg-red-100 text-red-600 rounded-xl transition-all"
+                                                                                className="p-1 hover:bg-red-50 text-gray-400 hover:text-red-600 rounded transition-colors"
                                                                                 title="Delete Receipt"
                                                                             >
-                                                                                <TrashIcon className="w-4 h-4" />
+                                                                                <TrashIcon className="w-5 h-5" />
                                                                             </button>
                                                                         </>
                                                                     )}
