@@ -3,7 +3,7 @@ import { SearchIcon, XIcon, BarChartIcon, FunnelIcon, PrinterIcon } from '../../
 import CustomDatePicker from "../../shared/CustomDatePicker";
 import { generateStockReportPDF } from '../../../utils/pdfGenerator';
 import { formatDate } from '../../../utils/helpers';
-import { calculatePktRemainder } from '../../../utils/stockHelpers';
+import { calculateStockData, calculatePktRemainder } from '../../../utils/stockHelpers';
 
 const StockReport = ({
     isOpen,
@@ -12,7 +12,9 @@ const StockReport = ({
     stockFilters,
     setStockFilters,
     stockData,
-    products
+    warehouseData,
+    products,
+    salesRecords
 }) => {
     if (!isOpen) return null;
 
@@ -83,6 +85,31 @@ const StockReport = ({
         totalSalePkt: totals.totalSalePkt
     }), [stockData, filteredRecords, totals]);
 
+    const warehouseOptions = React.useMemo(() => {
+        const fromStock = stockRecords.map(item => (item.warehouse || item.whName || '').trim()).filter(Boolean);
+        const fromWh = warehouseData ? warehouseData.map(item => (item.whName || item.warehouse || '').trim()).filter(Boolean) : [];
+        const options = [...new Set([...fromStock, ...fromWh])].sort();
+        // Priority for HILI warehouse
+        const hili = options.filter(o => o.toUpperCase().includes('HILI'));
+        const others = options.filter(o => !o.toUpperCase().includes('HILI'));
+        return [...hili, ...others];
+    }, [stockRecords, warehouseData]);
+
+    const multiWarehouseData = React.useMemo(() => {
+        if (stockFilters.warehouse !== "All Warehouses") return null;
+        return warehouseOptions.map(wh => {
+            const filters = { ...stockFilters, warehouse: wh };
+            // For per-warehouse calculation, we don't apply the global searchQuery here 
+            // as it's already applied to displayRecords if we were to use that, 
+            // but calculateStockData does its own filtering.
+            // However, we want the SEARCH to also apply to the multi-warehouse view.
+            return {
+                warehouseName: wh,
+                data: calculateStockData(stockRecords, filters, searchQuery, warehouseData, salesRecords, products)
+            };
+        }).filter(item => item.data.displayRecords.length > 0);
+    }, [stockFilters.warehouse, warehouseOptions, stockRecords, searchQuery, warehouseData, salesRecords, products]);
+
     const filterButtonRef = useRef(null);
     const filterPanelRef = useRef(null);
     const warehouseFilterRef = useRef(null);
@@ -121,10 +148,334 @@ const StockReport = ({
 
     // Helper to get Unique Options
     const getUniqueOptions = (key) => {
+        if (key === 'warehouse') {
+            const fromStock = stockRecords.map(item => (item.warehouse || item.whName || '').trim()).filter(Boolean);
+            const fromWh = warehouseData ? warehouseData.map(item => (item.whName || item.warehouse || '').trim()).filter(Boolean) : [];
+            const options = [...new Set([...fromStock, ...fromWh])].sort();
+            const hili = options.filter(o => o.toUpperCase().includes('HILI'));
+            const others = options.filter(o => !o.toUpperCase().includes('HILI'));
+            const sortedOptions = [...hili, ...others];
+            return ["All Warehouses", ...sortedOptions];
+        }
         if (key === 'productName') {
-            return [...new Set(stockRecords.map(item => (item.productName || item.product || '').trim()).filter(Boolean))].sort();
+            const fromStock = stockRecords.map(item => (item.productName || item.product || '').trim()).filter(Boolean);
+            const fromWh = warehouseData ? warehouseData.map(item => (item.productName || item.product || '').trim()).filter(Boolean) : [];
+            return [...new Set([...fromStock, ...fromWh])].sort();
         }
         return [...new Set(stockRecords.map(item => (item[key] || '').trim()).filter(Boolean))].sort();
+    };
+
+    const renderStockTable = (records, data) => {
+        const totals = {
+            totalTotalInHouseQty: records.reduce((sum, item) => sum + (item.totalInHouseQuantity || 0), 0),
+            totalSaleQty: records.reduce((sum, item) => sum + (item.saleQuantity || 0), 0),
+            totalInHouseQty: records.reduce((sum, item) => sum + (item.inHouseQuantity || 0), 0),
+            totalSalePkt: records.reduce((sum, item) => sum + (parseFloat(item.salePacket) || 0), 0)
+        };
+
+        return (
+            <>
+                {/* Desktop/Print Table View */}
+                <div className="hidden md:block print:block overflow-x-auto border border-gray-900">
+                    <table className="w-full border-collapse">
+                        <thead>
+                            <tr className="bg-gray-50 border-b border-gray-900">
+                                <th className="border-r border-gray-900 px-2 py-1 text-left text-[13px] font-bold text-gray-900 uppercase tracking-wider w-[4%] text-center" rowSpan={2}>SL</th>
+                                <th className="border-r border-gray-900 px-2 py-1 text-left text-[13px] font-bold text-gray-900 uppercase tracking-wider w-[12%]" rowSpan={2}>Product<br />Name</th>
+                                <th className="border-r border-gray-900 px-2 py-1 text-left text-[13px] font-bold text-gray-900 uppercase tracking-wider w-[18%]" rowSpan={2}>Brand</th>
+                                {reportType === 'detailed' && (
+                                    <>
+                                        <th className="border-r border-gray-900 px-1 py-1 text-center text-[11px] font-bold text-gray-900 uppercase tracking-wider" colSpan={2}>Opening Stock</th>
+                                        <th className="border-r border-gray-900 px-1 py-1 text-center text-[11px] font-bold text-gray-900 uppercase tracking-wider" colSpan={2}>Sale</th>
+                                    </>
+                                )}
+                                <th className="px-1 py-1 text-center text-[11px] font-bold text-gray-900 uppercase tracking-wider border-b border-gray-900" colSpan={2}>Closing Stock</th>
+                            </tr>
+                            <tr className="bg-gray-50 border-b border-gray-900">
+                                {reportType === 'detailed' && (
+                                    <>
+                                        <th className="border-r border-gray-900 px-2 py-1 text-right text-[12px] font-bold text-gray-900 uppercase tracking-wider w-[10%]">BAG</th>
+                                        <th className="border-r border-gray-900 px-2 py-1 text-right text-[12px] font-bold text-gray-900 uppercase tracking-wider w-[10%]">QTY</th>
+                                        <th className="border-r border-gray-900 px-2 py-1 text-right text-[12px] font-bold text-gray-900 uppercase tracking-wider w-[8%]">BAG</th>
+                                        <th className="border-r border-gray-900 px-2 py-1 text-right text-[12px] font-bold text-gray-900 uppercase tracking-wider w-[8%]">QTY</th>
+                                    </>
+                                )}
+                                <th className="border-r border-gray-900 px-2 py-1 text-right text-[12px] font-bold text-gray-900 uppercase tracking-wider w-[10%]">BAG</th>
+                                <th className="px-2 py-1 text-right text-[12px] font-bold text-gray-900 uppercase tracking-wider w-[10%]">QTY</th>
+                            </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-900">
+                            {records.length > 0 ? (
+                                records.map((item, index) => {
+                                    const renderList = [];
+                                    let currentQuality = null;
+                                    
+                                    item.brandList.forEach((ent, i) => {
+                                        const q = (ent.quality && ent.quality !== '-') ? ent.quality : '';
+                                        if (q !== currentQuality) {
+                                            currentQuality = q;
+                                            renderList.push({ ...ent, type: 'brand', showQuality: true });
+                                        } else {
+                                            renderList.push({ ...ent, type: 'brand', showQuality: false });
+                                        }
+                                    });
+
+                                    const hasTotal = true;
+                                    const hasAnyQ = item.brandList.some(b => b.quality && b.quality !== '-');
+                                    return (
+                                        <tr key={index} className="border-b border-gray-900 last:border-0 hover:bg-gray-50 transition-colors">
+                                            <td className={`border-r border-gray-900 px-2 py-0.5 text-[14px] text-gray-900 text-center ${!hasAnyQ ? 'align-middle' : 'align-top'}`}>
+                                                <div className="leading-tight">{index + 1}</div>
+                                                {hasTotal && <div className="mt-0 pt-0.5 border-t border-transparent leading-tight font-bold invisible">S</div>}
+                                            </td>
+                                            <td className={`border-r border-gray-900 px-2 py-0.5 text-[14px] font-bold text-gray-900 ${!hasAnyQ ? 'align-middle' : 'align-top'}`}>
+                                                <div className="leading-tight mb-0.5 underline decoration-gray-300">{item.productName}</div>
+                                                {renderList.map((ent, i) => {
+                                                    const isFirstSub = i === 0 && !(ent.quality && ent.quality !== '-');
+                                                    if (isFirstSub) return null;
+                                                    return (
+                                                        <div key={i} className="leading-tight text-[12px] text-gray-900">
+                                                            {ent.showQuality ? (ent.quality && ent.quality !== '-' ? ent.quality : '') : null}
+                                                        </div>
+                                                    );
+                                                })}
+                                                {hasTotal && <div className="mt-0 pt-0.5 border-t border-gray-900 leading-tight font-bold invisible">S</div>}
+                                            </td>
+                                            <td className="border-r border-gray-900 px-2 py-0.5 text-[14px] text-gray-900 align-top whitespace-nowrap">
+                                                {renderList[0] && renderList[0].quality && renderList[0].quality !== '-' && <div className="leading-tight mb-0.5">&nbsp;</div>}
+                                                {renderList.map((ent, i) => (
+                                                    <div key={i} className="leading-tight">
+                                                        {ent.brand || 'No Brand'}
+                                                    </div>
+                                                ))}
+                                                {hasTotal && <div className="mt-0 pt-0.5 border-t border-gray-900 font-bold leading-tight uppercase text-gray-400">SUB TOTAL</div>}
+                                            </td>
+                                            {reportType === 'detailed' && (
+                                                <>
+                                                    <td className="border-r border-gray-900 px-2 py-0.5 text-[14px] text-right text-gray-900 font-medium align-top whitespace-nowrap">
+                                                        {hasAnyQ && <div className="leading-tight mb-0.5">&nbsp;</div>}
+                                                        {renderList.map((ent, i) => {
+                                                            const { whole, remainder } = calculatePktRemainder(ent.totalInHouseQuantity, ent.packetSize);
+                                                            return (
+                                                                <div key={i} className="leading-tight">
+                                                                    {whole}{remainder !== 0 ? ` - ${Math.abs(remainder)} kg` : ''}
+                                                                </div>
+                                                            );
+                                                        })}
+                                                        {hasTotal && (
+                                                            <div className="mt-0 pt-0.5 border-t border-gray-900 font-bold leading-tight">
+                                                                {(() => {
+                                                                    const pktSize = item.packetSize || item.brandList[0]?.packetSize || 30;
+                                                                    const { whole, remainder } = calculatePktRemainder(item.totalInHouseQuantity, pktSize);
+                                                                    return `${whole}${remainder !== 0 ? ` - ${Math.abs(remainder)} kg` : ''}`;
+                                                                })()}
+                                                            </div>
+                                                        )}
+                                                    </td>
+                                                    <td className="border-r border-gray-900 px-2 py-0.5 text-[14px] text-right text-gray-900 font-bold align-top whitespace-nowrap">
+                                                        {hasAnyQ && <div className="leading-tight mb-0.5">&nbsp;</div>}
+                                                        {renderList.map((ent, i) => (
+                                                            <div key={i} className={`leading-tight ${ent.type === 'subtotal' ? 'text-gray-600' : ''}`}>
+                                                                {Math.round(ent.totalInHouseQuantity || 0)}
+                                                            </div>
+                                                        ))}
+                                                        {hasTotal && <div className="mt-0 pt-0.5 border-t border-gray-900 font-black leading-tight">{Math.round(item.totalInHouseQuantity)}</div>}
+                                                    </td>
+                                                    <td className="border-r border-gray-900 px-2 py-0.5 text-[14px] text-right text-gray-900 font-medium align-top whitespace-nowrap">
+                                                        {hasAnyQ && <div className="leading-tight mb-0.5">&nbsp;</div>}
+                                                        {renderList.map((ent, i) => {
+                                                            const sPkt = parseFloat(ent.salePacket) || 0;
+                                                            return (
+                                                                <div key={i} className={`leading-tight ${ent.type === 'subtotal' ? 'font-bold text-gray-600' : ''}`}>
+                                                                    {Number.isInteger(sPkt) ? sPkt : sPkt.toFixed(2)}
+                                                                </div>
+                                                            );
+                                                        })}
+                                                        {hasTotal && <div className="mt-0 pt-0.5 border-t border-gray-900 font-bold leading-tight text-right">{Number.isInteger(item.salePacket) ? item.salePacket : (item.salePacket || 0).toFixed(2)}</div>}
+                                                    </td>
+                                                    <td className="border-r border-gray-900 px-2 py-0.5 text-[14px] text-right text-gray-900 font-bold align-top whitespace-nowrap">
+                                                        {hasAnyQ && <div className="leading-tight mb-0.5">&nbsp;</div>}
+                                                        {renderList.map((ent, i) => (
+                                                            <div key={i} className={`leading-tight ${ent.type === 'subtotal' ? 'text-gray-600' : ''}`}>
+                                                                {Math.round(ent.saleQuantity || 0)}
+                                                            </div>
+                                                        ))}
+                                                        {hasTotal && <div className="mt-0 pt-0.5 border-t border-gray-900 font-black leading-tight">{Math.round(item.saleQuantity)}</div>}
+                                                    </td>
+                                                </>
+                                            )}
+                                            <td className="border-r border-gray-900 px-2 py-0.5 text-[14px] text-right text-gray-900 font-medium align-top whitespace-nowrap">
+                                                {hasAnyQ && <div className="leading-tight mb-0.5">&nbsp;</div>}
+                                                {renderList.map((ent, i) => {
+                                                    const { whole, remainder } = calculatePktRemainder(ent.inHouseQuantity, ent.packetSize || 30);
+                                                    return (
+                                                        <div key={i} className={`leading-tight ${ent.type === 'subtotal' ? 'font-bold text-gray-600' : ''}`}>
+                                                            {whole}{remainder !== 0 ? ` - ${Math.abs(remainder)} kg` : ''}
+                                                        </div>
+                                                    );
+                                                })}
+                                                {hasTotal && (
+                                                    <div className="mt-0 pt-0.5 border-t border-gray-900 font-bold leading-tight">
+                                                        {(() => {
+                                                            const pktSize = item.packetSize || item.brandList[0]?.packetSize || 30;
+                                                            const { whole, remainder } = calculatePktRemainder(item.inHouseQuantity, pktSize);
+                                                            return `${whole}${remainder !== 0 ? ` - ${Math.abs(remainder)} kg` : ''}`;
+                                                        })()}
+                                                    </div>
+                                                )}
+                                            </td>
+                                            <td className="px-2 py-0.5 text-[14px] text-right text-gray-900 font-bold whitespace-nowrap border-gray-900 align-top">
+                                                {hasAnyQ && <div className="leading-tight mb-0.5">&nbsp;</div>}
+                                                {renderList.map((ent, i) => (
+                                                    <div key={i} className={`leading-tight ${ent.type === 'subtotal' ? 'text-gray-600' : ''}`}>
+                                                        {Math.round(ent.inHouseQuantity || 0)}
+                                                    </div>
+                                                ))}
+                                                {hasTotal && <div className="mt-0 pt-0.5 border-t border-gray-900 font-black leading-tight">{Math.round(item.inHouseQuantity)}</div>}
+                                            </td>
+                                        </tr>
+                                    );
+                                })
+                            ) : (
+                                <tr><td colSpan="9" className="px-4 py-8 text-center text-gray-500 italic text-[14px]">No records found for the selected criteria.</td></tr>
+                            )}
+                        </tbody>
+                        {records.length > 0 && (
+                            <tfoot>
+                                <tr className="bg-gray-100 border-t-2 border-gray-900">
+                                    <td className="border-r border-gray-900 px-2 py-1.5"></td>
+                                    <td className="border-r border-gray-900 px-2 py-1.5"></td>
+                                    <td className="px-2 py-1.5 text-[14px] font-black text-gray-900 text-center uppercase tracking-wider border-r border-gray-900">Grand Total</td>
+                                    {reportType === 'detailed' && (
+                                        <>
+                                            <td className="px-2 py-1.5 text-[14px] text-right font-black text-gray-900 border-r border-gray-900">
+                                                {(() => {
+                                                    const totalWhole = records.reduce((accWhole, item) => accWhole + item.brandList.reduce((sum, ent) => sum + calculatePktRemainder(Math.max(0, ent.totalInHouseQuantity || 0), ent.packetSize).whole, 0), 0);
+                                                    const totalRem = records.reduce((accRem, item) => accRem + item.brandList.reduce((sum, ent) => sum + calculatePktRemainder(Math.max(0, ent.totalInHouseQuantity || 0), ent.packetSize).remainder, 0), 0);
+                                                    return `${totalWhole}${totalRem !== 0 ? ` - ${Math.abs(totalRem).toLocaleString('en-BD')} kg` : ''}`;
+                                                })()}
+                                            </td>
+                                            <td className="px-2 py-1.5 text-[14px] text-right font-black text-gray-900 border-r border-gray-900">
+                                                {Math.round(totals.totalTotalInHouseQty)}
+                                            </td>
+                                            <td className="px-2 py-1.5 text-[14px] text-right font-black text-gray-900 border-r border-gray-900">
+                                                {Number.isInteger(totals.totalSalePkt) ? totals.totalSalePkt : (totals.totalSalePkt || 0).toFixed(2)}
+                                            </td>
+                                            <td className="px-2 py-1.5 text-[14px] text-right font-black text-gray-900 border-r border-gray-900">
+                                                {Math.round(totals.totalSaleQty)}
+                                            </td>
+                                        </>
+                                    )}
+                                    <td className="px-2 py-1.5 text-[14px] text-right font-black text-gray-900 border-r border-gray-900">
+                                        {(() => {
+                                            const totalWhole = records.reduce((accWhole, item) => accWhole + item.brandList.reduce((sum, ent) => sum + calculatePktRemainder(Math.max(0, ent.inHouseQuantity || 0), ent.packetSize).whole, 0), 0);
+                                            const totalRem = records.reduce((accRem, item) => accRem + item.brandList.reduce((sum, ent) => sum + calculatePktRemainder(Math.max(0, ent.inHouseQuantity || 0), ent.packetSize).remainder, 0), 0);
+                                            return `${totalWhole}${totalRem !== 0 ? ` - ${Math.abs(totalRem).toLocaleString('en-BD')} kg` : ''}`;
+                                        })()}
+                                    </td>
+                                    <td className="px-2 py-1.5 text-[14px] text-right font-black text-gray-900">
+                                        {Math.round(totals.totalInHouseQty)}
+                                    </td>
+                                </tr>
+                            </tfoot>
+                        )}
+                    </table>
+                </div>
+
+                <div className="md:hidden print:hidden space-y-4">
+                    {records.length > 0 ? (
+                        records.map((item, index) => (
+                            <div key={index} className="bg-white border border-gray-200 rounded-2xl overflow-hidden shadow-sm">
+                                <div className="bg-gray-50/50 px-4 py-3 border-b border-gray-100 flex justify-between items-center">
+                                    <h4 className="font-black text-gray-900 tracking-tight">{item.productName}</h4>
+                                    <span className="text-[10px] font-bold text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">#{index + 1}</span>
+                                </div>
+                                <div className="p-4 space-y-4">
+                                    {item.brandList.map((ent, bIndex) => (
+                                        <div key={bIndex} className="space-y-3 pb-4 last:pb-0 border-b last:border-0 border-gray-50">
+                                            <div className="flex justify-center items-center w-full">
+                                                <span className="text-lg sm:text-xl font-black text-blue-600 text-center">{ent.brand}</span>
+                                            </div>
+                                            <div className="grid grid-cols-2 gap-x-4 gap-y-3">
+                                                <div className="space-y-0.5">
+                                                    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Total Inhouse</p>
+                                                    <p className="text-xs font-bold text-gray-700">
+                                                        {(() => {
+                                                            const { whole, remainder } = calculatePktRemainder(ent.totalInHouseQuantity, ent.packetSize);
+                                                            return `${whole}${remainder !== 0 ? ` - ${Math.abs(remainder)} kg` : ''}`;
+                                                        })()} BAG
+                                                    </p>
+                                                    <p className="text-sm font-black text-gray-900">{Math.round(ent.totalInHouseQuantity).toLocaleString('en-BD')} kg</p>
+                                                </div>
+                                                <div className="space-y-0.5 text-right">
+                                                    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Sale</p>
+                                                    <p className="text-xs font-bold text-gray-700">
+                                                        {Number.isInteger(parseFloat(ent.salePacket)) ? parseFloat(ent.salePacket) : (parseFloat(ent.salePacket) || 0).toFixed(2)} BAG
+                                                    </p>
+                                                    <p className="text-sm font-black text-gray-900">{Math.round(ent.saleQuantity).toLocaleString('en-BD')} kg</p>
+                                                </div>
+                                                <div className="col-span-full w-full pt-3 pb-2 border-t border-gray-100 flex flex-col items-center justify-center text-center">
+                                                    <p className="text-[10px] sm:text-xs font-bold text-blue-400 uppercase tracking-[0.1em] mb-1">Remaining Inhouse</p>
+                                                    <div className="flex flex-col items-center justify-center w-full space-y-0.5">
+                                                        <p className="text-lg sm:text-xl font-black text-blue-600 text-center">
+                                                            {(() => {
+                                                                const { whole, remainder } = calculatePktRemainder(ent.inHouseQuantity, ent.packetSize || 30);
+                                                                return `${whole}${remainder !== 0 ? ` - ${Math.abs(remainder)} kg` : ''}`;
+                                                            })()} BAG
+                                                        </p>
+                                                        <p className="text-lg sm:text-xl font-black text-blue-600 text-center">
+                                                            {Math.round(ent.inHouseQuantity).toLocaleString('en-BD')} kg
+                                                        </p>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    ))}
+                                    <div className="mt-2 pt-3 border-t-2 border-dashed border-gray-100 bg-blue-50/30 -mx-4 -mb-4 p-4">
+                                        <p className="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-2">Product Summary</p>
+                                        <div className="grid grid-cols-2 gap-4">
+                                            <div>
+                                                <p className="text-[10px] font-bold text-gray-400">Total Inhouse</p>
+                                                <p className="text-sm font-black text-gray-900">{Math.round(item.totalInHouseQuantity).toLocaleString('en-BD')} kg</p>
+                                            </div>
+                                            <div className="text-right">
+                                                <p className="text-[10px] font-bold text-blue-500">Net Stock</p>
+                                                <p className="text-sm font-black text-blue-600">{Math.round(item.inHouseQuantity).toLocaleString('en-BD')} kg</p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        ))
+                    ) : (
+                        <div className="text-center py-12 px-4 bg-gray-50 rounded-2xl border-2 border-dashed border-gray-200">
+                            <p className="text-gray-500 italic">No records found for the selected criteria.</p>
+                        </div>
+                    )}
+
+                    {/* Mobile Grand Total */}
+                    {records.length > 0 && (
+                        <div className="mt-8 p-5 bg-gray-900 rounded-2xl shadow-xl shadow-gray-200">
+                            <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-4 text-center">Grand Total Summary</h4>
+                            <div className="grid grid-cols-2 gap-y-6 gap-x-4">
+                                <div className="space-y-1">
+                                    <p className="text-[10px] font-bold text-gray-500 uppercase tracking-wider text-center">Total Inhouse</p>
+                                    <p className="text-xl font-black text-white text-center">{Math.round(totals.totalTotalInHouseQty).toLocaleString('en-BD')}<span className="text-[10px] ml-1 text-gray-400 uppercase">kg</span></p>
+                                </div>
+                                <div className="space-y-1">
+                                    <p className="text-[10px] font-bold text-gray-500 uppercase tracking-wider text-center">Total Sale</p>
+                                    <p className="text-xl font-black text-white text-center">{Math.round(totals.totalSaleQty).toLocaleString('en-BD')}<span className="text-[10px] ml-1 text-gray-400 uppercase">kg</span></p>
+                                </div>
+                                <div className="col-span-full pt-4 border-t border-gray-800 flex flex-col items-center">
+                                    <p className="text-[10px] font-bold text-blue-400 uppercase tracking-[0.2em] mb-1 text-center">Net Inhouse Stock</p>
+                                    <p className="text-4xl font-black text-blue-500 tracking-tighter text-center">{Math.round(totals.totalInHouseQty).toLocaleString('en-BD')}<span className="text-sm ml-2 text-blue-400 uppercase">kg</span></p>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+                </div>
+            </>
+        );
     };
 
     return (
@@ -373,9 +724,11 @@ const StockReport = ({
                                                         </div>
                                                         {filterDropdownOpen.brand && (() => {
                                                             const brandsSet = new Set();
-                                                            stockRecords.forEach(r => {
+                                                            const combinedRecords = [...stockRecords, ...(warehouseData || [])];
+                                                            combinedRecords.forEach(r => {
                                                                 // STRICT FILTER: If a product is selected, ONLY show brands for that product
-                                                                if (stockFilters.productName && (r.productName || '').trim() !== stockFilters.productName) return;
+                                                                const rProd = (r.productName || r.product || '').trim();
+                                                                if (stockFilters.productName && rProd !== stockFilters.productName) return;
 
                                                                 if (r.brand) brandsSet.add(r.brand);
                                                                 if (r.brandList) r.brandList.forEach(b => brandsSet.add(b.brand));
@@ -403,7 +756,7 @@ const StockReport = ({
                                 </>
                             )}
                         </div>
-                        <button onClick={() => generateStockReportPDF(filteredStockData, stockFilters, reportType)} className="w-9 h-9 sm:w-10 sm:h-10 flex items-center justify-center bg-blue-600 hover:bg-blue-700 text-white rounded-lg sm:rounded-xl shadow-lg shadow-blue-500/30 transition-all no-print">
+                        <button onClick={() => generateStockReportPDF(filteredStockData, stockFilters, reportType, stockRecords, warehouseData, salesRecords, products)} className="w-9 h-9 sm:w-10 sm:h-10 flex items-center justify-center bg-blue-600 hover:bg-blue-700 text-white rounded-lg sm:rounded-xl shadow-lg shadow-blue-500/30 transition-all no-print">
                             <PrinterIcon className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
                         </button>
                         <button onClick={onClose} className="w-9 h-9 sm:w-10 sm:h-10 flex items-center justify-center hover:bg-gray-100 rounded-lg sm:rounded-xl transition-colors no-print"><XIcon className="w-4 h-4 sm:w-6 sm:h-6 text-gray-500" /></button>
@@ -433,308 +786,19 @@ const StockReport = ({
                             <div className="font-bold"><span className="text-gray-900">Printed on:</span> <span className="text-gray-900">{formatDate(new Date().toISOString().split('T')[0])}</span></div>
                         </div>
 
-                        {/* Desktop/Print Table View */}
-                        <div className="hidden md:block print:block overflow-x-auto border border-gray-900">
-                            <table className="w-full border-collapse">
-                                <thead>
-                                    <tr className="bg-gray-50 border-b border-gray-900">
-                                        <th className="border-r border-gray-900 px-2 py-1 text-left text-[13px] font-bold text-gray-900 uppercase tracking-wider w-[4%] text-center" rowSpan={2}>SL</th>
-                                        <th className="border-r border-gray-900 px-2 py-1 text-left text-[13px] font-bold text-gray-900 uppercase tracking-wider w-[12%]" rowSpan={2}>Product<br />Name</th>
-                                        <th className="border-r border-gray-900 px-2 py-1 text-left text-[13px] font-bold text-gray-900 uppercase tracking-wider w-[18%]" rowSpan={2}>Brand</th>
-                                        {reportType === 'detailed' && (
-                                            <>
-                                                <th className="border-r border-gray-900 px-1 py-1 text-center text-[11px] font-bold text-gray-900 uppercase tracking-wider" colSpan={2}>Opening Stock</th>
-                                                <th className="border-r border-gray-900 px-1 py-1 text-center text-[11px] font-bold text-gray-900 uppercase tracking-wider" colSpan={2}>Sale</th>
-                                            </>
-                                        )}
-                                        <th className="px-1 py-1 text-center text-[11px] font-bold text-gray-900 uppercase tracking-wider border-b border-gray-900" colSpan={2}>Closing Stock</th>
-                                    </tr>
-                                    <tr className="bg-gray-50 border-b border-gray-900">
-                                        {reportType === 'detailed' && (
-                                            <>
-                                                <th className="border-r border-gray-900 px-2 py-1 text-right text-[12px] font-bold text-gray-900 uppercase tracking-wider w-[10%]">BAG</th>
-                                                <th className="border-r border-gray-900 px-2 py-1 text-right text-[12px] font-bold text-gray-900 uppercase tracking-wider w-[10%]">QTY</th>
-                                                <th className="border-r border-gray-900 px-2 py-1 text-right text-[12px] font-bold text-gray-900 uppercase tracking-wider w-[8%]">BAG</th>
-                                                <th className="border-r border-gray-900 px-2 py-1 text-right text-[12px] font-bold text-gray-900 uppercase tracking-wider w-[8%]">QTY</th>
-                                            </>
-                                        )}
-                                        <th className="border-r border-gray-900 px-2 py-1 text-right text-[12px] font-bold text-gray-900 uppercase tracking-wider w-[10%]">BAG</th>
-                                        <th className="px-2 py-1 text-right text-[12px] font-bold text-gray-900 uppercase tracking-wider w-[10%]">QTY</th>
-                                    </tr>
-                                </thead>
-                                <tbody className="divide-y divide-gray-900">
-                                    {filteredRecords.length > 0 ? (
-                                        filteredRecords.map((item, index) => {
-                                            // Pre-process brandList into a renderList with quality groups
-                                            const renderList = [];
-                                            let currentQuality = null;
-                                            
-                                            item.brandList.forEach((ent, i) => {
-                                                const q = (ent.quality && ent.quality !== '-') ? ent.quality : '';
-                                                if (q !== currentQuality) {
-                                                    currentQuality = q;
-                                                    renderList.push({ ...ent, type: 'brand', showQuality: true });
-                                                } else {
-                                                    renderList.push({ ...ent, type: 'brand', showQuality: false });
-                                                }
-                                            });
-
-                                            const hasTotal = true; // Always show subtotal in UI
-                                            const hasAnyQ = item.brandList.some(b => b.quality && b.quality !== '-');
-                                            return (
-                                                <tr key={index} className="border-b border-gray-900 last:border-0 hover:bg-gray-50 transition-colors">
-                                                    <td className={`border-r border-gray-900 px-2 py-0.5 text-[14px] text-gray-900 text-center ${!hasAnyQ ? 'align-middle' : 'align-top'}`}>
-                                                        <div className="leading-tight">{index + 1}</div>
-                                                        {hasTotal && <div className="mt-0 pt-0.5 border-t border-transparent leading-tight font-bold invisible">S</div>}
-                                                    </td>
-                                                    <td className={`border-r border-gray-900 px-2 py-0.5 text-[14px] font-bold text-gray-900 ${!hasAnyQ ? 'align-middle' : 'align-top'}`}>
-                                                        <div className="leading-tight mb-0.5 underline decoration-gray-300">{item.productName}</div>
-                                                        {renderList.map((ent, i) => {
-                                                            const isFirstSub = i === 0 && !(ent.quality && ent.quality !== '-');
-                                                            if (isFirstSub) return null;
-                                                            return (
-                                                                <div key={i} className="leading-tight text-[12px] text-gray-900">
-                                                                    {ent.showQuality ? (ent.quality && ent.quality !== '-' ? ent.quality : '') : null}
-                                                                </div>
-                                                            );
-                                                        })}
-                                                        {hasTotal && <div className="mt-0 pt-0.5 border-t border-gray-900 leading-tight font-bold invisible">S</div>}
-                                                    </td>
-                                                    <td className="border-r border-gray-900 px-2 py-0.5 text-[14px] text-gray-900 align-top whitespace-nowrap">
-                                                        {renderList[0] && renderList[0].quality && renderList[0].quality !== '-' && <div className="leading-tight mb-0.5">&nbsp;</div>}
-                                                        {renderList.map((ent, i) => (
-                                                            <div key={i} className="leading-tight">
-                                                                {ent.brand || 'No Brand'}
-                                                            </div>
-                                                        ))}
-                                                        {hasTotal && <div className="mt-0 pt-0.5 border-t border-gray-900 font-bold leading-tight uppercase text-gray-400">SUB TOTAL</div>}
-                                                    </td>
-                                                    {reportType === 'detailed' && (
-                                                        <>
-                                                            <td className="border-r border-gray-900 px-2 py-0.5 text-[14px] text-right text-gray-900 font-medium align-top whitespace-nowrap">
-                                                                {hasAnyQ && <div className="leading-tight mb-0.5">&nbsp;</div>}
-                                                                {renderList.map((ent, i) => {
-                                                                    const { whole, remainder } = calculatePktRemainder(ent.totalInHouseQuantity, ent.packetSize);
-                                                                    return (
-                                                                        <div key={i} className="leading-tight">
-                                                                            {whole}{remainder !== 0 ? ` - ${Math.abs(remainder)} kg` : ''}
-                                                                        </div>
-                                                                    );
-                                                                })}
-                                                                {hasTotal && (
-                                                                    <div className="mt-0 pt-0.5 border-t border-gray-900 font-bold leading-tight">
-                                                                        {(() => {
-                                                                            const pktSize = item.packetSize || item.brandList[0]?.packetSize || 30;
-                                                                            const { whole, remainder } = calculatePktRemainder(item.totalInHouseQuantity, pktSize);
-                                                                            return `${whole}${remainder !== 0 ? ` - ${Math.abs(remainder)} kg` : ''}`;
-                                                                        })()}
-                                                                    </div>
-                                                                )}
-                                                            </td>
-                                                            <td className="border-r border-gray-900 px-2 py-0.5 text-[14px] text-right text-gray-900 font-bold align-top whitespace-nowrap">
-                                                                {hasAnyQ && <div className="leading-tight mb-0.5">&nbsp;</div>}
-                                                                {renderList.map((ent, i) => (
-                                                                    <div key={i} className={`leading-tight ${ent.type === 'subtotal' ? 'text-gray-600' : ''}`}>
-                                                                        {Math.round(ent.totalInHouseQuantity || 0)}
-                                                                    </div>
-                                                                ))}
-                                                                {hasTotal && <div className="mt-0 pt-0.5 border-t border-gray-900 font-black leading-tight">{Math.round(item.totalInHouseQuantity)}</div>}
-                                                            </td>
-                                                            <td className="border-r border-gray-900 px-2 py-0.5 text-[14px] text-right text-gray-900 font-medium align-top whitespace-nowrap">
-                                                                {hasAnyQ && <div className="leading-tight mb-0.5">&nbsp;</div>}
-                                                                {renderList.map((ent, i) => {
-                                                                    const sPkt = parseFloat(ent.salePacket) || 0;
-                                                                    return (
-                                                                        <div key={i} className={`leading-tight ${ent.type === 'subtotal' ? 'font-bold text-gray-600' : ''}`}>
-                                                                            {Number.isInteger(sPkt) ? sPkt : sPkt.toFixed(2)}
-                                                                        </div>
-                                                                    );
-                                                                })}
-                                                                {hasTotal && <div className="mt-0 pt-0.5 border-t border-gray-900 font-bold leading-tight text-right">{Number.isInteger(item.salePacket) ? item.salePacket : (item.salePacket || 0).toFixed(2)}</div>}
-                                                            </td>
-                                                            <td className="border-r border-gray-900 px-2 py-0.5 text-[14px] text-right text-gray-900 font-bold align-top whitespace-nowrap">
-                                                                {hasAnyQ && <div className="leading-tight mb-0.5">&nbsp;</div>}
-                                                                {renderList.map((ent, i) => (
-                                                                    <div key={i} className={`leading-tight ${ent.type === 'subtotal' ? 'text-gray-600' : ''}`}>
-                                                                        {Math.round(ent.saleQuantity || 0)}
-                                                                    </div>
-                                                                ))}
-                                                                {hasTotal && <div className="mt-0 pt-0.5 border-t border-gray-900 font-black leading-tight">{Math.round(item.saleQuantity)}</div>}
-                                                            </td>
-                                                        </>
-                                                    )}
-                                                    <td className="border-r border-gray-900 px-2 py-0.5 text-[14px] text-right text-gray-900 font-medium align-top whitespace-nowrap">
-                                                        {hasAnyQ && <div className="leading-tight mb-0.5">&nbsp;</div>}
-                                                        {renderList.map((ent, i) => {
-                                                            const { whole, remainder } = calculatePktRemainder(ent.inHouseQuantity, ent.packetSize || 30);
-                                                            return (
-                                                                <div key={i} className={`leading-tight ${ent.type === 'subtotal' ? 'font-bold text-gray-600' : ''}`}>
-                                                                    {whole}{remainder !== 0 ? ` - ${Math.abs(remainder)} kg` : ''}
-                                                                </div>
-                                                            );
-                                                        })}
-                                                        {hasTotal && (
-                                                            <div className="mt-0 pt-0.5 border-t border-gray-900 font-bold leading-tight">
-                                                                {(() => {
-                                                                    const pktSize = item.packetSize || item.brandList[0]?.packetSize || 30;
-                                                                    const { whole, remainder } = calculatePktRemainder(item.inHouseQuantity, pktSize);
-                                                                    return `${whole}${remainder !== 0 ? ` - ${Math.abs(remainder)} kg` : ''}`;
-                                                                })()}
-                                                            </div>
-                                                        )}
-                                                    </td>
-                                                    <td className="px-2 py-0.5 text-[14px] text-right text-gray-900 font-bold whitespace-nowrap border-gray-900 align-top">
-                                                        {hasAnyQ && <div className="leading-tight mb-0.5">&nbsp;</div>}
-                                                        {renderList.map((ent, i) => (
-                                                            <div key={i} className={`leading-tight ${ent.type === 'subtotal' ? 'text-gray-600' : ''}`}>
-                                                                {Math.round(ent.inHouseQuantity || 0)}
-                                                            </div>
-                                                        ))}
-                                                        {hasTotal && <div className="mt-0 pt-0.5 border-t border-gray-900 font-black leading-tight">{Math.round(item.inHouseQuantity)}</div>}
-                                                    </td>
-                                                </tr>
-                                            );
-                                        })
-                                    ) : (
-                                        <tr><td colSpan="9" className="px-4 py-8 text-center text-gray-500 italic text-[14px]">No records found for the selected criteria.</td></tr>
-                                    )}
-                                </tbody>
-                                {filteredRecords.length > 0 && (
-                                    <tfoot>
-                                        <tr className="bg-gray-100 border-t-2 border-gray-900">
-                                            <td className="border-r border-gray-900 px-2 py-1.5"></td>
-                                            <td className="border-r border-gray-900 px-2 py-1.5"></td>
-                                            <td className="px-2 py-1.5 text-[14px] font-black text-gray-900 text-center uppercase tracking-wider border-r border-gray-900">Grand Total</td>
-                                            {reportType === 'detailed' && (
-                                                <>
-                                                    <td className="px-2 py-1.5 text-[14px] text-right font-black text-gray-900 border-r border-gray-900">
-                                                        {(() => {
-                                                            const totalWhole = filteredRecords.reduce((accWhole, item) => accWhole + item.brandList.reduce((sum, ent) => sum + calculatePktRemainder(Math.max(0, ent.totalInHouseQuantity || 0), ent.packetSize).whole, 0), 0);
-                                                            const totalRem = filteredRecords.reduce((accRem, item) => accRem + item.brandList.reduce((sum, ent) => sum + calculatePktRemainder(Math.max(0, ent.totalInHouseQuantity || 0), ent.packetSize).remainder, 0), 0);
-                                                            return `${totalWhole}${totalRem !== 0 ? ` - ${Math.abs(totalRem).toLocaleString('en-BD')} kg` : ''}`;
-                                                        })()}
-                                                    </td>
-                                                    <td className="px-2 py-1.5 text-[14px] text-right font-black text-gray-900 border-r border-gray-900">
-                                                        {Math.round(totals.totalTotalInHouseQty)}
-                                                    </td>
-                                                    <td className="px-2 py-1.5 text-[14px] text-right font-black text-gray-900 border-r border-gray-900">
-                                                        {Number.isInteger(totals.totalSalePkt) ? totals.totalSalePkt : (totals.totalSalePkt || 0).toFixed(2)}
-                                                    </td>
-                                                    <td className="px-2 py-1.5 text-[14px] text-right font-black text-gray-900 border-r border-gray-900">
-                                                        {Math.round(totals.totalSaleQty)}
-                                                    </td>
-                                                </>
-                                            )}
-                                            <td className="px-2 py-1.5 text-[14px] text-right font-black text-gray-900 border-r border-gray-900">
-                                                {(() => {
-                                                    const totalWhole = filteredRecords.reduce((accWhole, item) => accWhole + item.brandList.reduce((sum, ent) => sum + calculatePktRemainder(Math.max(0, ent.inHouseQuantity || 0), ent.packetSize).whole, 0), 0);
-                                                    const totalRem = filteredRecords.reduce((accRem, item) => accRem + item.brandList.reduce((sum, ent) => sum + calculatePktRemainder(Math.max(0, ent.inHouseQuantity || 0), ent.packetSize).remainder, 0), 0);
-                                                    return `${totalWhole}${totalRem !== 0 ? ` - ${Math.abs(totalRem).toLocaleString('en-BD')} kg` : ''}`;
-                                                })()}
-                                            </td>
-                                            <td className="px-2 py-1.5 text-[14px] text-right font-black text-gray-900">
-                                                {Math.round(totals.totalInHouseQty)}
-                                            </td>
-                                        </tr>
-                                    </tfoot>
-                                )}
-                            </table>
-                        </div>
-
-                        <div className="md:hidden print:hidden space-y-4">
-                            {filteredRecords.length > 0 ? (
-                                filteredRecords.map((item, index) => (
-                                    <div key={index} className="bg-white border border-gray-200 rounded-2xl overflow-hidden shadow-sm">
-                                        <div className="bg-gray-50/50 px-4 py-3 border-b border-gray-100 flex justify-between items-center">
-                                            <h4 className="font-black text-gray-900 tracking-tight">{item.productName}</h4>
-                                            <span className="text-[10px] font-bold text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">#{index + 1}</span>
-                                        </div>
-                                        <div className="p-4 space-y-4">
-                                            {item.brandList.map((ent, bIndex) => (
-                                                <div key={bIndex} className="space-y-3 pb-4 last:pb-0 border-b last:border-0 border-gray-50">
-                                                    <div className="flex justify-center items-center w-full">
-                                                        <span className="text-lg sm:text-xl font-black text-blue-600 text-center">{ent.brand}</span>
-                                                    </div>
-                                                    <div className="grid grid-cols-2 gap-x-4 gap-y-3">
-                                                        <div className="space-y-0.5">
-                                                            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Total Inhouse</p>
-                                                            <p className="text-xs font-bold text-gray-700">
-                                                                {(() => {
-                                                                    const { whole, remainder } = calculatePktRemainder(ent.totalInHouseQuantity, ent.packetSize);
-                                                                    return `${whole}${remainder !== 0 ? ` - ${Math.abs(remainder)} kg` : ''}`;
-                                                                })()} BAG
-                                                            </p>
-                                                            <p className="text-sm font-black text-gray-900">{Math.round(ent.totalInHouseQuantity).toLocaleString('en-BD')} kg</p>
-                                                        </div>
-                                                        <div className="space-y-0.5 text-right">
-                                                            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Sale</p>
-                                                            <p className="text-xs font-bold text-gray-700">
-                                                                {Number.isInteger(parseFloat(ent.salePacket)) ? parseFloat(ent.salePacket) : (parseFloat(ent.salePacket) || 0).toFixed(2)} BAG
-                                                            </p>
-                                                            <p className="text-sm font-black text-gray-900">{Math.round(ent.saleQuantity).toLocaleString('en-BD')} kg</p>
-                                                        </div>
-                                                        <div className="col-span-full w-full pt-3 pb-2 border-t border-gray-100 flex flex-col items-center justify-center text-center">
-                                                            <p className="text-[10px] sm:text-xs font-bold text-blue-400 uppercase tracking-[0.1em] mb-1">Remaining Inhouse</p>
-                                                            <div className="flex flex-col items-center justify-center w-full space-y-0.5">
-                                                                <p className="text-lg sm:text-xl font-black text-blue-600 text-center">
-                                                                    {(() => {
-                                                                        const { whole, remainder } = calculatePktRemainder(ent.inHouseQuantity, ent.packetSize || 30);
-                                                                        return `${whole}${remainder !== 0 ? ` - ${Math.abs(remainder)} kg` : ''}`;
-                                                                    })()} BAG
-                                                                </p>
-                                                                <p className="text-lg sm:text-xl font-black text-blue-600 text-center">
-                                                                    {Math.round(ent.inHouseQuantity).toLocaleString('en-BD')} kg
-                                                                </p>
-                                                            </div>
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                            ))}
-                                            {true && (
-                                                <div className="mt-2 pt-3 border-t-2 border-dashed border-gray-100 bg-blue-50/30 -mx-4 -mb-4 p-4">
-                                                    <p className="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-2">Product Summary</p>
-                                                    <div className="grid grid-cols-2 gap-4">
-                                                        <div>
-                                                            <p className="text-[10px] font-bold text-gray-400">Total Inhouse</p>
-                                                            <p className="text-sm font-black text-gray-900">{Math.round(item.totalInHouseQuantity).toLocaleString('en-BD')} kg</p>
-                                                        </div>
-                                                        <div className="text-right">
-                                                            <p className="text-[10px] font-bold text-blue-500">Net Stock</p>
-                                                            <p className="text-sm font-black text-blue-600">{Math.round(item.inHouseQuantity).toLocaleString('en-BD')} kg</p>
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                            )}
-                                        </div>
+                        {stockFilters.warehouse === "All Warehouses" ? (
+                            multiWarehouseData.map((whItem, whIdx) => (
+                                <div key={whIdx} className="space-y-6 pt-8 first:pt-0">
+                                    <div className="flex items-center gap-3 border-b-2 border-gray-900 pb-2">
+                                        <span className="text-xl font-bold text-gray-900 uppercase">Warehouse:</span>
+                                        <span className="text-xl font-black text-blue-700 uppercase">{whItem.warehouseName}</span>
                                     </div>
-                                ))
-                            ) : (
-                                <div className="text-center py-12 px-4 bg-gray-50 rounded-2xl border-2 border-dashed border-gray-200">
-                                    <p className="text-gray-500 italic">No records found for the selected criteria.</p>
+                                    {renderStockTable(whItem.data.displayRecords, whItem.data)}
                                 </div>
-                            )}
-
-                            {/* Mobile Grand Total */}
-                            {filteredRecords.length > 0 && (
-                                <div className="mt-8 p-5 bg-gray-900 rounded-2xl shadow-xl shadow-gray-200">
-                                    <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-4 text-center">Grand Total Summary</h4>
-                                    <div className="grid grid-cols-2 gap-y-6 gap-x-4">
-                                        <div className="space-y-1">
-                                            <p className="text-[10px] font-bold text-gray-500 uppercase tracking-wider text-center">Total Inhouse</p>
-                                            <p className="text-xl font-black text-white text-center">{Math.round(totals.totalTotalInHouseQty).toLocaleString('en-BD')}<span className="text-[10px] ml-1 text-gray-400 uppercase">kg</span></p>
-                                        </div>
-                                        <div className="space-y-1">
-                                            <p className="text-[10px] font-bold text-gray-500 uppercase tracking-wider text-center">Total Sale</p>
-                                            <p className="text-xl font-black text-white text-center">{Math.round(totals.totalSaleQty).toLocaleString('en-BD')}<span className="text-[10px] ml-1 text-gray-400 uppercase">kg</span></p>
-                                        </div>
-                                        <div className="col-span-full pt-4 border-t border-gray-800 flex flex-col items-center">
-                                            <p className="text-[10px] font-bold text-blue-400 uppercase tracking-[0.2em] mb-1 text-center">Net Inhouse Stock</p>
-                                            <p className="text-4xl font-black text-blue-500 tracking-tighter text-center">{Math.round(totals.totalInHouseQty).toLocaleString('en-BD')}<span className="text-sm ml-2 text-blue-400 uppercase">kg</span></p>
-                                        </div>
-                                    </div>
-                                </div>
-                            )}
-                        </div>
+                            ))
+                        ) : (
+                            renderStockTable(filteredRecords, filteredStockData)
+                        )}
 
                         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-6 px-2 print:grid">
                             {/* Card 1: TOTAL INHOUSE STOCK */}

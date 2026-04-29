@@ -1922,6 +1922,7 @@ function App() {
         isOpen={showStockReport}
         onClose={() => setShowStockReport(false)}
         stockRecords={stockRecords}
+        warehouseData={warehouseData}
         stockFilters={stockFilters}
         setStockFilters={setStockFilters}
         stockData={stockData}

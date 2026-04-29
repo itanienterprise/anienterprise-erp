@@ -1,5 +1,6 @@
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import { calculateStockData } from './stockHelpers';
 
 const formatDate = (dateString) => {
     if (!dateString) return '-';
@@ -674,7 +675,7 @@ export const generateLCReceiveReportPDF = (reportData, filters, summary) => {
     }
 };
 
-export const generateStockReportPDF = (stockData, filters, reportType = 'short') => {
+export const generateStockReportPDF = (stockData, filters, reportType = 'short', stockRecords, warehouseData, salesRecords, products) => {
     try {
         const doc = new jsPDF();
 
@@ -726,7 +727,7 @@ export const generateStockReportPDF = (stockData, filters, reportType = 'short')
             doc.text(filters.productName, margin + 25, yPos);
         }
 
-        if (filters.warehouse) {
+        if (filters.warehouse && filters.warehouse !== 'All Warehouses') {
             yPos += 5;
             doc.setFont('helvetica', 'bold');
             doc.text("Warehouse:", margin, yPos);
@@ -739,12 +740,26 @@ export const generateStockReportPDF = (stockData, filters, reportType = 'short')
         doc.setFont('helvetica', 'normal');
         doc.text(`Printed on: ${dateStr}`, pageWidth - margin, 55, { align: 'right' });
 
-        // --- Data Preparation ---
-        const tableRows = [];
-        const boldBottomRowIndices = new Set();
-        const boldLinesToDraw = [];
+        const warehousesToRender = (filters.warehouse === 'All Warehouses' && stockRecords)
+            ? (() => {
+                const fromStock = stockRecords.map(item => (item.warehouse || item.whName || '').trim()).filter(Boolean);
+                const fromWh = warehouseData ? warehouseData.map(item => (item.whName || item.warehouse || '').trim()).filter(Boolean) : [];
+                const options = [...new Set([...fromStock, ...fromWh])].sort();
+                
+                // Priority for HILI warehouse
+                const hili = options.filter(o => o.toUpperCase().includes('HILI'));
+                const others = options.filter(o => !o.toUpperCase().includes('HILI'));
+                const sortedOptions = [...hili, ...others];
 
-        const calculatePktRemainder = (qty, size) => {
+                return sortedOptions.map(wh => ({
+                    name: wh,
+                    data: calculateStockData(stockRecords, { ...filters, warehouse: wh }, '', warehouseData, salesRecords, products)
+                })).filter(w => w.data.displayRecords.length > 0);
+            })()
+            : [{ name: filters.warehouse, data: stockData }];
+
+        // Helper for packet/remainder calculation
+        const calculatePktRemainderLocal = (qty, size) => {
             const numQty = parseFloat(qty) || 0;
             const numSize = parseFloat(size) || 0;
             if (numSize <= 0) return { whole: 0, remainder: numQty };
@@ -758,7 +773,55 @@ export const generateStockReportPDF = (stockData, filters, reportType = 'short')
             };
         };
 
-        stockData.displayRecords.forEach((item, index) => {
+        // Global Summary Calculations for Cards
+        const globalGrandTotalPktStr = (() => {
+            const totalWhole = stockData.displayRecords.reduce((accWhole, item) => accWhole + item.brandList.reduce((sum, ent) => sum + Math.max(0, Math.floor(parseFloat(ent.totalInHousePacket) || 0)), 0), 0);
+            const totalRem = Math.round(stockData.displayRecords.reduce((accRem, item) => accRem + item.brandList.reduce((sum, ent) => sum + Math.max(0, (parseFloat(ent.totalInHouseQuantity) || 0)) - (Math.max(0, Math.floor(parseFloat(ent.totalInHousePacket) || 0)) * (parseFloat(ent.packetSize) || 0)), 0), 0));
+            return `${totalWhole}${totalRem !== 0 ? ` - ${Math.abs(totalRem)} kg` : ''}`;
+        })();
+
+        const globalInHousePktStr = (() => {
+            const totalWhole = stockData.displayRecords.reduce((accWhole, item) => accWhole + item.brandList.reduce((sum, ent) => sum + Math.max(0, Math.floor(parseFloat(ent.inHousePacket) || 0)), 0), 0);
+            const totalRem = Math.round(stockData.displayRecords.reduce((accRem, item) => accRem + item.brandList.reduce((sum, ent) => sum + Math.max(0, (parseFloat(ent.inHouseQuantity) || 0)) - (Math.max(0, Math.floor(parseFloat(ent.inHousePacket) || 0)) * (parseFloat(ent.packetSize) || 0)), 0), 0));
+            return `${totalWhole}${totalRem !== 0 ? ` - ${Math.abs(totalRem)} kg` : ''}`;
+        })();
+
+        const globalTotalSalePktStr = (() => {
+            const totalWhole = stockData.displayRecords.reduce((accWhole, item) => accWhole + item.brandList.reduce((sum, ent) => sum + Math.floor(parseFloat(ent.salePacket) || 0), 0), 0);
+            const totalRem = Math.round(stockData.displayRecords.reduce((accRem, item) => accRem + item.brandList.reduce((sum, ent) => sum + (parseFloat(ent.saleQuantity) || 0) - (Math.floor(parseFloat(ent.salePacket) || 0) * (parseFloat(ent.packetSize) || 0)), 0), 0));
+            return `${totalWhole}${totalRem !== 0 ? ` - ${Math.abs(totalRem)} kg` : ''}`;
+        })();
+
+        if (filters.warehouse === 'All Warehouses') {
+            yPos = Math.max(yPos, 68);
+        }
+
+        warehousesToRender.forEach((whItem, whIdx) => {
+            const currentStockData = whItem.data;
+            if (whIdx > 0) {
+                if (yPos + 40 > pageHeight) {
+                    doc.addPage();
+                    yPos = 20;
+                } else {
+                    yPos += 5;
+                }
+            }
+
+            if (filters.warehouse === 'All Warehouses') {
+                doc.setFontSize(11);
+                doc.setFont('helvetica', 'bold');
+                doc.setTextColor(0);
+                doc.text(`Warehouse: ${whItem.name}`, margin, yPos);
+                yPos += 6;
+            }
+
+            // --- Data Preparation ---
+            const tableRows = [];
+            const boldBottomRowIndices = new Set();
+            const boldLinesToDraw = [];
+
+
+        currentStockData.displayRecords.forEach((item, index) => {
             // Legitimate quality check - only separate if there's actual quality data
             const qualityGroups = item.brandList.reduce((acc, ent) => {
                 const q = (ent.quality || '-').toUpperCase().trim();
@@ -856,13 +919,13 @@ export const generateStockReportPDF = (stockData, filters, reportType = 'short')
                     if (reportType === 'detailed') {
                         const tQty = parseFloat(ent.totalInHouseQuantity) || 0;
                         const tSize = parseFloat(ent.packetSize) || 0;
-                        const { whole: tW, remainder: tR } = calculatePktRemainder(tQty, tSize);
+                        const { whole: tW, remainder: tR } = calculatePktRemainderLocal(tQty, tSize);
                         row.push({ content: `${tW}${tR !== 0 ? ` - ${Math.abs(tR)} kg` : ''}`, styles: { halign: 'right' } });
                         row.push({ content: Math.round(tQty).toLocaleString('en-BD'), styles: { halign: 'right' } });
 
                         const sQty = parseFloat(ent.saleQuantity) || 0;
                         const sSize = parseFloat(ent.packetSize) || 0;
-                        const { whole: sW, remainder: sR } = calculatePktRemainder(sQty, sSize);
+                        const { whole: sW, remainder: sR } = calculatePktRemainderLocal(sQty, sSize);
                         row.push({ content: `${sW}${sR !== 0 ? ` - ${Math.abs(sR)} kg` : ''}`, styles: { halign: 'right' } });
                         row.push({ content: Math.round(sQty).toLocaleString('en-BD'), styles: { halign: 'right' } });
                     }
@@ -870,7 +933,7 @@ export const generateStockReportPDF = (stockData, filters, reportType = 'short')
                     // Closing Data
                     const rQty = parseFloat(ent.inHouseQuantity) || 0;
                     const rSize = parseFloat(ent.packetSize) || 0;
-                    const { whole: rW, remainder: rR } = calculatePktRemainder(rQty, rSize);
+                    const { whole: rW, remainder: rR } = calculatePktRemainderLocal(rQty, rSize);
                     row.push({ content: `${rW}${rR !== 0 ? ` - ${Math.abs(rR)} kg` : ''}`, styles: { halign: 'right' } });
                     row.push({ content: Math.round(rQty).toLocaleString('en-BD'), styles: { halign: 'right' } });
 
@@ -900,17 +963,17 @@ export const generateStockReportPDF = (stockData, filters, reportType = 'short')
 
                 if (reportType === 'detailed') {
                     const tSize = item.brandList[0]?.packetSize || 0;
-                    const { whole: tW, remainder: tR } = calculatePktRemainder(item.totalInHouseQuantity, tSize);
+                    const { whole: tW, remainder: tR } = calculatePktRemainderLocal(item.totalInHouseQuantity, tSize);
                     subRow.push({ content: `${tW}${tR !== 0 ? ` - ${Math.abs(tR)} kg` : ''}`, styles: { fontStyle: 'bold', halign: 'right', fillColor: [248, 248, 248] } });
                     subRow.push({ content: Math.round(item.totalInHouseQuantity).toLocaleString('en-BD'), styles: { fontStyle: 'bold', halign: 'right', fillColor: [248, 248, 248] } });
 
-                    const { whole: sW, remainder: sR } = calculatePktRemainder(item.saleQuantity, tSize);
+                    const { whole: sW, remainder: sR } = calculatePktRemainderLocal(item.saleQuantity, tSize);
                     subRow.push({ content: `${sW}${sR !== 0 ? ` - ${Math.abs(sR)} kg` : ''}`, styles: { fontStyle: 'bold', halign: 'right', fillColor: [248, 248, 248] } });
                     subRow.push({ content: Math.round(item.saleQuantity).toLocaleString('en-BD'), styles: { fontStyle: 'bold', halign: 'right', fillColor: [248, 248, 248] } });
                 }
 
                 const tSize = item.brandList[0]?.packetSize || 0;
-                const { whole: rW, remainder: rR } = calculatePktRemainder(item.inHouseQuantity, tSize);
+                const { whole: rW, remainder: rR } = calculatePktRemainderLocal(item.inHouseQuantity, tSize);
                 subRow.push({ content: `${rW}${rR !== 0 ? ` - ${Math.abs(rR)} kg` : ''}`, styles: { fontStyle: 'bold', halign: 'right', fillColor: [248, 248, 248] } });
                 subRow.push({ content: Math.round(item.inHouseQuantity).toLocaleString('en-BD'), styles: { fontStyle: 'bold', halign: 'right', fillColor: [248, 248, 248] } });
 
@@ -920,22 +983,22 @@ export const generateStockReportPDF = (stockData, filters, reportType = 'short')
             }
         });
 
-        // Summary Calculations for Cards
-        const grandTotalPktStr = (() => {
-            const totalWhole = stockData.displayRecords.reduce((accWhole, item) => accWhole + item.brandList.reduce((sum, ent) => sum + Math.max(0, Math.floor(parseFloat(ent.totalInHousePacket) || 0)), 0), 0);
-            const totalRem = Math.round(stockData.displayRecords.reduce((accRem, item) => accRem + item.brandList.reduce((sum, ent) => sum + Math.max(0, (parseFloat(ent.totalInHouseQuantity) || 0)) - (Math.max(0, Math.floor(parseFloat(ent.totalInHousePacket) || 0)) * (parseFloat(ent.packetSize) || 0)), 0), 0));
+        // Per-Warehouse Summary for Table Grand Total
+        const whGrandTotalPktStr = (() => {
+            const totalWhole = currentStockData.displayRecords.reduce((accWhole, item) => accWhole + item.brandList.reduce((sum, ent) => sum + Math.max(0, Math.floor(parseFloat(ent.totalInHousePacket) || 0)), 0), 0);
+            const totalRem = Math.round(currentStockData.displayRecords.reduce((accRem, item) => accRem + item.brandList.reduce((sum, ent) => sum + Math.max(0, (parseFloat(ent.totalInHouseQuantity) || 0)) - (Math.max(0, Math.floor(parseFloat(ent.totalInHousePacket) || 0)) * (parseFloat(ent.packetSize) || 0)), 0), 0));
             return `${totalWhole}${totalRem !== 0 ? ` - ${Math.abs(totalRem)} kg` : ''}`;
         })();
 
-        const inHousePktStr = (() => {
-            const totalWhole = stockData.displayRecords.reduce((accWhole, item) => accWhole + item.brandList.reduce((sum, ent) => sum + Math.max(0, Math.floor(parseFloat(ent.inHousePacket) || 0)), 0), 0);
-            const totalRem = Math.round(stockData.displayRecords.reduce((accRem, item) => accRem + item.brandList.reduce((sum, ent) => sum + Math.max(0, (parseFloat(ent.inHouseQuantity) || 0)) - (Math.max(0, Math.floor(parseFloat(ent.inHousePacket) || 0)) * (parseFloat(ent.packetSize) || 0)), 0), 0));
+        const whInHousePktStr = (() => {
+            const totalWhole = currentStockData.displayRecords.reduce((accWhole, item) => accWhole + item.brandList.reduce((sum, ent) => sum + Math.max(0, Math.floor(parseFloat(ent.inHousePacket) || 0)), 0), 0);
+            const totalRem = Math.round(currentStockData.displayRecords.reduce((accRem, item) => accRem + item.brandList.reduce((sum, ent) => sum + Math.max(0, (parseFloat(ent.inHouseQuantity) || 0)) - (Math.max(0, Math.floor(parseFloat(ent.inHousePacket) || 0)) * (parseFloat(ent.packetSize) || 0)), 0), 0));
             return `${totalWhole}${totalRem !== 0 ? ` - ${Math.abs(totalRem)} kg` : ''}`;
         })();
 
-        const totalSalePktStr = (() => {
-            const totalWhole = stockData.displayRecords.reduce((accWhole, item) => accWhole + item.brandList.reduce((sum, ent) => sum + Math.floor(parseFloat(ent.salePacket) || 0), 0), 0);
-            const totalRem = Math.round(stockData.displayRecords.reduce((accRem, item) => accRem + item.brandList.reduce((sum, ent) => sum + (parseFloat(ent.saleQuantity) || 0) - (Math.floor(parseFloat(ent.salePacket) || 0) * (parseFloat(ent.packetSize) || 0)), 0), 0));
+        const whTotalSalePktStr = (() => {
+            const totalWhole = currentStockData.displayRecords.reduce((accWhole, item) => accWhole + item.brandList.reduce((sum, ent) => sum + Math.floor(parseFloat(ent.salePacket) || 0), 0), 0);
+            const totalRem = Math.round(currentStockData.displayRecords.reduce((accRem, item) => accRem + item.brandList.reduce((sum, ent) => sum + (parseFloat(ent.saleQuantity) || 0) - (Math.floor(parseFloat(ent.salePacket) || 0) * (parseFloat(ent.packetSize) || 0)), 0), 0));
             return `${totalWhole}${totalRem !== 0 ? ` - ${Math.abs(totalRem)} kg` : ''}`;
         })();
 
@@ -945,14 +1008,14 @@ export const generateStockReportPDF = (stockData, filters, reportType = 'short')
         ];
 
         if (reportType === 'detailed') {
-            grandTotalRow.push({ content: grandTotalPktStr, styles: { fontStyle: 'bold', halign: 'right', fillColor: [240, 240, 240] } });
-            grandTotalRow.push({ content: Math.round(stockData.totalTotalInHouseQty).toString(), styles: { fontStyle: 'bold', halign: 'right', fillColor: [240, 240, 240] } });
-            grandTotalRow.push({ content: totalSalePktStr, styles: { fontStyle: 'bold', halign: 'right', fillColor: [240, 240, 240] } });
-            grandTotalRow.push({ content: Math.round(stockData.totalSaleQty).toString(), styles: { fontStyle: 'bold', halign: 'right', fillColor: [240, 240, 240] } });
+            grandTotalRow.push({ content: whGrandTotalPktStr, styles: { fontStyle: 'bold', halign: 'right', fillColor: [240, 240, 240] } });
+            grandTotalRow.push({ content: Math.round(currentStockData.totalTotalInHouseQty).toString(), styles: { fontStyle: 'bold', halign: 'right', fillColor: [240, 240, 240] } });
+            grandTotalRow.push({ content: whTotalSalePktStr, styles: { fontStyle: 'bold', halign: 'right', fillColor: [240, 240, 240] } });
+            grandTotalRow.push({ content: Math.round(currentStockData.totalSaleQty).toString(), styles: { fontStyle: 'bold', halign: 'right', fillColor: [240, 240, 240] } });
         }
 
-        grandTotalRow.push({ content: inHousePktStr, styles: { fontStyle: 'bold', halign: 'right', fillColor: [240, 240, 240] } });
-        grandTotalRow.push({ content: Math.round(stockData.totalInHouseQty).toString(), styles: { fontStyle: 'bold', halign: 'right', fillColor: [240, 240, 240] } });
+        grandTotalRow.push({ content: whInHousePktStr, styles: { fontStyle: 'bold', halign: 'right', fillColor: [240, 240, 240] } });
+        grandTotalRow.push({ content: Math.round(currentStockData.totalInHouseQty).toString(), styles: { fontStyle: 'bold', halign: 'right', fillColor: [240, 240, 240] } });
 
         boldBottomRowIndices.add(tableRows.length);
         grandTotalRow.isSubTotal = true;
@@ -1034,6 +1097,10 @@ export const generateStockReportPDF = (stockData, filters, reportType = 'short')
             }
         });
 
+        yPos = doc.lastAutoTable.finalY + 5;
+        }); // End of warehousesToRender.forEach
+
+
         // --- Footer / Summary ---
         let finalY = doc.lastAutoTable.finalY + 12;
 
@@ -1103,11 +1170,11 @@ export const generateStockReportPDF = (stockData, filters, reportType = 'short')
             doc.text(qtyStrVal, qtyLineX + qtyLabelWidth, y + 21);
         };
 
-        drawSummaryCard(cardX, finalY, "OPENING STOCK", grandTotalPktStr, stockData.totalTotalInHouseQty, false);
+        drawSummaryCard(cardX, finalY, "OPENING STOCK", globalGrandTotalPktStr, stockData.totalTotalInHouseQty, false);
         cardX += cardWidth + cardGap;
-        drawSummaryCard(cardX, finalY, "TOTAL SALE", totalSalePktStr, stockData.totalSaleQty, false);
+        drawSummaryCard(cardX, finalY, "TOTAL SALE", globalTotalSalePktStr, stockData.totalSaleQty, false);
         cardX += cardWidth + cardGap;
-        drawSummaryCard(cardX, finalY, "CLOSING STOCK", inHousePktStr, stockData.totalInHouseQty, true);
+        drawSummaryCard(cardX, finalY, "CLOSING STOCK", globalInHousePktStr, stockData.totalInHouseQty, true);
 
         // --- Signature Section ---
         const sigY = finalY + 45;

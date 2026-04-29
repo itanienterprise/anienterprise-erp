@@ -149,8 +149,10 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
         if (stockFilters.lcNo && (item.lcNo || '').trim() !== stockFilters.lcNo) return false;
         if (stockFilters.warehouse) {
             const filterWH = stockFilters.warehouse.trim().toLowerCase();
-            const itemWH = (item.whName || item.warehouse || '').trim().toLowerCase();
-            if (itemWH !== filterWH && !itemWH.includes(filterWH) && !filterWH.includes(itemWH)) return false;
+            if (filterWH !== 'all warehouses') {
+                const itemWH = (item.whName || item.warehouse || '').trim().toLowerCase();
+                if (itemWH !== filterWH && !itemWH.includes(filterWH) && !filterWH.includes(itemWH)) return false;
+            }
         }
         if (stockFilters.brand && (item.brand || '').trim() !== stockFilters.brand) return false;
         if (stockFilters.productName) {
