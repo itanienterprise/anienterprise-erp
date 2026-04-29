@@ -66,7 +66,7 @@ const ViewDetailsModal = ({ data, onClose }) => {
                         </div>
                         <div className="space-y-1">
                             <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">IND Cost</span>
-                            <p className="text-sm text-gray-700 font-bold">{!isNaN(parseFloat(data.indCnFCost)) ? `৳${parseFloat(data.indCnFCost).toLocaleString('en-BD')}` : '-'}</p>
+                            <p className="text-sm text-gray-700 font-bold">{!isNaN(parseFloat(data.indCnFCost)) ? `৳${parseFloat(data.indCnFCost).toLocaleString('en-IN')}` : '-'}</p>
                         </div>
                         <div className="space-y-1">
                             <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">BD C&F</span>
@@ -74,7 +74,7 @@ const ViewDetailsModal = ({ data, onClose }) => {
                         </div>
                         <div className="space-y-1">
                             <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">BD Cost</span>
-                            <p className="text-sm text-gray-700 font-bold">{!isNaN(parseFloat(data.bdCnFCost)) ? `৳${parseFloat(data.bdCnFCost).toLocaleString('en-BD')}` : '-'}</p>
+                            <p className="text-sm text-gray-700 font-bold">{!isNaN(parseFloat(data.bdCnFCost)) ? `৳${parseFloat(data.bdCnFCost).toLocaleString('en-IN')}` : '-'}</p>
                         </div>
                     </div>
 
@@ -153,10 +153,10 @@ const ViewDetailsModal = ({ data, onClose }) => {
                                                         {item.truckNo}
                                                     </td>
                                                 )}
-                                                <td className="px-4 py-3 text-sm text-gray-800 text-center font-bold">{Math.round(item.packet).toLocaleString('en-BD')}</td>
-                                                <td className="px-4 py-3 text-sm text-gray-900 text-right font-bold">{Math.round(item.quantity).toLocaleString('en-BD')} kg</td>
-                                                <td className="px-4 py-3 text-sm text-red-500 text-right font-bold">{Math.round(item.sweepedQuantity).toLocaleString('en-BD')} kg</td>
-                                                <td className="px-4 py-3 text-sm text-blue-600 text-right font-black">{Math.round(item.inHouseQuantity).toLocaleString('en-BD')} kg</td>
+                                                <td className="px-4 py-3 text-sm text-gray-800 text-center font-bold">{Math.round(item.packet).toLocaleString('en-US')}</td>
+                                                <td className="px-4 py-3 text-sm text-gray-900 text-right font-bold">{Math.round(item.quantity).toLocaleString('en-US')} kg</td>
+                                                <td className="px-4 py-3 text-sm text-red-500 text-right font-bold">{Math.round(item.sweepedQuantity).toLocaleString('en-US')} kg</td>
+                                                <td className="px-4 py-3 text-sm text-blue-600 text-right font-black">{Math.round(item.inHouseQuantity).toLocaleString('en-US')} kg</td>
                                             </tr>
                                         ));
                                     })()}
@@ -164,10 +164,10 @@ const ViewDetailsModal = ({ data, onClose }) => {
                                 <tfoot>
                                     <tr className="bg-white/80 border-t border-gray-200">
                                         <td colSpan="3" className="px-4 py-3 text-xs font-black text-gray-400 uppercase text-right">Grand Totals</td>
-                                        <td className="px-4 py-3 text-sm text-gray-900 text-center font-black">{Math.round(data.entries.reduce((sum, e) => sum + (parseFloat(e.packet) || 0), 0)).toLocaleString('en-BD')}</td>
-                                        <td className="px-4 py-3 text-sm text-gray-900 text-right font-black">{Math.round(data.totalQuantity).toLocaleString('en-BD')} kg</td>
-                                        <td className="px-4 py-3 text-sm text-red-600 text-right font-black">{Math.round(data.entries.reduce((sum, e) => sum + (parseFloat(e.sweepedQuantity) || 0), 0)).toLocaleString('en-BD')} kg</td>
-                                        <td className="px-4 py-3 text-sm text-blue-700 text-right font-black">{Math.round(data.entries.reduce((sum, e) => sum + (parseFloat(e.inHouseQuantity) || 0), 0)).toLocaleString('en-BD')} kg</td>
+                                        <td className="px-4 py-3 text-sm text-gray-900 text-center font-black">{Math.round(data.entries.reduce((sum, e) => sum + (parseFloat(e.packet) || 0), 0)).toLocaleString('en-US')}</td>
+                                        <td className="px-4 py-3 text-sm text-gray-900 text-right font-black">{Math.round(data.totalQuantity).toLocaleString('en-US')} kg</td>
+                                        <td className="px-4 py-3 text-sm text-red-600 text-right font-black">{Math.round(data.entries.reduce((sum, e) => sum + (parseFloat(e.sweepedQuantity) || 0), 0)).toLocaleString('en-US')} kg</td>
+                                        <td className="px-4 py-3 text-sm text-blue-700 text-right font-black">{Math.round(data.entries.reduce((sum, e) => sum + (parseFloat(e.inHouseQuantity) || 0), 0)).toLocaleString('en-US')} kg</td>
                                     </tr>
                                 </tfoot>
                             </table>
@@ -222,19 +222,19 @@ const ViewDetailsModal = ({ data, onClose }) => {
                                                                 <div className="grid grid-cols-4 gap-2 pt-1 border-t border-gray-100">
                                                                     <div className="text-center">
                                                                         <p className="text-[10px] font-black text-gray-400 uppercase tracking-wider mb-0.5">Bag</p>
-                                                                        <p className="text-sm font-bold text-gray-800">{Math.round(item.packet).toLocaleString('en-BD')}</p>
+                                                                        <p className="text-sm font-bold text-gray-800">{Math.round(item.packet).toLocaleString('en-US')}</p>
                                                                     </div>
                                                                     <div className="text-center">
                                                                         <p className="text-[10px] font-black text-gray-400 uppercase tracking-wider mb-0.5">Arrival</p>
-                                                                        <p className="text-sm font-bold text-gray-800">{Math.round(item.quantity).toLocaleString('en-BD')} kg</p>
+                                                                        <p className="text-sm font-bold text-gray-800">{Math.round(item.quantity).toLocaleString('en-US')} kg</p>
                                                                     </div>
                                                                     <div className="text-center">
                                                                         <p className="text-[10px] font-black text-red-400 uppercase tracking-wider mb-0.5">Short</p>
-                                                                        <p className="text-sm font-bold text-red-500">{Math.round(item.sweepedQuantity).toLocaleString('en-BD')} kg</p>
+                                                                        <p className="text-sm font-bold text-red-500">{Math.round(item.sweepedQuantity).toLocaleString('en-US')} kg</p>
                                                                     </div>
                                                                     <div className="text-center">
                                                                         <p className="text-[10px] font-black text-blue-500 uppercase tracking-wider mb-0.5">In Qty</p>
-                                                                        <p className="text-sm font-black text-blue-600">{Math.round(item.inHouseQuantity).toLocaleString('en-BD')} kg</p>
+                                                                        <p className="text-sm font-black text-blue-600">{Math.round(item.inHouseQuantity).toLocaleString('en-US')} kg</p>
                                                                     </div>
                                                                 </div>
                                                             </div>
@@ -252,19 +252,19 @@ const ViewDetailsModal = ({ data, onClose }) => {
                                 <div className="grid grid-cols-4 gap-2">
                                     <div className="text-center">
                                         <p className="text-[10px] font-black text-gray-400 uppercase tracking-wider mb-0.5">Bag</p>
-                                        <p className="text-sm font-black text-gray-900">{Math.round(data.entries.reduce((sum, e) => sum + (parseFloat(e.packet) || 0), 0)).toLocaleString('en-BD')}</p>
+                                        <p className="text-sm font-black text-gray-900">{Math.round(data.entries.reduce((sum, e) => sum + (parseFloat(e.packet) || 0), 0)).toLocaleString('en-US')}</p>
                                     </div>
                                     <div className="text-center">
                                         <p className="text-[10px] font-black text-gray-400 uppercase tracking-wider mb-0.5">Arrival</p>
-                                        <p className="text-sm font-black text-gray-900">{Math.round(data.totalQuantity).toLocaleString('en-BD')} kg</p>
+                                        <p className="text-sm font-black text-gray-900">{Math.round(data.totalQuantity).toLocaleString('en-US')} kg</p>
                                     </div>
                                     <div className="text-center">
                                         <p className="text-[10px] font-black text-red-400 uppercase tracking-wider mb-0.5">Short</p>
-                                        <p className="text-sm font-black text-red-600">{Math.round(data.entries.reduce((sum, e) => sum + (parseFloat(e.sweepedQuantity) || 0), 0)).toLocaleString('en-BD')} kg</p>
+                                        <p className="text-sm font-black text-red-600">{Math.round(data.entries.reduce((sum, e) => sum + (parseFloat(e.sweepedQuantity) || 0), 0)).toLocaleString('en-US')} kg</p>
                                     </div>
                                     <div className="text-center">
                                         <p className="text-[10px] font-black text-blue-500 uppercase tracking-wider mb-0.5">In Qty</p>
-                                        <p className="text-sm font-black text-blue-700">{Math.round(data.entries.reduce((sum, e) => sum + (parseFloat(e.inHouseQuantity) || 0), 0)).toLocaleString('en-BD')} kg</p>
+                                        <p className="text-sm font-black text-blue-700">{Math.round(data.entries.reduce((sum, e) => sum + (parseFloat(e.inHouseQuantity) || 0), 0)).toLocaleString('en-US')} kg</p>
                                     </div>
                                 </div>
                             </div>
@@ -3095,11 +3095,11 @@ function LCReceive({
                                                                                     const size = brand.packetSize || 0;
                                                                                     const whole = Math.floor(pkt);
                                                                                     const remainder = Math.round((pkt % 1) * size);
-                                                                                    return remainder > 0 ? `${whole.toLocaleString('en-BD')} - ${remainder.toLocaleString('en-BD')} kg` : whole.toLocaleString('en-BD');
+                                                                                    return remainder > 0 ? `${whole.toLocaleString('en-US')} - ${remainder.toLocaleString('en-US')} kg` : whole.toLocaleString('en-US');
                                                                                 })()}
                                                                             </td>
                                                                             <td className="px-6 py-3 text-right font-bold text-gray-900 text-sm">
-                                                                                {parseFloat(brand.whQty || 0).toLocaleString('en-BD')} kg
+                                                                                {parseFloat(brand.whQty || 0).toLocaleString('en-US')} kg
                                                                             </td>
                                                                         </tr>
                                                                     ))}
@@ -3397,11 +3397,11 @@ function LCReceive({
                                                     <td className="px-6 py-4 text-sm text-gray-600">{entry.exporter || '-'}</td>
                                                     <td className="px-6 py-4 text-sm text-gray-600">{entry.indianCnF || '-'}</td>
                                                     <td className="px-6 py-4 text-sm text-gray-600">
-                                                        {!isNaN(parseFloat(entry.indCnFCost)) && entry.indCnFCost !== '' ? `৳${parseFloat(entry.indCnFCost).toLocaleString('en-BD')}` : '-'}
+                                                        {!isNaN(parseFloat(entry.indCnFCost)) && entry.indCnFCost !== '' ? `৳${parseFloat(entry.indCnFCost).toLocaleString('en-IN')}` : '-'}
                                                     </td>
                                                     <td className="px-6 py-4 text-sm text-gray-600">{entry.bdCnF || '-'}</td>
                                                     <td className="px-6 py-4 text-sm text-gray-600">
-                                                        {!isNaN(parseFloat(entry.bdCnFCost)) && entry.bdCnFCost !== '' ? `৳${parseFloat(entry.bdCnFCost).toLocaleString('en-BD')}` : '-'}
+                                                        {!isNaN(parseFloat(entry.bdCnFCost)) && entry.bdCnFCost !== '' ? `৳${parseFloat(entry.bdCnFCost).toLocaleString('en-IN')}` : '-'}
                                                     </td>
                                                     <td className="px-6 py-4 text-sm text-gray-600">{entry.billOfEntry || '-'}</td>
                                                     <td className="px-6 py-4 text-sm text-gray-600 align-top">
@@ -3674,15 +3674,15 @@ function LCReceive({
                                                     <div className="grid grid-cols-3 gap-x-2 p-3 bg-gray-50/50 rounded-xl border border-gray-100">
                                                         <div className="col-span-1 text-center">
                                                             <span className="block text-gray-400 uppercase font-bold tracking-widest text-[10px] mb-0.5">Total Qty</span>
-                                                            <div className="text-gray-900 font-bold text-sm">{Math.round(entry.totalQuantity).toLocaleString('en-BD')} kg</div>
+                                                            <div className="text-gray-900 font-bold text-sm">{Math.round(entry.totalQuantity).toLocaleString('en-US')} kg</div>
                                                         </div>
                                                         <div className="col-span-1 text-center">
                                                             <span className="block text-gray-400 uppercase font-bold tracking-widest text-[10px] mb-0.5">Short</span>
-                                                            <div className="text-red-500 font-bold text-sm">{Math.round(entry.totalShort).toLocaleString('en-BD')} kg</div>
+                                                            <div className="text-red-500 font-bold text-sm">{Math.round(entry.totalShort).toLocaleString('en-US')} kg</div>
                                                         </div>
                                                         <div className="col-span-1 text-center">
                                                             <span className="block text-gray-400 uppercase font-bold tracking-widest text-[10px] mb-0.5">IN QTY</span>
-                                                            <div className="text-blue-600 font-bold text-sm">{Math.round(entry.totalInQty).toLocaleString('en-BD')} kg</div>
+                                                            <div className="text-blue-600 font-bold text-sm">{Math.round(entry.totalInQty).toLocaleString('en-US')} kg</div>
                                                         </div>
                                                     </div>
 
@@ -3691,7 +3691,7 @@ function LCReceive({
                                                             <div key={idx} className="flex justify-between items-center p-2.5 bg-gray-50 rounded-lg text-sm hover:bg-gray-100 transition-colors">
                                                                 <span className="font-black text-gray-900 truncate mr-2">{item.productName}</span>
                                                                 <span className="shrink-0 text-gray-600 font-bold uppercase text-[11px]">
-                                                                    QTY: {Math.round(item.quantity).toLocaleString('en-BD')} kg | Truck: {item.truckNo}
+                                                                    QTY: {Math.round(item.quantity).toLocaleString('en-US')} kg | Truck: {item.truckNo}
                                                                 </span>
                                                             </div>
                                                         ))}

@@ -681,22 +681,22 @@ const Exporter = ({
                                                                         <td className="px-4 py-3 font-medium text-gray-800">{row.product || '-'}</td>
                                                                         <td className="px-4 py-3 text-purple-700 font-medium">{row.brand || '-'}</td>
                                                                         <td className="px-4 py-3 text-center text-gray-600">{row.truck || '-'}</td>
-                                                                        <td className="px-4 py-3 text-right font-semibold text-gray-800">{row.bag ? Math.round(parseFloat(row.bag)).toLocaleString('en-BD') : '-'}</td>
-                                                                        <td className="px-4 py-3 text-right font-semibold text-gray-800">{row.qty ? Math.round(parseFloat(row.qty)).toLocaleString('en-BD') : '-'}</td>
-                                                                        <td className="px-4 py-3 text-right text-gray-700">{row.rate ? `৳${parseFloat(row.rate).toLocaleString('en-BD')}` : '-'}</td>
-                                                                        <td className="px-4 py-3 text-right font-bold text-emerald-700">{rowTotal > 0 ? `৳${rowTotal.toLocaleString(undefined, { maximumFractionDigits: 0 })}` : '-'}</td>
-                                                                        <td className="px-4 py-3 text-right font-bold text-blue-700">{(row.source !== 'sale' && runningBalance > 0) ? `৳${runningBalance.toLocaleString(undefined, { maximumFractionDigits: 0 })}` : '-'}</td>
+                                                                        <td className="px-4 py-3 text-right font-semibold text-gray-800">{row.bag ? Math.round(parseFloat(row.bag)).toLocaleString('en-US') : '-'}</td>
+                                                                        <td className="px-4 py-3 text-right font-semibold text-gray-800">{row.qty ? Math.round(parseFloat(row.qty)).toLocaleString('en-US') : '-'}</td>
+                                                                        <td className="px-4 py-3 text-right text-gray-700">{row.rate ? `৳${parseFloat(row.rate).toLocaleString('en-IN')}` : '-'}</td>
+                                                                        <td className="px-4 py-3 text-right font-bold text-emerald-700">{rowTotal > 0 ? `৳${rowTotal.toLocaleString('en-IN', { maximumFractionDigits: 0 })}` : '-'}</td>
+                                                                        <td className="px-4 py-3 text-right font-bold text-blue-700">{(row.source !== 'sale' && runningBalance > 0) ? `৳${runningBalance.toLocaleString('en-IN', { maximumFractionDigits: 0 })}` : '-'}</td>
                                                                     </tr>
                                                                 );
                                                             });
                                                         })()}
                                                         <tr className="bg-blue-50 border-t-2 border-blue-200 font-bold">
                                                             <td colSpan={6} className="px-4 py-3 text-blue-700 text-xs uppercase tracking-wide">Grand Total</td>
-                                                            <td className="px-4 py-3 text-right text-blue-800">{Math.round(totalBag).toLocaleString('en-BD')}</td>
-                                                            <td className="px-4 py-3 text-right text-blue-800">{Math.round(totalQty).toLocaleString('en-BD')}</td>
+                                                            <td className="px-4 py-3 text-right text-blue-800">{Math.round(totalBag).toLocaleString('en-US')}</td>
+                                                            <td className="px-4 py-3 text-right text-blue-800">{Math.round(totalQty).toLocaleString('en-US')}</td>
                                                             <td></td>
-                                                            <td className="px-4 py-3 text-right text-emerald-800">৳{totalAmount.toLocaleString(undefined, { maximumFractionDigits: 0 })}</td>
-                                                            <td className="px-4 py-3 text-right text-blue-800">৳{totalAmount.toLocaleString(undefined, { maximumFractionDigits: 0 })}</td>
+                                                            <td className="px-4 py-3 text-right text-emerald-800">৳{totalAmount.toLocaleString('en-IN', { maximumFractionDigits: 0 })}</td>
+                                                            <td className="px-4 py-3 text-right text-blue-800">৳{totalAmount.toLocaleString('en-IN', { maximumFractionDigits: 0 })}</td>
                                                         </tr>
                                                     </>
                                                 ) : (
@@ -765,7 +765,7 @@ const Exporter = ({
                                                                             <div className="space-y-1 text-right">
                                                                                 <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Bag / Qty</p>
                                                                                 <p className="text-xs font-bold text-gray-900">
-                                                                                    {row.bag ? Math.round(parseFloat(row.bag)).toLocaleString('en-BD') : '0'} / {row.qty ? Math.round(parseFloat(row.qty)).toLocaleString('en-BD') : '0'}
+                                                                                    {row.bag ? Math.round(parseFloat(row.bag)).toLocaleString('en-US') : '0'} / {row.qty ? Math.round(parseFloat(row.qty)).toLocaleString('en-US') : '0'}
                                                                                 </p>
                                                                             </div>
                                                                         </div>
@@ -773,11 +773,11 @@ const Exporter = ({
                                                                         <div className="flex justify-between items-end">
                                                                             <div className="space-y-0.5">
                                                                                 <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Rate</p>
-                                                                                <p className="text-xs font-bold text-gray-700">{row.rate ? `৳${parseFloat(row.rate).toLocaleString('en-BD')}` : '-'}</p>
+                                                                                <p className="text-xs font-bold text-gray-700">{row.rate ? `৳${parseFloat(row.rate).toLocaleString('en-IN')}` : '-'}</p>
                                                                             </div>
                                                                             <div className="space-y-0.5 text-right">
                                                                                 <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Row Total</p>
-                                                                                <p className="text-sm font-black text-emerald-700">{rowTotal > 0 ? `৳${rowTotal.toLocaleString(undefined, { maximumFractionDigits: 0 })}` : '-'}</p>
+                                                                                <p className="text-sm font-black text-emerald-700">{rowTotal > 0 ? `৳${rowTotal.toLocaleString('en-IN', { maximumFractionDigits: 0 })}` : '-'}</p>
                                                                             </div>
                                                                         </div>
 
@@ -787,7 +787,7 @@ const Exporter = ({
                                                                                 <span className="text-[10px] font-bold text-blue-500 uppercase tracking-widest">Running Balance</span>
                                                                             </div>
                                                                             <span className="text-base font-black text-blue-700">
-                                                                                {(row.source !== 'sale' && runningBalance > 0) ? `৳${runningBalance.toLocaleString(undefined, { maximumFractionDigits: 0 })}` : '-'}
+                                                                                {(row.source !== 'sale' && runningBalance > 0) ? `৳${runningBalance.toLocaleString('en-IN', { maximumFractionDigits: 0 })}` : '-'}
                                                                             </span>
                                                                         </div>
                                                                     </div>
@@ -805,7 +805,7 @@ const Exporter = ({
                                                             <BoxIcon className="w-5 h-5 text-blue-600" />
                                                         </div>
                                                         <p className="text-[10px] font-bold text-gray-400 uppercase tracking-[0.1em] mb-1">Total Bag</p>
-                                                        <p className="text-base font-black text-gray-900">{Math.round(totalBag).toLocaleString('en-BD')}</p>
+                                                        <p className="text-base font-black text-gray-900">{Math.round(totalBag).toLocaleString('en-US')}</p>
                                                     </div>
 
                                                     {/* Total Qty Card */}
@@ -814,7 +814,7 @@ const Exporter = ({
                                                             <TrendingUpIcon className="w-5 h-5 text-emerald-600" />
                                                         </div>
                                                         <p className="text-[10px] font-bold text-gray-400 uppercase tracking-[0.1em] mb-1">Total Qty</p>
-                                                        <p className="text-base font-black text-gray-900">{Math.round(totalQty).toLocaleString('en-BD')}</p>
+                                                        <p className="text-base font-black text-gray-900">{Math.round(totalQty).toLocaleString('en-US')}</p>
                                                     </div>
 
                                                     {/* Grand Total Card (Full Width) */}
@@ -828,7 +828,7 @@ const Exporter = ({
                                                             </div>
                                                             <div>
                                                                 <p className="text-[10px] font-bold text-gray-400 uppercase tracking-[0.2em] mb-0.5">Grand Total Amount</p>
-                                                                <p className="text-xl font-black text-white leading-tight font-mono">৳{totalAmount.toLocaleString(undefined, { maximumFractionDigits: 0 })}</p>
+                                                                <p className="text-xl font-black text-white leading-tight font-mono">৳{totalAmount.toLocaleString('en-IN', { maximumFractionDigits: 0 })}</p>
                                                             </div>
                                                         </div>
                                                         

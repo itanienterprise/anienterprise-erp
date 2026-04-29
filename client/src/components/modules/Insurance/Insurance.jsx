@@ -311,7 +311,7 @@ const Insurance = ({ onDeleteConfirm }) => {
                                 <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">{card.label}</span>
                             </div>
                             <div className="flex items-baseline gap-1">
-                                <span className={`text-xl font-black text-${card.color}-600`}>৳{card.value.toLocaleString('en-BD')}</span>
+                                <span className={`text-xl font-black text-${card.color}-600`}>৳{card.value.toLocaleString('en-IN')}</span>
                             </div>
                         </div>
                     ))}
@@ -575,12 +575,12 @@ const Insurance = ({ onDeleteConfirm }) => {
                                                 <td className="px-6 py-4 text-sm font-bold text-gray-900">{item.companyName}</td>
                                                 <td className="px-6 py-4 text-sm font-medium text-blue-600 truncate max-w-[150px]">{item.email || 'N/A'}</td>
                                                 <td className="px-6 py-4 text-sm font-medium text-gray-600">{item.phone || 'N/A'}</td>
-                                                <td className="px-6 py-4 text-sm font-bold text-blue-600 text-right">৳{aggregates.totalPremium.toLocaleString('en-BD')}</td>
-                                                <td className="px-6 py-4 text-sm font-bold text-emerald-600 text-right">৳{paidPremium.toLocaleString('en-BD')}</td>
-                                                <td className="px-6 py-4 text-sm font-bold text-rose-600 text-right">৳{premiumBalance.toLocaleString('en-BD')}</td>
-                                                <td className="px-6 py-4 text-sm font-bold text-indigo-600 text-right">৳{aggregates.returnAmount.toLocaleString('en-BD')}</td>
-                                                <td className="px-6 py-4 text-sm font-bold text-emerald-600 text-right">৳{paidReturn.toLocaleString('en-BD')}</td>
-                                                <td className="px-6 py-4 text-sm font-bold text-rose-600 text-right">৳{returnBalance.toLocaleString('en-BD')}</td>
+                                                <td className="px-6 py-4 text-sm font-bold text-blue-600 text-right">৳{aggregates.totalPremium.toLocaleString('en-US')}</td>
+                                                <td className="px-6 py-4 text-sm font-bold text-emerald-600 text-right">৳{paidPremium.toLocaleString('en-US')}</td>
+                                                <td className="px-6 py-4 text-sm font-bold text-rose-600 text-right">৳{premiumBalance.toLocaleString('en-US')}</td>
+                                                <td className="px-6 py-4 text-sm font-bold text-indigo-600 text-right">৳{aggregates.returnAmount.toLocaleString('en-IN')}</td>
+                                                <td className="px-6 py-4 text-sm font-bold text-emerald-600 text-right">৳{paidReturn.toLocaleString('en-IN')}</td>
+                                                <td className="px-6 py-4 text-sm font-bold text-rose-600 text-right">৳{returnBalance.toLocaleString('en-IN')}</td>
                                                 <td className="px-6 py-4 text-center">
                                                     <div className="flex justify-center items-center gap-3">
                                                         <button onClick={() => handleView(item)} className="p-1.5 hover:bg-blue-50 text-gray-400 hover:text-blue-600 rounded-lg transition-all" title="View History">
@@ -704,7 +704,7 @@ const Insurance = ({ onDeleteConfirm }) => {
                                 ].map((stat, i) => (
                                     <div key={i} className={`p-4 bg-${stat.color}-50/50 border border-gray-100 rounded-2xl`}>
                                         <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">{stat.label}</p>
-                                        <p className={`text-sm font-black text-${stat.color}-600`}>৳{stat.value.toLocaleString('en-BD')}</p>
+                                        <p className={`text-sm font-black text-${stat.color}-600`}>৳{stat.value.toLocaleString('en-IN')}</p>
                                     </div>
                                 ))}
                             </div>
@@ -747,11 +747,11 @@ const Insurance = ({ onDeleteConfirm }) => {
                                                         <td className="px-6 py-4 text-xs font-bold text-gray-700 whitespace-nowrap">{item.method}</td>
                                                         <td className="px-6 py-4 text-xs text-gray-500 italic truncate max-w-[120px]" title={item.reference}>{item.reference || 'No Reference'}</td>
                                                         <td className="px-6 py-4 text-xs font-bold text-blue-600 text-right whitespace-nowrap">
-                                                            {item.adjustedAmount > 0 ? `৳${item.adjustedAmount.toLocaleString('en-BD')}` : '-'}
+                                                            {item.adjustedAmount > 0 ? `৳${item.adjustedAmount.toLocaleString('en-IN')}` : '-'}
                                                         </td>
-                                                        <td className="px-6 py-4 text-xs font-bold text-gray-700 text-right whitespace-nowrap">৳{parseFloat(item.amount || 0).toLocaleString('en-BD')}</td>
+                                                        <td className="px-6 py-4 text-xs font-bold text-gray-700 text-right whitespace-nowrap">৳{parseFloat(item.amount || 0).toLocaleString('en-IN')}</td>
                                                         <td className="px-6 py-4 text-xs font-black text-gray-900 text-right bg-gray-50/30 whitespace-nowrap">
-                                                            ৳{((parseFloat(item.amount || 0)) + (parseFloat(item.adjustedAmount || 0))).toLocaleString('en-BD')}
+                                                            ৳{((parseFloat(item.amount || 0)) + (parseFloat(item.adjustedAmount || 0))).toLocaleString('en-IN')}
                                                         </td>
                                                     </tr>
                                                 ) : (
@@ -759,8 +759,8 @@ const Insurance = ({ onDeleteConfirm }) => {
                                                         <td className="px-6 py-4 text-xs font-medium text-gray-600">{formatDate(item.lcDate)}</td>
                                                         <td className="px-6 py-4 text-xs font-bold text-blue-600">{item.lcNo}</td>
                                                         <td className="px-6 py-4 text-xs text-gray-700 truncate max-w-[200px]">{item.beneficiary}</td>
-                                                        <td className="px-6 py-4 text-xs font-black text-rose-600 text-right">৳{parseFloat(item.netPremium || 0).toLocaleString('en-BD')}</td>
-                                                        <td className="px-6 py-4 text-xs font-black text-emerald-600 text-right">৳{parseFloat(item.expectedReturnAmount || 0).toLocaleString('en-BD')}</td>
+                                                        <td className="px-6 py-4 text-xs font-black text-rose-600 text-right">৳{parseFloat(item.netPremium || 0).toLocaleString('en-US')}</td>
+                                                        <td className="px-6 py-4 text-xs font-black text-emerald-600 text-right">৳{parseFloat(item.expectedReturnAmount || 0).toLocaleString('en-IN')}</td>
                                                     </tr>
                                                 )
                                             ))

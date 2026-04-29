@@ -1069,7 +1069,7 @@ const CnF = ({
                                                     <td className="cnf-table-cell px-6 !text-left">{cnf.phone}</td>
                                                     <td className="cnf-table-cell px-6 !text-left">{cnf.uom || 'QTY'}</td>
                                                     <td className="cnf-table-cell px-6 font-bold !text-right">{cnf.commission}</td>
-                                                    <td className="cnf-table-cell px-6 font-black !text-right">{(cnf.totalBalance || 0).toLocaleString('en-BD')}</td>
+                                                    <td className="cnf-table-cell px-6 font-black !text-right">{(cnf.totalBalance || 0).toLocaleString('en-IN')}</td>
                                                     <td className="cnf-table-cell px-6 !text-center"><span className={`cnf-status-badge ${cnf.status === 'Active' ? 'active' : 'inactive'}`}>{cnf.status}</span></td>
                                                     <td className="cnf-table-cell px-6">
                                                         <div className="cnf-table-actions justify-end">
@@ -1135,7 +1135,7 @@ const CnF = ({
                                                             <div className="flex justify-between items-center"><span className="text-gray-400 font-bold uppercase tracking-widest text-[9px]">Phone</span><span className="text-gray-900 font-black font-mono">{cnf.phone}</span></div>
                                                             <div className="flex justify-between items-center bg-gray-50/50 p-2 rounded-lg border border-gray-100">
                                                                 <span className="text-gray-400 font-bold uppercase tracking-widest text-[9px]">Balance</span>
-                                                                <span className="text-gray-900 font-black">{(cnf.totalBalance || 0).toLocaleString('en-BD')} Tk</span>
+                                                                <span className="text-gray-900 font-black">{(cnf.totalBalance || 0).toLocaleString('en-IN')} Tk</span>
                                                             </div>
                                                         </div>
                                                         <div className="flex items-center gap-2 mt-4 pt-4 border-t border-gray-100">
@@ -1392,7 +1392,7 @@ const CnF = ({
                                                         <div className="space-y-1">
                                                             <p className="text-[10px] font-bold text-amber-600 uppercase tracking-widest opacity-70">Total Quantity</p>
                                                             <h3 className="text-2xl font-black text-gray-900 leading-none">
-                                                                {filteredHistory.reduce((acc, row) => acc + (parseFloat(row.qty) || 0), 0).toLocaleString('en-BD')}
+                                                                {filteredHistory.reduce((acc, row) => acc + (parseFloat(row.qty) || 0), 0).toLocaleString('en-US')}
                                                             </h3>
                                                         </div>
                                                         <div className="w-12 h-12 rounded-xl bg-amber-100 flex items-center justify-center text-amber-600 group-hover:scale-110 transition-transform">
@@ -1411,7 +1411,7 @@ const CnF = ({
                                                                     {(
                                                                         filteredHistory.reduce((acc, row) => acc + (parseFloat(row.totalCommission) || 0), 0) +
                                                                         expenseRecords.filter(exp => !historySearchQuery || exp.lcNo?.toLowerCase().includes(historySearchQuery.toLowerCase()) || exp.importer?.toLowerCase().includes(historySearchQuery.toLowerCase())).reduce((acc, exp) => acc + (parseFloat(exp.amount) || 0), 0)
-                                                                    ).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                                                    ).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                                                 </h3>
                                                                 <span className="text-[10px] font-bold text-gray-400">TK</span>
                                                             </div>
@@ -1428,7 +1428,7 @@ const CnF = ({
                                                         <div className="space-y-1">
                                                             <p className="text-[10px] font-bold text-indigo-600 uppercase tracking-widest opacity-70">Total Paid</p>
                                                             <h3 className="text-2xl font-black text-gray-900 leading-none">
-                                                                {paymentRecords.reduce((acc, p) => acc + (parseFloat(p.amount) || 0), 0).toLocaleString('en-BD')}
+                                                                {paymentRecords.reduce((acc, p) => acc + (parseFloat(p.amount) || 0), 0).toLocaleString('en-IN')}
                                                             </h3>
                                                         </div>
                                                         <div className="w-12 h-12 rounded-xl bg-indigo-100 flex items-center justify-center text-indigo-600 group-hover:scale-110 transition-transform">
@@ -1444,7 +1444,7 @@ const CnF = ({
                                                             <p className="text-[10px] font-bold text-emerald-600 uppercase tracking-widest opacity-70">Current Balance</p>
                                                             <div className="flex items-baseline gap-1">
                                                                 <h3 className="text-2xl font-black text-gray-900 leading-none">
-                                                                    {(viewData?.totalBalance || 0).toLocaleString('en-BD')}
+                                                                    {(viewData?.totalBalance || 0).toLocaleString('en-IN')}
                                                                 </h3>
                                                                 <span className="text-[10px] font-bold text-gray-400">TK</span>
                                                             </div>
@@ -1464,7 +1464,7 @@ const CnF = ({
                                                             <p className="text-[10px] font-bold text-rose-600 uppercase tracking-widest opacity-70">Total Expenses</p>
                                                             <div className="flex items-baseline gap-1">
                                                                 <h3 className="text-2xl font-black text-gray-900 leading-none">
-                                                                    {expenseRecords.filter(exp => !historySearchQuery || exp.lcNo?.toLowerCase().includes(historySearchQuery.toLowerCase()) || exp.importer?.toLowerCase().includes(historySearchQuery.toLowerCase())).reduce((acc, exp) => acc + (parseFloat(exp.amount) || 0), 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                                                    {expenseRecords.filter(exp => !historySearchQuery || exp.lcNo?.toLowerCase().includes(historySearchQuery.toLowerCase()) || exp.importer?.toLowerCase().includes(historySearchQuery.toLowerCase())).reduce((acc, exp) => acc + (parseFloat(exp.amount) || 0), 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                                                 </h3>
                                                                 <span className="text-[10px] font-bold text-gray-400">TK</span>
                                                             </div>
@@ -1497,7 +1497,7 @@ const CnF = ({
                                                             <p className="text-[10px] font-bold text-emerald-600 uppercase tracking-widest opacity-70">Current Balance</p>
                                                             <div className="flex items-baseline gap-1">
                                                                 <h3 className="text-2xl font-black text-gray-900 leading-none">
-                                                                    {(viewData?.totalBalance || 0).toLocaleString('en-BD')}
+                                                                    {(viewData?.totalBalance || 0).toLocaleString('en-IN')}
                                                                 </h3>
                                                                 <span className="text-[10px] font-bold text-gray-400">TK</span>
                                                             </div>
@@ -1516,7 +1516,7 @@ const CnF = ({
                                                         <div className="space-y-1">
                                                             <p className="text-[10px] font-bold text-blue-600 uppercase tracking-widest opacity-70">Total Paid</p>
                                                             <h3 className="text-2xl font-black text-gray-900 leading-none">
-                                                                {filteredPayments.reduce((acc, p) => acc + (parseFloat(p.amount) || 0), 0).toLocaleString('en-BD')}
+                                                                {filteredPayments.reduce((acc, p) => acc + (parseFloat(p.amount) || 0), 0).toLocaleString('en-IN')}
                                                             </h3>
                                                         </div>
                                                         <div className="w-12 h-12 rounded-xl bg-blue-100 flex items-center justify-center text-blue-600 group-hover:scale-110 transition-transform">
@@ -1547,7 +1547,7 @@ const CnF = ({
                                                             <p className="text-[10px] font-bold text-emerald-600 uppercase tracking-widest opacity-70">Current Balance</p>
                                                             <div className="flex items-baseline gap-1">
                                                                 <h3 className="text-2xl font-black text-gray-900 leading-none">
-                                                                    {(viewData?.totalBalance || 0).toLocaleString('en-BD')}
+                                                                    {(viewData?.totalBalance || 0).toLocaleString('en-IN')}
                                                                 </h3>
                                                                 <span className="text-[10px] font-bold text-gray-400">TK</span>
                                                             </div>
@@ -1615,10 +1615,10 @@ const CnF = ({
                                                                 <td className="cnf-table-cell font-medium">{row.product || '-'}</td>
                                                                 <td className="cnf-table-cell">{row.port || '-'}</td>
                                                                 <td className="cnf-table-cell text-center uppercase">{row.truck || '-'}</td>
-                                                                <td className="cnf-table-cell text-right font-bold">{(!isNaN(parseFloat(row.bag))) ? Math.round(row.bag).toLocaleString('en-BD') : '-'}</td>
-                                                                <td className="cnf-table-cell text-right font-bold">{(!isNaN(parseFloat(row.qty))) ? Math.round(row.qty).toLocaleString('en-BD') : '-'}</td>
+                                                                <td className="cnf-table-cell text-right font-bold">{(!isNaN(parseFloat(row.bag))) ? Math.round(row.bag).toLocaleString('en-US') : '-'}</td>
+                                                                <td className="cnf-table-cell text-right font-bold">{(!isNaN(parseFloat(row.qty))) ? Math.round(row.qty).toLocaleString('en-US') : '-'}</td>
                                                                 <td className="cnf-table-cell text-right">{row.commission}</td>
-                                                                <td className="cnf-table-cell text-right font-black">{(row.totalCommission || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                                                                <td className="cnf-table-cell text-right font-black">{(row.totalCommission || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                                                                 <td className="cnf-table-cell text-center">
                                                                     <span className={`px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-widest ${row.source === 'Sale' ? 'bg-amber-100 text-amber-700' : 'bg-blue-100 text-blue-700'} border ${row.source === 'Sale' ? 'border-amber-200' : 'border-blue-200'}`}>
                                                                         {row.source || 'LC'}
@@ -1714,16 +1714,16 @@ const CnF = ({
                                                                         </div>
                                                                         <div className="grid grid-cols-2 gap-3 py-2.5 bg-gray-50/70 rounded-xl px-4">
                                                                             <div className="space-y-1"><p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Truck No</p><p className="text-xs font-semibold text-gray-700">{row.truck || '-'}</p></div>
-                                                                            <div className="space-y-1 text-right"><p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Bag / Qty</p><p className="text-xs font-bold text-gray-900">{row.bag ? Math.round(parseFloat(row.bag)).toLocaleString('en-BD') : '0'} / {row.qty ? Math.round(parseFloat(row.qty)).toLocaleString('en-BD') : '0'}</p></div>
+                                                                            <div className="space-y-1 text-right"><p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Bag / Qty</p><p className="text-xs font-bold text-gray-900">{row.bag ? Math.round(parseFloat(row.bag)).toLocaleString('en-US') : '0'} / {row.qty ? Math.round(parseFloat(row.qty)).toLocaleString('en-US') : '0'}</p></div>
                                                                         </div>
                                                                         <div className="grid grid-cols-2 gap-4 mt-4 pt-4 border-t border-gray-50">
                                                                             <div>
                                                                                 <p className="text-[9px] font-bold text-gray-400 uppercase tracking-widest mb-1">Commission ({row.uom || viewData?.uom || 'QTY'})</p>
-                                                                                <p className="text-xs font-black text-gray-900 font-mono">{(row.commission || 0).toLocaleString('en-BD')} Tk</p>
+                                                                                <p className="text-xs font-black text-gray-900 font-mono">{(row.commission || 0).toLocaleString('en-IN')} Tk</p>
                                                                             </div>
                                                                             <div className="text-right">
                                                                                 <p className="text-[9px] font-bold text-gray-400 uppercase tracking-widest mb-1">Total Commission</p>
-                                                                                <p className="text-xs font-black text-gray-900 font-mono">{(row.totalCommission || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} Tk</p>
+                                                                                <p className="text-xs font-black text-gray-900 font-mono">{(row.totalCommission || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} Tk</p>
                                                                             </div>
                                                                         </div>
                                                                         <div className="mt-4 pt-4 border-t border-gray-100 flex gap-2">
@@ -1768,7 +1768,7 @@ const CnF = ({
                                                             <td className="cnf-table-cell">{row.product}</td>
                                                             <td className="cnf-table-cell">{row.port}</td>
                                                             <td className="cnf-table-cell text-right font-black text-rose-600">
-                                                                {parseFloat(row.amount).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                                                {parseFloat(row.amount).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                                             </td>
                                                         </tr>
                                                     ))}
@@ -1804,7 +1804,7 @@ const CnF = ({
                                                                     <td className="cnf-table-cell">{formatDate(p.date)}</td>
                                                                     <td className="cnf-table-cell font-bold">{p.method}</td>
                                                                     <td className="cnf-table-cell truncate max-w-[400px]" title={p.reference || '-'}>{p.reference || '-'}</td>
-                                                                    <td className="cnf-table-cell text-right font-black">{(p.amount || 0).toLocaleString('en-BD')} Tk</td>
+                                                                    <td className="cnf-table-cell text-right font-black">{(p.amount || 0).toLocaleString('en-IN')} Tk</td>
                                                                 </tr>
                                                             ))
                                                         ) : (
@@ -1827,7 +1827,7 @@ const CnF = ({
                                                             </div>
                                                             <div className="flex justify-between items-center pt-2 border-t border-gray-50">
                                                                 <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Amount</p>
-                                                                <p className="text-sm font-black text-gray-900">{(p.amount || 0).toLocaleString('en-BD')} Tk</p>
+                                                                <p className="text-sm font-black text-gray-900">{(p.amount || 0).toLocaleString('en-IN')} Tk</p>
                                                             </div>
                                                         </div>
                                                     ))

@@ -320,16 +320,16 @@ export const generatePIPDF = (record) => {
             rowSpan: hasFreight ? 2 : 1,
             styles: { halign: 'left', fontStyle: 'normal', cellPadding: { top: 28, left: 1.5, right: 1.5, bottom: 1.5 } }
         },
-        { content: record.quantity ? parseFloat(record.quantity).toLocaleString('en-BD') : '0', styles: { halign: 'center', fontStyle: 'bold' } },
+        { content: record.quantity ? parseFloat(record.quantity).toLocaleString('en-US') : '0', styles: { halign: 'center', fontStyle: 'bold' } },
         { content: record.rate ? parseFloat(record.rate).toFixed(3) : '0.000', styles: { halign: 'center', fontStyle: 'bold' } },
-        { content: record.amount ? parseFloat(record.amount).toLocaleString(undefined, { minimumFractionDigits: 2 }) : '0.00', styles: { halign: 'center', fontStyle: 'bold' } }
+        { content: record.amount ? parseFloat(record.amount).toLocaleString('en-IN', { minimumFractionDigits: 2 }) : '0.00', styles: { halign: 'center', fontStyle: 'bold' } }
     ]);
 
     if (hasFreight) {
         tableBody.push([
             { content: 'Freight', styles: { halign: 'center', fontStyle: 'bold', valign: 'middle', cellPadding: { top: 10, bottom: 10, left: 1.5, right: 1.5 } } },
             { content: parseFloat(record.freight).toFixed(3), styles: { halign: 'center', fontStyle: 'bold', valign: 'middle', cellPadding: { top: 10, bottom: 10, left: 1.5, right: 1.5 } } },
-            { content: record.totalFreight ? parseFloat(record.totalFreight).toLocaleString(undefined, { minimumFractionDigits: 2 }) : '0.00', styles: { halign: 'center', fontStyle: 'bold', valign: 'middle', cellPadding: { top: 10, bottom: 10, left: 1.5, right: 1.5 } } }
+            { content: record.totalFreight ? parseFloat(record.totalFreight).toLocaleString('en-IN', { minimumFractionDigits: 2 }) : '0.00', styles: { halign: 'center', fontStyle: 'bold', valign: 'middle', cellPadding: { top: 10, bottom: 10, left: 1.5, right: 1.5 } } }
         ]);
     }
 
@@ -437,7 +437,7 @@ export const generatePIPDF = (record) => {
     // 2. Draw TOTAL on the RIGHT
     doc.setFont("helvetica", "bold");
     doc.setFontSize(10);
-    const totalVal = record.grandTotal ? `$ ${parseFloat(record.grandTotal).toLocaleString(undefined, { minimumFractionDigits: 2 })}` : '$ 0.00';
+    const totalVal = record.grandTotal ? `$ ${parseFloat(record.grandTotal).toLocaleString('en-IN', { minimumFractionDigits: 2 })}` : '$ 0.00';
     doc.text(`TOTAL:-  ${totalVal}`, pageWidth - margin - 2, totalY + 6.5, { align: 'right' });
 
     doc.line(margin, totalY + 9, pageWidth - margin, totalY + 9);

@@ -2014,13 +2014,13 @@ const SaleManagement = ({
                                                         </div>
                                                     </td>
                                                     <td className="px-6 py-4 text-right align-middle">
-                                                        <div className="text-[13px] font-bold text-gray-900">{parseFloat(entry.quantity).toLocaleString('en-BD')} kg</div>
+                                                        <div className="text-[13px] font-bold text-gray-900">{parseFloat(entry.quantity).toLocaleString('en-US')} kg</div>
                                                     </td>
                                                     <td className="px-6 py-4 text-right align-middle">
-                                                        <div className="text-[12px] font-bold text-gray-400">৳{parseFloat(entry.unitPrice || 0).toLocaleString('en-BD')}</div>
+                                                        <div className="text-[12px] font-bold text-gray-400">৳{parseFloat(entry.unitPrice || 0).toLocaleString('en-IN')}</div>
                                                     </td>
                                                     <td className="px-6 py-4 text-right align-middle">
-                                                        <div className="text-[14px] font-black text-blue-900 group-hover:scale-[1.02] transition-transform origin-right">৳{parseFloat(entry.totalAmount || 0).toLocaleString('en-BD')}</div>
+                                                        <div className="text-[14px] font-black text-blue-900 group-hover:scale-[1.02] transition-transform origin-right">৳{parseFloat(entry.totalAmount || 0).toLocaleString('en-IN')}</div>
                                                     </td>
                                                 </tr>
                                             ))}
@@ -2033,16 +2033,16 @@ const SaleManagement = ({
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-2">
                             <div className="p-5 bg-orange-50/30 rounded-2xl border border-orange-100/50 group hover:bg-orange-50/50 transition-colors">
                                 <div className="text-[9px] font-black text-orange-400 uppercase tracking-widest mb-1.5">Total Discount</div>
-                                <div className="text-xl font-black text-orange-600 group-hover:scale-[1.02] transition-transform origin-left">৳{parseFloat(viewData.discount || 0).toLocaleString('en-BD')}</div>
+                                <div className="text-xl font-black text-orange-600 group-hover:scale-[1.02] transition-transform origin-left">৳{parseFloat(viewData.discount || 0).toLocaleString('en-IN')}</div>
                             </div>
                             <div className="p-5 bg-emerald-50/30 rounded-2xl border border-emerald-100/50 group hover:bg-emerald-50/50 transition-colors">
                                 <div className="text-[9px] font-black text-emerald-400 uppercase tracking-widest mb-1.5">Paid Amount</div>
-                                <div className="text-xl font-black text-emerald-500 group-hover:scale-[1.02] transition-transform origin-left">৳{parseFloat(viewData.paidAmount || 0).toLocaleString('en-BD')}</div>
+                                <div className="text-xl font-black text-emerald-500 group-hover:scale-[1.02] transition-transform origin-left">৳{parseFloat(viewData.paidAmount || 0).toLocaleString('en-IN')}</div>
                             </div>
                             <div className="p-5 bg-[#1a368b] rounded-2xl border border-blue-900 shadow-xl shadow-blue-500/10 group overflow-hidden relative">
                                 <div className="absolute top-0 right-0 w-32 h-32 bg-blue-500/20 rounded-full -mr-16 -mt-16 blur-3xl"></div>
                                 <div className="text-[9px] font-black text-blue-200 uppercase tracking-widest mb-1.5 relative z-10">Grand Total Invoice</div>
-                                <div className="text-2xl font-black text-white relative z-10 group-hover:scale-[1.02] transition-transform origin-left tracking-tight">৳{parseFloat(viewData.totalAmount || 0).toLocaleString('en-BD')}</div>
+                                <div className="text-2xl font-black text-white relative z-10 group-hover:scale-[1.02] transition-transform origin-left tracking-tight">৳{parseFloat(viewData.totalAmount || 0).toLocaleString('en-IN')}</div>
                             </div>
                         </div>
                     </div>
@@ -2593,24 +2593,24 @@ const SaleManagement = ({
                     {saleType === 'Border' && (
                         <div className="sale-mgmt-card bg-blue-50/50 border-blue-100">
                             <div className="sale-mgmt-card-label text-blue-500">Total Truck</div>
-                            <div className="sale-mgmt-card-value text-blue-700">{stats.totalTrucks.toLocaleString('en-BD')}</div>
+                            <div className="sale-mgmt-card-value text-blue-700">{stats.totalTrucks.toLocaleString('en-US')}</div>
                         </div>
                     )}
                     <div className="sale-mgmt-card sale-mgmt-card-default">
                         <div className="sale-mgmt-card-label text-gray-400">Total Sales</div>
-                        <div className="sale-mgmt-card-value text-gray-900">৳ {stats.totalSales.toLocaleString('en-BD')}</div>
+                        <div className="sale-mgmt-card-value text-gray-900">৳ {stats.totalSales.toLocaleString('en-IN')}</div>
                     </div>
                     <div className="sale-mgmt-card sale-mgmt-card-red">
                         <div className="sale-mgmt-card-label text-red-600">Total Disc.</div>
-                        <div className="sale-mgmt-card-value text-red-700">৳ {stats.totalDiscount.toLocaleString('en-BD')}</div>
+                        <div className="sale-mgmt-card-value text-red-700">৳ {stats.totalDiscount.toLocaleString('en-IN')}</div>
                     </div>
                     <div className="sale-mgmt-card sale-mgmt-card-emerald">
                         <div className="sale-mgmt-card-label text-emerald-600">Total Paid</div>
-                        <div className="sale-mgmt-card-value text-emerald-700">৳ {stats.totalPaid.toLocaleString('en-BD')}</div>
+                        <div className="sale-mgmt-card-value text-emerald-700">৳ {stats.totalPaid.toLocaleString('en-IN')}</div>
                     </div>
                     <div className="sale-mgmt-card sale-mgmt-card-orange">
                         <div className="sale-mgmt-card-label text-orange-600">Total Balance</div>
-                        <div className="sale-mgmt-card-value text-orange-700">৳ {stats.totalDue.toLocaleString('en-BD')}</div>
+                        <div className="sale-mgmt-card-value text-orange-700">৳ {stats.totalDue.toLocaleString('en-IN')}</div>
                     </div>
                 </div>
             )}
@@ -3326,7 +3326,7 @@ const SaleManagement = ({
                                                                 <div className="flex-1">
                                                                     <label className="md:hidden sale-mgmt-item-label mb-1 block text-center">Total</label>
                                                                     <div className="h-10 flex items-center justify-center bg-white/50 border border-gray-200/60 rounded-lg backdrop-blur-sm text-[13px] font-black text-blue-600">
-                                                                        {parseFloat(entry.totalAmount || 0).toLocaleString('en-BD')}
+                                                                        {parseFloat(entry.totalAmount || 0).toLocaleString('en-IN')}
                                                                     </div>
                                                                 </div>
                                                                 <div className="flex flex-row gap-1 items-center justify-center">
@@ -3554,7 +3554,7 @@ const SaleManagement = ({
                                                             <div className="flex-1">
                                                                 <label className="md:hidden sale-mgmt-item-label mb-1 block text-center">Total</label>
                                                                 <div className="w-full h-10 flex items-center justify-center bg-white/50 border border-gray-200/60 rounded-lg backdrop-blur-sm text-[13px] font-black text-blue-600">
-                                                                    {parseFloat(entry.totalAmount || 0).toLocaleString('en-BD')}
+                                                                    {parseFloat(entry.totalAmount || 0).toLocaleString('en-IN')}
                                                                 </div>
                                                             </div>
                                                             <div className="flex flex-row items-center gap-0.5 shrink-0">
@@ -3607,7 +3607,7 @@ const SaleManagement = ({
                                 </div>
                                 <div className="space-y-2">
                                     <label className="text-sm font-bold text-gray-700">Grand Total</label>
-                                    <div className="text-2xl font-black text-gray-900">৳ {parseFloat(formData.totalAmount).toLocaleString('en-BD')}</div>
+                                    <div className="text-2xl font-black text-gray-900">৳ {parseFloat(formData.totalAmount).toLocaleString('en-IN')}</div>
                                 </div>
                                 <div className="space-y-2">
                                     <label className="text-sm font-bold text-gray-700">Paid Amount</label>
@@ -3627,7 +3627,7 @@ const SaleManagement = ({
                                 <div className="space-y-2">
                                     <label className="text-sm font-bold text-gray-700">Balance</label>
                                     <div className={`text-2xl font-black ${parseFloat(formData.dueAmount) > 0 ? 'text-red-600' : 'text-emerald-600'}`}>
-                                        ৳ {parseFloat(formData.dueAmount).toLocaleString('en-BD')}
+                                        ৳ {parseFloat(formData.dueAmount).toLocaleString('en-IN')}
                                     </div>
                                 </div>
                                 <div className="flex flex-col md:flex-row items-center justify-between border-t border-gray-100 pt-4 mt-2">
@@ -3874,7 +3874,7 @@ const SaleManagement = ({
                                                 <td className="px-3 py-4 whitespace-nowrap text-center">
                                                     <div className="flex flex-col gap-1">
                                                         {items.map((it, idx) => (
-                                                            <div key={idx} className="font-semibold text-gray-800 border-b border-gray-100 last:border-0 pb-0.5">{parseFloat(it.quantity || 0).toLocaleString('en-BD')}</div>
+                                                            <div key={idx} className="font-semibold text-gray-800 border-b border-gray-100 last:border-0 pb-0.5">{parseFloat(it.quantity || 0).toLocaleString('en-US')}</div>
                                                         ))}
                                                     </div>
                                                 </td>
@@ -3890,11 +3890,11 @@ const SaleManagement = ({
                                                 <td className="px-3 py-4 whitespace-nowrap text-center">
                                                     <div className="flex flex-col gap-1">
                                                         {items.map((it, idx) => (
-                                                            <div key={idx} className="font-semibold text-gray-800 border-b border-gray-100 last:border-0 pb-0.5">৳ {parseFloat(it.unitPrice || 0).toLocaleString('en-BD')}</div>
+                                                            <div key={idx} className="font-semibold text-gray-800 border-b border-gray-100 last:border-0 pb-0.5">৳ {parseFloat(it.unitPrice || 0).toLocaleString('en-IN')}</div>
                                                         ))}
                                                     </div>
                                                 </td>
-                                                <td className="px-3 py-4 whitespace-nowrap text-center font-black text-gray-900">৳ {parseFloat(sale.totalAmount).toLocaleString('en-BD')}</td>
+                                                <td className="px-3 py-4 whitespace-nowrap text-center font-black text-gray-900">৳ {parseFloat(sale.totalAmount).toLocaleString('en-IN')}</td>
                                                 <td className="px-3 py-4 text-center whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
                                                     <div className="flex items-center justify-center gap-1.5">
                                                         {sale.status === 'Requested' ? (
@@ -3972,13 +3972,13 @@ const SaleManagement = ({
                                             <td className="px-3 py-4 whitespace-nowrap text-center">
                                                 {isMultiple && !isExpanded ? (
                                                     <div className="inline-block px-3 py-1 bg-blue-50 text-blue-700 rounded-lg border border-blue-100/50 text-[13px] font-black">
-                                                        {items.reduce((sum, it) => sum + (parseFloat(it.quantity) || 0), 0).toLocaleString('en-BD')}
+                                                        {items.reduce((sum, it) => sum + (parseFloat(it.quantity) || 0), 0).toLocaleString('en-US')}
                                                     </div>
                                                 ) : (
                                                     <div className="flex flex-col gap-2">
                                                         {items.map((it, idx) => (
                                                             <div key={idx} className={`text-[13px] font-semibold text-gray-800 ${idx < items.length - 1 ? 'border-b border-gray-100 pb-1' : ''}`}>
-                                                                {parseFloat(it.quantity || 0).toLocaleString('en-BD')}
+                                                                {parseFloat(it.quantity || 0).toLocaleString('en-US')}
                                                             </div>
                                                         ))}
                                                     </div>
@@ -3991,7 +3991,7 @@ const SaleManagement = ({
                                                     <div className="flex flex-col gap-2">
                                                         {items.map((it, idx) => (
                                                             <div key={idx} className={`text-[13px] font-semibold text-gray-800 ${idx < items.length - 1 ? 'border-b border-gray-100 pb-1' : ''}`}>
-                                                                ৳ {parseFloat(it.unitPrice || 0).toLocaleString('en-BD')}
+                                                                ৳ {parseFloat(it.unitPrice || 0).toLocaleString('en-IN')}
                                                             </div>
                                                         ))}
                                                     </div>
@@ -3999,20 +3999,20 @@ const SaleManagement = ({
                                             </td>
                                             <td className="px-3 py-4 whitespace-nowrap text-center">
                                                 <div className="text-[13px] font-bold text-red-600">
-                                                    {parseFloat(sale.discount || 0) > 0 ? `-৳ ${parseFloat(sale.discount).toLocaleString('en-BD')}` : '-'}
+                                                    {parseFloat(sale.discount || 0) > 0 ? `-৳ ${parseFloat(sale.discount).toLocaleString('en-IN')}` : '-'}
                                                 </div>
                                             </td>
                                             <td className="px-3 py-4 whitespace-nowrap text-center">
-                                                <div className="text-[13px] font-black text-gray-900">৳ {parseFloat(sale.totalAmount).toLocaleString('en-BD')}</div>
+                                                <div className="text-[13px] font-black text-gray-900">৳ {parseFloat(sale.totalAmount).toLocaleString('en-IN')}</div>
                                             </td>
                                             <td className="px-3 py-4 whitespace-nowrap text-center">
                                                 <div className="px-2 py-1 bg-emerald-50 text-emerald-700 rounded-lg text-xs font-bold inline-block border border-emerald-100/50">
-                                                    ৳ {parseFloat(sale.paidAmount || 0).toLocaleString('en-BD')}
+                                                    ৳ {parseFloat(sale.paidAmount || 0).toLocaleString('en-IN')}
                                                 </div>
                                             </td>
                                             <td className="px-3 py-4 whitespace-nowrap text-center">
                                                 <div className="px-2 py-1 bg-orange-50 text-orange-700 rounded-lg text-xs font-bold inline-block border border-orange-100/50">
-                                                    ৳ {parseFloat(sale.dueAmount || 0).toLocaleString('en-BD')}
+                                                    ৳ {parseFloat(sale.dueAmount || 0).toLocaleString('en-IN')}
                                                 </div>
                                             </td>
                                             <td className="px-3 py-4 text-center whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
@@ -4120,7 +4120,7 @@ const SaleManagement = ({
                                                     </div>
                                                     <div className="flex-shrink-0 border-l border-gray-100 pl-3 text-right">
                                                         <div className="sale-mgmt-mobile-label text-blue-600">Total</div>
-                                                        <div className="text-[11px] font-black text-gray-900">৳{parseFloat(sale.totalAmount).toLocaleString('en-BD')}</div>
+                                                        <div className="text-[11px] font-black text-gray-900">৳{parseFloat(sale.totalAmount).toLocaleString('en-IN')}</div>
                                                     </div>
                                                 </>
                                             )}
@@ -4219,13 +4219,13 @@ const SaleManagement = ({
                                                                     <span className="text-[10px] font-medium text-gray-500 italic truncate">{it.brand || '-'}</span>
                                                                 </div>
                                                                 <div className="col-span-3 text-right">
-                                                                    <div className="font-bold text-gray-900">{parseFloat(it.quantity || 0).toLocaleString('en-BD')}</div>
+                                                                    <div className="font-bold text-gray-900">{parseFloat(it.quantity || 0).toLocaleString('en-US')}</div>
                                                                 </div>
                                                                 <div className="col-span-3 text-right">
-                                                                    <div className="font-medium text-blue-600 truncate">{parseFloat(it.unitPrice || 0).toLocaleString('en-BD')}</div>
+                                                                    <div className="font-medium text-blue-600 truncate">{parseFloat(it.unitPrice || 0).toLocaleString('en-IN')}</div>
                                                                 </div>
                                                                 <div className="col-span-3 text-right">
-                                                                    <div className="font-black text-gray-900 truncate">৳{(parseFloat(it.quantity || 0) * parseFloat(it.unitPrice || 0)).toLocaleString('en-BD')}</div>
+                                                                    <div className="font-black text-gray-900 truncate">৳{(parseFloat(it.quantity || 0) * parseFloat(it.unitPrice || 0)).toLocaleString('en-US')}</div>
                                                                 </div>
                                                             </div>
                                                         </div>
@@ -4237,19 +4237,19 @@ const SaleManagement = ({
                                             <div className="grid grid-cols-2 gap-2 pt-3 border-t border-gray-50 mt-4">
                                                 <div className="sale-mgmt-mobile-money-card bg-red-50/40 border-red-100/50">
                                                     <div className="sale-mgmt-mobile-label text-red-600">Discount</div>
-                                                    <div className="text-[14px] font-black text-red-600">৳{parseFloat(sale.discount || 0).toLocaleString('en-BD')}</div>
+                                                    <div className="text-[14px] font-black text-red-600">৳{parseFloat(sale.discount || 0).toLocaleString('en-IN')}</div>
                                                 </div>
                                                 <div className="sale-mgmt-mobile-money-card bg-blue-50/40 border-blue-100/50">
                                                     <div className="sale-mgmt-mobile-label text-blue-600 mb-0">Total</div>
-                                                    <div className="text-[14px] font-black text-gray-900">৳{parseFloat(sale.totalAmount).toLocaleString('en-BD')}</div>
+                                                    <div className="text-[14px] font-black text-gray-900">৳{parseFloat(sale.totalAmount).toLocaleString('en-IN')}</div>
                                                 </div>
                                                 <div className="sale-mgmt-mobile-money-card bg-emerald-50/40 border-emerald-100/50">
                                                     <div className="sale-mgmt-mobile-label text-emerald-600">Paid</div>
-                                                    <div className="text-[14px] font-black text-emerald-700">৳{parseFloat(sale.paidAmount || 0).toLocaleString('en-BD')}</div>
+                                                    <div className="text-[14px] font-black text-emerald-700">৳{parseFloat(sale.paidAmount || 0).toLocaleString('en-IN')}</div>
                                                 </div>
                                                 <div className="sale-mgmt-mobile-money-card bg-orange-50/40 border-orange-100/50">
                                                     <div className="sale-mgmt-mobile-label text-orange-600">Balance</div>
-                                                    <div className="text-[14px] font-black text-orange-700">৳{parseFloat(sale.dueAmount || 0).toLocaleString('en-BD')}</div>
+                                                    <div className="text-[14px] font-black text-orange-700">৳{parseFloat(sale.dueAmount || 0).toLocaleString('en-IN')}</div>
                                                 </div>
                                             </div>
                                         </>

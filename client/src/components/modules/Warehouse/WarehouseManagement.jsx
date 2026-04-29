@@ -830,8 +830,8 @@ const WarehouseManagement = ({ currentUser }) => {
             availableCapacity: `${availableCapacityPercent}%`,
             pendingTransfers,
             lowStockCount,
-            totalInhouseStock: `${totalInhouseStockRaw.toLocaleString('en-BD')} kg`,
-            totalWarehouseStock: `${totalWarehouseStockRaw.toLocaleString('en-BD')} kg`
+            totalInhouseStock: `${totalInhouseStockRaw.toLocaleString('en-IN')} kg`,
+            totalWarehouseStock: `${totalWarehouseStockRaw.toLocaleString('en-IN')} kg`
         };
     }, [filteredData, uniqueWarehouses, globalBrandTotals, warehouseData, salesRecords, groupedStockData]);
 
@@ -1474,20 +1474,20 @@ const WarehouseManagement = ({ currentUser }) => {
                                                                                     <div className="text-sm text-black text-right font-bold">
                                                                                         {(() => {
                                                                                             const { whole, remainder } = calculatePktRemainder(brand.inhouseQty, brand.packetSize);
-                                                                                            return `${whole.toLocaleString('en-BD')} - ${remainder.toLocaleString('en-BD')} kg`;
+                                                                                            return `${whole.toLocaleString('en-US')} - ${remainder.toLocaleString('en-US')} kg`;
                                                                                         })()}
                                                                                     </div>
                                                                                     <div className="text-sm text-black text-right font-bold">
-                                                                                        {parseFloat(brand.inhouseQty || 0).toLocaleString('en-BD')} kg
+                                                                                        {parseFloat(brand.inhouseQty || 0).toLocaleString('en-US')} kg
                                                                                     </div>
                                                                                     <div className="text-sm text-black text-right font-bold">
                                                                                         {(() => {
                                                                                             const { whole, remainder } = calculatePktRemainder(brand.whQty, brand.packetSize);
-                                                                                            return `${whole.toLocaleString('en-BD')} - ${remainder.toLocaleString('en-BD')} kg`;
+                                                                                            return `${whole.toLocaleString('en-US')} - ${remainder.toLocaleString('en-US')} kg`;
                                                                                         })()}
                                                                                     </div>
                                                                                     <div className="text-sm text-black text-right font-bold">
-                                                                                        {parseFloat(brand.whQty || 0).toLocaleString('en-BD')} kg
+                                                                                        {parseFloat(brand.whQty || 0).toLocaleString('en-US')} kg
                                                                                     </div>
                                                                                     {isAdmin && (
                                                                                         <div className="flex items-center justify-end gap-2">
@@ -1572,13 +1572,13 @@ const WarehouseManagement = ({ currentUser }) => {
                                                                                                         <span className="text-[12px] sm:text-xs font-bold text-gray-600 truncate w-full xl:w-auto xl:text-right">
                                                                                                             {(() => {
                                                                                                                 const { whole, remainder } = calculatePktRemainder(brand.inhouseQty, brand.packetSize);
-                                                                                                                return `${whole.toLocaleString('en-BD')}${remainder > 0 ? ` - ${remainder.toLocaleString('en-BD')} kg` : ''}`;
+                                                                                                                return `${whole.toLocaleString('en-US')}${remainder > 0 ? ` - ${remainder.toLocaleString('en-US')} kg` : ''}`;
                                                                                                             })()}
                                                                                                         </span>
                                                                                                     </div>
                                                                                                     <div className="flex flex-col xl:flex-row xl:items-end justify-between border-t border-emerald-50 pt-1 gap-0.5 xl:gap-1">
                                                                                                         <span className="text-[10px] font-bold text-gray-400 uppercase">QTY</span>
-                                                                                                        <span className="text-[11px] sm:text-xs font-black text-emerald-700 truncate w-full xl:w-auto xl:text-right">{parseFloat(brand.inhouseQty || 0).toLocaleString('en-BD')} kg</span>
+                                                                                                        <span className="text-[11px] sm:text-xs font-black text-emerald-700 truncate w-full xl:w-auto xl:text-right">{parseFloat(brand.inhouseQty || 0).toLocaleString('en-US')} kg</span>
                                                                                                     </div>
                                                                                                 </div>
                                                                                             </div>
@@ -1590,13 +1590,13 @@ const WarehouseManagement = ({ currentUser }) => {
                                                                                                         <span className="text-[12px] sm:text-xs font-bold text-gray-600 truncate w-full xl:w-auto xl:text-right">
                                                                                                             {(() => {
                                                                                                                 const { whole, remainder } = calculatePktRemainder(brand.whQty, brand.packetSize);
-                                                                                                                return `${whole.toLocaleString('en-BD')}${remainder > 0 ? ` - ${remainder.toLocaleString('en-BD')} kg` : ''}`;
+                                                                                                                return `${whole.toLocaleString('en-US')}${remainder > 0 ? ` - ${remainder.toLocaleString('en-US')} kg` : ''}`;
                                                                                                             })()}
                                                                                                         </span>
                                                                                                     </div>
                                                                                                     <div className="flex flex-col xl:flex-row xl:items-end justify-between border-t border-blue-50 pt-1 gap-0.5 xl:gap-1">
                                                                                                         <span className="text-[10px] font-bold text-gray-400 uppercase">QTY</span>
-                                                                                                        <span className="text-[11px] sm:text-xs font-black text-blue-700 truncate w-full xl:w-auto xl:text-right">{parseFloat(brand.whQty || 0).toLocaleString('en-BD')} kg</span>
+                                                                                                        <span className="text-[11px] sm:text-xs font-black text-blue-700 truncate w-full xl:w-auto xl:text-right">{parseFloat(brand.whQty || 0).toLocaleString('en-US')} kg</span>
                                                                                                     </div>
                                                                                                 </div>
                                                                                             </div>
@@ -1669,7 +1669,7 @@ const WarehouseManagement = ({ currentUser }) => {
                                                             </td>
                                                             <td className="px-6 py-4 text-sm text-gray-600">{wh.manager || '-'}</td>
                                                             <td className="px-6 py-4 text-sm text-gray-600">{wh.location || '-'}</td>
-                                                            <td className="px-6 py-4 text-sm text-gray-600">{wh.capacity ? `${wh.capacity.toLocaleString('en-BD')} KG` : '-'}</td>
+                                                            <td className="px-6 py-4 text-sm text-gray-600">{wh.capacity ? `${wh.capacity.toLocaleString('en-US')} KG` : '-'}</td>
                                                             <td className="px-6 py-4">
                                                                 {isEmpty ? (
                                                                     <span className="px-2.5 py-1 bg-amber-100 text-amber-700 rounded-lg text-xs font-bold flex items-center gap-1 w-fit">
@@ -1737,7 +1737,7 @@ const WarehouseManagement = ({ currentUser }) => {
                                                     </div>
                                                     <div className="flex justify-between items-center">
                                                         <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Capacity</span>
-                                                        <span className="text-sm font-black text-gray-800">{wh.capacity ? `${wh.capacity.toLocaleString('en-BD')} KG` : '-'}</span>
+                                                        <span className="text-sm font-black text-gray-800">{wh.capacity ? `${wh.capacity.toLocaleString('en-US')} KG` : '-'}</span>
                                                     </div>
                                                     <div className="pt-3 border-t border-gray-100 flex justify-between items-center">
                                                         <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Stock Status</span>

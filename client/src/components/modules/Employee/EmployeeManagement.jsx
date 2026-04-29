@@ -690,7 +690,7 @@ const EmployeeManagement = ({
                                                     </span>
                                                 </td>
                                                 <td className="px-6 py-4 text-sm text-gray-600 font-sans">{e.phone}</td>
-                                                <td className="px-6 py-4 text-sm font-bold text-gray-900 font-sans text-right">{e.salary ? `${parseFloat(e.salary).toLocaleString('en-BD')} BDT` : '-'}</td>
+                                                <td className="px-6 py-4 text-sm font-bold text-gray-900 font-sans text-right">{e.salary ? `${parseFloat(e.salary).toLocaleString('en-IN')} BDT` : '-'}</td>
                                                 <td className="px-6 py-4 text-sm text-gray-600">
                                                     <div className="flex items-center justify-center space-x-2">
                                                         <button onClick={(event) => { event.stopPropagation(); setViewData(e); }} className="p-1 hover:bg-gray-100 text-gray-400 hover:text-gray-600 rounded transition-colors"><EyeIcon className="w-5 h-5" /></button>

@@ -356,7 +356,7 @@ const PaymentCollectionReport = ({ isOpen, onClose, payments = [] }) => {
                         {/* Title */}
                         <div className="flex justify-center -mt-6">
                             <div className="bg-white border-2 border-gray-900 px-12 py-1.5 inline-block">
-                                <h2 className="text-xl font-bold text-gray-900 tracking-wide uppercase">Payment Collection Report</h2>
+                                <h2 className="text-2xl font-bold text-gray-900 tracking-wide uppercase">Payment Collection Report</h2>
                             </div>
                         </div>
 
@@ -391,17 +391,17 @@ const PaymentCollectionReport = ({ isOpen, onClose, payments = [] }) => {
                             <table className="w-full border-collapse">
                                 <thead>
                                     <tr className="bg-gray-50 border-b border-gray-900">
-                                        <th className="border-r border-gray-900 px-2 py-2 text-center text-[11px] font-bold text-gray-900 uppercase tracking-wider w-[5%] whitespace-nowrap">SL</th>
-                                        <th className="border-r border-gray-900 px-2 py-2 text-left text-[11px] font-bold text-gray-900 uppercase tracking-wider w-[12%] whitespace-nowrap">Date</th>
-                                        <th className="border-r border-gray-900 px-2 py-2 text-left text-[11px] font-bold text-gray-900 uppercase tracking-wider w-[18%] whitespace-nowrap">Party Name</th>
-                                        <th className="border-r border-gray-900 px-2 py-2 text-left text-[11px] font-bold text-gray-900 uppercase tracking-wider w-[12%] whitespace-nowrap">Method</th>
-                                        <th className="border-r border-gray-900 px-2 py-2 text-left text-[11px] font-bold text-gray-900 uppercase tracking-wider w-[18%] whitespace-nowrap">Bank/Receiver</th>
-                                        <th className="border-r border-gray-900 px-2 py-2 text-left text-[11px] font-bold text-gray-900 uppercase tracking-wider w-[12%] whitespace-nowrap">Branch</th>
-                                        <th className="border-r border-gray-900 px-2 py-2 text-left text-[11px] font-bold text-gray-900 uppercase tracking-wider w-[12%] whitespace-nowrap">A/C No</th>
-                                        <th className="px-2 py-2 text-right text-[11px] font-bold text-gray-900 uppercase tracking-wider w-[11%] whitespace-nowrap">Amount</th>
+                                        <th className="border-r border-gray-900 px-2 py-2 text-center text-[12px] font-bold text-gray-900 uppercase tracking-wider w-[5%] whitespace-nowrap">SL</th>
+                                        <th className="border-r border-gray-900 px-2 py-2 text-left text-[12px] font-bold text-gray-900 uppercase tracking-wider w-[12%] whitespace-nowrap">Date</th>
+                                        <th className="border-r border-gray-900 px-2 py-2 text-left text-[12px] font-bold text-gray-900 uppercase tracking-wider w-[18%] whitespace-nowrap">Party Name</th>
+                                        <th className="border-r border-gray-900 px-2 py-2 text-left text-[12px] font-bold text-gray-900 uppercase tracking-wider w-[12%] whitespace-nowrap">Method</th>
+                                        <th className="border-r border-gray-900 px-2 py-2 text-left text-[12px] font-bold text-gray-900 uppercase tracking-wider w-[18%] whitespace-nowrap">Bank/Receiver</th>
+                                        <th className="border-r border-gray-900 px-2 py-2 text-left text-[12px] font-bold text-gray-900 uppercase tracking-wider w-[12%] whitespace-nowrap">Branch</th>
+                                        <th className="border-r border-gray-900 px-2 py-2 text-left text-[12px] font-bold text-gray-900 uppercase tracking-wider w-[12%] whitespace-nowrap">A/C No</th>
+                                        <th className="px-2 py-2 text-right text-[12px] font-bold text-gray-900 uppercase tracking-wider w-[11%] whitespace-nowrap">Amount</th>
                                     </tr>
                                 </thead>
-                                <tbody className="divide-y divide-gray-900 text-[12px]">
+                                <tbody className="divide-y divide-gray-900 text-[13px] sm:text-[14px]">
                                     {filteredPayments.length > 0 ? (
                                         filteredPayments.map((p, idx) => {
                                             const amount = parseFloat(p.amount) || 0;
@@ -420,8 +420,8 @@ const PaymentCollectionReport = ({ isOpen, onClose, payments = [] }) => {
                                                     <td className="border-r border-gray-900 px-2 py-1.5">
                                                         {p.accountNo || '-'}
                                                     </td>
-                                                    <td className="px-2 py-1.5 text-right font-bold text-blue-600 whitespace-nowrap">
-                                                        ৳{amount.toLocaleString('en-BD', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                                    <td className="px-2 py-1.5 text-right font-bold text-gray-900 whitespace-nowrap">
+                                                        ৳{Number(amount).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                                     </td>
                                                 </tr>
                                             );
@@ -435,9 +435,9 @@ const PaymentCollectionReport = ({ isOpen, onClose, payments = [] }) => {
                                 {filteredPayments.length > 0 && (
                                     <tfoot>
                                         <tr className="bg-gray-100 border-t-2 border-gray-900">
-                                            <td colSpan="7" className="px-2 py-2 text-[12px] font-black text-gray-900 text-right uppercase tracking-wider border-r border-gray-900 whitespace-nowrap">Grand Total</td>
-                                            <td className="px-2 py-2 text-[12px] text-right font-black text-blue-700 whitespace-nowrap">
-                                                ৳{grandTotal.toLocaleString('en-BD', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                            <td colSpan="7" className="px-2 py-2 text-[14px] font-black text-gray-900 text-right uppercase tracking-wider border-r border-gray-900 whitespace-nowrap">Grand Total</td>
+                                            <td className="px-2 py-2 text-[14px] text-right font-black text-gray-900 whitespace-nowrap">
+                                                ৳{Number(grandTotal).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                             </td>
                                         </tr>
                                     </tfoot>
@@ -448,13 +448,13 @@ const PaymentCollectionReport = ({ isOpen, onClose, payments = [] }) => {
                         {/* Summary Cards */}
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-6 px-2 print:grid print:grid-cols-2">
                             <div className="border border-gray-200 p-4 sm:p-5 rounded-2xl bg-gray-50 shadow-sm">
-                                <div className="text-[10px] sm:text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-2">Total Collections</div>
+                                <div className="text-[12px] font-bold text-gray-400 uppercase tracking-wider mb-2">Total Collections</div>
                                 <div className="text-2xl sm:text-3xl font-black text-gray-900">{filteredPayments.length}</div>
                             </div>
                             <div className="border border-gray-200 p-4 sm:p-5 rounded-2xl bg-white shadow-sm">
-                                <div className="text-[10px] sm:text-[11px] font-bold text-blue-500 uppercase tracking-wider mb-2">Grand Total Collected</div>
-                                <div className="text-xl sm:text-2xl font-black text-blue-600">
-                                    ৳{grandTotal.toLocaleString('en-BD', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                <div className="text-[12px] font-bold text-blue-500 uppercase tracking-wider mb-2">Grand Total Collected</div>
+                                <div className="text-xl sm:text-2xl font-black text-gray-900">
+                                    ৳{Number(grandTotal).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                 </div>
                             </div>
                         </div>

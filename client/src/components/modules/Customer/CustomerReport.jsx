@@ -189,7 +189,7 @@ const CustomerReport = ({ isOpen, onClose, customers = [] }) => {
                                                     <td className="border-r border-gray-200 px-2 py-2 text-[13px] text-gray-900">{c.companyName || c.customerName || '-'}</td>
                                                     <td className="border-r border-gray-200 px-2 py-2 text-[13px] font-medium text-gray-700 text-center">{getLastTransDay(c)}</td>
                                                     <td className={`px-2 py-2 text-[14px] text-right font-black ${due > 0 ? 'text-rose-600' : 'text-emerald-600'}`}>
-                                                        ৳{Math.round(due).toLocaleString('en-BD')}
+                                                        ৳{Math.round(due).toLocaleString('en-IN')}
                                                     </td>
                                                 </tr>
                                             );
@@ -205,7 +205,7 @@ const CustomerReport = ({ isOpen, onClose, customers = [] }) => {
                                         <tr className="bg-gray-100 border-t-2 border-gray-900">
                                             <td colSpan="4" className="px-2 py-2 text-[14px] font-black text-gray-900 text-right uppercase tracking-wider border-r border-gray-900">Grand Total Due</td>
                                             <td className="px-2 py-2 text-[14px] text-right font-black text-rose-700">
-                                                ৳{Math.round(grandTotalDue).toLocaleString('en-BD')}
+                                                ৳{Math.round(grandTotalDue).toLocaleString('en-IN')}
                                             </td>
                                         </tr>
                                     </tfoot>
@@ -235,7 +235,7 @@ const CustomerReport = ({ isOpen, onClose, customers = [] }) => {
                                                 <div className="text-right">
                                                     <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Total Due</p>
                                                     <p className={`text-lg font-black ${due > 0 ? 'text-rose-600' : 'text-emerald-600'}`}>
-                                                        ৳{Math.round(due).toLocaleString('en-BD')}
+                                                        ৳{Math.round(due).toLocaleString('en-IN')}
                                                     </p>
                                                 </div>
                                             </div>
@@ -254,7 +254,7 @@ const CustomerReport = ({ isOpen, onClose, customers = [] }) => {
                                     <div className="text-center">
                                         <p className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Total Due</p>
                                         <p className="text-3xl font-black text-rose-400">
-                                            ৳{Math.round(grandTotalDue).toLocaleString('en-BD')}
+                                            ৳{Math.round(grandTotalDue).toLocaleString('en-IN')}
                                         </p>
                                     </div>
                                 </div>
@@ -276,7 +276,7 @@ const CustomerReport = ({ isOpen, onClose, customers = [] }) => {
                             <div className="border border-gray-200 p-4 sm:p-5 rounded-2xl bg-white shadow-sm">
                                 <div className="text-[10px] sm:text-[11px] font-bold text-rose-500 uppercase tracking-wider mb-2">Grand Total Due</div>
                                 <div className="text-xl sm:text-2xl font-black text-rose-600">
-                                    ৳{Math.round(grandTotalDue).toLocaleString('en-BD')}
+                                    ৳{Math.round(grandTotalDue).toLocaleString('en-IN')}
                                 </div>
                             </div>
                         </div>

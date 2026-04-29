@@ -272,7 +272,7 @@ const CnFReport = ({ isOpen, onClose, agents = [], moduleType = '' }) => {
                                                 <td className="border-r border-gray-200 px-2 py-2 text-[12px] text-gray-700">{agent.contactPerson || '-'}</td>
                                                 <td className="border-r border-gray-200 px-2 py-2 text-[12px] text-gray-700">{agent.phone || '-'}</td>
                                                 <td className="px-2 py-2 text-[12px] text-right font-black text-indigo-700">
-                                                    {balance.toLocaleString('en-BD', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                                    {balance.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                                 </td>
                                             </tr>
                                         );
@@ -285,7 +285,7 @@ const CnFReport = ({ isOpen, onClose, agents = [], moduleType = '' }) => {
                                         <tr className="bg-gray-100 border-t-2 border-gray-900">
                                             <td colSpan="5" className="px-2 py-2 text-[12px] font-black text-gray-900 text-right uppercase tracking-wider border-r border-gray-900">Grand Total</td>
                                             <td className="px-2 py-2 text-[13px] text-right font-black text-indigo-700">
-                                                {summary.totalBalance.toLocaleString('en-BD', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                                {summary.totalBalance.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                             </td>
                                         </tr>
                                     </tfoot>
@@ -309,7 +309,7 @@ const CnFReport = ({ isOpen, onClose, agents = [], moduleType = '' }) => {
                                             </div>
                                             <div className="text-right">
                                                 <div className="text-[9px] font-bold text-indigo-400 uppercase tracking-widest mb-1 leading-none">Balance</div>
-                                                <div className="text-[15px] font-black text-indigo-700">Tk {balance.toLocaleString('en-BD', { maximumFractionDigits: 0 })}</div>
+                                                <div className="text-[15px] font-black text-indigo-700">Tk {balance.toLocaleString('en-IN', { maximumFractionDigits: 0 })}</div>
                                             </div>
                                         </div>
                                     </div>
@@ -337,7 +337,7 @@ const CnFReport = ({ isOpen, onClose, agents = [], moduleType = '' }) => {
                                         </div>
                                         <div className="col-span-2 text-right">
                                             <div className="text-[10px] font-bold text-indigo-400 uppercase mb-1">Total Balance</div>
-                                            <div className="text-xl font-black text-indigo-300">Tk {summary.totalBalance.toLocaleString('en-BD', { maximumFractionDigits: 0 })}</div>
+                                            <div className="text-xl font-black text-indigo-300">Tk {summary.totalBalance.toLocaleString('en-IN', { maximumFractionDigits: 0 })}</div>
                                         </div>
                                     </div>
                                 </div>
@@ -356,11 +356,11 @@ const CnFReport = ({ isOpen, onClose, agents = [], moduleType = '' }) => {
                             </div>
                             <div className="border border-blue-200 p-5 rounded-2xl bg-white shadow-sm hover:shadow-md transition-all ring-2 ring-blue-500/10">
                                 <div className="text-[11px] font-bold text-blue-500 uppercase tracking-wider mb-2">Avg. Commission</div>
-                                <div className="text-2xl font-black text-gray-900">{summary.avgCommission.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+                                <div className="text-2xl font-black text-gray-900">{summary.avgCommission.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
                             </div>
                             <div className="border border-indigo-200 p-5 rounded-2xl bg-indigo-50/50 shadow-sm hover:shadow-md transition-all">
                                 <div className="text-[11px] font-bold text-indigo-500 uppercase tracking-wider mb-2">Total Balance (Tk)</div>
-                                <div className="text-2xl font-black text-indigo-700">{summary.totalBalance.toLocaleString('en-BD', { maximumFractionDigits: 0 })}</div>
+                                <div className="text-2xl font-black text-indigo-700">{summary.totalBalance.toLocaleString('en-IN', { maximumFractionDigits: 0 })}</div>
                             </div>
                         </div>
 

@@ -900,17 +900,17 @@ const SalesReport = ({
                                                         {saleType !== 'Border' && (
                                                             <td className="border-r border-gray-900 px-2 py-1 text-[12px] text-gray-900 truncate">{item.brand}</td>
                                                         )}
-                                                        <td className={`border-r border-gray-900 ${saleType === 'Border' ? 'px-0.5' : 'px-1'} py-1 ${saleType === 'Border' ? 'text-[12px]' : 'text-[12px]'} text-right font-bold text-gray-900`}>{parseFloat(item.quantity).toLocaleString('en-BD')}</td>
+                                                        <td className={`border-r border-gray-900 ${saleType === 'Border' ? 'px-0.5' : 'px-1'} py-1 ${saleType === 'Border' ? 'text-[12px]' : 'text-[12px]'} text-right font-bold text-gray-900`}>{parseFloat(item.quantity).toLocaleString('en-US')}</td>
                                                         {saleType === 'Border' && (
                                                             <td className="border-r border-gray-900 px-0.5 py-1 text-[12px] text-gray-900 text-center">{item.truck || sale.truck || '-'}</td>
                                                         )}
-                                                        <td className={`border-r border-gray-900 ${saleType === 'Border' ? 'px-0.5' : 'px-1'} py-1 ${saleType === 'Border' ? 'text-[12px]' : 'text-[12px]'} text-right text-gray-900`}>{parseFloat(item.price).toLocaleString('en-BD')}</td>
-                                                        <td className={`${saleType === 'Border' ? '' : 'border-r'} border-gray-900 ${saleType === 'Border' ? 'px-0.5' : 'px-1'} py-1 ${saleType === 'Border' ? 'text-[12px]' : 'text-[12px]'} text-right font-bold text-gray-900`}>{parseFloat(item.total).toLocaleString('en-BD')}</td>
+                                                        <td className={`border-r border-gray-900 ${saleType === 'Border' ? 'px-0.5' : 'px-1'} py-1 ${saleType === 'Border' ? 'text-[12px]' : 'text-[12px]'} text-right text-gray-900`}>{parseFloat(item.price).toLocaleString('en-IN')}</td>
+                                                        <td className={`${saleType === 'Border' ? '' : 'border-r'} border-gray-900 ${saleType === 'Border' ? 'px-0.5' : 'px-1'} py-1 ${saleType === 'Border' ? 'text-[12px]' : 'text-[12px]'} text-right font-bold text-gray-900`}>{parseFloat(item.total).toLocaleString('en-IN')}</td>
                                                         {saleType !== 'Border' && idx === 0 && (
                                                             <>
-                                                                <td rowSpan={flatItems.length} className="border-r border-gray-900 px-1 py-1 text-[12px] text-right text-gray-600">{parseFloat(sale.discount || 0).toLocaleString('en-BD')}</td>
-                                                                <td rowSpan={flatItems.length} className="border-r border-gray-900 px-1 py-1 text-[12px] text-right text-green-700 font-bold">{parseFloat(sale.paidAmount || 0).toLocaleString('en-BD')}</td>
-                                                                <td rowSpan={flatItems.length} className="px-1 py-1 text-[12px] text-right text-red-700 font-black">{(parseFloat(sale.totalAmount || 0) - parseFloat(sale.paidAmount || 0)).toLocaleString('en-BD')}</td>
+                                                                <td rowSpan={flatItems.length} className="border-r border-gray-900 px-1 py-1 text-[12px] text-right text-gray-600">{parseFloat(sale.discount || 0).toLocaleString('en-IN')}</td>
+                                                                <td rowSpan={flatItems.length} className="border-r border-gray-900 px-1 py-1 text-[12px] text-right text-green-700 font-bold">{parseFloat(sale.paidAmount || 0).toLocaleString('en-IN')}</td>
+                                                                <td rowSpan={flatItems.length} className="px-1 py-1 text-[12px] text-right text-red-700 font-black">{(parseFloat(sale.totalAmount || 0) - parseFloat(sale.paidAmount || 0)).toLocaleString('en-IN')}</td>
                                                             </>
                                                         )}
                                                     </tr>
@@ -925,17 +925,17 @@ const SalesReport = ({
                                     <tfoot>
                                         <tr className="bg-gray-100 border-t-2 border-gray-900">
                                             <td colSpan={saleType === 'Border' ? "9" : "6"} className={`${saleType === 'Border' ? 'px-0.5 py-1 text-[12px]' : 'px-2 py-2 text-[12px]'} font-black text-gray-900 text-right uppercase tracking-wider border-r border-gray-900`}>Grand Total</td>
-                                            <td className={`${saleType === 'Border' ? 'px-0.5 py-1 text-[12px]' : 'px-1 py-2 text-[12px]'} text-right font-black text-gray-900 border-r border-gray-900`}>{saleType === 'Border' ? '-' : summary.totalQty.toLocaleString('en-BD')}</td>
-                                            {saleType === 'Border' && <td className="px-0.5 py-1 text-[12px] text-center font-black text-gray-900 border-r border-gray-900">{summary.totalTrucks.toLocaleString('en-BD')}</td>}
+                                            <td className={`${saleType === 'Border' ? 'px-0.5 py-1 text-[12px]' : 'px-1 py-2 text-[12px]'} text-right font-black text-gray-900 border-r border-gray-900`}>{saleType === 'Border' ? '-' : summary.totalQty.toLocaleString('en-US')}</td>
+                                            {saleType === 'Border' && <td className="px-0.5 py-1 text-[12px] text-center font-black text-gray-900 border-r border-gray-900">{summary.totalTrucks.toLocaleString('en-US')}</td>}
                                             <td className={`${saleType === 'Border' ? 'px-0.5 py-1 text-[12px]' : 'px-1 py-2 text-[12px]'} text-right font-bold text-gray-900 border-r border-gray-900`}></td>
                                             <td className={`${saleType === 'Border' ? '' : 'border-r'} ${saleType === 'Border' ? 'px-0.5 py-1 text-[12px]' : 'px-1 py-2 text-[12px]'} text-right font-black text-gray-900 border-gray-900`}>
-                                                {saleType === 'Border' ? Math.round(summary.totalAmount).toLocaleString('en-BD') : summary.totalAmount.toLocaleString('en-BD')}
+                                                {saleType === 'Border' ? Math.round(summary.totalAmount).toLocaleString('en-IN') : summary.totalAmount.toLocaleString('en-IN')}
                                             </td>
                                             {saleType !== 'Border' && (
                                                 <>
-                                                    <td className="px-1 py-2 text-[12px] text-right font-black text-gray-900 border-r border-gray-900">{filteredSales.reduce((sum, s) => sum + (parseFloat(s.discount) || 0), 0).toLocaleString('en-BD')}</td>
-                                                    <td className="px-1 py-2 text-[12px] text-right font-black text-green-700 border-r border-gray-900">{summary.totalPaid.toLocaleString('en-BD')}</td>
-                                                    <td className="px-1 py-2 text-[12px] text-right font-black text-red-700">{(summary.totalAmount - summary.totalPaid).toLocaleString('en-BD')}</td>
+                                                    <td className="px-1 py-2 text-[12px] text-right font-black text-gray-900 border-r border-gray-900">{filteredSales.reduce((sum, s) => sum + (parseFloat(s.discount) || 0), 0).toLocaleString('en-IN')}</td>
+                                                    <td className="px-1 py-2 text-[12px] text-right font-black text-green-700 border-r border-gray-900">{summary.totalPaid.toLocaleString('en-IN')}</td>
+                                                    <td className="px-1 py-2 text-[12px] text-right font-black text-red-700">{(summary.totalAmount - summary.totalPaid).toLocaleString('en-IN')}</td>
                                                 </>
                                             )}
                                         </tr>
@@ -992,7 +992,7 @@ const SalesReport = ({
                                                             </div>
                                                             <div className="flex-shrink-0 border-l border-gray-100 pl-3 text-right">
                                                                 <div className="text-[10px] font-bold text-blue-600 uppercase tracking-widest leading-none mb-1">Total</div>
-                                                                <div className="text-[11px] font-black text-gray-900">৳{parseFloat(sale.totalAmount).toLocaleString('en-BD')}</div>
+                                                                <div className="text-[11px] font-black text-gray-900">৳{parseFloat(sale.totalAmount).toLocaleString('en-IN')}</div>
                                                             </div>
                                                         </>
                                                     )}
@@ -1028,13 +1028,13 @@ const SalesReport = ({
                                                                                 <span className="text-[11px] font-medium text-gray-500 italic truncate block">{item.brand}</span>
                                                                             </div>
                                                                             <div className="col-span-2 text-right">
-                                                                                <div className="text-[10px] font-bold text-gray-900">{parseFloat(item.quantity).toLocaleString('en-BD')}</div>
+                                                                                <div className="text-[10px] font-bold text-gray-900">{parseFloat(item.quantity).toLocaleString('en-US')}</div>
                                                                             </div>
                                                                             <div className="col-span-3 text-right">
-                                                                                <div className="text-[11px] font-medium text-blue-600">৳{parseFloat(item.price).toLocaleString('en-BD')}</div>
+                                                                                <div className="text-[11px] font-medium text-blue-600">৳{parseFloat(item.price).toLocaleString('en-IN')}</div>
                                                                             </div>
                                                                             <div className="col-span-3 text-right">
-                                                                                <div className="text-[11px] font-black text-gray-900 text-truncate">৳{parseFloat(item.total).toLocaleString('en-BD')}</div>
+                                                                                <div className="text-[11px] font-black text-gray-900 text-truncate">৳{parseFloat(item.total).toLocaleString('en-IN')}</div>
                                                                             </div>
                                                                         </div>
                                                                     </div>
@@ -1046,19 +1046,19 @@ const SalesReport = ({
                                                         <div className="grid grid-cols-2 gap-2 mt-4">
                                                             <div className="text-center p-2 rounded-lg border bg-blue-50/40 border-blue-100/50">
                                                                 <div className="text-[10px] font-bold text-blue-600 uppercase tracking-widest mb-1">Total Amount</div>
-                                                                <div className="text-[13px] font-black text-gray-900">৳{parseFloat(sale.totalAmount).toLocaleString('en-BD')}</div>
+                                                                <div className="text-[13px] font-black text-gray-900">৳{parseFloat(sale.totalAmount).toLocaleString('en-IN')}</div>
                                                             </div>
                                                             <div className="text-center p-2 rounded-lg border bg-red-50/40 border-red-100/50">
                                                                 <div className="text-[10px] font-bold text-red-600 uppercase tracking-widest mb-1">Discount</div>
-                                                                <div className="text-[13px] font-black text-red-600">৳{parseFloat(sale.discount || 0).toLocaleString('en-BD')}</div>
+                                                                <div className="text-[13px] font-black text-red-600">৳{parseFloat(sale.discount || 0).toLocaleString('en-IN')}</div>
                                                             </div>
                                                             <div className="text-center p-2 rounded-lg border bg-emerald-50/40 border-emerald-100/50">
                                                                 <div className="text-[10px] font-bold text-emerald-600 uppercase tracking-widest mb-1">Paid Amount</div>
-                                                                <div className="text-[13px] font-black text-emerald-700">৳{parseFloat(sale.paidAmount || 0).toLocaleString('en-BD')}</div>
+                                                                <div className="text-[13px] font-black text-emerald-700">৳{parseFloat(sale.paidAmount || 0).toLocaleString('en-IN')}</div>
                                                             </div>
                                                             <div className="text-center p-2 rounded-lg border bg-orange-50/40 border-orange-100/50">
                                                                 <div className="text-[10px] font-bold text-orange-600 uppercase tracking-widest mb-1">Balance</div>
-                                                                <div className="text-[13px] font-black text-orange-700">৳{(parseFloat(sale.totalAmount || 0) - parseFloat(sale.paidAmount || 0)).toLocaleString('en-BD')}</div>
+                                                                <div className="text-[13px] font-black text-orange-700">৳{(parseFloat(sale.totalAmount || 0) - parseFloat(sale.paidAmount || 0)).toLocaleString('en-IN')}</div>
                                                             </div>
                                                         </div>
                                                     </div>
@@ -1083,19 +1083,19 @@ const SalesReport = ({
                                     <div className="grid grid-cols-2 gap-4">
                                         <div>
                                             <div className="text-[10px] font-bold text-gray-500 uppercase mb-1">Total Qty</div>
-                                            <div className="text-lg font-black text-white">{summary.totalQty.toLocaleString('en-BD')} <span className="text-[10px] font-bold text-gray-400 uppercase">KG</span></div>
+                                            <div className="text-lg font-black text-white">{summary.totalQty.toLocaleString('en-US')} <span className="text-[10px] font-bold text-gray-400 uppercase">KG</span></div>
                                         </div>
                                         <div className="text-right">
                                             <div className="text-[10px] font-bold text-gray-500 uppercase mb-1">Total Sales</div>
-                                            <div className="text-lg font-black text-white">৳{summary.totalAmount.toLocaleString('en-BD')}</div>
+                                            <div className="text-lg font-black text-white">৳{summary.totalAmount.toLocaleString('en-IN')}</div>
                                         </div>
                                         <div>
                                             <div className="text-[10px] font-bold text-gray-500 uppercase mb-1">Total Paid</div>
-                                            <div className="text-lg font-black text-emerald-400">৳{summary.totalPaid.toLocaleString('en-BD')}</div>
+                                            <div className="text-lg font-black text-emerald-400">৳{summary.totalPaid.toLocaleString('en-IN')}</div>
                                         </div>
                                         <div className="text-right">
                                             <div className="text-[10px] font-bold text-orange-400 uppercase mb-1">Total Balance</div>
-                                            <div className="text-xl font-black text-red-500">৳{(summary.totalAmount - summary.totalPaid).toLocaleString('en-BD')}</div>
+                                            <div className="text-xl font-black text-red-500">৳{(summary.totalAmount - summary.totalPaid).toLocaleString('en-IN')}</div>
                                         </div>
                                     </div>
                                 </div>
@@ -1107,28 +1107,28 @@ const SalesReport = ({
                             <div className="border border-gray-200 p-5 rounded-2xl bg-gray-50 shadow-sm transition-all hover:shadow-md">
                                 <div className="text-[12px] font-bold text-gray-400 uppercase tracking-wider mb-2">Total Sales Quantity</div>
                                 <div className="text-2xl font-black text-gray-900">
-                                    {summary.totalQty.toLocaleString('en-BD')} <span className="text-sm font-bold">KG</span>
+                                    {summary.totalQty.toLocaleString('en-US')} <span className="text-sm font-bold">KG</span>
                                 </div>
                             </div>
                             {saleType === 'Border' ? (
                                 <div className="border border-gray-200 p-5 rounded-2xl bg-white shadow-sm transition-all hover:shadow-md ring-2 ring-blue-500/10">
                                     <div className="text-[12px] font-bold text-blue-500 uppercase tracking-wider mb-2">Total Trucks</div>
                                     <div className="text-3xl font-black text-gray-900">
-                                        {summary.totalTrucks.toLocaleString('en-BD')} <span className="text-sm font-bold text-gray-500">Trucks</span>
+                                        {summary.totalTrucks.toLocaleString('en-US')} <span className="text-sm font-bold text-gray-500">Trucks</span>
                                     </div>
                                 </div>
                             ) : (
                                 <div className="border border-gray-200 p-5 rounded-2xl bg-white shadow-sm transition-all hover:shadow-md ring-2 ring-blue-500/10">
                                     <div className="text-[12px] font-bold text-blue-500 uppercase tracking-wider mb-2">Net Balance</div>
                                     <div className="text-3xl font-black text-red-600">
-                                        TK {(summary.totalAmount - summary.totalPaid).toLocaleString('en-BD')}
+                                        TK {(summary.totalAmount - summary.totalPaid).toLocaleString('en-IN')}
                                     </div>
                                 </div>
                             )}
                             <div className="border border-gray-200 p-5 rounded-2xl bg-gray-50 shadow-sm transition-all hover:shadow-md">
                                 <div className="text-[12px] font-bold text-gray-400 uppercase tracking-wider mb-2">Total Sales Amount</div>
                                 <div className="text-2xl font-black text-gray-900">
-                                    TK {summary.totalAmount.toLocaleString('en-BD')}
+                                    TK {summary.totalAmount.toLocaleString('en-IN')}
                                 </div>
                             </div>
                         </div>
