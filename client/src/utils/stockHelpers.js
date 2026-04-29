@@ -240,7 +240,7 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
                                 const saleEntryId = `${sale._id}_${siIdx}_${beIdx}`;
                                 if (consumedSales.has(saleEntryId)) return; // Prevent double-counting if multiple quality buckets exist
 
-                                if (stockFilters.warehouse && (be.warehouseName || '').trim().toLowerCase() !== stockFilters.warehouse.toLowerCase()) return;
+                                if (stockFilters.warehouse && stockFilters.warehouse.toLowerCase() !== 'all warehouses' && (be.warehouseName || '').trim().toLowerCase() !== stockFilters.warehouse.toLowerCase()) return;
 
                                 const sq = safeParse(be.quantity);
                                 let sp = safeParse(be.packet);
@@ -337,7 +337,7 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
             }
             const group = groupedStock[sProdName];
             (si.brandEntries || []).forEach((be, beIdx) => {
-                if (stockFilters.warehouse && (be.warehouseName || '').trim().toLowerCase() !== stockFilters.warehouse.toLowerCase()) return;
+                if (stockFilters.warehouse && stockFilters.warehouse.toLowerCase() !== 'all warehouses' && (be.warehouseName || '').trim().toLowerCase() !== stockFilters.warehouse.toLowerCase()) return;
                 const normBrand = (be.brand || 'No Brand').trim().toLowerCase();
                 const rq = resolveQuality(sProdName, be.brand);
                 const resolvedQ = rq !== '-' ? rq : (be.quality || '-');

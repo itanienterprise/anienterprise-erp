@@ -793,6 +793,7 @@ export const generateStockReportPDF = (stockData, filters, reportType = 'short',
             return `${totalWhole}${totalRem !== 0 ? ` - ${Math.abs(totalRem)} kg` : ''}`;
         })();
 
+        yPos += 8;
         if (filters.warehouse === 'All Warehouses') {
             yPos = Math.max(yPos, 68);
         }
