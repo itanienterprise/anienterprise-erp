@@ -89,10 +89,11 @@ const StockReport = ({
         const fromStock = stockRecords.map(item => (item.warehouse || item.whName || '').trim()).filter(Boolean);
         const fromWh = warehouseData ? warehouseData.map(item => (item.whName || item.warehouse || '').trim()).filter(Boolean) : [];
         const options = [...new Set([...fromStock, ...fromWh])].sort();
-        // Priority for HILI warehouse
+        // Priority: HILI first, then BOGURA, then others
         const hili = options.filter(o => o.toUpperCase().includes('HILI'));
-        const others = options.filter(o => !o.toUpperCase().includes('HILI'));
-        return [...hili, ...others];
+        const bogura = options.filter(o => o.toUpperCase().includes('BOGURA'));
+        const others = options.filter(o => !o.toUpperCase().includes('HILI') && !o.toUpperCase().includes('BOGURA'));
+        return [...hili, ...bogura, ...others];
     }, [stockRecords, warehouseData]);
 
     const multiWarehouseData = React.useMemo(() => {
@@ -153,8 +154,9 @@ const StockReport = ({
             const fromWh = warehouseData ? warehouseData.map(item => (item.whName || item.warehouse || '').trim()).filter(Boolean) : [];
             const options = [...new Set([...fromStock, ...fromWh])].sort();
             const hili = options.filter(o => o.toUpperCase().includes('HILI'));
-            const others = options.filter(o => !o.toUpperCase().includes('HILI'));
-            const sortedOptions = [...hili, ...others];
+            const bogura = options.filter(o => o.toUpperCase().includes('BOGURA'));
+            const others = options.filter(o => !o.toUpperCase().includes('HILI') && !o.toUpperCase().includes('BOGURA'));
+            const sortedOptions = [...hili, ...bogura, ...others];
             return ["All Warehouses", ...sortedOptions];
         }
         if (key === 'productName') {

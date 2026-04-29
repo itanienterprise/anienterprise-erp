@@ -745,11 +745,12 @@ export const generateStockReportPDF = (stockData, filters, reportType = 'short',
                 const fromStock = stockRecords.map(item => (item.warehouse || item.whName || '').trim()).filter(Boolean);
                 const fromWh = warehouseData ? warehouseData.map(item => (item.whName || item.warehouse || '').trim()).filter(Boolean) : [];
                 const options = [...new Set([...fromStock, ...fromWh])].sort();
-                
-                // Priority for HILI warehouse
+
+                // Priority: HILI first, then BOGURA, then others
                 const hili = options.filter(o => o.toUpperCase().includes('HILI'));
-                const others = options.filter(o => !o.toUpperCase().includes('HILI'));
-                const sortedOptions = [...hili, ...others];
+                const bogura = options.filter(o => o.toUpperCase().includes('BOGURA'));
+                const others = options.filter(o => !o.toUpperCase().includes('HILI') && !o.toUpperCase().includes('BOGURA'));
+                const sortedOptions = [...hili, ...bogura, ...others];
 
                 return sortedOptions.map(wh => ({
                     name: wh,
@@ -803,16 +804,28 @@ export const generateStockReportPDF = (stockData, filters, reportType = 'short',
                     doc.addPage();
                     yPos = 20;
                 } else {
-                    yPos += 5;
+                    yPos += 12;
                 }
             }
 
             if (filters.warehouse === 'All Warehouses') {
-                doc.setFontSize(11);
+                doc.setFontSize(10);
                 doc.setFont('helvetica', 'bold');
                 doc.setTextColor(0);
-                doc.text(`Warehouse: ${whItem.name}`, margin, yPos);
-                yPos += 6;
+                const label = `Warehouse: ${whItem.name}`;
+                const textWidth = doc.getTextWidth(label);
+                const padding = 4;
+                const boxWidth = textWidth + (padding * 2);
+                const boxHeight = 7;
+                const boxX = (pageWidth - boxWidth) / 2;
+                const boxY = yPos - 5;
+
+                doc.setDrawColor(0);
+                doc.setLineWidth(0.2);
+                doc.rect(boxX, boxY, boxWidth, boxHeight);
+                doc.text(label, pageWidth / 2, boxY + 5, { align: 'center' });
+                
+                yPos = boxY + boxHeight + 1;
             }
 
             // --- Data Preparation ---
@@ -821,283 +834,283 @@ export const generateStockReportPDF = (stockData, filters, reportType = 'short',
             const boldLinesToDraw = [];
 
 
-        currentStockData.displayRecords.forEach((item, index) => {
-            // Legitimate quality check - only separate if there's actual quality data
-            const qualityGroups = item.brandList.reduce((acc, ent) => {
-                const q = (ent.quality || '-').toUpperCase().trim();
-                // Ensure the entity visually reflects the properly capitalized string for display
-                if (q !== '-') ent.quality = q;
-                if (!acc[q]) acc[q] = [];
-                acc[q].push(ent);
-                return acc;
-            }, {});
+            currentStockData.displayRecords.forEach((item, index) => {
+                // Legitimate quality check - only separate if there's actual quality data
+                const qualityGroups = item.brandList.reduce((acc, ent) => {
+                    const q = (ent.quality || '-').toUpperCase().trim();
+                    // Ensure the entity visually reflects the properly capitalized string for display
+                    if (q !== '-') ent.quality = q;
+                    if (!acc[q]) acc[q] = [];
+                    acc[q].push(ent);
+                    return acc;
+                }, {});
 
-            const qEntries = Object.entries(qualityGroups);
-            const hasQuals = qEntries.length > 1 || (qEntries.length === 1 && qEntries[0][0] !== '-');
+                const qEntries = Object.entries(qualityGroups);
+                const hasQuals = qEntries.length > 1 || (qEntries.length === 1 && qEntries[0][0] !== '-');
 
-            const hasSubTotal = true;
-            const brandsCount = item.brandList.length;
-            const totalRowsForProduct = brandsCount + (hasQuals ? 1 : 0) + (hasSubTotal ? 1 : 0);
+                const hasSubTotal = true;
+                const brandsCount = item.brandList.length;
+                const totalRowsForProduct = brandsCount + (hasQuals ? 1 : 0) + (hasSubTotal ? 1 : 0);
 
-            let isFirstRowOfProduct = true;
+                let isFirstRowOfProduct = true;
 
-            // --- 1. PRODUCT HEADER ROW (MOSUR DAL style for products with qualities) ---
-            if (hasQuals) {
-                const headRow = [];
-                // SL Column
-                headRow.push({
-                    content: (index + 1).toString(),
-                    rowSpan: totalRowsForProduct,
-                    styles: { valign: 'middle', halign: 'center', fontStyle: 'bold' }
-                });
-                // Product Name Header (Stays strictly in Product Name Column)
-                headRow.push({
-                    content: (item.productName || '-').toUpperCase(),
-                    styles: { valign: 'middle', fontStyle: 'bold', halign: 'center', fillColor: [248, 248, 248] }
-                });
-                // Empty Brand Column
-                headRow.push({
-                    content: '',
-                    styles: { fillColor: [248, 248, 248] }
-                });
-                // Numeric placeholders
-                const emptyDataColsCount = reportType === 'detailed' ? 6 : 2;
-                for (let i = 0; i < emptyDataColsCount; i++) {
-                    headRow.push({ content: '', styles: { fillColor: [248, 248, 248] } });
-                }
-
-                tableRows.push(headRow);
-                isFirstRowOfProduct = false; // SL already pushed
-            }
-
-            // --- 2. DETAIL ROWS ---
-            qEntries.forEach(([quality, brands], qIdx) => {
-                let isFirstRowOfQuality = true;
-                const totalRowsForQuality = brands.length;
-
-                brands.forEach((ent, bIdx) => {
-                    const row = [];
-
-                    // Column 1: SL (Only if not already spanned by a header row)
-                    if (isFirstRowOfProduct) {
-                        row.push({
-                            content: (index + 1).toString(),
-                            rowSpan: totalRowsForProduct,
-                            styles: { valign: 'middle', halign: 'center', fontStyle: 'bold' }
-                        });
-
-                        // Product Name without Qualities spans all the way through detail and subtotal rows
-                        row.push({
-                            content: (item.productName || '-').toUpperCase(),
-                            rowSpan: totalRowsForProduct,
-                            styles: { valign: 'middle', fontStyle: 'bold', halign: 'center' }
-                        });
+                // --- 1. PRODUCT HEADER ROW (MOSUR DAL style for products with qualities) ---
+                if (hasQuals) {
+                    const headRow = [];
+                    // SL Column
+                    headRow.push({
+                        content: (index + 1).toString(),
+                        rowSpan: totalRowsForProduct,
+                        styles: { valign: 'middle', halign: 'center', fontStyle: 'bold' }
+                    });
+                    // Product Name Header (Stays strictly in Product Name Column)
+                    headRow.push({
+                        content: (item.productName || '-').toUpperCase(),
+                        styles: { valign: 'middle', fontStyle: 'bold', halign: 'center', fillColor: [248, 248, 248] }
+                    });
+                    // Empty Brand Column
+                    headRow.push({
+                        content: '',
+                        styles: { fillColor: [248, 248, 248] }
+                    });
+                    // Numeric placeholders
+                    const emptyDataColsCount = reportType === 'detailed' ? 6 : 2;
+                    for (let i = 0; i < emptyDataColsCount; i++) {
+                        headRow.push({ content: '', styles: { fillColor: [248, 248, 248] } });
                     }
 
-                    // Column 2/3: Quality & Brand
-                    if (hasQuals) {
-                        if (isFirstRowOfQuality) {
+                    tableRows.push(headRow);
+                    isFirstRowOfProduct = false; // SL already pushed
+                }
+
+                // --- 2. DETAIL ROWS ---
+                qEntries.forEach(([quality, brands], qIdx) => {
+                    let isFirstRowOfQuality = true;
+                    const totalRowsForQuality = brands.length;
+
+                    brands.forEach((ent, bIdx) => {
+                        const row = [];
+
+                        // Column 1: SL (Only if not already spanned by a header row)
+                        if (isFirstRowOfProduct) {
                             row.push({
-                                content: (quality === '-' ? '' : quality).toUpperCase(),
-                                rowSpan: totalRowsForQuality,
+                                content: (index + 1).toString(),
+                                rowSpan: totalRowsForProduct,
                                 styles: { valign: 'middle', halign: 'center', fontStyle: 'bold' }
                             });
+
+                            // Product Name without Qualities spans all the way through detail and subtotal rows
+                            row.push({
+                                content: (item.productName || '-').toUpperCase(),
+                                rowSpan: totalRowsForProduct,
+                                styles: { valign: 'middle', fontStyle: 'bold', halign: 'center' }
+                            });
                         }
-                        row.push({
-                            content: ent.brand || '-',
-                            styles: { halign: 'left' }
-                        });
-                    } else {
-                        // Product Name is already in column 2, so this is just the brand column
-                        row.push({
-                            content: ent.brand || '-',
-                            styles: { halign: 'left' }
-                        });
-                    }
 
-                    // Detailed Numeric Data
-                    if (reportType === 'detailed') {
-                        const tQty = parseFloat(ent.totalInHouseQuantity) || 0;
-                        const tSize = parseFloat(ent.packetSize) || 0;
-                        const { whole: tW, remainder: tR } = calculatePktRemainderLocal(tQty, tSize);
-                        row.push({ content: `${tW}${tR !== 0 ? ` - ${Math.abs(tR)} kg` : ''}`, styles: { halign: 'right' } });
-                        row.push({ content: Math.round(tQty).toLocaleString('en-BD'), styles: { halign: 'right' } });
-
-                        const sQty = parseFloat(ent.saleQuantity) || 0;
-                        const sSize = parseFloat(ent.packetSize) || 0;
-                        const { whole: sW, remainder: sR } = calculatePktRemainderLocal(sQty, sSize);
-                        row.push({ content: `${sW}${sR !== 0 ? ` - ${Math.abs(sR)} kg` : ''}`, styles: { halign: 'right' } });
-                        row.push({ content: Math.round(sQty).toLocaleString('en-BD'), styles: { halign: 'right' } });
-                    }
-
-                    // Closing Data
-                    const rQty = parseFloat(ent.inHouseQuantity) || 0;
-                    const rSize = parseFloat(ent.packetSize) || 0;
-                    const { whole: rW, remainder: rR } = calculatePktRemainderLocal(rQty, rSize);
-                    row.push({ content: `${rW}${rR !== 0 ? ` - ${Math.abs(rR)} kg` : ''}`, styles: { halign: 'right' } });
-                    row.push({ content: Math.round(rQty).toLocaleString('en-BD'), styles: { halign: 'right' } });
-
-                    if (bIdx === brands.length - 1) {
-                        const isLastQualityOfProduct = qIdx === qEntries.length - 1;
-                        if (!isLastQualityOfProduct || !hasSubTotal) {
-                            boldBottomRowIndices.add(tableRows.length);
+                        // Column 2/3: Quality & Brand
+                        if (hasQuals) {
+                            if (isFirstRowOfQuality) {
+                                row.push({
+                                    content: (quality === '-' ? '' : quality).toUpperCase(),
+                                    rowSpan: totalRowsForQuality,
+                                    styles: { valign: 'middle', halign: 'center', fontStyle: 'bold' }
+                                });
+                            }
+                            row.push({
+                                content: ent.brand || '-',
+                                styles: { halign: 'left' }
+                            });
+                        } else {
+                            // Product Name is already in column 2, so this is just the brand column
+                            row.push({
+                                content: ent.brand || '-',
+                                styles: { halign: 'left' }
+                            });
                         }
-                        row.isQualityEnd = true;
-                    }
-                    tableRows.push(row);
-                    isFirstRowOfProduct = false;
-                    isFirstRowOfQuality = false;
+
+                        // Detailed Numeric Data
+                        if (reportType === 'detailed') {
+                            const tQty = parseFloat(ent.totalInHouseQuantity) || 0;
+                            const tSize = parseFloat(ent.packetSize) || 0;
+                            const { whole: tW, remainder: tR } = calculatePktRemainderLocal(tQty, tSize);
+                            row.push({ content: `${tW}${tR !== 0 ? ` - ${Math.abs(tR)} kg` : ''}`, styles: { halign: 'right' } });
+                            row.push({ content: Math.round(tQty).toLocaleString('en-BD'), styles: { halign: 'right' } });
+
+                            const sQty = parseFloat(ent.saleQuantity) || 0;
+                            const sSize = parseFloat(ent.packetSize) || 0;
+                            const { whole: sW, remainder: sR } = calculatePktRemainderLocal(sQty, sSize);
+                            row.push({ content: `${sW}${sR !== 0 ? ` - ${Math.abs(sR)} kg` : ''}`, styles: { halign: 'right' } });
+                            row.push({ content: Math.round(sQty).toLocaleString('en-BD'), styles: { halign: 'right' } });
+                        }
+
+                        // Closing Data
+                        const rQty = parseFloat(ent.inHouseQuantity) || 0;
+                        const rSize = parseFloat(ent.packetSize) || 0;
+                        const { whole: rW, remainder: rR } = calculatePktRemainderLocal(rQty, rSize);
+                        row.push({ content: `${rW}${rR !== 0 ? ` - ${Math.abs(rR)} kg` : ''}`, styles: { halign: 'right' } });
+                        row.push({ content: Math.round(rQty).toLocaleString('en-BD'), styles: { halign: 'right' } });
+
+                        if (bIdx === brands.length - 1) {
+                            const isLastQualityOfProduct = qIdx === qEntries.length - 1;
+                            if (!isLastQualityOfProduct || !hasSubTotal) {
+                                boldBottomRowIndices.add(tableRows.length);
+                            }
+                            row.isQualityEnd = true;
+                        }
+                        tableRows.push(row);
+                        isFirstRowOfProduct = false;
+                        isFirstRowOfQuality = false;
+                    });
                 });
+
+                // --- 3. SUB TOTAL ROW ---
+                if (hasSubTotal) {
+                    const subRow = [];
+                    // If hasQuals, SUB TOTAL spans Product Name and Brand columns. 
+                    // If !hasQuals, Product Name column is occupied, so SUB TOTAL only occupies Brand column.
+                    subRow.push({
+                        content: 'SUB TOTAL',
+                        colSpan: hasQuals ? 2 : 1,
+                        styles: { fontStyle: 'bold', halign: 'center', fillColor: [248, 248, 248] }
+                    });
+
+                    if (reportType === 'detailed') {
+                        const tSize = item.brandList[0]?.packetSize || 0;
+                        const { whole: tW, remainder: tR } = calculatePktRemainderLocal(item.totalInHouseQuantity, tSize);
+                        subRow.push({ content: `${tW}${tR !== 0 ? ` - ${Math.abs(tR)} kg` : ''}`, styles: { fontStyle: 'bold', halign: 'right', fillColor: [248, 248, 248] } });
+                        subRow.push({ content: Math.round(item.totalInHouseQuantity).toLocaleString('en-BD'), styles: { fontStyle: 'bold', halign: 'right', fillColor: [248, 248, 248] } });
+
+                        const { whole: sW, remainder: sR } = calculatePktRemainderLocal(item.saleQuantity, tSize);
+                        subRow.push({ content: `${sW}${sR !== 0 ? ` - ${Math.abs(sR)} kg` : ''}`, styles: { fontStyle: 'bold', halign: 'right', fillColor: [248, 248, 248] } });
+                        subRow.push({ content: Math.round(item.saleQuantity).toLocaleString('en-BD'), styles: { fontStyle: 'bold', halign: 'right', fillColor: [248, 248, 248] } });
+                    }
+
+                    const tSize = item.brandList[0]?.packetSize || 0;
+                    const { whole: rW, remainder: rR } = calculatePktRemainderLocal(item.inHouseQuantity, tSize);
+                    subRow.push({ content: `${rW}${rR !== 0 ? ` - ${Math.abs(rR)} kg` : ''}`, styles: { fontStyle: 'bold', halign: 'right', fillColor: [248, 248, 248] } });
+                    subRow.push({ content: Math.round(item.inHouseQuantity).toLocaleString('en-BD'), styles: { fontStyle: 'bold', halign: 'right', fillColor: [248, 248, 248] } });
+
+                    boldBottomRowIndices.add(tableRows.length);
+                    subRow.isSubTotal = true;
+                    tableRows.push(subRow);
+                }
             });
 
-            // --- 3. SUB TOTAL ROW ---
-            if (hasSubTotal) {
-                const subRow = [];
-                // If hasQuals, SUB TOTAL spans Product Name and Brand columns. 
-                // If !hasQuals, Product Name column is occupied, so SUB TOTAL only occupies Brand column.
-                subRow.push({
-                    content: 'SUB TOTAL',
-                    colSpan: hasQuals ? 2 : 1,
-                    styles: { fontStyle: 'bold', halign: 'center', fillColor: [248, 248, 248] }
-                });
+            // Per-Warehouse Summary for Table Grand Total
+            const whGrandTotalPktStr = (() => {
+                const totalWhole = currentStockData.displayRecords.reduce((accWhole, item) => accWhole + item.brandList.reduce((sum, ent) => sum + Math.max(0, Math.floor(parseFloat(ent.totalInHousePacket) || 0)), 0), 0);
+                const totalRem = Math.round(currentStockData.displayRecords.reduce((accRem, item) => accRem + item.brandList.reduce((sum, ent) => sum + Math.max(0, (parseFloat(ent.totalInHouseQuantity) || 0)) - (Math.max(0, Math.floor(parseFloat(ent.totalInHousePacket) || 0)) * (parseFloat(ent.packetSize) || 0)), 0), 0));
+                return `${totalWhole}${totalRem !== 0 ? ` - ${Math.abs(totalRem)} kg` : ''}`;
+            })();
 
-                if (reportType === 'detailed') {
-                    const tSize = item.brandList[0]?.packetSize || 0;
-                    const { whole: tW, remainder: tR } = calculatePktRemainderLocal(item.totalInHouseQuantity, tSize);
-                    subRow.push({ content: `${tW}${tR !== 0 ? ` - ${Math.abs(tR)} kg` : ''}`, styles: { fontStyle: 'bold', halign: 'right', fillColor: [248, 248, 248] } });
-                    subRow.push({ content: Math.round(item.totalInHouseQuantity).toLocaleString('en-BD'), styles: { fontStyle: 'bold', halign: 'right', fillColor: [248, 248, 248] } });
+            const whInHousePktStr = (() => {
+                const totalWhole = currentStockData.displayRecords.reduce((accWhole, item) => accWhole + item.brandList.reduce((sum, ent) => sum + Math.max(0, Math.floor(parseFloat(ent.inHousePacket) || 0)), 0), 0);
+                const totalRem = Math.round(currentStockData.displayRecords.reduce((accRem, item) => accRem + item.brandList.reduce((sum, ent) => sum + Math.max(0, (parseFloat(ent.inHouseQuantity) || 0)) - (Math.max(0, Math.floor(parseFloat(ent.inHousePacket) || 0)) * (parseFloat(ent.packetSize) || 0)), 0), 0));
+                return `${totalWhole}${totalRem !== 0 ? ` - ${Math.abs(totalRem)} kg` : ''}`;
+            })();
 
-                    const { whole: sW, remainder: sR } = calculatePktRemainderLocal(item.saleQuantity, tSize);
-                    subRow.push({ content: `${sW}${sR !== 0 ? ` - ${Math.abs(sR)} kg` : ''}`, styles: { fontStyle: 'bold', halign: 'right', fillColor: [248, 248, 248] } });
-                    subRow.push({ content: Math.round(item.saleQuantity).toLocaleString('en-BD'), styles: { fontStyle: 'bold', halign: 'right', fillColor: [248, 248, 248] } });
-                }
+            const whTotalSalePktStr = (() => {
+                const totalWhole = currentStockData.displayRecords.reduce((accWhole, item) => accWhole + item.brandList.reduce((sum, ent) => sum + Math.floor(parseFloat(ent.salePacket) || 0), 0), 0);
+                const totalRem = Math.round(currentStockData.displayRecords.reduce((accRem, item) => accRem + item.brandList.reduce((sum, ent) => sum + (parseFloat(ent.saleQuantity) || 0) - (Math.floor(parseFloat(ent.salePacket) || 0) * (parseFloat(ent.packetSize) || 0)), 0), 0));
+                return `${totalWhole}${totalRem !== 0 ? ` - ${Math.abs(totalRem)} kg` : ''}`;
+            })();
 
-                const tSize = item.brandList[0]?.packetSize || 0;
-                const { whole: rW, remainder: rR } = calculatePktRemainderLocal(item.inHouseQuantity, tSize);
-                subRow.push({ content: `${rW}${rR !== 0 ? ` - ${Math.abs(rR)} kg` : ''}`, styles: { fontStyle: 'bold', halign: 'right', fillColor: [248, 248, 248] } });
-                subRow.push({ content: Math.round(item.inHouseQuantity).toLocaleString('en-BD'), styles: { fontStyle: 'bold', halign: 'right', fillColor: [248, 248, 248] } });
+            // Append Grand Total Row
+            const grandTotalRow = [
+                { content: 'GRAND TOTAL', colSpan: 3, styles: { fontStyle: 'bold', halign: 'center', fillColor: [240, 240, 240] } } // SL + Product Name + Brand
+            ];
 
-                boldBottomRowIndices.add(tableRows.length);
-                subRow.isSubTotal = true;
-                tableRows.push(subRow);
+            if (reportType === 'detailed') {
+                grandTotalRow.push({ content: whGrandTotalPktStr, styles: { fontStyle: 'bold', halign: 'right', fillColor: [240, 240, 240] } });
+                grandTotalRow.push({ content: Math.round(currentStockData.totalTotalInHouseQty).toString(), styles: { fontStyle: 'bold', halign: 'right', fillColor: [240, 240, 240] } });
+                grandTotalRow.push({ content: whTotalSalePktStr, styles: { fontStyle: 'bold', halign: 'right', fillColor: [240, 240, 240] } });
+                grandTotalRow.push({ content: Math.round(currentStockData.totalSaleQty).toString(), styles: { fontStyle: 'bold', halign: 'right', fillColor: [240, 240, 240] } });
             }
-        });
 
-        // Per-Warehouse Summary for Table Grand Total
-        const whGrandTotalPktStr = (() => {
-            const totalWhole = currentStockData.displayRecords.reduce((accWhole, item) => accWhole + item.brandList.reduce((sum, ent) => sum + Math.max(0, Math.floor(parseFloat(ent.totalInHousePacket) || 0)), 0), 0);
-            const totalRem = Math.round(currentStockData.displayRecords.reduce((accRem, item) => accRem + item.brandList.reduce((sum, ent) => sum + Math.max(0, (parseFloat(ent.totalInHouseQuantity) || 0)) - (Math.max(0, Math.floor(parseFloat(ent.totalInHousePacket) || 0)) * (parseFloat(ent.packetSize) || 0)), 0), 0));
-            return `${totalWhole}${totalRem !== 0 ? ` - ${Math.abs(totalRem)} kg` : ''}`;
-        })();
+            grandTotalRow.push({ content: whInHousePktStr, styles: { fontStyle: 'bold', halign: 'right', fillColor: [240, 240, 240] } });
+            grandTotalRow.push({ content: Math.round(currentStockData.totalInHouseQty).toString(), styles: { fontStyle: 'bold', halign: 'right', fillColor: [240, 240, 240] } });
 
-        const whInHousePktStr = (() => {
-            const totalWhole = currentStockData.displayRecords.reduce((accWhole, item) => accWhole + item.brandList.reduce((sum, ent) => sum + Math.max(0, Math.floor(parseFloat(ent.inHousePacket) || 0)), 0), 0);
-            const totalRem = Math.round(currentStockData.displayRecords.reduce((accRem, item) => accRem + item.brandList.reduce((sum, ent) => sum + Math.max(0, (parseFloat(ent.inHouseQuantity) || 0)) - (Math.max(0, Math.floor(parseFloat(ent.inHousePacket) || 0)) * (parseFloat(ent.packetSize) || 0)), 0), 0));
-            return `${totalWhole}${totalRem !== 0 ? ` - ${Math.abs(totalRem)} kg` : ''}`;
-        })();
+            boldBottomRowIndices.add(tableRows.length);
+            grandTotalRow.isSubTotal = true;
+            tableRows.push(grandTotalRow);
 
-        const whTotalSalePktStr = (() => {
-            const totalWhole = currentStockData.displayRecords.reduce((accWhole, item) => accWhole + item.brandList.reduce((sum, ent) => sum + Math.floor(parseFloat(ent.salePacket) || 0), 0), 0);
-            const totalRem = Math.round(currentStockData.displayRecords.reduce((accRem, item) => accRem + item.brandList.reduce((sum, ent) => sum + (parseFloat(ent.saleQuantity) || 0) - (Math.floor(parseFloat(ent.salePacket) || 0) * (parseFloat(ent.packetSize) || 0)), 0), 0));
-            return `${totalWhole}${totalRem !== 0 ? ` - ${Math.abs(totalRem)} kg` : ''}`;
-        })();
+            // --- Table ---
+            const pdfHead = reportType === 'detailed'
+                ? [['SL', 'PRODUCT NAME', 'BRAND', 'Opening Stock BAG', 'Opening Stock QTY', 'SALE BAG', 'SALE QTY', 'Closing Stock BAG', 'Closing Stock QTY']]
+                : [['SL', 'PRODUCT NAME', 'BRAND', 'BAG', 'QUANTITY']];
 
-        // Append Grand Total Row
-        const grandTotalRow = [
-            { content: 'GRAND TOTAL', colSpan: 3, styles: { fontStyle: 'bold', halign: 'center', fillColor: [240, 240, 240] } } // SL + Product Name + Brand
-        ];
+            autoTable(doc, {
+                startY: yPos + 1,
+                head: pdfHead,
+                body: tableRows,
+                theme: 'plain',
+                styles: {
+                    fontSize: reportType === 'detailed' ? 8 : 8.7,
+                    cellPadding: reportType === 'detailed' ? 1.2 : 1.3,
+                    lineColor: [0, 0, 0],
+                    lineWidth: 0.1,
+                    textColor: [0, 0, 0],
+                    valign: 'middle'
+                },
+                headStyles: {
+                    fillColor: [245, 245, 245],
+                    textColor: [0, 0, 0],
+                    fontStyle: 'bold',
+                    halign: 'center',
+                    lineWidth: 0.1
+                },
+                columnStyles: reportType === 'detailed' ? {
+                    0: { cellWidth: 8, halign: 'center' }, // SL
+                    1: { cellWidth: 32 }, // Product Name / Quality
+                    2: { cellWidth: 40 }, // Brand
+                    3: { cellWidth: 18, halign: 'right' }, // Opening Stock BAG
+                    4: { cellWidth: 18, halign: 'right' }, // Opening Stock QTY
+                    5: { cellWidth: 18, halign: 'right' }, // Sale BAG
+                    6: { cellWidth: 18, halign: 'right' }, // Sale QTY
+                    7: { cellWidth: 18, halign: 'right' }, // Closing Stock BAG
+                    8: { cellWidth: 18, halign: 'right' }  // Closing Stock QTY
+                } : {
+                    0: { cellWidth: 10, halign: 'center' }, // SL
+                    1: { cellWidth: 45 }, // Product Name / Quality
+                    2: { cellWidth: 75 }, // Brand
+                    3: { cellWidth: 35, halign: 'right' }, // BAG
+                    4: { cellWidth: 35, halign: 'right' }  // QUANTITY
+                },
+                margin: { left: margin, right: margin },
+                didDrawCell: (data) => {
+                    const { cell, row } = data;
+                    if (row.section !== 'body') return;
 
-        if (reportType === 'detailed') {
-            grandTotalRow.push({ content: whGrandTotalPktStr, styles: { fontStyle: 'bold', halign: 'right', fillColor: [240, 240, 240] } });
-            grandTotalRow.push({ content: Math.round(currentStockData.totalTotalInHouseQty).toString(), styles: { fontStyle: 'bold', halign: 'right', fillColor: [240, 240, 240] } });
-            grandTotalRow.push({ content: whTotalSalePktStr, styles: { fontStyle: 'bold', halign: 'right', fillColor: [240, 240, 240] } });
-            grandTotalRow.push({ content: Math.round(currentStockData.totalSaleQty).toString(), styles: { fontStyle: 'bold', halign: 'right', fillColor: [240, 240, 240] } });
-        }
+                    // Identify if this cell needs a bold bottom border
+                    // 1. It's a designated boundary row (end of quality, subtotal, or grand total)
+                    // 2. It's a spanned cell (SL/Product) that ENDS on a boundary row
+                    const isBoundaryRow = boldBottomRowIndices.has(row.index);
+                    const endRowIndex = row.index + (cell.rowSpan || 1) - 1;
+                    const endsOnBoundary = boldBottomRowIndices.has(endRowIndex);
 
-        grandTotalRow.push({ content: whInHousePktStr, styles: { fontStyle: 'bold', halign: 'right', fillColor: [240, 240, 240] } });
-        grandTotalRow.push({ content: Math.round(currentStockData.totalInHouseQty).toString(), styles: { fontStyle: 'bold', halign: 'right', fillColor: [240, 240, 240] } });
-
-        boldBottomRowIndices.add(tableRows.length);
-        grandTotalRow.isSubTotal = true;
-        tableRows.push(grandTotalRow);
-
-        // --- Table ---
-        const pdfHead = reportType === 'detailed'
-            ? [['SL', 'PRODUCT NAME', 'BRAND', 'Opening Stock BAG', 'Opening Stock QTY', 'SALE BAG', 'SALE QTY', 'Closing Stock BAG', 'Closing Stock QTY']]
-            : [['SL', 'PRODUCT NAME', 'BRAND', 'BAG', 'QUANTITY']];
-
-        autoTable(doc, {
-            startY: yPos + 10,
-            head: pdfHead,
-            body: tableRows,
-            theme: 'plain',
-            styles: {
-                fontSize: reportType === 'detailed' ? 8 : 8.7,
-                cellPadding: reportType === 'detailed' ? 1.2 : 1.3,
-                lineColor: [0, 0, 0],
-                lineWidth: 0.1,
-                textColor: [0, 0, 0],
-                valign: 'middle'
-            },
-            headStyles: {
-                fillColor: [245, 245, 245],
-                textColor: [0, 0, 0],
-                fontStyle: 'bold',
-                halign: 'center',
-                lineWidth: 0.1
-            },
-            columnStyles: reportType === 'detailed' ? {
-                0: { cellWidth: 8, halign: 'center' }, // SL
-                1: { cellWidth: 32 }, // Product Name / Quality
-                2: { cellWidth: 40 }, // Brand
-                3: { cellWidth: 18, halign: 'right' }, // Opening Stock BAG
-                4: { cellWidth: 18, halign: 'right' }, // Opening Stock QTY
-                5: { cellWidth: 18, halign: 'right' }, // Sale BAG
-                6: { cellWidth: 18, halign: 'right' }, // Sale QTY
-                7: { cellWidth: 18, halign: 'right' }, // Closing Stock BAG
-                8: { cellWidth: 18, halign: 'right' }  // Closing Stock QTY
-            } : {
-                0: { cellWidth: 10, halign: 'center' }, // SL
-                1: { cellWidth: 45 }, // Product Name / Quality
-                2: { cellWidth: 75 }, // Brand
-                3: { cellWidth: 35, halign: 'right' }, // BAG
-                4: { cellWidth: 35, halign: 'right' }  // QUANTITY
-            },
-            margin: { left: margin, right: margin },
-            didDrawCell: (data) => {
-                const { cell, row } = data;
-                if (row.section !== 'body') return;
-
-                // Identify if this cell needs a bold bottom border
-                // 1. It's a designated boundary row (end of quality, subtotal, or grand total)
-                // 2. It's a spanned cell (SL/Product) that ENDS on a boundary row
-                const isBoundaryRow = boldBottomRowIndices.has(row.index);
-                const endRowIndex = row.index + (cell.rowSpan || 1) - 1;
-                const endsOnBoundary = boldBottomRowIndices.has(endRowIndex);
-
-                if (isBoundaryRow || (cell.rowSpan > 1 && endsOnBoundary)) {
-                    boldLinesToDraw.push({
-                        x1: cell.x,
-                        y1: cell.y + cell.height,
-                        x2: cell.x + cell.width,
-                        y2: cell.y + cell.height
-                    });
+                    if (isBoundaryRow || (cell.rowSpan > 1 && endsOnBoundary)) {
+                        boldLinesToDraw.push({
+                            x1: cell.x,
+                            y1: cell.y + cell.height,
+                            x2: cell.x + cell.width,
+                            y2: cell.y + cell.height
+                        });
+                    }
+                },
+                didDrawPage: () => {
+                    // Draw all collected bold lines at the end of the page to ensure they are on top
+                    if (boldLinesToDraw.length > 0) {
+                        doc.setLineWidth(0.5);
+                        doc.setDrawColor(0, 0, 0);
+                        boldLinesToDraw.forEach(line => {
+                            doc.line(line.x1, line.y1, line.x2, line.y2);
+                        });
+                        boldLinesToDraw.length = 0; // Clear for next page
+                    }
                 }
-            },
-            didDrawPage: () => {
-                // Draw all collected bold lines at the end of the page to ensure they are on top
-                if (boldLinesToDraw.length > 0) {
-                    doc.setLineWidth(0.5);
-                    doc.setDrawColor(0, 0, 0);
-                    boldLinesToDraw.forEach(line => {
-                        doc.line(line.x1, line.y1, line.x2, line.y2);
-                    });
-                    boldLinesToDraw.length = 0; // Clear for next page
-                }
-            }
-        });
+            });
 
-        yPos = doc.lastAutoTable.finalY + 5;
+            yPos = doc.lastAutoTable.finalY + 5;
         }); // End of warehousesToRender.forEach
 
 
@@ -2442,7 +2455,7 @@ export const generateCustomerReportPDF = (customers, typeFilter, grandTotalDue, 
         const pageWidth = doc.internal.pageSize.width;
         const pageHeight = doc.internal.pageSize.height;
         const margin = 10;
-        
+
         // Filter out customers with zero balance
         const activeCustomers = customers.filter(c => {
             const due = computeDue(c);
