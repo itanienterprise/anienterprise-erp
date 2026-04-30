@@ -1371,6 +1371,12 @@ const SaleManagement = ({
         setCustomerSearch('');
         setProductSearch('');
         setCompanyNameSearch('');
+        setLcSearch('');
+        setImporterSearch('');
+        setExporterSearch('');
+        setPortSearch('');
+        setIndCnfSearch('');
+        setBdCnfSearch('');
         setActiveDropdown(null);
         setEditingId(null);
         setOriginalData(null);
@@ -1602,6 +1608,7 @@ const SaleManagement = ({
     const getFilteredPorts = () => {
         return portsList
             .filter(p => p.status !== 'Inactive')
+            .filter(p => p.name && p.name.toUpperCase() !== 'ANY PLACE OF INDIA')
             .filter(p => (p.name || '').toLowerCase().includes(portSearch.toLowerCase()));
     };
 
@@ -2672,6 +2679,7 @@ const SaleManagement = ({
                                             autoComplete="off"
                                             onFocus={() => {
                                                 if (isFieldReadOnly(originalData?.importer)) return;
+                                                setImporterSearch(formData.importer || '');
                                                 setActiveDropdown('importer');
                                                 setHighlightedIndex(-1);
                                             }}
@@ -2731,6 +2739,7 @@ const SaleManagement = ({
                                             autoComplete="off"
                                             onFocus={() => {
                                                 if (isFieldReadOnly(originalData?.lcNo)) return;
+                                                setLcSearch(formData.lcNo || '');
                                                 setActiveDropdown('lcNo');
                                                 setHighlightedIndex(-1);
                                             }}
@@ -2794,6 +2803,7 @@ const SaleManagement = ({
                                             autoComplete="off"
                                             onFocus={() => {
                                                 if (isFieldReadOnly(originalData?.exporter)) return;
+                                                setExporterSearch(formData.exporter || '');
                                                 setActiveDropdown('exporter');
                                                 setHighlightedIndex(-1);
                                             }}
@@ -2854,6 +2864,7 @@ const SaleManagement = ({
                                             autoComplete="off"
                                             onFocus={() => {
                                                 if (isFieldReadOnly(originalData?.indianCnF)) return;
+                                                setIndCnfSearch(formData.indianCnF || '');
                                                 setActiveDropdown('indianCnF');
                                                 setHighlightedIndex(-1);
                                             }}
@@ -2914,6 +2925,7 @@ const SaleManagement = ({
                                             autoComplete="off"
                                             onFocus={() => {
                                                 if (isFieldReadOnly(originalData?.bdCnf)) return;
+                                                setBdCnfSearch(formData.bdCnf || '');
                                                 setActiveDropdown('bdCnf');
                                                 setHighlightedIndex(-1);
                                             }}
@@ -2974,6 +2986,7 @@ const SaleManagement = ({
                                             autoComplete="off"
                                             onFocus={() => {
                                                 if (isFieldReadOnly(originalData?.port)) return;
+                                                setPortSearch(formData.port || '');
                                                 setActiveDropdown('port');
                                                 setHighlightedIndex(-1);
                                             }}
@@ -3032,6 +3045,7 @@ const SaleManagement = ({
                                         autoComplete="off"
                                         onFocus={() => {
                                             if (isFieldReadOnly(originalData?.companyName)) return;
+                                            setCompanyNameSearch(formData.companyName || '');
                                             setActiveDropdown('companyName');
                                             setHighlightedIndex(-1);
                                         }}
@@ -3225,9 +3239,9 @@ const SaleManagement = ({
                                                         autoComplete="off"
                                                         onFocus={() => {
                                                             if (isFieldReadOnly(originalData?.items?.[index]?.productName)) return;
+                                                            setProductSearch(item.productName || '');
                                                             setActiveDropdown('product');
                                                             setActiveItemIndex(index);
-                                                            setProductSearch(item.productName || '');
                                                         }}
                                                         className={`sale-mgmt-input pr-14 ${item.productName ? 'placeholder:text-gray-900 placeholder:font-semibold' : 'placeholder:text-gray-400'} ${isFieldReadOnly(originalData?.items?.[index]?.productName) ? 'bg-gray-50' : ''}`}
                                                     />

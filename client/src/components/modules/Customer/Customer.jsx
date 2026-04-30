@@ -1578,7 +1578,7 @@ const Customer = ({
 
                                 <div className="flex-1 overflow-auto p-4 md:p-8 pt-6 md:pt-8 min-h-0">
                                     {/* Global Summary Cards */}
-                                    <div className={`grid ${activeHistoryTab === 'all' ? 'grid-cols-2 md:grid-cols-4' : (activeHistoryTab === 'sales' ? 'grid-cols-2 md:grid-cols-6' : (activeHistoryTab === 'gp' ? 'grid-cols-2 md:grid-cols-2' : 'grid-cols-2 md:grid-cols-4'))} gap-2 md:gap-3 mb-4 md:mb-8 summary-grid-mobile`}>
+                                    <div className={`grid ${activeHistoryTab === 'all' ? 'grid-cols-2 md:grid-cols-4' : (activeHistoryTab === 'sales' ? (viewData.customerType?.includes('Party') ? 'grid-cols-2 md:grid-cols-6' : 'grid-cols-2 md:grid-cols-5') : (activeHistoryTab === 'gp' ? 'grid-cols-2 md:grid-cols-2' : 'grid-cols-2 md:grid-cols-4'))} gap-2 md:gap-3 mb-4 md:mb-8 summary-grid-mobile`}>
                                         {activeHistoryTab === 'sales' && (
                                             <>
                                                 {viewData.customerType?.includes('Party') && (
@@ -1798,6 +1798,17 @@ const Customer = ({
                                                                         <SortIcon config={historySortConfig} columnKey="discount" />
                                                                     </div>
                                                                 </th>
+                                                                <th className="px-4 py-3 font-semibold text-gray-600 text-left cursor-pointer hover:bg-gray-100 transition-colors" onClick={() => requestHistorySort('paid')}>
+                                                                    <div className="flex items-center justify-start gap-1">
+                                                                        <span>Paid</span>
+                                                                        <SortIcon config={historySortConfig} columnKey="paid" />
+                                                                    </div>
+                                                                </th>
+                                                                <th className="px-4 py-3 font-semibold text-gray-600 text-left cursor-pointer hover:bg-gray-100 transition-colors">
+                                                                    <div className="flex items-center justify-start gap-1">
+                                                                        <span>Balance</span>
+                                                                    </div>
+                                                                </th>
                                                                 <th className="px-4 py-3 font-semibold text-gray-600 text-left">Action</th>
                                                                 <th className="px-4 py-3 font-semibold text-gray-600 text-left">Status</th>
                                                             </tr>
@@ -1852,6 +1863,17 @@ const Customer = ({
                                                                         <SortIcon config={historySortConfig} columnKey="discount" />
                                                                     </div>
                                                                 </th>
+                                                                <th className="px-4 py-3 font-semibold text-gray-600 text-left cursor-pointer hover:bg-gray-100 transition-colors" onClick={() => requestHistorySort('paid')}>
+                                                                    <div className="flex items-center justify-start gap-1">
+                                                                        <span>Paid</span>
+                                                                        <SortIcon config={historySortConfig} columnKey="paid" />
+                                                                    </div>
+                                                                </th>
+                                                                <th className="px-4 py-3 font-semibold text-gray-600 text-left cursor-pointer hover:bg-gray-100 transition-colors">
+                                                                    <div className="flex items-center justify-start gap-1">
+                                                                        <span>Balance</span>
+                                                                    </div>
+                                                                </th>
                                                                 <th className="px-4 py-3 font-semibold text-gray-600 text-left">Action</th>
                                                                 <th className="px-4 py-3 font-semibold text-gray-600 text-left">Status</th>
                                                             </tr>
@@ -1871,6 +1893,7 @@ const Customer = ({
                                                                             items: [],
                                                                             totalAmount: 0,
                                                                             totalDiscount: 0,
+                                                                            totalPaid: 0,
                                                                             totalQty: 0,
                                                                             trucks: new Set()
                                                                         };
@@ -1878,6 +1901,7 @@ const Customer = ({
                                                                     groups[invoice].items.push(item);
                                                                     groups[invoice].totalAmount += parseFloat(item.amount || 0);
                                                                     groups[invoice].totalDiscount += parseFloat(item.discount || 0);
+                                                                    groups[invoice].totalPaid += parseFloat(item.paid || 0);
                                                                     groups[invoice].totalQty += parseFloat(item.quantity || 0);
                                                                     if (item.lcNo && !groups[invoice].lcNo) groups[invoice].lcNo = item.lcNo;
                                                                     if (item.truck) groups[invoice].trucks.add(item.truck);
@@ -1895,7 +1919,7 @@ const Customer = ({
                                                                     }
                                                                 };
                                                                 const isParty = viewData?.customerType?.toLowerCase().includes('party');
-                                                                const colSpan = isParty ? "10" : "10";
+                                                                const colSpan = isParty ? "12" : "12";
 
                                                                 return (
                                                                     <React.Fragment key={index}>
@@ -1958,6 +1982,8 @@ const Customer = ({
                                                                             </td>
                                                                             <td className="px-4 py-4 text-left font-black text-violet-700">৳{group.totalAmount.toLocaleString('en-IN')}</td>
                                                                             <td className="px-4 py-4 text-left font-bold text-pink-600">৳{group.totalDiscount.toLocaleString('en-IN')}</td>
+                                                                            <td className="px-4 py-4 text-left font-bold text-teal-600">৳{group.totalPaid.toLocaleString('en-IN')}</td>
+                                                                            <td className="px-4 py-4 text-left font-bold text-orange-600">৳{Math.max(0, group.totalAmount - group.totalDiscount - group.totalPaid).toLocaleString('en-IN')}</td>
                                                                             <td className="px-4 py-4 text-left">
                                                                                 <button
                                                                                     onClick={(e) => {
@@ -1977,7 +2003,7 @@ const Customer = ({
                                                                                              items: group.items,
                                                                                              totalAmount: group.totalAmount,
                                                                                              discount: group.totalDiscount,
-                                                                                             paid: firstItem?.paid || 0,
+                                                                                             paid: group.totalPaid,
                                                                                              status: group.status
                                                                                          };
                                                                                          generateSaleInvoicePDF(saleObject);
@@ -2015,6 +2041,8 @@ const Customer = ({
                                                                                 <td className="px-4 py-3 text-left text-xs text-gray-500">৳{parseFloat(item.rate).toLocaleString('en-IN')}</td>
                                                                                 <td className="px-4 py-3 text-left text-xs font-bold text-violet-600">৳{parseFloat(item.amount).toLocaleString('en-IN')}</td>
                                                                                 <td className="px-4 py-3 text-left text-xs font-bold text-pink-500">৳{parseFloat(item.discount || 0).toLocaleString('en-IN')}</td>
+                                                                                <td className="px-4 py-3 text-left text-xs font-bold text-teal-500">৳{parseFloat(item.paid || 0).toLocaleString('en-IN')}</td>
+                                                                                <td className="px-4 py-3 text-left text-xs font-bold text-orange-500">৳{Math.max(0, parseFloat(item.amount || 0) - parseFloat(item.discount || 0) - parseFloat(item.paid || 0)).toLocaleString('en-IN')}</td>
                                                                                 <td className="px-4 py-3"></td>
                                                                                 <td className="px-4 py-3"></td>
                                                                             </tr>
@@ -2024,7 +2052,7 @@ const Customer = ({
                                                             })
                                                         ) : (
                                                             <tr>
-                                                                <td colSpan="10" className="px-4 py-8 text-left text-gray-400 font-medium italic">No sales history found matching filters</td>
+                                                                <td colSpan="12" className="px-4 py-8 text-left text-gray-400 font-medium italic">No sales history found matching filters</td>
                                                             </tr>
                                                         )}
                                                     </tbody>
@@ -2045,6 +2073,7 @@ const Customer = ({
                                                                         items: [],
                                                                         totalAmount: 0,
                                                                         totalDiscount: 0,
+                                                                        totalPaid: 0,
                                                                         totalQty: 0,
                                                                         trucks: new Set()
                                                                     };
@@ -2052,6 +2081,7 @@ const Customer = ({
                                                                 groups[invoice].items.push(item);
                                                                 groups[invoice].totalAmount += parseFloat(item.amount || 0);
                                                                 groups[invoice].totalDiscount += parseFloat(item.discount || 0);
+                                                                groups[invoice].totalPaid += parseFloat(item.paid || 0);
                                                                 groups[invoice].totalQty += parseFloat(item.quantity || 0);
                                                                 if (item.lcNo && !groups[invoice].lcNo) groups[invoice].lcNo = item.lcNo;
                                                                 if (item.truck) groups[invoice].trucks.add(item.truck);
@@ -2102,6 +2132,14 @@ const Customer = ({
                                                                                 <span className="text-gray-500">Amount:</span>
                                                                                 <span className="font-black text-violet-700">৳{group.totalAmount.toLocaleString('en-IN')}</span>
                                                                             </div>
+                                                                            <div className="flex justify-between text-xs">
+                                                                                <span className="text-gray-500">Paid:</span>
+                                                                                <span className="font-bold text-teal-700">৳{group.totalPaid.toLocaleString('en-IN')}</span>
+                                                                            </div>
+                                                                            <div className="flex justify-between text-xs">
+                                                                                <span className="text-gray-500">Balance:</span>
+                                                                                <span className="font-bold text-orange-700">৳{Math.max(0, group.totalAmount - group.totalDiscount - group.totalPaid).toLocaleString('en-IN')}</span>
+                                                                            </div>
                                                                         </div>
 
                                                                         <div className="flex gap-2 mt-3">
@@ -2122,7 +2160,7 @@ const Customer = ({
                                                                                         items: group.items,
                                                                                         totalAmount: group.totalAmount,
                                                                                         discount: group.totalDiscount,
-                                                                                        paid: firstItem?.paid || 0,
+                                                                                        paid: group.totalPaid,
                                                                                         status: group.status
                                                                                     };
                                                                                     generateSaleInvoicePDF(saleObject);

@@ -1069,7 +1069,7 @@ function LCReceive({
                 // For Single mode, auto-fallback brand if empty
                 if (!p.isMultiBrand && !b.brand) b.brand = p.productName;
 
-                if (!b.brand) errors.push(`${prodLabel}: Brand is required for entry #${bIdx + 1}`);
+                // if (!b.brand) errors.push(`${prodLabel}: Brand is required for entry #${bIdx + 1}`);
 
                 // Packet Size is only required in Multi mode
                 if (p.isMultiBrand && !b.packetSize) {
