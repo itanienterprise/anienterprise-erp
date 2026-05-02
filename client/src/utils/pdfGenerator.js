@@ -1930,7 +1930,7 @@ export const generateProductHistoryPDF = (productName, category, activeTab, purc
                 const key = `${p.date}_${p.lcNo}`;
                 if (!acc[key]) acc[key] = { ...p, type: 'purchase', itemQty: 0, itemInHouseQty: 0, itemShortageQty: 0 };
                 acc[key].itemQty += parseFloat(p.itemQty) || 0;
-                acc[key].itemInHouseQty += parseFloat(p.inHouseQuantity || p.itemInHouseQty) || 0;
+                acc[key].itemInHouseQty += parseFloat(p.itemInHouseQty) || 0;
                 acc[key].itemShortageQty += parseFloat(p.itemShortageQty) || 0;
                 return acc;
             }, {}));
