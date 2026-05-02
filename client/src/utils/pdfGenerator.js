@@ -1922,6 +1922,21 @@ export const generateProductHistoryPDF = (productName, category, activeTab, purc
         doc.setFont('helvetica', 'normal');
         doc.text(`${formatDate(filters.startDate) === '-' ? 'Start' : formatDate(filters.startDate)} to ${formatDate(filters.endDate) === '-' ? 'Present' : formatDate(filters.endDate)}`, margin + 25, yPos);
 
+        if (filters.brand) {
+            yPos += 7;
+            doc.setFont('helvetica', 'bold');
+            doc.text("Brand:", margin, yPos);
+            doc.setFont('helvetica', 'normal');
+            doc.text(filters.brand, margin + 25, yPos);
+        }
+        if (filters.party) {
+            yPos += 7;
+            doc.setFont('helvetica', 'bold');
+            doc.text("Party:", margin, yPos);
+            doc.setFont('helvetica', 'normal');
+            doc.text(filters.party, margin + 25, yPos);
+        }
+
         let currentY = yPos + 10;
 
         if (activeTab === 'total') {

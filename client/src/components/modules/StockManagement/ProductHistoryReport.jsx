@@ -140,7 +140,7 @@ const ProductHistoryReport = ({
                 totalShortageQty,
                 totalAmount: totalSaleAmount
             },
-            filters
+            modalFilters
         );
     };
 
