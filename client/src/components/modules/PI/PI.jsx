@@ -39,6 +39,7 @@ function PI({
     const [activeDropdown, setActiveDropdown] = useState(null);
     const [highlightedIndex, setHighlightedIndex] = useState(-1);
     const [toast, setToast] = useState(null);
+    const [expandedCardId, setExpandedCardId] = useState(null);
     const toastTimerRef = useRef(null);
 
     const showToast = (message, type = 'success', duration = 3000) => {
@@ -1459,121 +1460,239 @@ function PI({
                         </div>
                     </form>
                 </div>
-            )}
-
-            {!showForm && (
-                <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-                    <div className="overflow-x-auto">
-                        <table className="w-full text-left border-collapse">
-                            <thead>
-                                <tr className="bg-gray-50/80">
-                                    <th className="px-6 py-4 text-[11px] font-bold text-gray-400 uppercase tracking-wider border-b border-gray-100">Date</th>
-                                    <th className="px-6 py-4 text-[11px] font-bold text-gray-400 uppercase tracking-wider border-b border-gray-100">PI Number</th>
-                                    <th className="px-6 py-4 text-[11px] font-bold text-gray-400 uppercase tracking-wider border-b border-gray-100">Importer</th>
-                                    <th className="px-6 py-4 text-[11px] font-bold text-gray-400 uppercase tracking-wider border-b border-gray-100">Exporter</th>
-                                    <th className="px-6 py-4 text-[11px] font-bold text-gray-400 uppercase tracking-wider border-b border-gray-100">Product</th>
-                                    <th className="px-6 py-4 text-[11px] font-bold text-gray-400 uppercase tracking-wider border-b border-gray-100">Qty</th>
-                                    <th className="px-6 py-4 text-[11px] font-bold text-gray-400 uppercase tracking-wider border-b border-gray-100">Rate</th>
-                                    <th className="px-6 py-4 text-[11px] font-bold text-gray-400 uppercase tracking-wider border-b border-gray-100">Amount</th>
-                                    <th className="px-6 py-4 text-[11px] font-bold text-gray-400 uppercase tracking-wider border-b border-gray-100">Freight</th>
-                                    <th className="px-6 py-4 text-[11px] font-bold text-gray-400 uppercase tracking-wider border-b border-gray-100">Total Fr.</th>
-                                    <th className="px-6 py-4 text-[11px] font-bold text-gray-400 uppercase tracking-wider border-b border-gray-100 text-blue-600">Grand T.</th>
-                                    <th className="px-6 py-4 text-[11px] font-bold text-gray-400 uppercase tracking-wider border-b border-gray-100">Port</th>
-                                    <th className="px-6 py-4 text-[11px] font-bold text-gray-400 uppercase tracking-wider border-b border-gray-100">Status</th>
-                                    <th className="px-6 py-4 text-[11px] font-bold text-gray-400 uppercase tracking-wider border-b border-gray-100 text-center">Action</th>
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y divide-gray-50">
-                                {isLoading ? (
-                                    Array(3).fill(0).map((_, i) => (
-                                        <tr key={i} className="animate-pulse">
-                                            <td colSpan="14" className="px-6 py-4"><div className="h-4 bg-gray-100 rounded w-full"></div></td>
+            )}            {!showForm && (
+                <div className="space-y-4">
+                    {/* Desktop Table View */}
+                    <div className="hidden md:block bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+                        <div className="overflow-x-auto">
+                            <table className="w-full text-left border-collapse">
+                                <thead>
+                                    <tr className="bg-gray-50/80">
+                                        <th className="px-6 py-4 text-[11px] font-bold text-gray-400 uppercase tracking-wider border-b border-gray-100">Date</th>
+                                        <th className="px-6 py-4 text-[11px] font-bold text-gray-400 uppercase tracking-wider border-b border-gray-100">PI Number</th>
+                                        <th className="px-6 py-4 text-[11px] font-bold text-gray-400 uppercase tracking-wider border-b border-gray-100">Importer</th>
+                                        <th className="px-6 py-4 text-[11px] font-bold text-gray-400 uppercase tracking-wider border-b border-gray-100">Exporter</th>
+                                        <th className="px-6 py-4 text-[11px] font-bold text-gray-400 uppercase tracking-wider border-b border-gray-100">Product</th>
+                                        <th className="px-6 py-4 text-[11px] font-bold text-gray-400 uppercase tracking-wider border-b border-gray-100">Qty</th>
+                                        <th className="px-6 py-4 text-[11px] font-bold text-gray-400 uppercase tracking-wider border-b border-gray-100 text-blue-600">Grand T.</th>
+                                        <th className="px-6 py-4 text-[11px] font-bold text-gray-400 uppercase tracking-wider border-b border-gray-100">Status</th>
+                                        <th className="px-6 py-4 text-[11px] font-bold text-gray-400 uppercase tracking-wider border-b border-gray-100 text-center">Action</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-gray-50">
+                                    {isLoading ? (
+                                        Array(3).fill(0).map((_, i) => (
+                                            <tr key={i} className="animate-pulse">
+                                                <td colSpan="9" className="px-6 py-4"><div className="h-4 bg-gray-100 rounded w-full"></div></td>
+                                            </tr>
+                                        ))
+                                    ) : filteredRecords.length > 0 ? (
+                                        filteredRecords.map(record => (
+                                            <tr key={record._id} className="hover:bg-gray-50/50 transition-colors">
+                                                <td className="px-6 py-4 text-sm text-gray-600 font-medium">{formatDate(record.date)}</td>
+                                                <td className="px-6 py-4 text-sm font-bold text-blue-600">{record.piNumber}</td>
+                                                <td className="px-6 py-4 text-sm text-gray-700 font-semibold">{record.partyName}</td>
+                                                <td className="px-6 py-4 text-sm text-gray-700 font-semibold">{record.exporterName}</td>
+                                                <td className="px-6 py-4 text-sm text-gray-600">{record.productName}</td>
+                                                <td className="px-6 py-4 text-sm text-gray-600 font-bold">{record.quantity} kg</td>
+                                                <td className="px-6 py-4 text-sm text-blue-700 font-bold">${parseFloat(record.grandTotal).toLocaleString()}</td>
+                                                <td className="px-6 py-4">
+                                                    <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest border ${record.status === 'Active' ? 'bg-green-50 text-green-700 border-green-100' :
+                                                        record.status === 'Closed' ? 'bg-gray-100 text-gray-600 border border-gray-200' :
+                                                            'bg-amber-50 text-amber-600 border-amber-100'
+                                                        }`}>
+                                                        {record.status}
+                                                    </span>
+                                                </td>
+                                                <td className="px-6 py-4">
+                                                    <div className="flex items-center justify-center gap-3">
+                                                        <button
+                                                            onClick={() => {
+                                                                const enriched = { ...record };
+                                                                if (!enriched.exporterAddress || !enriched.exporterEmail || !enriched.exporterSignature) {
+                                                                    const exp = exporters?.find(e => e.name === enriched.exporterName);
+                                                                    if (exp) {
+                                                                        enriched.exporterAddress = enriched.exporterAddress || exp.address;
+                                                                        enriched.exporterContact = enriched.exporterContact || exp.phone;
+                                                                        enriched.exporterEmail = enriched.exporterEmail || exp.email;
+                                                                        enriched.exporterSignature = enriched.exporterSignature || exp.signature;
+                                                                    }
+                                                                }
+                                                                if (!enriched.partyAddress || !enriched.partyEmail || !enriched.partySignature) {
+                                                                    const imp = importers?.find(i => i.name === enriched.partyName);
+                                                                    if (imp) {
+                                                                        enriched.partyAddress = enriched.partyAddress || imp.address;
+                                                                        enriched.partyContact = enriched.partyContact || imp.phone;
+                                                                        enriched.partyEmail = enriched.partyEmail || imp.email;
+                                                                        enriched.partySignature = enriched.partySignature || imp.signature;
+                                                                    }
+                                                                }
+                                                                generatePIPDF(enriched);
+                                                            }}
+                                                            className="p-2 text-gray-400 hover:text-blue-600 transition-all active:scale-90"
+                                                            title="Generate PI PDF"
+                                                        >
+                                                            <PDFIcon className="w-5 h-5" />
+                                                        </button>
+                                                        {canManage && (
+                                                            <>
+                                                                <button
+                                                                    onClick={() => handleEdit(record)}
+                                                                    className="p-2 text-gray-400 hover:text-indigo-600 transition-all active:scale-90"
+                                                                    title="Edit Record"
+                                                                >
+                                                                    <EditIcon className="w-5 h-5" />
+                                                                </button>
+                                                                <button
+                                                                    onClick={() => handleDelete(record._id)}
+                                                                    className="p-2 text-gray-400 hover:text-red-600 transition-all active:scale-90"
+                                                                    title="Delete Record"
+                                                                >
+                                                                    <TrashIcon className="w-5 h-5" />
+                                                                </button>
+                                                            </>
+                                                        )}
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        ))
+                                    ) : (
+                                        <tr>
+                                            <td colSpan="9" className="px-6 py-12 text-center text-gray-400 font-bold">No PI records found.</td>
                                         </tr>
-                                    ))
-                                ) : filteredRecords.length > 0 ? (
-                                    filteredRecords.map(record => (
-                                        <tr key={record._id} className="hover:bg-gray-50/50 transition-colors">
-                                            <td className="px-6 py-4 text-sm text-gray-600 font-medium">{formatDate(record.date)}</td>
-                                            <td className="px-6 py-4 text-sm font-bold text-blue-600">{record.piNumber}</td>
-                                            <td className="px-6 py-4 text-sm text-gray-700 font-semibold">{record.partyName}</td>
-                                            <td className="px-6 py-4 text-sm text-gray-700 font-semibold">{record.exporterName}</td>
-                                            <td className="px-6 py-4 text-sm text-gray-600">{record.productName}</td>
-                                            <td className="px-6 py-4 text-sm text-gray-600 font-bold">{record.quantity}</td>
-                                            <td className="px-6 py-4 text-sm text-gray-600 font-medium">${record.rate}</td>
-                                            <td className="px-6 py-4 text-sm text-gray-800 font-bold">${record.amount}</td>
-                                            <td className="px-6 py-4 text-sm text-gray-600 font-medium">${record.freight}</td>
-                                            <td className="px-6 py-4 text-sm text-gray-800 font-bold">${record.totalFreight}</td>
-                                            <td className="px-6 py-4 text-sm text-blue-700 font-bold">${record.grandTotal}</td>
-                                            <td className="px-6 py-4 text-sm text-gray-600">{record.port || record.portOfDischarge}</td>
-                                            <td className="px-6 py-4">
-                                                <span className={`px-3 py-1 rounded-full text-xs font-bold ${record.status === 'Active' ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' :
+                                    )}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    {/* Mobile Card View */}
+                    <div className="block md:hidden space-y-4 px-2 pb-10">
+                        {isLoading ? (
+                            Array(3).fill(0).map((_, i) => (
+                                <div key={i} className="bg-white p-6 rounded-2xl border border-gray-100 animate-pulse space-y-4">
+                                    <div className="h-4 bg-gray-100 rounded w-1/3"></div>
+                                    <div className="h-4 bg-gray-100 rounded w-full"></div>
+                                    <div className="h-4 bg-gray-100 rounded w-2/3"></div>
+                                </div>
+                            ))
+                        ) : filteredRecords.length > 0 ? (
+                            filteredRecords.map(record => {
+                                const isExpanded = expandedCardId === record._id;
+                                return (
+                                    <div
+                                        key={record._id}
+                                        className={`bg-white rounded-2xl border transition-all duration-300 ${isExpanded ? 'border-blue-200 shadow-lg ring-1 ring-blue-50' : 'border-gray-100 shadow-sm'}`}
+                                        onClick={() => setExpandedCardId(isExpanded ? null : record._id)}
+                                    >
+                                        <div className="p-5 space-y-4">
+                                            {/* Single Line Header: PI Number & Status Tag */}
+                                            <div className="flex items-center justify-between gap-3">
+                                                <div className="flex items-center min-w-0 flex-1">
+                                                    <span className="w-[48px] text-[11px] font-black text-blue-500 uppercase tracking-widest shrink-0 whitespace-nowrap">PI No.</span>
+                                                    <span className="text-blue-500 font-bold mx-2">-</span>
+                                                    <span className="text-sm font-black text-gray-900 tracking-tight truncate">{record.piNumber}</span>
+                                                </div>
+                                                <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-widest border shrink-0 ${record.status === 'Active' ? 'bg-green-50 text-green-700 border-green-100' :
                                                     record.status === 'Closed' ? 'bg-gray-100 text-gray-600 border border-gray-200' :
-                                                        'bg-amber-50 text-amber-600 border border-amber-100'
+                                                        'bg-amber-50 text-amber-700 border-amber-100'
                                                     }`}>
                                                     {record.status}
                                                 </span>
-                                            </td>
-                                            <td className="px-6 py-4">
-                                                <div className="flex items-center justify-center gap-3">
+                                            </div>
+
+                                            {/* Expandable Details */}
+                                            {isExpanded && (
+                                                <div className="space-y-2.5 pt-2 animate-in fade-in slide-in-from-top-2 duration-300">
+                                                    <div className="flex items-center">
+                                                        <span className="w-[100px] text-[11px] font-black text-gray-400 uppercase tracking-widest shrink-0">Date</span>
+                                                        <span className="text-gray-400 font-bold mx-2">-</span>
+                                                        <span className="text-sm font-bold text-gray-700">{formatDate(record.date)}</span>
+                                                    </div>
+                                                    <div className="flex items-center">
+                                                        <span className="w-[100px] text-[11px] font-black text-gray-400 uppercase tracking-widest shrink-0">Expire Date</span>
+                                                        <span className="text-gray-400 font-bold mx-2">-</span>
+                                                        <span className="text-sm font-bold text-red-600">{formatDate(record.validityDate)}</span>
+                                                    </div>
+                                                    <div className="flex items-center">
+                                                        <span className="w-[100px] text-[11px] font-black text-gray-400 uppercase tracking-widest shrink-0">Importer</span>
+                                                        <span className="text-gray-400 font-bold mx-2">-</span>
+                                                        <span className="text-sm font-bold text-gray-800 truncate">{record.partyName}</span>
+                                                    </div>
+                                                    <div className="flex items-center">
+                                                        <span className="w-[100px] text-[11px] font-black text-gray-400 uppercase tracking-widest shrink-0">Exporter</span>
+                                                        <span className="text-gray-400 font-bold mx-2">-</span>
+                                                        <span className="text-sm font-bold text-gray-800 truncate">{record.exporterName}</span>
+                                                    </div>
+                                                    <div className="flex items-center">
+                                                        <span className="w-[100px] text-[11px] font-black text-gray-400 uppercase tracking-widest shrink-0">Product</span>
+                                                        <span className="text-gray-400 font-bold mx-2">-</span>
+                                                        <span className="text-sm font-bold text-gray-700 truncate">{record.productName}</span>
+                                                    </div>
+                                                    <div className="flex items-center">
+                                                        <span className="w-[100px] text-[11px] font-black text-indigo-500 uppercase tracking-widest shrink-0">Grand Total</span>
+                                                        <span className="text-indigo-500 font-bold mx-2">-</span>
+                                                        <span className="text-sm font-black text-indigo-700 tracking-tight">${parseFloat(record.grandTotal).toLocaleString()}</span>
+                                                    </div>
+                                                </div>
+                                            )}
+                                        </div>
+
+                                        {/* Expandable Actions */}
+                                        {isExpanded && (
+                                            <div className="px-5 pb-5 animate-in slide-in-from-top-2 duration-300">
+                                                <div className="pt-2 flex flex-row gap-2">
                                                     <button
-                                                        onClick={() => {
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
                                                             const enriched = { ...record };
-                                                            if (!enriched.exporterAddress || !enriched.exporterEmail || !enriched.exporterSignature) {
-                                                                const exp = exporters?.find(e => e.name === enriched.exporterName);
-                                                                if (exp) {
-                                                                    enriched.exporterAddress = enriched.exporterAddress || exp.address;
-                                                                    enriched.exporterContact = enriched.exporterContact || exp.phone;
-                                                                    enriched.exporterEmail = enriched.exporterEmail || exp.email;
-                                                                    enriched.exporterSignature = enriched.exporterSignature || exp.signature;
-                                                                }
+                                                            const exp = exporters?.find(e => e.name === enriched.exporterName);
+                                                            if (exp) {
+                                                                enriched.exporterAddress = enriched.exporterAddress || exp.address;
+                                                                enriched.exporterContact = enriched.exporterContact || exp.phone;
+                                                                enriched.exporterEmail = enriched.exporterEmail || exp.email;
+                                                                enriched.exporterSignature = enriched.exporterSignature || exp.signature;
                                                             }
-                                                            if (!enriched.partyAddress || !enriched.partyEmail || !enriched.partySignature) {
-                                                                const imp = importers?.find(i => i.name === enriched.partyName);
-                                                                if (imp) {
-                                                                    enriched.partyAddress = enriched.partyAddress || imp.address;
-                                                                    enriched.partyContact = enriched.partyContact || imp.phone;
-                                                                    enriched.partyEmail = enriched.partyEmail || imp.email;
-                                                                    enriched.partySignature = enriched.partySignature || imp.signature;
-                                                                }
+                                                            const imp = importers?.find(i => i.name === enriched.partyName);
+                                                            if (imp) {
+                                                                enriched.partyAddress = enriched.partyAddress || imp.address;
+                                                                enriched.partyContact = enriched.partyContact || imp.phone;
+                                                                enriched.partyEmail = enriched.partyEmail || imp.email;
+                                                                enriched.partySignature = enriched.partySignature || imp.signature;
                                                             }
                                                             generatePIPDF(enriched);
                                                         }}
-                                                        className="text-gray-400 hover:text-blue-600 transition-colors"
-                                                        title="Generate PI PDF"
+                                                        className="flex-1 flex items-center justify-center gap-1.5 py-3 bg-blue-50 text-blue-700 rounded-xl font-black text-[10px] uppercase tracking-widest active:scale-95 transition-all"
                                                     >
-                                                        <PDFIcon className="w-5 h-5" />
+                                                        <PDFIcon className="w-3.5 h-3.5" /> PDF
                                                     </button>
                                                     {canManage && (
                                                         <>
                                                             <button
-                                                                onClick={() => handleEdit(record)}
-                                                                className="text-gray-400 hover:text-blue-600 transition-colors"
-                                                                title="Edit Record"
+                                                                onClick={(e) => { e.stopPropagation(); handleEdit(record); }}
+                                                                className="flex-1 flex items-center justify-center gap-1.5 py-3 bg-indigo-50 text-indigo-700 rounded-xl font-black text-[10px] uppercase tracking-widest active:scale-95 transition-all"
                                                             >
-                                                                <EditIcon className="w-5 h-5" />
+                                                                <EditIcon className="w-3.5 h-3.5" /> Edit
                                                             </button>
                                                             <button
-                                                                onClick={() => handleDelete(record._id)}
-                                                                className="text-gray-400 hover:text-red-600 transition-colors"
-                                                                title="Delete Record"
+                                                                onClick={(e) => { e.stopPropagation(); handleDelete(record._id); }}
+                                                                className="flex-1 flex items-center justify-center gap-1.5 py-3 bg-red-50 text-red-600 rounded-xl font-black text-[10px] uppercase tracking-widest active:scale-95 transition-all"
                                                             >
-                                                                <TrashIcon className="w-5 h-5" />
+                                                                <TrashIcon className="w-3.5 h-3.5" /> Delete
                                                             </button>
                                                         </>
                                                     )}
                                                 </div>
-                                            </td>
-                                        </tr>
-                                    ))
-                                ) : (
-                                    <tr>
-                                        <td colSpan="13" className="px-6 py-12 text-center text-gray-500 font-medium">
-                                            No PI records found.
-                                        </td>
-                                    </tr>
-                                )}
-                            </tbody>
-                        </table>
+                                            </div>
+                                        )}
+                                    </div>
+                                );
+                            })
+                        ) : (
+                            <div className="p-12 text-center bg-gray-50 rounded-3xl border-2 border-dashed border-gray-200">
+                                <p className="text-gray-400 font-bold uppercase tracking-widest text-xs">No PI records found</p>
+                            </div>
+                        )}
                     </div>
                 </div>
             )}

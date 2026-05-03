@@ -493,20 +493,20 @@ const Bank = ({ onDeleteConfirm }) => {
                                     {isExpanded && (
                                         <div className="mt-6 space-y-4 animate-in slide-in-from-top-4 duration-500">
                                             {group.items.map((item, idx) => (
-                                                <div key={item.uniqueRowKey} className="relative bg-gray-50/50 rounded-xl p-3 border border-gray-100/50">
-                                                    <div className="flex items-center gap-3">
-                                                        <div className="flex-1 flex items-start gap-2 min-w-0">
-                                                            <div className="flex-[0.8] min-w-0">
-                                                                <div className="text-[7px] font-bold text-gray-400 uppercase leading-none mb-1">Branch</div>
-                                                                <div className="text-[10px] font-bold text-gray-800 break-all">{item.branch}</div>
+                                                <div key={item.uniqueRowKey} className="relative bg-gray-50/50 rounded-2xl p-4 border border-gray-100 shadow-sm">
+                                                    <div className="flex items-center gap-4">
+                                                        <div className="flex-1 space-y-2.5">
+                                                            <div className="flex items-center text-[13px]">
+                                                                <span className="w-32 text-[11px] font-bold text-gray-400 uppercase tracking-wider shrink-0">Branch -</span>
+                                                                <span className="font-black text-gray-900 uppercase truncate">{item.branch}</span>
                                                             </div>
-                                                            <div className="flex-[1.2] min-w-0 border-l border-gray-200/50 pl-2">
-                                                                <div className="text-[7px] font-bold text-gray-400 uppercase leading-none mb-1">Name</div>
-                                                                <div className="text-[10px] font-bold text-gray-700 break-words leading-tight">{item.accountName}</div>
+                                                            <div className="flex items-start text-[13px]">
+                                                                <span className="w-32 text-[11px] font-bold text-gray-400 uppercase tracking-wider shrink-0">Account Name -</span>
+                                                                <span className="font-bold text-gray-800 uppercase leading-tight">{item.accountName}</span>
                                                             </div>
-                                                            <div className="flex-[1.1] min-w-0 border-l border-gray-200/50 pl-2">
-                                                                <div className="text-[7px] font-bold text-blue-400 uppercase leading-none mb-1">Acc No</div>
-                                                                <div className="text-[11px] font-black text-blue-600 break-all select-all">{item.accountNo}</div>
+                                                            <div className="flex items-center text-[13px]">
+                                                                <span className="w-32 text-[11px] font-bold text-blue-400 uppercase tracking-wider shrink-0">Account No -</span>
+                                                                <span className="font-black text-blue-600 select-all tracking-tight">{item.accountNo}</span>
                                                             </div>
                                                         </div>
                                                     </div>

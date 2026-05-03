@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import {
-    FunnelIcon, XIcon, ChevronDownIcon, EditIcon, TrashIcon, BoxIcon, ChevronUpIcon, SearchIcon, EyeIcon, PDFIcon, PlusIcon
+    FunnelIcon, XIcon, ChevronDownIcon, EditIcon, TrashIcon, BoxIcon, ChevronUpIcon, SearchIcon, EyeIcon, PDFIcon, PlusIcon, DownloadIcon
 } from '../../Icons';
 import { API_BASE_URL, formatDate, SortIcon } from '../../../utils/helpers';
 import axios from '../../../utils/api';
@@ -69,72 +69,74 @@ const ViewIPLCsModal = ({ ipRecord, lcRecords, allStockRecords = [], allSalesRec
     return (
         <div className="fixed inset-0 z-[2000] flex items-center justify-center p-4">
             <div className="absolute inset-0 bg-gray-900/60 backdrop-blur-sm" onClick={onClose}></div>
-            <div className="relative bg-white border border-gray-100 rounded-2xl shadow-2xl w-full max-w-5xl overflow-hidden animate-in zoom-in duration-300">
-                {/* Header */}
-                <div className="flex items-center justify-between px-6 py-4 border-b border-gray-50 bg-gray-50/50">
-                    <div className="flex items-center gap-3">
-                        <div className="p-2 rounded-lg bg-blue-50 text-blue-600">
-                            <EyeIcon className="w-5 h-5" />
+            <div className="relative bg-white border border-gray-100 rounded-3xl shadow-2xl w-full max-w-5xl animate-in zoom-in duration-300 flex flex-col max-h-[90vh] overflow-hidden">
+                {/* Header - Solid & Fixed at top */}
+                <div className="bg-white px-6 py-5 border-b border-gray-100 flex items-center justify-between z-20">
+                    <div className="flex items-center gap-4">
+                        <div className="p-3 rounded-2xl bg-blue-50 text-blue-600 shadow-sm border border-blue-100/50">
+                            <EyeIcon className="w-6 h-6" />
                         </div>
                         <div>
-                            <h3 className="text-lg font-bold text-gray-900">LCs Under This IP</h3>
-                            <p className="text-xs text-gray-500 font-bold uppercase tracking-widest">
+                            <h3 className="text-xl font-black text-gray-900 leading-tight">LCs Under This IP</h3>
+                            <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest mt-0.5">
                                 IP: <span className="text-sm font-black text-blue-600">{ipRecord.ipNumber}</span> • {ipRecord.ipParty}
                             </p>
                         </div>
                     </div>
-                    <button onClick={onClose} className="p-2 text-gray-400 hover:text-gray-600 rounded-full hover:bg-white transition-all">
-                        <XIcon className="w-5 h-5" />
+                    <button
+                        onClick={onClose}
+                        className="p-2.5 text-gray-400 hover:text-red-500 rounded-full hover:bg-red-50 transition-all active:scale-90 border border-transparent hover:border-red-100"
+                    >
+                        <XIcon className="w-6 h-6" />
                     </button>
                 </div>
 
-                {/* Summary Cards */}
-                <div className="px-6 pt-5">
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-                        <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm transition-all hover:shadow-md hover:border-blue-100 group">
-                            <div className="flex items-center gap-3 mb-2">
-                                <div className="p-1.5 bg-blue-50 text-blue-600 rounded-xl group-hover:bg-blue-600 group-hover:text-white transition-colors">
-                                    <BoxIcon className="w-4 h-4" />
+                {/* Scrollable Content Area */}
+                <div className="overflow-y-auto flex-1 px-6 py-6 custom-scrollbar">
+                    {/* Summary Cards - Forced One Row for all three - Optimized to prevent truncation */}
+                    <div className="flex flex-row gap-1 mb-6">
+                        <div className="flex-1 min-w-0 bg-white py-2 px-1.5 rounded-xl border border-gray-100 shadow-sm transition-all hover:shadow-md hover:border-blue-100 group">
+                            <div className="flex items-center gap-1 mb-1">
+                                <div className="p-0.5 bg-blue-50 text-blue-600 rounded-lg group-hover:bg-blue-600 group-hover:text-white transition-colors shrink-0">
+                                    <BoxIcon className="w-3 h-3" />
                                 </div>
-                                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">IP Quantity</span>
+                                <span className="text-[10px] font-black text-gray-400 uppercase tracking-tight truncate">IP Qty</span>
                             </div>
-                            <div className="flex items-baseline gap-1">
-                                <span className="text-xl font-black text-gray-900">{ipQtyKg.toLocaleString('en-US')}</span>
-                                <span className="text-xs font-bold text-gray-400">Kg</span>
+                            <div className="flex items-baseline gap-0.5 overflow-hidden">
+                                <span className="text-base font-black text-gray-900 truncate">{ipQtyKg.toLocaleString('en-US')}</span>
+                                <span className="text-[7px] font-bold text-gray-400 uppercase shrink-0">Kg</span>
                             </div>
                         </div>
 
-                        <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm transition-all hover:shadow-md hover:border-indigo-100 group">
-                            <div className="flex items-center gap-3 mb-2">
-                                <div className="p-1.5 bg-indigo-50 text-indigo-600 rounded-xl group-hover:bg-indigo-600 group-hover:text-white transition-colors">
-                                    <BoxIcon className="w-4 h-4" />
+                        <div className="flex-1 min-w-0 bg-white py-2 px-1.5 rounded-xl border border-gray-100 shadow-sm transition-all hover:shadow-md hover:border-indigo-100 group">
+                            <div className="flex items-center gap-1 mb-1">
+                                <div className="p-0.5 bg-indigo-50 text-indigo-600 rounded-lg group-hover:bg-indigo-600 group-hover:text-white transition-colors shrink-0">
+                                    <BoxIcon className="w-3 h-3" />
                                 </div>
-                                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Total LC Qty</span>
+                                <span className="text-[10px] font-black text-gray-400 uppercase tracking-tight truncate">Total LC</span>
                             </div>
-                            <div className="flex items-baseline gap-1">
-                                <span className="text-xl font-black text-gray-900">{totalLcQtyKg.toLocaleString('en-US')}</span>
-                                <span className="text-xs font-bold text-gray-400">Kg</span>
+                            <div className="flex items-baseline gap-0.5 overflow-hidden">
+                                <span className="text-base font-black text-gray-900 truncate">{totalLcQtyKg.toLocaleString('en-US')}</span>
+                                <span className="text-[7px] font-bold text-gray-400 uppercase shrink-0">Kg</span>
                             </div>
                         </div>
 
-                        <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm transition-all hover:shadow-md hover:border-emerald-100 group">
-                            <div className="flex items-center gap-3 mb-2">
-                                <div className="p-1.5 bg-emerald-50 text-emerald-600 rounded-xl group-hover:bg-emerald-600 group-hover:text-white transition-colors">
-                                    <BoxIcon className="w-4 h-4" />
+                        <div className="flex-1 min-w-0 bg-white py-2 px-1.5 rounded-xl border border-gray-100 shadow-sm transition-all hover:shadow-md hover:border-emerald-100 group">
+                            <div className="flex items-center gap-1 mb-1">
+                                <div className="p-0.5 bg-emerald-50 text-emerald-600 rounded-lg group-hover:bg-emerald-600 group-hover:text-white transition-colors shrink-0">
+                                    <BoxIcon className="w-3 h-3" />
                                 </div>
-                                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Remaining Qty</span>
+                                <span className="text-[10px] font-black text-gray-400 uppercase tracking-tight truncate">Rem. LC</span>
                             </div>
-                            <div className="flex items-baseline gap-1">
-                                <span className={`text-xl font-black ${ipRemQtyKg <= 0 ? 'text-emerald-600' : 'text-blue-600'}`}>{ipRemQtyKg.toLocaleString('en-US')}</span>
-                                <span className="text-xs font-bold text-gray-400">Kg</span>
+                            <div className="flex items-baseline gap-0.5 overflow-hidden">
+                                <span className={`text-base font-black ${ipRemQtyKg <= 0 ? 'text-emerald-600' : 'text-blue-600'} truncate`}>{ipRemQtyKg.toLocaleString('en-US')}</span>
+                                <span className="text-[7px] font-bold text-gray-400 uppercase shrink-0">Kg</span>
                             </div>
                         </div>
                     </div>
-                </div>
 
-                {/* LC Table */}
-                <div className="overflow-y-auto max-h-[60vh] px-6 pb-6 custom-scrollbar">
-                    <div className="overflow-hidden border border-gray-100 rounded-2xl shadow-sm">
+                    {/* LC Table / Card List */}
+                    <div className="hidden md:block border border-gray-100 rounded-2xl shadow-sm overflow-hidden">
                         <table className="w-full text-left border-collapse">
                             <thead>
                                 <tr className="bg-gray-50/50 border-b border-gray-100">
@@ -143,7 +145,7 @@ const ViewIPLCsModal = ({ ipRecord, lcRecords, allStockRecords = [], allSalesRec
                                     <th className="px-5 py-3.5 text-xs font-bold text-gray-500 uppercase tracking-wider">LC No</th>
                                     <th className="px-5 py-3.5 text-xs font-bold text-gray-500 uppercase tracking-wider">Bank</th>
                                     <th className="px-5 py-3.5 text-xs font-bold text-gray-500 uppercase tracking-wider text-right">Quantity</th>
-                                    <th className="px-5 py-3.5 text-xs font-bold text-gray-500 uppercase tracking-wider text-right">Rem. Qty</th>
+                                    <th className="px-5 py-3.5 text-xs font-bold text-gray-500 uppercase tracking-wider text-right">Remaining LC Qty</th>
                                     <th className="px-5 py-3.5 text-xs font-bold text-gray-500 uppercase tracking-wider text-center">Status</th>
                                 </tr>
                             </thead>
@@ -160,10 +162,10 @@ const ViewIPLCsModal = ({ ipRecord, lcRecords, allStockRecords = [], allSalesRec
                                                 <td className="px-5 py-3.5 text-sm font-black text-blue-600 whitespace-nowrap">{lc.lcNo || '-'}</td>
                                                 <td className="px-5 py-3.5 text-sm font-medium text-gray-800 uppercase">{lc.bankName || '-'}</td>
                                                 <td className="px-5 py-3.5 text-sm font-medium text-right text-gray-900 whitespace-nowrap">
-                                                    {lcQtyKg.toLocaleString('en-US')} <span className="text-[10px] text-gray-400 font-normal">Kg</span>
+                                                    {lcQtyKg.toLocaleString('en-US')} <span className="text-[10px] text-gray-400 font-normal uppercase">kg</span>
                                                 </td>
                                                 <td className="px-5 py-3.5 text-sm font-medium text-right whitespace-nowrap">
-                                                    <span className={`font-black ${lcRemQtyKg <= 0 ? 'text-emerald-600' : 'text-blue-600'}`}>{lcRemQtyKg.toLocaleString('en-US')}</span> <span className="text-[10px] text-gray-400 font-normal">Kg</span>
+                                                    <span className={`font-black ${lcRemQtyKg <= 0 ? 'text-emerald-600' : 'text-blue-600'}`}>{lcRemQtyKg.toLocaleString('en-US')}</span> <span className="text-[10px] text-gray-400 font-normal uppercase">kg</span>
                                                 </td>
                                                 <td className="px-5 py-3.5 text-center whitespace-nowrap">
                                                     {(() => {
@@ -202,6 +204,81 @@ const ViewIPLCsModal = ({ ipRecord, lcRecords, allStockRecords = [], allSalesRec
                             </tbody>
                         </table>
                     </div>
+
+                    {/* Mobile Card List View */}
+                    <div className="md:hidden space-y-4">
+                        {relatedLCs.length > 0 ? (
+                            relatedLCs.map((lc, idx) => {
+                                const lcQtyKg = parseNum(lc.quantity) * 1000;
+                                const lcRemQtyKg = computeLcRemQty(lc);
+
+                                const today = new Date();
+                                today.setHours(0, 0, 0, 0);
+                                const exp = new Date(lc.expiryDate);
+                                exp.setHours(0, 0, 0, 0);
+                                const diffDays = Math.ceil((exp - today) / (1000 * 60 * 60 * 24));
+
+                                let statusText = "Active";
+                                let statusClass = "bg-green-50 text-green-700 border-green-100";
+                                if (exp < today) {
+                                    statusText = "Expired";
+                                    statusClass = "bg-red-50 text-red-600 border-red-100";
+                                } else if (diffDays <= 5) {
+                                    statusText = "Expire Soon";
+                                    statusClass = "bg-amber-50 text-amber-600 border-amber-100";
+                                }
+
+                                return (
+                                    <div key={lc._id || idx} className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm">
+                                        {/* Card Top: LC No & Status */}
+                                        <div className="flex justify-between items-center mb-3">
+                                            <div className="flex items-center min-w-0 flex-1">
+                                                <span className="w-[48px] text-[11px] font-black text-blue-500 uppercase tracking-widest shrink-0 whitespace-nowrap">LC No.</span>
+                                                <span className="text-blue-500 font-bold mx-2">-</span>
+                                                <span className="text-sm font-black text-gray-900 tracking-tight truncate">{lc.lcNo || '-'}</span>
+                                            </div>
+                                            <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-widest border shrink-0 ${statusClass}`}>
+                                                {statusText}
+                                            </span>
+                                        </div>
+
+                                        {/* Card Details: Standardized Grid */}
+                                        <div className="space-y-1 pt-1 border-t border-gray-50 mt-1">
+                                            <div className="flex items-center pt-2">
+                                                <span className="w-[100px] text-[11px] font-black text-gray-400 uppercase tracking-widest shrink-0">Opening Date</span>
+                                                <span className="text-gray-400 font-bold mx-2">-</span>
+                                                <span className="text-sm font-bold text-gray-700">{formatDate(lc.openingDate)}</span>
+                                            </div>
+                                            <div className="flex items-center">
+                                                <span className="w-[100px] text-[11px] font-black text-gray-400 uppercase tracking-widest shrink-0">Expiry Date</span>
+                                                <span className="text-gray-400 font-bold mx-2">-</span>
+                                                <span className="text-sm font-black text-red-500">{formatDate(lc.expiryDate)}</span>
+                                            </div>
+                                            <div className="flex items-center">
+                                                <span className="w-[100px] text-[11px] font-black text-gray-400 uppercase tracking-widest shrink-0">Bank Name</span>
+                                                <span className="text-gray-400 font-bold mx-2">-</span>
+                                                <span className="text-sm font-bold text-gray-800 uppercase truncate">{lc.bankName || '-'}</span>
+                                            </div>
+                                            <div className="flex items-center">
+                                                <span className="w-[100px] text-[11px] font-black text-gray-400 uppercase tracking-widest shrink-0">Quantity</span>
+                                                <span className="text-gray-400 font-bold mx-2">-</span>
+                                                <span className="text-sm font-bold text-gray-900">{lcQtyKg.toLocaleString('en-US')} kg</span>
+                                            </div>
+                                            <div className="flex items-center">
+                                                <span className="w-[100px] text-[11px] font-black text-blue-500 uppercase tracking-widest shrink-0">Rem. LC Qty</span>
+                                                <span className="text-blue-500 font-bold mx-2">-</span>
+                                                <span className={`text-sm font-black ${lcRemQtyKg <= 0 ? 'text-emerald-600' : 'text-blue-600'}`}>{lcRemQtyKg.toLocaleString('en-US')} kg</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                );
+                            })
+                        ) : (
+                            <div className="p-8 text-center bg-gray-50 rounded-2xl border border-gray-100 border-dashed">
+                                <p className="text-gray-400 font-bold">No LC records found for this IP.</p>
+                            </div>
+                        )}
+                    </div>
                 </div>
             </div>
         </div>
@@ -216,35 +293,40 @@ const PDFViewerModal = ({ pdfData, fileName, onClose, onDownload }) => {
         <div className="fixed inset-0 z-[3000] flex items-center justify-center p-4">
             <div className="absolute inset-0 bg-gray-900/40 backdrop-blur-md" onClick={onClose}></div>
             <div className="relative bg-white border border-gray-100 rounded-3xl shadow-2xl w-full max-w-5xl h-[90vh] flex flex-col overflow-hidden animate-in zoom-in duration-300">
-                {/* Header */}
-                <div className="flex items-center justify-between px-8 py-5 border-b border-gray-100 bg-white/80 backdrop-blur-md sticky top-0 z-10">
-                    <div className="flex items-center gap-4">
-                        <div className="w-12 h-12 bg-blue-50 text-blue-600 rounded-2xl flex items-center justify-center">
-                            <PDFIcon className="w-6 h-6" />
+                {/* Header - Responsive & Premium */}
+                <div className="flex items-center justify-between px-4 md:px-8 py-4 md:py-5 border-b border-gray-100 bg-white/95 backdrop-blur-md sticky top-0 z-10">
+                    <div className="flex items-center gap-3 md:gap-4 flex-1 min-w-0">
+                        <div className="w-10 h-10 md:w-12 md:h-12 bg-blue-50 text-blue-600 rounded-xl md:rounded-2xl flex items-center justify-center shadow-sm border border-blue-100/50 shrink-0">
+                            <PDFIcon className="w-5 h-5 md:w-6 md:h-6" />
                         </div>
-                        <div>
-                            <h3 className="text-lg font-black text-gray-900 leading-none mb-1">{fileName || "IP Document"}</h3>
-                            <p className="text-[10px] text-blue-500 font-bold uppercase tracking-widest flex items-center gap-1.5">
-                                <span className="w-1 h-1 bg-blue-500 rounded-full animate-pulse"></span>
-                                Secure PDF Viewer
-                            </p>
+                        <div className="min-w-0">
+                            <h3 className="text-sm md:text-xl font-black text-gray-900 truncate tracking-tight">{fileName || 'Document.pdf'}</h3>
+                            <div className="flex items-center gap-1.5 md:gap-2">
+                                <span className="w-1 md:w-1.5 h-1 md:h-1.5 rounded-full bg-blue-500 animate-pulse"></span>
+                                <span className="text-[9px] md:text-xs font-black text-blue-600 uppercase tracking-widest">Secure Viewer</span>
+                            </div>
                         </div>
                     </div>
-                    <div className="flex items-center gap-3">
+
+                    <div className="flex items-center gap-2 md:gap-4 ml-3">
                         <button
-                            onClick={() => onDownload(pdfData, fileName)}
-                            className="flex items-center gap-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition-all shadow-lg shadow-blue-500/20 active:scale-95"
+                            onClick={onDownload}
+                            className="flex items-center gap-2 px-3 md:px-6 py-2.5 md:py-3 bg-blue-600 text-white rounded-xl font-black hover:bg-blue-700 transition-all shadow-lg shadow-blue-200 active:scale-95 text-[10px] md:text-sm"
                         >
-                            Download PDF
+                            <DownloadIcon className="w-4 h-4 md:w-5 md:h-5" />
+                            <span className="hidden xs:inline">Download</span>
                         </button>
-                        <button onClick={onClose} className="p-2.5 text-gray-400 hover:text-red-500 rounded-xl hover:bg-red-50 transition-all border border-transparent hover:border-red-100 active:scale-90">
-                            <XIcon className="w-6 h-6" />
+                        <button
+                            onClick={onClose}
+                            className="p-2 md:p-3 text-gray-400 hover:text-red-500 rounded-full hover:bg-red-50 transition-all active:scale-90 border border-transparent hover:border-red-100"
+                        >
+                            <XIcon className="w-5 h-5 md:w-6 md:h-6" />
                         </button>
                     </div>
                 </div>
 
-                {/* PDF Content */}
-                <div className="flex-1 bg-gray-100 relative">
+                {/* PDF Content Area */}
+                <div className="flex-1 bg-gray-50/50 relative overflow-hidden">
                     <iframe
                         src={pdfData}
                         className="w-full h-full border-none shadow-inner"
@@ -252,9 +334,11 @@ const PDFViewerModal = ({ pdfData, fileName, onClose, onDownload }) => {
                     />
                 </div>
 
-                {/* Footer Tip */}
-                <div className="px-8 py-3 bg-gray-50 border-t border-gray-100 text-center">
-                    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-[0.2em]">Press ESC or click outside to close viewer</p>
+                {/* Footer - Informational */}
+                <div className="px-4 py-3 bg-gray-50/80 border-t border-gray-100 text-center">
+                    <p className="text-[9px] md:text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">
+                        Press <span className="text-gray-600">ESC</span> or click outside to close viewer
+                    </p>
                 </div>
             </div>
         </div>
@@ -429,7 +513,7 @@ function IPManagement({
                 const status = (s.status || '').toLowerCase();
                 const sTypeLow = (s.saleType || '').toLowerCase().trim();
                 const isBorder = sTypeLow.includes('border') || (s.invoiceNo || '').startsWith('BS') || (!s.saleType && !!(s.lcNo || s.port || s.importer));
-                
+
                 if (lcNumbers.includes(sLcClean) && status === 'accepted' && isBorder) {
                     const itemSubtotal = (s.items || []).reduce((iSum, item) => {
                         const brandSubtotal = (item.brandEntries || []).reduce((bSum, b) => bSum + parseNum(b.quantity), 0);
@@ -1564,116 +1648,130 @@ function IPManagement({
                                                 }
                                             }}
                                         >
-                                            {/* Card Header */}
-                                            <div className="flex justify-between items-center p-4">
-                                                <div className="flex items-center gap-3 flex-1 min-w-0">
-                                                    {isSelectionMode && (
-                                                        <input
-                                                            type="checkbox"
-                                                            checked={selectedItems.has(record._id)}
-                                                            onChange={(e) => { e.stopPropagation(); toggleSelection(record._id); }}
-                                                            className="w-5 h-5 accent-blue-600 shrink-0"
-                                                            onClick={(e) => e.stopPropagation()}
-                                                        />
-                                                    )}
-                                                    <div className="min-w-0">
-                                                        <p className="text-xs font-bold text-gray-400 uppercase tracking-wider">{formatDate(record.openingDate)}</p>
-                                                        <div className="flex items-center gap-2 mt-0.5">
-                                                            <p className="font-bold text-black text-lg sm:text-xl truncate uppercase tracking-tight shrink-0">{record.ipNumber}</p>
-                                                            <span className="text-gray-300">|</span>
-                                                            <p className="text-sm font-semibold text-gray-900 truncate">{record.ipParty}</p>
-                                                        </div>
+                                            <div className="p-5 space-y-4">
+                                                {/* Single Line Header: IP No. & Status Tag */}
+                                                <div className="flex items-center justify-between gap-3">
+                                                    <div className="flex items-center min-w-0 flex-1">
+                                                        {isSelectionMode && (
+                                                            <input
+                                                                type="checkbox"
+                                                                checked={selectedItems.has(record._id)}
+                                                                onChange={(e) => { e.stopPropagation(); toggleSelection(record._id); }}
+                                                                className="w-5 h-5 accent-blue-600 shrink-0 mr-3"
+                                                                onClick={(e) => e.stopPropagation()}
+                                                            />
+                                                        )}
+                                                        <span className="w-[48px] text-[11px] font-black text-blue-500 uppercase tracking-widest shrink-0 whitespace-nowrap">IP No.</span>
+                                                        <span className="text-blue-500 font-bold mx-2">-</span>
+                                                        <span className="text-sm font-black text-gray-900 tracking-tight truncate">{record.ipNumber}</span>
                                                     </div>
-                                                </div>
-                                                <div className="flex items-center gap-3">
-                                                    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider border ${record.computedStatus === 'Active' ? 'bg-green-50 text-green-700 border-green-100' :
+                                                    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-widest border shrink-0 ${record.computedStatus === 'Active' ? 'bg-green-50 text-green-700 border-green-100' :
                                                         record.computedStatus === 'Expired' ? 'bg-red-50 text-red-600 border-red-100' :
                                                             'bg-amber-50 text-amber-700 border-amber-100'
                                                         }`}>
                                                         {record.computedStatus}
                                                     </span>
                                                 </div>
-                                            </div>
 
-                                            {/* Expandable Body */}
-                                            {isExpanded && (
-                                                <div className="px-4 pb-4 animate-in slide-in-from-top-2 duration-300">
-                                                    <div className="space-y-3 pt-3 border-t border-gray-50">
-                                                        <div className="flex justify-between items-center">
-                                                            <span className="text-gray-400 font-bold uppercase tracking-widest text-[10px]">Product</span>
-                                                            <span className="text-gray-900 font-black text-sm">{record.productName}</span>
-                                                        </div>
-                                                        <div className="flex justify-between items-center">
-                                                            <span className="text-gray-400 font-bold uppercase tracking-widest text-[10px]">Quantity</span>
-                                                            <span className="text-gray-900 font-black text-sm">{record.quantity} kg</span>
-                                                        </div>
-                                                        <div className="flex justify-between items-center">
-                                                            <span className="text-gray-400 font-bold uppercase tracking-widest text-[10px]">Rem. Quantity</span>
-                                                            <span className="text-black font-black text-sm">{record.remainingQuantity || '0'} kg</span>
-                                                        </div>
-                                                        <div className="flex justify-between items-center">
-                                                            <span className="text-gray-400 font-bold uppercase tracking-widest text-[10px]">Total LC</span>
-                                                            <span className="text-indigo-600 font-black text-sm">{record.totalLcCount || 0}</span>
-                                                        </div>
-                                                        <div className="flex justify-between items-center">
-                                                            <span className="text-gray-400 font-bold uppercase tracking-widest text-[10px]">Port</span>
-                                                            <span className="text-gray-900 font-black text-sm">{record.port}</span>
-                                                        </div>
-                                                        {record.closeDate && (
-                                                            <div className="flex justify-between items-center pt-1">
-                                                                <span className="text-gray-400 font-bold uppercase tracking-widest text-[10px]">Close Date</span>
-                                                                <span className="text-red-600 font-black text-sm">{formatDate(record.closeDate)}</span>
+                                                {/* Expandable Details & Actions */}
+                                                {isExpanded && (
+                                                    <div className="animate-in slide-in-from-top-2 duration-300">
+                                                        <div className="space-y-1 pt-2">
+                                                            {record.referenceNo && (
+                                                                <div className="flex items-center">
+                                                                    <span className="w-[100px] text-[11px] font-black text-gray-400 uppercase tracking-widest shrink-0">Reference</span>
+                                                                    <span className="text-gray-400 font-bold mx-2">-</span>
+                                                                    <span className="text-sm font-black text-emerald-600 truncate">{record.referenceNo}</span>
+                                                                </div>
+                                                            )}
+                                                            <div className="flex items-center">
+                                                                <span className="w-[100px] text-[11px] font-black text-gray-400 uppercase tracking-widest shrink-0">Opening Date</span>
+                                                                <span className="text-gray-400 font-bold mx-2">-</span>
+                                                                <span className="text-sm font-bold text-gray-700">{formatDate(record.openingDate)}</span>
                                                             </div>
-                                                        )}
-                                                        {record.referenceNo && (
-                                                            <div className="flex justify-between items-center pt-1">
-                                                                <span className="text-gray-400 font-bold uppercase tracking-widest text-[10px]">Reference</span>
-                                                                <span className="text-gray-900 font-black text-sm">{record.referenceNo}</span>
+                                                            {record.closeDate && (
+                                                                <div className="flex items-center">
+                                                                    <span className="w-[100px] text-[11px] font-black text-gray-400 uppercase tracking-widest shrink-0">Close Date</span>
+                                                                    <span className="text-gray-400 font-bold mx-2">-</span>
+                                                                    <span className="text-sm font-bold text-red-600">{formatDate(record.closeDate)}</span>
+                                                                </div>
+                                                            )}
+                                                            <div className="flex items-center">
+                                                                <span className="w-[100px] text-[11px] font-black text-gray-400 uppercase tracking-widest shrink-0">Importer</span>
+                                                                <span className="text-gray-400 font-bold mx-2">-</span>
+                                                                <span className="text-sm font-bold text-gray-800 truncate">{record.ipParty}</span>
                                                             </div>
-                                                        )}
-                                                    </div>
+                                                            <div className="flex items-center">
+                                                                <span className="w-[100px] text-[11px] font-black text-gray-400 uppercase tracking-widest shrink-0">Product</span>
+                                                                <span className="text-gray-400 font-bold mx-2">-</span>
+                                                                <span className="text-sm font-bold text-gray-900 truncate">{record.productName}</span>
+                                                            </div>
+                                                            <div className="flex items-center">
+                                                                <span className="w-[100px] text-[11px] font-black text-gray-400 uppercase tracking-widest shrink-0">Quantity</span>
+                                                                <span className="text-gray-400 font-bold mx-2">-</span>
+                                                                <span className="text-sm font-bold text-gray-900">{record.quantity} kg</span>
+                                                            </div>
+                                                            <div className="flex items-center">
+                                                                <span className="w-[100px] text-[11px] font-black text-gray-400 uppercase tracking-widest shrink-0">Rem. Qty</span>
+                                                                <span className="text-gray-400 font-bold mx-2">-</span>
+                                                                <span className="text-sm font-bold text-black">{record.remainingQuantity || '0'} kg</span>
+                                                            </div>
+                                                            <div className="flex items-center">
+                                                                <span className="w-[100px] text-[11px] font-black text-indigo-500 uppercase tracking-widest shrink-0">Total LC</span>
+                                                                <span className="text-indigo-500 font-bold mx-2">-</span>
+                                                                <span className="text-sm font-black text-indigo-600 tracking-tight">{record.totalLcCount || 0}</span>
+                                                            </div>
+                                                            <div className="flex items-center">
+                                                                <span className="w-[100px] text-[11px] font-black text-gray-400 uppercase tracking-widest shrink-0">Port</span>
+                                                                <span className="text-gray-400 font-bold mx-2">-</span>
+                                                                <span className="text-sm font-bold text-gray-900">{record.port}</span>
+                                                            </div>
+                                                        </div>
 
-                                                    {/* Card Actions */}
-                                                    <div className="flex items-center gap-2 mt-4 pt-4 border-t border-gray-100">
-                                                        <button
-                                                            onClick={(e) => { e.stopPropagation(); setViewIpLcData(record); }}
-                                                            className="flex items-center justify-center gap-2 py-3 px-4 bg-indigo-50 text-indigo-700 rounded-xl text-sm font-black flex-1 hover:bg-indigo-100 transition-all active:scale-95"
-                                                        >
-                                                            <EyeIcon className="w-5 h-5" /> View LCs
-                                                        </button>
-                                                        <button
-                                                            onClick={(e) => {
-                                                                e.stopPropagation();
-                                                                if (record.ipAttachment) {
-                                                                    setViewingPdf(record.ipAttachment);
-                                                                    setViewingPdfName(record.ipAttachmentName);
-                                                                } else {
-                                                                    alert("No PDF document has been uploaded for this IP record.");
-                                                                }
-                                                            }}
-                                                            className={`flex items-center justify-center gap-2 py-3 px-4 ${record.ipAttachment ? 'bg-blue-50 text-blue-700 hover:bg-blue-100' : 'bg-gray-50 text-gray-400 cursor-not-allowed opacity-60'} rounded-xl text-sm font-black flex-1 transition-all active:scale-95`}
-                                                        >
-                                                            <PDFIcon className="w-5 h-5" /> {record.ipAttachment ? 'View PDF' : 'No PDF'}
-                                                        </button>
-                                                        {canManage && (
-                                                            <>
+                                                        {/* Card Actions - Grouped Layout */}
+                                                        <div className="flex flex-col gap-2 mt-4 pt-2">
+                                                            <div className="flex flex-row gap-2">
                                                                 <button
-                                                                    onClick={(e) => { e.stopPropagation(); handleEdit(record); }}
-                                                                    className="flex items-center justify-center gap-2 py-3 px-4 bg-blue-50 text-blue-700 rounded-xl text-sm font-black flex-1 hover:bg-blue-100 transition-all active:scale-95"
+                                                                    onClick={(e) => { e.stopPropagation(); setViewIpLcData(record); }}
+                                                                    className="flex-1 flex items-center justify-center gap-1.5 py-3 bg-indigo-50 text-indigo-700 rounded-xl text-[10px] font-black uppercase tracking-widest active:scale-95 transition-all"
                                                                 >
-                                                                    <EditIcon className="w-5 h-5" /> Edit Record
+                                                                    <EyeIcon className="w-3.5 h-3.5" /> LCs
                                                                 </button>
+                                                                <button
+                                                                    onClick={(e) => {
+                                                                        e.stopPropagation();
+                                                                        if (record.ipAttachment) {
+                                                                            setViewingPdf(record.ipAttachment);
+                                                                            setViewingPdfName(record.ipAttachmentName);
+                                                                        } else {
+                                                                            alert("No PDF document has been uploaded for this IP record.");
+                                                                        }
+                                                                    }}
+                                                                    className={`flex-1 flex items-center justify-center gap-1.5 py-3 ${record.ipAttachment ? 'bg-blue-50 text-blue-700' : 'bg-gray-50 text-gray-400 cursor-not-allowed opacity-60'} rounded-xl text-[10px] font-black uppercase tracking-widest transition-all active:scale-95`}
+                                                                >
+                                                                    <PDFIcon className="w-3.5 h-3.5" /> PDF
+                                                                </button>
+                                                                {canManage && (
+                                                                    <button
+                                                                        onClick={(e) => { e.stopPropagation(); handleEdit(record); }}
+                                                                        className="flex-1 flex items-center justify-center gap-1.5 py-3 bg-emerald-50 text-emerald-700 rounded-xl text-[10px] font-black uppercase tracking-widest active:scale-95 transition-all"
+                                                                    >
+                                                                        <EditIcon className="w-3.5 h-3.5" /> Edit
+                                                                    </button>
+                                                                )}
+                                                            </div>
+                                                            {canManage && (
                                                                 <button
                                                                     onClick={(e) => { e.stopPropagation(); handleDelete(record._id); }}
-                                                                    className="p-3 bg-red-50 text-red-600 rounded-xl hover:bg-red-100 transition-all active:scale-95"
+                                                                    className="w-full flex items-center justify-center gap-1.5 py-3 bg-red-50 text-red-600 rounded-xl text-[10px] font-black uppercase tracking-widest active:scale-95 transition-all"
                                                                 >
-                                                                    <TrashIcon className="w-5 h-5" />
+                                                                    <TrashIcon className="w-3.5 h-3.5" /> Delete
                                                                 </button>
-                                                            </>
-                                                        )}
+                                                            )}
+                                                        </div>
                                                     </div>
-                                                </div>
-                                            )}
+                                                )}
+                                            </div>
                                         </div>
                                     );
                                 })}

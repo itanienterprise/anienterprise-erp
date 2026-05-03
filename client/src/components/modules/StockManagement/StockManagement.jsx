@@ -1871,11 +1871,11 @@ const StockManagement = ({
                                         <div ref={stockFilterRef} className="fixed inset-x-4 top-24 md:absolute md:inset-auto md:right-0 md:mt-3 md:w-80 bg-white border border-gray-100 rounded-2xl shadow-2xl z-[60] p-5 animate-in fade-in zoom-in duration-200 mb-4">
                                             <div className="flex items-center justify-between mb-6 pb-2 border-b border-gray-100">
                                                 <h4 className="font-bold text-gray-900 tracking-tight">Advance Filter</h4>
-                                                <button onClick={() => { 
+                                                <button onClick={() => {
                                                     const today = new Date().toISOString().split('T')[0];
-                                                    setStockFilters({ startDate: today, endDate: today, warehouse: '', brand: '', importer: '', productName: '', category: '' }); 
-                                                    setFilterSearchInputs({ ...filterSearchInputs, warehouseSearch: '', importerSearch: '', brandSearch: '', productSearch: '', categorySearch: '' }); 
-                                                    setShowStockFilterPanel(false); 
+                                                    setStockFilters({ startDate: today, endDate: today, warehouse: '', brand: '', importer: '', productName: '', category: '' });
+                                                    setFilterSearchInputs({ ...filterSearchInputs, warehouseSearch: '', importerSearch: '', brandSearch: '', productSearch: '', categorySearch: '' });
+                                                    setShowStockFilterPanel(false);
                                                 }} className="text-[11px] font-bold text-blue-600 hover:text-blue-700 uppercase tracking-widest">RESET ALL</button>
                                             </div>
                                             <div className="space-y-4">
@@ -1884,49 +1884,49 @@ const StockManagement = ({
                                                     <CustomDatePicker label="To Date" value={stockFilters.endDate} onChange={(e) => setStockFilters({ ...stockFilters, endDate: e.target.value })} compact={true} rightAlign={true} />
                                                 </div>
 
-                                                    {/* Warehouse Filter */}
-                                                    <div className="space-y-1.5 relative col-span-2" ref={stockWarehouseFilterRef}>
-                                                        <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider pl-1">WAREHOUSE</label>
-                                                        <div className="relative">
-                                                            <input
-                                                                type="text"
-                                                                value={filterSearchInputs.warehouseSearch}
-                                                                onChange={(e) => {
-                                                                    setFilterSearchInputs({ ...filterSearchInputs, warehouseSearch: e.target.value });
-                                                                    setFilterDropdownOpen({ ...initialFilterDropdownState, warehouse: true });
-                                                                }}
-                                                                onFocus={() => setFilterDropdownOpen({ ...initialFilterDropdownState, warehouse: true })}
-                                                                placeholder={stockFilters.warehouse || "Search Warehouse..."}
-                                                                className={`w-full px-4 py-2.5 bg-white border border-gray-100 rounded-xl text-sm focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all shadow-sm hover:border-gray-200 pr-14 ${stockFilters.warehouse ? 'placeholder:text-gray-900 placeholder:font-semibold' : 'placeholder:text-gray-300'}`}
-                                                            />
-                                                            <div className="absolute right-3.5 top-1/2 -translate-y-1/2 flex items-center gap-2">
-                                                                {stockFilters.warehouse && (
-                                                                    <button onClick={() => { setStockFilters({ ...stockFilters, warehouse: '' }); setFilterSearchInputs({ ...filterSearchInputs, warehouseSearch: '' }); setFilterDropdownOpen(initialFilterDropdownState); }} className="text-gray-400 hover:text-gray-600">
-                                                                        <XIcon className="w-4 h-4" />
-                                                                    </button>
-                                                                )}
-                                                                <SearchIcon className="w-4.5 h-4.5 text-gray-300 pointer-events-none" />
-                                                            </div>
+                                                {/* Warehouse Filter */}
+                                                <div className="space-y-1.5 relative col-span-2" ref={stockWarehouseFilterRef}>
+                                                    <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider pl-1">WAREHOUSE</label>
+                                                    <div className="relative">
+                                                        <input
+                                                            type="text"
+                                                            value={filterSearchInputs.warehouseSearch}
+                                                            onChange={(e) => {
+                                                                setFilterSearchInputs({ ...filterSearchInputs, warehouseSearch: e.target.value });
+                                                                setFilterDropdownOpen({ ...initialFilterDropdownState, warehouse: true });
+                                                            }}
+                                                            onFocus={() => setFilterDropdownOpen({ ...initialFilterDropdownState, warehouse: true })}
+                                                            placeholder={stockFilters.warehouse || "Search Warehouse..."}
+                                                            className={`w-full px-4 py-2.5 bg-white border border-gray-100 rounded-xl text-sm focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all shadow-sm hover:border-gray-200 pr-14 ${stockFilters.warehouse ? 'placeholder:text-gray-900 placeholder:font-semibold' : 'placeholder:text-gray-300'}`}
+                                                        />
+                                                        <div className="absolute right-3.5 top-1/2 -translate-y-1/2 flex items-center gap-2">
+                                                            {stockFilters.warehouse && (
+                                                                <button onClick={() => { setStockFilters({ ...stockFilters, warehouse: '' }); setFilterSearchInputs({ ...filterSearchInputs, warehouseSearch: '' }); setFilterDropdownOpen(initialFilterDropdownState); }} className="text-gray-400 hover:text-gray-600">
+                                                                    <XIcon className="w-4 h-4" />
+                                                                </button>
+                                                            )}
+                                                            <SearchIcon className="w-4.5 h-4.5 text-gray-300 pointer-events-none" />
                                                         </div>
-                                                        {filterDropdownOpen.warehouse && (() => {
-                                                            const options = [...new Set(uniqueWarehouses.map(w => w.whName).filter(Boolean))].sort();
-                                                            const filtered = options.filter(wh => wh.toLowerCase().includes(filterSearchInputs.warehouseSearch.toLowerCase()));
-                                                            return filtered.length > 0 ? (
-                                                                <div className="absolute z-[120] mt-1 w-full bg-white border border-gray-100 rounded-xl shadow-xl max-h-48 overflow-y-auto py-1">
-                                                                    {filtered.map(wh => (
-                                                                        <button
-                                                                            key={wh}
-                                                                            type="button"
-                                                                            onClick={() => { setStockFilters({ ...stockFilters, warehouse: wh }); setFilterSearchInputs({ ...filterSearchInputs, warehouseSearch: '' }); setFilterDropdownOpen(initialFilterDropdownState); }}
-                                                                            className="w-full px-4 py-2 text-left text-sm hover:bg-blue-50 transition-colors"
-                                                                        >
-                                                                            {wh}
-                                                                        </button>
-                                                                    ))}
-                                                                </div>
-                                                            ) : null;
-                                                        })()}
                                                     </div>
+                                                    {filterDropdownOpen.warehouse && (() => {
+                                                        const options = [...new Set(uniqueWarehouses.map(w => w.whName).filter(Boolean))].sort();
+                                                        const filtered = options.filter(wh => wh.toLowerCase().includes(filterSearchInputs.warehouseSearch.toLowerCase()));
+                                                        return filtered.length > 0 ? (
+                                                            <div className="absolute z-[120] mt-1 w-full bg-white border border-gray-100 rounded-xl shadow-xl max-h-48 overflow-y-auto py-1">
+                                                                {filtered.map(wh => (
+                                                                    <button
+                                                                        key={wh}
+                                                                        type="button"
+                                                                        onClick={() => { setStockFilters({ ...stockFilters, warehouse: wh }); setFilterSearchInputs({ ...filterSearchInputs, warehouseSearch: '' }); setFilterDropdownOpen(initialFilterDropdownState); }}
+                                                                        className="w-full px-4 py-2 text-left text-sm hover:bg-blue-50 transition-colors"
+                                                                    >
+                                                                        {wh}
+                                                                    </button>
+                                                                ))}
+                                                            </div>
+                                                        ) : null;
+                                                    })()}
+                                                </div>
 
                                                 <div className="space-y-4">
                                                     {/* Category Filter */}
@@ -2118,46 +2118,46 @@ const StockManagement = ({
                     {/* Summary Cards */}
                     <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3 md:gap-4 mb-6">
                         {[
-                            { 
-                                label: 'TOTAL BAG', 
-                                value: `${((totalOpeningPktWhole || 0) + (totalArrivalPktWhole || 0)).toLocaleString('en-US')}`, 
-                                bgColor: 'bg-blue-50/50', borderColor: 'border-blue-100', textColor: 'text-blue-700', labelColor: 'text-blue-600' 
+                            {
+                                label: 'TOTAL BAG',
+                                value: `${((totalOpeningPktWhole || 0) + (totalArrivalPktWhole || 0)).toLocaleString('en-US')}`,
+                                bgColor: 'bg-blue-50/50', borderColor: 'border-blue-100', textColor: 'text-blue-700', labelColor: 'text-blue-600'
                             },
-                            { 
-                                label: 'TOTAL QUANTITY', 
-                                value: `${Math.round((totalTotalInHouseQty || 0) + (totalArrivalQty || 0)).toLocaleString('en-US')} ${unit}`, 
-                                bgColor: 'bg-blue-50/50', borderColor: 'border-blue-100', textColor: 'text-blue-700', labelColor: 'text-blue-600' 
+                            {
+                                label: 'TOTAL QUANTITY',
+                                value: `${Math.round((totalTotalInHouseQty || 0) + (totalArrivalQty || 0)).toLocaleString('en-US')} ${unit}`,
+                                bgColor: 'bg-blue-50/50', borderColor: 'border-blue-100', textColor: 'text-blue-700', labelColor: 'text-blue-600'
                             },
-                            { 
-                                label: 'TOTAL SALE BAG', 
-                                value: `${(totalSalePktWhole || 0).toLocaleString('en-IN')} - ${(totalSalePktDecimalKg || 0).toLocaleString('en-IN')} ${unit}`, 
-                                bgColor: 'bg-orange-50/50', borderColor: 'border-orange-100', textColor: 'text-orange-700', labelColor: 'text-orange-600' 
+                            {
+                                label: 'TOTAL SALE BAG',
+                                value: `${(totalSalePktWhole || 0).toLocaleString('en-IN')} - ${(totalSalePktDecimalKg || 0).toLocaleString('en-IN')} ${unit}`,
+                                bgColor: 'bg-orange-50/50', borderColor: 'border-orange-100', textColor: 'text-orange-700', labelColor: 'text-orange-600'
                             },
-                            { 
-                                label: 'TOTAL SALE QTY', 
-                                value: `${Math.round(totalSaleQty || 0).toLocaleString('en-US')} ${unit}`, 
-                                bgColor: 'bg-orange-50/50', borderColor: 'border-orange-100', textColor: 'text-orange-700', labelColor: 'text-orange-600' 
+                            {
+                                label: 'TOTAL SALE QTY',
+                                value: `${Math.round(totalSaleQty || 0).toLocaleString('en-US')} ${unit}`,
+                                bgColor: 'bg-orange-50/50', borderColor: 'border-orange-100', textColor: 'text-orange-700', labelColor: 'text-orange-600'
                             },
-                            { 
-                                label: 'INHOUSE BAG', 
-                                value: `${(totalInHousePktWhole || 0).toLocaleString('en-US')} - ${Math.round(totalInHousePktDecimalKg || 0).toLocaleString('en-US')} ${unit}`, 
-                                bgColor: (totalInHouseQty || 0) < 0 ? 'bg-blue-50/50' : 'bg-emerald-50/50', 
-                                borderColor: (totalInHouseQty || 0) < 0 ? 'border-blue-100' : 'border-emerald-100', 
-                                textColor: (totalInHouseQty || 0) < 0 ? 'text-blue-700' : 'text-emerald-700', 
-                                labelColor: (totalInHouseQty || 0) < 0 ? 'text-blue-600' : 'text-emerald-600' 
+                            {
+                                label: 'INHOUSE BAG',
+                                value: `${(totalInHousePktWhole || 0).toLocaleString('en-US')} - ${Math.round(totalInHousePktDecimalKg || 0).toLocaleString('en-US')} ${unit}`,
+                                bgColor: (totalInHouseQty || 0) < 0 ? 'bg-blue-50/50' : 'bg-emerald-50/50',
+                                borderColor: (totalInHouseQty || 0) < 0 ? 'border-blue-100' : 'border-emerald-100',
+                                textColor: (totalInHouseQty || 0) < 0 ? 'text-blue-700' : 'text-emerald-700',
+                                labelColor: (totalInHouseQty || 0) < 0 ? 'text-blue-600' : 'text-emerald-600'
                             },
-                            { 
-                                label: 'INHOUSE QTY', 
-                                value: `${Math.round(totalInHouseQty || 0).toLocaleString('en-US')} ${unit}`, 
-                                bgColor: (totalInHouseQty || 0) < 0 ? 'bg-blue-50/50' : 'bg-emerald-50/50', 
-                                borderColor: (totalInHouseQty || 0) < 0 ? 'border-blue-100' : 'border-emerald-100', 
-                                textColor: (totalInHouseQty || 0) < 0 ? 'text-blue-700' : 'text-emerald-700', 
-                                labelColor: (totalInHouseQty || 0) < 0 ? 'text-blue-600' : 'text-emerald-600' 
+                            {
+                                label: 'INHOUSE QTY',
+                                value: `${Math.round(totalInHouseQty || 0).toLocaleString('en-US')} ${unit}`,
+                                bgColor: (totalInHouseQty || 0) < 0 ? 'bg-blue-50/50' : 'bg-emerald-50/50',
+                                borderColor: (totalInHouseQty || 0) < 0 ? 'border-blue-100' : 'border-emerald-100',
+                                textColor: (totalInHouseQty || 0) < 0 ? 'text-blue-700' : 'text-emerald-700',
+                                labelColor: (totalInHouseQty || 0) < 0 ? 'text-blue-600' : 'text-emerald-600'
                             },
-                            { 
-                                label: 'SHORTAGE', 
-                                value: `${Math.round(totalShortage || 0).toLocaleString('en-IN')} ${unit}`, 
-                                bgColor: 'bg-rose-50/50', borderColor: 'border-rose-100', textColor: 'text-rose-700', labelColor: 'text-rose-600' 
+                            {
+                                label: 'SHORTAGE',
+                                value: `${Math.round(totalShortage || 0).toLocaleString('en-IN')} ${unit}`,
+                                bgColor: 'bg-rose-50/50', borderColor: 'border-rose-100', textColor: 'text-rose-700', labelColor: 'text-rose-600'
                             },
                         ].map((card, i) => (
                             <div key={i} className={`bg-white border ${card.bgColor} ${card.borderColor} p-3 md:p-4 rounded-2xl shadow-sm transition-all hover:shadow-md hover:scale-[1.02] flex flex-col justify-between h-full`}>
@@ -2188,8 +2188,8 @@ const StockManagement = ({
                         </button>
                     </div>
 
-                    <form 
-                        onSubmit={handleAddWarehouseStockSubmit} 
+                    <form
+                        onSubmit={handleAddWarehouseStockSubmit}
                         onKeyDown={(e) => {
                             if (e.key === 'Enter' && e.target.tagName !== 'TEXTAREA') {
                                 e.preventDefault();
@@ -2689,35 +2689,22 @@ const StockManagement = ({
                                 const isExpanded = expandedProducts === group.productName;
                                 return (
                                     <div key={group.productName || gIdx} className="p-4 space-y-4 hover:bg-gray-50/50 transition-colors">
-                                        <div className="flex justify-between items-start w-full">
-                                            <div
-                                                className="flex flex-col gap-1 cursor-pointer select-none flex-1 pr-2"
-                                                onClick={() => toggleProductExpansion(group.productName)}
-                                            >
-                                                <div className="flex items-center gap-2">
-                                                    <h3 className="text-lg font-black text-gray-900 leading-none">{group.productName}</h3>
-                                                </div>
-                                                {!isExpanded && (
-                                                    <div className="flex items-center flex-wrap gap-2 mt-2">
-                                                        {group.totalInHouseQuantity > 0 && (
-                                                            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-bold bg-gray-100 text-gray-700 border border-gray-200">
-                                                                {Math.round(group.inHousePacket).toLocaleString('en-US')} BAG • {Math.round(group.inHouseQuantity).toLocaleString('en-US')} {group.unit}
-                                                            </span>
-                                                        )}
-                                                    </div>
-                                                )}
-                                            </div>
-                                            <div className="flex flex-col items-center gap-1.5 shrink-0 pt-0.5">
-                                                <button
-                                                    onClick={() => setViewRecord({ data: group })}
-                                                    className="p-1 text-blue-500 hover:bg-blue-50 rounded-lg transition-all shadow-sm border border-blue-100"
-                                                    title="View History"
-                                                >
-                                                    <EyeIcon className="w-4 h-4" />
-                                                </button>
-                                                {!isExpanded && (
-                                                    <span className={`inline-flex items-center px-1.5 py-0.5 rounded-full text-[9px] font-black ${group.totalInHouseQuantity > 0 ? 'bg-emerald-100 text-emerald-700' : group.totalInHouseQuantity < 0 ? 'bg-blue-100 text-blue-700' : 'bg-red-100 text-red-700'}`}>
+                                        <div 
+                                            className="flex justify-between items-start w-full cursor-pointer select-none"
+                                            onClick={() => toggleProductExpansion(group.productName)}
+                                        >
+                                            <div className="flex flex-col gap-2 flex-1 min-w-0 pr-4">
+                                                <h3 className="text-xl font-black text-gray-900 leading-tight truncate">{group.productName}</h3>
+                                                <div className="flex items-center">
+                                                    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider ${group.totalInHouseQuantity > 0 ? 'bg-emerald-100 text-emerald-700' : group.totalInHouseQuantity < 0 ? 'bg-blue-100 text-blue-700' : 'bg-red-100 text-red-700'}`}>
                                                         {group.totalInHouseQuantity > 0 ? 'In Stock' : group.totalInHouseQuantity < 0 ? 'Pre-Sold' : 'Out of Stock'}
+                                                    </span>
+                                                </div>
+                                            </div>
+                                            <div className="shrink-0 pt-1">
+                                                {group.totalInHouseQuantity !== 0 && (
+                                                    <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-base font-bold border whitespace-nowrap ${group.totalInHouseQuantity > 0 ? 'bg-emerald-50 border-emerald-100 text-gray-900' : 'bg-blue-50 border-blue-100 text-blue-700'}`}>
+                                                        {Math.round(group.inHousePacket).toLocaleString('en-US')} BAG • {Math.round(group.inHouseQuantity).toLocaleString('en-US')} {group.unit}
                                                     </span>
                                                 )}
                                             </div>
@@ -2725,29 +2712,6 @@ const StockManagement = ({
 
                                         {isExpanded && (
                                             <div className="space-y-4 animate-in fade-in slide-in-from-top-2 duration-200">
-                                                <div className="grid grid-cols-3 gap-2 mt-1">
-                                                    <div className="bg-blue-50 text-blue-700 p-2 rounded-xl border border-blue-100 flex flex-col items-center justify-center">
-                                                        <span className="text-[11px] font-bold opacity-70 mb-1.5 uppercase tracking-tighter">OPENING</span>
-                                                        <div className="flex flex-col items-center leading-none gap-1.5">
-                                                            <span className="text-[12.5px] font-black">{Math.round(group.openingPacket).toLocaleString('en-US')} <span className="text-[9px] opacity-60 font-bold">BAG</span></span>
-                                                            <span className="text-[12.5px] font-bold opacity-80">{Math.round(group.openingQuantity).toLocaleString('en-US')} <span className="text-[9px] opacity-60">{group.unit}</span></span>
-                                                        </div>
-                                                    </div>
-                                                    <div className="bg-orange-50 text-orange-700 p-2 rounded-xl border border-orange-100 flex flex-col items-center justify-center">
-                                                        <span className="text-[11px] font-bold opacity-70 mb-1.5 uppercase tracking-tighter">SALE</span>
-                                                        <div className="flex flex-col items-center leading-none gap-1.5">
-                                                            <span className="text-[12.5px] font-black">{Math.round(group.salePacket).toLocaleString('en-US')} <span className="text-[9px] opacity-60 font-bold">BAG</span></span>
-                                                            <span className="text-[12.5px] font-bold opacity-80">{Math.round(group.saleQuantity).toLocaleString('en-US')} <span className="text-[9px] opacity-60">{group.unit}</span></span>
-                                                        </div>
-                                                    </div>
-                                                    <div className="bg-emerald-50 text-emerald-700 p-2 rounded-xl border border-emerald-100 flex flex-col items-center justify-center underline decoration-emerald-200/50 underline-offset-[5px]">
-                                                        <span className="text-[11px] font-bold opacity-70 mb-1.5 uppercase tracking-tighter">CLOSING</span>
-                                                        <div className="flex flex-col items-center leading-none gap-1.5">
-                                                            <span className="text-[12.5px] font-black">{Math.round(group.inHousePacket).toLocaleString('en-US')} <span className="text-[9px] opacity-60 font-bold">BAG</span></span>
-                                                            <span className="text-[12.5px] font-bold opacity-80">{Math.round(group.inHouseQuantity).toLocaleString('en-US')} <span className="text-[9px] opacity-60">{group.unit}</span></span>
-                                                        </div>
-                                                    </div>
-                                                </div>
 
                                                 {/* Brands List Mobile */}
                                                 <div className="space-y-3 pl-2 border-l-2 border-blue-100">
@@ -2755,56 +2719,25 @@ const StockManagement = ({
                                                         const brandId = `${group.productName}-${brand.brand}`;
                                                         const isBrandExpanded = expandedBrands === brandId;
                                                         return (
-                                                        <div key={bIdx} className="bg-gray-50/50 rounded-xl p-3 border border-gray-100 space-y-2 transition-all">
-                                                            <div className="flex justify-between items-start w-full cursor-pointer select-none" onClick={() => toggleBrandExpansion(brandId)}>
-                                                                <div className="flex flex-col gap-1 flex-1 pr-2">
-                                                                    <div className="flex items-center gap-2">
-                                                                        <span className="font-bold text-gray-800 text-sm truncate">{brand.brand || '-'}</span>
-                                                                    </div>
-                                                                    {!isBrandExpanded && (
-                                                                        <div className="flex items-center flex-wrap gap-2 mt-1">
-                                                                            {brand.totalInHouseQuantity > 0 && (
-                                                                                <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-bold bg-white text-gray-700 border border-gray-200 shadow-sm">
-                                                                                    {Math.round(brand.inHousePacket).toLocaleString('en-US')} BAG • {Math.round(brand.inHouseQuantity).toLocaleString('en-US')} {group.unit}
-                                                                                </span>
-                                                                            )}
+                                                            <div key={bIdx} className="bg-gray-50/50 rounded-xl p-3 border border-gray-100 space-y-2 transition-all">
+                                                                <div className="flex justify-between items-start w-full select-none">
+                                                                    <div className="flex flex-col gap-1.5 flex-1 min-w-0 pr-4">
+                                                                        <span className="font-black text-gray-900 text-base truncate">{brand.brand || '-'}</span>
+                                                                        <div className="flex items-center">
+                                                                            <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider ${brand.totalInHouseQuantity > 0 ? 'bg-emerald-100 text-emerald-700' : brand.totalInHouseQuantity < 0 ? 'bg-blue-100 text-blue-700' : 'bg-red-100 text-red-700'}`}>
+                                                                                {brand.totalInHouseQuantity > 0 ? 'In Stock' : brand.totalInHouseQuantity < 0 ? 'Pre-Sold' : 'Out of Stock'}
+                                                                            </span>
                                                                         </div>
-                                                                    )}
-                                                                </div>
-                                                                {!isBrandExpanded && (
-                                                                    <div className="flex flex-col items-end shrink-0 pt-1">
-                                                                        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold ${brand.totalInHouseQuantity > 0 ? 'bg-emerald-100 text-emerald-700' : brand.totalInHouseQuantity < 0 ? 'bg-blue-100 text-blue-700' : 'bg-red-100 text-red-700'}`}>
-                                                                            {brand.totalInHouseQuantity > 0 ? 'In Stock' : brand.totalInHouseQuantity < 0 ? 'Pre-Sold' : 'Out of Stock'}
-                                                                        </span>
                                                                     </div>
-                                                                )}
-                                                            </div>
-                                                            {isBrandExpanded && (
-                                                            <div className="grid grid-cols-3 gap-1.5 animate-in fade-in slide-in-from-top-2 duration-200 pt-2 border-t border-gray-100">
-                                                                <div className="bg-blue-50/50 text-blue-700 py-1.5 rounded-xl border border-blue-100 flex flex-col items-center">
-                                                                    <span className="text-[9px] font-bold opacity-60 mb-0.5 uppercase tracking-tighter">OPN</span>
-                                                                    <div className="flex flex-col items-center leading-none gap-1">
-                                                                        <span className="text-[11px] font-bold">{Math.round(brand.openingPacket).toLocaleString('en-US')} <span className="text-[8.5px]">B</span></span>
-                                                                        <span className="text-[11px] font-medium opacity-80">{Math.round(brand.openingQuantity).toLocaleString('en-US')} <span className="text-[8.5px]">kg</span></span>
-                                                                    </div>
-                                                                </div>
-                                                                <div className="bg-orange-50/50 text-orange-700 py-1.5 rounded-xl border border-orange-100 flex flex-col items-center">
-                                                                    <span className="text-[9px] font-bold opacity-60 mb-0.5 uppercase tracking-tighter">SALE</span>
-                                                                    <div className="flex flex-col items-center leading-none gap-1">
-                                                                        <span className="text-[11px] font-bold">{Math.round(brand.salePacket).toLocaleString('en-US')} <span className="text-[8.5px]">B</span></span>
-                                                                        <span className="text-[11px] font-medium opacity-80">{Math.round(brand.saleQuantity).toLocaleString('en-US')} <span className="text-[8.5px]">kg</span></span>
-                                                                    </div>
-                                                                </div>
-                                                                <div className="bg-emerald-50/50 text-emerald-700 py-1.5 rounded-xl border border-emerald-100 flex flex-col items-center">
-                                                                    <span className="text-[9px] font-bold opacity-60 mb-0.5 uppercase tracking-tighter">CLS</span>
-                                                                    <div className="flex flex-col items-center leading-none gap-1 underline decoration-emerald-200/50 underline-offset-[3px]">
-                                                                        <span className="text-[11px] font-bold">{Math.round(brand.inHousePacket).toLocaleString('en-US')} <span className="text-[8.5px]">B</span></span>
-                                                                        <span className="text-[11px] font-medium opacity-80">{Math.round(brand.inHouseQuantity).toLocaleString('en-US')} <span className="text-[8.5px]">kg</span></span>
+                                                                    <div className="shrink-0 pt-0.5">
+                                                                        {brand.totalInHouseQuantity !== 0 && (
+                                                                            <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-sm font-bold border shadow-sm whitespace-nowrap ${brand.totalInHouseQuantity > 0 ? 'bg-emerald-50 border-emerald-100 text-gray-900' : 'bg-blue-50 border-blue-100 text-blue-700'}`}>
+                                                                                {Math.round(brand.inHousePacket).toLocaleString('en-US')} BAG • {Math.round(brand.inHouseQuantity).toLocaleString('en-US')} {group.unit}
+                                                                            </span>
+                                                                        )}
                                                                     </div>
                                                                 </div>
                                                             </div>
-                                                            )}
-                                                        </div>
                                                         );
                                                     })}
                                                 </div>
@@ -2854,7 +2787,7 @@ const StockManagement = ({
                                                     {group.brandList.map((brand, bIdx) => (
                                                         <div key={bIdx} className={`grid grid-cols-[2.5fr_1.2fr_1.2fr_1.2fr_1.2fr_1.2fr_1.2fr_1fr] gap-4 items-center whitespace-nowrap min-w-[1000px] ${bIdx !== group.brandList.length - 1 ? 'border-b border-gray-100 pb-2' : 'pb-1'}`}>
                                                             <div className="text-sm text-gray-600 font-medium whitespace-nowrap truncate pr-2" title={brand.brand}>{brand.brand || '-'}</div>
-                                                            
+
                                                             {/* Opening Stock */}
                                                             <div className="text-sm text-blue-800 bg-blue-50/50 px-2 py-1 rounded-lg text-center font-bold">
                                                                 {(() => {
