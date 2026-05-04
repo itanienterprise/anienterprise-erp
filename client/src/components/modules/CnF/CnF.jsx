@@ -531,8 +531,8 @@ const CnF = ({
                 }
             });
 
-            rows.sort((a, b) => new Date(b.date) - new Date(a.date));
-            expenseRows.sort((a, b) => new Date(b.date) - new Date(a.date));
+            rows.sort((a, b) => new Date(a.date) - new Date(b.date));
+            expenseRows.sort((a, b) => new Date(a.date) - new Date(b.date));
             setHistoryRecords(rows);
             setExpenseRecords(expenseRows);
         } catch (error) {

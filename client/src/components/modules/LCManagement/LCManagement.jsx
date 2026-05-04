@@ -74,7 +74,7 @@ const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords
             };
         });
 
-    const consumptionHistory = [...relatedReceipts, ...relatedSales].sort((a, b) => new Date(b.date) - new Date(a.date));
+    const consumptionHistory = [...relatedReceipts, ...relatedSales].sort((a, b) => new Date(a.date) - new Date(b.date));
 
     // G.P List for this LC
     const relatedGpRecords = gpRecords.filter(gp => {

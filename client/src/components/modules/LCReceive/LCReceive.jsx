@@ -397,7 +397,7 @@ function LCReceive({
     const [expandedCard, setExpandedCard] = useState(null);
     const [viewData, setViewData] = useState(null);
     const [isRequestedOnly, setIsRequestedOnly] = useState(false);
-    const [sortConfig, setSortConfig] = useState({ key: 'date', direction: 'desc' });
+    const [sortConfig, setSortConfig] = useState({ key: 'date', direction: 'asc' });
 
     const handleSort = (key) => {
         let direction = 'desc';

@@ -55,7 +55,7 @@ const SaleManagement = ({
     const [activeFilterDropdown, setActiveFilterDropdown] = useState(null); // 'from', 'to', 'company', 'invoice', 'port', 'product', 'indCnf', 'bdCnf'
     const [isRequestedOnly, setIsRequestedOnly] = useState(false);
     const [originalData, setOriginalData] = useState(null);
-    const [sortConfig, setSortConfig] = useState({ key: 'date', direction: 'desc' });
+    const [sortConfig, setSortConfig] = useState({ key: 'date', direction: 'asc' });
 
     const [showBulkRateModal, setShowBulkRateModal] = useState(false);
     const [lcRecords, setLcRecords] = useState([]);

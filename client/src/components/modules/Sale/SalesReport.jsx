@@ -132,7 +132,7 @@ const SalesReport = ({
         }
 
         return true;
-    }).sort((a, b) => new Date(b.date) - new Date(a.date));
+    }).sort((a, b) => new Date(a.date) - new Date(b.date));
 
     const summary = {
         totalQty: filteredSales.reduce((sum, sale) => {

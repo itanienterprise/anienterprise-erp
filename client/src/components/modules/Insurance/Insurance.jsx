@@ -191,7 +191,7 @@ const Insurance = ({ onDeleteConfirm }) => {
     const displayRecords = useMemo(() => {
         return insuranceRecords.filter(item =>
             (item.companyName || '').toLowerCase().includes(searchQuery.toLowerCase())
-        ).sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+        ).sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
     }, [insuranceRecords, searchQuery]);
 
     const globalAggregates = useMemo(() => {
@@ -242,13 +242,13 @@ const Insurance = ({ onDeleteConfirm }) => {
                 (item.method || '').toLowerCase().includes(historySearchQuery.toLowerCase()) ||
                 (item.reference || '').toLowerCase().includes(historySearchQuery.toLowerCase()) ||
                 (item.type || '').toLowerCase().includes(historySearchQuery.toLowerCase())
-            ).sort((a, b) => new Date(b.date) - new Date(a.date));
+            ).sort((a, b) => new Date(a.date) - new Date(b.date));
         } else {
             const companyLcs = insuranceTotals[viewData.companyName]?.lcs || [];
             return companyLcs.filter(lc =>
                 (lc.lcNo || '').toLowerCase().includes(historySearchQuery.toLowerCase()) ||
                 (lc.beneficiary || '').toLowerCase().includes(historySearchQuery.toLowerCase())
-            ).sort((a, b) => new Date(b.lcDate) - new Date(a.lcDate));
+            ).sort((a, b) => new Date(a.lcDate) - new Date(b.lcDate));
         }
     }, [viewData, historySearchQuery, activeHistoryTab, insuranceTotals]);
 

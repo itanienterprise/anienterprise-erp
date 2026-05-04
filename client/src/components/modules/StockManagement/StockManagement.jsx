@@ -87,8 +87,8 @@ const StockManagement = ({
     const [selectedItems, setSelectedItems] = useState(new Set());
     const [isSelectionMode, setIsSelectionMode] = useState(false);
     const [sortConfig, setSortConfig] = useState({
-        stock: { key: 'date', direction: 'desc' },
-        history: { key: 'date', direction: 'desc' }
+        stock: { key: 'date', direction: 'asc' },
+        history: { key: 'date', direction: 'asc' }
     });
 
     // Long Press Logic

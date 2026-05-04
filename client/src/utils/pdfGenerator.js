@@ -1547,18 +1547,17 @@ export const generateWarehouseReportPDF = (displayGroups, filters, totals) => {
     }
 };
 
-export const generateSaleInvoicePDF = (sale, allCustomers = []) => {
+export const generateSaleInvoicePDF = async (sale, allCustomers = []) => {
     try {
-        const doc = new jsPDF();
+        const doc = new jsPDF({ orientation: 'p', unit: 'mm', format: 'a4' });
         const pageWidth = doc.internal.pageSize.width;
         const pageHeight = doc.internal.pageSize.height;
         const margin = 10;
+        const contentWidth = pageWidth - (margin * 2);
 
         // --- Calculate Previous Balance Dynamically ---
         let previousBalance = parseFloat(sale.previousBalance || 0);
 
-        // If we have customer context, we can calculate a more accurate point-in-time balance
-        // identifying the matching customer from the list
         const customer = allCustomers.find(c =>
             c._id === sale.customerId ||
             (c.companyName && sale.companyName && c.companyName.trim().toLowerCase() === sale.companyName.trim().toLowerCase())
@@ -1568,11 +1567,8 @@ export const generateSaleInvoicePDF = (sale, allCustomers = []) => {
             const sHistory = customer.salesHistory || [];
             const pHistory = customer.paymentHistory || [];
 
-            // A transaction is "previous" if:
-            // 1. It happened on a strictly earlier date
-            // 2. OR it happened on the same date but has a lexicographically smaller invoice number
             const prevSales = sHistory.filter(h => {
-                if (h.invoiceNo === sale.invoiceNo) return false; // Exclude current sale
+                if (h.invoiceNo === sale.invoiceNo) return false;
                 if (h.date < sale.date) return true;
                 if (h.date === sale.date && h.invoiceNo < sale.invoiceNo) return true;
                 return false;
@@ -1582,41 +1578,91 @@ export const generateSaleInvoicePDF = (sale, allCustomers = []) => {
             const totalPrevPaid = prevSales.reduce((sum, h) => sum + (parseFloat(h.paid) || 0), 0);
             const totalPrevDisc = prevSales.reduce((sum, h) => sum + (parseFloat(h.discount) || 0), 0);
 
-            // For standalone payments, we don't have invoice numbers, so we just use date
             const prevPayments = pHistory.filter(h => h.date < sale.date);
             const totalPrevPayAmt = prevPayments.reduce((sum, h) => sum + (parseFloat(h.amount) || 0), 0);
 
             const calculatedPrevBalance = totalPrevAmt - totalPrevPaid - totalPrevDisc - totalPrevPayAmt;
-            // Use calculated balance if it's non-zero or if the sale belongs to this customer
             previousBalance = Math.max(0, calculatedPrevBalance);
         }
 
-        // --- 1. Header Section ---
-        doc.setFontSize(24);
+        // --- Background Patterns (Organic Waves - Adjusted for Portrait) ---
+        doc.setFillColor(255, 247, 237);
+        doc.circle(0, 0, 35, 'F');
+        doc.setFillColor(254, 215, 170);
+
+        doc.setFillColor(255, 247, 237);
+        doc.circle(pageWidth, pageHeight, 45, 'F');
+        doc.setFillColor(254, 215, 170);
+        doc.circle(0, pageHeight, 30, 'F');
+
+        // Load and embed company logo
+        const logoImg = await new Promise((resolve) => {
+            const img = new Image();
+            img.crossOrigin = 'anonymous';
+            img.onload = () => {
+                const canvas = document.createElement('canvas');
+                canvas.width = img.width;
+                canvas.height = img.height;
+                const ctx = canvas.getContext('2d');
+                ctx.drawImage(img, 0, 0);
+                resolve(canvas.toDataURL('image/png'));
+            };
+            img.onerror = () => resolve(null);
+            img.src = '/logo.png';
+        });
+
+        if (logoImg) {
+            doc.addImage(logoImg, 'PNG', margin, margin, 22, 22);
+        } else {
+            doc.setFillColor(249, 115, 22);
+            doc.roundedRect(margin, margin, 20, 20, 3, 3, 'F');
+            doc.setTextColor(255, 255, 255);
+            doc.setFontSize(18);
+            doc.setFont('helvetica', 'bold');
+            doc.text("A", margin + 10, margin + 13, { align: 'center' });
+        }
+
+        doc.setTextColor(20, 25, 35);
+        doc.setFontSize(28);
         doc.setFont('helvetica', 'bold');
-        doc.setTextColor(0);
-        doc.text("M/S ANI ENTERPRISE", pageWidth / 2, 20, { align: 'center' });
+        doc.text("ANI ENTERPRISE", margin + 24, margin + 13);
 
-        doc.setFontSize(9);
+        // Contact Info (Company) - Structured Multi-line
+        doc.setFontSize(10);
         doc.setFont('helvetica', 'normal');
-        doc.setTextColor(0); // Changed from 50 to 0 (Black)
-        doc.text("766, H.M Tower, Level-06, Borogola, Bogura-5800, Bangladesh", pageWidth / 2, 26, { align: 'center' });
-        doc.text("+8802588813057, anienterprise051@gmail.com, www.anienterprises.com.bd", pageWidth / 2, 31, { align: 'center' });
+        doc.setTextColor(0, 0, 0);
+        doc.text([
+            "766, H.M Tower, Level-06",
+            "Borogola, Bogura, Bangladesh",
+            "Tel: +8802588813057",
+            "Email: anienterprise051@gmail.com"
+        ], pageWidth - margin, margin + 3, { align: 'right', lineHeightFactor: 1.15 });
 
-        // --- 2. Boxed Title with Extending Lines ---
-        doc.setDrawColor(0);
-        doc.setLineWidth(0.5);
-        // Left line
-        doc.line(margin, 43, (pageWidth / 2) - 35, 43);
-        // Right line
-        doc.line((pageWidth / 2) + 35, 43, pageWidth - margin, 43);
+        // --- Body Section ---
+        let y = margin + 40;
+        doc.setFontSize(12);
+        doc.setTextColor(0, 0, 0);
+        doc.setFont('helvetica', 'bold');
 
-        // Boxed Title
-        doc.setLineWidth(0.3);
-        doc.rect((pageWidth / 2) - 35, 38, 70, 10);
+        // Helper for dotted lines
+        const drawDottedLine = (x1, y1, x2) => {
+            doc.setDrawColor(200);
+            doc.setLineWidth(0.1);
+            doc.setLineDashPattern([0.5, 1], 0);
+            doc.line(x1, y1, x2, y1);
+            doc.setLineDashPattern([], 0);
+        };
+
+        const labelWidth = 40;
+        const rightColStart = margin + 105;
+
+        // --- 2. Boxed Title ---
+        doc.setFillColor(249, 115, 22); // Orange color
+        doc.rect((pageWidth / 2) - 35, y - 8, 70, 9, 'F');
         doc.setFontSize(12);
         doc.setFont('helvetica', 'bold');
-        doc.text("SALES INVOICE", pageWidth / 2, 44.5, { align: 'center' });
+        doc.setTextColor(255, 255, 255);
+        doc.text("SALES INVOICE", pageWidth / 2, y - 2, { align: 'center' });
 
         // --- 2b. Customer Type (Centered under Title Box) ---
         let custTypeLabel = "General Customer";
@@ -1624,61 +1670,63 @@ export const generateSaleInvoicePDF = (sale, allCustomers = []) => {
         if (cType.includes("party") || sale.isParty) {
             custTypeLabel = "Party Customer";
         }
+        y += 6;
         doc.setFontSize(10);
         doc.setFont('helvetica', 'bold');
-        doc.text(custTypeLabel, pageWidth / 2, 53, { align: 'center' });
+        doc.setTextColor(0, 0, 0);
+        doc.text(custTypeLabel, pageWidth / 2, y, { align: 'center' });
 
-        // --- 3. Info Block (Expanded) ---
-        let infoY = 60; // Pushed down slightly to give room to Customer Type label
-        doc.setFontSize(9.5);
-        doc.setTextColor(0);
+        y += 12;
 
-        // Left Column: Customer Details
-        const leftColX = margin + 2;
+        // Line 1: Date (Left) | Invoice No (Right)
         doc.setFont('helvetica', 'bold');
-        doc.text("Customer ID :", leftColX, infoY);
+        doc.text("Invoice Date", margin, y);
+        doc.text(":", margin + labelWidth - 5, y);
         doc.setFont('helvetica', 'normal');
-        // Prioritize the human-readable customerId from the customer object if found
+        doc.text(formatDate(sale.date), margin + labelWidth, y);
+        drawDottedLine(margin + labelWidth, y + 1, rightColStart - 5);
+
+        doc.setFont('helvetica', 'bold');
+        doc.text("Invoice No :", rightColStart, y);
+        doc.setFont('helvetica', 'normal');
+        doc.text(sale.invoiceNo || "-", rightColStart + 28, y);
+        drawDottedLine(rightColStart + 28, y + 1, pageWidth - margin);
+
+        y += 12;
+        // Line 2: Company Name (Left) | Customer ID (Right)
+        doc.setFont('helvetica', 'bold');
+        doc.text("Company Name", margin, y);
+        doc.text(":", margin + labelWidth - 5, y);
+        doc.setFont('helvetica', 'normal');
+        doc.text(sale.companyName || "-", margin + labelWidth, y);
+        drawDottedLine(margin + labelWidth, y + 1, rightColStart - 5);
+
+        doc.setFont('helvetica', 'bold');
+        doc.text("Customer ID :", rightColStart, y);
+        doc.setFont('helvetica', 'normal');
         const displayCustId = customer?.customerId || (sale.customerId ? sale.customerId.slice(-5).toUpperCase() : "-");
-        doc.text(displayCustId, leftColX + 32, infoY);
+        doc.text(displayCustId, rightColStart + 28, y);
+        drawDottedLine(rightColStart + 28, y + 1, pageWidth - margin);
 
-        infoY += 5;
+        y += 12;
+        // Line 3: Address (Full Width)
         doc.setFont('helvetica', 'bold');
-        doc.text("Company Name :", leftColX, infoY);
+        doc.text("Address", margin, y);
+        doc.text(":", margin + labelWidth - 5, y);
         doc.setFont('helvetica', 'normal');
-        doc.text(sale.companyName || "-", leftColX + 32, infoY);
+        doc.text(sale.address || "-", margin + labelWidth, y);
+        drawDottedLine(margin + labelWidth, y + 1, pageWidth - margin);
 
-        infoY += 5;
+        y += 12;
+        // Line 4: Contact No (Full Width)
         doc.setFont('helvetica', 'bold');
-        doc.text("Address :", leftColX, infoY);
+        doc.text("Contact No", margin, y);
+        doc.text(":", margin + labelWidth - 5, y);
         doc.setFont('helvetica', 'normal');
-        const addr = sale.address || "-";
-        doc.text(addr, leftColX + 32, infoY, { maxWidth: 75 });
+        doc.text(sale.contact || "-", margin + labelWidth, y);
+        drawDottedLine(margin + labelWidth, y + 1, pageWidth - margin);
 
-        // Adjust Y pos based on address length
-        const addrLines = doc.splitTextToSize(addr, 75);
-        infoY += addrLines.length * 5;
-
-        doc.setFont('helvetica', 'bold');
-        doc.text("Contact No :", leftColX, infoY);
-        doc.setFont('helvetica', 'normal');
-        doc.text(sale.contact || "-", leftColX + 32, infoY);
-
-        // Right Column: Invoice Details
-        const rightLabelX = pageWidth - margin - 55;
-        const rightValueX = pageWidth - margin - 25;
-        let ryPos = 60; // Align with infoY
-
-        doc.setFont('helvetica', 'bold');
-        doc.text("Invoice Date :", rightLabelX, ryPos);
-        doc.setFont('helvetica', 'normal');
-        doc.text(formatDate(sale.date), rightValueX, ryPos);
-
-        ryPos += 5;
-        doc.setFont('helvetica', 'bold');
-        doc.text("Invoice No :", rightLabelX, ryPos);
-        doc.setFont('helvetica', 'normal');
-        doc.text(sale.invoiceNo || "-", rightValueX, ryPos);
+        y += 14;
 
         // --- 4. Items Table ---
         const tableRows = [];
@@ -1745,61 +1793,39 @@ export const generateSaleInvoicePDF = (sale, allCustomers = []) => {
         }
 
         autoTable(doc, {
-            startY: Math.max(infoY, ryPos) + 12,
-            head: [['SN', 'Product Name', (sale.invoiceNo || '').startsWith('BS') ? 'Truck' : 'Brand', 'Quantity', 'Rate', 'Total Amount']],
+            startY: y,
+            head: [['SN', 'Product Name', isBorderSale ? 'Truck' : 'Brand', 'Quantity', 'Rate', 'Total Amount']],
             body: tableRows,
             theme: 'grid',
-            headStyles: {
-                fillColor: [255, 255, 255],
-                textColor: [0, 0, 0],
-                fontStyle: 'bold',
-                halign: 'center',
-                lineWidth: 0.1,
-                lineColor: [0, 0, 0]
-            },
             styles: {
-                fontSize: 8.5,
-                cellPadding: 2,
+                fontSize: 9.5,
+                cellPadding: 3,
                 textColor: [0, 0, 0],
-                lineColor: [0, 0, 0],
-                lineWidth: 0.1,
-                valign: 'middle'
+                lineColor: [226, 232, 240],
+                lineWidth: 0.2,
+            },
+            headStyles: {
+                fillColor: [249, 115, 22],
+                textColor: [255, 255, 255],
+                fontStyle: 'bold',
+                fontSize: 9,
+                halign: 'center',
             },
             columnStyles: {
-                0: { halign: 'center', cellWidth: 10 },
-                1: { halign: 'left', cellWidth: 42 },
-                2: { halign: isBorderSale ? 'center' : 'left', cellWidth: 68 },
-                3: { halign: 'center', cellWidth: 20 },
-                4: { halign: 'right', cellWidth: 20 },
-                5: { halign: 'right', cellWidth: 30 }
+                0: { halign: 'center', cellWidth: 14 },
+                1: { halign: 'left', cellWidth: 40 },
+                2: { halign: isBorderSale ? 'center' : 'left', cellWidth: 40 },
+                3: { halign: 'center', cellWidth: 25 },
+                4: { halign: 'right', cellWidth: 33 },
+                5: { halign: 'right', cellWidth: 38 }
             },
             margin: { left: margin, right: margin }
         });
 
-        // --- 5. Summary Table (Right Aligned, Immediately after Table) ---
-        let finalY = doc.lastAutoTable.finalY + 2;
-        const summaryBoxWidth = 35;
-        const summaryX = pageWidth - margin - summaryBoxWidth;
-        const rowHeight = 7;
+        // --- 5. Summary Section ---
+        let finalY = doc.lastAutoTable.finalY + 10;
 
-        const drawSummaryRow = (label, value, y, isBold = false) => {
-            doc.setDrawColor(0);
-            doc.setLineWidth(0.1);
-            // Label Cell
-            doc.setFont('helvetica', 'bold');
-            doc.text(label + " :", summaryX - 2, y + 4.5, { align: 'right' });
-            // Value Cell (Boxed)
-            doc.rect(summaryX, y, summaryBoxWidth, rowHeight);
-            doc.setFont('helvetica', isBold ? 'bold' : 'normal');
-            doc.text(value, summaryX + summaryBoxWidth - 2, y + 4.5, { align: 'right' });
-        };
-
-        doc.setFontSize(9);
-
-        // Correct calculation logic
-        // subtotal should be the sum of all item totalAmounts
         const subtotal = tableRows.reduce((sum, row) => {
-            // totalAmount is the last element in the row
             const amtStr = row[row.length - 1].replace(/,/g, '');
             return sum + (parseFloat(amtStr) || 0);
         }, 0);
@@ -1810,45 +1836,81 @@ export const generateSaleInvoicePDF = (sale, allCustomers = []) => {
         const currentBalance = invoiceTotal - paidAmount;
         const totalBalance = currentBalance + previousBalance;
 
-        drawSummaryRow("Discount", discount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }), finalY);
-        finalY += rowHeight;
-        drawSummaryRow("Invoice Total", invoiceTotal.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }), finalY);
-        finalY += rowHeight;
-        drawSummaryRow("Paid Amount", paidAmount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }), finalY);
-        finalY += rowHeight;
-        drawSummaryRow("Balance", currentBalance.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }), finalY, true);
-        finalY += rowHeight;
-        drawSummaryRow("Previous Balance", previousBalance.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }), finalY);
-        finalY += rowHeight;
-        drawSummaryRow("Total Balance", totalBalance.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }), finalY, true);
+        // Left Side: In Words
+        doc.setFillColor(241, 245, 249);
+        doc.roundedRect(margin, finalY, contentWidth - 100, 15, 3, 3, 'F');
+        doc.setFontSize(14);
+        doc.setTextColor(0, 0, 0);
+        doc.setFont('helvetica', 'bold');
+        doc.text("TK.   " + invoiceTotal.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }), margin + ((contentWidth - 100) / 2), finalY + 5.5, { align: 'center' });
+        const amountWords = numberToWords(invoiceTotal);
+        doc.setFontSize(8.5);
+        doc.setFont('helvetica', 'normal');
+        doc.text("In Words : " + amountWords, margin + ((contentWidth - 100) / 2), finalY + 11.5, { align: 'center' });
+
+
+        // Right Side: Summary Table
+        const summaryBoxWidth = 35;
+        const summaryX = pageWidth - margin - summaryBoxWidth;
+        const rowHeight = 7;
+        let sumY = finalY;
+
+        const drawSummaryRow = (label, value, isBold = false) => {
+            doc.setDrawColor(200);
+            doc.setLineWidth(0.1);
+            doc.setFont('helvetica', 'bold');
+            doc.setFontSize(9);
+            doc.text(label + " :", summaryX - 2, sumY + 4.5, { align: 'right' });
+
+            // Box
+            if (isBold) {
+                doc.setFillColor(249, 115, 22);
+                doc.rect(summaryX, sumY, summaryBoxWidth, rowHeight, 'F');
+            } else {
+                doc.setFillColor(255, 255, 255);
+                doc.rect(summaryX, sumY, summaryBoxWidth, rowHeight, 'S');
+            }
+
+            doc.setFont('helvetica', isBold ? 'bold' : 'normal');
+            doc.setTextColor(isBold ? 255 : 0, isBold ? 255 : 0, isBold ? 255 : 0);
+            doc.text(value, summaryX + summaryBoxWidth - 2, sumY + 4.5, { align: 'right' });
+
+            sumY += rowHeight;
+            doc.setTextColor(0, 0, 0); // reset
+        };
+
+        drawSummaryRow("Discount", discount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
+        drawSummaryRow("Invoice Total", invoiceTotal.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
+        drawSummaryRow("Paid Amount", paidAmount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
+        drawSummaryRow("Balance", currentBalance.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }), true);
+        drawSummaryRow("Previous Balance", previousBalance.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
+        drawSummaryRow("Total Balance", totalBalance.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }), true);
 
         // --- 6. Footer / Signatures ---
-        const sigY = finalY + 30;
-        const sigWidth = 45;
-        const sigGap = (pageWidth - (margin * 2) - (sigWidth * 3)) / 2;
+        const sigY = Math.max(sumY + 20, finalY + 45);
 
-        doc.setLineWidth(0.3);
-        doc.setDrawColor(0);
+        doc.setDrawColor(180);
+        doc.setLineWidth(0.5);
 
         // Signature 1: PREPARED BY
-        doc.line(margin, sigY, margin + sigWidth, sigY);
+        doc.line(margin, sigY, margin + 40, sigY);
         doc.setFontSize(8);
         doc.setFont('helvetica', 'normal');
-        doc.text(sale.requestedBy || sale.requestedByUsername || "-", margin + sigWidth / 2, sigY - 2, { align: 'center' });
+        doc.text(sale.requestedBy || sale.requestedByUsername || "-", margin + 20, sigY - 2, { align: 'center' });
         doc.setFont('helvetica', 'bold');
-        doc.text("PREPARED BY", margin + sigWidth / 2, sigY + 5, { align: 'center' });
+        doc.text("PREPARED BY", margin + 20, sigY + 5, { align: 'center' });
 
         // Signature 2: VERIFIED BY
-        doc.line(margin + sigWidth + sigGap, sigY, margin + sigWidth + sigGap + sigWidth, sigY);
+        doc.line((pageWidth / 2) - 20, sigY, (pageWidth / 2) + 20, sigY);
         doc.setFont('helvetica', 'normal');
-        doc.text(sale.acceptedBy || sale.rejectedBy || "-", margin + sigWidth + sigGap + sigWidth / 2, sigY - 2, { align: 'center' });
+        doc.text(sale.acceptedBy || sale.rejectedBy || "-", pageWidth / 2, sigY - 2, { align: 'center' });
         doc.setFont('helvetica', 'bold');
-        doc.text("VERIFIED BY", margin + sigWidth + sigGap + sigWidth / 2, sigY + 5, { align: 'center' });
+        doc.text("VERIFIED BY", pageWidth / 2, sigY + 5, { align: 'center' });
 
         // Signature 3: AUTHORIZED SIGNATURE
-        doc.line(pageWidth - margin - sigWidth, sigY, pageWidth - margin, sigY);
+        doc.line(pageWidth - margin - 40, sigY, pageWidth - margin, sigY);
         doc.setFont('helvetica', 'bold');
-        doc.text("AUTHORIZED SIGNATURE", pageWidth - margin - sigWidth / 2, sigY + 5, { align: 'center' });
+        doc.text("AUTHORIZED SIGNATURE", pageWidth - margin - 20, sigY + 5, { align: 'center' });
 
         const pdfOutput = doc.output('blob');
         const blobURL = URL.createObjectURL(pdfOutput);

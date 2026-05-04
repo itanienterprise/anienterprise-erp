@@ -12,7 +12,7 @@ const PaymentCollection = () => {
     const [payments, setPayments] = useState([]);
     const [isLoading, setIsLoading] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
-    const [sortConfig, setSortConfig] = useState({ key: 'date', direction: 'desc' });
+    const [sortConfig, setSortConfig] = useState({ key: 'date', direction: 'asc' });
     const [currentUser] = useState(() => {
         try {
             const saved = localStorage.getItem('currentUser');

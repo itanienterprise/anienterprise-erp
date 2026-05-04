@@ -137,7 +137,7 @@ const Exporter = ({
             });
 
             // Sort by date (newest first)
-            rows.sort((a, b) => new Date(b.date) - new Date(a.date));
+            rows.sort((a, b) => new Date(a.date) - new Date(b.date));
 
             setHistoryRecords(rows);
         } catch (error) {
