@@ -2009,10 +2009,16 @@ export const generateProductHistoryPDF = (productName, category, activeTab, purc
         if (activeTab === 'total') {
             // --- Unified History Table ---
             const aggregatedPurchase = Object.values(sortedPurchaseData.reduce((acc, p) => {
-                const key = `${p.date}_${p.lcNo}`;
-                if (!acc[key]) acc[key] = { ...p, type: 'purchase', itemQty: 0, itemInHouseQty: 0, itemShortageQty: 0 };
+                const key = `${p.date}_${p.lcNo}_${p.itemTruck || p.truckNo || ''}`;
+                if (!acc[key]) acc[key] = { ...p, type: 'purchase', itemQty: 0, itemInHouseQty: 0, itemShortageQty: 0, brandsProcessed: new Set() };
                 acc[key].itemQty += parseFloat(p.itemQty) || 0;
-                acc[key].itemInHouseQty += parseFloat(p.itemInHouseQty) || 0;
+                
+                const brandKey = (p.itemBrand || '').trim().toLowerCase();
+                if (!acc[key].brandsProcessed.has(brandKey)) {
+                    acc[key].itemInHouseQty += parseFloat(p.itemInHouseQty) || 0;
+                    acc[key].brandsProcessed.add(brandKey);
+                }
+                
                 acc[key].itemShortageQty += parseFloat(p.itemShortageQty) || 0;
                 return acc;
             }, {}));
@@ -2025,20 +2031,47 @@ export const generateProductHistoryPDF = (productName, category, activeTab, purc
             }, {}));
 
             let currentBalance = 0;
+            const processedLCTruckBrands = new Set();
+            
             const unifiedData = [...aggregatedPurchase, ...aggregatedSale]
                 .sort((a, b) => new Date(a.date) - new Date(b.date))
                 .map(item => {
                     if (item.type === 'purchase') {
-                        currentBalance += item.itemInHouseQty;
+                        const lcKey = `${(item.lcNo || '').trim()}_${(item.itemTruck || item.truckNo || '').trim()}_${(item.itemBrand || '').trim()}`;
+                        if (!processedLCTruckBrands.has(lcKey)) {
+                            currentBalance += item.itemInHouseQty;
+                            processedLCTruckBrands.add(lcKey);
+                        }
                     } else {
                         currentBalance -= item.itemQty;
                     }
                     return { ...item, runningInHouse: currentBalance };
                 });
 
+            // deduplicate In House Quantity calculation using the robust (StockTable + WhPortionOnce) logic
+            let totalInHouseQty = 0;
+            const truckBrandsSeen = new Set();
+            
+            sortedPurchaseData.forEach(item => {
+                const bKey = (item.itemBrand || '').trim().toLowerCase();
+                const truckKey = `${(item.lcNo || '').trim()}_${(item.itemTruck || item.truckNo || '').trim()}_${bKey}`;
+                
+                // 1. Always add the raw stock table remainder for this specific entry
+                totalInHouseQty += parseFloat(item.inHouseQuantity) || 0;
+                
+                // 2. Add the shared warehouse portion ONLY once per truck/brand combination
+                if (!truckBrandsSeen.has(truckKey)) {
+                    const fullQty = parseFloat(item.itemInHouseQty) || 0;
+                    const stockQty = parseFloat(item.inHouseQuantity) || 0;
+                    const whPortion = Math.max(0, fullQty - stockQty);
+                    totalInHouseQty += whPortion;
+                    truckBrandsSeen.add(truckKey);
+                }
+            });
+
             const purchaseTotals = sortedPurchaseData.reduce((acc, item) => ({
                 qty: acc.qty + (parseFloat(item.itemQty) || 0),
-                inHouse: acc.inHouse + (parseFloat(item.itemInHouseQty) || 0),
+                inHouse: totalInHouseQty, // Use the pre-calculated unique total
                 shortage: acc.shortage + (parseFloat(item.itemShortageQty) || 0)
             }), { qty: 0, inHouse: 0, shortage: 0 });
 
@@ -3007,7 +3040,7 @@ export const generateCustomerHistoryPDF = (customer, historyData, summary, filte
                 grandTrucks += trucks;
 
                 const details = item.type === 'payment'
-                    ? `${item.method === 'Cash' ? (item.receiveBy || item.method) : (item.bankName || item.mobileType || item.method)}${item.method && (item.bankName || item.receiveBy || item.mobileType) ? ` (${item.method})` : ''}${item.reference ? ` [Ref: ${item.reference}]` : ''}`
+                    ? `${item.method === 'Cash' ? (item.receiveBy || item.method) : (item.bankName || item.mobileType || item.method)}${item.method && (item.bankName || item.receiveBy || item.mobileType) ? ` (${item.method})` : ''}${item.reference ? ` [Ref: ${item.reference}]` : ''}${parseFloat(item.discount) > 0 ? `\n(Disc: Tk ${parseFloat(item.discount).toLocaleString('en-IN')})` : ''}`
                     : '-';
 
                 const row = [
@@ -3200,12 +3233,13 @@ export const generateCustomerHistoryPDF = (customer, historyData, summary, filte
             let totalCollectedAmt = 0;
             sortedHistoryData.forEach((item, idx) => {
                 const amt = parseFloat(item.amount || 0);
+                const disc = parseFloat(item.discount || 0);
                 totalCollectedAmt += amt;
                 tableRows.push([
                     idx + 1,
                     formatDate(item.date),
                     item.method || '-',
-                    item.method === 'Cash' ? (item.receiveBy || '-') : (item.bankName || item.mobileType || '-'),
+                    `${item.method === 'Cash' ? (item.receiveBy || '-') : (item.bankName || item.mobileType || '-')}${disc > 0 ? `\n(Disc: Tk ${disc.toLocaleString('en-IN')})` : ''}`,
                     item.method === 'Cash' ? (item.place || '-') : (item.branch || '-'),
                     item.accountNo || '-',
                     `${amt.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`

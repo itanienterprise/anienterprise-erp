@@ -93,12 +93,40 @@ const ProductHistoryReport = ({
 
     // Calculate Unified History with Running Balance
     const unifiedHistory = (() => {
+        // First, group purchases by Date/LC/Truck to match UI grouping
         const purchases = Object.values(purchaseHistory.reduce((acc, p) => {
-            const key = `${p.date}_${p.lcNo}`;
-            if (!acc[key]) acc[key] = { ...p, type: 'purchase', itemQty: 0, itemInHouseQty: 0, itemShortageQty: 0 };
+            const key = `${p.date}_${p.lcNo}_${p.itemTruck || p.truckNo || ''}`;
+            if (!acc[key]) {
+                acc[key] = { 
+                    ...p, 
+                    type: 'purchase', 
+                    itemQty: 0, 
+                    itemInHouseQty: 0, 
+                    itemShortageQty: 0, 
+                    brands: {} 
+                };
+            }
+            
             acc[key].itemQty += parseFloat(p.itemQty) || 0;
-            acc[key].itemInHouseQty += parseFloat(p.itemInHouseQty) || 0;
             acc[key].itemShortageQty += parseFloat(p.itemShortageQty) || 0;
+            
+            const bKey = (p.itemBrand || '').trim().toLowerCase();
+            if (!acc[key].brands[bKey]) {
+                // Store the itemInHouseQty but we need to be careful with the warehouse portion
+                // StockManagement now sends itemInHouseQty = (StockTableQty + WhTotal)
+                acc[key].brands[bKey] = {
+                    qty: parseFloat(p.itemInHouseQty) || 0,
+                    stockTableQty: parseFloat(p.inHouseQuantity) || 0 // This should be the raw stock table remainder
+                };
+                acc[key].itemInHouseQty += acc[key].brands[bKey].qty;
+            } else {
+                // If same brand in same group, only add the stock table portion
+                const additionalStock = parseFloat(p.inHouseQuantity) || 0;
+                acc[key].brands[bKey].qty += additionalStock;
+                acc[key].brands[bKey].stockTableQty += additionalStock;
+                acc[key].itemInHouseQty += additionalStock;
+            }
+            
             return acc;
         }, {}));
 
@@ -112,9 +140,25 @@ const ProductHistoryReport = ({
         const combined = [...purchases, ...sales].sort((a, b) => new Date(a.date) - new Date(b.date));
 
         let currentBalance = 0;
+        // Track warehouse portion already added to balance to avoid doubling across different dates
+        const addedWhPortion = new Set();
+        
         return combined.map(item => {
             if (item.type === 'purchase') {
-                currentBalance += item.itemInHouseQty;
+                // For each brand in this purchase group
+                Object.entries(item.brands || {}).forEach(([bKey, bData]) => {
+                    const truckKey = `${(item.lcNo || '').trim()}_${(item.itemTruck || item.truckNo || '').trim()}_${bKey}`;
+                    
+                    // Add the stock table remainder (unique to this record)
+                    currentBalance += bData.stockTableQty;
+                    
+                    // Add the warehouse portion only ONCE for this truck/brand
+                    if (!addedWhPortion.has(truckKey)) {
+                        const whPortion = bData.qty - bData.stockTableQty;
+                        currentBalance += Math.max(0, whPortion);
+                        addedWhPortion.add(truckKey);
+                    }
+                });
             } else {
                 currentBalance -= item.itemQty;
             }
@@ -124,7 +168,27 @@ const ProductHistoryReport = ({
 
     const handlePrint = () => {
         const totalPurchaseQty = purchaseHistory.reduce((sum, item) => sum + (parseFloat(item.itemQty) || 0), 0);
-        const totalInHouseQty = purchaseHistory.reduce((sum, item) => sum + (parseFloat(item.itemInHouseQty) || 0), 0);
+        
+        // Accurate total in-house calculation for header
+        const uniqueTruckBrands = new Set();
+        let totalInHouseQty = 0;
+        
+        purchaseHistory.forEach(item => {
+            const bKey = (item.itemBrand || '').trim().toLowerCase();
+            const truckKey = `${(item.lcNo || '').trim()}_${(item.itemTruck || item.truckNo || '').trim()}_${bKey}`;
+            
+            // Always add the raw stock table remainder
+            totalInHouseQty += parseFloat(item.inHouseQuantity) || 0;
+            
+            // Add warehouse portion only once
+            if (!uniqueTruckBrands.has(truckKey)) {
+                const fullQty = parseFloat(item.itemInHouseQty) || 0;
+                const stockQty = parseFloat(item.inHouseQuantity) || 0;
+                totalInHouseQty += Math.max(0, fullQty - stockQty);
+                uniqueTruckBrands.add(truckKey);
+            }
+        });
+        
         const totalShortageQty = purchaseHistory.reduce((sum, item) => sum + (parseFloat(item.itemShortageQty) || 0), 0);
         const totalSaleAmount = saleHistory.reduce((sum, s) => sum + (parseFloat(s.itemTotal) || 0), 0);
 
@@ -697,7 +761,16 @@ const ProductHistoryReport = ({
                                         <div className="border-t border-gray-300 pt-1 mt-1 flex justify-between text-sm md:text-base font-black">
                                             <span className="text-blue-600 uppercase">InHouse:</span>
                                             <span className="text-blue-700">
-                                                {Math.round(purchaseHistory.reduce((sum, i) => sum + (parseFloat(i.itemInHouseQty) || 0), 0)).toLocaleString('en-US')} kg
+                                                {(() => {
+                                                    const uniqueInHouse = new Map();
+                                                    purchaseHistory.forEach(item => {
+                                                        const key = `${(item.lcNo || '').trim()}_${(item.itemTruck || item.truckNo || '').trim()}_${(item.itemBrand || '').trim()}`;
+                                                        if (!uniqueInHouse.has(key)) {
+                                                            uniqueInHouse.set(key, parseFloat(item.itemInHouseQty) || 0);
+                                                        }
+                                                    });
+                                                    return Array.from(uniqueInHouse.values()).reduce((sum, val) => sum + val, 0).toLocaleString('en-US');
+                                                })()} kg
                                             </span>
                                         </div>
                                     </div>

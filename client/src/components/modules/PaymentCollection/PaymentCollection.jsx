@@ -90,7 +90,8 @@ const PaymentCollection = () => {
             amount: ''
         }],
         status: 'Completed',
-        reference: ''
+        reference: '',
+        discount: ''
     });
 
     useEffect(() => {
@@ -348,7 +349,8 @@ const PaymentCollection = () => {
                 amount: payment.amount.toString()
             }],
             status: payment.status || 'Completed',
-            reference: payment.reference || ''
+            reference: payment.reference || '',
+            discount: payment.discount ? payment.discount.toString() : ''
         });
         setCustomerSearchQuery('');
         setShowAddModal(true);
@@ -385,6 +387,7 @@ const PaymentCollection = () => {
                     place: item.place,
                     reference: newPayment.reference,
                     status: newPayment.status,
+                    discount: idx === 0 ? (parseFloat(newPayment.discount) || 0) : 0,
                     id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
                 }));
 
@@ -433,7 +436,8 @@ const PaymentCollection = () => {
                         receiveBy: item.receiveBy,
                         place: item.place,
                         reference: newPayment.reference,
-                        status: newPayment.status
+                        status: newPayment.status,
+                        discount: parseFloat(newPayment.discount) || 0
                     };
                 }
                 return p;
@@ -471,7 +475,8 @@ const PaymentCollection = () => {
                 amount: ''
             }],
             status: 'Completed',
-            reference: ''
+            reference: '',
+            discount: ''
         });
         setCustomerSearchQuery('');
         setIsEditMode(false);
@@ -544,7 +549,8 @@ const PaymentCollection = () => {
         const totalSalesPaid = (customer.salesHistory || []).reduce((sum, item) => sum + (parseFloat(item.paid) || 0), 0);
         const totalDiscount = (customer.salesHistory || []).reduce((sum, item) => sum + (parseFloat(item.discount) || 0), 0);
         const totalHistoryPaid = (customer.paymentHistory || []).reduce((sum, item) => sum + (parseFloat(item.amount) || 0), 0);
-        return Math.max(0, totalAmount - totalSalesPaid - totalDiscount - totalHistoryPaid);
+        const totalHistoryDiscount = (customer.paymentHistory || []).reduce((sum, item) => sum + (parseFloat(item.discount) || 0), 0);
+        return Math.max(0, totalAmount - totalSalesPaid - totalDiscount - totalHistoryPaid - totalHistoryDiscount);
     };
 
     const selectedCustomerForBalance = rawCustomers.find(c => c._id === newPayment.customerId);
@@ -1198,7 +1204,7 @@ const PaymentCollection = () => {
                         }}
                         className="grid grid-cols-1 md:grid-cols-2 gap-6 relative z-10"
                     >
-                        <div className="md:col-span-2 grid grid-cols-1 md:grid-cols-4 gap-6 items-end">
+                        <div className="md:col-span-2 grid grid-cols-1 md:grid-cols-5 gap-4 items-end">
                             {/* Row 1: Date, Customer, Total Balance, Total Collection */}
                             <div className="space-y-2">
                                 <label className="text-sm font-medium text-gray-700 ml-1">Collection Date</label>
@@ -1320,6 +1326,25 @@ const PaymentCollection = () => {
                                     />
                                     <div className="absolute inset-y-0 right-0 pr-4 flex items-center">
                                         <span className="text-[10px] font-bold text-blue-400 uppercase tracking-widest">Collected</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="space-y-2">
+                                <label className="text-sm font-medium text-gray-700 ml-1 font-bold">Discount (TK)</label>
+                                <div className="relative group">
+                                    <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                                        <span className="text-emerald-600 font-bold group-focus-within:scale-110 transition-transform">৳</span>
+                                    </div>
+                                    <input
+                                        type="number"
+                                        placeholder="0.00"
+                                        value={newPayment.discount}
+                                        onChange={(e) => setNewPayment(prev => ({ ...prev, discount: e.target.value }))}
+                                        className="payment-form-input pl-9 font-bold text-emerald-700 border-emerald-100 focus:border-emerald-500 focus:ring-emerald-500/20 placeholder:text-emerald-200"
+                                    />
+                                    <div className="absolute inset-y-0 right-0 pr-4 flex items-center">
+                                        <span className="text-[10px] font-bold text-emerald-400 uppercase tracking-widest group-focus-within:text-emerald-500 transition-colors">Special</span>
                                     </div>
                                 </div>
                             </div>

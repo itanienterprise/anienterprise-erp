@@ -595,7 +595,8 @@ const Customer = ({
                 currentBalance += (amt - pd - disc);
             } else {
                 const amt = parseFloat(item.amount) || 0;
-                currentBalance -= amt;
+                const disc = parseFloat(item.discount) || 0;
+                currentBalance -= (amt + disc);
             }
             return { ...item, runningBalance: currentBalance };
         });
@@ -702,7 +703,9 @@ const Customer = ({
     // Summary Totals
     const totalAmount = filteredSalesHistory.reduce((sum, item) => sum + (parseFloat(item.amount) || 0), 0);
     const totalSalesPaid = filteredSalesHistory.reduce((sum, item) => sum + (parseFloat(item.paid) || 0), 0);
-    const totalDiscount = filteredSalesHistory.reduce((sum, item) => sum + (parseFloat(item.discount) || 0), 0);
+    const totalSalesDiscount = filteredSalesHistory.reduce((sum, item) => sum + (parseFloat(item.discount) || 0), 0);
+    const totalPaymentDiscount = filteredPaymentHistory.reduce((sum, item) => sum + (parseFloat(item.discount) || 0), 0);
+    const totalDiscount = totalSalesDiscount + totalPaymentDiscount;
     const totalHistoryPaid = filteredPaymentHistory.reduce((sum, item) => sum + (parseFloat(item.amount) || 0), 0);
     const totalPaidCalculated = totalSalesPaid + totalHistoryPaid;
     const totalDueCalculated = Math.max(0, totalAmount - totalSalesPaid - totalDiscount - totalHistoryPaid);
@@ -2498,8 +2501,14 @@ const Customer = ({
                                                                             {item.type === 'payment' ? (
                                                                                 <div className="flex flex-col">
                                                                                     <span className="font-bold text-gray-900">{item.bankName || item.receiveBy || '—'}</span>
-                                                                                    <span className="text-[10px] text-emerald-600 font-medium">
+                                                                                    <span className="text-[10px] text-emerald-600 font-medium flex items-center gap-1">
                                                                                         {item.method} {item.reference ? `(Ref: ${item.reference})` : ''}
+                                                                                        {parseFloat(item.discount) > 0 && (
+                                                                                            <span className="px-1.5 py-0.5 bg-pink-50 text-pink-600 rounded-md font-bold border border-pink-100 flex items-center gap-0.5 ml-1">
+                                                                                                <span className="text-[8px]">Disc:</span>
+                                                                                                ৳{parseFloat(item.discount).toLocaleString('en-IN')}
+                                                                                            </span>
+                                                                                        )}
                                                                                     </span>
                                                                                 </div>
                                                                             ) : '—'}
@@ -2622,6 +2631,12 @@ const Customer = ({
                                                                                         <div className="flex justify-between"><span className="text-gray-500">Account:</span><span className="font-bold">{item.accountNo || '—'}</span></div>
                                                                                         <div className="flex justify-between"><span className="text-gray-500">Bank:</span><span className="font-bold">{item.bankName || '—'}</span></div>
                                                                                         <div className="flex justify-between"><span className="text-gray-500">Ref:</span><span className="font-bold text-blue-600">{item.reference || '—'}</span></div>
+                                                                                        {parseFloat(item.discount) > 0 && (
+                                                                                            <div className="flex justify-between pt-1 border-t border-gray-100 mt-1">
+                                                                                                <span className="text-pink-500 font-bold">Discount:</span>
+                                                                                                <span className="font-black text-pink-600">৳{parseFloat(item.discount).toLocaleString('en-IN')}</span>
+                                                                                            </div>
+                                                                                        )}
                                                                                     </>
                                                                                 )}
                                                                             </div>

@@ -231,7 +231,11 @@ const StockManagement = ({
             const targetProd = normalizeStr(item.productName || item.product);
             const targetBrand = normalizeStr(item.brand);
 
+            // Filter warehouse records to ONLY include actual warehouse entries,
+            // excluding 'stock' entries to avoid double-counting the truck's arrival record
             const relatedWhRecords = (warehouseData || []).filter(w => {
+                if (w.recordType !== 'warehouse') return false;
+                
                 const wLC = normalizeStr(w.lcNo);
                 const wTruck = normalizeStr(w.truckNo);
                 const wProd = normalizeStr(w.productName || w.product);
@@ -239,8 +243,14 @@ const StockManagement = ({
                 return wLC === targetLC && wProd === targetProd && wBrand === targetBrand && (wTruck === targetTruck || (!wTruck && !targetTruck));
             });
 
-            const physicalWhQty = relatedWhRecords.reduce((sum, r) => sum + (parseFloat(r.whQty) || 0), 0);
-            const physicalWhPkt = relatedWhRecords.reduce((sum, r) => sum + (parseFloat(r.whPkt) || 0), 0);
+            const whOnlyQty = relatedWhRecords.reduce((sum, r) => sum + (parseFloat(r.whQty) || 0), 0);
+            const whOnlyPkt = relatedWhRecords.reduce((sum, r) => sum + (parseFloat(r.whPkt) || 0), 0);
+            
+            const itemInHouseQty = parseFloat(item.inHouseQuantity) || 0;
+            const itemInHousePkt = parseFloat(item.inHousePacket) || 0;
+
+            const physicalWhQty = itemInHouseQty + whOnlyQty;
+            const physicalWhPkt = itemInHousePkt + whOnlyPkt;
             const saleQty = relatedWhRecords.reduce((sum, r) => sum + (parseFloat(r.saleQuantity) || 0), 0);
             const salePkt = relatedWhRecords.reduce((sum, r) => sum + (parseFloat(r.salePacket) || 0), 0);
             const shortageQty = parseFloat(item.sweepedQuantity) || 0;
@@ -249,6 +259,7 @@ const StockManagement = ({
                 acc[key] = {
                     ...item,
                     allIds: [item._id],
+                    brandsProcessed: new Set([targetBrand]),
                     totalQuantity: parseFloat(item.quantity) || 0,
                     totalPacket: parseFloat(item.packet) || 0,
                     totalInHousePacket: physicalWhPkt,
@@ -275,8 +286,18 @@ const StockManagement = ({
                 acc[key].allIds.push(item._id);
                 acc[key].totalQuantity += parseFloat(item.quantity) || 0;
                 acc[key].totalPacket += parseFloat(item.packet) || 0;
-                acc[key].totalInHousePacket += physicalWhPkt;
-                acc[key].totalInHouseQuantity += physicalWhQty;
+                
+                if (!acc[key].brandsProcessed.has(targetBrand)) {
+                    acc[key].totalInHousePacket += physicalWhPkt;
+                    acc[key].totalInHouseQuantity += physicalWhQty;
+                    acc[key].brandsProcessed.add(targetBrand);
+                } else {
+                    // If we've already seen this brand in this group, only add the specific 
+                    // in-house quantity of THIS stock record (since warehouse total was already added)
+                    acc[key].totalInHousePacket += itemInHousePkt;
+                    acc[key].totalInHouseQuantity += itemInHouseQty;
+                }
+                
                 acc[key].totalShortage += shortageQty;
                 acc[key].totalSaleQuantity += saleQty;
                 acc[key].totalSalePacket += salePkt;
@@ -3137,9 +3158,40 @@ const StockManagement = ({
 
                                     const tPkts = history.reduce((sum, item) => sum + (parseFloat(item.totalPacket) || 0), 0);
                                     const tQty = history.reduce((sum, item) => sum + (parseFloat(item.totalQuantity) || 0), 0);
-                                    const tIHPkt = history.reduce((sum, item) => sum + (parseFloat(item.totalInHousePacket) || 0), 0);
-                                    const tIHQty = history.reduce((sum, item) => sum + (parseFloat(item.totalInHouseQuantity) || 0), 0);
                                     const tShort = history.reduce((sum, item) => sum + (parseFloat(item.totalShortage) || 0), 0);
+
+                                    // Calculate INHOUSE totals accurately:
+                                    // 1. Sum in-house quantities from all history items (unassigned stock)
+                                    // 2. Sum matching warehouse records (excluding 'stock' records)
+                                    const productName = (viewRecord.data.productName || '').trim().toLowerCase();
+                                    const shownLCTrucks = new Set(history.map(item => `${(item.lcNo || '').trim()}_${(item.truckNo || '').trim()}`));
+                                    
+                                    // Sum unassigned stock from history items
+                                    const historyInHouseQty = history.reduce((sum, h) => {
+                                        return sum + (h.entries || []).reduce((eSum, e) => eSum + (parseFloat(e.inHouseQuantity) || 0), 0);
+                                    }, 0);
+                                    const historyInHousePkt = history.reduce((sum, h) => {
+                                        return sum + (h.entries || []).reduce((eSum, e) => eSum + (parseFloat(e.inHousePacket) || 0), 0);
+                                    }, 0);
+
+                                    // Sum warehouse entries only
+                                    const filteredWhOnly = (warehouseData || []).filter(w => {
+                                        if (w.recordType !== 'warehouse') return false;
+                                        
+                                        const wProd = (w.productName || w.product || '').trim().toLowerCase();
+                                        if (wProd !== productName) return false;
+                                        
+                                        const key = `${(w.lcNo || '').trim()}_${(w.truckNo || '').trim()}`;
+                                        if (!shownLCTrucks.has(key)) return false;
+
+                                        if (historyFilters.brand && (w.brand || '').trim().toLowerCase() !== historyFilters.brand.toLowerCase()) return false;
+                                        if (historyFilters.warehouse && (w.whName || '').trim() !== historyFilters.warehouse) return false;
+                                        
+                                        return true;
+                                    });
+
+                                    const tIHQty = historyInHouseQty + filteredWhOnly.reduce((sum, r) => sum + (parseFloat(r.whQty) || 0), 0);
+                                    const tIHPkt = historyInHousePkt + filteredWhOnly.reduce((sum, r) => sum + (parseFloat(r.whPkt) || 0), 0);
 
                                     return (
                                         <div className="space-y-6">
