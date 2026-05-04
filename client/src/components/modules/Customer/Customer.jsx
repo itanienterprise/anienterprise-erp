@@ -32,7 +32,6 @@ const Customer = ({
     const [submitStatus, setSubmitStatus] = useState(null);
     const [customers, setCustomers] = useState([]);
     const [gatePasses, setGatePasses] = useState([]);
-    const [salesRecords, setSalesRecords] = useState([]);
     const [lcRecords, setLcRecords] = useState([]);
     const [isLoading, setIsLoading] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
@@ -255,124 +254,17 @@ const Customer = ({
         return lc?.port || '-';
     };
 
-    // Helper: Check if a sale belongs to a customer (including legacy matches by name)
-    const isSaleForCustomer = (sale, customer) => {
-        if (sale.customerId === customer._id) return true;
-        
-        // Fallback: match by company or customer name (handles legacy data and recreated customers)
-        if (customer.companyName && sale.companyName && customer.companyName.trim().toLowerCase() === sale.companyName.trim().toLowerCase()) return true;
-        if (customer.customerName && sale.customerName && customer.customerName.trim().toLowerCase() === sale.customerName.trim().toLowerCase()) return true;
-        
-        return false;
-    };
-
-    // Helper: compute balance for a customer from actual sale records
-    const getCustomerBalanceFromSales = (customer, customerSalesRecords, customerPayments) => {
-        // Find all valid sales that reference this customer (excluding pending/requested/rejected)
-        const matchingSales = customerSalesRecords.filter(s => {
-            if (!isSaleForCustomer(s, customer)) return false;
-            const status = (s.status || '').toLowerCase();
-            return !['requested', 'pending', 'rejected'].includes(status);
-        });
-        
-        let totalSalesAmount = 0;
-        let totalSalesPaid = 0;
-        let totalSalesDiscount = 0;
-        
-        matchingSales.forEach(sale => {
-            if (sale.items && Array.isArray(sale.items)) {
-                let isFirstEntry = true;
-                sale.items.forEach(item => {
-                    (item.brandEntries || []).forEach(entry => {
-                        totalSalesAmount += parseFloat(entry.totalAmount) || 0;
-                        if (isFirstEntry) {
-                            totalSalesPaid += parseFloat(sale.paidAmount) || 0;
-                            totalSalesDiscount += parseFloat(sale.discount) || 0;
-                            isFirstEntry = false;
-                        }
-                    });
-                });
-            } else {
-                totalSalesAmount += parseFloat(sale.totalAmount) || 0;
-                totalSalesPaid += parseFloat(sale.paidAmount) || 0;
-                totalSalesDiscount += parseFloat(sale.discount) || 0;
-            }
-        });
-        
-        const totalHistoryPaid = (customerPayments || []).reduce((sum, item) => sum + (parseFloat(item.amount) || 0), 0);
-        return totalSalesAmount - totalSalesPaid - totalSalesDiscount - totalHistoryPaid;
-    };
-
-    // Helper: reconstruct salesHistory format from actual sale records
-    const buildSalesHistoryFromSales = (customer, allSales) => {
-        const matchingSales = allSales.filter(s => {
-            if (!isSaleForCustomer(s, customer)) return false;
-            const status = (s.status || '').toLowerCase();
-            return !['requested', 'pending', 'rejected'].includes(status);
-        });
-        
-        let reconstructedHistory = [];
-        matchingSales.forEach(sale => {
-            if (sale.items && Array.isArray(sale.items)) {
-                sale.items.forEach((product, pIdx) => {
-                    (product.brandEntries || []).forEach((entry, eIdx) => {
-                        const isFirstEntry = pIdx === 0 && eIdx === 0;
-                        reconstructedHistory.push({
-                            id: sale._id + '-' + pIdx + '-' + eIdx,
-                            date: sale.date,
-                            invoiceNo: sale.invoiceNo,
-                            lcNo: sale.lcNo || '',
-                            product: product.productName || '',
-                            brand: entry.brand || '',
-                            quantity: entry.quantity || 0,
-                            rate: entry.unitPrice || 0,
-                            truck: entry.truck || '',
-                            amount: entry.totalAmount || 0,
-                            paid: isFirstEntry ? (parseFloat(sale.paidAmount) || 0) : 0,
-                            due: isFirstEntry ? (parseFloat(sale.dueAmount) || 0) : (entry.totalAmount || 0),
-                            discount: isFirstEntry ? (parseFloat(sale.discount) || 0) : 0,
-                            warehouse: entry.warehouseName || '',
-                            status: sale.status
-                        });
-                    });
-                });
-            } else {
-                reconstructedHistory.push({
-                    id: sale._id,
-                    date: sale.date,
-                    invoiceNo: sale.invoiceNo,
-                    product: sale.productName || '',
-                    amount: sale.totalAmount || 0,
-                    paid: sale.paidAmount || 0,
-                    due: sale.dueAmount || 0,
-                    discount: sale.discount || 0,
-                    status: sale.status
-                });
-            }
-        });
-        
-        return reconstructedHistory.sort((a, b) => new Date(b.date) - new Date(a.date));
-    };
-
-    const handleViewCustomer = (c) => {
-        const fullCustomer = { ...c };
-        fullCustomer.salesHistory = buildSalesHistoryFromSales(c, salesRecords);
-        setViewData(fullCustomer);
-    };
-
     const fetchCustomers = async () => {
         setIsLoading(true);
         try {
-            const [decryptedCustomers, gpRecords, lcData, allSales] = await Promise.all([
+            const [decryptedCustomers, gpRecords, lcData] = await Promise.all([
                 api.get('/api/customers'),
                 api.get('/api/lc-gp'),
-                api.get('/api/lc-management'),
-                api.get('/api/sales')
+                api.get('/api/lc-management')
             ]);
             setCustomers(decryptedCustomers);
             setGatePasses(gpRecords);
             setLcRecords(Array.isArray(lcData) ? lcData : []);
-            setSalesRecords(Array.isArray(allSales) ? allSales : []);
         } catch (error) {
             console.error('Error fetching data:', error);
         } finally {
@@ -417,10 +309,7 @@ const Customer = ({
         try {
             const url = editingId ? `/api/customers/${editingId}` : `/api/customers`;
             if (editingId) {
-                // Fetch existing customer data to preserve salesHistory, paymentHistory, etc.
-                const existingCustomer = await api.get(`/api/customers/${editingId}`);
-                const mergedData = { ...existingCustomer, ...formData };
-                await api.put(url, mergedData);
+                await api.put(url, formData);
             } else {
                 await api.post(url, formData);
             }
@@ -1097,8 +986,16 @@ const Customer = ({
                                         </thead>
                                         <tbody className="divide-y divide-gray-50">
                                             {getFilteredAndSortedData().map(c => {
-                                                // Calculate this customer's total due from actual sale records
-                                                const custTotalDue = getCustomerBalanceFromSales(c, salesRecords, c.paymentHistory || []);
+                                                // Calculate this customer's total due
+                                                const custSales = c.salesHistory || [];
+                                                const custPayments = c.paymentHistory || [];
+
+                                                const totalSalesAmount = custSales.reduce((sum, item) => sum + (parseFloat(item.amount) || 0), 0);
+                                                const totalSalesPaid = custSales.reduce((sum, item) => sum + (parseFloat(item.paid) || 0), 0);
+                                                const totalSalesDiscount = custSales.reduce((sum, item) => sum + (parseFloat(item.discount) || 0), 0);
+                                                const totalHistoryPaid = custPayments.reduce((sum, item) => sum + (parseFloat(item.amount) || 0), 0);
+
+                                                const custTotalDue = totalSalesAmount - totalSalesPaid - totalSalesDiscount - totalHistoryPaid;
 
                                                 return (
                                                     <tr
@@ -1125,7 +1022,7 @@ const Customer = ({
                                                         <td className="px-6 py-4 text-sm text-gray-600"><span className={`customer-status-badge ${c.status === 'Active' ? 'active' : 'inactive'}`}>{c.status}</span></td>
                                                         <td className="px-6 py-4 text-sm text-gray-600">
                                                             <div className="flex items-center justify-center space-x-2">
-                                                                <button onClick={(e) => { e.stopPropagation(); handleViewCustomer(c); }} className="p-1 hover:bg-gray-100 text-gray-400 hover:text-gray-600 rounded transition-colors"><EyeIcon className="w-5 h-5" /></button>
+                                                                <button onClick={(e) => { e.stopPropagation(); setViewData(c); }} className="p-1 hover:bg-gray-100 text-gray-400 hover:text-gray-600 rounded transition-colors"><EyeIcon className="w-5 h-5" /></button>
                                                                 <button onClick={(e) => { e.stopPropagation(); handleEdit(c); }} className="p-1 hover:bg-blue-50 text-gray-400 hover:text-blue-600 rounded transition-colors"><EditIcon className="w-5 h-5" /></button>
                                                                 {isFullAdmin && (
                                                                     <button onClick={(e) => { e.stopPropagation(); handleDelete(c._id); }} className="p-1 hover:bg-red-50 text-gray-400 hover:text-red-600 rounded transition-colors"><TrashIcon className="w-5 h-5" /></button>
@@ -1141,8 +1038,15 @@ const Customer = ({
                                     {/* Mobile Card View */}
                                     <div className="block md:hidden px-1 py-4 space-y-3">
                                         {getFilteredAndSortedData().map(c => {
-                                            // Calculate from actual sale records
-                                            const custTotalDue = getCustomerBalanceFromSales(c, salesRecords, c.paymentHistory || []);
+                                            const custSales = c.salesHistory || [];
+                                            const custPayments = c.paymentHistory || [];
+
+                                            const totalSalesAmount = custSales.reduce((sum, item) => sum + (parseFloat(item.amount) || 0), 0);
+                                            const totalSalesPaid = custSales.reduce((sum, item) => sum + (parseFloat(item.paid) || 0), 0);
+                                            const totalSalesDiscount = custSales.reduce((sum, item) => sum + (parseFloat(item.discount) || 0), 0);
+                                            const totalHistoryPaid = custPayments.reduce((sum, item) => sum + (parseFloat(item.amount) || 0), 0);
+
+                                            const custTotalDue = totalSalesAmount - totalSalesPaid - totalSalesDiscount - totalHistoryPaid;
                                             const isExpanded = expandedMobileCards === c._id;
 
                                             return (
@@ -1202,7 +1106,7 @@ const Customer = ({
 
                                                             <div className="mobile-card-actions">
                                                                 <button 
-                                                                    onClick={(e) => { e.stopPropagation(); handleViewCustomer(c); }} 
+                                                                    onClick={(e) => { e.stopPropagation(); setViewData(c); }} 
                                                                     className="flex items-center justify-center gap-1.5 py-2 bg-gray-50 text-gray-600 rounded-lg text-xs font-bold flex-1"
                                                                 >
                                                                     <EyeIcon className="w-4 h-4" /> View
