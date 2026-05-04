@@ -255,11 +255,21 @@ const Customer = ({
         return lc?.port || '-';
     };
 
+    // Helper: Check if a sale belongs to a customer (including legacy matches by name)
+    const isSaleForCustomer = (sale, customer) => {
+        if (sale.customerId === customer._id) return true;
+        if (!sale.customerId && (sale.companyName || sale.customerName)) {
+            if (customer.companyName && sale.companyName && customer.companyName.trim().toLowerCase() === sale.companyName.trim().toLowerCase()) return true;
+            if (customer.customerName && sale.customerName && customer.customerName.trim().toLowerCase() === sale.customerName.trim().toLowerCase()) return true;
+        }
+        return false;
+    };
+
     // Helper: compute balance for a customer from actual sale records
-    const getCustomerBalanceFromSales = (customerId, customerSalesRecords, customerPayments) => {
+    const getCustomerBalanceFromSales = (customer, customerSalesRecords, customerPayments) => {
         // Find all valid sales that reference this customer (excluding pending/requested/rejected)
         const matchingSales = customerSalesRecords.filter(s => {
-            if (s.customerId !== customerId) return false;
+            if (!isSaleForCustomer(s, customer)) return false;
             const status = (s.status || '').toLowerCase();
             return !['requested', 'pending', 'rejected'].includes(status);
         });
@@ -293,9 +303,9 @@ const Customer = ({
     };
 
     // Helper: reconstruct salesHistory format from actual sale records
-    const buildSalesHistoryFromSales = (customerId, allSales) => {
+    const buildSalesHistoryFromSales = (customer, allSales) => {
         const matchingSales = allSales.filter(s => {
-            if (s.customerId !== customerId) return false;
+            if (!isSaleForCustomer(s, customer)) return false;
             const status = (s.status || '').toLowerCase();
             return !['requested', 'pending', 'rejected'].includes(status);
         });
@@ -345,7 +355,7 @@ const Customer = ({
 
     const handleViewCustomer = (c) => {
         const fullCustomer = { ...c };
-        fullCustomer.salesHistory = buildSalesHistoryFromSales(c._id, salesRecords);
+        fullCustomer.salesHistory = buildSalesHistoryFromSales(c, salesRecords);
         setViewData(fullCustomer);
     };
 
@@ -1087,7 +1097,7 @@ const Customer = ({
                                         <tbody className="divide-y divide-gray-50">
                                             {getFilteredAndSortedData().map(c => {
                                                 // Calculate this customer's total due from actual sale records
-                                                const custTotalDue = getCustomerBalanceFromSales(c._id, salesRecords, c.paymentHistory || []);
+                                                const custTotalDue = getCustomerBalanceFromSales(c, salesRecords, c.paymentHistory || []);
 
                                                 return (
                                                     <tr
@@ -1131,7 +1141,7 @@ const Customer = ({
                                     <div className="block md:hidden px-1 py-4 space-y-3">
                                         {getFilteredAndSortedData().map(c => {
                                             // Calculate from actual sale records
-                                            const custTotalDue = getCustomerBalanceFromSales(c._id, salesRecords, c.paymentHistory || []);
+                                            const custTotalDue = getCustomerBalanceFromSales(c, salesRecords, c.paymentHistory || []);
                                             const isExpanded = expandedMobileCards === c._id;
 
                                             return (
