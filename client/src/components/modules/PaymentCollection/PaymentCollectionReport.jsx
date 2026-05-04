@@ -104,7 +104,7 @@ const PaymentCollectionReport = ({ isOpen, onClose, payments = [] }) => {
         }
 
         return true;
-    });
+    }).sort((a, b) => new Date(a.date) - new Date(b.date));
 
     const grandTotal = filteredPayments.reduce((sum, p) => sum + (parseFloat(p.amount) || 0), 0);
 

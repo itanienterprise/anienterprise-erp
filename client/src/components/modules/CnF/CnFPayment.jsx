@@ -9,7 +9,7 @@ const CnFPayment = () => {
     const [payments, setPayments] = useState([]);
     const [isLoading, setIsLoading] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
-    const [sortConfig, setSortConfig] = useState({ key: 'date', direction: 'asc' });
+    const [sortConfig, setSortConfig] = useState({ key: 'date', direction: 'desc' });
     const [currentUser] = useState(() => {
         try {
             const saved = localStorage.getItem('currentUser');
@@ -766,15 +766,15 @@ const CnFPayment = () => {
                                                     {/* Action Buttons in Expanded View */}
                                                     {isAdmin && (
                                                         <div className="flex items-center gap-3 pt-2">
-                                                            <button 
-                                                                onClick={(e) => { e.stopPropagation(); handleEditPayment(p); }} 
+                                                            <button
+                                                                onClick={(e) => { e.stopPropagation(); handleEditPayment(p); }}
                                                                 className="flex-1 flex items-center justify-center gap-2 py-2.5 bg-blue-50 text-blue-600 rounded-xl text-xs font-black transition-all active:scale-95"
                                                             >
                                                                 <EditIcon className="w-4 h-4" />
                                                                 <span>EDIT RECORD</span>
                                                             </button>
-                                                            <button 
-                                                                onClick={(e) => { e.stopPropagation(); handleDeletePayment(p); }} 
+                                                            <button
+                                                                onClick={(e) => { e.stopPropagation(); handleDeletePayment(p); }}
                                                                 className="flex-1 flex items-center justify-center gap-2 py-2.5 bg-rose-50 text-rose-600 rounded-xl text-xs font-black transition-all active:scale-95"
                                                             >
                                                                 <TrashIcon className="w-4 h-4" />

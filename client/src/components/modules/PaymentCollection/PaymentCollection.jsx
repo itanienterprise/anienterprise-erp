@@ -12,7 +12,7 @@ const PaymentCollection = () => {
     const [payments, setPayments] = useState([]);
     const [isLoading, setIsLoading] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
-    const [sortConfig, setSortConfig] = useState({ key: 'date', direction: 'asc' });
+    const [sortConfig, setSortConfig] = useState({ key: 'date', direction: 'desc' });
     const [currentUser] = useState(() => {
         try {
             const saved = localStorage.getItem('currentUser');
@@ -235,18 +235,18 @@ const PaymentCollection = () => {
 
     const handleGenerateReceipt = (payment, customAmount = null, items = null) => {
         const customer = rawCustomers.find(c => c._id === payment.customerId);
-        
+
         // Calculate historic balance
         const paidAmount = customAmount !== null ? customAmount : (parseFloat(payment.amount) || 0);
-        
+
         const salesUpTo = (customer?.salesHistory || []).filter(s => s.date <= payment.date);
         const paymentsUpTo = (customer?.paymentHistory || []).filter(p => p.date <= payment.date);
-        
+
         const totalSales = salesUpTo.reduce((sum, item) => sum + (parseFloat(item.amount) || 0), 0);
         const totalSalesPaid = salesUpTo.reduce((sum, item) => sum + (parseFloat(item.paid) || 0), 0);
         const totalDiscount = salesUpTo.reduce((sum, item) => sum + (parseFloat(item.discount) || 0), 0);
         const totalHistoryPaid = paymentsUpTo.reduce((sum, item) => sum + (parseFloat(item.amount) || 0), 0);
-        
+
         const balanceDue = Math.max(0, totalSales - totalSalesPaid - totalDiscount - totalHistoryPaid);
         const previousBalance = balanceDue + paidAmount;
 
@@ -306,7 +306,7 @@ const PaymentCollection = () => {
 
     const confirmDelete = async () => {
         if (!paymentToDelete) return;
-        
+
         setIsSubmitting(true);
         try {
             const custRes = await axios.get(`${API_BASE_URL}/api/customers/${paymentToDelete.customerId}`);
@@ -314,7 +314,7 @@ const PaymentCollection = () => {
             const updatedHistory = (customer.paymentHistory || []).filter(p => p.id !== paymentToDelete.id);
             const updatedCustomer = { ...customer, paymentHistory: updatedHistory };
             await axios.put(`${API_BASE_URL}/api/customers/${paymentToDelete.customerId}`, updatedCustomer);
-            
+
             // Show success briefly
             setSubmitStatus('success');
             setTimeout(() => {
@@ -501,7 +501,7 @@ const PaymentCollection = () => {
                 ? new Date(b.date) - new Date(a.date)
                 : new Date(a.date) - new Date(b.date);
         }
-        
+
         let valA, valB;
         if (sortConfig.key === 'customerName') {
             valA = (a.companyName || a.customerName || '').toLowerCase();
@@ -917,8 +917,8 @@ const PaymentCollection = () => {
                                             const totalAmount = group.items.reduce((sum, item) => sum + (parseFloat(item.amount) || 0), 0);
 
                                             return (
-                                                <tr 
-                                                    key={group.key} 
+                                                <tr
+                                                    key={group.key}
                                                     onClick={() => isMultiple && toggleRowExpansion(group.key)}
                                                     className={`hover:bg-blue-50/50 transition-all group border-b border-gray-50 last:border-0 align-middle ${isMultiple ? 'cursor-pointer' : ''} ${isExpanded ? 'bg-blue-50/30' : ''}`}
                                                 >
@@ -999,34 +999,34 @@ const PaymentCollection = () => {
                                                         )}
                                                     </td>
                                                     <td className={`px-3 ${!isExpanded ? 'py-4' : 'py-3'} text-center`} onClick={(e) => e.stopPropagation()}>
-                                                            <div className="flex items-center justify-center gap-1.5">
+                                                        <div className="flex items-center justify-center gap-1.5">
+                                                            <button
+                                                                onClick={() => handleGenerateReceipt(group.items[0], totalAmount, group.items)}
+                                                                className="p-1 hover:bg-emerald-50 text-gray-400 hover:text-emerald-600 rounded transition-colors"
+                                                                title="Money Receipt"
+                                                            >
+                                                                <FileTextIcon className="w-5 h-5" />
+                                                            </button>
+                                                            {isAdmin && (
+                                                                <>
                                                                     <button
-                                                                        onClick={() => handleGenerateReceipt(group.items[0], totalAmount, group.items)}
-                                                                        className="p-1 hover:bg-emerald-50 text-gray-400 hover:text-emerald-600 rounded transition-colors"
-                                                                        title="Money Receipt"
+                                                                        onClick={() => handleEditInitiation(group.items[0])}
+                                                                        className="p-1 hover:bg-blue-50 text-gray-400 hover:text-blue-600 rounded transition-colors"
+                                                                        title="Edit Receipt"
                                                                     >
-                                                                        <FileTextIcon className="w-5 h-5" />
+                                                                        <EditIcon className="w-5 h-5" />
                                                                     </button>
-                                                                    {isAdmin && (
-                                                                        <>
-                                                                            <button
-                                                                                onClick={() => handleEditInitiation(group.items[0])}
-                                                                                className="p-1 hover:bg-blue-50 text-gray-400 hover:text-blue-600 rounded transition-colors"
-                                                                                title="Edit Receipt"
-                                                                            >
-                                                                                <EditIcon className="w-5 h-5" />
-                                                                            </button>
-                                                                            <button
-                                                                                onClick={() => handleDeletePayment(group.items[0])}
-                                                                                className="p-1 hover:bg-red-50 text-gray-400 hover:text-red-600 rounded transition-colors"
-                                                                                title="Delete Receipt"
-                                                                            >
-                                                                                <TrashIcon className="w-5 h-5" />
-                                                                            </button>
-                                                                        </>
-                                                                    )}
-                                                                </div>
-                                                        </td>
+                                                                    <button
+                                                                        onClick={() => handleDeletePayment(group.items[0])}
+                                                                        className="p-1 hover:bg-red-50 text-gray-400 hover:text-red-600 rounded transition-colors"
+                                                                        title="Delete Receipt"
+                                                                    >
+                                                                        <TrashIcon className="w-5 h-5" />
+                                                                    </button>
+                                                                </>
+                                                            )}
+                                                        </div>
+                                                    </td>
                                                 </tr>
                                             );
                                         });
@@ -1081,7 +1081,7 @@ const PaymentCollection = () => {
                                     const totalAmount = group.items.reduce((sum, item) => sum + (parseFloat(item.amount) || 0), 0);
 
                                     return (
-                                        <div 
+                                        <div
                                             key={group.key}
                                             className={`mobile-card transition-all duration-300 ${isExpanded ? 'expanded' : 'collapsed'}`}
                                             onClick={() => setExpandedMobileCards(isExpanded ? null : group.key)}
@@ -1104,7 +1104,7 @@ const PaymentCollection = () => {
                                                     )}
                                                 </div>
                                             </div>
-                                            
+
                                             {isExpanded && (
                                                 <div className="animate-in slide-in-from-top-2 duration-300">
                                                     <div className="space-y-4 mt-4">
@@ -1133,13 +1133,13 @@ const PaymentCollection = () => {
 
                                                                 {isAdmin && (
                                                                     <div className="mobile-card-actions pt-2">
-                                                                        <button 
+                                                                        <button
                                                                             onClick={(e) => { e.stopPropagation(); handleEditInitiation(item); }}
                                                                             className="flex items-center justify-center gap-1.5 py-2 bg-blue-50 text-blue-600 rounded-lg text-xs font-bold flex-1 hover:bg-blue-100 transition-colors"
                                                                         >
                                                                             <EditIcon className="w-4 h-4" /> Edit
                                                                         </button>
-                                                                        <button 
+                                                                        <button
                                                                             onClick={(e) => { e.stopPropagation(); handleDeletePayment(item); }}
                                                                             className="flex items-center justify-center gap-1.5 py-2 bg-red-50 text-red-600 rounded-lg text-xs font-bold px-4 hover:bg-red-100 transition-colors"
                                                                         >
@@ -1189,8 +1189,8 @@ const PaymentCollection = () => {
                         </button>
                     </div>
 
-                    <form 
-                        onSubmit={isEditMode ? handleUpdateCollection : handleAddCollection} 
+                    <form
+                        onSubmit={isEditMode ? handleUpdateCollection : handleAddCollection}
                         onKeyDown={(e) => {
                             if (e.key === 'Enter' && e.target.tagName !== 'TEXTAREA') {
                                 e.preventDefault();
@@ -1657,18 +1657,17 @@ const PaymentCollection = () => {
             {showDeleteConfirm && (
                 <div className="fixed inset-0 z-[2000] flex items-center justify-center p-4">
                     {/* Backdrop */}
-                    <div 
+                    <div
                         className="absolute inset-0 bg-slate-900/60 backdrop-blur-md animate-in fade-in duration-300"
                         onClick={() => !isSubmitting && setShowDeleteConfirm(false)}
                     ></div>
-                    
+
                     {/* Modal Card */}
                     <div className="relative bg-white/90 backdrop-blur-2xl border border-white/50 rounded-3xl shadow-2xl p-8 max-w-md w-full animate-in zoom-in slide-in-from-bottom-8 duration-500">
                         {/* Status Icon */}
-                        <div className={`flex items-center justify-center w-20 h-20 rounded-full mx-auto mb-6 transition-all duration-500 ${
-                            submitStatus === 'success' ? 'bg-emerald-100 text-emerald-600' : 
-                            submitStatus === 'error' ? 'bg-red-100 text-red-600' : 'bg-red-50 text-red-500'
-                        }`}>
+                        <div className={`flex items-center justify-center w-20 h-20 rounded-full mx-auto mb-6 transition-all duration-500 ${submitStatus === 'success' ? 'bg-emerald-100 text-emerald-600' :
+                                submitStatus === 'error' ? 'bg-red-100 text-red-600' : 'bg-red-50 text-red-500'
+                            }`}>
                             {submitStatus === 'success' ? (
                                 <CheckIcon className="w-10 h-10 animate-in zoom-in duration-300" />
                             ) : (
@@ -1679,10 +1678,10 @@ const PaymentCollection = () => {
                         <h3 className="text-2xl font-black text-gray-900 text-center mb-3 tracking-tight">
                             {submitStatus === 'success' ? 'Deleted Successfully' : 'Delete Record?'}
                         </h3>
-                        
+
                         <p className="text-gray-500 text-center mb-8 leading-relaxed font-medium">
-                            {submitStatus === 'success' 
-                                ? 'The payment record has been removed from the system.' 
+                            {submitStatus === 'success'
+                                ? 'The payment record has been removed from the system.'
                                 : `Are you sure you want to delete the payment of ৳${paymentToDelete?.amount?.toLocaleString('en-IN')} from ${paymentToDelete?.companyName || paymentToDelete?.customerName}? This action cannot be undone.`
                             }
                         </p>
@@ -1709,7 +1708,7 @@ const PaymentCollection = () => {
                                 </button>
                             </div>
                         )}
-                        
+
                         {submitStatus === 'error' && (
                             <button
                                 onClick={() => setSubmitStatus(null)}

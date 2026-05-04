@@ -143,7 +143,7 @@ const LCReport = ({
             acc[key].rows.push(item);
             return acc;
         }, {});
-        return Object.values(lcGroupMap);
+        return Object.values(lcGroupMap).sort((a, b) => new Date(a.date) - new Date(b.date));
     }, [lcReceiveRecords]);
 
     if (!isOpen) return null;

@@ -159,7 +159,7 @@ const CnF = ({
             const response = await axios.get(`${API_BASE_URL}/api/cnf-payments`);
             const allPayments = Array.isArray(response.data) ? response.data : [];
             const filtered = allPayments.filter(p => p.cnfId === cnfId);
-            setPaymentRecords(filtered);
+            setPaymentRecords([...filtered].sort((a, b) => new Date(a.date) - new Date(b.date)));
         } catch (error) {
             console.error('Error fetching C&F payments:', error);
             setPaymentRecords([]);

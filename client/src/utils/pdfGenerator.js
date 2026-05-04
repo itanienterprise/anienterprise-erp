@@ -442,7 +442,7 @@ export const generateLCReceiveReportPDF = (reportData, filters, summary) => {
             }
             acc[key].entries.push(item);
             return acc;
-        }, {}));
+        }, {})).sort((a, b) => new Date(a.date) - new Date(b.date));
 
         const tableRows = [];
 
@@ -835,7 +835,8 @@ export const generateStockReportPDF = (stockData, filters, reportType = 'short',
             const boldLinesToDraw = [];
 
 
-            currentStockData.displayRecords.forEach((item, index) => {
+            const sortedDisplayRecords = [...currentStockData.displayRecords].sort((a, b) => new Date(a.date) - new Date(b.date));
+            sortedDisplayRecords.forEach((item, index) => {
                 // Legitimate quality check - only separate if there's actual quality data
                 const qualityGroups = item.brandList.reduce((acc, ent) => {
                     const q = (ent.quality || '-').toUpperCase().trim();
@@ -1931,6 +1932,10 @@ export const generateProductHistoryPDF = (productName, category, activeTab, purc
         const margin = 7; // Reduced margin to gain space
         const isFruitCategory = (category || '').toLowerCase() === 'fruit';
 
+        // Ensure data is sorted ascending by date for reports
+        const sortedPurchaseData = [...purchaseData].sort((a, b) => new Date(a.date) - new Date(b.date));
+        const sortedSaleData = [...saleData].sort((a, b) => new Date(a.date) - new Date(b.date));
+
         // --- Header ---
         doc.setFontSize(22);
         doc.setFont('helvetica', 'bold');
@@ -2003,7 +2008,7 @@ export const generateProductHistoryPDF = (productName, category, activeTab, purc
 
         if (activeTab === 'total') {
             // --- Unified History Table ---
-            const aggregatedPurchase = Object.values(purchaseData.reduce((acc, p) => {
+            const aggregatedPurchase = Object.values(sortedPurchaseData.reduce((acc, p) => {
                 const key = `${p.date}_${p.lcNo}`;
                 if (!acc[key]) acc[key] = { ...p, type: 'purchase', itemQty: 0, itemInHouseQty: 0, itemShortageQty: 0 };
                 acc[key].itemQty += parseFloat(p.itemQty) || 0;
@@ -2012,7 +2017,7 @@ export const generateProductHistoryPDF = (productName, category, activeTab, purc
                 return acc;
             }, {}));
 
-            const aggregatedSale = Object.values(saleData.reduce((acc, s) => {
+            const aggregatedSale = Object.values(sortedSaleData.reduce((acc, s) => {
                 const key = `${s.date}_${s.invoiceNo}`;
                 if (!acc[key]) acc[key] = { ...s, type: 'sale', itemQty: 0 };
                 acc[key].itemQty += parseFloat(s.itemQty) || 0;
@@ -2031,13 +2036,13 @@ export const generateProductHistoryPDF = (productName, category, activeTab, purc
                     return { ...item, runningInHouse: currentBalance };
                 });
 
-            const purchaseTotals = purchaseData.reduce((acc, item) => ({
+            const purchaseTotals = sortedPurchaseData.reduce((acc, item) => ({
                 qty: acc.qty + (parseFloat(item.itemQty) || 0),
                 inHouse: acc.inHouse + (parseFloat(item.itemInHouseQty) || 0),
                 shortage: acc.shortage + (parseFloat(item.itemShortageQty) || 0)
             }), { qty: 0, inHouse: 0, shortage: 0 });
 
-            const saleTotals = saleData.reduce((acc, sale) => ({
+            const saleTotals = sortedSaleData.reduce((acc, sale) => ({
                 qty: acc.qty + (parseFloat(sale.itemQty) || 0)
             }), { qty: 0 });
 
@@ -2086,7 +2091,7 @@ export const generateProductHistoryPDF = (productName, category, activeTab, purc
 
         } else if (activeTab === 'purchase') {
             // --- Purchase History Table (Single) ---
-            const purchaseTotals = purchaseData.reduce((acc, item) => {
+            const purchaseTotals = sortedPurchaseData.reduce((acc, item) => {
                 const qty = parseFloat(item.itemQty) || 0;
                 const price = parseFloat(item.itemPurchasedPrice) || 0;
                 return {
@@ -2099,7 +2104,7 @@ export const generateProductHistoryPDF = (productName, category, activeTab, purc
             }, { pkt: 0, qty: 0, inHouse: 0, shortage: 0, totalValue: 0 });
 
             const purchaseHead = [['Date', 'LC No', 'Exporter', 'Brand', 'Price', 'Bag', 'LC Qty', 'InHouse', 'Short']];
-            const purchaseBody = purchaseData.map(item => [
+            const purchaseBody = sortedPurchaseData.map(item => [
                 formatDate(item.date),
                 item.lcNo || '-',
                 item.itemExporter || '-',
@@ -2144,7 +2149,7 @@ export const generateProductHistoryPDF = (productName, category, activeTab, purc
 
         } else if (activeTab === 'sale') {
             // --- Sale History Table (Single) ---
-            const saleTotals = saleData.reduce((acc, sale) => ({
+            const saleTotals = sortedSaleData.reduce((acc, sale) => ({
                 qty: acc.qty + (parseFloat(sale.itemQty) || 0),
                 amount: acc.amount + (parseFloat(sale.itemTotal) || 0)
             }), { qty: 0, amount: 0 });
@@ -2153,7 +2158,7 @@ export const generateProductHistoryPDF = (productName, category, activeTab, purc
 
             if (isFruitCategory) {
                 saleHead = [['Date', 'Invoice', 'Company', 'Customer', 'Phone', 'Qty', 'Truck', 'Price', 'Total Price']];
-                saleBody = saleData.map(sale => [
+                saleBody = sortedSaleData.map(sale => [
                     formatDate(sale.date),
                     sale.invoiceNo || '-',
                     sale.companyName || '-',
@@ -2183,7 +2188,7 @@ export const generateProductHistoryPDF = (productName, category, activeTab, purc
                 };
             } else {
                 saleHead = [['Date', 'Invoice', 'Company', 'Brand', 'Bag', 'Qty', 'Price', 'Total Price']];
-                saleBody = saleData.map(sale => [
+                saleBody = sortedSaleData.map(sale => [
                     formatDate(sale.date),
                     sale.invoiceNo || '-',
                     sale.companyName || '-',
@@ -2315,7 +2320,8 @@ export const generateSalesReportPDF = (reportData, filters, summary, saleType = 
         const tableRows = [];
         let slNum = 1;
 
-        reportData.forEach((sale) => {
+        const sortedReportData = [...reportData].sort((a, b) => new Date(a.date) - new Date(b.date));
+        sortedReportData.forEach((sale) => {
             // Create flattened list of all entries across all items
             const flatItems = (sale.items || []).flatMap(item => {
                 const entries = (item.brandEntries && item.brandEntries.length > 0)
@@ -2389,7 +2395,6 @@ export const generateSalesReportPDF = (reportData, filters, summary, saleType = 
                     : (parseFloat(item.total) || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
 
                 if (saleType !== 'Border' && idx === 0) {
-                    row.push({ content: (parseFloat(sale.discount || 0)).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }), rowSpan: flatItems.length, styles: { halign: 'right' } });
                     row.push({ content: (parseFloat(sale.paidAmount || 0)).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }), rowSpan: flatItems.length, styles: { halign: 'right' } });
                     row.push({ content: ((parseFloat(sale.totalAmount || 0) - parseFloat(sale.paidAmount || 0))).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }), rowSpan: flatItems.length, styles: { halign: 'right' } });
                 }
@@ -2411,7 +2416,7 @@ export const generateSalesReportPDF = (reportData, filters, summary, saleType = 
 
         const headRow = saleType === 'Border'
             ? [['SL', 'Date', 'LC No', 'Importer', 'Port', 'IND C&F', 'BD C&F', 'Party Name', 'Product', 'Qty', 'Truck', 'Price', 'Total']]
-            : [['SL', 'Date', 'Invoice', 'Company', 'Product', 'Brand', 'Qty', 'Price', 'Total', 'Disc', 'Paid', 'Balance']];
+            : [['SL', 'Date', 'Invoice', 'Company', 'Product', 'Brand', 'Qty', 'Price', 'Total', 'Paid', 'Balance']];
 
         const footRow = [[
             { content: 'GRAND TOTAL', colSpan: saleType === 'Border' ? 9 : 6, styles: { halign: 'right', fontStyle: 'bold' } },
@@ -2422,7 +2427,6 @@ export const generateSalesReportPDF = (reportData, filters, summary, saleType = 
             ] : []),
             { content: saleType === 'Border' ? summary.totalAmount.toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 2 }) : summary.totalAmount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }), styles: { halign: 'right', fontStyle: 'bold' } },
             ...(saleType === 'Border' ? [] : [
-                { content: totalDiscount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }), styles: { halign: 'right', fontStyle: 'bold' } },
                 { content: summary.totalPaid.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }), styles: { halign: 'right', fontStyle: 'bold' } },
                 { content: (summary.totalAmount - summary.totalPaid).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }), styles: { halign: 'right', fontStyle: 'bold' } }
             ])
@@ -2453,34 +2457,33 @@ export const generateSalesReportPDF = (reportData, filters, summary, saleType = 
                 fontStyle: 'bold'
             },
             columnStyles: saleType === 'Border' ? {
-                0: { cellWidth: 7, halign: 'center' },     // SL
+                0: { cellWidth: 10, halign: 'center' },     // SL
                 1: { cellWidth: 20, halign: 'center' },    // Date
-                2: { cellWidth: 25, halign: 'center' },    // LC No
+                2: { cellWidth: 25, halign: 'center' },    // LC No (Reduced)
                 3: { cellWidth: 30, noWrap: true },        // Importer
                 4: { cellWidth: 18, noWrap: true },        // Port
                 5: { cellWidth: 26, noWrap: true },        // IND C&F
                 6: { cellWidth: 26, noWrap: true },        // BD C&F
                 7: { cellWidth: 36, noWrap: true },        // Party Name
-                8: { cellWidth: 24, overflow: 'linebreak' }, // Product
-                9: { cellWidth: 18, halign: 'right' },     // Qty
+                8: { cellWidth: 18, overflow: 'linebreak' }, // Product (Reduced)
+                9: { cellWidth: 22, halign: 'right' },     // Qty
                 10: { cellWidth: 12, halign: 'center' },   // Truck
-                11: { cellWidth: 24, halign: 'right' },    // Price
+                11: { cellWidth: 18, halign: 'right' },    // Price (Reduced)
                 12: { cellWidth: 24, halign: 'right' }     // Total
             } : {
                 0: { cellWidth: 7, halign: 'center' },     // SL
                 1: { cellWidth: 20, halign: 'center' },    // Date
                 2: { cellWidth: 18, halign: 'center' },    // Invoice
-                3: { cellWidth: 43 },                       // Company (Increased)
-                4: { cellWidth: 25, overflow: 'linebreak' }, // Product (Reduced)
+                3: { cellWidth: 50 },                       // Company (Increased)
+                4: { cellWidth: 20, overflow: 'linebreak' }, // Product (Reduced)
                 5: { cellWidth: 35, noWrap: false, overflow: 'linebreak' }, // Brand (Reduced)
-                6: { cellWidth: 15, halign: 'right' },     // Qty
-                7: { cellWidth: 15, halign: 'right' },     // Price
+                6: { cellWidth: 20, halign: 'right' },     // Qty
+                7: { cellWidth: 12, halign: 'right' },     // Price (Reduced)
                 8: { cellWidth: 30, halign: 'right' },     // Total (Increased)
-                9: { cellWidth: 15, halign: 'right' },     // Disc
-                10: { cellWidth: 28, halign: 'right' },    // Paid (Increased)
-                11: { cellWidth: 30, halign: 'right' }     // Balance (Increased)
+                9: { cellWidth: 30, halign: 'right' },    // Paid (Increased)
+                10: { cellWidth: 35, halign: 'right' }     // Balance (Increased)
             },
-            margin: { left: saleType === 'Border' ? (pageWidth - 290) / 2 : (pageWidth - 280) / 2, right: margin }
+            margin: { left: saleType === 'Border' ? (pageWidth - 277) / 2 : (pageWidth - 277) / 2, right: margin }
         });
 
         // --- Signatures ---
@@ -2761,7 +2764,8 @@ export const generatePaymentCollectionReportPDF = (payments, filters, dateStr) =
         const tableRows = [];
         let grandTotal = 0;
 
-        payments.forEach((p, idx) => {
+        const sortedPayments = [...payments].sort((a, b) => new Date(a.date) - new Date(b.date));
+        sortedPayments.forEach((p, idx) => {
             const amount = parseFloat(p.amount) || 0;
             grandTotal += amount;
 
@@ -2857,6 +2861,9 @@ export const generateCustomerHistoryPDF = (customer, historyData, summary, filte
         const pageHeight = doc.internal.pageSize.height;
         const margin = 5; // Standard margin in other reports
 
+        // Ensure history data is sorted ascending by date for reports
+        const sortedHistoryData = [...historyData].sort((a, b) => new Date(a.date) - new Date(b.date));
+
         // --- Header (Matching generateSalesReportPDF) ---
         doc.setFontSize(22);
         doc.setFont('helvetica', 'bold');
@@ -2931,11 +2938,8 @@ export const generateCustomerHistoryPDF = (customer, historyData, summary, filte
             let grandPaid = 0;
             let grandTrucks = 0;
 
-            // Sort for ascending order (chronological) in PDF
-            const rawChronoHistory = [...historyData].sort((a, b) => new Date(a.date) - new Date(b.date));
-
             // Merge same invoice numbers
-            const chronoHistory = rawChronoHistory.reduce((acc, item) => {
+            const chronoHistory = sortedHistoryData.reduce((acc, item) => {
                 const invoice = item.invoiceNo || item.lcNo;
                 const existing = item.type === 'sale' && invoice
                     ? acc.find(x => x.type === 'sale' && (x.invoiceNo === invoice || x.lcNo === invoice))
@@ -3086,7 +3090,7 @@ export const generateCustomerHistoryPDF = (customer, historyData, summary, filte
             let slIndex = 1;
 
             const invoiceGroups = [];
-            historyData.forEach(item => {
+            sortedHistoryData.forEach(item => {
                 const dateStr = formatDate(item.date);
                 const invNo = item.lcNo || item.invoiceNo || '-';
                 const key = `${dateStr}_${invNo}`;
@@ -3194,7 +3198,7 @@ export const generateCustomerHistoryPDF = (customer, historyData, summary, filte
             });
         } else {
             let totalCollectedAmt = 0;
-            historyData.forEach((item, idx) => {
+            sortedHistoryData.forEach((item, idx) => {
                 const amt = parseFloat(item.amount || 0);
                 totalCollectedAmt += amt;
                 tableRows.push([
@@ -3331,7 +3335,8 @@ export const generateCnFHistoryReportPDF = (reportData, agentInfo, filters) => {
         }
 
         // --- Data Preparation ---
-        const tableRows = reportData.map((row, index) => [
+        const sortedReportData = [...reportData].sort((a, b) => new Date(a.date) - new Date(b.date));
+        const tableRows = sortedReportData.map((row, index) => [
             formatDate(row.date),
             row.lcNo || '-',
             row.importer || '-',

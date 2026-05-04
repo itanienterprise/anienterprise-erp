@@ -538,6 +538,24 @@ apiRouter.put('/api/customers/:id', async (req, res) => {
     const updatedRecord = await Customer.findByIdAndUpdate(req.params.id, { data: encryptedData }, { new: true });
     if (!updatedRecord) return res.status(404).json({ message: 'Customer not found' });
 
+    // Propagate companyName and customerName changes to related sales
+    const sales = await Sale.find();
+    for (const s of sales) {
+      let d = decryptData(s.data);
+      if (d && d.data && typeof d.data === 'string' && !d.invoiceNo) {
+        try { d = decryptData(d.data); } catch(e) {}
+      }
+
+      if (d.customerId === req.params.id || (d.customer && d.customer._id === req.params.id)) {
+        if (d.companyName !== req.body.companyName || d.customerName !== req.body.customerName) {
+          d.companyName = req.body.companyName;
+          d.customerName = req.body.customerName;
+          s.data = encryptData(d);
+          await s.save();
+        }
+      }
+    }
+
     // Return decrypted record so middleware can re-encrypt it for transport
     const decrypted = { ...req.body, _id: updatedRecord._id, createdAt: updatedRecord.createdAt };
     res.json(decrypted);

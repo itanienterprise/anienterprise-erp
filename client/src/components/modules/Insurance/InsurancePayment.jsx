@@ -8,7 +8,7 @@ const InsurancePayment = () => {
     const [payments, setPayments] = useState([]);
     const [isLoading, setIsLoading] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
-    const [sortConfig, setSortConfig] = useState({ key: 'date', direction: 'asc' });
+    const [sortConfig, setSortConfig] = useState({ key: 'date', direction: 'desc' });
     const [currentUser] = useState(() => {
         try {
             const saved = localStorage.getItem('currentUser');
@@ -110,8 +110,8 @@ const InsurancePayment = () => {
                 const manualPremiumPaid = parseFloat(ins.paidPremium || 0);
                 const manualReturnCollected = parseFloat(ins.paidReturn || 0);
 
-                return { 
-                    ...ins, 
+                return {
+                    ...ins,
                     premiumBalance: totalPremium - premiumPaid - manualPremiumPaid,
                     returnBalance: expectedReturn - returnCollected - manualReturnCollected
                 };
@@ -174,7 +174,7 @@ const InsurancePayment = () => {
         const amountVal = parseFloat(newPayment.amount || 0);
         const selectedIns = insurances.find(i => i._id === newPayment.insuranceId);
         const returnBal = selectedIns?.returnBalance || 0;
-        
+
         if (!newPayment.insuranceId) return;
         if (!newPayment.isAdjustReturn && amountVal <= 0) return;
         if (newPayment.isAdjustReturn && amountVal <= 0 && returnBal <= 0) return;
@@ -316,7 +316,7 @@ const InsurancePayment = () => {
         if (selectedLc) {
             let premiumPaid = 0;
             let returnCollected = 0;
-            
+
             payments.forEach(payment => {
                 if (payment.lcNo === newPayment.lcNo) {
                     if (payment.type === 'Return Collection') {
@@ -406,8 +406,8 @@ const InsurancePayment = () => {
                                     <div className="flex items-center gap-4">
                                         <label className="flex items-center gap-2 cursor-pointer group">
                                             <div className="relative flex items-center justify-center">
-                                                <input 
-                                                    type="radio" 
+                                                <input
+                                                    type="radio"
                                                     name="isAdjustReturn"
                                                     checked={newPayment.isAdjustReturn}
                                                     onChange={() => setNewPayment(prev => ({ ...prev, isAdjustReturn: true, type: 'Premium Payment' }))}
@@ -419,8 +419,8 @@ const InsurancePayment = () => {
                                         </label>
                                         <label className="flex items-center gap-2 cursor-pointer group">
                                             <div className="relative flex items-center justify-center">
-                                                <input 
-                                                    type="radio" 
+                                                <input
+                                                    type="radio"
                                                     name="isAdjustReturn"
                                                     checked={!newPayment.isAdjustReturn}
                                                     onChange={() => setNewPayment(prev => ({ ...prev, isAdjustReturn: false }))}
@@ -444,13 +444,12 @@ const InsurancePayment = () => {
                                                 type="button"
                                                 disabled={newPayment.isAdjustReturn}
                                                 onClick={() => setNewPayment(prev => ({ ...prev, type: t }))}
-                                                className={`px-4 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${
-                                                    newPayment.isAdjustReturn 
-                                                        ? 'bg-gray-100 text-gray-300 cursor-not-allowed border-transparent' 
+                                                className={`px-4 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${newPayment.isAdjustReturn
+                                                        ? 'bg-gray-100 text-gray-300 cursor-not-allowed border-transparent'
                                                         : newPayment.type === t
                                                             ? t === 'Premium Payment' ? 'bg-rose-600 text-white shadow-lg shadow-rose-200' : 'bg-emerald-600 text-white shadow-lg shadow-emerald-200'
                                                             : 'bg-white border border-gray-200 text-gray-400 hover:border-gray-300'
-                                                }`}
+                                                    }`}
                                             >
                                                 {t.split(' ')[0]}
                                             </button>
@@ -459,313 +458,313 @@ const InsurancePayment = () => {
                                 </div>
                             </div>
 
-                        <div className="grid grid-cols-1 md:grid-cols-5 gap-6">
-                            {/* Row 1: Primary Info */}
-                            <div className="space-y-1.5">
-                                <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider ml-1">Payment Date</label>
-                                <CustomDatePicker value={newPayment.date} onChange={(e) => setNewPayment({ ...newPayment, date: e.target.value })} compact />
-                            </div>
+                            <div className="grid grid-cols-1 md:grid-cols-5 gap-6">
+                                {/* Row 1: Primary Info */}
+                                <div className="space-y-1.5">
+                                    <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider ml-1">Payment Date</label>
+                                    <CustomDatePicker value={newPayment.date} onChange={(e) => setNewPayment({ ...newPayment, date: e.target.value })} compact />
+                                </div>
 
-                            <div className="space-y-1.5 relative">
-                                <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider ml-1">LC No</label>
-                                <div ref={lcDropdownRef} className="relative">
-                                    <button
-                                        type="button"
-                                        onClick={() => setActiveDropdown(activeDropdown === 'lc' ? null : 'lc')}
-                                        className="w-full flex items-center justify-between px-4 py-2.5 bg-white border border-gray-100 rounded-xl text-sm shadow-sm hover:border-gray-200 transition-all focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 outline-none"
-                                    >
-                                        <span className={`truncate ${!newPayment.lcNo ? 'text-gray-400' : 'text-gray-900'}`}>
-                                            {newPayment.lcNo || 'Select LC'}
-                                        </span>
-                                        <div className="flex items-center gap-2">
-                                            {newPayment.lcNo && (
-                                                <div 
-                                                    className="p-0.5 hover:bg-gray-100 rounded-full transition-colors cursor-pointer"
-                                                    onMouseDown={(e) => {
-                                                        e.preventDefault();
-                                                        e.stopPropagation();
-                                                        setNewPayment({ ...newPayment, lcNo: '' });
-                                                    }}
-                                                >
-                                                    <XIcon className="w-4 h-4 text-gray-400 hover:text-red-500 transition-colors" />
-                                                </div>
-                                            )}
-                                            <ChevronDownIcon className="w-4 h-4 text-gray-400" />
-                                        </div>
-                                    </button>
-                                    {activeDropdown === 'lc' && (
-                                        <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-xl shadow-xl z-[110] max-h-60 flex flex-col animate-in fade-in slide-in-from-top-2 duration-200">
-                                            <div className="p-2 border-b border-gray-100 sticky top-0 bg-white">
-                                                <input
-                                                    type="text"
-                                                    placeholder="Search LC..."
-                                                    value={lcSearchQuery}
-                                                    onChange={(e) => setLcSearchQuery(e.target.value)}
-                                                    className="w-full px-3 py-1.5 text-sm bg-gray-50 border border-gray-200 rounded-lg outline-none focus:border-blue-500"
-                                                />
-                                            </div>
-                                            <div className="overflow-y-auto">
-                                                {lcs.filter(lc => (lc.lcNo || '').toLowerCase().includes(lcSearchQuery.toLowerCase())).map(lc => (
-                                                    <button
-                                                        key={lc._id}
-                                                        type="button"
-                                                        onClick={() => { 
-                                                            const insCoName = (lc.insuranceCo || '').toLowerCase().trim();
-                                                            const matchingIns = insurances.find(i => (i.companyName || '').toLowerCase().trim() === insCoName);
-                                                            
-                                                            setNewPayment({ 
-                                                                ...newPayment, 
-                                                                lcNo: lc.lcNo,
-                                                                insuranceId: matchingIns ? matchingIns._id : newPayment.insuranceId
-                                                            }); 
-                                                            setActiveDropdown(null); 
+                                <div className="space-y-1.5 relative">
+                                    <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider ml-1">LC No</label>
+                                    <div ref={lcDropdownRef} className="relative">
+                                        <button
+                                            type="button"
+                                            onClick={() => setActiveDropdown(activeDropdown === 'lc' ? null : 'lc')}
+                                            className="w-full flex items-center justify-between px-4 py-2.5 bg-white border border-gray-100 rounded-xl text-sm shadow-sm hover:border-gray-200 transition-all focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 outline-none"
+                                        >
+                                            <span className={`truncate ${!newPayment.lcNo ? 'text-gray-400' : 'text-gray-900'}`}>
+                                                {newPayment.lcNo || 'Select LC'}
+                                            </span>
+                                            <div className="flex items-center gap-2">
+                                                {newPayment.lcNo && (
+                                                    <div
+                                                        className="p-0.5 hover:bg-gray-100 rounded-full transition-colors cursor-pointer"
+                                                        onMouseDown={(e) => {
+                                                            e.preventDefault();
+                                                            e.stopPropagation();
+                                                            setNewPayment({ ...newPayment, lcNo: '' });
                                                         }}
-                                                        className="w-full px-4 py-2.5 text-left text-sm hover:bg-blue-50 transition-colors flex items-center justify-between"
                                                     >
-                                                        <div>
-                                                            <div className="font-bold text-gray-900">{lc.lcNo}</div>
-                                                            <div className="text-[10px] text-gray-500">{lc.importer}</div>
-                                                        </div>
-                                                        {newPayment.lcNo === lc.lcNo && <CheckIcon className="w-4 h-4 text-blue-600" />}
+                                                        <XIcon className="w-4 h-4 text-gray-400 hover:text-red-500 transition-colors" />
+                                                    </div>
+                                                )}
+                                                <ChevronDownIcon className="w-4 h-4 text-gray-400" />
+                                            </div>
+                                        </button>
+                                        {activeDropdown === 'lc' && (
+                                            <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-xl shadow-xl z-[110] max-h-60 flex flex-col animate-in fade-in slide-in-from-top-2 duration-200">
+                                                <div className="p-2 border-b border-gray-100 sticky top-0 bg-white">
+                                                    <input
+                                                        type="text"
+                                                        placeholder="Search LC..."
+                                                        value={lcSearchQuery}
+                                                        onChange={(e) => setLcSearchQuery(e.target.value)}
+                                                        className="w-full px-3 py-1.5 text-sm bg-gray-50 border border-gray-200 rounded-lg outline-none focus:border-blue-500"
+                                                    />
+                                                </div>
+                                                <div className="overflow-y-auto">
+                                                    {lcs.filter(lc => (lc.lcNo || '').toLowerCase().includes(lcSearchQuery.toLowerCase())).map(lc => (
+                                                        <button
+                                                            key={lc._id}
+                                                            type="button"
+                                                            onClick={() => {
+                                                                const insCoName = (lc.insuranceCo || '').toLowerCase().trim();
+                                                                const matchingIns = insurances.find(i => (i.companyName || '').toLowerCase().trim() === insCoName);
+
+                                                                setNewPayment({
+                                                                    ...newPayment,
+                                                                    lcNo: lc.lcNo,
+                                                                    insuranceId: matchingIns ? matchingIns._id : newPayment.insuranceId
+                                                                });
+                                                                setActiveDropdown(null);
+                                                            }}
+                                                            className="w-full px-4 py-2.5 text-left text-sm hover:bg-blue-50 transition-colors flex items-center justify-between"
+                                                        >
+                                                            <div>
+                                                                <div className="font-bold text-gray-900">{lc.lcNo}</div>
+                                                                <div className="text-[10px] text-gray-500">{lc.importer}</div>
+                                                            </div>
+                                                            {newPayment.lcNo === lc.lcNo && <CheckIcon className="w-4 h-4 text-blue-600" />}
+                                                        </button>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+
+                                <div className="space-y-1.5 relative">
+                                    <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider ml-1">Insurance Company</label>
+                                    <div ref={insuranceDropdownRef} className="relative">
+                                        <button
+                                            type="button"
+                                            onClick={() => setActiveDropdown(activeDropdown === 'insurance' ? null : 'insurance')}
+                                            className="w-full flex items-center justify-between px-4 py-2.5 bg-white border border-gray-100 rounded-xl text-sm shadow-sm hover:border-gray-200 transition-all focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 outline-none"
+                                        >
+                                            <span className={`truncate ${!newPayment.insuranceId ? 'text-gray-400' : 'text-gray-900'}`}>
+                                                {insurances.find(i => i._id === newPayment.insuranceId)?.companyName || 'Select Company'}
+                                            </span>
+                                            <div className="flex items-center gap-2">
+                                                {newPayment.insuranceId && (
+                                                    <div
+                                                        className="p-0.5 hover:bg-gray-100 rounded-full transition-colors cursor-pointer"
+                                                        onMouseDown={(e) => {
+                                                            e.preventDefault();
+                                                            e.stopPropagation();
+                                                            setNewPayment({ ...newPayment, insuranceId: '' });
+                                                        }}
+                                                    >
+                                                        <XIcon className="w-4 h-4 text-gray-400 hover:text-red-500 transition-colors" />
+                                                    </div>
+                                                )}
+                                                <ChevronDownIcon className="w-4 h-4 text-gray-400" />
+                                            </div>
+                                        </button>
+                                        {activeDropdown === 'insurance' && (
+                                            <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-xl shadow-xl z-[110] max-h-60 flex flex-col animate-in fade-in slide-in-from-top-2 duration-200">
+                                                <div className="p-2 border-b border-gray-100 sticky top-0 bg-white">
+                                                    <input
+                                                        type="text"
+                                                        placeholder="Search Company..."
+                                                        value={insuranceSearchQuery}
+                                                        onChange={(e) => setInsuranceSearchQuery(e.target.value)}
+                                                        className="w-full px-3 py-1.5 text-sm bg-gray-50 border border-gray-200 rounded-lg outline-none focus:border-blue-500"
+                                                    />
+                                                </div>
+                                                <div className="overflow-y-auto">
+                                                    {insurances.filter(i => i.companyName.toLowerCase().includes(insuranceSearchQuery.toLowerCase())).map(i => (
+                                                        <button
+                                                            key={i._id}
+                                                            type="button"
+                                                            onClick={() => { setNewPayment({ ...newPayment, insuranceId: i._id }); setActiveDropdown(null); }}
+                                                            className="w-full px-4 py-2.5 text-left text-sm hover:bg-blue-50 transition-colors flex items-center justify-between"
+                                                        >
+                                                            <div>
+                                                                <div className="font-bold text-gray-900">{i.companyName}</div>
+                                                                <div className="text-[10px] text-gray-500">{i.policyType}</div>
+                                                            </div>
+                                                            {newPayment.insuranceId === i._id && <CheckIcon className="w-4 h-4 text-blue-600" />}
+                                                        </button>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+
+                                <div className="space-y-1.5 relative">
+                                    <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider ml-1">Payment Method</label>
+                                    <div ref={methodDropdownRef} className="relative">
+                                        <button
+                                            type="button"
+                                            onClick={() => setActiveDropdown(activeDropdown === 'method' ? null : 'method')}
+                                            className="w-full flex items-center justify-between px-4 py-2.5 bg-white border border-gray-100 rounded-xl text-sm shadow-sm hover:border-gray-200 transition-all focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 outline-none"
+                                        >
+                                            <span className="truncate">{newPayment.method || 'Select Method'}</span>
+                                            <ChevronDownIcon className="w-4 h-4 text-gray-400" />
+                                        </button>
+                                        {activeDropdown === 'method' && (
+                                            <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-xl shadow-xl z-[110] py-1 animate-in fade-in slide-in-from-top-2 duration-200">
+                                                {uniqueMethods.map(m => (
+                                                    <button
+                                                        key={m}
+                                                        type="button"
+                                                        onClick={() => { setNewPayment({ ...newPayment, method: m }); setActiveDropdown(null); }}
+                                                        className="w-full px-4 py-2 text-left text-sm hover:bg-blue-50 transition-colors flex items-center justify-between"
+                                                    >
+                                                        <span className={newPayment.method === m ? 'font-bold text-blue-600' : 'text-gray-700'}>{m}</span>
+                                                        {newPayment.method === m && <CheckIcon className="w-3.5 h-3.5 text-blue-600" />}
                                                     </button>
                                                 ))}
                                             </div>
-                                        </div>
-                                    )}
+                                        )}
+                                    </div>
+                                </div>
+
+                                <div className="space-y-1.5">
+                                    <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider ml-1">Reference / Note</label>
+                                    <input
+                                        type="text"
+                                        value={newPayment.reference}
+                                        onChange={(e) => setNewPayment({ ...newPayment, reference: e.target.value })}
+                                        placeholder="Ref No, Note..."
+                                        className="w-full px-4 py-2.5 bg-white border border-gray-200 rounded-xl text-sm shadow-sm hover:border-gray-200 transition-all focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 outline-none"
+                                    />
                                 </div>
                             </div>
 
-                            <div className="space-y-1.5 relative">
-                                <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider ml-1">Insurance Company</label>
-                                <div ref={insuranceDropdownRef} className="relative">
-                                    <button
-                                        type="button"
-                                        onClick={() => setActiveDropdown(activeDropdown === 'insurance' ? null : 'insurance')}
-                                        className="w-full flex items-center justify-between px-4 py-2.5 bg-white border border-gray-100 rounded-xl text-sm shadow-sm hover:border-gray-200 transition-all focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 outline-none"
-                                    >
-                                        <span className={`truncate ${!newPayment.insuranceId ? 'text-gray-400' : 'text-gray-900'}`}>
-                                            {insurances.find(i => i._id === newPayment.insuranceId)?.companyName || 'Select Company'}
-                                        </span>
-                                        <div className="flex items-center gap-2">
-                                            {newPayment.insuranceId && (
-                                                <div 
-                                                    className="p-0.5 hover:bg-gray-100 rounded-full transition-colors cursor-pointer"
-                                                    onMouseDown={(e) => {
-                                                        e.preventDefault();
-                                                        e.stopPropagation();
-                                                        setNewPayment({ ...newPayment, insuranceId: '' });
-                                                    }}
-                                                >
-                                                    <XIcon className="w-4 h-4 text-gray-400 hover:text-red-500 transition-colors" />
+
+
+                            <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-start pt-4 border-t border-gray-50">
+                                {/* Dynamic Balance Section */}
+                                {newPayment.isAdjustReturn ? (
+                                    <>
+                                        {/* Adjustment Mode: Show Premium, Return and Payable */}
+                                        <div className="space-y-1.5 animate-in fade-in slide-in-from-left-2 duration-300">
+                                            <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider ml-1">Premium Bal.</label>
+                                            <div className="relative">
+                                                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                                                    <span className="text-gray-400 font-bold text-[10px]">৳</span>
                                                 </div>
-                                            )}
-                                            <ChevronDownIcon className="w-4 h-4 text-gray-400" />
-                                        </div>
-                                    </button>
-                                    {activeDropdown === 'insurance' && (
-                                        <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-xl shadow-xl z-[110] max-h-60 flex flex-col animate-in fade-in slide-in-from-top-2 duration-200">
-                                            <div className="p-2 border-b border-gray-100 sticky top-0 bg-white">
                                                 <input
                                                     type="text"
-                                                    placeholder="Search Company..."
-                                                    value={insuranceSearchQuery}
-                                                    onChange={(e) => setInsuranceSearchQuery(e.target.value)}
-                                                    className="w-full px-3 py-1.5 text-sm bg-gray-50 border border-gray-200 rounded-lg outline-none focus:border-blue-500"
+                                                    readOnly
+                                                    value={(newPayment.lcNo || newPayment.insuranceId) ? displayPremiumBalance.toLocaleString('en-US') : '0.00'}
+                                                    className="w-full pl-6 pr-3 py-2.5 bg-white border border-gray-100 rounded-xl text-sm font-black text-gray-900 shadow-sm outline-none cursor-not-allowed"
                                                 />
                                             </div>
-                                            <div className="overflow-y-auto">
-                                                {insurances.filter(i => i.companyName.toLowerCase().includes(insuranceSearchQuery.toLowerCase())).map(i => (
-                                                    <button
-                                                        key={i._id}
-                                                        type="button"
-                                                        onClick={() => { setNewPayment({ ...newPayment, insuranceId: i._id }); setActiveDropdown(null); }}
-                                                        className="w-full px-4 py-2.5 text-left text-sm hover:bg-blue-50 transition-colors flex items-center justify-between"
-                                                    >
-                                                        <div>
-                                                            <div className="font-bold text-gray-900">{i.companyName}</div>
-                                                            <div className="text-[10px] text-gray-500">{i.policyType}</div>
-                                                        </div>
-                                                        {newPayment.insuranceId === i._id && <CheckIcon className="w-4 h-4 text-blue-600" />}
-                                                    </button>
-                                                ))}
+                                        </div>
+                                        <div className="space-y-1.5 animate-in fade-in slide-in-from-left-2 duration-300">
+                                            <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider ml-1">Return Bal.</label>
+                                            <div className="relative">
+                                                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                                                    <span className="text-gray-400 font-bold text-[10px]">৳</span>
+                                                </div>
+                                                <input
+                                                    type="text"
+                                                    readOnly
+                                                    value={(newPayment.lcNo || newPayment.insuranceId) ? displayReturnBalance.toLocaleString('en-IN') : '0.00'}
+                                                    className="w-full pl-6 pr-3 py-2.5 bg-white border border-gray-100 rounded-xl text-sm font-black text-gray-900 shadow-sm outline-none cursor-not-allowed"
+                                                />
                                             </div>
                                         </div>
-                                    )}
+                                        <div className="space-y-1.5 animate-in fade-in slide-in-from-left-2 duration-300">
+                                            <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider ml-1">Net Payable</label>
+                                            <div className="relative">
+                                                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                                                    <span className="text-gray-400 font-bold text-[10px]">৳</span>
+                                                </div>
+                                                <input
+                                                    type="text"
+                                                    readOnly
+                                                    value={(newPayment.lcNo || newPayment.insuranceId) ? (displayPremiumBalance - displayReturnBalance).toLocaleString('en-US') : '0.00'}
+                                                    className="w-full pl-6 pr-3 py-2.5 bg-white border border-gray-100 rounded-xl text-sm font-black text-gray-900 shadow-sm outline-none cursor-not-allowed"
+                                                />
+                                            </div>
+                                        </div>
+                                        {/* Payment Entry Section for Adjustment Mode */}
+                                        <div className="space-y-1.5">
+                                            <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider ml-1">Amount (৳)</label>
+                                            <div className="relative">
+                                                <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                                                    <span className="text-gray-400 font-bold text-sm">৳</span>
+                                                </div>
+                                                <input
+                                                    type="number"
+                                                    value={newPayment.amount}
+                                                    onChange={(e) => setNewPayment({ ...newPayment, amount: e.target.value })}
+                                                    placeholder="0.00"
+                                                    required
+                                                    className="w-full pl-8 pr-4 py-2.5 bg-white border border-gray-100 rounded-xl text-sm font-bold shadow-sm hover:border-gray-200 transition-all focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 outline-none"
+                                                />
+                                            </div>
+                                        </div>
+                                    </>
+                                ) : (
+                                    <>
+                                        {/* Direct Mode: Show only active type balance and Amount next to it */}
+                                        <div className="space-y-1.5 animate-in fade-in slide-in-from-left-2 duration-300">
+                                            <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider ml-1">
+                                                {newPayment.type === 'Premium Payment' ? 'Premium Balance' : 'Return Balance'}
+                                            </label>
+                                            <div className="relative">
+                                                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                                                    <span className="text-gray-400 font-bold text-[10px]">৳</span>
+                                                </div>
+                                                <input
+                                                    type="text"
+                                                    readOnly
+                                                    value={(newPayment.lcNo || newPayment.insuranceId) ? (newPayment.type === 'Premium Payment' ? displayPremiumBalance : displayReturnBalance).toLocaleString('en-US') : '0.00'}
+                                                    className="w-full pl-6 pr-3 py-2.5 bg-white border border-gray-100 rounded-xl text-sm font-black text-gray-900 shadow-sm outline-none cursor-not-allowed"
+                                                />
+                                            </div>
+                                        </div>
+                                        {/* Amount field immediately after balance */}
+                                        <div className="space-y-1.5">
+                                            <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider ml-1">Amount (৳)</label>
+                                            <div className="relative">
+                                                <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                                                    <span className="text-gray-400 font-bold text-sm">৳</span>
+                                                </div>
+                                                <input
+                                                    type="number"
+                                                    value={newPayment.amount}
+                                                    onChange={(e) => setNewPayment({ ...newPayment, amount: e.target.value })}
+                                                    placeholder="0.00"
+                                                    required
+                                                    className="w-full pl-8 pr-4 py-2.5 bg-white border border-gray-100 rounded-xl text-sm font-bold shadow-sm hover:border-gray-200 transition-all focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 outline-none"
+                                                />
+                                            </div>
+                                        </div>
+                                        {/* Spacers for the rest of the 4-column grid */}
+                                        <div></div>
+                                        <div></div>
+                                    </>
+                                )}
+                            </div>
+
+                            <div className="flex items-center justify-end gap-3 pt-4 border-t border-gray-50">
+
+                                <button
+                                    type="submit"
+                                    disabled={isSubmitting}
+                                    className="px-10 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white text-sm font-black rounded-xl shadow-lg shadow-blue-500/20 transition-all disabled:opacity-50"
+                                >
+                                    {isSubmitting ? 'Processing...' : isEditMode ? 'Update Payment' : 'Confirm Payment'}
+                                </button>
+                            </div>
+                        </form>
+
+                        {submitStatus === 'success' && (
+                            <div className="absolute inset-0 bg-white/90 backdrop-blur-sm flex flex-col items-center justify-center animate-in fade-in">
+                                <div className="w-16 h-16 bg-green-100 text-green-600 rounded-full flex items-center justify-center mb-4">
+                                    <CheckIcon className="w-8 h-8" />
                                 </div>
+                                <h4 className="text-xl font-black text-gray-900">Success!</h4>
+                                <p className="text-gray-500">Payment record saved successfully.</p>
                             </div>
-
-                            <div className="space-y-1.5 relative">
-                                <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider ml-1">Payment Method</label>
-                                <div ref={methodDropdownRef} className="relative">
-                                    <button
-                                        type="button"
-                                        onClick={() => setActiveDropdown(activeDropdown === 'method' ? null : 'method')}
-                                        className="w-full flex items-center justify-between px-4 py-2.5 bg-white border border-gray-100 rounded-xl text-sm shadow-sm hover:border-gray-200 transition-all focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 outline-none"
-                                    >
-                                        <span className="truncate">{newPayment.method || 'Select Method'}</span>
-                                        <ChevronDownIcon className="w-4 h-4 text-gray-400" />
-                                    </button>
-                                    {activeDropdown === 'method' && (
-                                        <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-xl shadow-xl z-[110] py-1 animate-in fade-in slide-in-from-top-2 duration-200">
-                                            {uniqueMethods.map(m => (
-                                                <button
-                                                    key={m}
-                                                    type="button"
-                                                    onClick={() => { setNewPayment({ ...newPayment, method: m }); setActiveDropdown(null); }}
-                                                    className="w-full px-4 py-2 text-left text-sm hover:bg-blue-50 transition-colors flex items-center justify-between"
-                                                >
-                                                    <span className={newPayment.method === m ? 'font-bold text-blue-600' : 'text-gray-700'}>{m}</span>
-                                                    {newPayment.method === m && <CheckIcon className="w-3.5 h-3.5 text-blue-600" />}
-                                                </button>
-                                            ))}
-                                        </div>
-                                    )}
-                                </div>
-                            </div>
-
-                            <div className="space-y-1.5">
-                                <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider ml-1">Reference / Note</label>
-                                <input
-                                    type="text"
-                                    value={newPayment.reference}
-                                    onChange={(e) => setNewPayment({ ...newPayment, reference: e.target.value })}
-                                    placeholder="Ref No, Note..."
-                                    className="w-full px-4 py-2.5 bg-white border border-gray-200 rounded-xl text-sm shadow-sm hover:border-gray-200 transition-all focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 outline-none"
-                                />
-                            </div>
-                        </div>
-
-
-
-                        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-start pt-4 border-t border-gray-50">
-                            {/* Dynamic Balance Section */}
-                            {newPayment.isAdjustReturn ? (
-                                <>
-                                    {/* Adjustment Mode: Show Premium, Return and Payable */}
-                                    <div className="space-y-1.5 animate-in fade-in slide-in-from-left-2 duration-300">
-                                        <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider ml-1">Premium Bal.</label>
-                                        <div className="relative">
-                                            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                                                <span className="text-gray-400 font-bold text-[10px]">৳</span>
-                                            </div>
-                                            <input
-                                                type="text"
-                                                readOnly
-                                                value={(newPayment.lcNo || newPayment.insuranceId) ? displayPremiumBalance.toLocaleString('en-US') : '0.00'}
-                                                className="w-full pl-6 pr-3 py-2.5 bg-white border border-gray-100 rounded-xl text-sm font-black text-gray-900 shadow-sm outline-none cursor-not-allowed"
-                                            />
-                                        </div>
-                                    </div>
-                                    <div className="space-y-1.5 animate-in fade-in slide-in-from-left-2 duration-300">
-                                        <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider ml-1">Return Bal.</label>
-                                        <div className="relative">
-                                            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                                                <span className="text-gray-400 font-bold text-[10px]">৳</span>
-                                            </div>
-                                            <input
-                                                type="text"
-                                                readOnly
-                                                value={(newPayment.lcNo || newPayment.insuranceId) ? displayReturnBalance.toLocaleString('en-IN') : '0.00'}
-                                                className="w-full pl-6 pr-3 py-2.5 bg-white border border-gray-100 rounded-xl text-sm font-black text-gray-900 shadow-sm outline-none cursor-not-allowed"
-                                            />
-                                        </div>
-                                    </div>
-                                    <div className="space-y-1.5 animate-in fade-in slide-in-from-left-2 duration-300">
-                                        <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider ml-1">Net Payable</label>
-                                        <div className="relative">
-                                            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                                                <span className="text-gray-400 font-bold text-[10px]">৳</span>
-                                            </div>
-                                            <input
-                                                type="text"
-                                                readOnly
-                                                value={(newPayment.lcNo || newPayment.insuranceId) ? (displayPremiumBalance - displayReturnBalance).toLocaleString('en-US') : '0.00'}
-                                                className="w-full pl-6 pr-3 py-2.5 bg-white border border-gray-100 rounded-xl text-sm font-black text-gray-900 shadow-sm outline-none cursor-not-allowed"
-                                            />
-                                        </div>
-                                    </div>
-                                    {/* Payment Entry Section for Adjustment Mode */}
-                                    <div className="space-y-1.5">
-                                        <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider ml-1">Amount (৳)</label>
-                                        <div className="relative">
-                                            <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                                                <span className="text-gray-400 font-bold text-sm">৳</span>
-                                            </div>
-                                            <input
-                                                type="number"
-                                                value={newPayment.amount}
-                                                onChange={(e) => setNewPayment({ ...newPayment, amount: e.target.value })}
-                                                placeholder="0.00"
-                                                required
-                                                className="w-full pl-8 pr-4 py-2.5 bg-white border border-gray-100 rounded-xl text-sm font-bold shadow-sm hover:border-gray-200 transition-all focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 outline-none"
-                                            />
-                                        </div>
-                                    </div>
-                                </>
-                            ) : (
-                                <>
-                                    {/* Direct Mode: Show only active type balance and Amount next to it */}
-                                    <div className="space-y-1.5 animate-in fade-in slide-in-from-left-2 duration-300">
-                                        <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider ml-1">
-                                            {newPayment.type === 'Premium Payment' ? 'Premium Balance' : 'Return Balance'}
-                                        </label>
-                                        <div className="relative">
-                                            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                                                <span className="text-gray-400 font-bold text-[10px]">৳</span>
-                                            </div>
-                                            <input
-                                                type="text"
-                                                readOnly
-                                                value={(newPayment.lcNo || newPayment.insuranceId) ? (newPayment.type === 'Premium Payment' ? displayPremiumBalance : displayReturnBalance).toLocaleString('en-US') : '0.00'}
-                                                className="w-full pl-6 pr-3 py-2.5 bg-white border border-gray-100 rounded-xl text-sm font-black text-gray-900 shadow-sm outline-none cursor-not-allowed"
-                                            />
-                                        </div>
-                                    </div>
-                                    {/* Amount field immediately after balance */}
-                                    <div className="space-y-1.5">
-                                        <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider ml-1">Amount (৳)</label>
-                                        <div className="relative">
-                                            <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                                                <span className="text-gray-400 font-bold text-sm">৳</span>
-                                            </div>
-                                            <input
-                                                type="number"
-                                                value={newPayment.amount}
-                                                onChange={(e) => setNewPayment({ ...newPayment, amount: e.target.value })}
-                                                placeholder="0.00"
-                                                required
-                                                className="w-full pl-8 pr-4 py-2.5 bg-white border border-gray-100 rounded-xl text-sm font-bold shadow-sm hover:border-gray-200 transition-all focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 outline-none"
-                                            />
-                                        </div>
-                                    </div>
-                                    {/* Spacers for the rest of the 4-column grid */}
-                                    <div></div>
-                                    <div></div>
-                                </>
-                            )}
-                        </div>
-
-                    <div className="flex items-center justify-end gap-3 pt-4 border-t border-gray-50">
-
-                            <button
-                                type="submit"
-                                disabled={isSubmitting}
-                                className="px-10 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white text-sm font-black rounded-xl shadow-lg shadow-blue-500/20 transition-all disabled:opacity-50"
-                            >
-                                {isSubmitting ? 'Processing...' : isEditMode ? 'Update Payment' : 'Confirm Payment'}
-                            </button>
-                        </div>
-                    </form>
-
-                    {submitStatus === 'success' && (
-                        <div className="absolute inset-0 bg-white/90 backdrop-blur-sm flex flex-col items-center justify-center animate-in fade-in">
-                            <div className="w-16 h-16 bg-green-100 text-green-600 rounded-full flex items-center justify-center mb-4">
-                                <CheckIcon className="w-8 h-8" />
-                            </div>
-                            <h4 className="text-xl font-black text-gray-900">Success!</h4>
-                            <p className="text-gray-500">Payment record saved successfully.</p>
-                        </div>
-                    )}
+                        )}
                     </div>
                 </div>
             ) : (

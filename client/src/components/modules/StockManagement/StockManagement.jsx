@@ -87,8 +87,8 @@ const StockManagement = ({
     const [selectedItems, setSelectedItems] = useState(new Set());
     const [isSelectionMode, setIsSelectionMode] = useState(false);
     const [sortConfig, setSortConfig] = useState({
-        stock: { key: 'date', direction: 'asc' },
-        history: { key: 'date', direction: 'asc' }
+        stock: { key: 'date', direction: 'desc' },
+        history: { key: 'date', direction: 'desc' }
     });
 
     // Long Press Logic
@@ -2689,7 +2689,7 @@ const StockManagement = ({
                                 const isExpanded = expandedProducts === group.productName;
                                 return (
                                     <div key={group.productName || gIdx} className="p-4 space-y-4 hover:bg-gray-50/50 transition-colors">
-                                        <div 
+                                        <div
                                             className="flex justify-between items-start w-full cursor-pointer select-none"
                                             onClick={() => toggleProductExpansion(group.productName)}
                                         >

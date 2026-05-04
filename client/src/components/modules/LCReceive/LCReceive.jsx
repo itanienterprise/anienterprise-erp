@@ -397,7 +397,7 @@ function LCReceive({
     const [expandedCard, setExpandedCard] = useState(null);
     const [viewData, setViewData] = useState(null);
     const [isRequestedOnly, setIsRequestedOnly] = useState(false);
-    const [sortConfig, setSortConfig] = useState({ key: 'date', direction: 'asc' });
+    const [sortConfig, setSortConfig] = useState({ key: 'date', direction: 'desc' });
 
     const handleSort = (key) => {
         let direction = 'desc';
@@ -2132,14 +2132,14 @@ function LCReceive({
                             </button>
                         </div>
 
-                        <form 
-                            onSubmit={handleStockSubmit} 
+                        <form
+                            onSubmit={handleStockSubmit}
                             onKeyDown={(e) => {
                                 if (e.key === 'Enter' && e.target.tagName !== 'TEXTAREA') {
                                     e.preventDefault();
                                 }
                             }}
-                            autoComplete="off" 
+                            autoComplete="off"
                             className="grid grid-cols-1 md:grid-cols-2 gap-6 relative z-10"
                         >
                             {/* Form Fields - Reusing logic by passing handlers */}
