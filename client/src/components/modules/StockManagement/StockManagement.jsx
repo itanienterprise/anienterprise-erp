@@ -1825,20 +1825,12 @@ const StockManagement = ({
     // --- Render ---
     const {
         displayRecords,
-        totalPackets,
         totalQuantity,
-        totalTotalInHousePkt,
-        totalTotalInHouseQty,
         totalOpeningPktWhole,
         totalOpeningPktRemainder,
-        totalArrivalQty,
-        totalArrivalPktWhole,
-        totalArrivalPktRemainder,
-        totalInHousePkt,
         totalInHousePktWhole,
         totalInHousePktDecimalKg,
         totalInHouseQty,
-        totalSalePkt,
         totalSalePktWhole,
         totalSaleQty,
         totalSalePktDecimalKg,
@@ -2141,12 +2133,12 @@ const StockManagement = ({
                         {[
                             {
                                 label: 'TOTAL BAG',
-                                value: `${((totalOpeningPktWhole || 0) + (totalArrivalPktWhole || 0)).toLocaleString('en-US')}`,
+                                value: `${(totalOpeningPktWhole || 0).toLocaleString('en-US')}`,
                                 bgColor: 'bg-blue-50/50', borderColor: 'border-blue-100', textColor: 'text-blue-700', labelColor: 'text-blue-600'
                             },
                             {
                                 label: 'TOTAL QUANTITY',
-                                value: `${Math.round((totalTotalInHouseQty || 0) + (totalArrivalQty || 0)).toLocaleString('en-US')} ${unit}`,
+                                value: `${Math.round(totalQuantity || 0).toLocaleString('en-US')} ${unit}`,
                                 bgColor: 'bg-blue-50/50', borderColor: 'border-blue-100', textColor: 'text-blue-700', labelColor: 'text-blue-600'
                             },
                             {
