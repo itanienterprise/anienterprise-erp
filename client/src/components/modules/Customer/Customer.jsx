@@ -309,7 +309,9 @@ const Customer = ({
         try {
             const url = editingId ? `/api/customers/${editingId}` : `/api/customers`;
             if (editingId) {
-                await api.put(url, formData);
+                const existingCustomer = await api.get(url);
+                const payload = { ...existingCustomer, ...formData };
+                await api.put(url, payload);
             } else {
                 await api.post(url, formData);
             }
