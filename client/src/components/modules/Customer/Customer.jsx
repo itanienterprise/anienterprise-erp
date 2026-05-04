@@ -258,10 +258,11 @@ const Customer = ({
     // Helper: Check if a sale belongs to a customer (including legacy matches by name)
     const isSaleForCustomer = (sale, customer) => {
         if (sale.customerId === customer._id) return true;
-        if (!sale.customerId && (sale.companyName || sale.customerName)) {
-            if (customer.companyName && sale.companyName && customer.companyName.trim().toLowerCase() === sale.companyName.trim().toLowerCase()) return true;
-            if (customer.customerName && sale.customerName && customer.customerName.trim().toLowerCase() === sale.customerName.trim().toLowerCase()) return true;
-        }
+        
+        // Fallback: match by company or customer name (handles legacy data and recreated customers)
+        if (customer.companyName && sale.companyName && customer.companyName.trim().toLowerCase() === sale.companyName.trim().toLowerCase()) return true;
+        if (customer.customerName && sale.customerName && customer.customerName.trim().toLowerCase() === sale.customerName.trim().toLowerCase()) return true;
+        
         return false;
     };
 
