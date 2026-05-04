@@ -257,10 +257,12 @@ const Customer = ({
 
     // Helper: compute balance for a customer from actual sale records
     const getCustomerBalanceFromSales = (customerId, customerSalesRecords, customerPayments) => {
-        // Find all accepted sales that reference this customer
-        const matchingSales = customerSalesRecords.filter(s => 
-            s.customerId === customerId && (s.status || '').toLowerCase() === 'accepted'
-        );
+        // Find all valid sales that reference this customer (excluding pending/requested/rejected)
+        const matchingSales = customerSalesRecords.filter(s => {
+            if (s.customerId !== customerId) return false;
+            const status = (s.status || '').toLowerCase();
+            return !['requested', 'pending', 'rejected'].includes(status);
+        });
         
         let totalSalesAmount = 0;
         let totalSalesPaid = 0;
@@ -292,9 +294,11 @@ const Customer = ({
 
     // Helper: reconstruct salesHistory format from actual sale records
     const buildSalesHistoryFromSales = (customerId, allSales) => {
-        const matchingSales = allSales.filter(s => 
-            s.customerId === customerId && (s.status || '').toLowerCase() === 'accepted'
-        );
+        const matchingSales = allSales.filter(s => {
+            if (s.customerId !== customerId) return false;
+            const status = (s.status || '').toLowerCase();
+            return !['requested', 'pending', 'rejected'].includes(status);
+        });
         
         let reconstructedHistory = [];
         matchingSales.forEach(sale => {
