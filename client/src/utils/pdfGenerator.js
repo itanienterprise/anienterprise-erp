@@ -1838,16 +1838,17 @@ export const generateSaleInvoicePDF = async (sale, allCustomers = []) => {
         const totalBalance = currentBalance + previousBalance;
 
         // Left Side: In Words
+        const boxWidth = contentWidth - 65;
         doc.setFillColor(241, 245, 249);
-        doc.roundedRect(margin, finalY, contentWidth - 100, 15, 3, 3, 'F');
+        doc.roundedRect(margin, finalY, boxWidth, 16, 4, 4, 'F');
         doc.setFontSize(14);
         doc.setTextColor(0, 0, 0);
         doc.setFont('helvetica', 'bold');
-        doc.text("TK.   " + invoiceTotal.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }), margin + ((contentWidth - 100) / 2), finalY + 5.5, { align: 'center' });
+        doc.text("TK.   " + invoiceTotal.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }), margin + (boxWidth / 2), finalY + 6, { align: 'center' });
         const amountWords = numberToWords(invoiceTotal);
         doc.setFontSize(8.5);
         doc.setFont('helvetica', 'normal');
-        doc.text("In Words : " + amountWords, margin + ((contentWidth - 100) / 2), finalY + 11.5, { align: 'center' });
+        doc.text("In Words : " + amountWords, margin + (boxWidth / 2), finalY + 12, { align: 'center' });
 
 
         // Right Side: Summary Table
@@ -2012,13 +2013,13 @@ export const generateProductHistoryPDF = (productName, category, activeTab, purc
                 const key = `${p.date}_${p.lcNo}_${p.itemTruck || p.truckNo || ''}`;
                 if (!acc[key]) acc[key] = { ...p, type: 'purchase', itemQty: 0, itemInHouseQty: 0, itemShortageQty: 0, brandsProcessed: new Set() };
                 acc[key].itemQty += parseFloat(p.itemQty) || 0;
-                
+
                 const brandKey = (p.itemBrand || '').trim().toLowerCase();
                 if (!acc[key].brandsProcessed.has(brandKey)) {
                     acc[key].itemInHouseQty += parseFloat(p.itemInHouseQty) || 0;
                     acc[key].brandsProcessed.add(brandKey);
                 }
-                
+
                 acc[key].itemShortageQty += parseFloat(p.itemShortageQty) || 0;
                 return acc;
             }, {}));
@@ -2032,7 +2033,7 @@ export const generateProductHistoryPDF = (productName, category, activeTab, purc
 
             let currentBalance = 0;
             const processedLCTruckBrands = new Set();
-            
+
             const unifiedData = [...aggregatedPurchase, ...aggregatedSale]
                 .sort((a, b) => new Date(a.date) - new Date(b.date))
                 .map(item => {
@@ -2051,14 +2052,14 @@ export const generateProductHistoryPDF = (productName, category, activeTab, purc
             // deduplicate In House Quantity calculation using the robust (StockTable + WhPortionOnce) logic
             let totalInHouseQty = 0;
             const truckBrandsSeen = new Set();
-            
+
             sortedPurchaseData.forEach(item => {
                 const bKey = (item.itemBrand || '').trim().toLowerCase();
                 const truckKey = `${(item.lcNo || '').trim()}_${(item.itemTruck || item.truckNo || '').trim()}_${bKey}`;
-                
+
                 // 1. Always add the raw stock table remainder for this specific entry
                 totalInHouseQty += parseFloat(item.inHouseQuantity) || 0;
-                
+
                 // 2. Add the shared warehouse portion ONLY once per truck/brand combination
                 if (!truckBrandsSeen.has(truckKey)) {
                     const fullQty = parseFloat(item.itemInHouseQty) || 0;
