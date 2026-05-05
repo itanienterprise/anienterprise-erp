@@ -1,11 +1,21 @@
 import React, { useState } from 'react';
-import { PlusIcon, XIcon, EditIcon, TrashIcon, BoxIcon, ChevronDownIcon } from '../../Icons';
+import { PlusIcon, XIcon, EditIcon, TrashIcon, BoxIcon, ChevronDownIcon, EyeIcon } from '../../Icons';
 import { API_BASE_URL } from '../../../utils/helpers';
 import axios from '../../../utils/api';
+import StockHistoryModal from '../../shared/StockHistoryModal';
 import './ProductManagement.css';
 
-const ProductManagement = ({ products, fetchProducts }) => {
+const ProductManagement = ({ 
+    products, 
+    fetchProducts,
+    stockRecords,
+    warehouseData,
+    salesRecords,
+    setShowProductHistoryReport,
+    setProductHistoryReportData
+}) => {
     const [showProductForm, setShowProductForm] = useState(false);
+    const [viewData, setViewData] = useState(null);
     const [editingId, setEditingId] = useState(null);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [expandedCard, setExpandedCard] = useState(null);
@@ -381,6 +391,9 @@ const ProductManagement = ({ products, fetchProducts }) => {
                                             <td className="px-6 py-4 text-sm text-gray-600 align-top">{product.category || '-'}</td>
                                             <td className="px-6 py-4 text-center align-top">
                                                 <div className="flex items-center justify-center space-x-3">
+                                                    <button onClick={() => setViewData(product)} className="text-gray-400 hover:text-blue-600 transition-colors">
+                                                        <EyeIcon className="w-5 h-5" />
+                                                    </button>
                                                     <button onClick={() => handleProductEdit(product)} className="text-gray-400 hover:text-blue-600 transition-colors">
                                                         <EditIcon className="w-5 h-5" />
                                                     </button>
@@ -429,6 +442,12 @@ const ProductManagement = ({ products, fetchProducts }) => {
                                             <div className="flex items-center gap-2 shrink-0 ml-2">
                                                 {isExpanded && (
                                                     <>
+                                                        <button
+                                                            onClick={(e) => { e.stopPropagation(); setViewData(product); }}
+                                                            className="p-2 text-blue-600 bg-blue-50/50 rounded-lg transition-colors hover:bg-blue-100"
+                                                        >
+                                                            <EyeIcon className="w-4 h-4" />
+                                                        </button>
                                                         <button
                                                             onClick={(e) => { e.stopPropagation(); handleProductEdit(product); }}
                                                             className="p-2 text-blue-600 bg-blue-50/50 rounded-lg transition-colors hover:bg-blue-100"
@@ -508,6 +527,18 @@ const ProductManagement = ({ products, fetchProducts }) => {
                     </div>
                 )}
             </div>
+
+            {viewData && (
+                <StockHistoryModal
+                    viewRecord={viewData}
+                    setViewRecord={setViewData}
+                    stockRecords={stockRecords}
+                    salesRecords={salesRecords}
+                    warehouseData={warehouseData}
+                    setShowProductHistoryReport={setShowProductHistoryReport}
+                    setProductHistoryReportData={setProductHistoryReportData}
+                />
+            )}
         </div>
     );
 };

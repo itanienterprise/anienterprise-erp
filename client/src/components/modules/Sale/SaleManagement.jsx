@@ -29,7 +29,8 @@ const SaleManagement = ({
     saleFilters,
     setSaleFilters,
     currentUser,
-    addNotification
+    addNotification,
+    refreshPendingIndicators
 }) => {
     const [showForm, setShowForm] = useState(false);
     const [sales, setSales] = useState([]);
@@ -389,6 +390,7 @@ const SaleManagement = ({
                 try { fetchCustomers(); } catch (e) { console.error('fetchCustomers error', e); }
                 try { fetchWarehouses(); } catch (e) { console.error('fetchWarehouses error', e); }
                 try { fetchStockRecords(); } catch (e) { console.error('fetchStockRecords error', e); }
+                if (refreshPendingIndicators) refreshPendingIndicators();
                 console.log(`[handleStatusUpdate] Update successfully finished!`);
             } else {
                 console.warn(`[handleStatusUpdate] Unexpected response status:`, response.status);

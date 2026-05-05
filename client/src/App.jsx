@@ -57,6 +57,7 @@ function App() {
   const [showProfile, setShowProfile] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
   const [notifications, setNotifications] = useState([]);
+  const [allModuleNotifications, setAllModuleNotifications] = useState([]);
 
   // Fetch notifications from backend
   const fetchNotifications = async () => {
@@ -75,20 +76,27 @@ function App() {
 
       // Filter based on user role
       // admin user, admin role, incharge, sales manager
-      const filtered = decrypted.filter(n => {
+      const roleFiltered = decrypted.filter(n => {
         const userRole = (currentUser?.role || '').toLowerCase();
         const isAdminUser = currentUser?.username === 'admin';
 
         const isTargetRole = n.targetRoles ? n.targetRoles.some(r => r.toLowerCase() === userRole || (isAdminUser && r.toLowerCase() === 'admin')) : false;
         const isTargetUser = n.targetUsers ? n.targetUsers.includes(currentUser?.username) : false;
-        const isSelfCreated = n.createdBy === currentUser?.username;
 
-        return (isTargetRole || isTargetUser) && (!isSelfCreated || n.isSystemic);
+        return isTargetRole || isTargetUser;
       }).map(n => ({
         ...n,
         isUnread: n.readByUsers ? !n.readByUsers.includes(currentUser?.username) : true
       }));
 
+      // All notifications for sidebar module dots (includes self-created)
+      setAllModuleNotifications(roleFiltered);
+
+      // Bell icon notifications (excludes self-created unless systemic)
+      const filtered = roleFiltered.filter(n => {
+        const isSelfCreated = n.createdBy === currentUser?.username;
+        return !isSelfCreated || n.isSystemic;
+      });
       setNotifications(filtered);
     } catch (err) {
       console.error('Error fetching notifications:', err);
@@ -223,6 +231,41 @@ function App() {
   };
 
   const unreadCount = notifications.filter(n => n.isUnread).length;
+
+  // --- Pending "Requested" entries indicator for sidebar ---
+  const [pendingModules, setPendingModules] = useState({ lc: false, stock: false, sale: false });
+
+  const fetchPendingEntries = async () => {
+    if (!isAuthenticated) return;
+    try {
+      const [stockRes, salesRes] = await Promise.all([
+        axios.get(`${API_BASE_URL}/api/stock`),
+        axios.get(`${API_BASE_URL}/api/sales`)
+      ]);
+      const stockData = Array.isArray(stockRes.data) ? stockRes.data : [];
+      const salesData = Array.isArray(salesRes.data) ? salesRes.data : [];
+
+      const hasRequestedStock = stockData.some(item => (item.status || '').toLowerCase() === 'requested');
+      const hasRequestedSale = salesData.some(item => (item.status || '').toLowerCase() === 'requested');
+
+      setPendingModules({
+        lc: hasRequestedStock,
+        stock: hasRequestedStock,
+        sale: hasRequestedSale
+      });
+    } catch (err) {
+      console.error('Error checking pending entries:', err);
+    }
+  };
+
+  useEffect(() => {
+    let interval;
+    if (isAuthenticated && currentUser) {
+      fetchPendingEntries();
+      interval = setInterval(fetchPendingEntries, 15000);
+    }
+    return () => { if (interval) clearInterval(interval); };
+  }, [isAuthenticated, currentUser?.username]);
 
   // Check session on mount
   useEffect(() => {
@@ -1146,6 +1189,7 @@ function App() {
             lcReceiveSummary={lcReceiveSummary}
             fetchProducts={fetchProducts}
             salesRecords={salesRecords}
+            refreshPendingIndicators={fetchPendingEntries}
           />
         );
 
@@ -1329,6 +1373,11 @@ function App() {
           <ProductManagement
             products={products}
             fetchProducts={fetchProducts}
+            stockRecords={stockRecords}
+            warehouseData={warehouseData}
+            salesRecords={salesRecords}
+            setShowProductHistoryReport={setShowProductHistoryReport}
+            setProductHistoryReportData={setProductHistoryReportData}
           />
         );
       case 'customer-section':
@@ -1378,6 +1427,7 @@ function App() {
             isLongPressTriggered={isLongPressTriggered}
             saleFilters={saleFilters}
             setSaleFilters={setSaleFilters}
+            refreshPendingIndicators={fetchPendingEntries}
           />
         );
       case 'border-sale-section':
@@ -1400,6 +1450,7 @@ function App() {
             isLongPressTriggered={isLongPressTriggered}
             saleFilters={saleFilters}
             setSaleFilters={setSaleFilters}
+            refreshPendingIndicators={fetchPendingEntries}
           />
         );
       case 'employee-section':
@@ -1542,6 +1593,7 @@ function App() {
           <button onClick={() => { setCurrentView('port-section'); setSidebarOpen(false); }} className={`w-full flex items-center px-4 py-2 rounded-lg transition-all ${currentView === 'port-section' ? 'bg-blue-50 text-blue-600 shadow-sm' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'}`}>
             <AnchorIcon className="w-5 h-5 mr-3" />
             <span className="font-medium text-sm">Port</span>
+
           </button>
 
           <div>
@@ -1614,6 +1666,7 @@ function App() {
           <button onClick={() => { setCurrentView('bank-section'); setSidebarOpen(false); }} className={`w-full flex items-center px-4 py-2 rounded-lg transition-all ${currentView === 'bank-section' ? 'bg-blue-50 text-blue-600 shadow-sm' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'}`}>
             <DollarSignIcon className="w-5 h-5 mr-3" />
             <span className="font-medium text-sm">Bank</span>
+
           </button>
           <div>
             <button
@@ -1641,6 +1694,7 @@ function App() {
           <button onClick={() => { setCurrentView('pi-section'); setSidebarOpen(false); }} className={`w-full flex items-center px-4 py-2 rounded-lg transition-all ${currentView === 'pi-section' ? 'bg-blue-50 text-blue-600 shadow-sm' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'}`}>
             <FileTextIcon className="w-5 h-5 mr-3" />
             <span className="font-medium text-sm">Proforma Invoice</span>
+
           </button>
           <div>
             <button
@@ -1681,7 +1735,10 @@ function App() {
                 <LCManagerIcon className="w-5 h-5 mr-3" />
                 <span className="font-medium text-sm">LC Management</span>
               </div>
-              <ChevronDownIcon className={`w-4 h-4 transition-transform duration-200 ${lcDropdownOpen ? 'transform rotate-180' : ''}`} />
+              <div className="flex items-center gap-1.5">
+                {pendingModules.lc && <span className="w-2 h-2 bg-red-500 rounded-full flex-shrink-0 shadow-[0_0_6px_rgba(239,68,68,0.6)] animate-pulse" />}
+                <ChevronDownIcon className={`w-4 h-4 transition-transform duration-200 ${lcDropdownOpen ? 'transform rotate-180' : ''}`} />
+              </div>
             </button>
             {lcDropdownOpen && (
               <div className="pl-7 pr-2 space-y-1 mt-1 transition-all duration-300">
@@ -1726,7 +1783,10 @@ function App() {
                 <ShoppingCartIcon className="w-5 h-5 mr-3" />
                 <span className="font-medium text-sm">Stock</span>
               </div>
-              <ChevronDownIcon className={`w-4 h-4 transition-transform duration-200 ${stockDropdownOpen ? 'transform rotate-180' : ''}`} />
+              <div className="flex items-center gap-1.5">
+                {pendingModules.stock && <span className="w-2 h-2 bg-red-500 rounded-full flex-shrink-0 shadow-[0_0_6px_rgba(239,68,68,0.6)] animate-pulse" />}
+                <ChevronDownIcon className={`w-4 h-4 transition-transform duration-200 ${stockDropdownOpen ? 'transform rotate-180' : ''}`} />
+              </div>
             </button>
             <div className={`overflow-hidden transition-all duration-300 ease-in-out ${stockDropdownOpen ? 'max-h-48 opacity-100 mt-1' : 'max-h-0 opacity-0'}`}>
               <div className="pl-7 pr-2 space-y-1">
@@ -1794,7 +1854,10 @@ function App() {
                 <ReceiptIcon className="w-5 h-5 mr-3" />
                 <span className="font-medium text-sm">Sale</span>
               </div>
-              <ChevronDownIcon className={`w-4 h-4 transition-transform duration-200 ${saleDropdownOpen ? 'transform rotate-180' : ''}`} />
+              <div className="flex items-center gap-1.5">
+                {pendingModules.sale && <span className="w-2 h-2 bg-red-500 rounded-full flex-shrink-0 shadow-[0_0_6px_rgba(239,68,68,0.6)] animate-pulse" />}
+                <ChevronDownIcon className={`w-4 h-4 transition-transform duration-200 ${saleDropdownOpen ? 'transform rotate-180' : ''}`} />
+              </div>
             </button>
             <div className={`overflow-hidden transition-all duration-300 ease-in-out ${saleDropdownOpen ? 'max-h-48 opacity-100 mt-1' : 'max-h-0 opacity-0'}`}>
               <div className="pl-7 pr-2 space-y-1">

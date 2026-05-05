@@ -357,7 +357,8 @@ function LCReceive({
     lcReceiveSummary,
     fetchProducts,
     salesRecords = [],
-    addNotification
+    addNotification,
+    refreshPendingIndicators
 }) {
     const [cnfs, setCnfs] = useState([]);
     const [isLoading, setIsLoading] = useState(false);
@@ -1488,6 +1489,7 @@ function LCReceive({
 
             if (fetchStockRecords) fetchStockRecords();
             fetchWarehouses();
+            if (refreshPendingIndicators) refreshPendingIndicators();
         } catch (error) {
             console.error(`Error updating status to ${newStatus}:`, error);
             alert(`Failed to update status to ${newStatus}`);
