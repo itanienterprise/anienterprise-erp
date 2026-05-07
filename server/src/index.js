@@ -59,6 +59,7 @@ const Product = require('./models/Product');
 const Customer = require('./models/Customer');
 const Warehouse = require('./models/Warehouse');
 const Sale = require('./models/Sale');
+const Return = require('./models/Return');
 const User = require('./models/User');
 const Employee = require('./models/Employee');
 const Notification = require('./models/Notification');
@@ -775,6 +776,52 @@ apiRouter.get('/api/sales', async (req, res) => {
       return { ...d, _id: r._id, createdAt: r.createdAt };
     });
     res.json(decrypted);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// Return APIs
+apiRouter.post('/api/returns', async (req, res) => {
+  try {
+    const encryptedData = encryptData(req.body);
+    const newReturn = new Return({ data: encryptedData });
+    const savedReturn = await newReturn.save();
+    res.status(201).json({ ...req.body, _id: savedReturn._id, createdAt: savedReturn.createdAt });
+  } catch (err) {
+    res.status(400).json({ message: err.message });
+  }
+});
+
+apiRouter.get('/api/returns', async (req, res) => {
+  try {
+    const records = await Return.find().sort({ createdAt: -1 });
+    const decrypted = records.map(r => {
+      const d = decryptData(r.data);
+      return { ...d, _id: r._id, createdAt: r.createdAt };
+    });
+    res.json(decrypted);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+apiRouter.put('/api/returns/:id', async (req, res) => {
+  try {
+    const encryptedData = encryptData(req.body);
+    const updatedReturn = await Return.findByIdAndUpdate(req.params.id, { data: encryptedData }, { new: true });
+    if (!updatedReturn) return res.status(404).json({ message: 'Return not found' });
+    res.json({ ...req.body, _id: updatedReturn._id, createdAt: updatedReturn.createdAt });
+  } catch (err) {
+    res.status(400).json({ message: err.message });
+  }
+});
+
+apiRouter.delete('/api/returns/:id', async (req, res) => {
+  try {
+    const deletedReturn = await Return.findByIdAndDelete(req.params.id);
+    if (!deletedReturn) return res.status(404).json({ message: 'Return not found' });
+    res.json({ message: 'Return deleted' });
   } catch (err) {
     res.status(500).json({ message: err.message });
   }

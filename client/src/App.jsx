@@ -4,7 +4,7 @@ import {
   MenuIcon, SearchIcon, HomeIcon, UsersIcon, UserIcon, AnchorIcon,
   BarChartIcon, FunnelIcon, XIcon, DollarSignIcon, ShoppingCartIcon,
   ChevronDownIcon, BoxIcon, BellIcon, TrashIcon, VegetableIcon, ReceiptIcon, TrendingUpIcon, LogOutIcon, BriefcaseIcon,
-  GlobeIcon, ArrowUpRightIcon, ArrowDownLeftIcon, LinkIcon, BuildingIcon, ShieldIcon, FileTextIcon, LayoutIcon, LCManagerIcon
+  GlobeIcon, ArrowUpRightIcon, ArrowDownLeftIcon, LinkIcon, BuildingIcon, ShieldIcon, FileTextIcon, LayoutIcon, LCManagerIcon, RotateCcwIcon
 } from './components/Icons';
 
 import { encryptData, decryptData } from './utils/encryption';
@@ -39,6 +39,7 @@ import { calculateStockData } from './utils/stockHelpers';
 import LoginPage from './components/auth/LoginPage';
 import Profile from './components/modules/Profile/Profile';
 import NotificationMenu from './components/modules/Notification/NotificationMenu';
+import ReturnProduct from './components/modules/ReturnProduct/ReturnProduct';
 
 
 function App() {
@@ -1500,6 +1501,8 @@ function App() {
         );
       case 'lc-management-section':
         return <LCManagement addNotification={addNotification} currentUser={currentUser} />;
+      case 'return-product-section':
+        return <ReturnProduct currentUser={currentUser} />;
       default:
         return null;
     }
@@ -1874,6 +1877,13 @@ function App() {
                 >
                   <TrendingUpIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
                   <span>Border Sale</span>
+                </button>
+                <button
+                  onClick={() => { setCurrentView('return-product-section'); setSidebarOpen(false); }}
+                  className={`w-full flex flex-row items-center py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'return-product-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'}`}
+                >
+                  <RotateCcwIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
+                  <span>Return Product</span>
                 </button>
               </div>
             </div>

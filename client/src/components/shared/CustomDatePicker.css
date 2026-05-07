@@ -99,7 +99,7 @@
     border-radius: 1rem;
     box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
     padding: 1.25rem;
-    width: 320px;
+    width: 350px;
     left: 0;
 }
 
@@ -124,10 +124,14 @@
     align-items: center;
     justify-content: space-between;
     margin-bottom: 1rem;
+    width: 19rem;
+    margin-left: auto;
+    margin-right: auto;
 }
 
 .date-picker-dropdown.compact .date-picker-header {
     margin-bottom: 0.5rem;
+    width: 14.875rem; /* 7 * 2rem + 6 * 0.125rem */
 }
 
 .date-picker-nav-btn {
@@ -156,12 +160,14 @@
 
 .date-picker-weekdays {
     display: grid;
-    grid-template-columns: repeat(7, 1fr);
+    grid-template-columns: repeat(7, 2.5rem);
     gap: 0.25rem;
     margin-bottom: 0.75rem;
+    justify-content: center;
 }
 
 .date-picker-dropdown.compact .date-picker-weekdays {
+    grid-template-columns: repeat(7, 2rem);
     gap: 0.125rem;
     margin-bottom: 0.5rem;
 }
@@ -181,20 +187,24 @@
 
 .date-picker-days {
     display: grid;
-    grid-template-columns: repeat(7, 1fr);
+    grid-template-columns: repeat(7, 2.5rem);
     gap: 0.25rem;
+    justify-content: center;
 }
 
 .date-picker-dropdown.compact .date-picker-days {
+    grid-template-columns: repeat(7, 2rem);
     gap: 0.125rem;
 }
 
 .date-picker-blank {
     height: 2.5rem;
+    width: 2.5rem;
 }
 
 .date-picker-dropdown.compact .date-picker-blank {
     height: 2rem;
+    width: 2rem;
 }
 
 .date-picker-day {
