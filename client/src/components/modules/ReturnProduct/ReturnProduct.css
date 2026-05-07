@@ -434,3 +434,66 @@
 .invoice-dropdown-item:hover {
     background: #eff6ff;
 }
+
+.return-product-grid-3 {
+    display: grid;
+    grid-template-columns: repeat(1, 1fr);
+    gap: 1.5rem;
+    grid-column: span 1;
+}
+
+@media (min-width: 768px) {
+    .return-product-grid-3 {
+        grid-template-columns: repeat(2, 1fr);
+        grid-column: span 2;
+    }
+}
+
+@media (min-width: 1024px) {
+    .return-product-grid-3 {
+        grid-template-columns: repeat(3, 1fr);
+        grid-column: span 3;
+    }
+}
+
+.return-product-grid-4 {
+    display: grid;
+    grid-template-columns: repeat(1, 1fr);
+    gap: 1.5rem;
+    grid-column: span 1;
+}
+
+@media (min-width: 768px) {
+    .return-product-grid-4 {
+        grid-template-columns: repeat(2, 1fr);
+        grid-column: span 2;
+    }
+}
+
+@media (min-width: 1200px) {
+    .return-product-grid-4 {
+        grid-template-columns: repeat(4, 1fr);
+        grid-column: span 3;
+    }
+}
+
+.return-product-grid-5 {
+    display: grid;
+    grid-template-columns: repeat(1, 1fr);
+    gap: 1.5rem;
+    grid-column: span 1;
+}
+
+@media (min-width: 768px) {
+    .return-product-grid-5 {
+        grid-template-columns: repeat(2, 1fr);
+        grid-column: span 2;
+    }
+}
+
+@media (min-width: 1200px) {
+    .return-product-grid-5 {
+        grid-template-columns: repeat(5, 1fr);
+        grid-column: span 3;
+    }
+}

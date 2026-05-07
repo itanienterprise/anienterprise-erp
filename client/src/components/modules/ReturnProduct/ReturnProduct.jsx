@@ -27,7 +27,7 @@ const ReturnProduct = ({ currentUser }) => {
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [editingId, setEditingId] = useState(null);
     const [expandedReturnId, setExpandedReturnId] = useState(null);
-    
+
     // Searchable Invoice State
     const [invoiceSearch, setInvoiceSearch] = useState('');
     const [showInvoiceDropdown, setShowInvoiceDropdown] = useState(false);
@@ -41,9 +41,13 @@ const ReturnProduct = ({ currentUser }) => {
         phone: '',
         customerName: '',
         productName: '',
+        brand: '',
         quantity: '',
+        bags: '',
         warehouse: '',
         reason: '',
+        status: 'Pending',
+        packetSize: 0,
         purchaseItems: []
     });
 
@@ -51,6 +55,19 @@ const ReturnProduct = ({ currentUser }) => {
     const [warehouseSearch, setWarehouseSearch] = useState('');
     const [showWarehouseDropdown, setShowWarehouseDropdown] = useState(false);
     const warehouseRef = useRef(null);
+
+    useEffect(() => {
+        const qty = parseFloat(formData.quantity);
+        const pktSize = parseFloat(formData.packetSize);
+
+        if (qty > 0 && pktSize > 0) {
+            const calculatedBags = (qty / pktSize).toFixed(2);
+            // Only update if it's different to avoid infinite loops
+            if (parseFloat(formData.bags) !== parseFloat(calculatedBags)) {
+                setFormData(prev => ({ ...prev, bags: calculatedBags }));
+            }
+        }
+    }, [formData.quantity, formData.packetSize, formData.bags]);
 
     const fetchReturns = async () => {
         setIsLoading(true);
@@ -80,10 +97,10 @@ const ReturnProduct = ({ currentUser }) => {
                 axios.get(`${API_BASE_URL}/api/warehouses`),
                 axios.get(`${API_BASE_URL}/api/stock`)
             ]);
-            
+
             const whList = Array.isArray(whRes.data) ? whRes.data : [];
             const stockList = Array.isArray(stockRes.data) ? stockRes.data : [];
-            
+
             // Get unique warehouse names from both sources
             const names = new Set();
             whList.forEach(w => {
@@ -94,12 +111,12 @@ const ReturnProduct = ({ currentUser }) => {
                 const name = s.warehouse || s.whName;
                 if (name) names.add(name);
             });
-            
+
             const uniqueWhList = Array.from(names).map(name => ({
                 _id: name, // Use name as ID for unique-ness in this list
                 whName: name
             })).sort((a, b) => a.whName.localeCompare(b.whName));
-            
+
             console.log('Merged Warehouse List:', uniqueWhList);
             setWarehouses(uniqueWhList);
         } catch (error) {
@@ -144,11 +161,165 @@ const ReturnProduct = ({ currentUser }) => {
         e.preventDefault();
         setIsSubmitting(true);
         try {
+            const returnQty = parseFloat(formData.quantity) || 0;
+            const returnPkt = parseFloat(formData.bags) || (formData.packetSize > 0 ? returnQty / formData.packetSize : 0);
+
+            // 1. Update Warehouse Stock (Differential update for Edit, Simple add for New)
+            if (formData.warehouse && formData.productName) {
+                const whResponse = await axios.get(`${API_BASE_URL}/api/warehouses`);
+                const allWh = Array.isArray(whResponse.data) ? whResponse.data : [];
+                
+                const targetWhName = (formData.warehouse || '').trim().toLowerCase();
+                const targetProdName = (formData.productName || '').trim().toLowerCase();
+                const targetBrand = (formData.brand || '').trim().toLowerCase();
+
+                const targetWh = allWh.find(w => {
+                    const wName = (w.whName || w.name || w.warehouse || '').trim().toLowerCase();
+                    const wProd = (w.productName || w.product || '').trim().toLowerCase();
+                    const wBrand = (w.brand || '').trim().toLowerCase();
+                    return wName === targetWhName && wProd === targetProdName && (wBrand === targetBrand || (wBrand === '' && targetBrand === ''));
+                });
+
+                let diffQty = returnQty;
+                let diffPkt = returnPkt;
+
+                if (editingId) {
+                    const oldReturn = returns.find(r => r._id === editingId);
+                    if (oldReturn) {
+                        diffQty = returnQty - (parseFloat(oldReturn.quantity) || 0);
+                        diffPkt = returnPkt - (parseFloat(oldReturn.bags) || 0);
+                    }
+                }
+
+                if (targetWh) {
+                    const updatedWh = {
+                        ...targetWh,
+                        whQty: (parseFloat(targetWh.whQty) || 0) + diffQty,
+                        whPkt: (parseFloat(targetWh.whPkt) || 0) + diffPkt,
+                        inHouseQuantity: (parseFloat(targetWh.inHouseQuantity || targetWh.whQty) || 0) + diffQty,
+                        inHousePacket: (parseFloat(targetWh.inHousePacket || targetWh.whPkt) || 0) + diffPkt,
+                        recordType: targetWh.recordType || 'warehouse'
+                    };
+                    await axios.put(`${API_BASE_URL}/api/warehouses/${targetWh._id}`, updatedWh);
+                } else if (!editingId) {
+                    const newWh = {
+                        whName: formData.warehouse,
+                        productName: formData.productName,
+                        brand: formData.brand,
+                        whQty: returnQty,
+                        whPkt: returnPkt,
+                        inHouseQuantity: returnQty,
+                        inHousePacket: returnPkt,
+                        status: 'Active',
+                        manager: '-',
+                        location: 'Returned Stock',
+                        packetSize: formData.packetSize || 0,
+                        recordType: 'warehouse',
+                        date: formData.date || new Date().toISOString()
+                    };
+                    await axios.post(`${API_BASE_URL}/api/warehouses`, newWh);
+                }
+            }
+
+            // 2. Save Return Record
             if (editingId) {
                 await axios.put(`${API_BASE_URL}/api/returns/${editingId}`, formData);
             } else {
                 await axios.post(`${API_BASE_URL}/api/returns`, formData);
             }
+
+            // 4. Update Quantity in Original Sale Invoice (Absolute Sync)
+            const originalSale = sales.find(s => s.invoiceNo === formData.invoiceNo);
+            if (originalSale) {
+                // Fetch all returns for this specific invoice to get the absolute truth
+                const allReturnsResponse = await axios.get(`${API_BASE_URL}/api/returns`);
+                const allReturns = Array.isArray(allReturnsResponse.data) ? allReturnsResponse.data : [];
+                const invoiceReturns = allReturns.filter(r => r.invoiceNo === formData.invoiceNo);
+
+                const updatedSale = JSON.parse(JSON.stringify(originalSale));
+                let itemModified = false;
+
+                if (updatedSale.items && updatedSale.items.length > 0) {
+                    updatedSale.items = updatedSale.items.map(item => {
+                        // Calculate total returned for this product across all return records
+                        const productReturns = invoiceReturns.filter(r => r.productName === item.productName);
+                        
+                        if (item.brandEntries && item.brandEntries.length > 0) {
+                            item.brandEntries = item.brandEntries.map(be => {
+                                const brandName = be.brandName || be.brand;
+                                const brandReturns = productReturns.filter(r => (r.brandName || r.brand) === brandName);
+                                
+                                const totalRetQty = brandReturns.reduce((sum, r) => sum + (parseFloat(r.quantity) || 0), 0);
+                                const totalRetPkt = brandReturns.reduce((sum, r) => sum + (parseFloat(r.bags) || 0), 0);
+
+                                // Purchase Qty = Current Net + Current Return (from DB)
+                                // We want to keep Purchase Qty constant. 
+                                // Purchase = Original Qty.
+                                // If data is corrupted, we might need a fallback.
+                                // Let's assume the Purchase Qty is (be.quantity + be.returnQty) IF we haven't fixed it yet.
+                                // But wait, if we use the sum of returns, we can just update the be.returnQty.
+                                // To fix the corrupted be.quantity, we need the original value.
+                                // We can estimate original = be.quantity + (old totalRetQty).
+                                
+                                // Use user-provided original quantity if available to fix distorted data
+                                const trueOriginalQty = parseFloat(formData.originalQuantity) || be.originalQuantity || (parseFloat(be.quantity) || 0) + (parseFloat(be.returnQty) || 0);
+                                be.originalQuantity = trueOriginalQty;
+
+                                be.returnQty = totalRetQty;
+                                be.returnPkt = totalRetPkt;
+                                be.quantity = Math.max(0, be.originalQuantity - totalRetQty);
+                                be.packet = Math.max(0, (be.originalPacket || be.originalQuantity / (formData.packetSize || 50)) - totalRetPkt);
+                                if (be.bags) be.bags = be.packet;
+
+                                const price = parseFloat(be.unitPrice) || 0;
+                                be.totalAmount = (be.quantity * price).toFixed(2);
+                                itemModified = true;
+                                return be;
+                            });
+                        } else {
+                            // Single item product
+                            const totalRetQty = productReturns.reduce((sum, r) => sum + (parseFloat(r.quantity) || 0), 0);
+                            
+                            const trueOriginalQty = parseFloat(formData.originalQuantity) || item.originalQuantity || (parseFloat(item.quantity) || 0) + (parseFloat(item.returnQty) || 0);
+                            item.originalQuantity = trueOriginalQty;
+
+                            item.returnQty = totalRetQty;
+                            item.quantity = Math.max(0, item.originalQuantity - totalRetQty);
+                            
+                            const price = parseFloat(item.unitPrice || item.rate) || 0;
+                            item.totalAmount = (item.quantity * price).toFixed(2);
+                            itemModified = true;
+                        }
+                        return item;
+                    });
+                    updatedSale.totalAmount = updatedSale.items.reduce((sum, item) => sum + (parseFloat(item.totalAmount) || 0), 0).toFixed(2);
+                } else {
+                    // Legacy format
+                    const productReturns = invoiceReturns.filter(r => r.productName === updatedSale.productName);
+                    const totalRetQty = productReturns.reduce((sum, r) => sum + (parseFloat(r.quantity) || 0), 0);
+                    
+                    if (!updatedSale.originalQuantity) {
+                        updatedSale.originalQuantity = (parseFloat(updatedSale.quantity) || 0) + (parseFloat(updatedSale.returnQty) || 0);
+                    }
+                    
+                    updatedSale.returnQty = totalRetQty;
+                    updatedSale.quantity = Math.max(0, updatedSale.originalQuantity - totalRetQty);
+                    const price = parseFloat(updatedSale.unitPrice || updatedSale.rate) || 0;
+                    updatedSale.totalAmount = (updatedSale.quantity * price).toFixed(2);
+                    itemModified = true;
+                }
+
+                if (itemModified) {
+                    const total = parseFloat(updatedSale.totalAmount) || 0;
+                    const disc = parseFloat(updatedSale.discount) || 0;
+                    const paid = parseFloat(updatedSale.paidAmount) || 0;
+                    updatedSale.dueAmount = Math.max(0, total - disc - paid);
+
+                    const { _id, createdAt, updatedAt, __v, ...dataToSend } = updatedSale;
+                    await axios.put(`${API_BASE_URL}/api/sales/${originalSale._id}`, dataToSend);
+                }
+            }
+
             setShowForm(false);
             setEditingId(null);
             setInvoiceSearch('');
@@ -161,10 +332,14 @@ const ReturnProduct = ({ currentUser }) => {
                 phone: '',
                 customerName: '',
                 productName: '',
+                brand: '',
                 quantity: '',
+                bags: '',
                 warehouse: '',
                 reason: '',
                 status: 'Pending',
+                packetSize: 0,
+                originalQuantity: '',
                 purchaseItems: []
             });
             fetchReturns();
@@ -192,7 +367,99 @@ const ReturnProduct = ({ currentUser }) => {
     const handleDelete = async (id) => {
         if (window.confirm('Are you sure you want to delete this return record?')) {
             try {
+                const returnToDelete = returns.find(r => r._id === id);
+                if (!returnToDelete) return;
+
+                // 1. Reverse Warehouse Stock
+                const whResponse = await axios.get(`${API_BASE_URL}/api/warehouses`);
+                const allWh = Array.isArray(whResponse.data) ? whResponse.data : [];
+                
+                const targetWhName = (returnToDelete.warehouse || '').trim().toLowerCase();
+                const targetProdName = (returnToDelete.productName || '').trim().toLowerCase();
+                const targetBrand = (returnToDelete.brand || '').trim().toLowerCase();
+
+                const targetWh = allWh.find(w => {
+                    const wName = (w.whName || w.name || w.warehouse || '').trim().toLowerCase();
+                    const wProd = (w.productName || w.product || '').trim().toLowerCase();
+                    const wBrand = (w.brand || '').trim().toLowerCase();
+                    return wName === targetWhName && wProd === targetProdName && (wBrand === targetBrand || (wBrand === '' && targetBrand === ''));
+                });
+
+                if (targetWh) {
+                    const retQty = parseFloat(returnToDelete.quantity) || 0;
+                    const retPkt = parseFloat(returnToDelete.bags) || 0;
+
+                    const updatedWh = {
+                        ...targetWh,
+                        whQty: Math.max(0, (parseFloat(targetWh.whQty) || 0) - retQty),
+                        whPkt: Math.max(0, (parseFloat(targetWh.whPkt) || 0) - retPkt),
+                        inHouseQuantity: Math.max(0, (parseFloat(targetWh.inHouseQuantity || targetWh.whQty) || 0) - retQty),
+                        inHousePacket: Math.max(0, (parseFloat(targetWh.inHousePacket || targetWh.whPkt) || 0) - retPkt),
+                        recordType: targetWh.recordType || 'warehouse'
+                    };
+                    await axios.put(`${API_BASE_URL}/api/warehouses/${targetWh._id}`, updatedWh);
+                }
+
+                // 2. Delete the Return Record
                 await axios.delete(`${API_BASE_URL}/api/returns/${id}`);
+
+                // 3. Sync Sale Invoice (Recalculate based on REMAINING returns)
+                const originalSale = sales.find(s => s.invoiceNo === returnToDelete.invoiceNo);
+                if (originalSale) {
+                    // Fetch remaining returns to get new absolute truth
+                    const allReturnsResponse = await axios.get(`${API_BASE_URL}/api/returns`);
+                    const remainingReturns = (Array.isArray(allReturnsResponse.data) ? allReturnsResponse.data : [])
+                        .filter(r => r.invoiceNo === returnToDelete.invoiceNo && r._id !== id);
+
+                    const updatedSale = JSON.parse(JSON.stringify(originalSale));
+                    let itemModified = false;
+
+                    if (updatedSale.items && updatedSale.items.length > 0) {
+                        updatedSale.items = updatedSale.items.map(item => {
+                            const productReturns = remainingReturns.filter(r => r.productName === item.productName);
+                            if (item.brandEntries && item.brandEntries.length > 0) {
+                                item.brandEntries = item.brandEntries.map(be => {
+                                    const brandName = be.brandName || be.brand;
+                                    const brandReturns = productReturns.filter(r => (r.brandName || r.brand) === brandName);
+                                    const totalRetQty = brandReturns.reduce((sum, r) => sum + (parseFloat(r.quantity) || 0), 0);
+                                    const totalRetPkt = brandReturns.reduce((sum, r) => sum + (parseFloat(r.bags) || 0), 0);
+
+                                    // Use stored original quantity
+                                    const originalQty = be.originalQuantity || (parseFloat(be.quantity) || 0) + (parseFloat(be.returnQty) || 0);
+                                    be.originalQuantity = originalQty;
+                                    be.returnQty = totalRetQty;
+                                    be.returnPkt = totalRetPkt;
+                                    be.quantity = Math.max(0, originalQty - totalRetQty);
+                                    
+                                    const price = parseFloat(be.unitPrice) || 0;
+                                    be.totalAmount = (be.quantity * price).toFixed(2);
+                                    itemModified = true;
+                                    return be;
+                                });
+                            } else if (item.productName === returnToDelete.productName) {
+                                const totalRetQty = productReturns.reduce((sum, r) => sum + (parseFloat(r.quantity) || 0), 0);
+                                const originalQty = item.originalQuantity || (parseFloat(item.quantity) || 0) + (parseFloat(item.returnQty) || 0);
+                                item.originalQuantity = originalQty;
+                                item.returnQty = totalRetQty;
+                                item.quantity = Math.max(0, originalQty - totalRetQty);
+                                item.totalAmount = (item.quantity * (parseFloat(item.unitPrice || item.rate) || 0)).toFixed(2);
+                                itemModified = true;
+                            }
+                            return item;
+                        });
+                        updatedSale.totalAmount = updatedSale.items.reduce((sum, item) => sum + (parseFloat(item.totalAmount) || 0), 0).toFixed(2);
+                    }
+
+                    if (itemModified) {
+                        const total = parseFloat(updatedSale.totalAmount) || 0;
+                        const disc = parseFloat(updatedSale.discount) || 0;
+                        const paid = parseFloat(updatedSale.paidAmount) || 0;
+                        updatedSale.dueAmount = Math.max(0, total - disc - paid);
+                        const { _id, createdAt, updatedAt, __v, ...dataToSend } = updatedSale;
+                        await axios.put(`${API_BASE_URL}/api/sales/${originalSale._id}`, dataToSend);
+                    }
+                }
+
                 fetchReturns();
             } catch (error) {
                 console.error('Error deleting return:', error);
@@ -208,7 +475,7 @@ const ReturnProduct = ({ currentUser }) => {
         (ret.companyName || '').toLowerCase().includes(searchQuery.toLowerCase())
     );
 
-    const filteredSales = sales.filter(sale => 
+    const filteredSales = sales.filter(sale =>
         ((sale.saleType || '').toLowerCase() === 'general' || (sale.invoiceNo || '').startsWith('GS')) &&
         (sale.invoiceNo || '').toLowerCase().includes(invoiceSearch.toLowerCase())
     ).slice(0, 5); // Limit to 5 results for better UX
@@ -217,7 +484,7 @@ const ReturnProduct = ({ currentUser }) => {
         // Get the first product name if items exist
         let prodName = '';
         const items = sale.items || [];
-        
+
         if (items.length > 0) {
             prodName = items[0].productName;
         } else if (sale.productName) {
@@ -250,16 +517,16 @@ const ReturnProduct = ({ currentUser }) => {
         <div className="return-product-container">
             <div className="return-product-header flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <div className="w-full md:w-1/4 text-center md:text-left">
-                    <h2 className="return-product-title" style={{margin:0}}>Return Product</h2>
+                    <h2 className="return-product-title" style={{ margin: 0 }}>Return Product</h2>
                 </div>
-                
+
                 <div className="w-full md:flex-1 md:max-w-md md:mx-auto relative group px-2 md:px-0">
                     <div className="absolute inset-y-0 left-0 pl-5 md:pl-3.5 flex items-center pointer-events-none">
                         <SearchIcon className="h-4 w-4 text-gray-400 group-focus-within:text-blue-500 transition-colors" />
                     </div>
-                    <input 
-                        type="text" 
-                        className="block w-full pl-12 md:pl-10 pr-4 py-2.5 md:py-2 bg-white/50 border border-gray-200 rounded-xl text-[13px] md:text-[13px] text-center md:text-left placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 focus:bg-white transition-all outline-none shadow-sm" 
+                    <input
+                        type="text"
+                        className="block w-full pl-12 md:pl-10 pr-4 py-2.5 md:py-2 bg-white/50 border border-gray-200 rounded-xl text-[13px] md:text-[13px] text-center md:text-left placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 focus:bg-white transition-all outline-none shadow-sm"
                         placeholder="Search by customer, product, invoice..."
                         value={searchQuery}
                         onChange={(e) => setSearchQuery(e.target.value)}
@@ -267,7 +534,7 @@ const ReturnProduct = ({ currentUser }) => {
                 </div>
 
                 <div className="w-full md:w-1/4 flex justify-end z-10">
-                    <button 
+                    <button
                         onClick={() => {
                             setShowForm(true);
                             setEditingId(null);
@@ -279,9 +546,10 @@ const ReturnProduct = ({ currentUser }) => {
                                 productName: '',
                                 quantity: '',
                                 reason: '',
-                                status: 'Pending'
+                                status: 'Pending',
+                                originalQuantity: ''
                             });
-                        }} 
+                        }}
                         className="w-full md:w-auto return-product-add-btn whitespace-nowrap"
                     >
                         <span className="return-product-add-icon">+</span> Add New
@@ -293,12 +561,12 @@ const ReturnProduct = ({ currentUser }) => {
                 <div className="return-product-form-container animate-in">
                     <div className="return-product-form-bg-orb return-product-form-bg-orb-1"></div>
                     <div className="return-product-form-bg-orb return-product-form-bg-orb-2"></div>
-                    
+
                     <div className="return-product-form-header">
                         <h3 className="return-product-form-title">
                             {editingId ? 'Edit Return Entry' : 'New Return Entry'}
                         </h3>
-                        <button 
+                        <button
                             onClick={() => { setShowForm(false); setEditingId(null); }}
                             className="return-product-form-close"
                         >
@@ -309,9 +577,9 @@ const ReturnProduct = ({ currentUser }) => {
                     <form onSubmit={handleSubmit} className="return-product-form">
                         <div className="return-product-form-field">
                             <label className="return-product-form-label">Return Date</label>
-                            <CustomDatePicker 
+                            <CustomDatePicker
                                 value={formData.date}
-                                onChange={(e) => setFormData({...formData, date: e.target.value})}
+                                onChange={(e) => setFormData({ ...formData, date: e.target.value })}
                                 required={true}
                             />
                         </div>
@@ -319,15 +587,15 @@ const ReturnProduct = ({ currentUser }) => {
                         <div className="return-product-form-field relative" ref={invoiceDropdownRef}>
                             <label className="return-product-form-label">Original Invoice No</label>
                             <div className="relative">
-                                <input 
-                                    type="text" 
-                                    className="return-product-form-input" 
+                                <input
+                                    type="text"
+                                    className="return-product-form-input"
                                     placeholder="Search invoice (e.g. GS0001)"
                                     value={invoiceSearch}
                                     onChange={(e) => {
                                         setInvoiceSearch(e.target.value);
                                         setShowInvoiceDropdown(true);
-                                        setFormData({...formData, invoiceNo: e.target.value});
+                                        setFormData({ ...formData, invoiceNo: e.target.value });
                                     }}
                                     onFocus={() => { if (invoiceSearch.length > 0) setShowInvoiceDropdown(true); }}
                                     required
@@ -335,7 +603,7 @@ const ReturnProduct = ({ currentUser }) => {
                                 {showInvoiceDropdown && invoiceSearch.length > 0 && filteredSales.length > 0 && (
                                     <div className="absolute z-50 w-full mt-1 bg-white rounded-xl shadow-xl border border-gray-100 max-h-48 overflow-y-auto">
                                         {filteredSales.map(sale => (
-                                            <div 
+                                            <div
                                                 key={sale._id}
                                                 className="px-4 py-2 hover:bg-blue-50 cursor-pointer transition-colors border-b border-gray-50 last:border-0"
                                                 onClick={() => handleInvoiceSelect(sale)}
@@ -354,48 +622,48 @@ const ReturnProduct = ({ currentUser }) => {
 
                         <div className="return-product-form-field">
                             <label className="return-product-form-label">Invoice Date</label>
-                            <input 
-                                type="text" 
-                                className="return-product-form-input" 
+                            <input
+                                type="text"
+                                className="return-product-form-input"
                                 placeholder="Auto-filled from invoice"
                                 value={formData.invoiceDate}
-                                onChange={(e) => setFormData({...formData, invoiceDate: e.target.value})}
+                                onChange={(e) => setFormData({ ...formData, invoiceDate: e.target.value })}
                                 required
                             />
                         </div>
 
                         <div className="return-product-form-field">
                             <label className="return-product-form-label">Company Name</label>
-                            <input 
-                                type="text" 
-                                className="return-product-form-input" 
+                            <input
+                                type="text"
+                                className="return-product-form-input"
                                 placeholder="Auto-filled from invoice"
                                 value={formData.companyName}
-                                onChange={(e) => setFormData({...formData, companyName: e.target.value})}
+                                onChange={(e) => setFormData({ ...formData, companyName: e.target.value })}
                                 required
                             />
                         </div>
 
                         <div className="return-product-form-field">
                             <label className="return-product-form-label">Phone No</label>
-                            <input 
-                                type="text" 
-                                className="return-product-form-input" 
+                            <input
+                                type="text"
+                                className="return-product-form-input"
                                 placeholder="Auto-filled from invoice"
                                 value={formData.phone}
-                                onChange={(e) => setFormData({...formData, phone: e.target.value})}
+                                onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
                                 required
                             />
                         </div>
 
                         <div className="return-product-form-field">
                             <label className="return-product-form-label">Customer Name</label>
-                            <input 
-                                type="text" 
-                                className="return-product-form-input" 
+                            <input
+                                type="text"
+                                className="return-product-form-input"
                                 placeholder="Auto-filled from invoice"
                                 value={formData.customerName}
-                                onChange={(e) => setFormData({...formData, customerName: e.target.value})}
+                                onChange={(e) => setFormData({ ...formData, customerName: e.target.value })}
                                 required
                             />
                         </div>
@@ -424,26 +692,34 @@ const ReturnProduct = ({ currentUser }) => {
                                                             <tr key={`${idx}-${beIdx}`} className="cursor-pointer hover:bg-blue-50/50" onClick={() => {
                                                                 setFormData({
                                                                     ...formData,
-                                                                    productName: `${item.productName} (${be.brandName || be.brand})`,
+                                                                    productName: item.productName,
+                                                                    brand: be.brand || be.brandName || '',
+                                                                    quantity: '',
+                                                                    originalQuantity: parseFloat(be.quantity || 0) + (parseFloat(be.returnQty) || 0),
+                                                                    packetSize: parseFloat(be.packetSize || item.packetSize || be.bagSize || item.bagSize || 50)
                                                                 });
                                                             }}>
                                                                 <td>{item.productName}</td>
                                                                 <td>{be.brandName || be.brand}</td>
-                                                                <td className="text-center font-bold">{be.quantity}</td>
-                                                                <td className="text-right font-mono">{be.unitPrice}</td>
+                                                                <td className="text-center font-bold text-blue-600">{parseFloat(be.quantity || 0) + (parseFloat(be.returnQty) || 0)}</td>
+                                                                <td className="text-right">৳ {parseFloat(be.unitPrice || 0).toLocaleString()}</td>
                                                             </tr>
                                                         ))
                                                     ) : (
-                                                        <tr key={idx} className="cursor-pointer hover:bg-blue-50/50" onClick={() => {
+                                                        <tr className="cursor-pointer hover:bg-blue-50/50" onClick={() => {
                                                             setFormData({
                                                                 ...formData,
                                                                 productName: item.productName,
+                                                                brand: '-',
+                                                                quantity: '',
+                                                                originalQuantity: parseFloat(item.quantity || 0) + (parseFloat(item.returnQty) || 0),
+                                                                packetSize: parseFloat(item.packetSize || item.bagSize || 50)
                                                             });
                                                         }}>
                                                             <td>{item.productName}</td>
-                                                            <td className="text-gray-400">N/A</td>
-                                                            <td className="text-center font-bold">{item.quantity}</td>
-                                                            <td className="text-right font-mono">{item.unitPrice || '-'}</td>
+                                                            <td>-</td>
+                                                            <td className="text-center font-bold text-blue-600">{parseFloat(item.quantity || 0) + (parseFloat(item.returnQty) || 0)}</td>
+                                                            <td className="text-right">৳ {parseFloat(item.unitPrice || 0).toLocaleString()}</td>
                                                         </tr>
                                                     )}
                                                 </React.Fragment>
@@ -455,90 +731,115 @@ const ReturnProduct = ({ currentUser }) => {
                             </div>
                         )}
 
-                        <div className="return-product-form-field">
-                            <label className="return-product-form-label">Product Name</label>
-                            <input 
-                                type="text" 
-                                className="return-product-form-input" 
-                                placeholder="Auto-filled from invoice"
-                                value={formData.productName}
-                                onChange={(e) => setFormData({...formData, productName: e.target.value})}
-                                required
-                            />
-                        </div>
-
-                        <div className="return-product-form-field">
-                            <label className="return-product-form-label">Return Quantity</label>
-                            <input 
-                                type="number" 
-                                className="return-product-form-input" 
-                                placeholder="Enter quantity"
-                                value={formData.quantity}
-                                onChange={(e) => setFormData({...formData, quantity: e.target.value})}
-                                required
-                            />
-                        </div>
-
-                        <div className="return-product-form-field" ref={warehouseRef}>
-                            <label className="return-product-form-label">Warehouse</label>
-                            <div className="relative">
-                                <input 
-                                    type="text" 
-                                    className="return-product-form-input pr-10" 
-                                    placeholder="Search warehouse..."
-                                    value={warehouseSearch}
-                                    onChange={(e) => {
-                                        setWarehouseSearch(e.target.value);
-                                        setShowWarehouseDropdown(true);
-                                    }}
-                                    onFocus={() => setShowWarehouseDropdown(true)}
+                        <div className="return-product-grid-5">
+                            <div className="return-product-form-field">
+                                <label className="return-product-form-label">Product Name</label>
+                                <input
+                                    type="text"
+                                    className="return-product-form-input"
+                                    placeholder="Auto-filled"
+                                    value={formData.productName}
+                                    onChange={(e) => setFormData({ ...formData, productName: e.target.value })}
                                     required
                                 />
-                                <ChevronDownIcon className={`absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none transition-transform duration-200 ${showWarehouseDropdown ? 'rotate-180' : ''} w-4 h-4`} />
-                                
-                                {showWarehouseDropdown && filteredWarehouses.length > 0 && (
-                                    <div className="invoice-dropdown-list">
-                                        {filteredWarehouses.map(w => (
-                                            <div 
-                                                key={w._id}
-                                                className="invoice-dropdown-item"
-                                                onClick={() => {
-                                                    const selectedName = w.whName || w.name || w.warehouse;
-                                                    setFormData({...formData, warehouse: selectedName});
-                                                    setWarehouseSearch(selectedName);
-                                                    setShowWarehouseDropdown(false);
-                                                }}
-                                            >
-                                                <div className="text-sm font-semibold text-gray-700">{w.whName || w.name || w.warehouse}</div>
-                                            </div>
-                                        ))}
-                                    </div>
-                                )}
+                            </div>
+
+                            <div className="return-product-form-field">
+                                <label className="return-product-form-label">Brand</label>
+                                <input
+                                    type="text"
+                                    className="return-product-form-input"
+                                    placeholder="Auto-filled"
+                                    value={formData.brand}
+                                    onChange={(e) => setFormData({ ...formData, brand: e.target.value })}
+                                    required
+                                />
+                            </div>
+
+                            <div className="return-product-form-field">
+                                <label className="return-product-form-label">Return Quantity</label>
+                                <input
+                                    type="number"
+                                    className="return-product-form-input"
+                                    placeholder="Enter qty"
+                                    value={formData.quantity}
+                                    onChange={(e) => setFormData({ ...formData, quantity: e.target.value })}
+                                    required
+                                />
+                            </div>
+
+                            <div className="return-product-form-field">
+                                <label className="return-product-form-label">Return Bags</label>
+                                <input
+                                    type="number"
+                                    className="return-product-form-input"
+                                    placeholder="Bags"
+                                    value={formData.bags}
+                                    onChange={(e) => setFormData({ ...formData, bags: e.target.value })}
+                                />
+                            </div>
+
+                            <div className="return-product-form-field" ref={warehouseRef}>
+                                <label className="return-product-form-label">Warehouse</label>
+                                <div className="relative">
+                                    <input
+                                        type="text"
+                                        className="return-product-form-input pr-10"
+                                        placeholder="Search..."
+                                        value={warehouseSearch}
+                                        onChange={(e) => {
+                                            setWarehouseSearch(e.target.value);
+                                            setShowWarehouseDropdown(true);
+                                        }}
+                                        onFocus={() => setShowWarehouseDropdown(true)}
+                                        required
+                                    />
+                                    <ChevronDownIcon className={`absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none transition-transform duration-200 ${showWarehouseDropdown ? 'rotate-180' : ''} w-4 h-4`} />
+
+                                    {showWarehouseDropdown && filteredWarehouses.length > 0 && (
+                                        <div className="invoice-dropdown-list">
+                                            {filteredWarehouses.map(w => (
+                                                <div
+                                                    key={w._id}
+                                                    className="invoice-dropdown-item"
+                                                    onClick={() => {
+                                                        const selectedName = w.whName || w.name || w.warehouse;
+                                                        setFormData({ ...formData, warehouse: selectedName });
+                                                        setWarehouseSearch(selectedName);
+                                                        setShowWarehouseDropdown(false);
+                                                    }}
+                                                >
+                                                    <div className="text-sm font-semibold text-gray-700">{w.whName || w.name || w.warehouse}</div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
                             </div>
                         </div>
 
 
                         <div className="return-product-form-field return-product-form-field-full">
                             <label className="return-product-form-label">Reason for Return</label>
-                            <textarea 
-                                className="return-product-form-textarea" 
+                            <textarea
+                                className="return-product-form-textarea"
                                 placeholder="Describe the reason for return..."
                                 rows="3"
                                 value={formData.reason}
-                                onChange={(e) => setFormData({...formData, reason: e.target.value})}
+                                onChange={(e) => setFormData({ ...formData, reason: e.target.value })}
                             ></textarea>
                         </div>
 
                         <div className="return-product-form-footer">
-                            <button 
-                                type="button" 
+                            <button
+                                type="button"
                                 onClick={() => { setShowForm(false); setEditingId(null); }}
                                 className="return-product-form-cancel"
                             >
                                 Cancel
                             </button>
-                            <button 
-                                type="submit" 
+                            <button
+                                type="submit"
                                 disabled={isSubmitting}
                                 className={`return-product-form-submit ${isSubmitting ? 'disabled' : ''}`}
                             >
@@ -561,6 +862,7 @@ const ReturnProduct = ({ currentUser }) => {
                                         <th className="return-product-table-header">Customer</th>
                                         <th className="return-product-table-header">Product</th>
                                         <th className="return-product-table-header text-center">Quantity</th>
+                                        <th className="return-product-table-header text-center">Bags</th>
                                         <th className="return-product-table-header text-center">Status</th>
                                         <th className="return-product-table-header text-right">Actions</th>
                                     </tr>
@@ -586,6 +888,7 @@ const ReturnProduct = ({ currentUser }) => {
                                             <td className="return-product-table-cell return-product-table-cell-bold">{ret.customerName}</td>
                                             <td className="return-product-table-cell">{ret.productName}</td>
                                             <td className="return-product-table-cell text-center font-bold">{ret.quantity}</td>
+                                            <td className="return-product-table-cell text-center font-mono text-blue-600">{ret.bags || '-'}</td>
                                             <td className="return-product-table-cell text-center">
                                                 <span className={`return-product-status-badge ${ret.status.toLowerCase()}`}>
                                                     {ret.status}
@@ -593,13 +896,13 @@ const ReturnProduct = ({ currentUser }) => {
                                             </td>
                                             <td className="return-product-table-cell">
                                                 <div className="return-product-table-actions">
-                                                    <button 
+                                                    <button
                                                         onClick={() => handleEdit(ret)}
                                                         className="return-product-action-btn return-product-action-edit"
                                                     >
                                                         <EditIcon className="w-5 h-5" />
                                                     </button>
-                                                    <button 
+                                                    <button
                                                         onClick={() => handleDelete(ret._id)}
                                                         className="return-product-action-btn return-product-action-delete"
                                                     >
@@ -660,7 +963,7 @@ const ReturnProduct = ({ currentUser }) => {
                                                 </div>
                                                 <div className="flex justify-between items-center text-xs">
                                                     <span className="text-gray-400 font-bold uppercase tracking-widest text-[9px]">Company / Phone</span>
-                                                    <span className="text-gray-900 font-black text-right">{ret.companyName} <br/> <span className="text-[10px] opacity-60">{ret.phone}</span></span>
+                                                    <span className="text-gray-900 font-black text-right">{ret.companyName} <br /> <span className="text-[10px] opacity-60">{ret.phone}</span></span>
                                                 </div>
                                                 <div className="flex justify-between items-center text-xs">
                                                     <span className="text-gray-400 font-bold uppercase tracking-widest text-[9px]">Customer</span>

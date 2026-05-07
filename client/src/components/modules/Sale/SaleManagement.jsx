@@ -4019,7 +4019,15 @@ const SaleManagement = ({
                                                 </div>
                                             </td>
                                             <td className="px-3 py-4 whitespace-nowrap text-center">
-                                                <div className="text-[13px] font-black text-gray-900">৳ {parseFloat(sale.totalAmount).toLocaleString('en-IN')}</div>
+                                                <div className="text-[13px] font-black text-gray-900">
+                                                    ৳ {(() => {
+                                                        const storedTotal = parseFloat(sale.totalAmount) || 0;
+                                                        if (storedTotal > 0) return storedTotal.toLocaleString('en-IN');
+                                                        // Fallback for corrupted data: Recalculate from items
+                                                        const calculatedTotal = items.reduce((sum, it) => sum + (parseFloat(it.quantity || 0) * parseFloat(it.unitPrice || 0)), 0);
+                                                        return calculatedTotal.toLocaleString('en-IN');
+                                                    })()}
+                                                </div>
                                             </td>
                                             <td className="px-3 py-4 whitespace-nowrap text-center">
                                                 <div className="px-2 py-1 bg-emerald-50 text-emerald-700 rounded-lg text-xs font-bold inline-block border border-emerald-100/50">
@@ -4028,7 +4036,16 @@ const SaleManagement = ({
                                             </td>
                                             <td className="px-3 py-4 whitespace-nowrap text-center">
                                                 <div className="px-2 py-1 bg-orange-50 text-orange-700 rounded-lg text-xs font-bold inline-block border border-orange-100/50">
-                                                    ৳ {parseFloat(sale.dueAmount || 0).toLocaleString('en-IN')}
+                                                    ৳ {(() => {
+                                                        const storedDue = parseFloat(sale.dueAmount) || 0;
+                                                        const storedTotal = parseFloat(sale.totalAmount) || 0;
+                                                        if (storedDue > 0 || storedTotal > 0) return storedDue.toLocaleString('en-IN');
+                                                        
+                                                        // Fallback calculation
+                                                        const calculatedTotal = items.reduce((sum, it) => sum + (parseFloat(it.quantity || 0) * parseFloat(it.unitPrice || 0)), 0);
+                                                        const calculatedDue = Math.max(0, calculatedTotal - parseFloat(sale.discount || 0) - parseFloat(sale.paidAmount || 0));
+                                                        return calculatedDue.toLocaleString('en-IN');
+                                                    })()}
                                                 </div>
                                             </td>
                                             <td className="px-3 py-4 text-center whitespace-nowrap" onClick={(e) => e.stopPropagation()}>

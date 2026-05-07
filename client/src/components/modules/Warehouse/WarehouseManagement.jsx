@@ -362,7 +362,8 @@ const WarehouseManagement = ({ currentUser }) => {
                         saleItem.brandEntries.forEach(entry => {
                             const brandName = (entry.brand || '').trim().toLowerCase();
                             const brandKey = `${prodName}|${brandName}`;
-                            const sQty = parseFloat(entry.quantity) || 0;
+                            const sQty = parseFloat(entry.originalQuantity || entry.quantity) || 0;
+                            // Subtract ORIGINAL quantity. The return records in the warehouse collection will offset this.
 
                             if (brands[brandKey]) {
                                 // Exact match (multi-brand products)
@@ -656,7 +657,8 @@ const WarehouseManagement = ({ currentUser }) => {
 
                             if (!groups[whName] || !groups[whName].products[prodName]) return;
 
-                            const sQty = parseFloat(entry.quantity) || 0;
+                            // Subtract ORIGINAL quantity. The return records in the warehouse collection will offset this.
+                            const sQty = parseFloat(entry.originalQuantity || entry.quantity) || 0;
 
                             // Try exact brand match first
                             if (groups[whName].products[prodName].brands[brandName]) {

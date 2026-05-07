@@ -1722,10 +1722,7 @@ export const generateSaleInvoicePDF = async (sale, allCustomers = []) => {
         // Line 4: Contact No (Full Width)
         doc.setFont('helvetica', 'bold');
         doc.text("Contact No", margin, y);
-        doc.text(":", margin + labelWidth - 5, y);
-        doc.setFont('helvetica', 'normal');
-        doc.text(sale.contact || "-", margin + labelWidth, y);
-        drawDottedLine(margin + labelWidth, y + 1, pageWidth - margin);
+doc.line(margin + labelWidth, y + 1, pageWidth - margin, y + 1);
 
         y += 14;
 
@@ -1733,22 +1730,41 @@ export const generateSaleInvoicePDF = async (sale, allCustomers = []) => {
         const tableRows = [];
         let items = sale.items || [];
 
-        const prepareRow = (sl, prod, brand, qty, rate, total) => {
-            const quantity = parseFloat(qty) || 0;
+        const hasReturns = items.some(item => 
+            (parseFloat(item.returnQty) || 0) > 0 || 
+            (item.brandEntries && item.brandEntries.some(be => (parseFloat(be.returnQty) || 0) > 0))
+        ) || (parseFloat(sale.returnQty) || 0) > 0;
+
+        const prepareRow = (sl, prod, brand, qty, rate, total, retQty = 0) => {
+            const netQuantity = parseFloat(qty) || 0;
+            const returnQuantity = parseFloat(retQty) || 0;
+            const purchaseQuantity = netQuantity + returnQuantity;
             const productName = (prod || '').toString().toUpperCase();
             const brandName = (brand || '').toString().toUpperCase();
 
-            // Fallback: Calculate rate if it's missing or zero
             let displayRate = parseFloat(rate) || 0;
-            if (displayRate === 0 && quantity > 0) {
-                displayRate = (parseFloat(total) || 0) / quantity;
+            if (displayRate === 0 && netQuantity > 0) {
+                displayRate = (parseFloat(total) || 0) / netQuantity;
+            }
+
+            if (hasReturns) {
+                return [
+                    sl,
+                    productName,
+                    brandName,
+                    purchaseQuantity.toLocaleString('en-US'),
+                    returnQuantity.toLocaleString('en-US'),
+                    netQuantity.toLocaleString('en-US'),
+                    displayRate.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
+                    parseFloat(total).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+                ];
             }
 
             return [
                 sl,
                 productName,
                 brandName,
-                quantity.toLocaleString('en-US'),
+                netQuantity.toLocaleString('en-US'),
                 displayRate.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
                 parseFloat(total).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
             ];
@@ -1763,7 +1779,8 @@ export const generateSaleInvoicePDF = async (sale, allCustomers = []) => {
                 isBorderSale ? (sale.truck || '-') : (sale.brand || '-'),
                 sale.quantity,
                 sale.unitPrice || sale.rate,
-                sale.totalAmount || sale.amount
+                sale.totalAmount || sale.amount,
+                sale.returnQty
             ));
         } else {
             let sl = 1;
@@ -1777,7 +1794,8 @@ export const generateSaleInvoicePDF = async (sale, allCustomers = []) => {
                             isBorderSale ? (brand.truck || '-') : (brand.brand || '-'),
                             brand.quantity,
                             brand.unitPrice || brand.rate || 0,
-                            brand.totalAmount || brand.amount || 0
+                            brand.totalAmount || brand.amount || 0,
+                            brand.returnQty
                         ));
                     });
                 } else {
@@ -1787,15 +1805,40 @@ export const generateSaleInvoicePDF = async (sale, allCustomers = []) => {
                         isBorderSale ? (item.truck || '-') : (item.brand || '-'),
                         item.quantity,
                         item.unitPrice || item.rate || 0,
-                        item.totalAmount || item.amount || 0
+                        item.totalAmount || item.amount || 0,
+                        item.returnQty
                     ));
                 }
             });
         }
 
+        const tableHead = hasReturns 
+            ? [['SN', 'Product Name', isBorderSale ? 'Truck' : 'Brand', 'Purchase', 'Return', 'Net Qty', 'Rate', 'Total Amount']]
+            : [['SN', 'Product Name', isBorderSale ? 'Truck' : 'Brand', 'Quantity', 'Rate', 'Total Amount']];
+
+        const columnStyles = hasReturns
+            ? {
+                0: { cellWidth: 8 }, 
+                1: { cellWidth: 35 }, 
+                2: { cellWidth: 35 }, 
+                3: { halign: 'center', cellWidth: 20 }, 
+                4: { halign: 'center', cellWidth: 20 }, 
+                5: { halign: 'center', cellWidth: 20, fontStyle: 'bold' }, 
+                6: { halign: 'right', cellWidth: 22 }, 
+                7: { halign: 'right', fontStyle: 'bold' }, 
+            }
+            : {
+                0: { halign: 'center', cellWidth: 14 },
+                1: { halign: 'left', cellWidth: 40 },
+                2: { halign: isBorderSale ? 'center' : 'left', cellWidth: 40 },
+                3: { halign: 'center', cellWidth: 25 },
+                4: { halign: 'right', cellWidth: 33 },
+                5: { halign: 'right', cellWidth: 38 }
+            };
+
         autoTable(doc, {
             startY: y,
-            head: [['SN', 'Product Name', isBorderSale ? 'Truck' : 'Brand', 'Quantity', 'Rate', 'Total Amount']],
+            head: tableHead,
             body: tableRows,
             theme: 'grid',
             styles: {
@@ -1812,15 +1855,8 @@ export const generateSaleInvoicePDF = async (sale, allCustomers = []) => {
                 fontSize: 9,
                 halign: 'center',
             },
-            columnStyles: {
-                0: { halign: 'center', cellWidth: 14 },
-                1: { halign: 'left', cellWidth: 40 },
-                2: { halign: isBorderSale ? 'center' : 'left', cellWidth: 40 },
-                3: { halign: 'center', cellWidth: 25 },
-                4: { halign: 'right', cellWidth: 33 },
-                5: { halign: 'right', cellWidth: 38 }
-            },
-            margin: { left: margin, right: margin }
+            columnStyles: columnStyles,
+            margin: { left: margin, right: margin },
         });
 
         // --- 5. Summary Section ---

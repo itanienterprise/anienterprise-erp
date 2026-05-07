@@ -155,7 +155,7 @@ apiRouter.delete('/api/ip-records/:id', async (req, res) => {
 apiRouter.put('/api/ip-records/:id', async (req, res) => {
   try {
     const encryptedData = encryptData(req.body);
-    const updatedRecord = await IpRecord.findByIdAndUpdate(req.params.id, { data: encryptedData }, { new: true });
+    const updatedRecord = await IpRecord.findByIdAndUpdate(req.params.id, { data: encryptedData }, { returnDocument: 'after' });
     if (!updatedRecord) return res.status(404).json({ message: 'Record not found' });
     res.json({ ...req.body, _id: updatedRecord._id, createdAt: updatedRecord.createdAt });
   } catch (err) {
@@ -203,7 +203,7 @@ apiRouter.delete('/api/importers/:id', adminOnly, async (req, res) => {
 apiRouter.put('/api/importers/:id', adminOnly, async (req, res) => {
   try {
     const encryptedData = encryptData(req.body);
-    const updatedImporter = await Importer.findByIdAndUpdate(req.params.id, { data: encryptedData }, { new: true });
+    const updatedImporter = await Importer.findByIdAndUpdate(req.params.id, { data: encryptedData }, { returnDocument: 'after' });
     if (!updatedImporter) return res.status(404).json({ message: 'Importer not found' });
     res.json({ ...req.body, _id: updatedImporter._id, createdAt: updatedImporter.createdAt });
   } catch (err) {
@@ -251,7 +251,7 @@ apiRouter.delete('/api/exporters/:id', adminOnly, async (req, res) => {
 apiRouter.put('/api/exporters/:id', adminOnly, async (req, res) => {
   try {
     const encryptedData = encryptData(req.body);
-    const updatedExporter = await Exporter.findByIdAndUpdate(req.params.id, { data: encryptedData }, { new: true });
+    const updatedExporter = await Exporter.findByIdAndUpdate(req.params.id, { data: encryptedData }, { returnDocument: 'after' });
     if (!updatedExporter) return res.status(404).json({ message: 'Exporter not found' });
     res.json({ ...req.body, _id: updatedExporter._id, createdAt: updatedExporter.createdAt });
   } catch (err) {
@@ -297,7 +297,7 @@ apiRouter.delete('/api/cnfs/:id', adminOnly, async (req, res) => {
 apiRouter.put('/api/cnfs/:id', adminOnly, async (req, res) => {
   try {
     const encryptedData = encryptData(req.body);
-    const updatedCnF = await CnF.findByIdAndUpdate(req.params.id, { data: encryptedData }, { new: true });
+    const updatedCnF = await CnF.findByIdAndUpdate(req.params.id, { data: encryptedData }, { returnDocument: 'after' });
     if (!updatedCnF) return res.status(404).json({ message: 'C&F not found' });
     res.json({ ...req.body, _id: updatedCnF._id, createdAt: updatedCnF.createdAt });
   } catch (err) {
@@ -343,7 +343,7 @@ apiRouter.delete('/api/cnf-payments/:id', adminOnly, async (req, res) => {
 apiRouter.put('/api/cnf-payments/:id', adminOnly, async (req, res) => {
   try {
     const encryptedData = encryptData(req.body);
-    const updatedRecord = await CnFPayment.findByIdAndUpdate(req.params.id, { data: encryptedData }, { new: true });
+    const updatedRecord = await CnFPayment.findByIdAndUpdate(req.params.id, { data: encryptedData }, { returnDocument: 'after' });
     if (!updatedRecord) return res.status(404).json({ message: 'Payment record not found' });
     res.json({ ...req.body, _id: updatedRecord._id, createdAt: updatedRecord.createdAt });
   } catch (err) {
@@ -389,7 +389,7 @@ apiRouter.delete('/api/ports/:id', async (req, res) => {
 apiRouter.put('/api/ports/:id', async (req, res) => {
   try {
     const encryptedData = encryptData(req.body);
-    const updatedPort = await Port.findByIdAndUpdate(req.params.id, { data: encryptedData }, { new: true });
+    const updatedPort = await Port.findByIdAndUpdate(req.params.id, { data: encryptedData }, { returnDocument: 'after' });
     if (!updatedPort) return res.status(404).json({ message: 'Port not found' });
     res.json({ ...req.body, _id: updatedPort._id, createdAt: updatedPort.createdAt });
   } catch (err) {
@@ -435,7 +435,7 @@ apiRouter.delete('/api/stock/:id', async (req, res) => {
 apiRouter.put('/api/stock/:id', async (req, res) => {
   try {
     const encryptedData = encryptData(req.body);
-    const updatedStock = await Stock.findByIdAndUpdate(req.params.id, { data: encryptedData }, { new: true });
+    const updatedStock = await Stock.findByIdAndUpdate(req.params.id, { data: encryptedData }, { returnDocument: 'after' });
     if (!updatedStock) return res.status(404).json({ message: 'Item not found' });
     res.json(req.body);
   } catch (err) {
@@ -485,7 +485,7 @@ apiRouter.delete('/api/products/:id', async (req, res) => {
 apiRouter.put('/api/products/:id', async (req, res) => {
   try {
     const encryptedData = encryptData(req.body);
-    const updatedProduct = await Product.findByIdAndUpdate(req.params.id, { data: encryptedData }, { new: true });
+    const updatedProduct = await Product.findByIdAndUpdate(req.params.id, { data: encryptedData }, { returnDocument: 'after' });
     if (!updatedProduct) return res.status(404).json({ message: 'Product not found' });
     res.json({ ...req.body, _id: updatedProduct._id, createdAt: updatedProduct.createdAt });
   } catch (err) {
@@ -536,7 +536,7 @@ apiRouter.put('/api/customers/:id', async (req, res) => {
   try {
     // req.body is already decrypted by the security middleware
     const encryptedData = encryptData(req.body);
-    const updatedRecord = await Customer.findByIdAndUpdate(req.params.id, { data: encryptedData }, { new: true });
+    const updatedRecord = await Customer.findByIdAndUpdate(req.params.id, { data: encryptedData }, { returnDocument: 'after' });
     if (!updatedRecord) return res.status(404).json({ message: 'Customer not found' });
 
     // Propagate companyName and customerName changes to related sales
@@ -615,7 +615,7 @@ apiRouter.delete('/api/warehouses/:id', async (req, res) => {
 apiRouter.put('/api/warehouses/:id', async (req, res) => {
   try {
     const encryptedData = encryptData(req.body);
-    const updatedWarehouse = await Warehouse.findByIdAndUpdate(req.params.id, { data: encryptedData }, { new: true });
+    const updatedWarehouse = await Warehouse.findByIdAndUpdate(req.params.id, { data: encryptedData }, { returnDocument: 'after' });
     if (!updatedWarehouse) return res.status(404).json({ message: 'Warehouse not found' });
     res.json({ ...req.body, _id: updatedWarehouse._id, createdAt: updatedWarehouse.createdAt });
   } catch (err) {
@@ -754,7 +754,7 @@ apiRouter.put('/api/sales/:id', async (req, res) => {
       invoiceNo: req.body.invoiceNo,
       saleType: req.body.saleType,
       data: encryptedData 
-    }, { new: true });
+    }, { returnDocument: 'after' });
     res.json({ ...req.body, _id: updatedSale._id, createdAt: updatedSale.createdAt });
   } catch (err) {
     if (err.code === 11000) {
@@ -809,7 +809,7 @@ apiRouter.get('/api/returns', async (req, res) => {
 apiRouter.put('/api/returns/:id', async (req, res) => {
   try {
     const encryptedData = encryptData(req.body);
-    const updatedReturn = await Return.findByIdAndUpdate(req.params.id, { data: encryptedData }, { new: true });
+    const updatedReturn = await Return.findByIdAndUpdate(req.params.id, { data: encryptedData }, { returnDocument: 'after' });
     if (!updatedReturn) return res.status(404).json({ message: 'Return not found' });
     res.json({ ...req.body, _id: updatedReturn._id, createdAt: updatedReturn.createdAt });
   } catch (err) {
@@ -852,7 +852,7 @@ apiRouter.delete('/api/banks/:id', async (req, res) => {
 apiRouter.put('/api/banks/:id', async (req, res) => {
   try {
     const encryptedData = encryptData(req.body);
-    const updatedBank = await Bank.findByIdAndUpdate(req.params.id, { data: encryptedData }, { new: true });
+    const updatedBank = await Bank.findByIdAndUpdate(req.params.id, { data: encryptedData }, { returnDocument: 'after' });
     if (!updatedBank) return res.status(404).json({ message: 'Bank not found' });
     res.json({ ...req.body, _id: updatedBank._id, createdAt: updatedBank.createdAt });
   } catch (err) {
@@ -899,7 +899,7 @@ apiRouter.delete('/api/insurance/:id', async (req, res) => {
 apiRouter.put('/api/insurance/:id', async (req, res) => {
   try {
     const encryptedData = encryptData(req.body);
-    const updatedRecord = await Insurance.findByIdAndUpdate(req.params.id, { data: encryptedData }, { new: true });
+    const updatedRecord = await Insurance.findByIdAndUpdate(req.params.id, { data: encryptedData }, { returnDocument: 'after' });
     if (!updatedRecord) return res.status(404).json({ message: 'Insurance record not found' });
     res.json({ ...req.body, _id: updatedRecord._id, createdAt: updatedRecord.createdAt });
   } catch (err) {
@@ -945,7 +945,7 @@ apiRouter.delete('/api/insurance-payments/:id', adminOnly, async (req, res) => {
 apiRouter.put('/api/insurance-payments/:id', adminOnly, async (req, res) => {
   try {
     const encryptedData = encryptData(req.body);
-    const updatedRecord = await InsurancePayment.findByIdAndUpdate(req.params.id, { data: encryptedData }, { new: true });
+    const updatedRecord = await InsurancePayment.findByIdAndUpdate(req.params.id, { data: encryptedData }, { returnDocument: 'after' });
     if (!updatedRecord) return res.status(404).json({ message: 'Payment record not found' });
     res.json({ ...req.body, _id: updatedRecord._id, createdAt: updatedRecord.createdAt });
   } catch (err) {
@@ -991,7 +991,7 @@ apiRouter.delete('/api/lc-management/:id', async (req, res) => {
 apiRouter.put('/api/lc-management/:id', async (req, res) => {
   try {
     const encryptedData = encryptData(req.body);
-    const updatedRecord = await LCManagement.findByIdAndUpdate(req.params.id, { data: encryptedData }, { new: true });
+    const updatedRecord = await LCManagement.findByIdAndUpdate(req.params.id, { data: encryptedData }, { returnDocument: 'after' });
     if (!updatedRecord) return res.status(404).json({ message: 'LC record not found' });
     res.json({ ...req.body, _id: updatedRecord._id, createdAt: updatedRecord.createdAt });
   } catch (err) {
@@ -1079,7 +1079,7 @@ apiRouter.post('/api/lc-gp', async (req, res) => {
 apiRouter.put('/api/lc-gp/:id', async (req, res) => {
   try {
     const encryptedData = encryptData(req.body);
-    const updatedRecord = await LCGatePass.findByIdAndUpdate(req.params.id, { data: encryptedData }, { new: true });
+    const updatedRecord = await LCGatePass.findByIdAndUpdate(req.params.id, { data: encryptedData }, { returnDocument: 'after' });
     if (!updatedRecord) return res.status(404).json({ message: 'Gate Pass record not found' });
     res.json({ ...req.body, _id: updatedRecord._id, createdAt: updatedRecord.createdAt });
   } catch (err) {
@@ -1125,7 +1125,7 @@ apiRouter.post('/api/lc-expenses', async (req, res) => {
 apiRouter.put('/api/lc-expenses/:id', async (req, res) => {
   try {
     const encryptedData = encryptData(req.body);
-    const updatedRecord = await LCExpense.findByIdAndUpdate(req.params.id, { data: encryptedData }, { new: true });
+    const updatedRecord = await LCExpense.findByIdAndUpdate(req.params.id, { data: encryptedData }, { returnDocument: 'after' });
     if (!updatedRecord) return res.status(404).json({ message: 'LC Expense record not found' });
     res.json({ ...req.body, _id: updatedRecord._id, createdAt: updatedRecord.createdAt });
   } catch (err) {
@@ -1179,7 +1179,7 @@ apiRouter.put('/api/pi/:id', async (req, res) => {
     const updateData = { data: encryptedData };
     if (piNumber) updateData.piNumber = piNumber.trim();
 
-    const updatedRecord = await PI.findByIdAndUpdate(req.params.id, updateData, { new: true });
+    const updatedRecord = await PI.findByIdAndUpdate(req.params.id, updateData, { returnDocument: 'after' });
     if (!updatedRecord) return res.status(404).json({ message: 'PI record not found' });
     res.json({ ...req.body, _id: updatedRecord._id, createdAt: updatedRecord.createdAt });
   } catch (err) {
@@ -1324,7 +1324,7 @@ apiRouter.put('/api/employees/:id', async (req, res) => {
     }
 
     const encryptedData = encryptData(employeeData);
-    const updatedEmployee = await Employee.findByIdAndUpdate(req.params.id, { data: encryptedData }, { new: true });
+    const updatedEmployee = await Employee.findByIdAndUpdate(req.params.id, { data: encryptedData }, { returnDocument: 'after' });
     res.json({ ...employeeData, _id: updatedEmployee._id, createdAt: updatedEmployee.createdAt });
   } catch (err) {
     res.status(400).json({ message: err.message });
