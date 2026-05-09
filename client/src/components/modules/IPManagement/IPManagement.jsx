@@ -26,17 +26,29 @@ const ViewIPLCsModal = ({ ipRecord, lcRecords, allStockRecords = [], allSalesRec
         const lcNoClean = cleanLc(lc.lcNo);
         const qtyKg = parseNum(lc.quantity) * 1000;
 
-        const receivedQtyKg = allStockRecords
+        const receiptsMapForBalance = {};
+        allStockRecords
             .filter(s => {
                 const recordLcNoClean = cleanLc(s.lcNo);
                 const status = (s.status || '').toLowerCase();
                 return recordLcNoClean === lcNoClean && (status === 'accepted' || status === 'in stock');
             })
-            .reduce((sum, s) => {
-                const itemSubtotal = (s.entries || []).reduce((iSum, item) => iSum + parseNum(item.inHouseQuantity || item.quantity), 0);
-                const qty = parseNum(s.totalLcQuantity) || parseNum(s.inHouseQuantity) || parseNum(s.quantity) || itemSubtotal;
-                return sum + qty;
-            }, 0);
+            .forEach(s => {
+                const rawDate = s.date || s.receiveDate || s.createdAt || '';
+                const dateStr = typeof rawDate === 'string' && rawDate.includes('T') ? rawDate.split('T')[0] : rawDate;
+                const groupVal = s.totalLcQuantity || s.billOfEntry || s.totalLcTruck || s.truckNo || s.truck || 'single';
+                const key = `${dateStr}_${groupVal}`;
+                
+                if (!receiptsMapForBalance[key]) {
+                    const itemSubtotal = (s.entries || []).reduce((iSum, item) => iSum + parseNum(item.inHouseQuantity || item.quantity), 0);
+                    receiptsMapForBalance[key] = parseNum(s.totalLcQuantity) || itemSubtotal || parseNum(s.inHouseQuantity) || parseNum(s.quantity);
+                } else {
+                    if (!s.totalLcQuantity) {
+                        receiptsMapForBalance[key] += parseNum(s.inHouseQuantity) || parseNum(s.quantity);
+                    }
+                }
+            });
+        const receivedQtyKg = Object.values(receiptsMapForBalance).reduce((sum, qty) => sum + qty, 0);
 
         const borderSaleQtyKg = allSalesRecords
             .filter(s => {
@@ -497,15 +509,27 @@ function IPManagement({
             let totalConsumption = 0;
 
             // Related Receipts (Stock)
+            const ipReceiptsMap = {};
             allStockRecords.forEach(s => {
                 const sLcClean = cleanLc(s.lcNo);
                 const status = (s.status || '').toLowerCase();
                 if (lcNumbers.includes(sLcClean) && (status === 'accepted' || status === 'in stock')) {
-                    const itemSubtotal = (s.entries || []).reduce((iSum, item) => iSum + parseNum(item.inHouseQuantity || item.quantity), 0);
-                    const qty = parseNum(s.totalLcQuantity) || parseNum(s.inHouseQuantity) || parseNum(s.quantity) || itemSubtotal;
-                    totalConsumption += qty;
+                    const rawDate = s.date || s.receiveDate || s.createdAt || '';
+                    const dateStr = typeof rawDate === 'string' && rawDate.includes('T') ? rawDate.split('T')[0] : rawDate;
+                    const groupVal = s.totalLcQuantity || s.billOfEntry || s.totalLcTruck || s.truckNo || s.truck || 'single';
+                    const key = `${sLcClean}_${dateStr}_${groupVal}`;
+                    
+                    if (!ipReceiptsMap[key]) {
+                        const itemSubtotal = (s.entries || []).reduce((iSum, item) => iSum + parseNum(item.inHouseQuantity || item.quantity), 0);
+                        ipReceiptsMap[key] = parseNum(s.totalLcQuantity) || itemSubtotal || parseNum(s.inHouseQuantity) || parseNum(s.quantity);
+                    } else {
+                        if (!s.totalLcQuantity) {
+                            ipReceiptsMap[key] += parseNum(s.inHouseQuantity) || parseNum(s.quantity);
+                        }
+                    }
                 }
             });
+            totalConsumption += Object.values(ipReceiptsMap).reduce((sum, qty) => sum + qty, 0);
 
             // Related Border Sales
             allSalesRecords.forEach(s => {

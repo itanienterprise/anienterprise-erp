@@ -517,48 +517,50 @@ const ReturnProduct = ({ currentUser }) => {
 
     return (
         <div className="return-product-container">
-            <div className="return-product-header flex flex-col md:flex-row md:items-center justify-between gap-4">
-                <div className="w-full md:w-1/4 text-center md:text-left">
-                    <h2 className="return-product-title" style={{ margin: 0 }}>Return Product</h2>
-                </div>
-
-                <div className="w-full md:flex-1 md:max-w-md md:mx-auto relative group px-2 md:px-0">
-                    <div className="absolute inset-y-0 left-0 pl-5 md:pl-3.5 flex items-center pointer-events-none">
-                        <SearchIcon className="h-4 w-4 text-gray-400 group-focus-within:text-blue-500 transition-colors" />
+            {!showForm && (
+                <div className="return-product-header flex flex-col md:flex-row md:items-center justify-between gap-4">
+                    <div className="w-full md:w-1/4 text-center md:text-left">
+                        <h2 className="return-product-title" style={{ margin: 0 }}>Return Product</h2>
                     </div>
-                    <input
-                        type="text"
-                        className="block w-full pl-12 md:pl-10 pr-4 py-2.5 md:py-2 bg-white/50 border border-gray-200 rounded-xl text-[13px] md:text-[13px] text-center md:text-left placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 focus:bg-white transition-all outline-none shadow-sm"
-                        placeholder="Search by customer, product, invoice..."
-                        value={searchQuery}
-                        onChange={(e) => setSearchQuery(e.target.value)}
-                    />
-                </div>
 
-                <div className="w-full md:w-1/4 flex justify-end z-10">
-                    <button
-                        onClick={() => {
-                            setShowForm(true);
-                            setEditingId(null);
-                            setInvoiceSearch('');
-                            setFormData({
-                                date: new Date().toISOString().split('T')[0],
-                                invoiceNo: '',
-                                customerName: '',
-                                productName: '',
-                                quantity: '',
-                                returnPrice: '',
-                                reason: '',
-                                status: 'Pending',
-                                originalQuantity: ''
-                            });
-                        }}
-                        className="w-full md:w-auto return-product-add-btn whitespace-nowrap"
-                    >
-                        <span className="return-product-add-icon">+</span> Add New
-                    </button>
+                    <div className="w-full md:flex-1 md:max-w-md md:mx-auto relative group px-2 md:px-0">
+                        <div className="absolute inset-y-0 left-0 pl-5 md:pl-3.5 flex items-center pointer-events-none">
+                            <SearchIcon className="h-4 w-4 text-gray-400 group-focus-within:text-blue-500 transition-colors" />
+                        </div>
+                        <input
+                            type="text"
+                            className="block w-full pl-12 md:pl-10 pr-4 py-2.5 md:py-2 bg-white/50 border border-gray-200 rounded-xl text-[13px] md:text-[13px] text-center md:text-left placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 focus:bg-white transition-all outline-none shadow-sm"
+                            placeholder="Search by customer, product, invoice..."
+                            value={searchQuery}
+                            onChange={(e) => setSearchQuery(e.target.value)}
+                        />
+                    </div>
+
+                    <div className="w-full md:w-1/4 flex justify-end z-10">
+                        <button
+                            onClick={() => {
+                                setShowForm(true);
+                                setEditingId(null);
+                                setInvoiceSearch('');
+                                setFormData({
+                                    date: new Date().toISOString().split('T')[0],
+                                    invoiceNo: '',
+                                    customerName: '',
+                                    productName: '',
+                                    quantity: '',
+                                    returnPrice: '',
+                                    reason: '',
+                                    status: 'Pending',
+                                    originalQuantity: ''
+                                });
+                            }}
+                            className="w-full md:w-auto return-product-add-btn whitespace-nowrap"
+                        >
+                            <span className="return-product-add-icon">+</span> Add New
+                        </button>
+                    </div>
                 </div>
-            </div>
+            )}
 
             {showForm ? (
                 <div className="return-product-form-container animate-in">
@@ -736,7 +738,7 @@ const ReturnProduct = ({ currentUser }) => {
                             </div>
                         )}
 
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-6">
+                        <div className="return-product-form-field-full grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-6">
                             <div className="return-product-form-field">
                                 <label className="return-product-form-label">Product Name</label>
                                 <input
