@@ -46,6 +46,7 @@ const ReturnProduct = ({ currentUser }) => {
         bags: '',
         warehouse: '',
         reason: '',
+        returnPrice: '',
         status: 'Pending',
         packetSize: 0,
         purchaseItems: []
@@ -337,6 +338,7 @@ const ReturnProduct = ({ currentUser }) => {
                 bags: '',
                 warehouse: '',
                 reason: '',
+                returnPrice: '',
                 status: 'Pending',
                 packetSize: 0,
                 originalQuantity: '',
@@ -545,6 +547,7 @@ const ReturnProduct = ({ currentUser }) => {
                                 customerName: '',
                                 productName: '',
                                 quantity: '',
+                                returnPrice: '',
                                 reason: '',
                                 status: 'Pending',
                                 originalQuantity: ''
@@ -695,6 +698,7 @@ const ReturnProduct = ({ currentUser }) => {
                                                                     productName: item.productName,
                                                                     brand: be.brand || be.brandName || '',
                                                                     quantity: '',
+                                                                    returnPrice: be.unitPrice || 0,
                                                                     originalQuantity: parseFloat(be.quantity || 0) + (parseFloat(be.returnQty) || 0),
                                                                     packetSize: parseFloat(be.packetSize || item.packetSize || be.bagSize || item.bagSize || 50)
                                                                 });
@@ -712,6 +716,7 @@ const ReturnProduct = ({ currentUser }) => {
                                                                 productName: item.productName,
                                                                 brand: '-',
                                                                 quantity: '',
+                                                                returnPrice: item.unitPrice || item.rate || 0,
                                                                 originalQuantity: parseFloat(item.quantity || 0) + (parseFloat(item.returnQty) || 0),
                                                                 packetSize: parseFloat(item.packetSize || item.bagSize || 50)
                                                             });
@@ -731,7 +736,7 @@ const ReturnProduct = ({ currentUser }) => {
                             </div>
                         )}
 
-                        <div className="return-product-grid-5">
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-6">
                             <div className="return-product-form-field">
                                 <label className="return-product-form-label">Product Name</label>
                                 <input
@@ -776,6 +781,17 @@ const ReturnProduct = ({ currentUser }) => {
                                     placeholder="Bags"
                                     value={formData.bags}
                                     onChange={(e) => setFormData({ ...formData, bags: e.target.value })}
+                                />
+                            </div>
+
+                            <div className="return-product-form-field">
+                                <label className="return-product-form-label">Return Price</label>
+                                <input
+                                    type="number"
+                                    className="return-product-form-input"
+                                    placeholder="Price"
+                                    value={formData.returnPrice}
+                                    onChange={(e) => setFormData({ ...formData, returnPrice: e.target.value })}
                                 />
                             </div>
 
@@ -858,44 +874,59 @@ const ReturnProduct = ({ currentUser }) => {
                                     <tr className="return-product-table-header-row">
                                         <th className="return-product-table-header">Date</th>
                                         <th className="return-product-table-header">Invoice No</th>
-                                        <th className="return-product-table-header">Company</th>
-                                        <th className="return-product-table-header">Customer</th>
+                                        <th className="return-product-table-header">Company Name</th>
                                         <th className="return-product-table-header">Product</th>
+                                        <th className="return-product-table-header">Brand</th>
                                         <th className="return-product-table-header text-center">Quantity</th>
                                         <th className="return-product-table-header text-center">Bags</th>
-                                        <th className="return-product-table-header text-center">Status</th>
+                                        <th className="return-product-table-header text-right">Return Price</th>
                                         <th className="return-product-table-header text-right">Actions</th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     {filteredReturns.map((ret) => (
                                         <tr key={ret._id} className="return-product-table-row">
-                                            <td className="return-product-table-cell">{ret.date}</td>
+                                            <td className="return-product-table-cell whitespace-nowrap">{ret.date}</td>
                                             <td className="return-product-table-cell">
-                                                <div className="flex flex-col">
-                                                    <span className="px-2 py-0.5 bg-gray-100 rounded text-[10px] font-bold text-gray-600 w-fit">
-                                                        {ret.invoiceNo}
-                                                    </span>
-                                                    <span className="text-[9px] text-gray-400 mt-0.5">{ret.invoiceDate}</span>
-                                                </div>
-                                            </td>
-                                            <td className="return-product-table-cell">
-                                                <div className="flex flex-col">
-                                                    <span className="font-bold text-gray-900">{ret.companyName}</span>
-                                                    <span className="text-[10px] text-gray-500">{ret.phone}</span>
-                                                </div>
-                                            </td>
-                                            <td className="return-product-table-cell return-product-table-cell-bold">{ret.customerName}</td>
-                                            <td className="return-product-table-cell">{ret.productName}</td>
-                                            <td className="return-product-table-cell text-center font-bold">{ret.quantity}</td>
-                                            <td className="return-product-table-cell text-center font-mono text-blue-600">{ret.bags || '-'}</td>
-                                            <td className="return-product-table-cell text-center">
-                                                <span className={`return-product-status-badge ${ret.status.toLowerCase()}`}>
-                                                    {ret.status}
+                                                <span className="px-2 py-0.5 bg-gray-100 rounded text-[10px] font-bold text-gray-600 w-fit">
+                                                    {ret.invoiceNo}
                                                 </span>
                                             </td>
+                                            <td className="return-product-table-cell font-bold text-gray-900">{ret.companyName}</td>
+                                            <td className="return-product-table-cell font-bold text-gray-900">{ret.productName}</td>
+                                            <td className="return-product-table-cell text-purple-600 font-bold text-[11px]">{ret.brand !== '-' ? ret.brand : ''}</td>
+                                            <td className="return-product-table-cell text-center font-bold">{ret.quantity}</td>
+                                            <td className="return-product-table-cell text-center font-bold">{ret.bags || '-'}</td>
+                                            <td className="return-product-table-cell text-right font-bold text-emerald-600">
+                                                {(() => {
+                                                    let rate = parseFloat(ret.returnPrice || ret.unitPrice || ret.rate) || 0;
+                                                    if (!rate) {
+                                                        // Fallback: Try to find rate from original sale if not saved in return record
+                                                        const originalSale = sales.find(s => s.invoiceNo === ret.invoiceNo);
+                                                        if (originalSale && originalSale.items) {
+                                                            const item = originalSale.items.find(i => i.productName === ret.productName);
+                                                            if (item) {
+                                                                if (item.brandEntries && item.brandEntries.length > 0) {
+                                                                    const be = item.brandEntries.find(b => (b.brandName || b.brand) === ret.brand);
+                                                                    if (be) rate = parseFloat(be.unitPrice || be.rate) || 0;
+                                                                } else {
+                                                                    rate = parseFloat(item.unitPrice || item.rate) || 0;
+                                                                }
+                                                            }
+                                                        } else if (originalSale) {
+                                                            rate = parseFloat(originalSale.rate || originalSale.unitPrice) || 0;
+                                                        }
+                                                    }
+                                                    
+                                                    const qty = parseFloat(ret.quantity) || 0;
+                                                    if (rate > 0) {
+                                                        return `৳ ${(rate * qty).toLocaleString()}`;
+                                                    }
+                                                    return '-';
+                                                })()}
+                                            </td>
                                             <td className="return-product-table-cell">
-                                                <div className="return-product-table-actions">
+                                                <div className="return-product-table-actions justify-end">
                                                     <button
                                                         onClick={() => handleEdit(ret)}
                                                         className="return-product-action-btn return-product-action-edit"

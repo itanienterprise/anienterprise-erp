@@ -24,27 +24,49 @@ const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords
     const lcNoClean = cleanLc(data.lcNo);
 
     // Calculate Consumptions
-    const relatedReceipts = allStockRecords
+    const receiptsMap = {};
+    allStockRecords
         .filter(s => {
             const recordLcNoClean = cleanLc(s.lcNo);
             const status = (s.status || '').toLowerCase();
             return recordLcNoClean === lcNoClean && (status === 'accepted' || status === 'in stock');
         })
-        .map(s => {
-            const itemSubtotal = (s.entries || []).reduce((iSum, item) => iSum + parseNum(item.inHouseQuantity || item.quantity), 0);
-            // truckNo is a numeric count (number of trucks), not a plate number
-            const truckNumeric = parseFloat(s.truckNo) || 0;
-            return {
-                date: s.receiveDate || s.createdAt,
-                importer: s.importer || data.importer,
-                exporter: s.exporter || data.exporter,
-                product: s.productName || data.productName,
-                truck: s.truckNo || s.truck || '-',
-                truckCount: truckNumeric,
-                quantity: parseNum(s.totalLcQuantity) || parseNum(s.inHouseQuantity) || parseNum(s.quantity) || itemSubtotal,
-                source: 'LC Receive'
-            };
+        .forEach(s => {
+            // Ensure date key is just the day, so milliseconds in createdAt don't break grouping
+            const rawDate = s.date || s.receiveDate || s.createdAt || '';
+            const dateStr = typeof rawDate === 'string' && rawDate.includes('T') ? rawDate.split('T')[0] : rawDate;
+            
+            // Group by date, and total quantity or truck to merge split records from the same transaction
+            const groupVal = s.totalLcQuantity || s.billOfEntry || s.totalLcTruck || s.truckNo || s.truck || 'single';
+            const key = `${dateStr}_${groupVal}`;
+            
+            if (!receiptsMap[key]) {
+                const itemSubtotal = (s.entries || []).reduce((iSum, item) => iSum + parseNum(item.inHouseQuantity || item.quantity), 0);
+                const truckNumeric = parseFloat(s.totalLcTruck || s.truckNo || s.truck) || 0;
+                receiptsMap[key] = {
+                    date: rawDate,
+                    importer: s.importer || data.importer,
+                    exporter: s.exporter || data.exporter,
+                    product: s.productName || data.productName,
+                    truck: s.totalLcTruck || s.truckNo || s.truck || '-',
+                    truckCount: truckNumeric,
+                    quantity: parseNum(s.totalLcQuantity) || itemSubtotal || parseNum(s.inHouseQuantity) || parseNum(s.quantity),
+                    source: 'LC Receive',
+                    _products: new Set([s.productName || data.productName])
+                };
+            } else {
+                receiptsMap[key]._products.add(s.productName || data.productName);
+                if (receiptsMap[key]._products.size > 1) {
+                    receiptsMap[key].product = 'Multiple Products';
+                }
+                // If the group doesn't have a totalLcQuantity, accumulate the individual pieces
+                if (!s.totalLcQuantity) {
+                    receiptsMap[key].quantity += parseNum(s.inHouseQuantity) || parseNum(s.quantity);
+                }
+            }
         });
+        
+    const relatedReceipts = Object.values(receiptsMap);
 
     const relatedSales = allSalesRecords
         .filter(s => {
@@ -1873,17 +1895,29 @@ const LCManagement = ({ addNotification, currentUser }) => {
                                     // Received: From allStockRecords where lcNo matches and status is NOT requested/rejected
                                     const lcNoClean = cleanLc(record.lcNo);
 
-                                    const receivedQtyKg = allStockRecords
+                                    const receiptsMapForBalance = {};
+                                    allStockRecords
                                         .filter(s => {
                                             const recordLcNoClean = cleanLc(s.lcNo);
                                             const status = (s.status || '').toLowerCase();
                                             return recordLcNoClean === lcNoClean && (status === 'accepted' || status === 'in stock');
                                         })
-                                        .reduce((sum, s) => {
-                                            const itemSubtotal = (s.entries || []).reduce((iSum, item) => iSum + parseNum(item.inHouseQuantity || item.quantity), 0);
-                                            const qty = parseNum(s.totalLcQuantity) || parseNum(s.inHouseQuantity) || parseNum(s.quantity) || itemSubtotal;
-                                            return sum + qty;
-                                        }, 0);
+                                        .forEach(s => {
+                                            const rawDate = s.date || s.receiveDate || s.createdAt || '';
+                                            const dateStr = typeof rawDate === 'string' && rawDate.includes('T') ? rawDate.split('T')[0] : rawDate;
+                                            const groupVal = s.totalLcQuantity || s.billOfEntry || s.totalLcTruck || s.truckNo || s.truck || 'single';
+                                            const key = `${dateStr}_${groupVal}`;
+                                            
+                                            if (!receiptsMapForBalance[key]) {
+                                                const itemSubtotal = (s.entries || []).reduce((iSum, item) => iSum + parseNum(item.inHouseQuantity || item.quantity), 0);
+                                                receiptsMapForBalance[key] = parseNum(s.totalLcQuantity) || itemSubtotal || parseNum(s.inHouseQuantity) || parseNum(s.quantity);
+                                            } else {
+                                                if (!s.totalLcQuantity) {
+                                                    receiptsMapForBalance[key] += parseNum(s.inHouseQuantity) || parseNum(s.quantity);
+                                                }
+                                            }
+                                        });
+                                    const receivedQtyKg = Object.values(receiptsMapForBalance).reduce((sum, qty) => sum + qty, 0);
 
                                     // Border Sale: From allSalesRecords where lcNo matches and is a Border Sale
                                     const borderSaleQtyKg = allSalesRecords
