@@ -181,7 +181,7 @@ const Insurance = ({ onDeleteConfirm }) => {
             if (!totals[co]) {
                 totals[co] = { totalPremium: 0, returnAmount: 0, lcs: [] };
             }
-            totals[co].totalPremium += parseFloat(lc.netPremium || 0);
+            totals[co].totalPremium += parseFloat(lc.grossPremium || 0);
             totals[co].returnAmount += parseFloat(lc.expectedReturnAmount || 0);
             totals[co].lcs.push(lc);
         });

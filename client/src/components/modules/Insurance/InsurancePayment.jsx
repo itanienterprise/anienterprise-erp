@@ -87,7 +87,7 @@ const InsurancePayment = () => {
                 let expectedReturn = 0;
                 allLc.forEach(lc => {
                     if ((lc.insuranceCo || '').toLowerCase().trim() === targetName) {
-                        totalPremium += (parseFloat(lc.netPremium) || 0);
+                        totalPremium += (parseFloat(lc.grossPremium) || 0);
                         expectedReturn += (parseFloat(lc.expectedReturnAmount) || 0);
                     }
                 });
@@ -327,7 +327,7 @@ const InsurancePayment = () => {
                 }
             });
 
-            displayPremiumBalance = (parseFloat(selectedLc.netPremium) || 0) - premiumPaid;
+            displayPremiumBalance = (parseFloat(selectedLc.grossPremium) || 0) - premiumPaid;
             displayReturnBalance = (parseFloat(selectedLc.expectedReturnAmount) || 0) - returnCollected;
         }
     } else if (newPayment.insuranceId) {
