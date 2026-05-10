@@ -12,7 +12,7 @@ const LCExpense = ({ currentUser, addNotification, onDeleteConfirm, refreshKey }
     const [isEditMode, setIsEditMode] = useState(false);
     const [editingId, setEditingId] = useState(null);
     const [isSubmitting, setIsSubmitting] = useState(false);
-    
+
     // For dropdowns
     const [lcs, setLcs] = useState([]);
     const [activeDropdown, setActiveDropdown] = useState(null);
@@ -51,7 +51,7 @@ const LCExpense = ({ currentUser, addNotification, onDeleteConfirm, refreshKey }
 
     useEffect(() => {
         const handleClickOutside = (event) => {
-            if (lcRef.current && !lcRef.current.contains(event.target) && 
+            if (lcRef.current && !lcRef.current.contains(event.target) &&
                 expenseHeadRef.current && !expenseHeadRef.current.contains(event.target) &&
                 (!cnfAgentRef.current || !cnfAgentRef.current.contains(event.target))) {
                 setActiveDropdown(null);
@@ -71,10 +71,10 @@ const LCExpense = ({ currentUser, addNotification, onDeleteConfirm, refreshKey }
         } else if (e.key === 'Enter' && highlightedIndex >= 0) {
             e.preventDefault();
             const selected = list[highlightedIndex];
-            
+
             if (field === 'lcNo') {
-                setFormData(prev => ({ 
-                    ...prev, 
+                setFormData(prev => ({
+                    ...prev,
                     lcNo: selected.value,
                     bankName: selected.bankName || ''
                 }));
@@ -211,7 +211,7 @@ const LCExpense = ({ currentUser, addNotification, onDeleteConfirm, refreshKey }
                 ) : (
                     <div className="hidden md:block md:flex-1"></div>
                 )}
-                
+
                 {!showAddModal && (
                     <div className="w-full md:w-1/4 flex justify-end gap-3 z-50">
                         <button
@@ -277,15 +277,15 @@ const LCExpense = ({ currentUser, addNotification, onDeleteConfirm, refreshKey }
                                             </td>
                                             <td className="px-6 py-4 text-center">
                                                 <div className="flex items-center justify-center gap-2">
-                                                    <button 
-                                                        onClick={() => handleEdit(exp)} 
+                                                    <button
+                                                        onClick={() => handleEdit(exp)}
                                                         className="p-2 hover:bg-blue-50 text-gray-400 hover:text-blue-600 rounded-xl transition-all active:scale-90"
                                                         title="Edit Expense"
                                                     >
                                                         <EditIcon className="w-4 h-4" />
                                                     </button>
-                                                    <button 
-                                                        onClick={() => handleDelete(exp._id)} 
+                                                    <button
+                                                        onClick={() => handleDelete(exp._id)}
                                                         className="p-2 hover:bg-rose-50 text-gray-400 hover:text-rose-600 rounded-xl transition-all active:scale-90"
                                                         title="Delete Expense"
                                                     >
@@ -337,7 +337,7 @@ const LCExpense = ({ currentUser, addNotification, onDeleteConfirm, refreshKey }
                                     required
                                 />
                             </div>
-                            
+
                             <div className="space-y-1.5 text-left relative" ref={lcRef}>
                                 <label className="text-sm font-semibold text-gray-600 ml-1">LC No <span className="text-red-500">*</span></label>
                                 <div className="relative">
@@ -374,19 +374,18 @@ const LCExpense = ({ currentUser, addNotification, onDeleteConfirm, refreshKey }
                                             <button
                                                 key={lc._id}
                                                 type="button"
-                                                onMouseDown={(e) => { 
-                                                    e.preventDefault(); 
-                                                    setFormData(prev => ({ 
-                                                        ...prev, 
+                                                onMouseDown={(e) => {
+                                                    e.preventDefault();
+                                                    setFormData(prev => ({
+                                                        ...prev,
                                                         lcNo: lc.lcNo,
                                                         bankName: lc.bankName || ''
                                                     }));
                                                     setActiveDropdown(null);
                                                 }}
                                                 onMouseEnter={() => setHighlightedIndex(idx)}
-                                                className={`w-full px-4 py-2.5 text-left text-sm transition-colors flex items-center justify-between ${
-                                                    highlightedIndex === idx ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-blue-50'
-                                                }`}
+                                                className={`w-full px-4 py-2.5 text-left text-sm transition-colors flex items-center justify-between ${highlightedIndex === idx ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-blue-50'
+                                                    }`}
                                             >
                                                 <span className="font-bold">{lc.lcNo}</span>
                                             </button>
@@ -431,15 +430,14 @@ const LCExpense = ({ currentUser, addNotification, onDeleteConfirm, refreshKey }
                                             <button
                                                 key={head}
                                                 type="button"
-                                                onMouseDown={(e) => { 
-                                                    e.preventDefault(); 
+                                                onMouseDown={(e) => {
+                                                    e.preventDefault();
                                                     setFormData(prev => ({ ...prev, expenseHead: head }));
                                                     setActiveDropdown(null);
                                                 }}
                                                 onMouseEnter={() => setHighlightedIndex(idx)}
-                                                className={`w-full px-4 py-2.5 text-left text-sm transition-colors flex items-center justify-between ${
-                                                    highlightedIndex === idx ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-blue-50'
-                                                }`}
+                                                className={`w-full px-4 py-2.5 text-left text-sm transition-colors flex items-center justify-between ${highlightedIndex === idx ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-blue-50'
+                                                    }`}
                                             >
                                                 <span className="font-medium">{head}</span>
                                             </button>
@@ -498,15 +496,14 @@ const LCExpense = ({ currentUser, addNotification, onDeleteConfirm, refreshKey }
                                                 <button
                                                     key={cnf}
                                                     type="button"
-                                                    onMouseDown={(e) => { 
-                                                        e.preventDefault(); 
+                                                    onMouseDown={(e) => {
+                                                        e.preventDefault();
                                                         setFormData(prev => ({ ...prev, cnfAgent: cnf }));
                                                         setActiveDropdown(null);
                                                     }}
                                                     onMouseEnter={() => setHighlightedIndex(idx)}
-                                                    className={`w-full px-4 py-2.5 text-left text-sm transition-colors flex items-center justify-between ${
-                                                        highlightedIndex === idx ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-blue-50'
-                                                    }`}
+                                                    className={`w-full px-4 py-2.5 text-left text-sm transition-colors flex items-center justify-between ${highlightedIndex === idx ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-blue-50'
+                                                        }`}
                                                 >
                                                     <span className="font-medium">{cnf}</span>
                                                 </button>
@@ -531,7 +528,7 @@ const LCExpense = ({ currentUser, addNotification, onDeleteConfirm, refreshKey }
                                 />
                             </div>
                         </div>
-                        
+
                         <div className="mb-8 space-y-1.5 text-left">
                             <label className="text-sm font-semibold text-gray-600 ml-1">Remarks</label>
                             <textarea

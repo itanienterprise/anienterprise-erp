@@ -852,7 +852,9 @@ export const generateStockReportPDF = (stockData, filters, reportType = 'short',
 
                 const hasSubTotal = true;
                 const brandsCount = item.brandList.length;
-                const totalRowsForProduct = brandsCount + (hasQuals ? 1 : 0) + (hasSubTotal ? 1 : 0);
+                const hasQualSubTotals = hasQuals && qEntries.length > 1;
+                const qualSubTotalCount = hasQualSubTotals ? qEntries.length : 0;
+                const totalRowsForProduct = brandsCount + (hasQuals ? 1 : 0) + (hasSubTotal ? 1 : 0) + qualSubTotalCount;
 
                 let isFirstRowOfProduct = true;
 
@@ -888,7 +890,7 @@ export const generateStockReportPDF = (stockData, filters, reportType = 'short',
                 // --- 2. DETAIL ROWS ---
                 qEntries.forEach(([quality, brands], qIdx) => {
                     let isFirstRowOfQuality = true;
-                    const totalRowsForQuality = brands.length;
+                    const totalRowsForQuality = brands.length + (hasQualSubTotals ? 1 : 0);
 
                     brands.forEach((ent, bIdx) => {
                         const row = [];
@@ -954,7 +956,7 @@ export const generateStockReportPDF = (stockData, filters, reportType = 'short',
 
                         if (bIdx === brands.length - 1) {
                             const isLastQualityOfProduct = qIdx === qEntries.length - 1;
-                            if (!isLastQualityOfProduct || !hasSubTotal) {
+                            if (!hasQualSubTotals && (!isLastQualityOfProduct || !hasSubTotal)) {
                                 boldBottomRowIndices.add(tableRows.length);
                             }
                             row.isQualityEnd = true;
@@ -963,6 +965,37 @@ export const generateStockReportPDF = (stockData, filters, reportType = 'short',
                         isFirstRowOfProduct = false;
                         isFirstRowOfQuality = false;
                     });
+
+                    // --- Quality Sub Total Row ---
+                    if (hasQualSubTotals) {
+                        const qualSubRow = [];
+                        qualSubRow.push({
+                            content: `${quality} Total`,
+                            styles: { fontStyle: 'bolditalic', halign: 'right', fillColor: [245, 245, 250] }
+                        });
+
+                        if (reportType === 'detailed') {
+                            const qTotalIHQty = brands.reduce((s, e) => s + (parseFloat(e.totalInHouseQuantity) || 0), 0);
+                            const qPktSize = parseFloat(brands[0]?.packetSize) || 0;
+                            const { whole: tW, remainder: tR } = calculatePktRemainderLocal(qTotalIHQty, qPktSize);
+                            qualSubRow.push({ content: `${tW}${tR !== 0 ? ` - ${Math.abs(tR)} kg` : ''}`, styles: { fontStyle: 'bold', halign: 'right', fillColor: [245, 245, 250] } });
+                            qualSubRow.push({ content: Math.round(qTotalIHQty).toLocaleString('en-US'), styles: { fontStyle: 'bold', halign: 'right', fillColor: [245, 245, 250] } });
+
+                            const qSaleQty = brands.reduce((s, e) => s + (parseFloat(e.saleQuantity) || 0), 0);
+                            const { whole: sW, remainder: sR } = calculatePktRemainderLocal(qSaleQty, qPktSize);
+                            qualSubRow.push({ content: `${sW}${sR !== 0 ? ` - ${Math.abs(sR)} kg` : ''}`, styles: { fontStyle: 'bold', halign: 'right', fillColor: [245, 245, 250] } });
+                            qualSubRow.push({ content: Math.round(qSaleQty).toLocaleString('en-US'), styles: { fontStyle: 'bold', halign: 'right', fillColor: [245, 245, 250] } });
+                        }
+
+                        const qCloseQty = brands.reduce((s, e) => s + (parseFloat(e.inHouseQuantity) || 0), 0);
+                        const qPktSize2 = parseFloat(brands[0]?.packetSize) || 0;
+                        const { whole: rW2, remainder: rR2 } = calculatePktRemainderLocal(qCloseQty, qPktSize2);
+                        qualSubRow.push({ content: `${rW2}${rR2 !== 0 ? ` - ${Math.abs(rR2)} kg` : ''}`, styles: { fontStyle: 'bold', halign: 'right', fillColor: [245, 245, 250] } });
+                        qualSubRow.push({ content: Math.round(qCloseQty).toLocaleString('en-US'), styles: { fontStyle: 'bold', halign: 'right', fillColor: [245, 245, 250] } });
+
+                        boldBottomRowIndices.add(tableRows.length);
+                        tableRows.push(qualSubRow);
+                    }
                 });
 
                 // --- 3. SUB TOTAL ROW ---

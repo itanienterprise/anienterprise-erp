@@ -536,6 +536,7 @@ const ReturnProduct = ({ currentUser }) => {
                         />
                     </div>
 
+                    {isAdmin && (
                     <div className="w-full md:w-1/4 flex justify-end z-10">
                         <button
                             onClick={() => {
@@ -559,6 +560,7 @@ const ReturnProduct = ({ currentUser }) => {
                             <span className="return-product-add-icon">+</span> Add New
                         </button>
                     </div>
+                    )}
                 </div>
             )}
 
@@ -882,7 +884,7 @@ const ReturnProduct = ({ currentUser }) => {
                                         <th className="return-product-table-header text-center">Quantity</th>
                                         <th className="return-product-table-header text-center">Bags</th>
                                         <th className="return-product-table-header text-right">Return Price</th>
-                                        <th className="return-product-table-header text-right">Actions</th>
+                                        {isAdmin && <th className="return-product-table-header text-right">Actions</th>}
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -927,6 +929,7 @@ const ReturnProduct = ({ currentUser }) => {
                                                     return '-';
                                                 })()}
                                             </td>
+                                            {isAdmin && (
                                             <td className="return-product-table-cell">
                                                 <div className="return-product-table-actions justify-end">
                                                     <button
@@ -943,11 +946,12 @@ const ReturnProduct = ({ currentUser }) => {
                                                     </button>
                                                 </div>
                                             </td>
+                                            )}
                                         </tr>
                                     ))}
                                     {filteredReturns.length === 0 && (
                                         <tr>
-                                            <td colSpan="8" className="py-20 text-center text-gray-400">
+                                            <td colSpan={isAdmin ? 9 : 8} className="py-20 text-center text-gray-400">
                                                 <RotateCcwIcon className="w-12 h-12 mx-auto mb-4 opacity-20" />
                                                 <p className="text-sm">No return records found</p>
                                             </td>
@@ -1018,6 +1022,7 @@ const ReturnProduct = ({ currentUser }) => {
                                                 )}
                                             </div>
 
+                                            {isAdmin && (
                                             <div className="flex items-center gap-2 mt-4 pt-4 border-t border-gray-100">
                                                 <button
                                                     onClick={(e) => { e.stopPropagation(); handleEdit(ret); }}
@@ -1032,6 +1037,7 @@ const ReturnProduct = ({ currentUser }) => {
                                                     <TrashIcon className="w-4 h-4" />
                                                 </button>
                                             </div>
+                                            )}
                                         </div>
                                     )}
                                 </div>
