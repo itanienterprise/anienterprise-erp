@@ -2660,67 +2660,6 @@ const SaleManagement = ({
                                 <input autoComplete="off" type="text" name="invoiceNo" value={formData.invoiceNo} readOnly placeholder="Auto-generated" className="sale-mgmt-input sale-mgmt-input-readonly cursor-default" />
                             </div>
 
-                            {/* Border Field: Importer */}
-                            {saleType === 'Border' && (
-                                <div className="sale-mgmt-input-group relative importer-dropdown-container">
-                                    <label className="sale-mgmt-label">Importer</label>
-                                    <div className="relative">
-                                        <input
-                                            type="text"
-                                            name="importer"
-                                            placeholder={formData.importer || "Search importer..."}
-                                            value={activeDropdown === 'importer' ? importerSearch : formData.importer}
-                                            readOnly={isFieldReadOnly(originalData?.importer)}
-                                            onChange={(e) => {
-                                                if (isFieldReadOnly(originalData?.importer)) return;
-                                                setImporterSearch(e.target.value);
-                                                setActiveDropdown('importer');
-                                                setHighlightedIndex(-1);
-                                                handleInputChange(e); // allow fallback text input
-                                            }}
-                                            autoComplete="off"
-                                            onFocus={() => {
-                                                if (isFieldReadOnly(originalData?.importer)) return;
-                                                setImporterSearch(formData.importer || '');
-                                                setActiveDropdown('importer');
-                                                setHighlightedIndex(-1);
-                                            }}
-                                            onKeyDown={(e) => !isFieldReadOnly(originalData?.importer) && handleDropdownKeyDown(e, 'importer', getFilteredImporters(), handleImporterSelect)}
-                                            className={`sale-mgmt-input pr-14 ${formData.importer ? 'placeholder:text-gray-900 placeholder:font-semibold' : 'placeholder:text-gray-400'} ${isFieldReadOnly(originalData?.importer) ? 'bg-gray-50' : ''}`}
-                                        />
-                                        <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-2">
-                                            {formData.importer && (
-                                                <button type="button" onClick={() => handleImporterSelect(null)} className="text-gray-400 hover:text-red-500">
-                                                    <XIcon className="w-4 h-4" />
-                                                </button>
-                                            )}
-                                            <button
-                                                type="button"
-                                                onClick={() => setActiveDropdown(activeDropdown === 'importer' ? null : 'importer')}
-                                                className="text-gray-300 hover:text-blue-500 transition-colors"
-                                            >
-                                                <ChevronDownIcon className={`w-4 h-4 transition-transform duration-200 ${activeDropdown === 'importer' ? 'rotate-180' : ''}`} />
-                                            </button>
-                                        </div>
-                                    </div>
-                                    {activeDropdown === 'importer' && getFilteredImporters().length > 0 && (
-                                        <div className="absolute z-[60] w-full mt-1 bg-white border border-gray-100 rounded-xl shadow-xl max-h-48 overflow-y-auto py-1">
-                                            {getFilteredImporters().map((importer, idx) => (
-                                                <button
-                                                    key={importer._id || `imp-${idx}`}
-                                                    type="button"
-                                                    onClick={() => handleImporterSelect(importer.name)}
-                                                    onMouseEnter={() => setHighlightedIndex(idx)}
-                                                    className={`w-full px-4 py-2 text-left text-sm transition-colors font-medium ${formData.importer === importer.name ? 'bg-blue-50 text-blue-700' : highlightedIndex === idx ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-blue-50'}`}
-                                                >
-                                                    {importer.name}
-                                                </button>
-                                            ))}
-                                        </div>
-                                    )}
-                                </div>
-                            )}
-
                             {saleType === 'Border' && (
                                 <div className="sale-mgmt-input-group relative lc-dropdown-container">
                                     <label className="sale-mgmt-label">LC No</label>
@@ -2777,6 +2716,67 @@ const SaleManagement = ({
                                                         <span className="font-bold">{lc.lcNo}</span>
                                                         <span className="text-[10px] text-gray-500">{lc.importerName} | {lc.productName}</span>
                                                     </div>
+                                                </button>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+
+                            {/* Border Field: Importer */}
+                            {saleType === 'Border' && (
+                                <div className="sale-mgmt-input-group relative importer-dropdown-container">
+                                    <label className="sale-mgmt-label">Importer</label>
+                                    <div className="relative">
+                                        <input
+                                            type="text"
+                                            name="importer"
+                                            placeholder={formData.importer || "Search importer..."}
+                                            value={activeDropdown === 'importer' ? importerSearch : formData.importer}
+                                            readOnly={isFieldReadOnly(originalData?.importer)}
+                                            onChange={(e) => {
+                                                if (isFieldReadOnly(originalData?.importer)) return;
+                                                setImporterSearch(e.target.value);
+                                                setActiveDropdown('importer');
+                                                setHighlightedIndex(-1);
+                                                handleInputChange(e); // allow fallback text input
+                                            }}
+                                            autoComplete="off"
+                                            onFocus={() => {
+                                                if (isFieldReadOnly(originalData?.importer)) return;
+                                                setImporterSearch(formData.importer || '');
+                                                setActiveDropdown('importer');
+                                                setHighlightedIndex(-1);
+                                            }}
+                                            onKeyDown={(e) => !isFieldReadOnly(originalData?.importer) && handleDropdownKeyDown(e, 'importer', getFilteredImporters(), handleImporterSelect)}
+                                            className={`sale-mgmt-input pr-14 ${formData.importer ? 'placeholder:text-gray-900 placeholder:font-semibold' : 'placeholder:text-gray-400'} ${isFieldReadOnly(originalData?.importer) ? 'bg-gray-50' : ''}`}
+                                        />
+                                        <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-2">
+                                            {formData.importer && (
+                                                <button type="button" onClick={() => handleImporterSelect(null)} className="text-gray-400 hover:text-red-500">
+                                                    <XIcon className="w-4 h-4" />
+                                                </button>
+                                            )}
+                                            <button
+                                                type="button"
+                                                onClick={() => setActiveDropdown(activeDropdown === 'importer' ? null : 'importer')}
+                                                className="text-gray-300 hover:text-blue-500 transition-colors"
+                                            >
+                                                <ChevronDownIcon className={`w-4 h-4 transition-transform duration-200 ${activeDropdown === 'importer' ? 'rotate-180' : ''}`} />
+                                            </button>
+                                        </div>
+                                    </div>
+                                    {activeDropdown === 'importer' && getFilteredImporters().length > 0 && (
+                                        <div className="absolute z-[60] w-full mt-1 bg-white border border-gray-100 rounded-xl shadow-xl max-h-48 overflow-y-auto py-1">
+                                            {getFilteredImporters().map((importer, idx) => (
+                                                <button
+                                                    key={importer._id || `imp-${idx}`}
+                                                    type="button"
+                                                    onClick={() => handleImporterSelect(importer.name)}
+                                                    onMouseEnter={() => setHighlightedIndex(idx)}
+                                                    className={`w-full px-4 py-2 text-left text-sm transition-colors font-medium ${formData.importer === importer.name ? 'bg-blue-50 text-blue-700' : highlightedIndex === idx ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-blue-50'}`}
+                                                >
+                                                    {importer.name}
                                                 </button>
                                             ))}
                                         </div>

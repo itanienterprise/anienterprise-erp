@@ -247,8 +247,8 @@ const Insurance = ({ onDeleteConfirm }) => {
             const companyLcs = insuranceTotals[viewData.companyName]?.lcs || [];
             return companyLcs.filter(lc =>
                 (lc.lcNo || '').toLowerCase().includes(historySearchQuery.toLowerCase()) ||
-                (lc.beneficiary || '').toLowerCase().includes(historySearchQuery.toLowerCase())
-            ).sort((a, b) => new Date(a.lcDate) - new Date(b.lcDate));
+                (lc.exporterName || '').toLowerCase().includes(historySearchQuery.toLowerCase())
+            ).sort((a, b) => new Date(a.openingDate) - new Date(b.openingDate));
         }
     }, [viewData, historySearchQuery, activeHistoryTab, insuranceTotals]);
 
@@ -930,6 +930,7 @@ const Insurance = ({ onDeleteConfirm }) => {
                                                     <th className="px-6 py-4 text-[11px] font-bold text-gray-500 uppercase tracking-wider">LC Date</th>
                                                     <th className="px-6 py-4 text-[11px] font-bold text-gray-500 uppercase tracking-wider">LC Number</th>
                                                     <th className="px-6 py-4 text-[11px] font-bold text-gray-500 uppercase tracking-wider">Beneficiary</th>
+                                                    <th className="px-6 py-4 text-[11px] font-bold text-gray-500 uppercase tracking-wider text-right">Gross Premium</th>
                                                     <th className="px-6 py-4 text-[11px] font-bold text-gray-500 uppercase tracking-wider text-right">Net Premium</th>
                                                     <th className="px-6 py-4 text-[11px] font-bold text-gray-500 uppercase tracking-wider text-right">Exp. Return</th>
                                                 </tr>
@@ -958,16 +959,17 @@ const Insurance = ({ onDeleteConfirm }) => {
                                                         </tr>
                                                     ) : (
                                                         <tr key={idx} className="hover:bg-gray-50/50 transition-colors">
-                                                            <td className="px-6 py-4 text-xs font-medium text-gray-600">{formatDate(item.lcDate)}</td>
+                                                            <td className="px-6 py-4 text-xs font-medium text-gray-600">{formatDate(item.openingDate)}</td>
                                                             <td className="px-6 py-4 text-xs font-bold text-blue-600">{item.lcNo}</td>
-                                                            <td className="px-6 py-4 text-xs text-gray-700 truncate max-w-[200px]">{item.beneficiary}</td>
+                                                            <td className="px-6 py-4 text-xs text-gray-700 truncate max-w-[200px]">{item.exporterName}</td>
+                                                            <td className="px-6 py-4 text-xs font-black text-blue-600 text-right">৳{parseFloat(item.grossPremium || 0).toLocaleString('en-US')}</td>
                                                             <td className="px-6 py-4 text-xs font-black text-rose-600 text-right">৳{parseFloat(item.netPremium || 0).toLocaleString('en-US')}</td>
                                                             <td className="px-6 py-4 text-xs font-black text-emerald-600 text-right">৳{parseFloat(item.expectedReturnAmount || 0).toLocaleString('en-IN')}</td>
                                                         </tr>
                                                     )
                                                 ))
                                             ) : (
-                                                <tr><td colSpan={activeHistoryTab === 'payments' ? 7 : 5} className="px-6 py-12 text-center text-gray-400 text-sm italic">No records found matching your search.</td></tr>
+                                                <tr><td colSpan={activeHistoryTab === 'payments' ? 7 : 6} className="px-6 py-12 text-center text-gray-400 text-sm italic">No records found matching your search.</td></tr>
                                             )}
                                         </tbody>
                                     </table>
@@ -980,7 +982,7 @@ const Insurance = ({ onDeleteConfirm }) => {
                                             <div key={idx} className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm space-y-4">
                                                 <div className="flex justify-between items-start">
                                                     <div className="space-y-1">
-                                                        <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">{activeHistoryTab === 'payments' ? formatDate(item.date) : formatDate(item.lcDate)}</p>
+                                                        <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">{activeHistoryTab === 'payments' ? formatDate(item.date) : formatDate(item.openingDate)}</p>
                                                         <p className="text-sm font-black text-gray-900 uppercase tracking-tight">{activeHistoryTab === 'payments' ? item.method : item.lcNo}</p>
                                                     </div>
                                                     {activeHistoryTab === 'payments' && (
@@ -1010,7 +1012,11 @@ const Insurance = ({ onDeleteConfirm }) => {
                                                         <>
                                                             <div className="flex justify-between">
                                                                 <span className="text-[11px] font-black text-gray-400 uppercase tracking-widest">Beneficiary</span>
-                                                                <span className="text-sm font-bold text-gray-700 truncate ml-4 text-right">{item.beneficiary}</span>
+                                                                <span className="text-sm font-bold text-gray-700 truncate ml-4 text-right">{item.exporterName}</span>
+                                                            </div>
+                                                            <div className="flex justify-between">
+                                                                <span className="text-[11px] font-black text-gray-400 uppercase tracking-widest">Gross Premium</span>
+                                                                <span className="text-sm font-black text-blue-600">৳{parseFloat(item.grossPremium || 0).toLocaleString('en-IN')}</span>
                                                             </div>
                                                             <div className="flex justify-between">
                                                                 <span className="text-[11px] font-black text-gray-400 uppercase tracking-widest">Net Premium</span>

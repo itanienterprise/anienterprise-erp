@@ -25,7 +25,7 @@ import axios from '../../../utils/api';
 import { ChevronDownIcon } from '../../Icons';
 import { calculatePktRemainder } from '../../../utils/stockHelpers';
 
-const WarehouseManagement = ({ currentUser }) => {
+const WarehouseManagement = ({ currentUser, damages, addNotification }) => {
     const isAdmin = currentUser?.role?.toLowerCase() === 'admin';
     const [activeTab, setActiveTab] = useState('stock'); // 'stock' or 'warehouses'
     const [showWarehouseForm, setShowWarehouseForm] = useState(false);
@@ -690,7 +690,28 @@ const WarehouseManagement = ({ currentUser }) => {
             }
         });
 
-        // 3. Final cleanup: Ensure no negatives — all categories represent physical stock
+        // 3. Subtract damages
+        if (damages && Array.isArray(damages)) {
+            damages.forEach(d => {
+                const whName = (d.warehouse || '').trim();
+                const prodName = (d.productName || '').trim();
+                const brandName = (d.brand || '-').trim();
+
+                if (!groups[whName] || !groups[whName].products[prodName]) return;
+
+                const dQty = parseFloat(d.quantity) || 0;
+                // Try exact brand match, then fallback to '-' for single-entry products
+                const bObj = groups[whName].products[prodName].brands[brandName] || groups[whName].products[prodName].brands['-'];
+                
+                if (bObj) {
+                    const pktSize = parseFloat(bObj.packetSize) || 0;
+                    bObj.whQty -= dQty;
+                    if (pktSize > 0) bObj.whPkt -= (dQty / pktSize);
+                }
+            });
+        }
+
+        // 4. Final cleanup: Ensure no negatives — all categories represent physical stock
         Object.values(groups).forEach(wh => {
             Object.values(wh.products).forEach(p => {
                 Object.values(p.brands).forEach(b => {

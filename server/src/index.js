@@ -58,6 +58,7 @@ const Stock = require('./models/Stock');
 const Product = require('./models/Product');
 const Customer = require('./models/Customer');
 const Warehouse = require('./models/Warehouse');
+const Damage = require('./models/Damage');
 const Sale = require('./models/Sale');
 const Return = require('./models/Return');
 const User = require('./models/User');
@@ -585,6 +586,52 @@ apiRouter.get('/api/customers/:id', async (req, res) => {
 
     const decrypted = decryptData(record.data);
     res.json({ ...decrypted, _id: record._id, createdAt: record.createdAt });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// Damage APIs
+apiRouter.post('/api/damages', async (req, res) => {
+  try {
+    const encryptedData = encryptData(req.body);
+    const newDamage = new Damage({ data: encryptedData });
+    const savedDamage = await newDamage.save();
+    res.status(201).json({ ...req.body, _id: savedDamage._id, createdAt: savedDamage.createdAt });
+  } catch (err) {
+    res.status(400).json({ message: err.message });
+  }
+});
+
+apiRouter.delete('/api/damages/:id', async (req, res) => {
+  try {
+    const deletedDamage = await Damage.findByIdAndDelete(req.params.id);
+    if (!deletedDamage) return res.status(404).json({ message: 'Damage record not found' });
+    res.json({ message: 'Damage record deleted' });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+apiRouter.put('/api/damages/:id', async (req, res) => {
+  try {
+    const encryptedData = encryptData(req.body);
+    const updatedDamage = await Damage.findByIdAndUpdate(req.params.id, { data: encryptedData }, { returnDocument: 'after' });
+    if (!updatedDamage) return res.status(404).json({ message: 'Damage record not found' });
+    res.json({ ...req.body, _id: updatedDamage._id, createdAt: updatedDamage.createdAt });
+  } catch (err) {
+    res.status(400).json({ message: err.message });
+  }
+});
+
+apiRouter.get('/api/damages', async (req, res) => {
+  try {
+    const records = await Damage.find().sort({ createdAt: -1 });
+    const decrypted = records.map(r => {
+      let d = decryptData(r.data);
+      return { ...d, _id: r._id, createdAt: r.createdAt };
+    });
+    res.json(decrypted);
   } catch (err) {
     res.status(500).json({ message: err.message });
   }

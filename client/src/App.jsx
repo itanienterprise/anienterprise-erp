@@ -21,6 +21,7 @@ import Customer from './components/modules/Customer/Customer';
 import LCReceive from './components/modules/LCReceive/LCReceive';
 import CnFPayment from './components/modules/CnF/CnFPayment';
 import WarehouseManagement from './components/modules/Warehouse/WarehouseManagement';
+import DamageManagement from './components/modules/Warehouse/DamageManagement';
 import StockManagement from "./components/modules/StockManagement/StockManagement";
 import StockReport from './components/modules/StockManagement/StockReport';
 import LCReport from './components/modules/LCReceive/LCReport';
@@ -324,7 +325,7 @@ function App() {
   });
   const [stockDropdownOpen, setStockDropdownOpen] = useState(() => {
     const initialView = localStorage.getItem('currentView') || 'dashboard';
-    return initialView.includes('stock') || initialView === 'products-section' || initialView === 'warehouse-section';
+    return initialView.includes('stock') || initialView === 'products-section' || initialView === 'warehouse-section' || initialView === 'damage-section';
   });
   const [saleDropdownOpen, setSaleDropdownOpen] = useState(() => {
     const initialView = localStorage.getItem('currentView') || 'dashboard';
@@ -444,6 +445,7 @@ function App() {
   const [filteredSalesForReport, setFilteredSalesForReport] = useState([]);
   const [saleFilters, setSaleFilters] = useState({ startDate: '', endDate: '', companyName: '', invoiceNo: '', port: '', productName: '', indCnf: '', bdCnf: '' });
   const [products, setProducts] = useState([]);
+  const [damages, setDamages] = useState([]);
 
 
   const initialLcFilterState = {
@@ -580,6 +582,11 @@ function App() {
       fetchCnFs();
     } else if (currentView === 'port-section') {
       fetchPorts();
+    } else if (currentView === 'warehouse-section' || currentView === 'damage-section') {
+      fetchWarehouses();
+      fetchProducts();
+      fetchSales(); // Fetch sales data
+      fetchDamages();
     } else if (currentView === 'stock-section' || currentView === 'lc-entry-section' || currentView === 'general-sale-section' || currentView === 'border-sale-section') {
       fetchStockRecords();
       fetchWarehouses(); // Fetch warehouse data
@@ -1033,6 +1040,7 @@ function App() {
             salePacket,
             saleQuantity,
             productName: item.productName || item.product,
+            brand: item.brand || item.quality || '',
             packetSize: item.packetSize || item.size || 0,
             recordType: 'stock',
           };
@@ -1055,6 +1063,15 @@ function App() {
       }
     } catch (error) {
       console.error('Error fetching sales:', error);
+    }
+  };
+
+  const fetchDamages = async () => {
+    try {
+      const response = await axios.get(`${API_BASE_URL}/api/damages`);
+      setDamages(Array.isArray(response.data) ? response.data : []);
+    } catch (error) {
+      console.error('Error fetching damages:', error);
     }
   };
 
@@ -1406,7 +1423,23 @@ function App() {
         );
       case 'warehouse-section':
         return (
-          <WarehouseManagement currentUser={currentUser} />
+          <WarehouseManagement 
+            currentUser={currentUser} 
+            damages={damages}
+            addNotification={addNotification} 
+          />
+        );
+      case 'damage-section':
+        return (
+          <DamageManagement 
+            currentUser={currentUser} 
+            products={products} 
+            warehouseData={warehouseData} 
+            salesRecords={salesRecords}
+            damages={damages}
+            fetchDamages={fetchDamages}
+            addNotification={addNotification} 
+          />
         );
       case 'general-sale-section':
         return (
@@ -1780,7 +1813,7 @@ function App() {
           <div>
             <button
               onClick={() => setStockDropdownOpen(!stockDropdownOpen)}
-              className={`w-full flex items-center justify-between px-4 py-2 rounded-lg transition-all ${currentView.includes('stock') || currentView === 'products-section' ? 'bg-blue-50 text-blue-600 shadow-sm' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'}`}
+              className={`w-full flex items-center justify-between px-4 py-2 rounded-lg transition-all ${currentView.includes('stock') || currentView === 'products-section' || currentView === 'warehouse-section' || currentView === 'damage-section' ? 'bg-blue-50 text-blue-600 shadow-sm' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'}`}
             >
               <div className="flex items-center">
                 <ShoppingCartIcon className="w-5 h-5 mr-3" />
@@ -1812,7 +1845,14 @@ function App() {
                   className={`w-full flex flex-row items-center py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'warehouse-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'}`}
                 >
                   <HomeIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
-                  <span>WareHouse</span>
+                  <span>Warehouse</span>
+                </button>
+                <button
+                  onClick={() => { setCurrentView('damage-section'); setSidebarOpen(false); }}
+                  className={`w-full flex flex-row items-center py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'damage-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'}`}
+                >
+                  <TrashIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
+                  <span>Damage</span>
                 </button>
               </div>
             </div>
