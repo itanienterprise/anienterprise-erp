@@ -393,6 +393,31 @@ const WarehouseManagement = ({ currentUser, damages, addNotification }) => {
             }
         });
 
+        // 1.2 Subtract damages from global totals
+        if (damages && Array.isArray(damages)) {
+            damages.forEach(d => {
+                const prodName = (d.productName || '').trim().toLowerCase();
+                const brandName = (d.brand || '').trim().toLowerCase();
+                const brandKey = `${prodName}|${brandName}`;
+                
+                if (brands[brandKey]) {
+                    const dQty = parseFloat(d.quantity) || 0;
+                    const pktSize = brands[brandKey].packetSize || 0;
+                    brands[brandKey].inhouseQty -= dQty;
+                    if (pktSize > 0) brands[brandKey].inhousePkt -= (dQty / pktSize);
+                } else if (brandName === '') {
+                    // Fallback for single-entry products
+                    const fallbackKey = `${prodName}|${prodName}`;
+                    if (brands[fallbackKey]) {
+                        const dQty = parseFloat(d.quantity) || 0;
+                        const pktSize = brands[fallbackKey].packetSize || 0;
+                        brands[fallbackKey].inhouseQty -= dQty;
+                        if (pktSize > 0) brands[fallbackKey].inhousePkt -= (dQty / pktSize);
+                    }
+                }
+            });
+        }
+
         // Ensure no negatives — all categories represent physical stock
         Object.keys(brands).forEach(k => {
             brands[k].inhouseQty = Math.max(0, brands[k].inhouseQty);

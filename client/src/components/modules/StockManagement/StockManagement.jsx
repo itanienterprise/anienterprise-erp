@@ -59,6 +59,7 @@ const StockManagement = ({
     setStockFilters,
     salesRecords,
     fetchSales,
+    damages,
     setShowProductHistoryReport,
     showProductHistoryReport,
     setProductHistoryReportData
@@ -447,12 +448,26 @@ const StockManagement = ({
         // 2. Calculate Sale History (already flattened in activeSaleHistory)
         const saleFlattened = activeSaleHistory;
 
+        // 3. Filter Damage History
+        const damageFlattened = (damages || []).filter(d => {
+            const pMatch = (d.productName || '').trim().toLowerCase() === productName;
+            const bMatch = !historyFilters.brand || (d.brand || '').trim().toLowerCase() === historyFilters.brand.toLowerCase();
+            return pMatch && bMatch;
+        }).map(d => ({
+            ...d,
+            itemBrand: d.brand,
+            itemQty: d.quantity,
+            itemPacket: d.packet,
+            type: 'damage'
+        }));
+
         setProductHistoryReportData({
             productName: viewRecord.data.productName,
             category: viewRecord.data.category,
             filters: historyFilters,
             purchaseHistory: purchaseFlattened,
-            saleHistory: saleFlattened
+            saleHistory: saleFlattened,
+            damageHistory: damageFlattened
         });
         setShowProductHistoryReport(true);
     };
@@ -1788,8 +1803,8 @@ const StockManagement = ({
     // --- Calculations (Memoized) ---
 
     const stockData = useMemo(() => {
-        return calculateStockData(stockRecords, stockFilters, stockSearchQuery, warehouseData, salesRecords, products);
-    }, [stockRecords, stockFilters, stockSearchQuery, warehouseData, salesRecords, products]);
+        return calculateStockData(stockRecords, stockFilters, stockSearchQuery, warehouseData, salesRecords, products, damages);
+    }, [stockRecords, stockFilters, stockSearchQuery, warehouseData, salesRecords, products, damages]);
 
     const isStockGroupSelected = (productName) => {
         const groupItems = stockRecords.filter(r => r.productName === productName);
@@ -1835,6 +1850,7 @@ const StockManagement = ({
         totalSaleQty,
         totalSalePktDecimalKg,
         totalShortage,
+        totalDamageQty,
         unit
     } = stockData;
 
@@ -2129,7 +2145,7 @@ const StockManagement = ({
                         </div>
                     </div>
                     {/* Summary Cards */}
-                    <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3 md:gap-4 mb-6">
+                    <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-3 md:gap-4 mb-6">
                         {[
                             {
                                 label: 'TOTAL BAG',
@@ -2171,6 +2187,11 @@ const StockManagement = ({
                                 label: 'SHORTAGE',
                                 value: `${Math.round(totalShortage || 0).toLocaleString('en-IN')} ${unit}`,
                                 bgColor: 'bg-rose-50/50', borderColor: 'border-rose-100', textColor: 'text-rose-700', labelColor: 'text-rose-600'
+                            },
+                            {
+                                label: 'DAMAGE',
+                                value: `${Math.round(totalDamageQty || 0).toLocaleString('en-IN')} ${unit}`,
+                                bgColor: 'bg-red-50/50', borderColor: 'border-red-100', textColor: 'text-red-700', labelColor: 'text-red-600'
                             },
                         ].map((card, i) => (
                             <div key={i} className={`bg-white border ${card.bgColor} ${card.borderColor} p-3 md:p-4 rounded-2xl shadow-sm transition-all hover:shadow-md hover:scale-[1.02] flex flex-col justify-between h-full`}>

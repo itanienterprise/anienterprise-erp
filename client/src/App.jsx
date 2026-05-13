@@ -235,7 +235,15 @@ function App() {
   const unreadCount = notifications.filter(n => n.isUnread).length;
 
   // --- Pending "Requested" entries indicator for sidebar ---
-  const [pendingModules, setPendingModules] = useState({ lc: false, stock: false, sale: false });
+  const [pendingModules, setPendingModules] = useState({ 
+    lc: false, 
+    stock: false, 
+    sale: false,
+    lcReceive: false,
+    stockManagement: false,
+    generalSale: false,
+    borderSale: false
+  });
 
   const fetchPendingEntries = async () => {
     if (!isAuthenticated) return;
@@ -247,13 +255,31 @@ function App() {
       const stockData = Array.isArray(stockRes.data) ? stockRes.data : [];
       const salesData = Array.isArray(salesRes.data) ? salesRes.data : [];
 
-      const hasRequestedStock = stockData.some(item => (item.status || '').toLowerCase() === 'requested');
-      const hasRequestedSale = salesData.some(item => (item.status || '').toLowerCase() === 'requested');
+      const hasRequestedLC = stockData.some(item => (item.status || '').toLowerCase() === 'requested' && !!item.lcNo);
+      const hasRequestedStockMgmt = stockData.some(item => (item.status || '').toLowerCase() === 'requested' && !item.lcNo);
+      
+      const hasRequestedGeneralSale = salesData.some(item => {
+        const status = (item.status || '').toLowerCase();
+        const type = (item.saleType || '').toLowerCase();
+        const isGeneral = type === 'general' || (item.invoiceNo || '').startsWith('GS');
+        return status === 'requested' && isGeneral;
+      });
+
+      const hasRequestedBorderSale = salesData.some(item => {
+        const status = (item.status || '').toLowerCase();
+        const type = (item.saleType || '').toLowerCase();
+        const isBorder = type === 'border' || (item.invoiceNo || '').startsWith('BS');
+        return status === 'requested' && isBorder;
+      });
 
       setPendingModules({
-        lc: hasRequestedStock,
-        stock: hasRequestedStock,
-        sale: hasRequestedSale
+        lc: hasRequestedLC,
+        stock: hasRequestedStockMgmt,
+        sale: hasRequestedGeneralSale || hasRequestedBorderSale,
+        lcReceive: hasRequestedLC,
+        stockManagement: hasRequestedStockMgmt,
+        generalSale: hasRequestedGeneralSale,
+        borderSale: hasRequestedBorderSale
       });
     } catch (err) {
       console.error('Error checking pending entries:', err);
@@ -595,6 +621,7 @@ function App() {
       fetchImporters(); // Fetch importers to populate the dropdown
       fetchExporters(); // Fetch exporters to populate the dropdown
       fetchProducts(); // Fetch products to populate the dropdown
+      fetchDamages(); // Ensure damages are available for stock calculations
     } else if (currentView === 'products-section') {
       fetchProducts();
     }
@@ -794,7 +821,7 @@ function App() {
           setSelectedItems(new Set());
         } else {
           // Single delete
-          await fetch(`${API_BASE_URL}/api/${endpoint}/${id}`, { method: 'DELETE' });
+          await axios.delete(`${API_BASE_URL}/api/${endpoint}/${id}`);
 
           if (type === 'sales') {
             if (extraData?.customerId && (extraData?.invoiceNo || extraData?.lcNo)) {
@@ -1007,9 +1034,21 @@ function App() {
       const rawStockData = Array.isArray(stockRes.data) ? stockRes.data : [];
 
       // 1. Warehouse records are now plain objects from server
-      const allDecryptedWh = rawWhData.map(item => ({
-        ...item, recordType: 'warehouse'
-      }));
+      const allDecryptedWh = rawWhData.map(item => {
+        const whName = (item.whName || item.warehouse || item.name || '').trim();
+        const prodName = (item.product || item.productName || '').trim();
+        const brand = (item.brand || '').trim();
+        
+        return {
+          ...item,
+          whName,
+          productName: prodName,
+          brand,
+          whPkt: parseFloat(item.whPkt || 0),
+          whQty: parseFloat(item.whQty || 0),
+          recordType: 'warehouse'
+        };
+      });
 
       // 2. Extract Warehouse-Specific Stock from Stock Records (exclude requested/rejected)
       const decryptedStock = rawStockData.map(item => {
@@ -1018,21 +1057,20 @@ function App() {
           if (itemStatus.includes('requested') || itemStatus.includes('rejected')) return null;
 
           // item is already the decrypted object
-          const rawWh = item.whName || item.warehouse || '';
+          const rawWh = (item.whName || item.warehouse || '').trim();
+          const whName = rawWh || 'General / In Stock';
 
-          if (!rawWh) return null;
-
-          const inhousePkt = item.inhousePkt !== undefined && item.inhousePkt !== null ? item.inhousePkt : 0;
-          const inhouseQty = item.inhouseQty !== undefined && item.inhouseQty !== null ? item.inhouseQty : 0;
-          const whPkt = item.whPkt !== undefined && item.whPkt !== null ? item.whPkt : 0;
-          const whQty = item.whQty !== undefined && item.whQty !== null ? item.whQty : 0;
-          const salePacket = item.salePacket !== undefined && item.salePacket !== null ? item.salePacket : 0;
-          const saleQuantity = item.saleQuantity !== undefined && item.saleQuantity !== null ? item.saleQuantity : 0;
+          const inhousePkt = parseFloat(item.inHousePacket !== undefined ? item.inHousePacket : (item.inhousePkt || 0));
+          const inhouseQty = parseFloat(item.inHouseQuantity !== undefined ? item.inHouseQuantity : (item.inhouseQty || 0));
+          const whPkt = item.whPkt !== undefined && item.whPkt !== null ? parseFloat(item.whPkt) : inhousePkt;
+          const whQty = item.whQty !== undefined && item.whQty !== null ? parseFloat(item.whQty) : inhouseQty;
+          const salePacket = parseFloat(item.salePacket || 0);
+          const saleQuantity = parseFloat(item.saleQuantity || 0);
 
           return {
             ...item,
             _id: item._id,
-            whName: rawWh,
+            whName,
             inhousePkt,
             inhouseQty,
             whPkt,
@@ -1381,9 +1419,11 @@ function App() {
             setStockFilters={setStockFilters}
             salesRecords={salesRecords}
             fetchSales={fetchSales}
+            damages={damages}
             setShowProductHistoryReport={setShowProductHistoryReport}
             showProductHistoryReport={showProductHistoryReport}
             setProductHistoryReportData={setProductHistoryReportData}
+            refreshPendingIndicators={fetchPendingEntries}
           />
         );
       case 'products-section':
@@ -1439,6 +1479,7 @@ function App() {
             damages={damages}
             fetchDamages={fetchDamages}
             addNotification={addNotification} 
+            refreshPendingIndicators={fetchPendingEntries}
           />
         );
       case 'general-sale-section':
@@ -1526,24 +1567,29 @@ function App() {
       case 'lc-expense-section':
         return (
           <LCExpense 
+            key={refreshKey}
             currentUser={currentUser}
             addNotification={addNotification}
-            onDeleteConfirm={handleDelete}
+            onDeleteConfirm={(data) => handleDelete(data.type, data.id, data.isBulk, data.extraData)}
             refreshKey={refreshKey}
           />
         );
       case 'lc-management-section':
         return <LCManagement addNotification={addNotification} currentUser={currentUser} />;
       case 'return-product-section':
-        return <ReturnProduct currentUser={currentUser} />;
+        return <ReturnProduct currentUser={currentUser} refreshPendingIndicators={fetchPendingEntries} />;
       default:
         return null;
     }
   };
 
+  const getGlobalStockData = () => {
+    return calculateStockData(stockRecords, stockFilters, '', warehouseData, salesRecords, products, damages);
+  };
+
   const stockData = useMemo(() => {
-    return calculateStockData(stockRecords, stockFilters, '', warehouseData, salesRecords, products);
-  }, [stockRecords, stockFilters, warehouseData, salesRecords, products]);
+    return getGlobalStockData();
+  }, [stockRecords, stockFilters, warehouseData, salesRecords, products, damages]);
 
   if (isCheckingSession) {
     return (
@@ -1801,10 +1847,13 @@ function App() {
                 </button>
                 <button
                   onClick={() => { setCurrentView('lc-entry-section'); setSidebarOpen(false); }}
-                  className={`w-full flex flex-row items-center py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'lc-entry-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'}`}
+                  className={`w-full flex items-center justify-between py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'lc-entry-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'}`}
                 >
-                  <FileTextIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
-                  <span>LC Receive</span>
+                  <div className="flex items-center">
+                    <FileTextIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
+                    <span>LC Receive</span>
+                  </div>
+                  {pendingModules.lcReceive && <span className="w-1.5 h-1.5 bg-red-500 rounded-full flex-shrink-0 shadow-[0_0_4px_rgba(239,68,68,0.6)] animate-pulse" />}
                 </button>
               </div>
             )}
@@ -1835,10 +1884,13 @@ function App() {
                 </button>
                 <button
                   onClick={() => { setCurrentView('stock-section'); setSidebarOpen(false); }}
-                  className={`w-full flex flex-row items-center py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'stock-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'}`}
+                  className={`w-full flex items-center justify-between py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'stock-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'}`}
                 >
-                  <BarChartIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
-                  <span>Stock Management</span>
+                  <div className="flex items-center">
+                    <BarChartIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
+                    <span>Stock Management</span>
+                  </div>
+                  {pendingModules.stockManagement && <span className="w-1.5 h-1.5 bg-red-500 rounded-full flex-shrink-0 shadow-[0_0_4px_rgba(239,68,68,0.6)] animate-pulse" />}
                 </button>
                 <button
                   onClick={() => { setCurrentView('warehouse-section'); setSidebarOpen(false); }}
@@ -1906,17 +1958,23 @@ function App() {
               <div className="pl-7 pr-2 space-y-1">
                 <button
                   onClick={() => { setCurrentView('general-sale-section'); setSidebarOpen(false); }}
-                  className={`w-full flex flex-row items-center py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'general-sale-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'}`}
+                  className={`w-full flex items-center justify-between py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'general-sale-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'}`}
                 >
-                  <DollarSignIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
-                  <span>General Sale</span>
+                  <div className="flex items-center">
+                    <DollarSignIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
+                    <span>General Sale</span>
+                  </div>
+                  {pendingModules.generalSale && <span className="w-1.5 h-1.5 bg-red-500 rounded-full flex-shrink-0 shadow-[0_0_4px_rgba(239,68,68,0.6)] animate-pulse" />}
                 </button>
                 <button
                   onClick={() => { setCurrentView('border-sale-section'); setSidebarOpen(false); }}
-                  className={`w-full flex flex-row items-center py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'border-sale-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'}`}
+                  className={`w-full flex items-center justify-between py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'border-sale-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'}`}
                 >
-                  <TrendingUpIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
-                  <span>Border Sale</span>
+                  <div className="flex items-center">
+                    <TrendingUpIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
+                    <span>Border Sale</span>
+                  </div>
+                  {pendingModules.borderSale && <span className="w-1.5 h-1.5 bg-red-500 rounded-full flex-shrink-0 shadow-[0_0_4px_rgba(239,68,68,0.6)] animate-pulse" />}
                 </button>
                 <button
                   onClick={() => { setCurrentView('return-product-section'); setSidebarOpen(false); }}
@@ -2041,6 +2099,7 @@ function App() {
         stockData={stockData}
         salesRecords={salesRecords}
         products={products}
+        damages={damages}
       />
 
       {/* Product History Report Modal */}

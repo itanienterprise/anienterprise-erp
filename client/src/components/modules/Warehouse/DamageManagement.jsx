@@ -31,7 +31,7 @@ const DamageManagement = ({ currentUser, products, warehouseData, salesRecords, 
     const [productSearch, setProductSearch] = useState('');
     const [brandSearch, setBrandSearch] = useState('');
     const [warehouseSearch, setWarehouseSearch] = useState('');
-    
+
     const productRef = useRef(null);
     const brandRef = useRef(null);
     const warehouseRef = useRef(null);
@@ -55,25 +55,31 @@ const DamageManagement = ({ currentUser, products, warehouseData, salesRecords, 
     }, [formData.productName, products]);
 
     const currentStock = useMemo(() => {
-        if (!formData.productName || !formData.warehouse) return 0;
-        
+        if (!formData.productName || !formData.warehouse) return null; // Return null to indicate missing selection
+
         const targetWH = formData.warehouse.trim().toLowerCase();
         const targetProd = formData.productName.trim().toLowerCase();
         const targetBrand = (formData.brand || '').trim().toLowerCase();
+
+        // Standardize "General / In Stock" name matching
+        const isGeneralWH = targetWH === 'general / in stock' || targetWH === '';
 
         // 1. Sum physical warehouse stock from warehouseData
         const matches = warehouseData?.filter(w => {
             const wh = (w.whName || w.warehouse || w.name || '').trim().toLowerCase();
             const prod = (w.productName || w.product || '').trim().toLowerCase();
             const brand = (w.brand || w.quality || '').trim().toLowerCase();
-            
-            const whMatch = wh === targetWH;
+
+            const whMatch = wh === targetWH || (isGeneralWH && (wh === '' || wh === 'general / in stock'));
             const prodMatch = prod === targetProd;
-            const brandMatch = !targetBrand || brand === targetBrand || (targetBrand === '' && (brand === '' || brand === '-'));
-            
+
+            // Fixed brand match: if targetBrand is empty, sum ALL brands.
+            // If targetBrand is specified, match it exactly, OR match '-' if item has no brand.
+            const brandMatch = !targetBrand || brand === targetBrand || (brand === '-' && targetBrand === '');
+
             return whMatch && prodMatch && brandMatch;
         });
-        
+
         let physicalStock = matches?.reduce((sum, m) => sum + (parseFloat(m.whQty) || 0), 0) || 0;
 
         // 2. Subtract sales matching this specific warehouse + product + brand
@@ -92,9 +98,9 @@ const DamageManagement = ({ currentUser, products, warehouseData, salesRecords, 
                             const whName = (entry.warehouseName || '').trim().toLowerCase();
                             const brandName = (entry.brand || entry.quality || '').trim().toLowerCase();
 
-                            if (whName === targetWH) {
-                                // Match brand if provided, otherwise assume it matches (or match against empty)
-                                const brandMatch = !targetBrand || brandName === targetBrand || (targetBrand === '' && (brandName === '' || brandName === '-'));
+                            const whMatch = whName === targetWH || (isGeneralWH && (whName === '' || whName === 'general / in stock'));
+                            if (whMatch) {
+                                const brandMatch = !targetBrand || brandName === targetBrand || (brandName === '-' && targetBrand === '') || (brandName === '' && targetBrand === '');
                                 if (brandMatch) {
                                     totalSales += parseFloat(entry.originalQuantity || entry.quantity) || 0;
                                 }
@@ -115,8 +121,9 @@ const DamageManagement = ({ currentUser, products, warehouseData, salesRecords, 
             const dProd = (d.productName || '').trim().toLowerCase();
             const dBrand = (d.brand || '').trim().toLowerCase();
 
-            if (dWH === targetWH && dProd === targetProd) {
-                const brandMatch = !targetBrand || dBrand === targetBrand || (targetBrand === '' && (dBrand === '' || dBrand === '-'));
+            const whMatch = dWH === targetWH || (isGeneralWH && (dWH === '' || dWH === 'general / in stock'));
+            if (whMatch && dProd === targetProd) {
+                const brandMatch = !targetBrand || dBrand === targetBrand || (dBrand === '-' && targetBrand === '') || (dBrand === '' && targetBrand === '');
                 if (brandMatch) {
                     totalDamages += parseFloat(d.quantity) || 0;
                 }
@@ -212,7 +219,7 @@ const DamageManagement = ({ currentUser, products, warehouseData, salesRecords, 
     }, [warehouseData]);
 
     const displayDamages = useMemo(() => {
-        let filtered = damages.filter(d => 
+        let filtered = damages.filter(d =>
             (d.productName || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
             (d.warehouse || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
             (d.reason || '').toLowerCase().includes(searchQuery.toLowerCase())
@@ -256,7 +263,7 @@ const DamageManagement = ({ currentUser, products, warehouseData, salesRecords, 
 
                 <div className={`${showForm ? 'w-full md:w-auto flex justify-end hidden' : 'w-full md:w-1/4 flex justify-end'} gap-3`}>
                     {!showForm && (
-                        <button 
+                        <button
                             onClick={() => setShowForm(true)}
                             className="w-full md:w-auto px-4 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-medium rounded-xl shadow-lg shadow-blue-500/30 transition-all transform active:scale-95 flex items-center justify-center"
                         >
@@ -305,7 +312,7 @@ const DamageManagement = ({ currentUser, products, warehouseData, salesRecords, 
                                     />
                                     <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-2">
                                         {formData.productName && (
-                                            <button 
+                                            <button
                                                 type="button"
                                                 onClick={() => {
                                                     setFormData({ ...formData, productName: '', brand: '' });
@@ -325,7 +332,7 @@ const DamageManagement = ({ currentUser, products, warehouseData, salesRecords, 
                                         </button>
                                     </div>
                                 </div>
-                                
+
                                 {activeDropdown === 'product' && (
                                     <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-100 rounded-xl shadow-xl z-[110] max-h-60 flex flex-col animate-in fade-in slide-in-from-top-2 duration-200 overflow-hidden">
                                         <div className="overflow-y-auto py-1">
@@ -379,7 +386,7 @@ const DamageManagement = ({ currentUser, products, warehouseData, salesRecords, 
                                     />
                                     <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-2">
                                         {formData.brand && (
-                                            <button 
+                                            <button
                                                 type="button"
                                                 onClick={() => {
                                                     setFormData({ ...formData, brand: '' });
@@ -400,7 +407,7 @@ const DamageManagement = ({ currentUser, products, warehouseData, salesRecords, 
                                         </button>
                                     </div>
                                 </div>
-                                
+
                                 {activeDropdown === 'brand' && formData.productName && (
                                     <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-100 rounded-xl shadow-xl z-[110] max-h-60 flex flex-col animate-in fade-in slide-in-from-top-2 duration-200 overflow-hidden">
                                         <div className="overflow-y-auto py-1">
@@ -451,7 +458,7 @@ const DamageManagement = ({ currentUser, products, warehouseData, salesRecords, 
                                     />
                                     <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-2">
                                         {formData.warehouse && (
-                                            <button 
+                                            <button
                                                 type="button"
                                                 onClick={() => {
                                                     setFormData({ ...formData, warehouse: '' });
@@ -471,7 +478,7 @@ const DamageManagement = ({ currentUser, products, warehouseData, salesRecords, 
                                         </button>
                                     </div>
                                 </div>
-                                
+
                                 {activeDropdown === 'warehouse' && (
                                     <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-100 rounded-xl shadow-xl z-[110] max-h-60 flex flex-col animate-in fade-in slide-in-from-top-2 duration-200 overflow-hidden">
                                         <div className="overflow-y-auto py-1">
@@ -503,28 +510,28 @@ const DamageManagement = ({ currentUser, products, warehouseData, salesRecords, 
 
                         <div className="space-y-2">
                             <label className="text-xs font-bold text-gray-400 uppercase tracking-wider">Available Stock</label>
-                            <div className="w-full px-4 py-2.5 bg-blue-50/50 border border-blue-100 rounded-xl text-sm font-bold text-blue-700 h-[45px] flex items-center">
-                                {currentStock.toLocaleString('en-IN')} kg
+                            <div className={`w-full px-4 py-2.5 rounded-xl text-sm font-bold h-[45px] flex items-center border transition-colors ${currentStock === null ? 'bg-gray-50 border-gray-100 text-gray-400 italic' : 'bg-blue-50/50 border-blue-100 text-blue-700'}`}>
+                                {currentStock === null ? 'Select product & warehouse' : `${currentStock.toLocaleString('en-IN')} kg`}
                             </div>
                         </div>
 
                         <div className="space-y-2">
-                            <label className="text-xs font-bold text-gray-600 uppercase tracking-wider">Price / Unit</label>
-                            <input 
+                            <label className="text-xs font-bold text-gray-600 uppercase tracking-wider">Rate</label>
+                            <input
                                 type="number"
                                 name="price"
                                 value={formData.price}
                                 onChange={handleInputChange}
                                 min="0"
                                 step="0.01"
-                                placeholder="Enter price..."
+                                placeholder="Enter rate..."
                                 className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 outline-none"
                             />
                         </div>
 
                         <div className="space-y-2">
-                            <label className="text-xs font-bold text-gray-600 uppercase tracking-wider">Quantity (Bags/Pkts)</label>
-                            <input 
+                            <label className="text-xs font-bold text-gray-600 uppercase tracking-wider">Quantity</label>
+                            <input
                                 type="number"
                                 name="quantity"
                                 value={formData.quantity}
@@ -532,8 +539,16 @@ const DamageManagement = ({ currentUser, products, warehouseData, salesRecords, 
                                 required
                                 min="0"
                                 step="0.01"
+                                placeholder="Enter quantity..."
                                 className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 outline-none"
                             />
+                        </div>
+
+                        <div className="space-y-2">
+                            <label className="text-xs font-bold text-gray-400 uppercase tracking-wider">Total Amount</label>
+                            <div className="w-full px-4 py-2.5 bg-gray-50 border border-gray-100 rounded-xl text-sm font-bold h-[45px] flex items-center text-gray-700">
+                                {formData.price && formData.quantity ? `৳ ${(formData.price * formData.quantity).toLocaleString('en-IN', { minimumFractionDigits: 2 })}` : '৳ 0.00'}
+                            </div>
                         </div>
 
                         <div className="space-y-2">
@@ -549,7 +564,7 @@ const DamageManagement = ({ currentUser, products, warehouseData, salesRecords, 
                                         <ChevronDownIcon className={`w-4 h-4 text-gray-400 transition-transform duration-200 ${activeDropdown === 'reason' ? 'rotate-180 text-blue-500' : 'group-hover:text-gray-600'}`} />
                                     </div>
                                 </button>
-                                
+
                                 {activeDropdown === 'reason' && (
                                     <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-100 rounded-xl shadow-xl z-[110] py-1 animate-in fade-in slide-in-from-top-2 duration-200 overflow-hidden">
                                         {['Broken', 'Lost', 'Expired', 'Damaged', 'Other'].map((reason) => (
@@ -575,7 +590,7 @@ const DamageManagement = ({ currentUser, products, warehouseData, salesRecords, 
 
                         <div className="space-y-2 lg:col-span-1">
                             <label className="text-xs font-bold text-gray-600 uppercase tracking-wider">Remarks</label>
-                            <input 
+                            <input
                                 type="text"
                                 name="remarks"
                                 value={formData.remarks}
@@ -601,30 +616,34 @@ const DamageManagement = ({ currentUser, products, warehouseData, salesRecords, 
                         <table className="w-full text-left border-collapse">
                             <thead>
                                 <tr className="bg-gray-50/80">
-                                    <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest border-b border-gray-100">Date</th>
-                                    <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest border-b border-gray-100">Product</th>
-                                    <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest border-b border-gray-100">Brand</th>
-                                    <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest border-b border-gray-100">Warehouse</th>
-                                    <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest border-b border-gray-100 text-right">Price</th>
-                                    <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest border-b border-gray-100 text-right">Quantity</th>
-                                    <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest border-b border-gray-100">Reason</th>
-                                    <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest border-b border-gray-100 text-center">Actions</th>
+                                    <th className="px-6 py-4 text-[11px] font-bold text-gray-400 uppercase tracking-wider border-b border-gray-100">Date</th>
+                                    <th className="px-6 py-4 text-[11px] font-bold text-gray-400 uppercase tracking-wider border-b border-gray-100">Product</th>
+                                    <th className="px-6 py-4 text-[11px] font-bold text-gray-400 uppercase tracking-wider border-b border-gray-100">Brand</th>
+                                    <th className="px-6 py-4 text-[11px] font-bold text-gray-400 uppercase tracking-wider border-b border-gray-100">Warehouse</th>
+                                    <th className="px-6 py-4 text-[11px] font-bold text-gray-400 uppercase tracking-wider border-b border-gray-100 text-right">Quantity</th>
+                                    <th className="px-6 py-4 text-[11px] font-bold text-gray-400 uppercase tracking-wider border-b border-gray-100 text-right">Rate</th>
+                                    <th className="px-6 py-4 text-[11px] font-bold text-gray-400 uppercase tracking-wider border-b border-gray-100 text-right">Total Amount</th>
+                                    <th className="px-6 py-4 text-[11px] font-bold text-gray-400 uppercase tracking-wider border-b border-gray-100 text-right">Reason</th>
+                                    <th className="px-6 py-4 text-[11px] font-bold text-gray-400 uppercase tracking-wider border-b border-gray-100 text-center">Actions</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-50">
                                 {isLoading ? (
-                                    Array(3).fill(0).map((_, i) => <tr key={i}><td colSpan="6" className="px-6 py-4 animate-pulse bg-gray-50"></td></tr>)
+                                    Array(3).fill(0).map((_, i) => <tr key={i}><td colSpan="9" className="px-6 py-4 animate-pulse bg-gray-50"></td></tr>)
                                 ) : displayDamages.length > 0 ? (
                                     displayDamages.map((item) => (
                                         <tr key={item._id} className="hover:bg-blue-50/30 transition-colors">
-                                            <td className="px-6 py-4 text-xs font-medium text-gray-600">{formatDate(item.date)}</td>
-                                            <td className="px-6 py-4 text-sm font-bold text-gray-800">{item.productName}</td>
-                                            <td className="px-6 py-4 text-xs font-medium text-gray-600">{item.brand || '-'}</td>
-                                            <td className="px-6 py-4 text-xs font-medium text-gray-600">{item.warehouse}</td>
-                                            <td className="px-6 py-4 text-sm font-black text-gray-800 text-right">{item.price ? `৳ ${item.price}` : '-'}</td>
-                                            <td className="px-6 py-4 text-sm font-black text-rose-600 text-right">{item.quantity}</td>
-                                            <td className="px-6 py-4">
-                                                <span className="px-2.5 py-1 bg-gray-100 text-gray-600 rounded-full text-[10px] font-bold uppercase tracking-wider">{item.reason}</span>
+                                            <td className="px-6 py-4 text-[13px] font-medium text-gray-500 whitespace-nowrap">{formatDate(item.date)}</td>
+                                            <td className="px-6 py-4 text-[13px] font-bold text-gray-900">{item.productName}</td>
+                                            <td className="px-6 py-4 text-[13px] font-semibold text-gray-600">{item.brand || '-'}</td>
+                                            <td className="px-6 py-4 text-[13px] font-medium text-gray-600">{item.warehouse}</td>
+                                            <td className="px-6 py-4 text-[13px] font-black text-red-600 text-right">{item.quantity}</td>
+                                            <td className="px-6 py-4 text-[13px] font-bold text-gray-800 text-right">{item.price ? `৳ ${item.price.toLocaleString('en-IN')}` : '-'}</td>
+                                            <td className="px-6 py-4 text-[13px] font-black text-gray-900 text-right">
+                                                {item.price && item.quantity ? `৳ ${(item.price * item.quantity).toLocaleString('en-IN', { minimumFractionDigits: 2 })}` : '-'}
+                                            </td>
+                                            <td className="px-6 py-4 text-right">
+                                                <span className="inline-block px-2.5 py-1 bg-gray-100 text-gray-600 rounded-full text-[10px] font-bold uppercase tracking-wider">{item.reason}</span>
                                             </td>
                                             <td className="px-6 py-4">
                                                 <div className="flex justify-center gap-2">
@@ -636,7 +655,7 @@ const DamageManagement = ({ currentUser, products, warehouseData, salesRecords, 
                                     ))
                                 ) : (
                                     <tr>
-                                        <td colSpan="6" className="px-6 py-12 text-center text-gray-400 font-medium text-sm">No damage records found.</td>
+                                        <td colSpan="9" className="px-6 py-12 text-center text-gray-400 font-medium text-sm">No damage records found.</td>
                                     </tr>
                                 )}
                             </tbody>

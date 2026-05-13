@@ -36,7 +36,7 @@ export const calculatePktRemainder = (totalQty, pktSize) => {
     }
 };
 
-export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery = '', warehouseData = [], salesRecords = [], products = []) => {
+export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery = '', warehouseData = [], salesRecords = [], products = [], damages = []) => {
     const resolveQuality = (pName, bName) => {
         if (!products || !Array.isArray(products)) return '-';
         const targetP = products.find(p => (p.name || p.productName || '').trim().toLowerCase() === (pName || '').trim().toLowerCase());
@@ -185,6 +185,7 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
                 periodArrivalPacket: 0, periodArrivalQuantity: 0,
                 salePacket: 0, saleQuantity: 0,
                 sweepedPacket: 0, sweepedQuantity: 0,
+                damagePacket: 0, damageQuantity: 0,
                 inHousePacket: 0, inHouseQuantity: 0,
                 unit: item.unit || 'kg',
                 brands: {}, allIds: []
@@ -203,16 +204,17 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
                 periodArrivalPacket: 0, periodArrivalQuantity: 0,
                 salePacket: 0, saleQuantity: 0,
                 sweepedPacket: 0, sweepedQuantity: 0,
+                damagePacket: 0, damageQuantity: 0,
                 inHousePacket: 0, inHouseQuantity: 0,
                 packetSize: safeParse(item.packetSize),
-                _salesResolved: false
+                _salesResolved: false,
+                _damagesResolved: false
             };
         }
 
         const brandObj = acc[key].brands[subKey];
 
         // Resolve Sales for this brand if not already done
-        // Only count 'accepted' and 'pending' sales — NOT 'requested'
         if (!brandObj._salesResolved) {
             salesRecords.forEach(sale => {
                 const sStatus = (sale.status || '').toLowerCase();
@@ -231,21 +233,19 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
                             let beQualityRaw = rq !== '-' ? rq : (be.quality || '-');
                             let beQuality = beQualityRaw.trim().toLowerCase();
 
-                            // Fallback: If sale entry does not specify quality, map it to the current evaluating brandObj's quality
                             if (beBrand === normBrand && beQuality === '-' && normQuality !== '-') {
                                 beQuality = normQuality;
                             }
 
                             if (beBrand === normBrand && beQuality === normQuality) {
                                 const saleEntryId = `${sale._id}_${siIdx}_${beIdx}`;
-                                if (consumedSales.has(saleEntryId)) return; // Prevent double-counting if multiple quality buckets exist
+                                if (consumedSales.has(saleEntryId)) return;
 
                                 if (stockFilters.warehouse && stockFilters.warehouse.toLowerCase() !== 'all warehouses' && (be.warehouseName || '').trim().toLowerCase() !== stockFilters.warehouse.toLowerCase()) return;
 
                                 const sq = safeParse(be.quantity);
                                 let sp = safeParse(be.packet);
 
-                                // If bag count is missing but weight exists, calculate bags
                                 if (sp <= 0 && sq > 0) {
                                     const pSize = brandObj.packetSize || 30;
                                     sp = sq / pSize;
@@ -272,8 +272,47 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
             brandObj._salesResolved = true;
         }
 
-        // Arrival Quantities: Use physical distributed stock if filtering by warehouse.
-        // For Global view, only count primary LC records as "Arrival" to prevent double-counting transfers.
+        // Resolve Damages for this brand if not already done
+        if (!brandObj._damagesResolved) {
+            damages.forEach(damage => {
+                const dDate = (damage.date || damage.createdAt || '').split('T')[0];
+                if (endDate && dDate > endDate) return;
+
+                const isBeforeDamage = startDate && dDate < startDate;
+                
+                const dProdName = (damage.productName || damage.product || '').trim().toLowerCase();
+                const dBrand = (damage.brand || 'No Brand').trim().toLowerCase();
+                const dWh = (damage.warehouse || '').trim().toLowerCase();
+
+                if (dProdName === keyLower && dBrand === normBrand) {
+                    if (stockFilters.warehouse && stockFilters.warehouse.toLowerCase() !== 'all warehouses') {
+                        const filterWH = stockFilters.warehouse.toLowerCase();
+                        if (dWh !== filterWH && !dWh.includes(filterWH) && !filterWH.includes(dWh)) return;
+                    }
+
+                    const dq = safeParse(damage.quantity);
+                    let dp = safeParse(damage.packet);
+                    if (dp <= 0 && dq > 0) {
+                        const pSize = brandObj.packetSize || 30;
+                        dp = dq / pSize;
+                    }
+
+                    if (isBeforeDamage) {
+                        brandObj.openingQuantity -= dq;
+                        brandObj.openingPacket -= dp;
+                        acc[key].openingQuantity -= dq;
+                        acc[key].openingPacket -= dp;
+                    } else {
+                        brandObj.damageQuantity += dq;
+                        brandObj.damagePacket += dp;
+                        acc[key].damageQuantity += dq;
+                        acc[key].damagePacket += dp;
+                    }
+                }
+            });
+            brandObj._damagesResolved = true;
+        }
+
         const arrivalQty = stockFilters.warehouse
             ? safeParse(item.inHouseQuantity)
             : (item.recordType === 'stock' ? safeParse(item.quantity) : 0);
@@ -306,7 +345,6 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
     }, {});
 
     // 5. Second Pass: General Products (from sales)
-    // Only count 'accepted' and 'pending' sales — NOT 'requested'
     salesRecords.forEach(sale => {
         const sStatus = (sale.status || '').toLowerCase();
         if (sStatus !== 'accepted' && sStatus !== 'pending') return;
@@ -331,6 +369,7 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
                     productName: sProdName, productRef: product, category: 'General',
                     openingPacket: 0, openingQuantity: 0, periodArrivalPacket: 0, periodArrivalQuantity: 0,
                     saleQuantity: 0, salePacket: 0, sweepedPacket: 0, sweepedQuantity: 0,
+                    damageQuantity: 0, damagePacket: 0,
                     inHousePacket: 0, inHouseQuantity: 0,
                     unit: si.unit || 'kg', brands: {}, allIds: []
                 };
@@ -338,6 +377,10 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
             const group = groupedStock[sProdName];
             (si.brandEntries || []).forEach((be, beIdx) => {
                 if (stockFilters.warehouse && stockFilters.warehouse.toLowerCase() !== 'all warehouses' && (be.warehouseName || '').trim().toLowerCase() !== stockFilters.warehouse.toLowerCase()) return;
+                
+                // ADDED: Brand filter for General products
+                if (stockFilters.brand && (be.brand || '').trim() !== stockFilters.brand) return;
+
                 const normBrand = (be.brand || 'No Brand').trim().toLowerCase();
                 const rq = resolveQuality(sProdName, be.brand);
                 const resolvedQ = rq !== '-' ? rq : (be.quality || '-');
@@ -350,11 +393,37 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
                         quality: resolvedQ || '-',
                         openingPacket: 0, openingQuantity: 0, periodArrivalPacket: 0, periodArrivalQuantity: 0,
                         salePacket: 0, saleQuantity: 0, sweepedPacket: 0, sweepedQuantity: 0,
+                        damagePacket: 0, damageQuantity: 0,
                         inHousePacket: 0, inHouseQuantity: 0, packetSize: safeParse(be.packetSize),
-                        _salesResolved: false
+                        _salesResolved: false,
+                        _damagesResolved: false
                     };
                 }
                 const brandObj = group.brands[subKey];
+
+                // Resolve Damages for General Product
+                if (!brandObj._damagesResolved) {
+                    damages.forEach(damage => {
+                        const dDate = (damage.date || '').split('T')[0];
+                        if (endDate && dDate > endDate) return;
+                        const isBefore = startDate && dDate < startDate;
+                        const dProdName = (damage.productName || '').trim().toLowerCase();
+                        const dBrand = (damage.brand || 'No Brand').trim().toLowerCase();
+                        if (dProdName === sProdName.toLowerCase() && dBrand === normBrand) {
+                            const dq = safeParse(damage.quantity);
+                            let dp = safeParse(damage.packet) || (brandObj.packetSize > 0 ? dq / brandObj.packetSize : 0);
+                            if (isBefore) {
+                                brandObj.openingQuantity -= dq;
+                                group.openingQuantity -= dq;
+                            } else {
+                                brandObj.damageQuantity += dq;
+                                brandObj.damagePacket += dp;
+                                group.damageQuantity += dq;
+                            }
+                        }
+                    });
+                    brandObj._damagesResolved = true;
+                }
                 
                 const saleEntryId = `${sale._id}_${siIdx}_${beIdx}`;
                 if (!consumedSales.has(saleEntryId)) {
@@ -379,20 +448,18 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
 
     const displayRecords = Object.values(groupedStock).map(group => {
         const brandList = Object.values(group.brands).map(b => {
-            // In this UI table, "Opening Stock" is the total arriving or starting balance
             const totalIn = b.openingQuantity + b.periodArrivalQuantity;
             const saleQty = b.saleQuantity;
             const shortageQty = b.sweepedQuantity;
+            const damageQty = b.damageQuantity || 0;
             const totalPkt = b.openingPacket + b.periodArrivalPacket;
 
-            // MATH: Opening = Arrival - Shortage (only if arrival is gross), Closing = Opening - Sales
-            // If arrivalQty already came from inHouseQuantity (Warehouse view), shortage is already subtracted.
             const isGrossArrival = !stockFilters.warehouse;
             const openingAfterShortage = isGrossArrival ? (totalIn - shortageQty) : totalIn;
             const openingPktAfterShortage = isGrossArrival ? (totalPkt - b.sweepedPacket) : totalPkt;
             
-            const closingQty = openingAfterShortage - saleQty;
-            const closingPkt = openingPktAfterShortage - b.salePacket;
+            const closingQty = openingAfterShortage - saleQty - damageQty;
+            const closingPkt = openingPktAfterShortage - b.salePacket - (b.damagePacket || 0);
 
             return {
                 ...b,
@@ -413,7 +480,8 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
             Math.abs(b.totalInHouseQuantity) > 0.01 || 
             Math.abs(b.saleQuantity) > 0.01 || 
             Math.abs(b.inHouseQuantity) > 0.01 || 
-            Math.abs(b.sweepedQuantity) > 0.01
+            Math.abs(b.sweepedQuantity) > 0.01 ||
+            Math.abs(b.damageQuantity || 0) > 0.01
         );
 
         if (brandList.length === 0) return null;
@@ -421,9 +489,11 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
         const openingQty = brandList.reduce((sum, b) => sum + Math.max(0, b.openingQuantity), 0);
         const inHouseQty = brandList.reduce((sum, b) => sum + Math.max(0, b.inHouseQuantity), 0);
         const saleQty = brandList.reduce((sum, b) => sum + b.saleQuantity, 0);
+        const damageQty = brandList.reduce((sum, b) => sum + (b.damageQuantity || 0), 0);
         const openingPkt = brandList.reduce((sum, b) => sum + Math.max(0, b.openingPacket), 0);
         const inHousePkt = brandList.reduce((sum, b) => sum + Math.max(0, b.inHousePacket), 0);
         const salePkt = brandList.reduce((sum, b) => sum + b.salePacket, 0);
+        const damagePkt = brandList.reduce((sum, b) => sum + (b.damagePacket || 0), 0);
 
         const groupPktSize = brandList.find(b => (b.packetSize || 0) > 0)?.packetSize || products.find(p => (p.name || p.productName || '').trim().toLowerCase() === group.productName.toLowerCase())?.packetSize || 30;
 
@@ -438,12 +508,14 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
             inHouseQuantity: inHouseQty,
             inHousePacket: inHousePkt,
             saleQuantity: saleQty,
-            salePacket: salePkt
+            salePacket: salePkt,
+            damageQuantity: damageQty,
+            damagePacket: damagePkt
         };
     }).filter(p => p !== null && p.productName && p.productName.trim() !== '-' && p.productName.trim() !== '').sort((a, b) => a.productName.localeCompare(b.productName));
 
     // Summary Calculations
-    let tOpeningQty = 0; let tSaleQty = 0; let tInHouseQty = 0; let tShortageQty = 0;
+    let tOpeningQty = 0; let tSaleQty = 0; let tInHouseQty = 0; let tShortageQty = 0; let tDamageQty = 0;
     const tOpeningPkt = { whole: 0, remainder: 0 };
     const tSalePkt = { whole: 0, remainder: 0 };
     const tInHousePkt = { whole: 0, remainder: 0 };
@@ -454,6 +526,7 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
             tSaleQty += b.saleQuantity;
             tInHouseQty += Math.max(0, b.inHouseQuantity);
             tShortageQty += b.sweepedQuantity;
+            tDamageQty += (b.damageQuantity || 0);
 
             const op = calculatePktRemainder(Math.max(0, b.openingQuantity), b.packetSize);
             tOpeningPkt.whole += op.whole; tOpeningPkt.remainder += op.remainder;
@@ -466,16 +539,25 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
         });
     });
 
-    // Final Filter: Hide "Out of Stock" (zero stock) items from display
-    // We do this AFTER summary calculations so totals remain accurate
     const filteredDisplayRecords = displayRecords.map(group => {
-        const filteredBrands = group.brandList.filter(b => Math.abs(b.inHouseQuantity) > 0.01);
-        if (filteredBrands.length === 0 && Math.abs(group.inHouseQuantity) <= 0.01) {
+        // Filter brands by in-house quantity OR by active brand filter
+        let filteredBrands = group.brandList;
+
+        // Apply brand filter if active
+        if (stockFilters.brand) {
+            filteredBrands = filteredBrands.filter(b => (b.brand || '').trim() === stockFilters.brand);
+        } else {
+            // Otherwise just filter out empty stocks
+            filteredBrands = filteredBrands.filter(b => Math.abs(b.inHouseQuantity) > 0.01);
+        }
+
+        if (filteredBrands.length === 0 && (!stockFilters.brand || Math.abs(group.inHouseQuantity) <= 0.01)) {
             return null;
         }
+
         return {
             ...group,
-            brandList: filteredBrands.length > 0 ? filteredBrands : group.brandList // keep original if group has total stock but brands are weirdly zero
+            brandList: filteredBrands.length > 0 ? filteredBrands : group.brandList
         };
     }).filter(Boolean);
 
@@ -485,6 +567,7 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
         totalSaleQty: tSaleQty,
         totalInHouseQty: tInHouseQty,
         totalShortage: tShortageQty,
+        totalDamageQty: tDamageQty,
         totalOpeningPktWhole: tOpeningPkt.whole,
         totalOpeningPktRemainder: tOpeningPkt.remainder,
         totalArrivalPktWhole: 0,

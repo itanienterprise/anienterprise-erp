@@ -1,7 +1,7 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { EditIcon, TrashIcon, UserIcon, EyeIcon, XIcon, BoxIcon, SearchIcon, ChevronDownIcon, ChevronUpIcon, TrendingUpIcon, DollarSignIcon, FunnelIcon, PrinterIcon, BarChartIcon } from '../../Icons';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
+import { EditIcon, TrashIcon, UserIcon, EyeIcon, XIcon, BoxIcon, SearchIcon, ChevronDownIcon, ChevronUpIcon, TrendingUpIcon, DollarSignIcon, FunnelIcon, PrinterIcon, BarChartIcon, ReceiptIcon } from '../../Icons';
 import CustomDatePicker from "../../shared/CustomDatePicker";
-import { generateCnFHistoryReportPDF, generateCnFAgentListReportPDF } from '../../../utils/pdfGenerator';
+import { generateCnFHistoryReportPDF, generateCnFAgentListReportPDF, generateCnFExpenseReportPDF, generateCnFPaymentReportPDF, generateCnFAllReportPDF } from '../../../utils/pdfGenerator';
 import { API_BASE_URL, SortIcon, formatDate } from '../../../utils/helpers';
 import axios from '../../../utils/api';
 import './CnF.css';
@@ -168,9 +168,144 @@ const CnF = ({
         }
     };
 
+    const filteredHistory = historyRecords.filter(row => {
+        const q = historySearchQuery.toLowerCase();
+
+        // Date Filtering
+        if (historyFilters.startDate || historyFilters.endDate) {
+            const rowDate = new Date(row.date);
+            if (historyFilters.startDate && rowDate < new Date(historyFilters.startDate)) return false;
+            if (historyFilters.endDate && rowDate > new Date(historyFilters.endDate)) return false;
+        }
+
+        // Field Specific Filtering
+        if (historyFilters.lcNo && !(row.lcNo || '').toLowerCase().includes(historyFilters.lcNo.toLowerCase())) return false;
+        if (historyFilters.productName && !(row.product || '').toLowerCase().includes(historyFilters.productName.toLowerCase())) return false;
+
+        // Search Query Filtering
+        if (!q) return true;
+        return (row.date || '').toLowerCase().includes(q) || (row.lcNo || '').toLowerCase().includes(q) || (row.port || '').toLowerCase().includes(q) || (row.product || '').toLowerCase().includes(q) || (row.brand || '').toLowerCase().includes(q) || String(row.truck || '').toLowerCase().includes(q);
+    });
+
+    const filteredExpenses = expenseRecords.filter(exp => {
+        const q = historySearchQuery.toLowerCase();
+
+        // Date Filtering
+        if (historyFilters.startDate || historyFilters.endDate) {
+            const rowDate = new Date(exp.date);
+            if (historyFilters.startDate && rowDate < new Date(historyFilters.startDate)) return false;
+            if (historyFilters.endDate && rowDate > new Date(historyFilters.endDate)) return false;
+        }
+
+        if (!q) return true;
+        return (exp.lcNo || '').toLowerCase().includes(q) || (exp.importer || '').toLowerCase().includes(q) || (exp.product || '').toLowerCase().includes(q) || (exp.port || '').toLowerCase().includes(q);
+    });
+
+    const filteredPayments = paymentRecords.filter(p => {
+        const q = historySearchQuery.toLowerCase();
+
+        // Date Filtering
+        if (historyFilters.startDate || historyFilters.endDate) {
+            const rowDate = new Date(p.date);
+            if (historyFilters.startDate && rowDate < new Date(historyFilters.startDate)) return false;
+            if (historyFilters.endDate && rowDate > new Date(historyFilters.endDate)) return false;
+        }
+
+        if (!q) return true;
+        return (p.date || '').toLowerCase().includes(q) || (p.method || '').toLowerCase().includes(q) || (p.reference || '').toLowerCase().includes(q) || String(p.amount || '').toLowerCase().includes(q);
+    });
+
+    const filteredAll = useMemo(() => {
+        const combined = [];
+
+        // Add Earnings
+        historyRecords.forEach(row => {
+            combined.push({
+                type: 'earning',
+                date: row.date,
+                lcNo: row.lcNo,
+                importer: row.importer,
+                product: row.product,
+                billingAmount: parseFloat(row.totalCommission) || 0,
+                amount: 0,
+                method: '-',
+                reference: '-'
+            });
+        });
+
+        // Add Expenses
+        expenseRecords.forEach(row => {
+            combined.push({
+                type: 'expense',
+                date: row.date,
+                lcNo: row.lcNo,
+                importer: row.importer,
+                product: row.product,
+                billingAmount: parseFloat(row.amount) || 0,
+                amount: 0,
+                method: '-',
+                reference: '-'
+            });
+        });
+
+        // Add Payments
+        paymentRecords.forEach(row => {
+            combined.push({
+                type: 'payment',
+                date: row.date,
+                lcNo: '-',
+                importer: '-',
+                product: '-',
+                billingAmount: 0,
+                amount: parseFloat(row.amount) || 0,
+                discount: parseFloat(row.discount) || 0,
+                method: row.method,
+                reference: row.reference,
+                bankName: row.bankName
+            });
+        });
+
+        // Filter and Sort
+        const filtered = combined.filter(row => {
+            const q = historySearchQuery.toLowerCase();
+            if (historyFilters.startDate || historyFilters.endDate) {
+                const rowDate = new Date(row.date);
+                if (historyFilters.startDate && rowDate < new Date(historyFilters.startDate)) return false;
+                if (historyFilters.endDate && rowDate > new Date(historyFilters.endDate)) return false;
+            }
+            if (!q) return true;
+            return (row.lcNo || '').toLowerCase().includes(q) ||
+                   (row.importer || '').toLowerCase().includes(q) ||
+                   (row.product || '').toLowerCase().includes(q) ||
+                   (row.method || '').toLowerCase().includes(q) ||
+                   (row.reference || '').toLowerCase().includes(q);
+        }).sort((a, b) => new Date(a.date) - new Date(b.date));
+
+        // Add Running Balance
+        let balance = 0;
+        return filtered.map(row => {
+            if (row.type === 'earning' || row.type === 'expense') {
+                balance += row.billingAmount;
+            } else {
+                balance -= (row.amount + (row.discount || 0));
+            }
+            return { ...row, runningBalance: balance };
+        });
+    }, [historyRecords, expenseRecords, paymentRecords, historySearchQuery, historyFilters]);
+
     const handlePrintHistory = () => {
-        if (!viewData || filteredHistory.length === 0) return;
-        generateCnFHistoryReportPDF(filteredHistory, { name: viewData.name, cnfId: viewData.cnfId }, historyFilters);
+        if (!viewData) return;
+        const agentInfo = { name: viewData.name, cnfId: viewData.cnfId };
+
+        if (historyViewMode === 'earnings') {
+            generateCnFHistoryReportPDF(filteredHistory, agentInfo, historyFilters);
+        } else if (historyViewMode === 'expense') {
+            generateCnFExpenseReportPDF(filteredExpenses, agentInfo, historyFilters);
+        } else if (historyViewMode === 'payments') {
+            generateCnFPaymentReportPDF(filteredPayments, agentInfo, historyFilters);
+        } else if (historyViewMode === 'all') {
+            generateCnFAllReportPDF(filteredAll, agentInfo, historyFilters);
+        }
     };
 
     const fetchCnFs = async () => {
@@ -293,7 +428,7 @@ const CnF = ({
                 // 3. Subtract Payments
                 const paid = allPayments.reduce((acc, payment) => {
                     if (payment.cnfId === cnf._id) {
-                        return acc + (parseFloat(payment.amount) || 0);
+                        return acc + (parseFloat(payment.amount) || 0) + (parseFloat(payment.discount) || 0);
                     }
                     return acc;
                 }, 0);
@@ -867,30 +1002,6 @@ const CnF = ({
         });
     };
 
-    const filteredHistory = historyRecords.filter(row => {
-        const q = historySearchQuery.toLowerCase();
-
-        // Date Filtering
-        if (historyFilters.startDate || historyFilters.endDate) {
-            const rowDate = new Date(row.date);
-            if (historyFilters.startDate && rowDate < new Date(historyFilters.startDate)) return false;
-            if (historyFilters.endDate && rowDate > new Date(historyFilters.endDate)) return false;
-        }
-
-        // Field Specific Filtering
-        if (historyFilters.lcNo && !(row.lcNo || '').toLowerCase().includes(historyFilters.lcNo.toLowerCase())) return false;
-        if (historyFilters.productName && !(row.product || '').toLowerCase().includes(historyFilters.productName.toLowerCase())) return false;
-
-        // Search Query Filtering
-        if (!q) return true;
-        return (row.date || '').toLowerCase().includes(q) || (row.lcNo || '').toLowerCase().includes(q) || (row.port || '').toLowerCase().includes(q) || (row.product || '').toLowerCase().includes(q) || (row.brand || '').toLowerCase().includes(q) || String(row.truck || '').toLowerCase().includes(q);
-    });
-
-    const filteredPayments = paymentRecords.filter(p => {
-        const q = historySearchQuery.toLowerCase();
-        if (!q) return true;
-        return (p.date || '').toLowerCase().includes(q) || (p.method || '').toLowerCase().includes(q) || (p.reference || '').toLowerCase().includes(q) || String(p.amount || '').toLowerCase().includes(q);
-    });
 
     return (
         <div className="cnf-container">
@@ -1208,6 +1319,15 @@ const CnF = ({
                                         >
                                             Payment History
                                         </button>
+                                        <button
+                                            onClick={() => setHistoryViewMode('all')}
+                                            className={`px-5 py-1.5 rounded-full text-[11px] font-black uppercase tracking-widest transition-all whitespace-nowrap border ${historyViewMode === 'all'
+                                                ? 'bg-blue-600 text-white border-blue-600 shadow-sm'
+                                                : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50'
+                                                }`}
+                                        >
+                                            All
+                                        </button>
                                     </div>
                             </div>
                             <div className="flex-1 flex items-center justify-end gap-2">
@@ -1368,197 +1488,81 @@ const CnF = ({
                         <div className="flex-1 overflow-auto p-4 md:p-8 pt-6 md:pt-8 hide-scrollbar min-h-0">
                             {historyLoading ? <div className="flex justify-center p-12"><div className="w-8 h-8 border-2 border-t-blue-600 rounded-full animate-spin"></div></div> : (
                                 <div className="space-y-6">
-                                    <div className={`grid grid-cols-1 gap-4 ${historyViewMode === 'earnings' ? 'md:grid-cols-5' : 'md:grid-cols-3'}`}>
-                                        {historyViewMode === 'earnings' ? (
-                                            <>
-                                                {/* Total Truck Card */}
-                                                <div className="bg-gradient-to-br from-blue-50 to-indigo-50 border border-blue-100/50 p-5 rounded-2xl shadow-sm group hover:shadow-md transition-all duration-300">
-                                                    <div className="flex items-center justify-between">
-                                                        <div className="space-y-1">
-                                                            <p className="text-[10px] font-bold text-blue-600 uppercase tracking-widest opacity-70">Total Trucks</p>
-                                                            <h3 className="text-2xl font-black text-gray-900 leading-none">
-                                                                {filteredHistory.reduce((acc, row) => acc + (parseFloat(row.truck) || 0), 0)}
-                                                            </h3>
-                                                        </div>
-                                                        <div className="w-12 h-12 rounded-xl bg-blue-100 flex items-center justify-center text-blue-600 group-hover:scale-110 transition-transform">
-                                                            <BoxIcon className="w-6 h-6" />
-                                                        </div>
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                                        {/* Total Bill Card */}
+                                        <div className="bg-gradient-to-br from-purple-50 to-indigo-50 border border-purple-100/50 p-5 rounded-2xl shadow-sm group hover:shadow-md transition-all duration-300">
+                                            <div className="flex items-center justify-between">
+                                                <div className="space-y-1">
+                                                    <p className="text-[10px] font-bold text-purple-600 uppercase tracking-widest opacity-70">Total Bill</p>
+                                                    <div className="flex items-baseline gap-1">
+                                                        <h3 className="text-2xl font-black text-gray-900 leading-none">
+                                                            {(
+                                                                historyRecords.reduce((acc, row) => acc + (parseFloat(row.totalCommission) || 0), 0) +
+                                                                expenseRecords.reduce((acc, exp) => acc + (parseFloat(exp.amount) || 0), 0)
+                                                            ).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                                        </h3>
+                                                        <span className="text-[10px] font-bold text-gray-400">TK</span>
                                                     </div>
                                                 </div>
+                                                <div className="w-12 h-12 rounded-xl bg-purple-100 flex items-center justify-center text-purple-600 group-hover:scale-110 transition-transform">
+                                                    <BarChartIcon className="w-6 h-6" />
+                                                </div>
+                                            </div>
+                                        </div>
 
-                                                {/* Total Qty Card */}
-                                                <div className="bg-gradient-to-br from-amber-50 to-orange-50 border border-amber-100/50 p-5 rounded-2xl shadow-sm group hover:shadow-md transition-all duration-300">
-                                                    <div className="flex items-center justify-between">
-                                                        <div className="space-y-1">
-                                                            <p className="text-[10px] font-bold text-amber-600 uppercase tracking-widest opacity-70">Total Quantity</p>
-                                                            <h3 className="text-2xl font-black text-gray-900 leading-none">
-                                                                {filteredHistory.reduce((acc, row) => acc + (parseFloat(row.qty) || 0), 0).toLocaleString('en-US')}
-                                                            </h3>
-                                                        </div>
-                                                        <div className="w-12 h-12 rounded-xl bg-amber-100 flex items-center justify-center text-amber-600 group-hover:scale-110 transition-transform">
-                                                            <TrendingUpIcon className="w-6 h-6" />
-                                                        </div>
+                                        {/* Total Paid Card */}
+                                        <div className="bg-gradient-to-br from-blue-50 to-indigo-50 border border-blue-100/50 p-5 rounded-2xl shadow-sm group hover:shadow-md transition-all duration-300">
+                                            <div className="flex items-center justify-between">
+                                                <div className="space-y-1">
+                                                    <p className="text-[10px] font-bold text-blue-600 uppercase tracking-widest opacity-70">Total Paid</p>
+                                                    <div className="flex items-baseline gap-1">
+                                                        <h3 className="text-2xl font-black text-gray-900 leading-none">
+                                                            {paymentRecords.reduce((acc, p) => acc + (parseFloat(p.amount) || 0), 0).toLocaleString('en-IN')}
+                                                        </h3>
+                                                        <span className="text-[10px] font-bold text-gray-400">TK</span>
                                                     </div>
                                                 </div>
+                                                <div className="w-12 h-12 rounded-xl bg-blue-100 flex items-center justify-center text-blue-600 group-hover:scale-110 transition-transform">
+                                                    <DollarSignIcon className="w-6 h-6" />
+                                                </div>
+                                            </div>
+                                        </div>
 
-                                                {/* Total Commission Card */}
-                                                <div className="bg-gradient-to-br from-emerald-50 to-teal-50 border border-emerald-100/50 p-5 rounded-2xl shadow-sm group hover:shadow-md transition-all duration-300">
-                                                    <div className="flex items-center justify-between">
-                                                        <div className="space-y-1">
-                                                            <p className="text-[10px] font-bold text-emerald-600 uppercase tracking-widest opacity-70">Total Commission</p>
-                                                            <div className="flex items-baseline gap-1">
-                                                                <h3 className="text-2xl font-black text-gray-900 leading-none">
-                                                                    {(
-                                                                        filteredHistory.reduce((acc, row) => acc + (parseFloat(row.totalCommission) || 0), 0) +
-                                                                        expenseRecords.filter(exp => !historySearchQuery || exp.lcNo?.toLowerCase().includes(historySearchQuery.toLowerCase()) || exp.importer?.toLowerCase().includes(historySearchQuery.toLowerCase())).reduce((acc, exp) => acc + (parseFloat(exp.amount) || 0), 0)
-                                                                    ).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                                                                </h3>
-                                                                <span className="text-[10px] font-bold text-gray-400">TK</span>
-                                                            </div>
-                                                        </div>
-                                                        <div className="w-12 h-12 rounded-xl bg-emerald-100 flex items-center justify-center text-emerald-600 group-hover:scale-110 transition-transform">
-                                                            <DollarSignIcon className="w-6 h-6" />
-                                                        </div>
+                                        {/* Total Discount Card */}
+                                        <div className="bg-gradient-to-br from-emerald-50 to-teal-50 border border-emerald-100/50 p-5 rounded-2xl shadow-sm group hover:shadow-md transition-all duration-300">
+                                            <div className="flex items-center justify-between">
+                                                <div className="space-y-1">
+                                                    <p className="text-[10px] font-bold text-emerald-600 uppercase tracking-widest opacity-70">Total Discount</p>
+                                                    <div className="flex items-baseline gap-1">
+                                                        <h3 className="text-2xl font-black text-gray-900 leading-none">
+                                                            {paymentRecords.reduce((acc, p) => acc + (parseFloat(p.discount) || 0), 0).toLocaleString('en-IN')}
+                                                        </h3>
+                                                        <span className="text-[10px] font-bold text-gray-400">TK</span>
                                                     </div>
                                                 </div>
+                                                <div className="w-12 h-12 rounded-xl bg-emerald-100 flex items-center justify-center text-emerald-600 group-hover:scale-110 transition-transform">
+                                                    <ReceiptIcon className="w-6 h-6" />
+                                                </div>
+                                            </div>
+                                        </div>
 
-                                                {/* Total Paid Card */}
-                                                <div className="bg-gradient-to-br from-indigo-50 to-purple-50 border border-indigo-100/50 p-5 rounded-2xl shadow-sm group hover:shadow-md transition-all duration-300">
-                                                    <div className="flex items-center justify-between">
-                                                        <div className="space-y-1">
-                                                            <p className="text-[10px] font-bold text-indigo-600 uppercase tracking-widest opacity-70">Total Paid</p>
-                                                            <h3 className="text-2xl font-black text-gray-900 leading-none">
-                                                                {paymentRecords.reduce((acc, p) => acc + (parseFloat(p.amount) || 0), 0).toLocaleString('en-IN')}
-                                                            </h3>
-                                                        </div>
-                                                        <div className="w-12 h-12 rounded-xl bg-indigo-100 flex items-center justify-center text-indigo-600 group-hover:scale-110 transition-transform">
-                                                            <DollarSignIcon className="w-6 h-6" />
-                                                        </div>
+                                        {/* Balance Card */}
+                                        <div className="bg-gradient-to-br from-rose-50 to-red-50 border border-rose-100/50 p-5 rounded-2xl shadow-sm group hover:shadow-md transition-all duration-300">
+                                            <div className="flex items-center justify-between">
+                                                <div className="space-y-1">
+                                                    <p className="text-[10px] font-bold text-rose-600 uppercase tracking-widest opacity-70">Current Balance</p>
+                                                    <div className="flex items-baseline gap-1">
+                                                        <h3 className="text-2xl font-black text-gray-900 leading-none">
+                                                            {(viewData?.totalBalance || 0).toLocaleString('en-IN')}
+                                                        </h3>
+                                                        <span className="text-[10px] font-bold text-gray-400">TK</span>
                                                     </div>
                                                 </div>
-
-                                                {/* Balance Card */}
-                                                <div className="bg-gradient-to-br from-emerald-50 to-teal-50 border border-emerald-100/50 p-5 rounded-2xl shadow-sm group hover:shadow-md transition-all duration-300">
-                                                    <div className="flex items-center justify-between">
-                                                        <div className="space-y-1">
-                                                            <p className="text-[10px] font-bold text-emerald-600 uppercase tracking-widest opacity-70">Current Balance</p>
-                                                            <div className="flex items-baseline gap-1">
-                                                                <h3 className="text-2xl font-black text-gray-900 leading-none">
-                                                                    {(viewData?.totalBalance || 0).toLocaleString('en-IN')}
-                                                                </h3>
-                                                                <span className="text-[10px] font-bold text-gray-400">TK</span>
-                                                            </div>
-                                                        </div>
-                                                        <div className="w-12 h-12 rounded-xl bg-emerald-100 flex items-center justify-center text-emerald-600 group-hover:scale-110 transition-transform">
-                                                            <TrendingUpIcon className="w-6 h-6" />
-                                                        </div>
-                                                    </div>
+                                                <div className="w-12 h-12 rounded-xl bg-rose-100 flex items-center justify-center text-rose-600 group-hover:scale-110 transition-transform">
+                                                    <TrendingUpIcon className="w-6 h-6" />
                                                 </div>
-                                            </>
-                                        ) : historyViewMode === 'expense' ? (
-                                            <>
-                                                {/* Total Expense Card */}
-                                                <div className="bg-gradient-to-br from-rose-50 to-red-50 border border-rose-100/50 p-5 rounded-2xl shadow-sm group hover:shadow-md transition-all duration-300">
-                                                    <div className="flex items-center justify-between">
-                                                        <div className="space-y-1">
-                                                            <p className="text-[10px] font-bold text-rose-600 uppercase tracking-widest opacity-70">Total Expenses</p>
-                                                            <div className="flex items-baseline gap-1">
-                                                                <h3 className="text-2xl font-black text-gray-900 leading-none">
-                                                                    {expenseRecords.filter(exp => !historySearchQuery || exp.lcNo?.toLowerCase().includes(historySearchQuery.toLowerCase()) || exp.importer?.toLowerCase().includes(historySearchQuery.toLowerCase())).reduce((acc, exp) => acc + (parseFloat(exp.amount) || 0), 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                                                                </h3>
-                                                                <span className="text-[10px] font-bold text-gray-400">TK</span>
-                                                            </div>
-                                                        </div>
-                                                        <div className="w-12 h-12 rounded-xl bg-rose-100 flex items-center justify-center text-rose-600 group-hover:scale-110 transition-transform">
-                                                            <DollarSignIcon className="w-6 h-6" />
-                                                        </div>
-                                                    </div>
-                                                </div>
-
-                                                {/* Transaction Count Card */}
-                                                <div className="bg-gradient-to-br from-amber-50 to-orange-50 border border-amber-100/50 p-5 rounded-2xl shadow-sm group hover:shadow-md transition-all duration-300">
-                                                    <div className="flex items-center justify-between">
-                                                        <div className="space-y-1">
-                                                            <p className="text-[10px] font-bold text-amber-600 uppercase tracking-widest opacity-70">Transactions</p>
-                                                            <h3 className="text-2xl font-black text-gray-900 leading-none">
-                                                                {expenseRecords.filter(exp => !historySearchQuery || exp.lcNo?.toLowerCase().includes(historySearchQuery.toLowerCase()) || exp.importer?.toLowerCase().includes(historySearchQuery.toLowerCase())).length}
-                                                            </h3>
-                                                        </div>
-                                                        <div className="w-12 h-12 rounded-xl bg-amber-100 flex items-center justify-center text-amber-600 group-hover:scale-110 transition-transform">
-                                                            <BarChartIcon className="w-6 h-6" />
-                                                        </div>
-                                                    </div>
-                                                </div>
-
-                                                {/* Balance Card (Optional or placeholder to keep layout) */}
-                                                <div className="bg-gradient-to-br from-emerald-50 to-teal-50 border border-emerald-100/50 p-5 rounded-2xl shadow-sm group hover:shadow-md transition-all duration-300">
-                                                    <div className="flex items-center justify-between">
-                                                        <div className="space-y-1">
-                                                            <p className="text-[10px] font-bold text-emerald-600 uppercase tracking-widest opacity-70">Current Balance</p>
-                                                            <div className="flex items-baseline gap-1">
-                                                                <h3 className="text-2xl font-black text-gray-900 leading-none">
-                                                                    {(viewData?.totalBalance || 0).toLocaleString('en-IN')}
-                                                                </h3>
-                                                                <span className="text-[10px] font-bold text-gray-400">TK</span>
-                                                            </div>
-                                                        </div>
-                                                        <div className="w-12 h-12 rounded-xl bg-emerald-100 flex items-center justify-center text-emerald-600 group-hover:scale-110 transition-transform">
-                                                            <TrendingUpIcon className="w-6 h-6" />
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                            </>
-                                        ) : (
-                                            <>
-                                                {/* Total Paid Card */}
-                                                <div className="bg-gradient-to-br from-blue-50 to-indigo-50 border border-blue-100/50 p-5 rounded-2xl shadow-sm group hover:shadow-md transition-all duration-300">
-                                                    <div className="flex items-center justify-between">
-                                                        <div className="space-y-1">
-                                                            <p className="text-[10px] font-bold text-blue-600 uppercase tracking-widest opacity-70">Total Paid</p>
-                                                            <h3 className="text-2xl font-black text-gray-900 leading-none">
-                                                                {filteredPayments.reduce((acc, p) => acc + (parseFloat(p.amount) || 0), 0).toLocaleString('en-IN')}
-                                                            </h3>
-                                                        </div>
-                                                        <div className="w-12 h-12 rounded-xl bg-blue-100 flex items-center justify-center text-blue-600 group-hover:scale-110 transition-transform">
-                                                            <DollarSignIcon className="w-6 h-6" />
-                                                        </div>
-                                                    </div>
-                                                </div>
-
-                                                {/* Transaction Count Card */}
-                                                <div className="bg-gradient-to-br from-amber-50 to-orange-50 border border-amber-100/50 p-5 rounded-2xl shadow-sm group hover:shadow-md transition-all duration-300">
-                                                    <div className="flex items-center justify-between">
-                                                        <div className="space-y-1">
-                                                            <p className="text-[10px] font-bold text-amber-600 uppercase tracking-widest opacity-70">Transactions</p>
-                                                            <h3 className="text-2xl font-black text-gray-900 leading-none">
-                                                                {filteredPayments.length}
-                                                            </h3>
-                                                        </div>
-                                                        <div className="w-12 h-12 rounded-xl bg-amber-100 flex items-center justify-center text-amber-600 group-hover:scale-110 transition-transform">
-                                                            <BarChartIcon className="w-6 h-6" />
-                                                        </div>
-                                                    </div>
-                                                </div>
-
-                                                {/* Balance Card */}
-                                                <div className="bg-gradient-to-br from-emerald-50 to-teal-50 border border-emerald-100/50 p-5 rounded-2xl shadow-sm group hover:shadow-md transition-all duration-300">
-                                                    <div className="flex items-center justify-between">
-                                                        <div className="space-y-1">
-                                                            <p className="text-[10px] font-bold text-emerald-600 uppercase tracking-widest opacity-70">Current Balance</p>
-                                                            <div className="flex items-baseline gap-1">
-                                                                <h3 className="text-2xl font-black text-gray-900 leading-none">
-                                                                    {(viewData?.totalBalance || 0).toLocaleString('en-IN')}
-                                                                </h3>
-                                                                <span className="text-[10px] font-bold text-gray-400">TK</span>
-                                                            </div>
-                                                        </div>
-                                                        <div className="w-12 h-12 rounded-xl bg-emerald-100 flex items-center justify-center text-emerald-600 group-hover:scale-110 transition-transform">
-                                                            <TrendingUpIcon className="w-6 h-6" />
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                            </>
-                                        )}
+                                            </div>
+                                        </div>
                                     </div>
 
                                     {historyViewMode === 'earnings' ? (
@@ -1760,7 +1764,7 @@ const CnF = ({
                                                     </tr>
                                                 </thead>
                                                 <tbody className="cnf-table-body">
-                                                    {expenseRecords.filter(exp => !historySearchQuery || exp.lcNo?.toLowerCase().includes(historySearchQuery.toLowerCase()) || exp.importer?.toLowerCase().includes(historySearchQuery.toLowerCase())).map((row, idx) => (
+                                                    {filteredExpenses.map((row, idx) => (
                                                         <tr key={idx} className="cnf-table-row transition-colors">
                                                             <td className="cnf-table-cell whitespace-nowrap">{formatDate(row.date)}</td>
                                                             <td className="cnf-table-cell font-bold whitespace-nowrap text-blue-600">{row.lcNo}</td>
@@ -1772,7 +1776,7 @@ const CnF = ({
                                                             </td>
                                                         </tr>
                                                     ))}
-                                                    {expenseRecords.filter(exp => !historySearchQuery || exp.lcNo?.toLowerCase().includes(historySearchQuery.toLowerCase()) || exp.importer?.toLowerCase().includes(historySearchQuery.toLowerCase())).length === 0 && (
+                                                    {filteredExpenses.length === 0 && (
                                                         <tr>
                                                             <td colSpan="6" className="py-12 text-center text-gray-400">
                                                                 <div className="flex flex-col items-center justify-center">
@@ -1785,7 +1789,7 @@ const CnF = ({
                                                 </tbody>
                                             </table>
                                         </div>
-                                    ) : (
+                                    ) : historyViewMode === 'payments' ? (
                                         <>
                                             <div className="hidden md:block overflow-x-auto">
                                                 <table className="cnf-table">
@@ -1793,8 +1797,9 @@ const CnF = ({
                                                         <tr className="cnf-table-header-row">
                                                             <th className="cnf-table-header">Date</th>
                                                             <th className="cnf-table-header">Method</th>
-                                                            <th className="cnf-table-header">Reference</th>
+                                                            <th className="cnf-table-header">Reference / Bank</th>
                                                             <th className="cnf-table-header text-right">Amount</th>
+                                                            <th className="cnf-table-header text-right">Discount</th>
                                                         </tr>
                                                     </thead>
                                                     <tbody className="cnf-table-body">
@@ -1803,12 +1808,15 @@ const CnF = ({
                                                                 <tr key={idx} className="cnf-table-row">
                                                                     <td className="cnf-table-cell">{formatDate(p.date)}</td>
                                                                     <td className="cnf-table-cell font-bold">{p.method}</td>
-                                                                    <td className="cnf-table-cell truncate max-w-[400px]" title={p.reference || '-'}>{p.reference || '-'}</td>
+                                                                    <td className="cnf-table-cell truncate max-w-[400px]" title={p.bankName || p.reference || '-'}>{p.bankName || p.reference || '-'}</td>
                                                                     <td className="cnf-table-cell text-right font-black">{(p.amount || 0).toLocaleString('en-IN')} Tk</td>
+                                                                    <td className="cnf-table-cell text-right font-bold text-emerald-600">
+                                                                        {p.discount > 0 ? `${(p.discount || 0).toLocaleString('en-IN')} Tk` : '-'}
+                                                                    </td>
                                                                 </tr>
                                                             ))
                                                         ) : (
-                                                            <tr><td colSpan="4" className="text-center py-12 text-gray-400"><DollarSignIcon className="w-8 h-8 mb-2 mx-auto opacity-20" /><p className="text-sm">No payment records found</p></td></tr>
+                                                            <tr><td colSpan="5" className="text-center py-12 text-gray-400"><DollarSignIcon className="w-8 h-8 mb-2 mx-auto opacity-20" /><p className="text-sm">No payment records found</p></td></tr>
                                                         )}
                                                     </tbody>
                                                 </table>
@@ -1822,12 +1830,20 @@ const CnF = ({
                                                                 <span className="px-2 py-0.5 bg-blue-50 text-blue-600 rounded text-[10px] font-black uppercase tracking-widest">{p.method}</span>
                                                             </div>
                                                             <div>
-                                                                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-0.5">Reference</p>
-                                                                <p className="text-xs font-medium text-gray-700 truncate">{p.reference || '-'}</p>
+                                                                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-0.5">Reference / Bank</p>
+                                                                <p className="text-xs font-medium text-gray-700 truncate">{p.bankName || p.reference || '-'}</p>
                                                             </div>
                                                             <div className="flex justify-between items-center pt-2 border-t border-gray-50">
-                                                                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Amount</p>
-                                                                <p className="text-sm font-black text-gray-900">{(p.amount || 0).toLocaleString('en-IN')} Tk</p>
+                                                                <div>
+                                                                    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Amount</p>
+                                                                    <p className="text-sm font-black text-gray-900">{(p.amount || 0).toLocaleString('en-IN')} Tk</p>
+                                                                </div>
+                                                                {p.discount > 0 && (
+                                                                    <div className="text-right">
+                                                                        <p className="text-[10px] font-bold text-emerald-600 uppercase tracking-wider">Discount</p>
+                                                                        <p className="text-sm font-black text-emerald-600">{(p.discount || 0).toLocaleString('en-IN')} Tk</p>
+                                                                    </div>
+                                                                )}
                                                             </div>
                                                         </div>
                                                     ))
@@ -1836,6 +1852,59 @@ const CnF = ({
                                                 )}
                                             </div>
                                         </>
+                                    ) : (
+                                        <div className="overflow-x-auto">
+                                            <table className="cnf-table">
+                                                <thead>
+                                                        <tr className="cnf-table-header-row bg-gray-50">
+                                                            <th className="cnf-table-header py-3 px-4 text-left font-bold uppercase tracking-widest text-[9px]">Date</th>
+                                                            <th className="cnf-table-header py-3 px-4 text-left font-bold uppercase tracking-widest text-[9px]">LC No</th>
+                                                            <th className="cnf-table-header py-3 px-4 text-left font-bold uppercase tracking-widest text-[9px]">Importer</th>
+                                                            <th className="cnf-table-header py-3 px-4 text-left font-bold uppercase tracking-widest text-[9px]">Product</th>
+                                                            <th className="cnf-table-header py-3 px-4 text-right font-bold uppercase tracking-widest text-[9px]">Billing Amount</th>
+                                                            <th className="cnf-table-header py-3 px-4 text-left font-bold uppercase tracking-widest text-[9px]">Payment Method</th>
+                                                            <th className="cnf-table-header py-3 px-4 text-left font-bold uppercase tracking-widest text-[9px]">Reference / Bank</th>
+                                                            <th className="cnf-table-header py-3 px-4 text-right font-bold uppercase tracking-widest text-[9px]">Amount</th>
+                                                            <th className="cnf-table-header py-3 px-4 text-right font-bold uppercase tracking-widest text-[9px]">Discount</th>
+                                                            <th className="cnf-table-header py-3 px-4 text-right font-bold uppercase tracking-widest text-[9px]">Balance</th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody className="cnf-table-body">
+                                                        {filteredAll.map((row, idx) => (
+                                                            <tr key={idx} className="cnf-table-row hover:bg-gray-50/50 transition-colors">
+                                                                <td className="cnf-table-cell py-3 px-4 whitespace-nowrap text-[11px] font-medium text-gray-500">{formatDate(row.date)}</td>
+                                                                <td className="cnf-table-cell py-3 px-4 text-[11px] font-bold text-blue-600">{row.lcNo}</td>
+                                                                <td className="cnf-table-cell py-3 px-4 text-[11px] font-medium text-gray-700 truncate max-w-[120px]">{row.importer}</td>
+                                                                <td className="cnf-table-cell py-3 px-4 text-[11px] font-medium text-gray-700 truncate max-w-[120px]">{row.product}</td>
+                                                                <td className="cnf-table-cell py-3 px-4 text-right text-[11px] font-bold text-gray-900">
+                                                                    {row.billingAmount > 0 ? row.billingAmount.toLocaleString('en-IN', { minimumFractionDigits: 2 }) : '-'}
+                                                                </td>
+                                                                <td className="cnf-table-cell py-3 px-4 text-[11px] font-medium text-gray-600 uppercase tracking-wider">{row.method}</td>
+                                                                <td className="cnf-table-cell py-3 px-4 text-[11px] font-medium text-gray-600 truncate max-w-[150px]">{row.bankName || row.reference || '-'}</td>
+                                                                <td className="cnf-table-cell py-3 px-4 text-right text-[11px] font-black text-rose-600">
+                                                                    {row.amount > 0 ? row.amount.toLocaleString('en-IN', { minimumFractionDigits: 2 }) : '-'}
+                                                                </td>
+                                                                <td className="cnf-table-cell py-3 px-4 text-right text-[11px] font-bold text-emerald-600">
+                                                                    {row.discount > 0 ? row.discount.toLocaleString('en-IN', { minimumFractionDigits: 2 }) : '-'}
+                                                                </td>
+                                                                <td className="cnf-table-cell py-3 px-4 text-right text-[11px] font-black text-gray-900 bg-gray-50/30">
+                                                                    {row.runningBalance.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                                                                </td>
+                                                            </tr>
+                                                        ))}
+                                                    {filteredAll.length === 0 && (
+                                                        <tr>
+                                                            <td colSpan="9" className="py-20 text-center text-gray-400">
+                                                                <div className="flex flex-col items-center justify-center gap-3">
+                                                                    <BoxIcon className="w-12 h-12 opacity-20" />
+                                                                    <p className="text-sm font-medium uppercase tracking-widest opacity-50">No ledger entries found</p>
+                                                                </div>
+                                                            </td>
+                                                        </tr>
+                                                    )}
+                                                </tbody>
+                                            </table>
+                                        </div>
                                     )}
                                 </div>
                             )}

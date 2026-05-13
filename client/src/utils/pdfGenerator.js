@@ -675,7 +675,7 @@ export const generateLCReceiveReportPDF = (reportData, filters, summary) => {
     }
 };
 
-export const generateStockReportPDF = (stockData, filters, reportType = 'short', stockRecords, warehouseData, salesRecords, products) => {
+export const generateStockReportPDF = (stockData, filters, reportType = 'short', stockRecords, warehouseData, salesRecords, products, damages = []) => {
     try {
         const doc = new jsPDF();
 
@@ -754,7 +754,7 @@ export const generateStockReportPDF = (stockData, filters, reportType = 'short',
 
                 return sortedOptions.map(wh => ({
                     name: wh,
-                    data: calculateStockData(stockRecords, { ...filters, warehouse: wh }, '', warehouseData, salesRecords, products)
+                    data: calculateStockData(stockRecords, { ...filters, warehouse: wh }, '', warehouseData, salesRecords, products, damages)
                 })).filter(w => w.data.displayRecords.length > 0);
             })()
             : [{ name: filters.warehouse, data: stockData }];
@@ -790,6 +790,18 @@ export const generateStockReportPDF = (stockData, filters, reportType = 'short',
         const globalTotalSalePktStr = (() => {
             const totalWhole = stockData.displayRecords.reduce((accWhole, item) => accWhole + item.brandList.reduce((sum, ent) => sum + Math.floor(parseFloat(ent.salePacket) || 0), 0), 0);
             const totalRem = Math.round(stockData.displayRecords.reduce((accRem, item) => accRem + item.brandList.reduce((sum, ent) => sum + (parseFloat(ent.saleQuantity) || 0) - (Math.floor(parseFloat(ent.salePacket) || 0) * (parseFloat(ent.packetSize) || 0)), 0), 0));
+            return `${totalWhole}${totalRem !== 0 ? ` - ${Math.abs(totalRem)} kg` : ''}`;
+        })();
+
+        const globalTotalShortagePktStr = (() => {
+            const totalWhole = stockData.displayRecords.reduce((accWhole, item) => accWhole + item.brandList.reduce((sum, ent) => sum + Math.floor((parseFloat(ent.sweepedQuantity) || 0) / (parseFloat(ent.packetSize) || 30)), 0), 0);
+            const totalRem = Math.round(stockData.displayRecords.reduce((accRem, item) => accRem + item.brandList.reduce((sum, ent) => sum + (parseFloat(ent.sweepedQuantity) || 0) % (parseFloat(ent.packetSize) || 30), 0), 0));
+            return `${totalWhole}${totalRem !== 0 ? ` - ${Math.abs(totalRem)} kg` : ''}`;
+        })();
+
+        const globalTotalDamagePktStr = (() => {
+            const totalWhole = stockData.displayRecords.reduce((accWhole, item) => accWhole + item.brandList.reduce((sum, ent) => sum + Math.floor((parseFloat(ent.damageQuantity) || 0) / (parseFloat(ent.packetSize) || 30)), 0), 0);
+            const totalRem = Math.round(stockData.displayRecords.reduce((accRem, item) => accRem + item.brandList.reduce((sum, ent) => sum + (parseFloat(ent.damageQuantity) || 0) % (parseFloat(ent.packetSize) || 30), 0), 0));
             return `${totalWhole}${totalRem !== 0 ? ` - ${Math.abs(totalRem)} kg` : ''}`;
         })();
 
@@ -970,7 +982,7 @@ export const generateStockReportPDF = (stockData, filters, reportType = 'short',
                     if (hasQualSubTotals) {
                         const qualSubRow = [];
                         qualSubRow.push({
-                            content: `${quality} Total`,
+                            content: `${quality} TOTAL`,
                             styles: { fontStyle: 'bolditalic', halign: 'right', fillColor: [245, 245, 250] }
                         });
 
@@ -1085,7 +1097,7 @@ export const generateStockReportPDF = (stockData, filters, reportType = 'short',
                     lineColor: [0, 0, 0],
                     lineWidth: 0.1,
                     textColor: [0, 0, 0],
-                    valign: 'middle'
+                    valign: 'top'
                 },
                 headStyles: {
                     fillColor: [245, 245, 245],
@@ -1157,10 +1169,10 @@ export const generateStockReportPDF = (stockData, filters, reportType = 'short',
             finalY = 20;
         }
 
-        const cardWidth = 64;
+        const cardWidth = 38;
         const cardHeight = 25;
-        const cardGap = 4;
-        const totalCardsWidth = (cardWidth * 3) + (cardGap * 2);
+        const cardGap = 2;
+        const totalCardsWidth = (cardWidth * 5) + (cardGap * 4);
         let cardX = (pageWidth - totalCardsWidth) / 2;
 
         const drawSummaryCard = (x, y, title, pktVal, qtyVal, isBlue = false) => {
@@ -1169,19 +1181,19 @@ export const generateStockReportPDF = (stockData, filters, reportType = 'short',
             doc.setFillColor(255, 255, 255);
             doc.rect(x, y, cardWidth, cardHeight, 'FD');
 
-            doc.setFillColor(245, 245, 245);
+            doc.setFillColor(isBlue ? 240 : 245, isBlue ? 245 : 245, isBlue ? 255 : 245);
             doc.rect(x, y, cardWidth, 8, 'F');
             doc.setDrawColor(200, 200, 200);
             doc.line(x, y + 8, x + cardWidth, y + 8);
 
-            doc.setFontSize(9);
+            doc.setFontSize(7);
             doc.setFont('helvetica', 'bold');
-            doc.setTextColor(0);
+            doc.setTextColor(isBlue ? 0 : 0);
             const titleWidth = doc.getTextWidth(title);
-            doc.text(title, x + (cardWidth - titleWidth) / 2, y + 5.5);
+            doc.text(title, x + (cardWidth - titleWidth) / 2, y + 5.2); // Adjusted for center
 
             // Row 1: BAG
-            doc.setFontSize(10);
+            doc.setFontSize(8);
             doc.setFont('helvetica', 'normal');
             doc.setTextColor(0);
             const pktLabelWidth = doc.getTextWidth("BAG: ");
@@ -1194,28 +1206,29 @@ export const generateStockReportPDF = (stockData, filters, reportType = 'short',
 
             doc.setFont('helvetica', 'normal');
             doc.setTextColor(0);
-            doc.text("BAG: ", pktLineX, y + 15);
+            doc.text("BAG: ", pktLineX, y + 14.5); // Adjusted up
             doc.setFont('helvetica', 'bold');
             doc.setTextColor(0);
-            doc.text(pktValStr, pktLineX + pktLabelWidth, y + 15);
+            doc.text(pktValStr, pktLineX + pktLabelWidth, y + 14.5);
 
             // Row 2: QTY
             const qtyStrVal = `${Math.round(qtyVal).toLocaleString('en-US')} kg`;
+            doc.setFontSize(8);
             doc.setFont('helvetica', 'normal');
             doc.setTextColor(0);
             const qtyLabelWidth = doc.getTextWidth("QTY: ");
             doc.setFont('helvetica', 'bold');
-            doc.setTextColor(0);
+            doc.setTextColor(isBlue ? 0 : 0);
             const qtyValWidth = doc.getTextWidth(qtyStrVal);
             const qtyTotalWidth = qtyLabelWidth + qtyValWidth;
             const qtyLineX = x + (cardWidth - qtyTotalWidth) / 2;
 
             doc.setFont('helvetica', 'normal');
             doc.setTextColor(0);
-            doc.text("QTY: ", qtyLineX, y + 21);
+            doc.text("QTY: ", qtyLineX, y + 20.5); // Adjusted up
             doc.setFont('helvetica', 'bold');
-            doc.setTextColor(0);
-            doc.text(qtyStrVal, qtyLineX + qtyLabelWidth, y + 21);
+            doc.setTextColor(isBlue ? 0 : 0);
+            doc.text(qtyStrVal, qtyLineX + qtyLabelWidth, y + 20.5);
         };
 
         drawSummaryCard(cardX, finalY, "OPENING STOCK", globalGrandTotalPktStr, stockData.totalTotalInHouseQty, false);
@@ -1223,6 +1236,10 @@ export const generateStockReportPDF = (stockData, filters, reportType = 'short',
         drawSummaryCard(cardX, finalY, "TOTAL SALE", globalTotalSalePktStr, stockData.totalSaleQty, false);
         cardX += cardWidth + cardGap;
         drawSummaryCard(cardX, finalY, "CLOSING STOCK", globalInHousePktStr, stockData.totalInHouseQty, true);
+        cardX += cardWidth + cardGap;
+        drawSummaryCard(cardX, finalY, "TOTAL SHORTAGE", globalTotalShortagePktStr, stockData.totalShortage || 0, false);
+        cardX += cardWidth + cardGap;
+        drawSummaryCard(cardX, finalY, "TOTAL DAMAGE", globalTotalDamagePktStr, stockData.totalDamageQty || 0, false);
 
         // --- Signature Section ---
         const sigY = finalY + 45;
@@ -1755,7 +1772,7 @@ export const generateSaleInvoicePDF = async (sale, allCustomers = []) => {
         // Line 4: Contact No (Full Width)
         doc.setFont('helvetica', 'bold');
         doc.text("Contact No", margin, y);
-doc.line(margin + labelWidth, y + 1, pageWidth - margin, y + 1);
+        doc.line(margin + labelWidth, y + 1, pageWidth - margin, y + 1);
 
         y += 14;
 
@@ -1763,8 +1780,8 @@ doc.line(margin + labelWidth, y + 1, pageWidth - margin, y + 1);
         const tableRows = [];
         let items = sale.items || [];
 
-        const hasReturns = items.some(item => 
-            (parseFloat(item.returnQty) || 0) > 0 || 
+        const hasReturns = items.some(item =>
+            (parseFloat(item.returnQty) || 0) > 0 ||
             (item.brandEntries && item.brandEntries.some(be => (parseFloat(be.returnQty) || 0) > 0))
         ) || (parseFloat(sale.returnQty) || 0) > 0;
 
@@ -1845,20 +1862,20 @@ doc.line(margin + labelWidth, y + 1, pageWidth - margin, y + 1);
             });
         }
 
-        const tableHead = hasReturns 
+        const tableHead = hasReturns
             ? [['SN', 'Product Name', isBorderSale ? 'Truck' : 'Brand', 'Purchase', 'Return', 'Net Qty', 'Rate', 'Total Amount']]
             : [['SN', 'Product Name', isBorderSale ? 'Truck' : 'Brand', 'Quantity', 'Rate', 'Total Amount']];
 
         const columnStyles = hasReturns
             ? {
-                0: { cellWidth: 8 }, 
-                1: { cellWidth: 35 }, 
-                2: { cellWidth: 35 }, 
-                3: { halign: 'center', cellWidth: 20 }, 
-                4: { halign: 'center', cellWidth: 20 }, 
-                5: { halign: 'center', cellWidth: 20, fontStyle: 'bold' }, 
-                6: { halign: 'right', cellWidth: 22 }, 
-                7: { halign: 'right', fontStyle: 'bold' }, 
+                0: { cellWidth: 8 },
+                1: { cellWidth: 35 },
+                2: { cellWidth: 35 },
+                3: { halign: 'center', cellWidth: 20 },
+                4: { halign: 'center', cellWidth: 20 },
+                5: { halign: 'center', cellWidth: 20, fontStyle: 'bold' },
+                6: { halign: 'right', cellWidth: 22 },
+                7: { halign: 'right', fontStyle: 'bold' },
             }
             : {
                 0: { halign: 'center', cellWidth: 14 },
@@ -3542,6 +3559,147 @@ export const generateCnFHistoryReportPDF = (reportData, agentInfo, filters) => {
     }
 };
 
+export const generateCnFExpenseReportPDF = (reportData, agentInfo, filters) => {
+    try {
+        const doc = new jsPDF({ orientation: 'p', unit: 'mm', format: 'a4' });
+
+        const pageWidth = doc.internal.pageSize.width;
+        const pageHeight = doc.internal.pageSize.height;
+        const margin = 10;
+
+        // Header
+        doc.setFontSize(22);
+        doc.setFont('helvetica', 'bold');
+        doc.text("M/S ANI ENTERPRISE", pageWidth / 2, 20, { align: 'center' });
+
+        doc.setFontSize(10);
+        doc.setFont('helvetica', 'normal');
+        doc.setTextColor(0);
+        doc.text("766, H.M Tower, Level-06, Borogola, Bogura-5800, Bangladesh", pageWidth / 2, 26, { align: 'center' });
+        doc.text("+8802588813057, anienterprise051@gmail.com, www.anienterprises.com.bd", pageWidth / 2, 31, { align: 'center' });
+
+        doc.setDrawColor(0);
+        doc.setLineWidth(0.5);
+        doc.line(margin, 40, pageWidth - margin, 40);
+
+        doc.setFillColor(255, 255, 255);
+        doc.setDrawColor(0);
+        doc.rect(pageWidth / 2 - 40, 37, 80, 8, 'FD');
+        doc.setFontSize(12);
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(0);
+        doc.text("LC EXPENSE REPORT", pageWidth / 2, 42, { align: 'center' });
+
+        let yPos = 55;
+        doc.setFontSize(9);
+
+        doc.setFont('helvetica', 'bold');
+        doc.text("Agent Name:", margin, yPos);
+        doc.setFont('helvetica', 'normal');
+        doc.text(agentInfo.name || '-', margin + 22, yPos);
+
+        doc.setFont('helvetica', 'bold');
+        doc.text("Agent ID:", margin, yPos + 6);
+        doc.setFont('helvetica', 'normal');
+        doc.text(agentInfo.cnfId || '-', margin + 22, yPos + 6);
+
+        const dateStr = formatDate(new Date().toISOString().split('T')[0]);
+        const rightColX = pageWidth - margin - 70;
+
+        doc.setFont('helvetica', 'bold');
+        doc.text("Printed on:", rightColX, yPos);
+        doc.setFont('helvetica', 'normal');
+        doc.text(dateStr, pageWidth - margin, yPos, { align: 'right' });
+
+        if (filters.startDate || filters.endDate) {
+            doc.setFont('helvetica', 'bold');
+            doc.text("Date Range:", rightColX, yPos + 6);
+            doc.setFont('helvetica', 'normal');
+            doc.text(`${formatDate(filters.startDate) === '-' ? 'Start' : formatDate(filters.startDate)} to ${formatDate(filters.endDate) === '-' ? 'Present' : formatDate(filters.endDate)}`, pageWidth - margin, yPos + 6, { align: 'right' });
+        }
+
+        const tableRows = reportData.map((row) => [
+            formatDate(row.date),
+            row.lcNo || '-',
+            row.importer || '-',
+            row.product || '-',
+            row.port || '-',
+            parseFloat(row.amount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })
+        ]);
+
+        const totalAmount = reportData.reduce((sum, row) => sum + (parseFloat(row.amount) || 0), 0);
+
+        autoTable(doc, {
+            startY: yPos + 15,
+            head: [['Billing Date', 'LC No', 'Importer', 'Product', 'Port', 'Amount']],
+            body: tableRows,
+            foot: [[
+                { content: 'GRAND TOTAL', colSpan: 5, styles: { halign: 'right', fontStyle: 'bold' } },
+                { content: totalAmount.toLocaleString('en-IN', { minimumFractionDigits: 2 }), styles: { halign: 'right', fontStyle: 'bold' } }
+            ]],
+            theme: 'plain',
+            styles: {
+                fontSize: 9.5,
+                cellPadding: 2,
+                lineColor: [0, 0, 0],
+                lineWidth: 0.15,
+                textColor: [0, 0, 0],
+                valign: 'middle'
+            },
+            headStyles: {
+                fillColor: [240, 240, 240],
+                textColor: [0, 0, 0],
+                fontStyle: 'bold',
+                halign: 'center',
+                valign: 'middle',
+                lineWidth: 0.15
+            },
+            footStyles: {
+                fillColor: [240, 240, 240],
+                textColor: [0, 0, 0],
+                fontStyle: 'bold',
+                lineWidth: 0.15
+            },
+            margin: { left: margin, right: margin },
+            columnStyles: {
+                0: { cellWidth: 25, halign: 'center' },
+                1: { cellWidth: 30, halign: 'center' },
+                2: { cellWidth: 40, halign: 'left' },
+                3: { cellWidth: 40, halign: 'left' },
+                4: { cellWidth: 25, halign: 'center' },
+                5: { cellWidth: 30, halign: 'right' }
+            }
+        });
+
+        let finalY = doc.lastAutoTable.finalY + 40;
+        if (finalY + 20 > pageHeight) {
+            doc.addPage();
+            finalY = 40;
+        }
+
+        const sigWidth = 40;
+        const sigGap = (pageWidth - (margin * 2) - (sigWidth * 3)) / 2;
+
+        doc.setLineWidth(0.2);
+        doc.line(margin, finalY, margin + sigWidth, finalY);
+        doc.setFontSize(8);
+        doc.text("PREPARED BY", margin + sigWidth / 2, finalY + 5, { align: 'center' });
+
+        doc.line(margin + sigWidth + sigGap, finalY, margin + sigWidth + sigGap + sigWidth, finalY);
+        doc.text("VERIFIED BY", margin + sigWidth + sigGap + sigWidth / 2, finalY + 5, { align: 'center' });
+
+        doc.line(pageWidth - margin - sigWidth, finalY, pageWidth - margin, finalY);
+        doc.text("AUTHORIZED SIGNATURE", pageWidth - margin - sigWidth / 2, finalY + 5, { align: 'center' });
+
+        const pdfOutput = doc.output('blob');
+        const blobURL = URL.createObjectURL(pdfOutput);
+        window.open(blobURL, '_blank');
+    } catch (error) {
+        console.error("PDF Generation Error:", error);
+        alert(`Failed to generate PDF: ${error.message}`);
+    }
+};
+
 export const generateCnFAgentListReportPDF = (agents, moduleType) => {
     try {
         const doc = new jsPDF({ orientation: 'p', unit: 'mm', format: 'a4' });
@@ -3669,5 +3827,306 @@ export const generateCnFAgentListReportPDF = (agents, moduleType) => {
     } catch (error) {
         console.error("C&F Agent List PDF Error:", error);
         alert(`Failed to generate C&F Agent List PDF: ${error.message}`);
+    }
+};
+
+export const generateCnFPaymentReportPDF = (reportData, agentInfo, filters) => {
+    try {
+        const doc = new jsPDF({ orientation: 'p', unit: 'mm', format: 'a4' });
+
+        const pageWidth = doc.internal.pageSize.width;
+        const pageHeight = doc.internal.pageSize.height;
+        const margin = 10;
+
+        // Header
+        doc.setFontSize(22);
+        doc.setFont('helvetica', 'bold');
+        doc.text("M/S ANI ENTERPRISE", pageWidth / 2, 20, { align: 'center' });
+
+        doc.setFontSize(10);
+        doc.setFont('helvetica', 'normal');
+        doc.setTextColor(0);
+        doc.text("766, H.M Tower, Level-06, Borogola, Bogura-5800, Bangladesh", pageWidth / 2, 26, { align: 'center' });
+        doc.text("+8802588813057, anienterprise051@gmail.com, www.anienterprises.com.bd", pageWidth / 2, 31, { align: 'center' });
+
+        doc.setDrawColor(0);
+        doc.setLineWidth(0.5);
+        doc.line(margin, 40, pageWidth - margin, 40);
+
+        doc.setFillColor(255, 255, 255);
+        doc.setDrawColor(0);
+        doc.rect(pageWidth / 2 - 40, 37, 80, 8, 'FD');
+        doc.setFontSize(12);
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(0);
+        doc.text("C&F PAYMENT REPORT", pageWidth / 2, 42, { align: 'center' });
+
+        let yPos = 55;
+        doc.setFontSize(9);
+
+        doc.setFont('helvetica', 'bold');
+        doc.text("Agent Name:", margin, yPos);
+        doc.setFont('helvetica', 'normal');
+        doc.text(agentInfo.name || '-', margin + 22, yPos);
+
+        doc.setFont('helvetica', 'bold');
+        doc.text("Agent ID:", margin, yPos + 6);
+        doc.setFont('helvetica', 'normal');
+        doc.text(agentInfo.cnfId || '-', margin + 22, yPos + 6);
+
+        const dateStr = formatDate(new Date().toISOString().split('T')[0]);
+        const rightColX = pageWidth - margin - 70;
+
+        doc.setFont('helvetica', 'bold');
+        doc.text("Printed on:", rightColX, yPos);
+        doc.setFont('helvetica', 'normal');
+        doc.text(dateStr, pageWidth - margin, yPos, { align: 'right' });
+
+        if (filters.startDate || filters.endDate) {
+            doc.setFont('helvetica', 'bold');
+            doc.text("Date Range:", rightColX, yPos + 6);
+            doc.setFont('helvetica', 'normal');
+            doc.text(`${formatDate(filters.startDate) === '-' ? 'Start' : formatDate(filters.startDate)} to ${formatDate(filters.endDate) === '-' ? 'Present' : formatDate(filters.endDate)}`, pageWidth - margin, yPos + 6, { align: 'right' });
+        }
+
+        const tableRows = reportData.map((row) => [
+            formatDate(row.date),
+            row.method || '-',
+            row.bankName ? (row.reference ? `${row.reference} / ${row.bankName}` : row.bankName) : (row.reference || '-'),
+            parseFloat(row.amount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 }),
+            parseFloat(row.discount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })
+        ]);
+
+        const totalAmount = reportData.reduce((sum, row) => sum + (parseFloat(row.amount) || 0), 0);
+        const totalDiscount = reportData.reduce((sum, row) => sum + (parseFloat(row.discount) || 0), 0);
+
+        autoTable(doc, {
+            startY: yPos + 15,
+            head: [['Date', 'Method', 'Reference / Bank', 'Amount', 'Discount']],
+            body: tableRows,
+            foot: [[
+                { content: 'GRAND TOTAL', colSpan: 3, styles: { halign: 'right', fontStyle: 'bold' } },
+                { content: totalAmount.toLocaleString('en-IN', { minimumFractionDigits: 2 }), styles: { halign: 'right', fontStyle: 'bold' } },
+                { content: totalDiscount.toLocaleString('en-IN', { minimumFractionDigits: 2 }), styles: { halign: 'right', fontStyle: 'bold' } }
+            ]],
+            theme: 'plain',
+            styles: {
+                fontSize: 9.5,
+                cellPadding: 2,
+                lineColor: [0, 0, 0],
+                lineWidth: 0.15,
+                textColor: [0, 0, 0],
+                valign: 'middle'
+            },
+            headStyles: {
+                fillColor: [240, 240, 240],
+                textColor: [0, 0, 0],
+                fontStyle: 'bold',
+                halign: 'center',
+                valign: 'middle',
+                lineWidth: 0.15
+            },
+            footStyles: {
+                fillColor: [240, 240, 240],
+                textColor: [0, 0, 0],
+                fontStyle: 'bold',
+                lineWidth: 0.15
+            },
+            margin: { left: margin, right: margin },
+            columnStyles: {
+                0: { cellWidth: 30, halign: 'center' },
+                1: { cellWidth: 40, halign: 'center' },
+                2: { cellWidth: 55, halign: 'left' },
+                3: { cellWidth: 35, halign: 'right' },
+                4: { cellWidth: 30, halign: 'right' }
+            }
+        });
+
+        let finalY = doc.lastAutoTable.finalY + 40;
+        if (finalY + 20 > pageHeight) {
+            doc.addPage();
+            finalY = 40;
+        }
+
+        const sigWidth = 40;
+        const sigGap = (pageWidth - (margin * 2) - (sigWidth * 3)) / 2;
+
+        doc.setLineWidth(0.2);
+        doc.line(margin, finalY, margin + sigWidth, finalY);
+        doc.setFontSize(8);
+        doc.text("PREPARED BY", margin + sigWidth / 2, finalY + 5, { align: 'center' });
+
+        doc.line(margin + sigWidth + sigGap, finalY, margin + sigWidth + sigGap + sigWidth, finalY);
+        doc.text("VERIFIED BY", margin + sigWidth + sigGap + sigWidth / 2, finalY + 5, { align: 'center' });
+
+        doc.line(pageWidth - margin - sigWidth, finalY, pageWidth - margin, finalY);
+        doc.text("AUTHORIZED SIGNATURE", pageWidth - margin - sigWidth / 2, finalY + 5, { align: 'center' });
+
+        const pdfOutput = doc.output('blob');
+        const blobURL = URL.createObjectURL(pdfOutput);
+        window.open(blobURL, '_blank');
+    } catch (error) {
+        console.error("PDF Generation Error:", error);
+        alert(`Failed to generate PDF: ${error.message}`);
+    }
+};
+
+export const generateCnFAllReportPDF = (reportData, agentInfo, filters) => {
+    try {
+        const doc = new jsPDF({ orientation: 'l', unit: 'mm', format: 'a4' });
+
+        const pageWidth = doc.internal.pageSize.width;
+        const pageHeight = doc.internal.pageSize.height;
+        const margin = 10;
+
+        // Header
+        doc.setFontSize(22);
+        doc.setFont('helvetica', 'bold');
+        doc.text("M/S ANI ENTERPRISE", pageWidth / 2, 20, { align: 'center' });
+
+        doc.setFontSize(10);
+        doc.setFont('helvetica', 'normal');
+        doc.setTextColor(0);
+        doc.text("766, H.M Tower, Level-06, Borogola, Bogura-5800, Bangladesh", pageWidth / 2, 26, { align: 'center' });
+        doc.text("+8802588813057, anienterprise051@gmail.com, www.anienterprises.com.bd", pageWidth / 2, 31, { align: 'center' });
+
+        doc.setDrawColor(0);
+        doc.setLineWidth(0.5);
+        doc.line(margin, 40, pageWidth - margin, 40);
+
+        doc.setFillColor(255, 255, 255);
+        doc.setDrawColor(0);
+        doc.rect(pageWidth / 2 - 40, 37, 80, 8, 'FD');
+        doc.setFontSize(12);
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(0);
+        doc.text("C&F COMPLETE LEDGER", pageWidth / 2, 42, { align: 'center' });
+
+        let yPos = 55;
+        doc.setFontSize(9);
+
+        doc.setFont('helvetica', 'bold');
+        doc.text("Agent Name:", margin, yPos);
+        doc.setFont('helvetica', 'normal');
+        doc.text(agentInfo.name || '-', margin + 22, yPos);
+
+        doc.setFont('helvetica', 'bold');
+        doc.text("Agent ID:", margin, yPos + 6);
+        doc.setFont('helvetica', 'normal');
+        doc.text(agentInfo.cnfId || '-', margin + 22, yPos + 6);
+
+        const dateStr = formatDate(new Date().toISOString().split('T')[0]);
+        const rightColX = pageWidth - margin - 70;
+
+        doc.setFont('helvetica', 'bold');
+        doc.text("Printed on:", rightColX, yPos);
+        doc.setFont('helvetica', 'normal');
+        doc.text(dateStr, pageWidth - margin, yPos, { align: 'right' });
+
+        if (filters.startDate || filters.endDate) {
+            doc.setFont('helvetica', 'bold');
+            doc.text("Date Range:", rightColX, yPos + 6);
+            doc.setFont('helvetica', 'normal');
+            doc.text(`${formatDate(filters.startDate) === '-' ? 'Start' : formatDate(filters.startDate)} to ${formatDate(filters.endDate) === '-' ? 'Present' : formatDate(filters.endDate)}`, pageWidth - margin, yPos + 6, { align: 'right' });
+        }
+
+        const tableRows = reportData.map((row) => [
+            formatDate(row.date),
+            row.lcNo || '-',
+            row.importer || '-',
+            row.product || '-',
+            row.billingAmount > 0 ? row.billingAmount.toLocaleString('en-IN', { minimumFractionDigits: 2 }) : '-',
+            row.method || '-',
+            row.bankName ? (row.reference ? `${row.reference} / ${row.bankName}` : row.bankName) : (row.reference || '-'),
+            row.amount > 0 ? row.amount.toLocaleString('en-IN', { minimumFractionDigits: 2 }) : '-',
+            row.discount > 0 ? row.discount.toLocaleString('en-IN', { minimumFractionDigits: 2 }) : '-',
+            row.runningBalance.toLocaleString('en-IN', { minimumFractionDigits: 2 })
+        ]);
+
+        const totalBilling = reportData.reduce((sum, row) => sum + (parseFloat(row.billingAmount) || 0), 0);
+        const totalAmount = reportData.reduce((sum, row) => sum + (parseFloat(row.amount) || 0), 0);
+        const totalDiscount = reportData.reduce((sum, row) => sum + (parseFloat(row.discount) || 0), 0);
+
+        const totalTableWidth = 18 + 22 + 32 + 32 + 22 + 22 + 38 + 22 + 22 + 25;
+        const tableMargin = (pageWidth - totalTableWidth) / 2;
+        const lastBalance = reportData.length > 0 ? reportData[reportData.length - 1].runningBalance : 0;
+
+        autoTable(doc, {
+            startY: yPos + 15,
+            head: [['Date', 'LC No', 'Importer', 'Product', 'Billing Amt', 'Method', 'Reference / Bank', 'Amount', 'Discount', 'Balance']],
+            body: tableRows,
+            foot: [[
+                { content: 'GRAND TOTAL', colSpan: 4, styles: { halign: 'right', fontStyle: 'bold' } },
+                { content: totalBilling.toLocaleString('en-IN', { minimumFractionDigits: 2 }), styles: { halign: 'right', fontStyle: 'bold' } },
+                '',
+                '',
+                { content: totalAmount.toLocaleString('en-IN', { minimumFractionDigits: 2 }), styles: { halign: 'right', fontStyle: 'bold' } },
+                { content: totalDiscount.toLocaleString('en-IN', { minimumFractionDigits: 2 }), styles: { halign: 'right', fontStyle: 'bold' } },
+                { content: lastBalance.toLocaleString('en-IN', { minimumFractionDigits: 2 }), styles: { halign: 'right', fontStyle: 'bold' } }
+            ]],
+            theme: 'plain',
+            styles: {
+                fontSize: 8,
+                cellPadding: 1.5,
+                lineColor: [0, 0, 0],
+                lineWidth: 0.1,
+                textColor: [0, 0, 0],
+                valign: 'middle'
+            },
+            headStyles: {
+                fillColor: [240, 240, 240],
+                textColor: [0, 0, 0],
+                fontStyle: 'bold',
+                halign: 'center',
+                valign: 'middle',
+                lineWidth: 0.1
+            },
+            footStyles: {
+                fillColor: [240, 240, 240],
+                textColor: [0, 0, 0],
+                fontStyle: 'bold',
+                lineWidth: 0.1
+            },
+            margin: { left: tableMargin, right: tableMargin },
+            columnStyles: {
+                0: { cellWidth: 18, halign: 'center' },
+                1: { cellWidth: 22, halign: 'center' },
+                2: { cellWidth: 32, halign: 'left' },
+                3: { cellWidth: 32, halign: 'left' },
+                4: { cellWidth: 22, halign: 'right' },
+                5: { cellWidth: 22, halign: 'center' },
+                6: { cellWidth: 38, halign: 'left' },
+                7: { cellWidth: 22, halign: 'right' },
+                8: { cellWidth: 22, halign: 'right' },
+                9: { cellWidth: 25, halign: 'right', fontStyle: 'bold' }
+            }
+        });
+
+        let finalY = doc.lastAutoTable.finalY + 40;
+        if (finalY + 20 > pageHeight) {
+            doc.addPage();
+            finalY = 40;
+        }
+
+        const sigWidth = 40;
+        const sigGap = (pageWidth - (margin * 2) - (sigWidth * 3)) / 2;
+
+        doc.setLineWidth(0.2);
+        doc.line(margin, finalY, margin + sigWidth, finalY);
+        doc.setFontSize(8);
+        doc.text("PREPARED BY", margin + sigWidth / 2, finalY + 5, { align: 'center' });
+
+        doc.line(margin + sigWidth + sigGap, finalY, margin + sigWidth + sigGap + sigWidth, finalY);
+        doc.text("VERIFIED BY", margin + sigWidth + sigGap + sigWidth / 2, finalY + 5, { align: 'center' });
+
+        doc.line(pageWidth - margin - sigWidth, finalY, pageWidth - margin, finalY);
+        doc.text("AUTHORIZED SIGNATURE", pageWidth - margin - sigWidth / 2, finalY + 5, { align: 'center' });
+
+        const pdfOutput = doc.output('blob');
+        const blobURL = URL.createObjectURL(pdfOutput);
+        window.open(blobURL, '_blank');
+    } catch (error) {
+        console.error("PDF Generation Error:", error);
+        alert(`Failed to generate PDF: ${error.message}`);
     }
 };

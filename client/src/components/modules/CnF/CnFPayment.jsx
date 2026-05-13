@@ -53,13 +53,17 @@ const CnFPayment = () => {
     const [expandedCard, setExpandedCard] = useState(null);
     const cnfDropdownRef = useRef(null);
     const methodDropdownRef = useRef(null);
+    const bankDropdownRef = useRef(null);
+    const [banks, setBanks] = useState([]);
 
     const [newPayment, setNewPayment] = useState({
         cnfId: '',
         date: new Date().toISOString().split('T')[0],
         method: 'Cash',
         amount: '',
+        discount: '',
         reference: '',
+        bankName: '',
         remarks: ''
     });
 
@@ -70,12 +74,13 @@ const CnFPayment = () => {
 
     const fetchCnFs = async () => {
         try {
-            const [cnfsRes, stockRes, salesRes, paymentsRes, expenseRes] = await Promise.all([
+            const [cnfsRes, stockRes, salesRes, paymentsRes, expenseRes, banksRes] = await Promise.all([
                 axios.get(`${API_BASE_URL}/api/cnfs`),
                 axios.get(`${API_BASE_URL}/api/stock`),
                 axios.get(`${API_BASE_URL}/api/sales`),
                 axios.get(`${API_BASE_URL}/api/cnf-payments`),
-                axios.get(`${API_BASE_URL}/api/lc-expenses`)
+                axios.get(`${API_BASE_URL}/api/lc-expenses`),
+                axios.get(`${API_BASE_URL}/api/banks`)
             ]);
 
             const allCnfs = Array.isArray(cnfsRes.data) ? cnfsRes.data : [];
@@ -83,6 +88,9 @@ const CnFPayment = () => {
             const allSales = Array.isArray(salesRes.data) ? salesRes.data : [];
             const allPayments = Array.isArray(paymentsRes.data) ? paymentsRes.data : [];
             const allExpenses = Array.isArray(expenseRes.data) ? expenseRes.data : [];
+            const allBanks = Array.isArray(banksRes.data) ? banksRes.data : [];
+
+            setBanks(allBanks);
 
             const cnfsWithBalance = allCnfs.map(cnf => {
                 const targetName = (cnf.name || '').toLowerCase().trim();
@@ -226,6 +234,9 @@ const CnFPayment = () => {
             if (activeDropdown === 'method' && methodDropdownRef.current && !methodDropdownRef.current.contains(event.target)) {
                 setActiveDropdown(null);
             }
+            if (activeDropdown === 'bank' && bankDropdownRef.current && !bankDropdownRef.current.contains(event.target)) {
+                setActiveDropdown(null);
+            }
         };
         document.addEventListener('mousedown', handleClickOutside);
         return () => document.removeEventListener('mousedown', handleClickOutside);
@@ -257,7 +268,8 @@ const CnFPayment = () => {
                 ...newPayment,
                 cnfName: selectedCnf?.name,
                 cnfType: selectedCnf?.type,
-                amount: parseFloat(newPayment.amount)
+                amount: parseFloat(newPayment.amount),
+                discount: parseFloat(newPayment.discount || 0)
             };
 
             if (isEditMode) {
@@ -287,7 +299,9 @@ const CnFPayment = () => {
             date: new Date().toISOString().split('T')[0],
             method: 'Cash',
             amount: '',
+            discount: '',
             reference: '',
+            bankName: '',
             remarks: ''
         });
         setCnfSearchQuery('');
@@ -303,7 +317,9 @@ const CnFPayment = () => {
             date: payment.date,
             method: payment.method,
             amount: payment.amount.toString(),
+            discount: (payment.discount || 0).toString(),
             reference: payment.reference || '',
+            bankName: payment.bankName || '',
             remarks: payment.remarks || ''
         });
         const cnf = cnfs.find(c => c._id === payment.cnfId);
@@ -423,7 +439,7 @@ const CnFPayment = () => {
                 /* Add/Edit Form Card */
                 <div className="relative group mb-8">
                     <div className="absolute -inset-1 bg-gradient-to-r from-blue-600 to-indigo-600 rounded-[2.5rem] blur opacity-5 group-hover:opacity-10 transition duration-1000"></div>
-                    <div className="relative bg-white/80 backdrop-blur-xl rounded-[2rem] border border-white shadow-2xl overflow-hidden animate-in slide-in-from-top-4 duration-500">
+                    <div className="relative bg-white/80 backdrop-blur-xl rounded-[2rem] border border-white shadow-2xl animate-in slide-in-from-top-4 duration-500">
                         <div className="px-8 py-6 border-b border-gray-100/50 flex items-center justify-between bg-gradient-to-r from-gray-50/50 to-white">
                             <div>
                                 <h3 className="text-lg font-black text-gray-900 tracking-tight">{isEditMode ? 'Edit C&F Payment' : 'New C&F Payment'}</h3>
@@ -434,8 +450,9 @@ const CnFPayment = () => {
                             </button>
                         </div>
 
-                        <form onSubmit={handleAddPayment} className="p-8 space-y-8">
-                            <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+                        <form onSubmit={handleAddPayment} className="p-8 space-y-6">
+                            {/* Row 1: Basic Info */}
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 pb-6 border-b border-gray-50">
                                 <div className="space-y-1.5">
                                     <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider ml-1">Payment Date</label>
                                     <CustomDatePicker value={newPayment.date} onChange={(e) => setNewPayment({ ...newPayment, date: e.target.value })} compact />
@@ -443,42 +460,51 @@ const CnFPayment = () => {
 
                                 <div className="space-y-1.5 relative">
                                     <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider ml-1">C&F Agent</label>
-                                    <div ref={cnfDropdownRef} className="relative">
-                                        <button
-                                            type="button"
-                                            onClick={() => setActiveDropdown(activeDropdown === 'cnf' ? null : 'cnf')}
-                                            className="w-full flex items-center justify-between px-4 py-2.5 bg-white border border-gray-100 rounded-xl text-sm shadow-sm hover:border-gray-200 transition-all focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 outline-none"
-                                        >
-                                            <span className="truncate">{cnfs.find(c => c._id === newPayment.cnfId)?.name || 'Select C&F'}</span>
-                                            <ChevronDownIcon className="w-4 h-4 text-gray-400" />
-                                        </button>
+                                    <div ref={cnfDropdownRef} className="relative group">
+                                        <div className="relative">
+                                            <input
+                                                type="text"
+                                                placeholder="Search C&F..."
+                                                value={activeDropdown === 'cnf' ? cnfSearchQuery : (cnfs.find(c => c._id === newPayment.cnfId)?.name || '')}
+                                                onChange={(e) => {
+                                                    setCnfSearchQuery(e.target.value);
+                                                    if (activeDropdown !== 'cnf') setActiveDropdown('cnf');
+                                                }}
+                                                onFocus={() => {
+                                                    setActiveDropdown('cnf');
+                                                    setCnfSearchQuery('');
+                                                }}
+                                                className="w-full px-4 py-2.5 bg-white border border-gray-100 rounded-xl text-sm shadow-sm hover:border-gray-200 transition-all focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 outline-none pr-10 font-medium text-gray-900"
+                                            />
+                                            <SearchIcon className={`absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 transition-colors ${activeDropdown === 'cnf' ? 'text-blue-500' : 'text-gray-400'}`} />
+                                        </div>
                                         {activeDropdown === 'cnf' && (
-                                            <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-xl shadow-xl z-[110] max-h-60 flex flex-col animate-in fade-in slide-in-from-top-2 duration-200">
-                                                <div className="p-2 border-b border-gray-100 sticky top-0 bg-white">
-                                                    <input
-                                                        type="text"
-                                                        placeholder="Search C&F..."
-                                                        value={cnfSearchQuery}
-                                                        onChange={(e) => setCnfSearchQuery(e.target.value)}
-                                                        className="w-full px-3 py-1.5 text-sm bg-gray-50 border border-gray-200 rounded-lg outline-none focus:border-blue-500"
-                                                    />
-                                                </div>
-                                                <div className="overflow-y-auto">
-                                                    {cnfs.filter(c => c.name.toLowerCase().includes(cnfSearchQuery.toLowerCase())).map(c => (
+                                            <div className="absolute top-full left-0 right-0 mt-2 bg-white border border-gray-100 rounded-2xl shadow-2xl z-[110] max-h-60 overflow-y-auto animate-in fade-in slide-in-from-top-2 duration-200 border-t-0 py-1">
+                                                {cnfs.filter(c => c.name.toLowerCase().includes(cnfSearchQuery.toLowerCase())).length > 0 ? (
+                                                    cnfs.filter(c => c.name.toLowerCase().includes(cnfSearchQuery.toLowerCase())).map(c => (
                                                         <button
                                                             key={c._id}
                                                             type="button"
-                                                            onClick={() => { setNewPayment({ ...newPayment, cnfId: c._id }); setActiveDropdown(null); }}
-                                                            className="w-full px-4 py-2.5 text-left text-sm hover:bg-blue-50 transition-colors flex items-center justify-between"
+                                                            onClick={() => { 
+                                                                setNewPayment({ ...newPayment, cnfId: c._id }); 
+                                                                setActiveDropdown(null); 
+                                                                setCnfSearchQuery(c.name);
+                                                            }}
+                                                            className="w-full px-5 py-3 text-left text-sm hover:bg-blue-50 transition-colors flex items-center justify-between group"
                                                         >
                                                             <div>
-                                                                <div className="font-bold text-gray-900">{c.name}</div>
-                                                                <div className="text-[10px] text-gray-500">{c.type} C&F</div>
+                                                                <div className="font-bold text-gray-900 group-hover:text-blue-600 transition-colors">{c.name}</div>
+                                                                <div className="text-[10px] text-gray-500 font-medium uppercase tracking-wider">{c.cnfId || c.type}</div>
                                                             </div>
                                                             {newPayment.cnfId === c._id && <CheckIcon className="w-4 h-4 text-blue-600" />}
                                                         </button>
-                                                    ))}
-                                                </div>
+                                                    ))
+                                                ) : (
+                                                    <div className="px-5 py-8 text-center text-gray-400">
+                                                        <BoxIcon className="w-8 h-8 mb-2 mx-auto opacity-20" />
+                                                        <p className="text-xs font-medium">No matching agent found</p>
+                                                    </div>
+                                                )}
                                             </div>
                                         )}
                                     </div>
@@ -498,6 +524,10 @@ const CnFPayment = () => {
                                         />
                                     </div>
                                 </div>
+                            </div>
+
+                            {/* Row 2: Payment Details */}
+                            <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
                                 <div className="space-y-1.5 relative">
                                     <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider ml-1">Payment Method</label>
                                     <div ref={methodDropdownRef} className="relative">
@@ -527,6 +557,49 @@ const CnFPayment = () => {
                                     </div>
                                 </div>
 
+                                {['Bank Transfer', 'Online Banking', 'Cheque'].includes(newPayment.method) ? (
+                                    <div className="space-y-1.5 relative">
+                                        <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider ml-1">Select Bank</label>
+                                        <div ref={bankDropdownRef} className="relative">
+                                            <button
+                                                type="button"
+                                                onClick={() => setActiveDropdown(activeDropdown === 'bank' ? null : 'bank')}
+                                                className="w-full flex items-center justify-between px-4 py-2.5 bg-white border border-gray-100 rounded-xl text-sm shadow-sm hover:border-gray-200 transition-all focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 outline-none"
+                                            >
+                                                <span className="truncate">{newPayment.bankName || 'Select Bank'}</span>
+                                                <ChevronDownIcon className="w-4 h-4 text-gray-400" />
+                                            </button>
+                                            {activeDropdown === 'bank' && (
+                                                <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-xl shadow-xl z-[110] py-1 animate-in fade-in slide-in-from-top-2 duration-200 max-h-48 overflow-y-auto">
+                                                    {banks.map(b => (
+                                                        <button
+                                                            key={b._id}
+                                                            type="button"
+                                                            onClick={() => { setNewPayment({ ...newPayment, bankName: b.bankName }); setActiveDropdown(null); }}
+                                                            className="w-full px-4 py-2 text-left text-sm hover:bg-blue-50 transition-colors flex items-center justify-between"
+                                                        >
+                                                            <span className={newPayment.bankName === b.bankName ? 'font-bold text-blue-600' : 'text-gray-700'}>{b.bankName}</span>
+                                                            {newPayment.bankName === b.bankName && <CheckIcon className="w-3.5 h-3.5 text-blue-600" />}
+                                                        </button>
+                                                    ))}
+                                                    {banks.length === 0 && <div className="px-4 py-2 text-xs text-gray-400">No banks found</div>}
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <div className="space-y-1.5">
+                                        <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider ml-1">Reference / Note</label>
+                                        <input
+                                            type="text"
+                                            value={newPayment.reference}
+                                            onChange={(e) => setNewPayment({ ...newPayment, reference: e.target.value })}
+                                            placeholder="Cheque No, Txn ID, or any reference..."
+                                            className="w-full px-4 py-2.5 bg-white border border-gray-100 rounded-xl text-sm shadow-sm hover:border-gray-200 transition-all focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 outline-none"
+                                        />
+                                    </div>
+                                )}
+
                                 <div className="space-y-1.5">
                                     <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider ml-1">Amount (৳)</label>
                                     <div className="relative">
@@ -543,15 +616,20 @@ const CnFPayment = () => {
                                     </div>
                                 </div>
 
-                                <div className="md:col-span-3 space-y-1.5">
-                                    <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider ml-1">Reference / Note</label>
-                                    <input
-                                        type="text"
-                                        value={newPayment.reference}
-                                        onChange={(e) => setNewPayment({ ...newPayment, reference: e.target.value })}
-                                        placeholder="Cheque No, Txn ID, or any reference..."
-                                        className="w-full px-4 py-2.5 bg-white border border-gray-100 rounded-xl text-sm shadow-sm hover:border-gray-200 transition-all focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 outline-none"
-                                    />
+                                <div className="space-y-1.5">
+                                    <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider ml-1">Discount (৳)</label>
+                                    <div className="relative">
+                                        <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                                            <span className="text-gray-400 font-bold text-sm">৳</span>
+                                        </div>
+                                        <input
+                                            type="number"
+                                            value={newPayment.discount}
+                                            onChange={(e) => setNewPayment({ ...newPayment, discount: e.target.value })}
+                                            placeholder="0.00"
+                                            className="w-full pl-8 pr-4 py-2.5 bg-white border border-gray-100 rounded-xl text-sm font-bold shadow-sm hover:border-gray-200 transition-all focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 outline-none"
+                                        />
+                                    </div>
                                 </div>
                             </div>
 
@@ -668,21 +746,22 @@ const CnFPayment = () => {
                                         </th>
                                         <th className="px-4 py-3 font-bold text-gray-500 text-xs uppercase tracking-wider">Type</th>
                                         <th className="px-4 py-3 font-bold text-gray-500 text-xs uppercase tracking-wider">Method</th>
-                                        <th className="px-4 py-3 font-bold text-gray-500 text-xs uppercase tracking-wider">Reference</th>
+                                        <th className="px-4 py-3 font-bold text-gray-500 text-xs uppercase tracking-wider text-left">Reference / Bank</th>
                                         <th className="px-4 py-3 font-bold text-gray-500 text-xs uppercase tracking-wider text-right cursor-pointer hover:bg-gray-100 transition-colors" onClick={() => handleSort('amount')}>
                                             <div className="flex items-center justify-end gap-1">
                                                 <span>Amount</span>
                                                 <SortIcon config={sortConfig} columnKey="amount" />
                                             </div>
                                         </th>
+                                        <th className="px-4 py-3 font-bold text-gray-500 text-xs uppercase tracking-wider text-right">Discount</th>
                                         {isAdmin && <th className="px-4 py-3 font-bold text-gray-500 text-xs uppercase tracking-wider text-center">Actions</th>}
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-gray-100">
                                     {isLoading ? (
-                                        <tr><td colSpan="7" className="px-4 py-12 text-center text-gray-400">Loading payments...</td></tr>
+                                        <tr><td colSpan={isAdmin ? 8 : 7} className="px-4 py-12 text-center text-gray-400">Loading payments...</td></tr>
                                     ) : filteredPayments.length === 0 ? (
-                                        <tr><td colSpan="7" className="px-4 py-12 text-center text-gray-400">No payment records found.</td></tr>
+                                        <tr><td colSpan={isAdmin ? 8 : 7} className="px-4 py-12 text-center text-gray-400">No payment records found.</td></tr>
                                     ) : (
                                         filteredPayments.map((p) => (
                                             <tr key={p._id} className="hover:bg-gray-50/50 transition-colors group">
@@ -692,8 +771,11 @@ const CnFPayment = () => {
                                                 </td>
                                                 <td className="px-4 py-3 whitespace-nowrap text-gray-500">{p.cnfType}</td>
                                                 <td className="px-4 py-3 whitespace-nowrap text-gray-500">{p.method}</td>
-                                                <td className="px-4 py-3 whitespace-nowrap text-gray-500">{p.reference || '-'}</td>
+                                                <td className="px-4 py-3 whitespace-nowrap text-gray-500">{p.bankName || p.reference || '-'}</td>
                                                 <td className="px-4 py-3 whitespace-nowrap text-right font-black text-gray-900">৳{p.amount.toLocaleString('en-IN')}</td>
+                                                <td className="px-4 py-3 whitespace-nowrap text-right font-bold text-emerald-600">
+                                                    {p.discount > 0 ? `৳${p.discount.toLocaleString('en-IN')}` : '-'}
+                                                </td>
                                                 {isAdmin && (
                                                     <td className="px-4 py-3 whitespace-nowrap text-center">
                                                         <div className="flex items-center justify-center gap-2">
@@ -721,40 +803,49 @@ const CnFPayment = () => {
                                     return (
                                         <div key={p._id} className="p-5 bg-white hover:bg-gray-50 transition-all cursor-pointer" onClick={() => toggleCard(p._id)}>
                                             <div className="flex flex-col gap-2">
-                                                <div className="flex items-center justify-between">
-                                                    <div className="flex items-center gap-2 overflow-hidden mr-2">
-                                                        <div className="text-base md:text-lg font-black text-gray-900 truncate tracking-tight">{p.cnfName}</div>
-                                                        <span className="text-[10px] font-bold text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded uppercase tracking-wider shrink-0">{p.cnfType}</span>
-                                                    </div>
-                                                    <div className="text-base md:text-lg font-black text-gray-900">৳{p.amount.toLocaleString('en-IN')}</div>
-                                                </div>
-                                                <div className="flex items-center gap-4">
-                                                    <div className="flex items-center gap-1.5 text-xs text-gray-400 font-medium">
-                                                        <CalendarIcon className="w-3.5 h-3.5" />
-                                                        {formatDate(p.date)}
-                                                    </div>
-                                                    <div className="flex items-center gap-1.5 text-xs text-gray-400 font-medium">
-                                                        <div className="w-2 h-2 rounded-full bg-blue-500"></div>
-                                                        {p.method}
-                                                    </div>
-                                                </div>
-                                            </div>
-
-                                            {isExpanded && (
-                                                <div className="mt-5 pt-5 border-t border-gray-100 space-y-5 animate-in fade-in slide-in-from-top-1 duration-200">
-                                                    <div className="grid grid-cols-2 gap-5">
-                                                        <div>
-                                                            <span className="block text-gray-400 uppercase font-black tracking-widest text-[10px] mb-1">Payment Method</span>
-                                                            <div className="text-gray-900 text-sm font-bold">{p.method}</div>
+                                                    <div className="flex items-center justify-between">
+                                                        <div className="flex items-center gap-2 overflow-hidden mr-2">
+                                                            <div className="text-base md:text-lg font-black text-gray-900 truncate tracking-tight">{p.cnfName}</div>
+                                                            <span className="text-[10px] font-bold text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded uppercase tracking-wider shrink-0">{p.cnfType}</span>
                                                         </div>
                                                         <div className="text-right">
-                                                            <span className="block text-gray-400 uppercase font-black tracking-widest text-[10px] mb-1">Agent Type</span>
-                                                            <div className="text-gray-900 text-sm font-bold">{p.cnfType}</div>
+                                                            <div className="text-base md:text-lg font-black text-gray-900">৳{p.amount.toLocaleString('en-IN')}</div>
+                                                            {p.discount > 0 && <div className="text-[10px] font-bold text-emerald-600 leading-none">(-৳{p.discount.toLocaleString('en-IN')})</div>}
                                                         </div>
-                                                        <div className="col-span-2">
-                                                            <span className="block text-gray-400 uppercase font-black tracking-widest text-[10px] mb-1">Reference / Note</span>
-                                                            <div className="text-gray-800 text-sm leading-relaxed font-medium">{p.reference || '-'}</div>
+                                                    </div>
+                                                    <div className="flex items-center gap-4">
+                                                        <div className="flex items-center gap-1.5 text-xs text-gray-400 font-medium">
+                                                            <CalendarIcon className="w-3.5 h-3.5" />
+                                                            {formatDate(p.date)}
                                                         </div>
+                                                        <div className="flex items-center gap-1.5 text-xs text-gray-400 font-medium">
+                                                            <div className="w-2 h-2 rounded-full bg-blue-500"></div>
+                                                            {p.method}
+                                                        </div>
+                                                    </div>
+                                                </div>
+
+                                                {isExpanded && (
+                                                    <div className="mt-5 pt-5 border-t border-gray-100 space-y-5 animate-in fade-in slide-in-from-top-1 duration-200">
+                                                        <div className="grid grid-cols-2 gap-5">
+                                                            <div>
+                                                                <span className="block text-gray-400 uppercase font-black tracking-widest text-[10px] mb-1">Payment Method</span>
+                                                                <div className="text-gray-900 text-sm font-bold">{p.method}</div>
+                                                            </div>
+                                                            <div className="text-right">
+                                                                <span className="block text-gray-400 uppercase font-black tracking-widest text-[10px] mb-1">Agent Type</span>
+                                                                <div className="text-gray-900 text-sm font-bold">{p.cnfType}</div>
+                                                            </div>
+                                                            <div className="col-span-2">
+                                                                <span className="block text-gray-400 uppercase font-black tracking-widest text-[10px] mb-1">Reference / Bank</span>
+                                                                <div className="text-gray-800 text-sm leading-relaxed font-medium">{p.bankName || p.reference || '-'}</div>
+                                                            </div>
+                                                            {p.discount > 0 && (
+                                                                <div className="col-span-2">
+                                                                    <span className="block text-gray-400 uppercase font-black tracking-widest text-[10px] mb-1">Discount Given</span>
+                                                                    <div className="text-emerald-600 text-sm font-black italic">৳{p.discount.toLocaleString('en-IN')}</div>
+                                                                </div>
+                                                            )}
                                                         {p.remarks && (
                                                             <div className="col-span-2">
                                                                 <span className="block text-gray-400 uppercase font-black tracking-widest text-[10px] mb-1">Remarks</span>

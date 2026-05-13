@@ -46,7 +46,6 @@
 /* Form Styles */
 .cnf-form-container {
     position: relative;
-    overflow: hidden;
     border-radius: 1rem;
     background: rgba(255, 255, 255, 0.6);
     backdrop-filter: blur(40px);
