@@ -781,19 +781,23 @@ apiRouter.put('/api/sales/:id', async (req, res) => {
     }
 
     if (!isAdmin) {
-      const wasRateMissing = existingData.rateMissing === true;
-      const alreadyEdited = existingData.isEdited === true;
+      if (req.body.isCnfCommissionUpdate) {
+        // Allow C&F commission updates to bypass the general rate missing and edit locks
+      } else {
+        const wasRateMissing = existingData.rateMissing === true;
+        const alreadyEdited = existingData.isEdited === true;
 
-      if (!wasRateMissing) {
-        return res.status(403).json({ message: 'Forbidden: You cannot edit a sale entry that already has a rate.' });
-      }
-      if (alreadyEdited) {
-        return res.status(403).json({ message: 'Forbidden: You have already edited this entry once.' });
-      }
+        if (!wasRateMissing) {
+          return res.status(403).json({ message: 'Forbidden: You cannot edit a sale entry that already has a rate.' });
+        }
+        if (alreadyEdited) {
+          return res.status(403).json({ message: 'Forbidden: You have already edited this entry once.' });
+        }
 
-      // Mark as edited for non-admin
-      req.body.isEdited = true;
-      req.body.rateMissing = true; // Preserve the flag
+        // Mark as edited for non-admin
+        req.body.isEdited = true;
+        req.body.rateMissing = true; // Preserve the flag
+      }
     }
 
     const encryptedData = encryptData(req.body);
@@ -1569,7 +1573,7 @@ apiRouter.delete('/api/notifications/clear', async (req, res) => {
 
 apiRouter.put('/api/notifications/:id', async (req, res) => {
   try {
-    const updated = await Notification.findByIdAndUpdate(req.params.id, req.body, { new: true });
+    const updated = await Notification.findByIdAndUpdate(req.params.id, req.body, { returnDocument: 'after' });
     if (!updated) return res.status(404).json({ message: 'Notification not found' });
     res.json(updated);
   } catch (err) {

@@ -830,7 +830,7 @@ const SalesReport = ({
                                         {saleType !== 'Border' && (
                                             <>
                                                 <th className="border-r border-gray-900 px-1 py-1.5 text-right text-[11px] font-bold text-gray-900 uppercase w-[6%]">Disc</th>
-                                                <th className="border-r border-gray-900 px-1 py-1.5 text-right text-[11px] font-bold text-gray-900 uppercase w-[9%]">Paid</th>
+                                                <th className="border-r border-gray-900 px-1 py-1.5 text-right text-[11px] font-bold text-gray-900 uppercase w-[9%]">Truck Fare</th>
                                                 <th className="px-1 py-1.5 text-right text-[11px] font-bold text-gray-900 uppercase w-[10%]">Balance</th>
                                             </>
                                         )}
@@ -1053,7 +1053,7 @@ const SalesReport = ({
                                                                 <div className="text-[13px] font-black text-red-600">৳{parseFloat(sale.discount || 0).toLocaleString('en-IN')}</div>
                                                             </div>
                                                             <div className="text-center p-2 rounded-lg border bg-emerald-50/40 border-emerald-100/50">
-                                                                <div className="text-[10px] font-bold text-emerald-600 uppercase tracking-widest mb-1">Paid Amount</div>
+                                                                <div className="text-[10px] font-bold text-emerald-600 uppercase tracking-widest mb-1">Truck Fare</div>
                                                                 <div className="text-[13px] font-black text-emerald-700">৳{parseFloat(sale.paidAmount || 0).toLocaleString('en-IN')}</div>
                                                             </div>
                                                             <div className="text-center p-2 rounded-lg border bg-orange-50/40 border-orange-100/50">
@@ -1090,7 +1090,7 @@ const SalesReport = ({
                                             <div className="text-lg font-black text-white">৳{summary.totalAmount.toLocaleString('en-IN')}</div>
                                         </div>
                                         <div>
-                                            <div className="text-[10px] font-bold text-gray-500 uppercase mb-1">Total Paid</div>
+                                            <div className="text-[10px] font-bold text-gray-500 uppercase mb-1">Total Truck Fare</div>
                                             <div className="text-lg font-black text-emerald-400">৳{summary.totalPaid.toLocaleString('en-IN')}</div>
                                         </div>
                                         <div className="text-right">

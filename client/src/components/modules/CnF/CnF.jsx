@@ -753,6 +753,7 @@ const CnF = ({
                     updatedSale.bdCommissionTotal = newTotal.toFixed(2);
                 }
 
+                updatedSale.isCnfCommissionUpdate = true;
                 await axios.put(`${API_BASE_URL}/api/sales/${saleId}`, updatedSale);
             } else {
                 // ORIGINAL BRANCH FOR STOCK (LC)
@@ -846,37 +847,94 @@ const CnF = ({
         if (selectedHistoryIds.size === 0) return;
         setIsSubmitting(true);
         try {
-            const res = await axios.get('/api/stock');
-            const targetCnF = (viewData?.name || '').toUpperCase();
-            const selectedStocks = res.data.filter(r => selectedHistoryIds.has(r._id));
+            const selectedRecords = filteredHistory.filter(r => selectedHistoryIds.has(r._id));
+            const selectedStockRecords = selectedRecords.filter(r => r.source === 'LC');
+            const selectedSaleRecords = selectedRecords.filter(r => r.source === 'Sale');
 
-            for (const originalRecord of selectedStocks) {
-                const updatedData = { ...originalRecord };
-                const indCnF = (originalRecord.indianCnF || '').toLowerCase().trim();
-                const bdCnF = (originalRecord.bdCnF || '').toLowerCase().trim();
-                const targetCnF = (viewData?.name || '').toLowerCase().trim();
-                const commissionRate = parseFloat(bulkEditData.commission) || 0;
-                const qty = parseFloat(originalRecord.qty) || 0;
+            if (selectedStockRecords.length > 0) {
+                const res = await axios.get(`${API_BASE_URL}/api/stock`);
+                for (const row of selectedStockRecords) {
+                    const originalRecord = res.data.find(r => r._id === row._id);
+                    if (!originalRecord) continue;
 
-                let totalCommission = 0;
-                if (bulkEditData.uom === 'QTY') {
-                    totalCommission = qty * commissionRate;
-                } else {
-                    totalCommission = commissionRate;
+                    const updatedData = { ...originalRecord };
+                    const recordIndCnF = (originalRecord.indianCnF || '').toLowerCase().trim();
+                    const recordBdCnF = (originalRecord.bdCnF || '').toLowerCase().trim();
+                    const targetCnF = (viewData?.name || '').toLowerCase().trim();
+                    const commissionRate = parseFloat(bulkEditData.commission) || 0;
+                    const qty = parseFloat(row.qty) || 0;
+
+                    let totalCommission = 0;
+                    if (bulkEditData.uom === 'QTY') {
+                        totalCommission = qty * commissionRate;
+                    } else if (bulkEditData.uom === 'TRUCK') {
+                        const truckCount = !isNaN(parseFloat(row.truck)) ? parseFloat(row.truck) : 1;
+                        totalCommission = truckCount * commissionRate;
+                    } else if (bulkEditData.uom === 'BAG') {
+                        const bagCount = !isNaN(parseFloat(row.bag)) ? parseFloat(row.bag) : 0;
+                        totalCommission = bagCount * commissionRate;
+                    } else {
+                        totalCommission = commissionRate;
+                    }
+
+                    if (row.cnfType === 'Indian' || recordIndCnF === targetCnF) {
+                        updatedData.indCnFComm = commissionRate;
+                        updatedData.indCnFCost = totalCommission;
+                        updatedData.indCnFUom = bulkEditData.uom;
+                        updatedData.indCnFBulkEdited = true;
+                    } else if (row.cnfType === 'BD' || recordBdCnF === targetCnF) {
+                        updatedData.bdCnFComm = commissionRate;
+                        updatedData.bdCnFCost = totalCommission;
+                        updatedData.bdCnFUom = bulkEditData.uom;
+                        updatedData.bdCnFBulkEdited = true;
+                    }
+                    await axios.put(`${API_BASE_URL}/api/stock/${originalRecord._id}`, updatedData);
                 }
+            }
 
-                if (indCnF === targetCnF) {
-                    updatedData.indCnFComm = commissionRate;
-                    updatedData.indCnFCost = totalCommission;
-                    updatedData.indCnFUom = bulkEditData.uom;
-                    updatedData.indCnFBulkEdited = true;
-                } else if (bdCnF === targetCnF) {
-                    updatedData.bdCnFComm = commissionRate;
-                    updatedData.bdCnFCost = totalCommission;
-                    updatedData.bdCnFUom = bulkEditData.uom;
-                    updatedData.bdCnFBulkEdited = true;
+            if (selectedSaleRecords.length > 0) {
+                const salesRes = await axios.get(`${API_BASE_URL}/api/sales`);
+                const allSales = Array.isArray(salesRes.data) ? salesRes.data : [];
+                const saleIds = [...new Set(selectedSaleRecords.map(r => r.originalId))];
+
+                for (const saleId of saleIds) {
+                    const originalSale = allSales.find(s => s._id === saleId);
+                    if (!originalSale) continue;
+
+                    const updatedSale = { ...originalSale };
+                    const sampleRow = selectedSaleRecords.find(r => r.originalId === saleId);
+                    const isIndian = sampleRow.cnfType === 'Indian';
+
+                    if (isIndian) {
+                        updatedSale.indCommissionRate = bulkEditData.commission;
+                        updatedSale.indCommissionUom = bulkEditData.uom;
+                        updatedSale.indCommissionEdited = true;
+                    } else {
+                        updatedSale.bdCommissionRate = bulkEditData.commission;
+                        updatedSale.bdCommissionUom = bulkEditData.uom;
+                        updatedSale.bdCommissionEdited = true;
+                    }
+
+                    const totalTrucks = (updatedSale.items || []).reduce((sum, p) =>
+                        sum + (p.brandEntries || []).reduce((eSum, e) => eSum + (parseFloat(e.truck) || 0), 0)
+                    , 0);
+                    const totalQty = (updatedSale.items || []).reduce((sum, p) =>
+                        sum + (p.brandEntries || []).reduce((eSum, e) => eSum + (parseFloat(e.quantity) || 0), 0)
+                    , 0);
+
+                    const rate = parseFloat(bulkEditData.commission) || 0;
+                    const uom = (bulkEditData.uom || '').toUpperCase();
+                    const newTotal = (uom === 'TRUCK' ? totalTrucks : totalQty) * rate;
+
+                    if (isIndian) {
+                        updatedSale.indCommissionTotal = newTotal.toFixed(2);
+                    } else {
+                        updatedSale.bdCommissionTotal = newTotal.toFixed(2);
+                    }
+
+                    updatedSale.isCnfCommissionUpdate = true;
+                    await axios.put(`${API_BASE_URL}/api/sales/${saleId}`, updatedSale);
                 }
-                await axios.put(`/api/stock/${originalRecord._id}`, updatedData);
             }
 
             setIsBulkEditModalOpen(false);

@@ -2045,7 +2045,7 @@ const SaleManagement = ({
                                 <div className="text-xl font-black text-orange-600 group-hover:scale-[1.02] transition-transform origin-left">৳{parseFloat(viewData.discount || 0).toLocaleString('en-IN')}</div>
                             </div>
                             <div className="p-5 bg-emerald-50/30 rounded-2xl border border-emerald-100/50 group hover:bg-emerald-50/50 transition-colors">
-                                <div className="text-[9px] font-black text-emerald-400 uppercase tracking-widest mb-1.5">Paid Amount</div>
+                                <div className="text-[9px] font-black text-emerald-400 uppercase tracking-widest mb-1.5">Truck Fare</div>
                                 <div className="text-xl font-black text-emerald-500 group-hover:scale-[1.02] transition-transform origin-left">৳{parseFloat(viewData.paidAmount || 0).toLocaleString('en-IN')}</div>
                             </div>
                             <div className="p-5 bg-[#1a368b] rounded-2xl border border-blue-900 shadow-xl shadow-blue-500/10 group overflow-hidden relative">
@@ -3626,7 +3626,7 @@ const SaleManagement = ({
                                     <div className="text-2xl font-black text-gray-900">৳ {parseFloat(formData.totalAmount).toLocaleString('en-IN')}</div>
                                 </div>
                                 <div className="space-y-2">
-                                    <label className="text-sm font-bold text-gray-700">Paid Amount</label>
+                                    <label className="text-sm font-bold text-gray-700">Truck Fare</label>
                                     <div className="relative">
                                         <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 font-bold">৳</span>
                                         <input autoComplete="off"
@@ -3808,7 +3808,7 @@ const SaleManagement = ({
                                             <div className="flex items-center justify-center">Total {renderSortIcon('totalAmount')}</div>
                                         </th>
                                         <th className="sale-mgmt-th text-center cursor-pointer group" onClick={() => handleSort('paidAmount')}>
-                                            <div className="flex items-center justify-center">Paid {renderSortIcon('paidAmount')}</div>
+                                            <div className="flex items-center justify-center">Truck Fare {renderSortIcon('paidAmount')}</div>
                                         </th>
                                         <th className="sale-mgmt-th text-center cursor-pointer group" onClick={() => handleSort('dueAmount')}>
                                             <div className="flex items-center justify-center">Balance {renderSortIcon('dueAmount')}</div>

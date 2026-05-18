@@ -1582,7 +1582,7 @@ const Customer = ({
 
                                 <div className="flex-1 overflow-auto p-4 md:p-8 pt-6 md:pt-8 min-h-0">
                                     {/* Global Summary Cards */}
-                                    <div className={`grid ${activeHistoryTab === 'all' ? 'grid-cols-2 md:grid-cols-4' : (activeHistoryTab === 'sales' ? (viewData.customerType?.includes('Party') ? 'grid-cols-2 md:grid-cols-6' : 'grid-cols-2 md:grid-cols-5') : (activeHistoryTab === 'gp' ? 'grid-cols-2 md:grid-cols-2' : 'grid-cols-2 md:grid-cols-4'))} gap-2 md:gap-3 mb-4 md:mb-8 summary-grid-mobile`}>
+                                    <div className={`grid ${activeHistoryTab === 'all' ? 'grid-cols-2 md:grid-cols-5' : (activeHistoryTab === 'sales' ? (viewData.customerType?.includes('Party') ? 'grid-cols-2 md:grid-cols-7' : 'grid-cols-2 md:grid-cols-6') : (activeHistoryTab === 'gp' ? 'grid-cols-2 md:grid-cols-2' : 'grid-cols-2 md:grid-cols-5'))} gap-2 md:gap-3 mb-4 md:mb-8 summary-grid-mobile`}>
                                         {activeHistoryTab === 'sales' && (
                                             <>
                                                 {viewData.customerType?.includes('Party') && (
@@ -1616,8 +1616,12 @@ const Customer = ({
                                                     <p className="text-base md:text-lg font-black text-violet-700">৳{totalAmount.toLocaleString('en-IN')}</p>
                                                 </div>
                                                 <div className="bg-teal-50/50 p-3 md:p-4 rounded-2xl border border-teal-100 shadow-sm transition-all hover:shadow-md">
-                                                    <p className="text-[9px] md:text-[10px] text-teal-500 font-bold uppercase tracking-wider mb-1">Total Paid</p>
-                                                    <p className="text-base md:text-lg font-black text-teal-700">৳{totalPaidCalculated.toLocaleString('en-IN')}</p>
+                                                    <p className="text-[9px] md:text-[10px] text-teal-500 font-bold uppercase tracking-wider mb-1">{(viewData?.customerType === 'General Customer' && activeHistoryTab === 'sales') ? 'Total Truck Fare' : 'Total Paid'}</p>
+                                                    <p className="text-base md:text-lg font-black text-teal-700">৳{totalSalesPaid.toLocaleString('en-IN')}</p>
+                                                </div>
+                                                <div className="bg-indigo-50/50 p-3 md:p-4 rounded-2xl border border-indigo-100 shadow-sm transition-all hover:shadow-md">
+                                                    <p className="text-[9px] md:text-[10px] text-indigo-500 font-bold uppercase tracking-wider mb-1">Payment Collection</p>
+                                                    <p className="text-base md:text-lg font-black text-indigo-700">৳{totalHistoryPaid.toLocaleString('en-IN')}</p>
                                                 </div>
                                                 <div className="bg-pink-50/50 p-3 md:p-4 rounded-2xl border border-pink-100 shadow-sm transition-all hover:shadow-md">
                                                     <p className="text-[9px] md:text-[10px] text-pink-500 font-bold uppercase tracking-wider mb-1">Total Discount</p>
@@ -1869,7 +1873,7 @@ const Customer = ({
                                                                 </th>
                                                                 <th className="px-4 py-3 font-semibold text-gray-600 text-left cursor-pointer hover:bg-gray-100 transition-colors" onClick={() => requestHistorySort('paid')}>
                                                                     <div className="flex items-center justify-start gap-1">
-                                                                        <span>Paid</span>
+                                                                        <span>{viewData?.customerType === 'General Customer' ? 'Truck Fare' : 'Paid'}</span>
                                                                         <SortIcon config={historySortConfig} columnKey="paid" />
                                                                     </div>
                                                                 </th>
@@ -2137,7 +2141,7 @@ const Customer = ({
                                                                                 <span className="font-black text-violet-700">৳{group.totalAmount.toLocaleString('en-IN')}</span>
                                                                             </div>
                                                                             <div className="flex justify-between text-xs">
-                                                                                <span className="text-gray-500">Paid:</span>
+                                                                                <span className="text-gray-500">{viewData?.customerType === 'General Customer' ? 'Truck Fare:' : 'Paid:'}</span>
                                                                                 <span className="font-bold text-teal-700">৳{group.totalPaid.toLocaleString('en-IN')}</span>
                                                                             </div>
                                                                             <div className="flex justify-between text-xs">
@@ -2511,7 +2515,9 @@ const Customer = ({
                                                                                         )}
                                                                                     </span>
                                                                                 </div>
-                                                                            ) : '—'}
+                                                                            ) : (
+                                                                                parseFloat(item.paid || 0) > 0 ? <span className="font-bold text-teal-600 text-[11px] uppercase tracking-wider">Truck Fare</span> : '—'
+                                                                            )}
                                                                         </td>
                                                                         <td className="px-4 py-3 text-left font-black text-emerald-600">
                                                                             {item.type === 'sale'

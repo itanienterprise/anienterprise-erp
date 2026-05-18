@@ -1969,7 +1969,7 @@ export const generateSaleInvoicePDF = async (sale, allCustomers = []) => {
 
         drawSummaryRow("Discount", discount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
         drawSummaryRow("Invoice Total", invoiceTotal.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
-        drawSummaryRow("Paid Amount", paidAmount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
+        drawSummaryRow("Truck Fare", paidAmount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
         drawSummaryRow("Balance", currentBalance.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }), true);
         drawSummaryRow("Previous Balance", previousBalance.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
         drawSummaryRow("Total Balance", totalBalance.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }), true);
@@ -2536,7 +2536,7 @@ export const generateSalesReportPDF = (reportData, filters, summary, saleType = 
 
         const headRow = saleType === 'Border'
             ? [['SL', 'Date', 'LC No', 'Importer', 'Port', 'IND C&F', 'BD C&F', 'Party Name', 'Product', 'Qty', 'Truck', 'Price', 'Total']]
-            : [['SL', 'Date', 'Invoice', 'Company', 'Product', 'Brand', 'Qty', 'Price', 'Total', 'Paid', 'Balance']];
+            : [['SL', 'Date', 'Invoice', 'Company', 'Product', 'Brand', 'Qty', 'Price', 'Total', 'Truck Fare', 'Balance']];
 
         const footRow = [[
             { content: 'GRAND TOTAL', colSpan: saleType === 'Border' ? 9 : 6, styles: { halign: 'right', fontStyle: 'bold' } },
@@ -2600,7 +2600,7 @@ export const generateSalesReportPDF = (reportData, filters, summary, saleType = 
                 6: { cellWidth: 20, halign: 'right' },     // Qty
                 7: { cellWidth: 12, halign: 'right' },     // Price (Reduced)
                 8: { cellWidth: 30, halign: 'right' },     // Total (Increased)
-                9: { cellWidth: 30, halign: 'right' },    // Paid (Increased)
+                9: { cellWidth: 30, halign: 'right' },    // Truck Fare (Increased)
                 10: { cellWidth: 35, halign: 'right' }     // Balance (Increased)
             },
             margin: { left: saleType === 'Border' ? (pageWidth - 277) / 2 : (pageWidth - 277) / 2, right: margin }
@@ -3128,7 +3128,7 @@ export const generateCustomerHistoryPDF = (customer, historyData, summary, filte
 
                 const details = item.type === 'payment'
                     ? `${item.method === 'Cash' ? (item.receiveBy || item.method) : (item.bankName || item.mobileType || item.method)}${item.method && (item.bankName || item.receiveBy || item.mobileType) ? ` (${item.method})` : ''}${item.reference ? ` [Ref: ${item.reference}]` : ''}${parseFloat(item.discount) > 0 ? `\n(Disc: Tk ${parseFloat(item.discount).toLocaleString('en-IN')})` : ''}`
-                    : '-';
+                    : (parseFloat(item.paid || 0) > 0 ? 'Truck Fare' : '-');
 
                 const row = [
                     idx + 1,
