@@ -960,7 +960,7 @@ const WarehouseManagement = ({ currentUser, damages, addNotification }) => {
                             placeholder="Search by name, location or manager..."
                             value={searchQuery}
                             onChange={(e) => setSearchQuery(e.target.value)}
-                            className="block w-full pl-10 pr-4 py-2 bg-white/50 border border-gray-200 rounded-xl text-[13px] placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 focus:bg-white transition-all outline-none"
+                            className="h-10 block w-full pl-10 pr-4 bg-white/50 border border-gray-200 rounded-xl text-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 focus:bg-white transition-all outline-none"
                             autoComplete="off"
                         />
                     </div>
@@ -976,9 +976,9 @@ const WarehouseManagement = ({ currentUser, damages, addNotification }) => {
                                     }
                                     setShowWarehouseFilterPanel(!showWarehouseFilterPanel);
                                 }}
-                                className={`w-full flex justify-center items-center gap-2 px-4 py-2 rounded-xl transition-all border h-[42px] ${showWarehouseFilterPanel || Object.values(warehouseFilters).some(v => v !== '')
+                                className={`w-full h-10 flex justify-center items-center gap-2 px-4 rounded-xl transition-all border text-sm font-medium active:scale-95 shadow-sm ${showWarehouseFilterPanel || Object.values(warehouseFilters).some(v => v !== '')
                                     ? 'bg-blue-600 border-blue-600 text-white shadow-lg shadow-blue-500/30'
-                                    : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50 hover:border-gray-300 transition-all shadow-sm active:scale-95'
+                                    : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50 hover:border-gray-300 transition-all'
                                     }`}
                             >
                                 <FunnelIcon className={`w-4 h-4 ${showWarehouseFilterPanel || Object.values(warehouseFilters).some(v => v !== '') ? 'text-white' : 'text-gray-400'}`} />
@@ -1218,14 +1218,14 @@ const WarehouseManagement = ({ currentUser, damages, addNotification }) => {
                         </div>
                         <button
                             onClick={() => setShowWarehouseReport(true)}
-                            className="flex-1 md:flex-none w-full md:w-auto flex justify-center items-center gap-2 px-2 sm:px-4 py-2 bg-white border border-gray-200 text-gray-600 rounded-xl hover:bg-gray-50 hover:border-gray-300 transition-all shadow-sm active:scale-95 h-[42px]"
+                            className="h-10 flex-1 md:flex-none w-full md:w-auto flex justify-center items-center gap-2 px-2 sm:px-4 bg-white border border-gray-200 text-gray-600 rounded-xl hover:bg-gray-50 hover:border-gray-300 transition-all shadow-sm active:scale-95 text-sm font-medium"
                         >
                             <BarChartIcon className="w-4 h-4 text-gray-400 hidden sm:block" />
                             <span className="text-sm font-medium">Report</span>
                         </button>
                         <button
                             onClick={() => setShowWarehouseForm(true)}
-                            className="flex-1 md:flex-none w-full md:w-auto flex justify-center items-center gap-2 px-2 sm:px-4 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl hover:from-blue-700 hover:to-indigo-700 transition-all duration-200 shadow-lg shadow-blue-500/30 hover:scale-105 h-[42px]"
+                            className="h-10 border border-transparent flex-1 md:flex-none w-full md:w-auto flex justify-center items-center gap-2 px-2 sm:px-4 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl hover:from-blue-700 hover:to-indigo-700 transition-all duration-200 shadow-lg shadow-blue-500/30 active:scale-95 text-sm font-medium"
                         >
                             <HomeIcon className="w-5 h-5 text-white/90 hidden sm:block" />
                             <PlusIcon className="w-4 h-4 text-white/90 sm:hidden" />

@@ -461,45 +461,128 @@ export const generatePIPDF = (record) => {
 
     // Signature Area
     y += 25;
-    doc.setFontSize(8.5); // Increased
-    doc.text("For,", margin + 2, y + 5);
 
-    // Render Signatures if available
-    if (record.partySignature) {
-        try {
-            // Buyer signature on the left
-            doc.addImage(record.partySignature, 'PNG', margin + 5, y + 14, 60, 12);
-        } catch (e) {
-            console.error('Error adding importer signature to PDF:', e);
+    const style = record.invoiceStyle || 'Style 1 SAA';
+
+    if (style === 'Style 1 SAA') {
+        // This generates the EXACT existing PDF layout (Buyer Left, Seller Right)
+        doc.setFontSize(8.5);
+        doc.text("For,", margin + 2, y + 5);
+
+        // Buyer signature (Left)
+        if (record.partySignature) {
+            try {
+                doc.addImage(record.partySignature, 'PNG', margin + 5, y + 14, 60, 12);
+            } catch (e) {
+                console.error('Error adding importer signature to PDF:', e);
+            }
         }
-    }
+        doc.line(margin + 5, y + 30, margin + 65, y + 30);
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(8.5);
+        doc.text("Signature", margin + 35, y + 35, { align: 'center' });
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(11);
+        doc.text("Buyer", margin + 35, y + 43, { align: 'center' });
 
-    if (record.exporterSignature) {
-        try {
-            // Seller signature on the right
-            doc.addImage(record.exporterSignature, 'PNG', pageWidth - margin - 65, y + 9, 60, 20);
-        } catch (e) {
-            console.error('Error adding exporter signature to PDF:', e);
+        // Seller signature (Right)
+        if (record.exporterSignature) {
+            try {
+                doc.addImage(record.exporterSignature, 'PNG', pageWidth - margin - 65, y + 9, 60, 20);
+            } catch (e) {
+                console.error('Error adding exporter signature to PDF:', e);
+            }
         }
+        doc.line(pageWidth - margin - 65, y + 30, pageWidth - margin - 5, y + 30);
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(8.5);
+        doc.text("Signature", pageWidth - margin - 35, y + 35, { align: 'center' });
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(11);
+        doc.text("Seller", pageWidth - margin - 35, y + 43, { align: 'center' });
+
+    } else if (style === 'Style 2 AAS') {
+        doc.setFontSize(8.5);
+        doc.text("For,", margin + 2, y + 5);
+
+        // Seller signature (Left)
+        if (record.exporterSignature) {
+            try {
+                doc.addImage(record.exporterSignature, 'PNG', margin + 5, y + 9, 60, 20);
+            } catch (e) {
+                console.error('Error adding exporter signature to PDF:', e);
+            }
+        }
+        doc.line(margin + 5, y + 30, margin + 65, y + 30);
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(8.5);
+        doc.text("Signature", margin + 35, y + 35, { align: 'center' });
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(11);
+        doc.text("Seller", margin + 35, y + 43, { align: 'center' });
+
+        // Buyer signature (Right)
+        if (record.partySignature) {
+            try {
+                doc.addImage(record.partySignature, 'PNG', pageWidth - margin - 65, y + 14, 60, 12);
+            } catch (e) {
+                console.error('Error adding importer signature to PDF:', e);
+            }
+        }
+        doc.line(pageWidth - margin - 65, y + 30, pageWidth - margin - 5, y + 30);
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(8.5);
+        doc.text("Signature", pageWidth - margin - 35, y + 35, { align: 'center' });
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(11);
+        doc.text("Buyer", pageWidth - margin - 35, y + 43, { align: 'center' });
+
+    } else {
+        // Style 3 / Fallback - classic 3 column style with "Authorized Signatory" in the middle instead of "Advising Bank"
+        doc.setFontSize(8.5);
+        doc.text("For,", margin + 2, y + 5);
+
+        // Seller signature (Left)
+        if (record.exporterSignature) {
+            try {
+                doc.addImage(record.exporterSignature, 'PNG', margin + 5, y + 9, 50, 20);
+            } catch (e) {
+                console.error('Error adding exporter signature to PDF:', e);
+            }
+        }
+        doc.line(margin + 5, y + 30, margin + 55, y + 30);
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(8.5);
+        doc.text("Signature", margin + 25, y + 35, { align: 'center' });
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(11);
+        doc.text("Seller", margin + 25, y + 43, { align: 'center' });
+
+        // Authorized Signatory (Middle)
+        doc.line((pageWidth / 2) - 25, y + 30, (pageWidth / 2) + 25, y + 30);
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(8.5);
+        doc.text("Signature", pageWidth / 2, y + 35, { align: 'center' });
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(11);
+        doc.text("Authorized Signature", pageWidth / 2, y + 43, { align: 'center' });
+
+        // Buyer / Acceptor (Right)
+        if (record.partySignature) {
+            try {
+                doc.addImage(record.partySignature, 'PNG', pageWidth - margin - 55, y + 14, 50, 12);
+            } catch (e) {
+                console.error('Error adding importer signature to PDF:', e);
+            }
+        }
+        doc.line(pageWidth - margin - 55, y + 30, pageWidth - margin - 5, y + 30);
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(8.5);
+        doc.text("Signature", pageWidth - margin - 30, y + 35, { align: 'center' });
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(11);
+        doc.text("Buyer", pageWidth - margin - 30, y + 43, { align: 'center' });
     }
-
-    // Buyer line (Left)
-    doc.line(margin + 5, y + 30, margin + 65, y + 30);
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(8.5);
-    doc.text("Signature", margin + 30, y + 35);
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(11);
-    doc.text("Buyer", margin + 31, y + 43);
-
-    // Seller line (Right)
-    doc.line(pageWidth - margin - 65, y + 30, pageWidth - margin - 5, y + 30);
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(8.5);
-    doc.text("Signature", pageWidth - margin - 40, y + 35);
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(11);
-    doc.text("Seller", pageWidth - margin - 40, y + 43);
 
     // Opening in new tab instead of direct download
     const pdfOutput = doc.output('blob');

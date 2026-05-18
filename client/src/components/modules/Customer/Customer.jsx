@@ -734,7 +734,7 @@ const Customer = ({
                                 placeholder="Search by ID, Company, Name, Location or Phone..."
                                 value={searchQuery}
                                 onChange={(e) => setSearchQuery(e.target.value)}
-                                className="block w-full pl-10 pr-4 py-2 bg-white/50 border border-gray-200 rounded-xl text-[13px] placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 focus:bg-white transition-all outline-none"
+                                className="h-10 block w-full pl-10 pr-4 bg-white/50 border border-gray-200 rounded-xl text-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 focus:bg-white transition-all outline-none"
                                 autoComplete="off"
                             />
                         </div>
@@ -742,7 +742,7 @@ const Customer = ({
                         <div className="w-full md:w-auto flex flex-row items-center justify-between md:justify-end gap-2">
                             <button
                                 onClick={() => setShowReport(true)}
-                                className="flex-1 md:flex-none w-full md:w-auto flex justify-center items-center gap-2 px-4 py-2 bg-white border border-gray-200 text-gray-600 rounded-xl hover:bg-gray-50 hover:border-gray-300 transition-all shadow-sm active:scale-95 h-[42px]"
+                                className="h-10 flex-1 md:flex-none w-full md:w-auto flex justify-center items-center gap-2 px-4 bg-white border border-gray-200 text-gray-600 rounded-xl hover:bg-gray-50 hover:border-gray-300 transition-all shadow-sm active:scale-95 text-sm font-medium"
                             >
                                 <BarChartIcon className="w-4 h-4 text-gray-400 hidden sm:block" />
                                 <span className="text-sm font-medium">Report</span>
@@ -752,7 +752,7 @@ const Customer = ({
                                     if (!showForm) resetForm();
                                     setShowForm(!showForm);
                                 }}
-                                className="flex-1 md:flex-none w-full md:w-auto flex justify-center items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl hover:from-blue-700 hover:to-indigo-700 transition-all duration-200 shadow-lg shadow-blue-500/30 hover:scale-105 h-[42px]"
+                                className="h-10 border border-transparent flex-1 md:flex-none w-full md:w-auto flex justify-center items-center gap-2 px-4 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl hover:from-blue-700 hover:to-indigo-700 transition-all duration-200 shadow-lg shadow-blue-500/30 active:scale-95 text-sm font-medium"
                             >
                                 <span className="text-sm font-medium">+ Add New</span>
                             </button>

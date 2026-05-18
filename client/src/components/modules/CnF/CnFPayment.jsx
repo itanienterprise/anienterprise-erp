@@ -242,6 +242,24 @@ const CnFPayment = () => {
         return () => document.removeEventListener('mousedown', handleClickOutside);
     }, [activeDropdown]);
 
+    // Click outside and keydown listener for Filter Panel
+    useEffect(() => {
+        const handleClickOutside = (event) => {
+            if (showFilterPanel && filterPanelRef.current && !filterPanelRef.current.contains(event.target) && !filterButtonRef.current?.contains(event.target)) {
+                setShowFilterPanel(false);
+            }
+        };
+        const handleEscape = (e) => {
+            if (e.key === 'Escape') setShowFilterPanel(false);
+        };
+        document.addEventListener('mousedown', handleClickOutside);
+        document.addEventListener('keydown', handleEscape);
+        return () => {
+            document.removeEventListener('mousedown', handleClickOutside);
+            document.removeEventListener('keydown', handleEscape);
+        };
+    }, [showFilterPanel]);
+
     const handleFilterChange = (key, value) => {
         setFilters(prev => ({ ...prev, [key]: value }));
         setFilterDropdownOpen(null);
@@ -388,47 +406,103 @@ const CnFPayment = () => {
     });
 
     const totalPaid = filteredPayments.reduce((sum, p) => sum + p.amount, 0);
+    const totalDiscount = filteredPayments.reduce((sum, p) => sum + (p.discount || 0), 0);
     const transactionCount = filteredPayments.length;
 
     return (
         <div className="space-y-6">
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-2">
-                <div className="text-center md:text-left">
-                    <h2 className="text-2xl md:text-3xl font-black text-gray-900 tracking-tight">C&F Payment</h2>
-                    <div className="h-1 w-12 bg-gradient-to-r from-blue-600 to-indigo-600 rounded-full mx-auto md:mx-0 mt-1"></div>
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <div>
+                    <h2 className="text-xl md:text-2xl font-bold text-gray-800">C&F Payment</h2>
                 </div>
 
                 {!showAddModal && (
                     <div className="flex-1 w-full max-w-md mx-auto relative group">
-                        <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                            <SearchIcon className="h-5 w-5 text-gray-400 group-focus-within:text-blue-500 transition-colors" />
+                        <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
+                            <SearchIcon className="h-4 w-4 text-gray-400 group-focus-within:text-blue-500 transition-colors" />
                         </div>
                         <input
                             type="text"
                             placeholder="Search by C&F, method, reference..."
                             value={searchQuery}
                             onChange={(e) => setSearchQuery(e.target.value)}
-                            className="block w-full pl-11 pr-4 py-3 bg-white border border-gray-100 rounded-2xl text-sm shadow-sm hover:border-gray-200 focus:outline-none focus:ring-4 focus:ring-blue-500/5 focus:border-blue-500 transition-all placeholder:text-gray-400"
+                            className="h-10 block w-full pl-10 pr-4 bg-white/50 border border-gray-200 rounded-xl text-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all outline-none"
                         />
                     </div>
                 )}
 
-                <div className="flex items-center justify-center md:justify-end gap-3">
+                <div className="flex items-center gap-2">
                     {!showAddModal && (
-                        <button
-                            onClick={() => setShowFilterPanel(!showFilterPanel)}
-                            className={`flex items-center gap-2 px-5 py-3 rounded-2xl text-sm font-bold transition-all active:scale-95 ${showFilterPanel || Object.values(filters).some(v => v !== '') ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/30' : 'bg-white border border-gray-100 text-gray-600 hover:border-gray-200 hover:bg-gray-50 shadow-sm'}`}
-                        >
-                            <FunnelIcon className={`w-4 h-4 ${showFilterPanel || Object.values(filters).some(v => v !== '') ? 'text-white' : 'text-gray-400'}`} />
-                            <span>Filter</span>
-                        </button>
+                        <div className="relative">
+                            <button
+                                ref={filterButtonRef}
+                                onClick={() => setShowFilterPanel(!showFilterPanel)}
+                                className={`h-10 flex items-center justify-center gap-2 px-4 rounded-xl border transition-all active:scale-95 text-sm font-medium shadow-sm ${showFilterPanel || Object.values(filters).some(v => v !== '') ? 'bg-blue-600 border-blue-600 text-white shadow-lg shadow-blue-500/30' : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'}`}
+                            >
+                                <FunnelIcon className="w-4 h-4" />
+                                <span className="text-sm font-medium">Filter</span>
+                            </button>
+                            {showFilterPanel && (
+                                <>
+                                    {/* Mobile backdrop */}
+                                    <div className="fixed inset-0 bg-black/10 z-[2005] md:hidden" onClick={() => setShowFilterPanel(false)} />
+                                    <div ref={filterPanelRef} className="fixed inset-x-4 top-24 md:absolute md:top-full md:left-auto md:right-0 md:mt-2 w-auto md:w-72 bg-white border border-gray-100 rounded-2xl shadow-[0_20px_50px_rgba(0,0,0,0.15)] z-[2010] p-4 flex flex-col animate-in fade-in zoom-in-95 duration-200 overflow-visible">
+                                        <div className="flex items-center justify-between mb-3 pb-2 border-b border-gray-100">
+                                            <h4 className="font-bold text-gray-900 text-sm">Filter Payments</h4>
+                                            <button onClick={resetFilters} className="text-[10px] font-bold text-blue-600 hover:text-blue-700 uppercase tracking-wider">Reset</button>
+                                        </div>
+
+                                        <div className="space-y-3">
+                                            <CustomDatePicker
+                                                label="Start Date"
+                                                value={filters.startDate}
+                                                onChange={(e) => handleFilterChange('startDate', e.target.value)}
+                                                compact={true}
+                                            />
+                                            <CustomDatePicker
+                                                label="End Date"
+                                                value={filters.endDate}
+                                                onChange={(e) => handleFilterChange('endDate', e.target.value)}
+                                                compact={true}
+                                            />
+
+                                            <div className="space-y-1.5 relative">
+                                                <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider ml-1">C&F Name</label>
+                                                <button
+                                                    onClick={() => setFilterDropdownOpen(filterDropdownOpen === 'cnfName' ? null : 'cnfName')}
+                                                    className="w-full flex items-center justify-between px-3 py-2 bg-gray-50/50 border border-gray-200 rounded-xl text-sm"
+                                                >
+                                                    <span className="truncate">{filters.cnfName || 'All C&Fs'}</span>
+                                                    <ChevronDownIcon className="w-4 h-4 text-gray-400" />
+                                                </button>
+                                                {filterDropdownOpen === 'cnfName' && (
+                                                    <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-100 rounded-xl shadow-lg z-50 max-h-48 overflow-y-auto">
+                                                        <button onClick={() => handleFilterChange('cnfName', '')} className="w-full px-4 py-2 text-left text-sm hover:bg-gray-50">All C&Fs</button>
+                                                        {uniqueCnfNames.map(name => (
+                                                            <button key={name} onClick={() => handleFilterChange('cnfName', name)} className="w-full px-4 py-2 text-left text-sm hover:bg-gray-50">{name}</button>
+                                                        ))}
+                                                    </div>
+                                                )}
+                                            </div>
+
+                                            <button
+                                                onClick={() => setShowFilterPanel(false)}
+                                                className="w-full py-2.5 bg-gray-900 text-white rounded-xl text-xs font-bold hover:bg-gray-800 transition-all mt-2 active:scale-[0.98]"
+                                            >
+                                                APPLY FILTERS
+                                            </button>
+                                        </div>
+                                    </div>
+                                </>
+                            )}
+                        </div>
                     )}
                     {!showAddModal && (
                         <button
                             onClick={() => setShowAddModal(true)}
-                            className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white text-sm font-black rounded-2xl shadow-lg shadow-blue-500/20 transition-all active:scale-95 whitespace-nowrap"
+                            className="h-10 border border-transparent flex items-center justify-center gap-2 px-4 bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-bold rounded-xl shadow-lg transition-all active:scale-95 text-sm hover:shadow-blue-500/30"
                         >
-                            <PlusIcon className="w-5 h-5" />
+                            <PlusIcon className="w-4 h-4" />
                             <span>Add Payment</span>
                         </button>
                     )}
@@ -673,6 +747,20 @@ const CnFPayment = () => {
                             <div className="text-[10px] text-gray-400 mt-1 italic">Across filtered records</div>
                         </div>
 
+                        {/* Total Discount */}
+                        <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm transition-all hover:shadow-md hover:border-emerald-100 group">
+                            <div className="flex items-center gap-3 mb-3">
+                                <div className="p-2 bg-emerald-50 text-emerald-600 rounded-xl group-hover:bg-emerald-600 group-hover:text-white transition-colors">
+                                    <DollarSignIcon className="w-5 h-5" />
+                                </div>
+                                <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Total Discount</span>
+                            </div>
+                            <div className="flex items-baseline gap-1">
+                                <span className="text-2xl font-black text-gray-900">৳{totalDiscount.toLocaleString('en-IN')}</span>
+                            </div>
+                            <div className="text-[10px] text-gray-400 mt-1 italic">Across filtered records</div>
+                        </div>
+
                         {/* Transactions */}
                         <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm transition-all hover:shadow-md hover:border-indigo-100 group">
                             <div className="flex items-center gap-3 mb-3">
@@ -689,41 +777,7 @@ const CnFPayment = () => {
                         </div>
                     </div>
 
-                    {/* Filter Panel */}
-                    {showFilterPanel && (
-                        <div className="bg-white border border-gray-100 rounded-2xl shadow-xl p-5 relative z-10 grid grid-cols-1 md:grid-cols-4 gap-4 animate-in fade-in zoom-in duration-200">
-                            <div className="space-y-1.5">
-                                <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider ml-1">Start Date</label>
-                                <CustomDatePicker value={filters.startDate} onChange={(e) => handleFilterChange('startDate', e.target.value)} compact />
-                            </div>
-                            <div className="space-y-1.5">
-                                <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider ml-1">End Date</label>
-                                <CustomDatePicker value={filters.endDate} onChange={(e) => handleFilterChange('endDate', e.target.value)} compact />
-                            </div>
-                            <div className="space-y-1.5 relative">
-                                <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider ml-1">C&F Name</label>
-                                <button
-                                    onClick={() => setFilterDropdownOpen(filterDropdownOpen === 'cnfName' ? null : 'cnfName')}
-                                    className="w-full flex items-center justify-between px-3 py-2 bg-gray-50/50 border border-gray-200 rounded-xl text-sm"
-                                >
-                                    <span className="truncate">{filters.cnfName || 'All C&Fs'}</span>
-                                    <ChevronDownIcon className="w-4 h-4 text-gray-400" />
-                                </button>
-                                {filterDropdownOpen === 'cnfName' && (
-                                    <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-100 rounded-xl shadow-lg z-50 max-h-48 overflow-y-auto">
-                                        <button onClick={() => handleFilterChange('cnfName', '')} className="w-full px-4 py-2 text-left text-sm hover:bg-gray-50">All C&Fs</button>
-                                        {uniqueCnfNames.map(name => (
-                                            <button key={name} onClick={() => handleFilterChange('cnfName', name)} className="w-full px-4 py-2 text-left text-sm hover:bg-gray-50">{name}</button>
-                                        ))}
-                                    </div>
-                                )}
-                            </div>
-                            <div className="flex items-end gap-2">
-                                <button onClick={resetFilters} className="flex-1 py-2 text-sm font-bold text-gray-500 hover:text-blue-600 bg-gray-50 rounded-xl transition-colors">Reset</button>
-                                <button onClick={() => setShowFilterPanel(false)} className="flex-1 py-2 text-sm font-bold bg-gray-900 text-white rounded-xl hover:bg-gray-800 transition-colors">Apply</button>
-                            </div>
-                        </div>
-                    )}
+
 
                     {/* Table Section */}
                     <div className="bg-white border border-gray-200 rounded-2xl shadow-sm overflow-hidden">

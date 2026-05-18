@@ -144,6 +144,8 @@ const ProductHistoryReport = ({
             return acc;
         }, {}));
 
+        const sales = saleHistory.map(s => ({ ...s, type: 'sale', itemQty: parseFloat(s.itemQty) || 0 }));
+
         const combined = [...purchases, ...sales, ...damages].sort((a, b) => new Date(a.date) - new Date(b.date));
 
         let currentBalance = 0;

@@ -294,13 +294,13 @@ const Exporter = ({
                         placeholder="Search exporters..."
                         value={searchQuery}
                         onChange={(e) => setSearchQuery(e.target.value)}
-                        className="block w-full pl-12 md:pl-10 pr-4 py-2.5 md:py-2 bg-white/50 border border-gray-200 rounded-xl text-[13px] md:text-[13px] text-center md:text-left placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 focus:bg-white transition-all outline-none shadow-sm"
+                        className="h-10 block w-full pl-10 pr-4 bg-white/50 border border-gray-200 rounded-xl text-sm text-center md:text-left placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 focus:bg-white transition-all outline-none shadow-sm"
                     />
                 </div>
 
                 <div className="w-full md:w-1/4 flex justify-end z-10">
-                    <button onClick={() => setShowForm(!showForm)} className="w-full md:w-auto exporter-add-btn whitespace-nowrap">
-                        <span className="exporter-add-icon">+</span> Add New
+                    <button onClick={() => setShowForm(!showForm)} className="h-10 border border-transparent w-full md:w-auto px-4 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold rounded-xl shadow-lg shadow-blue-500/30 transition-all transform active:scale-95 flex items-center justify-center text-sm whitespace-nowrap">
+                        <span className="mr-2 text-xl font-bold">+</span> Add New
                     </button>
                 </div>
             </div>

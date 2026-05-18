@@ -3,6 +3,7 @@ import {
     FunnelIcon, XIcon, ChevronDownIcon, EditIcon, TrashIcon, SearchIcon, PlusIcon, EyeIcon, PDFIcon
 } from '../../Icons';
 import { generatePIPDF } from '../../../utils/pipdfgenerator';
+import { generatePI2PDF } from '../../../utils/pi2pdfgenerator';
 import { API_BASE_URL, formatDate } from '../../../utils/helpers';
 import axios from '../../../utils/api';
 import CustomDatePicker from '../../shared/CustomDatePicker';
@@ -66,6 +67,7 @@ function PI({
         freight: '',
         totalFreight: '',
         grandTotal: '',
+        invoiceStyle: 'Style 1 SAA',
         port: '',
         placeOfReceipt: '',
         portOfLoading: '',
@@ -106,6 +108,7 @@ function PI({
     const countryOriginRef = useRef(null);
     const countryFinalDestRef = useRef(null);
     const statusRef = useRef(null);
+    const invoiceStyleRef = useRef(null);
 
     useEffect(() => {
         fetchRecords();
@@ -444,7 +447,8 @@ function PI({
             descriptionGoods: DEFAULT_DESC_GOODS,
             termsDeliveryPayment: 'CPT BHOMRA, BANGLADESH, BY ROAD, BY TRUCK AGAINST 100% Confirm Irrevocable at Sight Letter of Credit valid for 90 days & Negotiable within 21 days of Shipment.\nPacking: Export Standard P.P/Gunny Bags.',
             declaration: '1. Deliveries age quoted in good faith, however we shall not be responsible for delays due to reasons beyond our control.\n2. We declare that this invoice shows the actual price of the goods described and that all particulars are true and correct.',
-            status: 'Active'
+            status: 'Active',
+            invoiceStyle: 'Style 1 SAA'
         });
         setEditingId(null);
         setSubmitStatus(null);
@@ -493,7 +497,8 @@ function PI({
             descriptionGoods: record.descriptionGoods || '',
             termsDeliveryPayment: record.termsDeliveryPayment || 'CPT BHOMRA, BANGLADESH, BY ROAD, BY TRUCK AGAINST 100% Confirm Irrevocable at Sight Letter of Credit valid for 90 days & Negotiable within 21 days of Shipment.\nPacking: Export Standard P.P/Gunny Bags.',
             declaration: record.declaration || '1. Deliveries age quoted in good faith, however we shall not be responsible for delays due to reasons beyond our control.\n2. We declare that this invoice shows the actual price of the goods described and that all particulars are true and correct.',
-            status: record.status || 'Active'
+            status: record.status || 'Active',
+            invoiceStyle: record.invoiceStyle || 'Style 1 SAA'
         });
         setEditingId(record._id);
         setShowForm(true);
@@ -1381,6 +1386,35 @@ function PI({
                             </div>
                         </div>
 
+                        <div className="space-y-2 relative dropdown-container" ref={invoiceStyleRef}>
+                            <label className="text-sm font-medium text-gray-700 font-bold text-blue-700">Invoice Style</label>
+                            <div className="relative">
+                                <button
+                                    type="button"
+                                    onClick={() => { setActiveDropdown(activeDropdown === 'invoiceStyle' ? null : 'invoiceStyle'); setHighlightedIndex(-1); }}
+                                    className="w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg text-left focus:ring-2 focus:ring-blue-500 outline-none transition-all flex items-center justify-between"
+                                >
+                                    <span className="text-gray-900 font-medium">{formData.invoiceStyle || 'Style 1 SAA'}</span>
+                                    <ChevronDownIcon className="w-4 h-4 text-gray-400" />
+                                </button>
+                                {activeDropdown === 'invoiceStyle' && (
+                                    <div className="absolute z-[60] w-full mt-1 bg-white border border-gray-100 rounded-xl shadow-xl py-1">
+                                        {['Style 1 SAA', 'Style 2 AAS', 'Style 3'].map((styleName, idx) => (
+                                            <button
+                                                key={styleName}
+                                                type="button"
+                                                onMouseDown={() => handleDropdownSelect('invoiceStyle', styleName)}
+                                                onMouseEnter={() => setHighlightedIndex(idx)}
+                                                className={`w-full px-4 py-2 text-left text-sm ${formData.invoiceStyle === styleName ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-blue-50'}`}
+                                            >
+                                                {styleName}
+                                            </button>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+
                         {/* --- Advanced/Detailed Sections --- */}
                         <div className="md:col-span-3 space-y-2">
                             <label className="text-sm font-medium text-gray-700">Description of Goods</label>
@@ -1527,7 +1561,11 @@ function PI({
                                                                         enriched.partySignature = enriched.partySignature || imp.signature;
                                                                     }
                                                                 }
-                                                                generatePIPDF(enriched);
+                                                                if (enriched.invoiceStyle === 'Style 2 AAS') {
+                                                                    generatePI2PDF(enriched);
+                                                                } else {
+                                                                    generatePIPDF(enriched);
+                                                                }
                                                             }}
                                                             className="p-2 text-gray-400 hover:text-blue-600 transition-all active:scale-90"
                                                             title="Generate PI PDF"
@@ -1660,7 +1698,11 @@ function PI({
                                                                 enriched.partyEmail = enriched.partyEmail || imp.email;
                                                                 enriched.partySignature = enriched.partySignature || imp.signature;
                                                             }
-                                                            generatePIPDF(enriched);
+                                                            if (enriched.invoiceStyle === 'Style 2 AAS') {
+                                                                generatePI2PDF(enriched);
+                                                            } else {
+                                                                generatePIPDF(enriched);
+                                                            }
                                                         }}
                                                         className="flex-1 flex items-center justify-center gap-1.5 py-3 bg-blue-50 text-blue-700 rounded-xl font-black text-[10px] uppercase tracking-widest active:scale-95 transition-all"
                                                     >

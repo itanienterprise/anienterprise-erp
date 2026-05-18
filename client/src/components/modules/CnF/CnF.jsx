@@ -702,6 +702,12 @@ const CnF = ({
 
             if (currentUom === 'QTY') {
                 newData.totalCommission = qty * rate;
+            } else if (currentUom === 'BAG') {
+                const bagCount = parseFloat(editRecord?.bag) || 0;
+                newData.totalCommission = bagCount * rate;
+            } else if (currentUom === 'TRUCK') {
+                const truckCount = !isNaN(parseFloat(editRecord?.truck)) ? parseFloat(editRecord.truck) : 1;
+                newData.totalCommission = truckCount * rate;
             } else {
                 newData.totalCommission = rate;
             }
