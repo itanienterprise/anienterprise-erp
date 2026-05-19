@@ -20,6 +20,8 @@ function PI({
     currentUser
 }) {
     const DEFAULT_DESC_GOODS = "Insurance to be covered by the opener.\nPartial Bill & Partial Payment be allowed.\nNegotiation any Bank in India.\nThe Importer or Bank will not hold the bill in any circumstances.\nAll Foreign Bank Charges outside India are on account of Importer.\nWeight and measurement are final which is taken by weighing bridge in India.\n\nTRANSHIPMENT: ALLOWED\nPARTIAL SHIPMENT: ALLOWED";
+    const DEFAULT_DECLARATION = "1. Deliveries age quoted in good faith, however we shall not be responsible for delays due to reasons beyond our control.\n2. We declare that this invoice shows the actual price of the goods described and that all particulars are true and correct.";
+    const STYLE2_DECLARATION = "We declare that this invoice shows the actual price of the goods described and that all particulars are true and correct.\nWe do certify that we have no local agent in Bangladesh and the quoted price is net and no commission is payable.";
 
     // Authorization check for administrative actions
     const canManage = ['admin', 'incharge', 'lc manager', 'border manager', 'data entry'].includes((currentUser?.role || '').toLowerCase());
@@ -37,6 +39,8 @@ function PI({
     const [receiptPlaces, setReceiptPlaces] = useState([]);
     const [vessels, setVessels] = useState([]);
     const [countries, setCountries] = useState([]);
+    const [certifications, setCertifications] = useState([]);
+    const [certSearch, setCertSearch] = useState('');
     const [activeDropdown, setActiveDropdown] = useState(null);
     const [highlightedIndex, setHighlightedIndex] = useState(-1);
     const [toast, setToast] = useState(null);
@@ -67,6 +71,7 @@ function PI({
         freight: '',
         totalFreight: '',
         grandTotal: '',
+        productsList: [{ productName: '', hsCode: '', quantity: '', rate: '', amount: '', freight: '', totalFreight: '' }],
         invoiceStyle: 'Style 1 SAA',
         port: '',
         placeOfReceipt: '',
@@ -90,9 +95,10 @@ function PI({
         marksNo: '',
         noKindPackage: '',
         descriptionGoods: DEFAULT_DESC_GOODS,
-        termsDeliveryPayment: 'CPT BHOMRA, BANGLADESH, BY ROAD, BY TRUCK AGAINST 100% Irrevocable at Sight Letter of Credit valid for 90 days & Negotiable within 21 days of Shipment.\nPacking: Export Standard P.P/Gunny Bags.',
-        declaration: '1. Deliveries age quoted in good faith, however we shall not be responsible for delays due to reasons beyond our control.\n2. We declare that this invoice shows the actual price of the goods described and that all particulars are true and correct.',
-        status: 'Active'
+        termsDeliveryPayment: 'CPT [PORT OF DISCHARGE], BANGLADESH, BY ROAD, BY TRUCK AGAINST 100% Irrevocable at Sight Letter of Credit valid for 90 days & Negotiable within 21 days of Shipment.\nPacking: Export Standard P.P/Gunny Bags.',
+        declaration: DEFAULT_DECLARATION,
+        status: 'Active',
+        certification: ''
     });
 
     const ipNumberRef = useRef(null);
@@ -107,6 +113,7 @@ function PI({
     const vesselRef = useRef(null);
     const countryOriginRef = useRef(null);
     const countryFinalDestRef = useRef(null);
+    const certificationRef = useRef(null);
     const statusRef = useRef(null);
     const invoiceStyleRef = useRef(null);
 
@@ -116,6 +123,7 @@ function PI({
         fetchMetaData('receiptPlace', setReceiptPlaces);
         fetchMetaData('vessel', setVessels);
         fetchMetaData('country', setCountries);
+        fetchMetaData('certification', setCertifications);
     }, []);
 
     useEffect(() => {
@@ -183,6 +191,123 @@ function PI({
 
             if (name === 'countryFinalDest') {
                 updated.finalDestination = value;
+                if (updated.termsDeliveryPayment) {
+                    updated.termsDeliveryPayment = updated.termsDeliveryPayment.replace(/(CPT\s+[^,]+,\s*)([^,]+)(,)/i, `$1${value.toUpperCase()}$3`);
+                }
+            }
+
+            if (name === 'portOfDischarge' && updated.termsDeliveryPayment) {
+                updated.termsDeliveryPayment = updated.termsDeliveryPayment.replace(/CPT\s+([^,]+),/i, `CPT ${value.toUpperCase()},`);
+            }
+
+            return updated;
+        });
+    };
+
+    const handleProductFieldChange = (idx, field, value) => {
+        setFormData(prev => {
+            const list = [...(prev.productsList || [])];
+            list[idx] = { ...list[idx], [field]: value };
+
+            // Recalculate amounts
+            const q = parseFloat(list[idx].quantity) || 0;
+            const r = parseFloat(list[idx].rate) || 0;
+            const f = parseFloat(list[idx].freight) || 0;
+
+            const amt = q * r;
+            const totalFreight = q * f;
+
+            list[idx].amount = amt > 0 ? amt.toFixed(2) : '';
+            list[idx].totalFreight = totalFreight > 0 ? totalFreight.toFixed(2) : '';
+
+            // Calculate grand total of all products
+            let grandTotalVal = 0;
+            list.forEach(item => {
+                const itemQ = parseFloat(item.quantity) || 0;
+                const itemR = parseFloat(item.rate) || 0;
+                const itemF = parseFloat(item.freight) || 0;
+                grandTotalVal += (itemQ * itemR) + (itemQ * itemF);
+            });
+
+            // Backward compatibility: keep root-level product fields updated with the first product
+            const updated = {
+                ...prev,
+                productsList: list,
+                grandTotal: grandTotalVal > 0 ? grandTotalVal.toFixed(2) : ''
+            };
+
+            if (idx === 0) {
+                updated.productName = list[0].productName || '';
+                updated.hsCode = list[0].hsCode || '';
+                updated.quantity = list[0].quantity || '';
+                updated.rate = list[0].rate || '';
+                updated.amount = list[0].amount || '';
+                updated.freight = list[0].freight || '';
+                updated.totalFreight = list[0].totalFreight || '';
+            }
+
+            return updated;
+        });
+    };
+
+    const handleAddProduct = () => {
+        setFormData(prev => {
+            const currentList = prev.productsList || [];
+            const updatedList = [
+                ...currentList,
+                {
+                    productName: '',
+                    hsCode: currentList.length > 0 ? currentList[0].hsCode : '',
+                    quantity: '',
+                    rate: '',
+                    amount: '',
+                    freight: currentList.length > 0 ? currentList[0].freight : '',
+                    totalFreight: ''
+                }
+            ];
+            return {
+                ...prev,
+                productsList: updatedList
+            };
+        });
+    };
+
+    const handleRemoveProduct = (idx) => {
+        setFormData(prev => {
+            const list = (prev.productsList || []).filter((_, i) => i !== idx);
+
+            // Recalculate grand total
+            let grandTotalVal = 0;
+            list.forEach(item => {
+                const itemQ = parseFloat(item.quantity) || 0;
+                const itemR = parseFloat(item.rate) || 0;
+                const itemF = parseFloat(item.freight) || 0;
+                grandTotalVal += (itemQ * itemR) + (itemQ * itemF);
+            });
+
+            const updated = {
+                ...prev,
+                productsList: list,
+                grandTotal: grandTotalVal > 0 ? grandTotalVal.toFixed(2) : ''
+            };
+
+            // Update root-level fields with the first item
+            if (list.length > 0) {
+                updated.productName = list[0].productName || '';
+                updated.hsCode = list[0].hsCode || '';
+                updated.quantity = list[0].quantity || '';
+                updated.rate = list[0].rate || '';
+                updated.amount = list[0].amount || '';
+                updated.freight = list[0].freight || '';
+                updated.totalFreight = list[0].totalFreight || '';
+            } else {
+                updated.productName = '';
+                updated.hsCode = '';
+                updated.quantity = '';
+                updated.rate = '';
+                updated.amount = '';
+                updated.freight = '';
+                updated.totalFreight = '';
             }
 
             return updated;
@@ -221,6 +346,7 @@ function PI({
             else if (category === 'receiptPlace') fetchMetaData(category, setReceiptPlaces);
             else if (category === 'vessel') fetchMetaData(category, setVessels);
             else if (category === 'country') fetchMetaData(category, setCountries);
+            else if (category === 'certification') fetchMetaData(category, setCertifications);
         } catch (error) {
             console.error(`Error adding quick ${category}:`, error);
         }
@@ -234,6 +360,7 @@ function PI({
             else if (category === 'receiptPlace') fetchMetaData(category, setReceiptPlaces);
             else if (category === 'vessel') fetchMetaData(category, setVessels);
             else if (category === 'country') fetchMetaData(category, setCountries);
+            else if (category === 'certification') fetchMetaData(category, setCertifications);
         } catch (error) {
             console.error(`Error deleting quick ${category}:`, error);
             showToast('Failed to delete option', 'error');
@@ -268,6 +395,21 @@ function PI({
         setFormData(prev => {
             const updated = { ...prev, [field]: value };
 
+            if (field === 'certification') {
+                setCertSearch('');
+                const currentCert = prev.certification || '';
+                const parts = currentCert.split(',').map(s => s.trim()).filter(Boolean);
+                if (parts.includes(value)) {
+                    // Remove if already selected
+                    const newParts = parts.filter(p => p !== value);
+                    updated.certification = newParts.join(', ');
+                } else {
+                    // Add if not selected
+                    parts.push(value);
+                    updated.certification = parts.join(', ');
+                }
+            }
+
             if (field === 'ipNumber') {
                 const ip = ipRecords.find(i => i.ipNumber === value);
                 if (ip) {
@@ -284,9 +426,23 @@ function PI({
                     }
 
                     // Also try to find HS Code from the product list if product name matches
+                    let hCode = '';
                     const product = products.find(p => p.name === ip.productName);
                     if (product) {
-                        updated.hsCode = product.hsCode || '';
+                        hCode = product.hsCode || '';
+                        updated.hsCode = hCode;
+                    }
+
+                    // Sync to productsList[0]
+                    if (!updated.productsList || updated.productsList.length === 0) {
+                        updated.productsList = [{ productName: ip.productName || '', hsCode: hCode, hsCodeInd: product ? (product.hsCodeInd || '') : '', quantity: '', rate: '', amount: '', freight: '', totalFreight: '' }];
+                    } else {
+                        updated.productsList[0] = {
+                            ...updated.productsList[0],
+                            productName: ip.productName || '',
+                            hsCode: hCode,
+                            hsCodeInd: product ? (product.hsCodeInd || '') : ''
+                        };
                     }
                 }
             }
@@ -315,10 +471,33 @@ function PI({
                 }
             }
 
+            if (field === 'invoiceStyle') {
+                if (value === 'Style 2 AAS') {
+                    updated.descriptionGoods = "";
+                    updated.declaration = STYLE2_DECLARATION;
+                } else {
+                    updated.descriptionGoods = DEFAULT_DESC_GOODS;
+                    updated.declaration = DEFAULT_DECLARATION;
+                }
+            }
+
+            if (field === 'portOfDischarge' && updated.termsDeliveryPayment) {
+                updated.termsDeliveryPayment = updated.termsDeliveryPayment.replace(/CPT\s+([^,]+),/i, `CPT ${value.toUpperCase()},`);
+            }
+
+            if (field === 'countryFinalDest') {
+                updated.finalDestination = value;
+                if (updated.termsDeliveryPayment) {
+                    updated.termsDeliveryPayment = updated.termsDeliveryPayment.replace(/(CPT\s+[^,]+,\s*)([^,]+)(,)/i, `$1${value.toUpperCase()}$3`);
+                }
+            }
+
             return updated;
         });
-        setActiveDropdown(null);
-        setHighlightedIndex(-1);
+        if (field !== 'certification') {
+            setActiveDropdown(null);
+            setHighlightedIndex(-1);
+        }
     };
 
     const handleDropdownKeyDown = (e, dropdownId, options = [], field) => {
@@ -423,6 +602,7 @@ function PI({
             freight: '',
             totalFreight: '',
             grandTotal: '',
+            productsList: [{ productName: '', hsCode: '', quantity: '', rate: '', amount: '', freight: '', totalFreight: '' }],
             port: '',
             placeOfReceipt: '',
             portOfLoading: '',
@@ -446,15 +626,29 @@ function PI({
             noKindPackage: '',
             descriptionGoods: DEFAULT_DESC_GOODS,
             termsDeliveryPayment: 'CPT BHOMRA, BANGLADESH, BY ROAD, BY TRUCK AGAINST 100% Confirm Irrevocable at Sight Letter of Credit valid for 90 days & Negotiable within 21 days of Shipment.\nPacking: Export Standard P.P/Gunny Bags.',
-            declaration: '1. Deliveries age quoted in good faith, however we shall not be responsible for delays due to reasons beyond our control.\n2. We declare that this invoice shows the actual price of the goods described and that all particulars are true and correct.',
+            declaration: DEFAULT_DECLARATION,
             status: 'Active',
-            invoiceStyle: 'Style 1 SAA'
+            invoiceStyle: 'Style 1 SAA',
+            certification: ''
         });
         setEditingId(null);
         setSubmitStatus(null);
+        setCertSearch('');
     };
 
     const handleEdit = (record) => {
+        const loadedList = record.productsList && record.productsList.length > 0
+            ? record.productsList
+            : [{
+                productName: record.productName || '',
+                hsCode: record.hsCode || '',
+                quantity: record.quantity || '',
+                rate: record.rate || '',
+                amount: record.amount || '',
+                freight: record.freight || '',
+                totalFreight: record.totalFreight || ''
+              }];
+
         setFormData({
             date: record.date || '',
             validityDate: record.validityDate || '',
@@ -473,6 +667,7 @@ function PI({
             freight: record.freight || '',
             totalFreight: record.totalFreight || '',
             grandTotal: record.grandTotal || '',
+            productsList: loadedList,
             port: record.port || '',
             placeOfReceipt: record.placeOfReceipt || '',
             portOfLoading: record.portOfLoading || '',
@@ -496,12 +691,14 @@ function PI({
             noKindPackage: record.noKindPackage || '',
             descriptionGoods: record.descriptionGoods || '',
             termsDeliveryPayment: record.termsDeliveryPayment || 'CPT BHOMRA, BANGLADESH, BY ROAD, BY TRUCK AGAINST 100% Confirm Irrevocable at Sight Letter of Credit valid for 90 days & Negotiable within 21 days of Shipment.\nPacking: Export Standard P.P/Gunny Bags.',
-            declaration: record.declaration || '1. Deliveries age quoted in good faith, however we shall not be responsible for delays due to reasons beyond our control.\n2. We declare that this invoice shows the actual price of the goods described and that all particulars are true and correct.',
+            declaration: record.declaration || DEFAULT_DECLARATION,
             status: record.status || 'Active',
-            invoiceStyle: record.invoiceStyle || 'Style 1 SAA'
+            invoiceStyle: record.invoiceStyle || 'Style 1 SAA',
+            certification: record.certification || ''
         });
         setEditingId(record._id);
         setShowForm(true);
+        setCertSearch('');
     };
 
     const handleDelete = (id) => {
@@ -1219,130 +1416,176 @@ function PI({
                                 autoComplete="off"
                                 className="w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-all"
                             />
-                        </div>
+                        </div>                        {/* --- Products List Section --- */}
+                        <div className="md:col-span-3 col-span-1 space-y-4">
+                            <div className="flex items-center justify-between border-b border-gray-200 pb-2">
+                                <h3 className="text-lg font-bold text-gray-800 flex items-center gap-2">
+                                    Product Details
+                                </h3>
+                                <button
+                                    type="button"
+                                    onClick={handleAddProduct}
+                                    className="flex items-center justify-center w-8 h-8 rounded-full bg-blue-600 hover:bg-blue-700 text-white shadow-md hover:scale-105 transition-all duration-200"
+                                    title="Add Product"
+                                >
+                                    <PlusIcon className="w-5 h-5" />
+                                </button>
+                            </div>
 
-                        {/* --- Item Details --- */}
-                        <div className="space-y-2 relative dropdown-container" ref={productRef}>
-                            <label className="text-sm font-medium text-gray-700">Product Name</label>
-                            <div className="relative">
-                                <input
-                                    type="text"
-                                    name="productName"
-                                    value={formData.productName}
-                                    onChange={(e) => { handleInputChange(e); setActiveDropdown('product'); setHighlightedIndex(-1); }}
-                                    onFocus={() => { setActiveDropdown('product'); setHighlightedIndex(-1); }}
-                                    onKeyDown={(e) => handleDropdownKeyDown(e, 'product', products.filter(p => !formData.productName || p.name.toLowerCase().includes(formData.productName.toLowerCase())), 'productName')}
-                                    placeholder="Search Product..."
-                                    required
-                                    autoComplete="off"
-                                    className="w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-all pr-10"
-                                />
-                                {activeDropdown === 'product' && (
-                                    <div className="absolute z-[60] w-full mt-1 bg-white border border-gray-100 rounded-xl shadow-xl max-h-48 overflow-y-auto">
-                                        {products.filter(p => !formData.productName || p.name.toLowerCase().includes(formData.productName.toLowerCase())).map((p, idx) => (
-                                            <button
-                                                key={p._id}
-                                                type="button"
-                                                onMouseDown={() => handleDropdownSelect('productName', p.name)}
-                                                onMouseEnter={() => setHighlightedIndex(idx)}
-                                                className={`w-full px-4 py-2 text-left text-sm ${highlightedIndex === idx || formData.productName === p.name ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-blue-50'}`}
-                                            >
-                                                {p.name}
-                                            </button>
-                                        ))}
+                            <div className="space-y-4">
+                                {(formData.productsList || [{ productName: '', hsCode: '', quantity: '', rate: '', amount: '', freight: '', totalFreight: '' }]).map((item, idx) => (
+                                    <div key={idx} className="p-5 bg-gray-50/50 border border-gray-200/60 rounded-2xl relative space-y-4 transition-all duration-200">
+                                        <div className="flex items-center justify-between border-b border-gray-200/50 pb-2">
+                                            <span className="text-sm font-bold text-gray-700">Product #{idx + 1}</span>
+                                            {formData.productsList && formData.productsList.length > 1 && (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => handleRemoveProduct(idx)}
+                                                    className="text-red-500 hover:text-red-700 p-1.5 rounded-lg hover:bg-red-50 transition-all duration-200"
+                                                    title="Remove Product"
+                                                >
+                                                    <TrashIcon className="w-4 h-4" />
+                                                </button>
+                                            )}
+                                        </div>
+
+                                        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                                            {/* Product Name */}
+                                            <div className="space-y-2 relative dropdown-container">
+                                                <label className="text-sm font-medium text-gray-700">Product Name</label>
+                                                <div className="relative">
+                                                    <input
+                                                        type="text"
+                                                        value={item.productName}
+                                                        onChange={(e) => {
+                                                            handleProductFieldChange(idx, 'productName', e.target.value);
+                                                            setActiveDropdown(`product_${idx}`);
+                                                            setHighlightedIndex(-1);
+                                                        }}
+                                                        onFocus={() => {
+                                                            setActiveDropdown(`product_${idx}`);
+                                                            setHighlightedIndex(-1);
+                                                        }}
+                                                        onKeyDown={(e) => handleDropdownKeyDown(e, `product_${idx}`, products.filter(p => !item.productName || p.name.toLowerCase().includes(item.productName.toLowerCase())), 'productName')}
+                                                        placeholder="Search Product..."
+                                                        required
+                                                        autoComplete="off"
+                                                        className="w-full px-4 py-2 bg-white border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-all pr-10"
+                                                    />
+                                                    {activeDropdown === `product_${idx}` && (
+                                                        <div className="absolute z-[60] w-full mt-1 bg-white border border-gray-100 rounded-xl shadow-xl max-h-48 overflow-y-auto">
+                                                            {products.filter(p => !item.productName || p.name.toLowerCase().includes(item.productName.toLowerCase())).map((p, pIdx) => (
+                                                                <button
+                                                                    key={p._id}
+                                                                    type="button"
+                                                                    onMouseDown={() => {
+                                                                        handleProductFieldChange(idx, 'productName', p.name);
+                                                                        handleProductFieldChange(idx, 'hsCode', p.hsCode || '');
+                                                                        handleProductFieldChange(idx, 'hsCodeInd', p.hsCodeInd || '');
+                                                                        setActiveDropdown(null);
+                                                                    }}
+                                                                    onMouseEnter={() => setHighlightedIndex(pIdx)}
+                                                                    className={`w-full px-4 py-2 text-left text-sm ${highlightedIndex === pIdx || item.productName === p.name ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-blue-50'}`}
+                                                                >
+                                                                    {p.name}
+                                                                </button>
+                                                            ))}
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            </div>
+
+                                            {/* HS Code */}
+                                            <div className="space-y-2">
+                                                <label className="text-sm font-medium text-gray-700">HS Code</label>
+                                                <input
+                                                    type="text"
+                                                    value={item.hsCode}
+                                                    onChange={(e) => handleProductFieldChange(idx, 'hsCode', e.target.value)}
+                                                    maxLength="10"
+                                                    placeholder="10-digit HS Code"
+                                                    className="w-full px-4 py-2 bg-white border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-all"
+                                                />
+                                            </div>
+
+                                            {/* Quantity (KG) */}
+                                            <div className="space-y-2">
+                                                <label className="text-sm font-medium text-gray-700">Quantity (KG)</label>
+                                                <input
+                                                    type="number"
+                                                    value={item.quantity}
+                                                    onChange={(e) => handleProductFieldChange(idx, 'quantity', e.target.value)}
+                                                    required
+                                                    placeholder="0.00"
+                                                    className="w-full px-4 py-2 bg-white border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-all"
+                                                />
+                                            </div>
+
+                                            {/* Rate Per KG */}
+                                            <div className="space-y-2">
+                                                <label className="text-sm font-medium text-gray-700">Rate Per KG (US $)</label>
+                                                <div className="relative">
+                                                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500">$</span>
+                                                    <input
+                                                        type="number"
+                                                        value={item.rate}
+                                                        onChange={(e) => handleProductFieldChange(idx, 'rate', e.target.value)}
+                                                        required
+                                                        step="0.001"
+                                                        placeholder="0.00"
+                                                        className="w-full pl-8 pr-4 py-2 bg-white border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-all"
+                                                    />
+                                                </div>
+                                            </div>
+
+                                            {/* Freight Per KG */}
+                                            <div className="space-y-2">
+                                                <label className="text-sm font-medium text-gray-700">Freight Per KG (US $)</label>
+                                                <div className="relative">
+                                                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500">$</span>
+                                                    <input
+                                                        type="number"
+                                                        value={item.freight}
+                                                        onChange={(e) => handleProductFieldChange(idx, 'freight', e.target.value)}
+                                                        step="0.001"
+                                                        placeholder="0.00"
+                                                        className="w-full pl-8 pr-4 py-2 bg-white border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-all"
+                                                    />
+                                                </div>
+                                            </div>
+
+                                            {/* Total Freight */}
+                                            <div className="space-y-2">
+                                                <label className="text-sm font-medium text-gray-700">Total Freight (US $)</label>
+                                                <div className="relative">
+                                                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500">$</span>
+                                                    <input
+                                                        type="number"
+                                                        value={item.totalFreight}
+                                                        readOnly
+                                                        placeholder="0.00"
+                                                        className="w-full pl-8 pr-4 py-2 bg-gray-50 border border-gray-200 rounded-lg outline-none cursor-not-allowed font-medium text-gray-600"
+                                                    />
+                                                </div>
+                                            </div>
+
+                                            {/* Total Amount */}
+                                            <div className="space-y-2 md:col-span-3">
+                                                <label className="text-sm font-medium text-gray-700">Total Amount (US $)</label>
+                                                <div className="relative">
+                                                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500">$</span>
+                                                    <input
+                                                        type="number"
+                                                        value={item.amount}
+                                                        readOnly
+                                                        placeholder="0.00"
+                                                        className="w-full pl-8 pr-4 py-2 bg-gray-50 border border-gray-200 rounded-lg outline-none cursor-not-allowed font-bold text-gray-700"
+                                                    />
+                                                </div>
+                                            </div>
+                                        </div>
                                     </div>
-                                )}
-                            </div>
-                        </div>
-
-                        <div className="space-y-2">
-                            <label className="text-sm font-medium text-gray-700">HS Code</label>
-                            <input
-                                type="text"
-                                name="hsCode"
-                                value={formData.hsCode}
-                                onChange={handleInputChange}
-                                maxLength="10"
-                                placeholder="10-digit HS Code"
-                                className="w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-all"
-                            />
-                        </div>
-
-                        <div className="space-y-2">
-                            <label className="text-sm font-medium text-gray-700">Quantity (KG)</label>
-                            <input
-                                type="number"
-                                name="quantity"
-                                value={formData.quantity}
-                                onChange={handleInputChange}
-                                required
-                                placeholder="0.00"
-                                className="w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-all"
-                            />
-                        </div>
-
-                        <div className="space-y-2">
-                            <label className="text-sm font-medium text-gray-700">Rate Per KG (US $)</label>
-                            <div className="relative">
-                                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500">$</span>
-                                <input
-                                    type="number"
-                                    name="rate"
-                                    value={formData.rate}
-                                    onChange={handleInputChange}
-                                    required
-                                    step="0.001"
-                                    placeholder="0.00"
-                                    className="w-full pl-8 pr-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-all"
-                                />
-                            </div>
-                        </div>
-
-                        <div className="space-y-2">
-                            <label className="text-sm font-medium text-gray-700">Freight Per KG (US $)</label>
-                            <div className="relative">
-                                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500">$</span>
-                                <input
-                                    type="number"
-                                    name="freight"
-                                    value={formData.freight}
-                                    onChange={handleInputChange}
-                                    step="0.001"
-                                    placeholder="0.00"
-                                    className="w-full pl-8 pr-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-all"
-                                />
-                            </div>
-                        </div>
-
-                        <div className="space-y-2">
-                            <label className="text-sm font-medium text-gray-700">Total Freight (US $)</label>
-                            <div className="relative">
-                                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500">$</span>
-                                <input
-                                    type="number"
-                                    name="totalFreight"
-                                    value={formData.totalFreight}
-                                    readOnly
-                                    placeholder="0.00"
-                                    className="w-full pl-8 pr-4 py-2 bg-gray-50/50 border border-gray-200/60 rounded-lg outline-none transition-all cursor-not-allowed"
-                                />
-                            </div>
-                        </div>
-
-                        <div className="space-y-2">
-                            <label className="text-sm font-medium text-gray-700">Total Amount (US $)</label>
-                            <div className="relative">
-                                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500">$</span>
-                                <input
-                                    type="number"
-                                    name="amount"
-                                    value={formData.amount}
-                                    onChange={handleInputChange}
-                                    required
-                                    readOnly
-                                    placeholder="0.00"
-                                    className="w-full pl-8 pr-4 py-2 bg-gray-50/50 border border-gray-200/60 rounded-lg outline-none transition-all cursor-not-allowed font-bold"
-                                />
+                                ))}
                             </div>
                         </div>
 
@@ -1383,6 +1626,68 @@ function PI({
                                     placeholder="0.00"
                                     className="w-full pl-8 pr-4 py-2 bg-blue-50/50 border border-blue-200/60 rounded-lg outline-none font-bold text-blue-700 transition-all cursor-not-allowed"
                                 />
+                            </div>
+                        </div>
+
+                        <div className="space-y-2 relative dropdown-container" ref={certificationRef}>
+                            <label className="text-sm font-medium text-gray-700 font-bold text-blue-700">Certification</label>
+                            <div className="relative">
+                                <input
+                                    type="text"
+                                    name="certification"
+                                    value={formData.certification}
+                                    onChange={(e) => {
+                                        handleInputChange(e);
+                                        setActiveDropdown('certification');
+                                        setHighlightedIndex(-1);
+                                        const val = e.target.value;
+                                        const lastPart = val.split(',').pop().trim();
+                                        setCertSearch(lastPart);
+                                    }}
+                                    onFocus={() => { setActiveDropdown('certification'); setHighlightedIndex(-1); }}
+                                    onKeyDown={(e) => handleDropdownKeyDown(e, 'certification', certifications.filter(v => !certSearch || v.value.toLowerCase().includes(certSearch.toLowerCase())), 'certification')}
+                                    autoComplete="off"
+                                    placeholder="e.g. ISO 9001:2015"
+                                    className="w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-all pr-10"
+                                />
+                                <button
+                                    type="button"
+                                    onClick={() => handleAddQuickMetaData('certification', formData.certification)}
+                                    className="absolute right-2 top-1/2 -translate-y-1/2 text-blue-500 hover:text-blue-700 p-1"
+                                    title="Add new certification"
+                                >
+                                    <PlusIcon className="w-4 h-4" />
+                                </button>
+                                {activeDropdown === 'certification' && (
+                                    <div className="absolute z-[60] w-full mt-1 bg-white border border-gray-100 rounded-xl shadow-xl max-h-48 overflow-y-auto">
+                                        {certifications.filter(v => !certSearch || v.value.toLowerCase().includes(certSearch.toLowerCase())).map((v, idx) => {
+                                            const selectedParts = (formData.certification || '').split(',').map(p => p.trim()).filter(Boolean);
+                                            const isSelected = selectedParts.includes(v.value);
+                                            return (
+                                                <div key={v._id} className="flex items-center group">
+                                                    <button
+                                                        key={v._id}
+                                                        type="button"
+                                                        onMouseDown={() => handleDropdownSelect('certification', v.value)}
+                                                        onMouseEnter={() => setHighlightedIndex(idx)}
+                                                        className={`flex-1 px-4 py-2 text-left text-sm flex items-center justify-between ${highlightedIndex === idx || isSelected ? 'bg-blue-50 text-blue-700 font-bold' : 'text-gray-700 hover:bg-blue-50'}`}
+                                                    >
+                                                        <span>{v.value}</span>
+                                                        {isSelected && <span className="text-blue-600 font-bold">✓</span>}
+                                                    </button>
+                                                    <button
+                                                        type="button"
+                                                        onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); handleDeleteQuickMetaData('certification', v._id); }}
+                                                        className="p-2 text-gray-400 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"
+                                                        title="Delete this certification"
+                                                    >
+                                                        <TrashIcon className="w-3.5 h-3.5" />
+                                                    </button>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                )}
                             </div>
                         </div>
 
