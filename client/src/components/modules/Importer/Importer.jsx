@@ -37,7 +37,9 @@ const Importer = ({
         contactPerson: '',
         email: '',
         phone: '+880',
-        licenseNo: '',
+        bin: '',
+        tin: '',
+        irc: '',
         status: 'Active',
         signature: ''
     });
@@ -151,7 +153,9 @@ const Importer = ({
             contactPerson: '',
             email: '',
             phone: '+880',
-            licenseNo: '',
+            bin: '',
+            tin: '',
+            irc: '',
             status: 'Active',
             signature: ''
         });
@@ -166,7 +170,9 @@ const Importer = ({
             contactPerson: importer.contactPerson || '',
             email: importer.email || '',
             phone: importer.phone || '+880',
-            licenseNo: importer.licenseNo || '',
+            bin: importer.bin || '',
+            tin: importer.tin || '',
+            irc: importer.irc || '',
             status: importer.status || 'Active',
             signature: importer.signature || ''
         });
@@ -274,10 +280,24 @@ const Importer = ({
                             />
                         </div>
                         <div className="importer-form-field">
-                            <label className="importer-form-label">License No</label>
+                            <label className="importer-form-label">BIN</label>
                             <input
-                                type="text" name="licenseNo" value={formData.licenseNo} onChange={handleInputChange} required
-                                placeholder="LIC-00000" className="importer-form-input"
+                                type="text" name="bin" value={formData.bin} onChange={handleInputChange} required
+                                placeholder="BIN Number" className="importer-form-input"
+                            />
+                        </div>
+                        <div className="importer-form-field">
+                            <label className="importer-form-label">TIN</label>
+                            <input
+                                type="text" name="tin" value={formData.tin} onChange={handleInputChange} required
+                                placeholder="TIN Number" className="importer-form-input"
+                            />
+                        </div>
+                        <div className="importer-form-field">
+                            <label className="importer-form-label">IRC Number</label>
+                            <input
+                                type="text" name="irc" value={formData.irc} onChange={handleInputChange} required
+                                placeholder="IRC Number" className="importer-form-input"
                             />
                         </div>
                         <div className="importer-form-field importer-form-field-full">
@@ -383,7 +403,9 @@ const Importer = ({
             {!showForm && (() => {
                 const filteredImporters = importers.filter(importer => 
                     (importer.name || '').toLowerCase().includes(searchQuery.toLowerCase()) || 
-                    (importer.licenseNo || '').toLowerCase().includes(searchQuery.toLowerCase()) || 
+                    (importer.bin || '').toLowerCase().includes(searchQuery.toLowerCase()) || 
+                    (importer.tin || '').toLowerCase().includes(searchQuery.toLowerCase()) || 
+                    (importer.irc || '').toLowerCase().includes(searchQuery.toLowerCase()) || 
                     (importer.phone || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
                     (importer.contactPerson || '').toLowerCase().includes(searchQuery.toLowerCase())
                 );
@@ -440,8 +462,14 @@ const Importer = ({
                                             <th className="importer-table-header" onClick={() => requestSort('name')}>
                                                 <div className="importer-table-header-content">Importer Name <SortIcon config={sortConfig.importer} columnKey="name" /></div>
                                             </th>
-                                            <th className="importer-table-header" onClick={() => requestSort('licenseNo')}>
-                                                <div className="importer-table-header-content">License No <SortIcon config={sortConfig.importer} columnKey="licenseNo" /></div>
+                                            <th className="importer-table-header" onClick={() => requestSort('bin')}>
+                                                <div className="importer-table-header-content">BIN <SortIcon config={sortConfig.importer} columnKey="bin" /></div>
+                                            </th>
+                                            <th className="importer-table-header" onClick={() => requestSort('tin')}>
+                                                <div className="importer-table-header-content">TIN <SortIcon config={sortConfig.importer} columnKey="tin" /></div>
+                                            </th>
+                                            <th className="importer-table-header" onClick={() => requestSort('irc')}>
+                                                <div className="importer-table-header-content">IRC <SortIcon config={sortConfig.importer} columnKey="irc" /></div>
                                             </th>
                                             <th className="importer-table-header" onClick={() => requestSort('contactPerson')}>
                                                 <div className="importer-table-header-content">Contact Person <SortIcon config={sortConfig.importer} columnKey="contactPerson" /></div>
@@ -480,7 +508,9 @@ const Importer = ({
                                                     </td>
                                                 )}
                                                 <td className="importer-table-cell importer-table-cell-name">{importer.name}</td>
-                                                <td className="importer-table-cell importer-table-cell-license">{importer.licenseNo}</td>
+                                                <td className="importer-table-cell">{importer.bin || '-'}</td>
+                                                <td className="importer-table-cell">{importer.tin || '-'}</td>
+                                                <td className="importer-table-cell">{importer.irc || '-'}</td>
                                                 <td className="importer-table-cell">{importer.contactPerson}</td>
                                                 <td className="importer-table-cell importer-table-cell-muted">{importer.phone}</td>
                                                 <td className="importer-table-cell">
@@ -533,7 +563,7 @@ const Importer = ({
                                                 )}
                                                 <div className="min-w-0">
                                                     <p className="font-bold text-gray-900 text-sm truncate">{importer.name}</p>
-                                                    <p className="text-xs text-blue-600 mt-0.5">{importer.licenseNo}</p>
+                                                    <p className="text-[10px] font-semibold text-blue-600 mt-0.5">BIN: {importer.bin} | TIN: {importer.tin} | IRC: {importer.irc}</p>
                                                 </div>
                                             </div>
                                             <span className={`importer-status-badge ${importer.status === 'Active' ? 'active' : 'inactive'} shrink-0`}>
@@ -603,9 +633,9 @@ const Importer = ({
                         {/* Modal Header */}
                         <div className="relative px-4 py-4 md:px-8 md:py-6 border-b border-gray-100 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 bg-white flex-shrink-0 z-10 rounded-t-2xl">
                             <div className="flex-1 text-left">
-                                <h3 className="text-lg md:text-xl font-bold text-gray-900">Import History - {viewData.name}</h3>
-                                <p className="text-xs text-gray-500 mt-1">License: {viewData.licenseNo}{viewData.address ? ` | ${viewData.address}` : ''}</p>
-                            </div>
+                                                <h3 className="text-lg md:text-xl font-bold text-gray-900">Import History - {viewData.name}</h3>
+                                                <p className="text-xs text-gray-500 mt-1">BIN: {viewData.bin} | TIN: {viewData.tin} | IRC: {viewData.irc}{viewData.address ? ` | ${viewData.address}` : ''}</p>
+                                            </div>
 
                             {/* Search bar */}
                             <div className="flex-1 w-full md:max-w-sm md:mx-auto">

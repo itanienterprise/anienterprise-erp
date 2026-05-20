@@ -15,6 +15,7 @@ const Bank = ({ onDeleteConfirm }) => {
     const [expandedRowKey, setExpandedRowKey] = useState(null);
     const [formData, setFormData] = useState({
         bankName: '',
+        binNo: '',
         branches: [{ branch: '', accountName: '', accountNo: '' }],
         isIndian: false,
         status: 'Active'
@@ -97,6 +98,7 @@ const Bank = ({ onDeleteConfirm }) => {
     const resetForm = () => {
         setFormData({
             bankName: '',
+            binNo: '',
             branches: [{ branch: '', accountName: '', accountNo: '' }],
             isIndian: false,
             status: 'Active'
@@ -117,6 +119,7 @@ const Bank = ({ onDeleteConfirm }) => {
 
         setFormData({
             bankName: bank.bankName || '',
+            binNo: bank.binNo || '',
             branches: branches,
             isIndian: bank.isIndian || false,
             status: bank.status || 'Active'
@@ -150,6 +153,7 @@ const Bank = ({ onDeleteConfirm }) => {
         })
         .filter(item => 
             (item.bankName || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+            (item.binNo || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
             (item.accountNo || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
             (item.accountName || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
             (item.branch || '').toLowerCase().includes(searchQuery.toLowerCase())
@@ -238,7 +242,7 @@ const Bank = ({ onDeleteConfirm }) => {
                         autoComplete="off" 
                         className="grid grid-cols-1 md:grid-cols-2 gap-6 relative z-10"
                     >
-                        <div className="col-span-1 md:col-span-2 space-y-2">
+                        <div className="col-span-1 space-y-2">
                             <label className="text-sm font-medium text-gray-700">Bank Name</label>
                             <input
                                 type="text"
@@ -247,6 +251,19 @@ const Bank = ({ onDeleteConfirm }) => {
                                 onChange={handleInputChange}
                                 required
                                 placeholder="Enter Bank Name"
+                                autoComplete="off"
+                                className="w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm shadow-sm"
+                            />
+                        </div>
+
+                        <div className="col-span-1 space-y-2">
+                            <label className="text-sm font-medium text-gray-700">BIN No</label>
+                            <input
+                                type="text"
+                                name="binNo"
+                                value={formData.binNo}
+                                onChange={handleInputChange}
+                                placeholder="Enter BIN Number"
                                 autoComplete="off"
                                 className="w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm shadow-sm"
                             />
@@ -378,6 +395,7 @@ const Bank = ({ onDeleteConfirm }) => {
                             <thead>
                                 <tr className="bg-gray-50/50">
                                     <th className="px-6 py-4 text-[10px] font-bold text-gray-400 uppercase tracking-widest border-b border-gray-100">Bank</th>
+                                    <th className="px-6 py-4 text-[10px] font-bold text-gray-400 uppercase tracking-widest border-b border-gray-100">BIN No</th>
                                     <th className="px-6 py-4 text-[10px] font-bold text-gray-400 uppercase tracking-widest border-b border-gray-100">Branch</th>
                                     <th className="px-6 py-4 text-[10px] font-bold text-gray-400 uppercase tracking-widest border-b border-gray-100">Account Name</th>
                                     <th className="px-6 py-4 text-[10px] font-bold text-gray-400 uppercase tracking-widest border-b border-gray-100">Account No</th>
@@ -398,6 +416,9 @@ const Bank = ({ onDeleteConfirm }) => {
                                                 <tr key={item.uniqueRowKey} className="hover:bg-gray-50/50 transition-colors group border-b border-gray-100 last:border-b-0">
                                                     <td className="px-6 py-4 text-[13px] font-bold text-gray-700">
                                                         {idx === 0 ? group.bankName : ''}
+                                                    </td>
+                                                    <td className="px-6 py-4 text-[13px] font-medium text-gray-600">
+                                                        {idx === 0 ? (item.binNo || '-') : ''}
                                                     </td>
                                                     <td className="px-6 py-4 text-[13px] font-medium text-gray-600">{item.branch}</td>
                                                     <td className="px-6 py-4 text-[13px] font-medium text-gray-600">{item.accountName}</td>
@@ -465,6 +486,9 @@ const Bank = ({ onDeleteConfirm }) => {
                                             <h3 className={`text-base md:text-lg font-black transition-colors duration-300 ${isExpanded ? 'text-blue-600' : 'text-gray-800'}`}>
                                                 {group.bankName}
                                             </h3>
+                                            {group.items[0]?.binNo && (
+                                                <p className="text-xs font-semibold text-blue-600">BIN: {group.items[0].binNo}</p>
+                                            )}
                                             <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest flex items-center">
                                                 <span className={`w-1.5 h-1.5 rounded-full mr-2 ${isExpanded ? 'bg-blue-500 animate-pulse' : 'bg-gray-300'}`}></span>
                                                 {group.items.length} {group.items.length > 1 ? 'Accounts' : 'Account'}

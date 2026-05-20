@@ -38,7 +38,9 @@ const Exporter = ({
         contactPerson: '',
         email: '',
         phone: '+880',
-        licenseNo: '',
+        bin: '',
+        tin: '',
+        irc: '',
         status: 'Active',
         signature: ''
     });
@@ -212,7 +214,7 @@ const Exporter = ({
     };
 
     const resetForm = () => {
-        setFormData({ name: '', address: '', contactPerson: '', email: '', phone: '+880', licenseNo: '', status: 'Active', signature: '' });
+        setFormData({ name: '', address: '', contactPerson: '', email: '', phone: '+880', bin: '', tin: '', irc: '', status: 'Active', signature: '' });
         setEditingId(null);
         setSubmitStatus(null);
     };
@@ -224,7 +226,9 @@ const Exporter = ({
             contactPerson: exporter.contactPerson || '',
             email: exporter.email || '',
             phone: exporter.phone || '+880',
-            licenseNo: exporter.licenseNo || '',
+            bin: exporter.bin || '',
+            tin: exporter.tin || '',
+            irc: exporter.irc || '',
             status: exporter.status || 'Active',
             signature: exporter.signature || ''
         });
@@ -329,8 +333,16 @@ const Exporter = ({
                             <input type="text" name="name" value={formData.name} onChange={handleInputChange} required placeholder="Full Name" className="exporter-form-input" />
                         </div>
                         <div className="exporter-form-field">
-                            <label className="exporter-form-label">License No</label>
-                            <input type="text" name="licenseNo" value={formData.licenseNo} onChange={handleInputChange} required placeholder="LIC-00000" className="exporter-form-input" />
+                            <label className="exporter-form-label">BIN</label>
+                            <input type="text" name="bin" value={formData.bin} onChange={handleInputChange} required placeholder="BIN Number" className="exporter-form-input" />
+                        </div>
+                        <div className="exporter-form-field">
+                            <label className="exporter-form-label">TIN</label>
+                            <input type="text" name="tin" value={formData.tin} onChange={handleInputChange} required placeholder="TIN Number" className="exporter-form-input" />
+                        </div>
+                        <div className="exporter-form-field">
+                            <label className="exporter-form-label">IRC Number</label>
+                            <input type="text" name="irc" value={formData.irc} onChange={handleInputChange} required placeholder="IRC Number" className="exporter-form-input" />
                         </div>
                         <div className="exporter-form-field exporter-form-field-full">
                             <label className="exporter-form-label">Address</label>
@@ -415,7 +427,9 @@ const Exporter = ({
             {!showForm && (() => {
                 const filteredExporters = exporters.filter(exporter => 
                     (exporter.name || '').toLowerCase().includes(searchQuery.toLowerCase()) || 
-                    (exporter.licenseNo || '').toLowerCase().includes(searchQuery.toLowerCase()) || 
+                    (exporter.bin || '').toLowerCase().includes(searchQuery.toLowerCase()) || 
+                    (exporter.tin || '').toLowerCase().includes(searchQuery.toLowerCase()) || 
+                    (exporter.irc || '').toLowerCase().includes(searchQuery.toLowerCase()) || 
                     (exporter.phone || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
                     (exporter.contactPerson || '').toLowerCase().includes(searchQuery.toLowerCase())
                 );
@@ -448,7 +462,9 @@ const Exporter = ({
                                                 </th>
                                             )}
                                             <th className="exporter-table-header" onClick={() => requestSort('name')}><div className="exporter-table-header-content">Exporter Name <SortIcon config={sortConfig.exporter} columnKey="name" /></div></th>
-                                            <th className="exporter-table-header" onClick={() => requestSort('licenseNo')}><div className="exporter-table-header-content">License No <SortIcon config={sortConfig.exporter} columnKey="licenseNo" /></div></th>
+                                            <th className="exporter-table-header" onClick={() => requestSort('bin')}><div className="exporter-table-header-content">BIN <SortIcon config={sortConfig.exporter} columnKey="bin" /></div></th>
+                                            <th className="exporter-table-header" onClick={() => requestSort('tin')}><div className="exporter-table-header-content">TIN <SortIcon config={sortConfig.exporter} columnKey="tin" /></div></th>
+                                            <th className="exporter-table-header" onClick={() => requestSort('irc')}><div className="exporter-table-header-content">IRC <SortIcon config={sortConfig.exporter} columnKey="irc" /></div></th>
                                             <th className="exporter-table-header" onClick={() => requestSort('contactPerson')}><div className="exporter-table-header-content">Contact Person <SortIcon config={sortConfig.exporter} columnKey="contactPerson" /></div></th>
                                             <th className="exporter-table-header" onClick={() => requestSort('phone')}><div className="exporter-table-header-content">Phone <SortIcon config={sortConfig.exporter} columnKey="phone" /></div></th>
                                             <th className="exporter-table-header" onClick={() => requestSort('status')}><div className="exporter-table-header-content">Status <SortIcon config={sortConfig.exporter} columnKey="status" /></div></th>
@@ -470,7 +486,9 @@ const Exporter = ({
                                                     </td>
                                                 )}
                                                 <td className="exporter-table-cell exporter-table-cell-name">{exporter.name}</td>
-                                                <td className="exporter-table-cell exporter-table-cell-license">{exporter.licenseNo}</td>
+                                                <td className="exporter-table-cell">{exporter.bin || '-'}</td>
+                                                <td className="exporter-table-cell">{exporter.tin || '-'}</td>
+                                                <td className="exporter-table-cell">{exporter.irc || '-'}</td>
                                                 <td className="exporter-table-cell">{exporter.contactPerson}</td>
                                                 <td className="exporter-table-cell exporter-table-cell-muted">{exporter.phone}</td>
                                                 <td className="exporter-table-cell">
@@ -529,7 +547,7 @@ const Exporter = ({
                                                     )}
                                                     <div className="min-w-0">
                                                         <p className="font-bold text-gray-900 text-sm truncate uppercase tracking-tight">{exporter.name}</p>
-                                                        <p className="text-[10px] font-bold text-blue-600 mt-0.5 tracking-wider uppercase opacity-80">{exporter.licenseNo}</p>
+                                                        <p className="text-[10px] font-semibold text-blue-600 mt-0.5">BIN: {exporter.bin} | TIN: {exporter.tin} | IRC: {exporter.irc}</p>
                                                     </div>
                                                 </div>
                                                 <div className="flex items-center gap-3">
@@ -614,7 +632,7 @@ const Exporter = ({
                         <div className="relative px-4 py-4 md:px-8 md:py-6 border-b border-gray-100 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 bg-white flex-shrink-0 z-10 rounded-t-2xl">
                             <div className="flex-1 text-left min-w-0 pr-8 md:pr-0">
                                 <h3 className="text-lg md:text-xl font-bold text-gray-900 truncate">{viewData.name}</h3>
-                                <p className="text-xs text-gray-500 mt-1 truncate">License: {viewData.licenseNo}{viewData.address ? ` | ${viewData.address}` : ''}</p>
+                                <p className="text-xs text-gray-500 mt-1 truncate">BIN: {viewData.bin} | TIN: {viewData.tin} | IRC: {viewData.irc}{viewData.address ? ` | ${viewData.address}` : ''}</p>
                             </div>
 
                             {/* Search bar */}

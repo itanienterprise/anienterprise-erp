@@ -72,6 +72,7 @@ const LCManagement = require('./models/LCManagement');
 const LCGatePass = require('./models/LCGatePass');
 const LCExpense = require('./models/LCExpense');
 const PI = require('./models/PI');
+const PackingList = require('./models/PackingList');
 const MetaData = require('./models/MetaData');
 const CnFPayment = require('./models/CnFPayment');
 const InsurancePayment = require('./models/InsurancePayment');
@@ -1244,6 +1245,66 @@ apiRouter.put('/api/pi/:id', async (req, res) => {
 apiRouter.get('/api/pi', async (req, res) => {
   try {
     const records = await PI.find().sort({ createdAt: -1 });
+    const decrypted = records.map(r => {
+      const d = decryptData(r.data);
+      return { ...d, _id: r._id, createdAt: r.createdAt };
+    });
+    res.json(decrypted);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// Packing List APIs
+apiRouter.post('/api/packing-lists', async (req, res) => {
+  try {
+    const { packingListNumber } = req.body;
+    const encryptedData = encryptData(req.body);
+    const newRecord = new PackingList({ 
+      packingListNumber: packingListNumber ? packingListNumber.trim() : undefined,
+      data: encryptedData 
+    });
+    const savedRecord = await newRecord.save();
+    res.status(201).json({ ...req.body, _id: savedRecord._id, createdAt: savedRecord.createdAt });
+  } catch (err) {
+    if (err.code === 11000) {
+      return res.status(400).json({ message: 'Duplicate Packing List Number detected! This number already exists in the system.' });
+    }
+    res.status(400).json({ message: err.message });
+  }
+});
+
+apiRouter.delete('/api/packing-lists/:id', async (req, res) => {
+  try {
+    const deletedRecord = await PackingList.findByIdAndDelete(req.params.id);
+    if (!deletedRecord) return res.status(404).json({ message: 'Packing List record not found' });
+    res.json({ message: 'Packing List record deleted' });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+apiRouter.put('/api/packing-lists/:id', async (req, res) => {
+  try {
+    const { packingListNumber } = req.body;
+    const encryptedData = encryptData(req.body);
+    const updateData = { data: encryptedData };
+    if (packingListNumber) updateData.packingListNumber = packingListNumber.trim();
+
+    const updatedRecord = await PackingList.findByIdAndUpdate(req.params.id, updateData, { returnDocument: 'after' });
+    if (!updatedRecord) return res.status(404).json({ message: 'Packing List record not found' });
+    res.json({ ...req.body, _id: updatedRecord._id, createdAt: updatedRecord.createdAt });
+  } catch (err) {
+    if (err.code === 11000) {
+      return res.status(400).json({ message: 'Duplicate Packing List Number detected! This number already exists in the system.' });
+    }
+    res.status(400).json({ message: err.message });
+  }
+});
+
+apiRouter.get('/api/packing-lists', async (req, res) => {
+  try {
+    const records = await PackingList.find().sort({ createdAt: -1 });
     const decrypted = records.map(r => {
       const d = decryptData(r.data);
       return { ...d, _id: r._id, createdAt: r.createdAt };

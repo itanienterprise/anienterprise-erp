@@ -4,7 +4,7 @@ import {
   MenuIcon, SearchIcon, HomeIcon, UsersIcon, UserIcon, AnchorIcon,
   BarChartIcon, FunnelIcon, XIcon, DollarSignIcon, ShoppingCartIcon,
   ChevronDownIcon, BoxIcon, BellIcon, TrashIcon, VegetableIcon, ReceiptIcon, TrendingUpIcon, LogOutIcon, BriefcaseIcon,
-  GlobeIcon, ArrowUpRightIcon, ArrowDownLeftIcon, LinkIcon, BuildingIcon, ShieldIcon, FileTextIcon, LayoutIcon, LCManagerIcon, RotateCcwIcon
+  GlobeIcon, ArrowUpRightIcon, ArrowDownLeftIcon, LinkIcon, BuildingIcon, ShieldIcon, FileTextIcon, LayoutIcon, LCManagerIcon, RotateCcwIcon, ClipboardIcon
 } from './components/Icons';
 
 import { encryptData, decryptData } from './utils/encryption';
@@ -16,6 +16,7 @@ import CnF from './components/modules/CnF/CnF';
 import Port from './components/modules/Port/Port';
 import IPManagement from './components/modules/IPManagement/IPManagement';
 import PI from './components/modules/PI/PI';
+import PackingList from './components/modules/PackingList/PackingList';
 import ProductManagement from './components/modules/Product/ProductManagement';
 import Customer from './components/modules/Customer/Customer';
 import LCReceive from './components/modules/LCReceive/LCReceive';
@@ -394,7 +395,7 @@ function App() {
 
   const [piDropdownOpen, setPiDropdownOpen] = useState(() => {
     const initialView = localStorage.getItem('currentView') || 'dashboard';
-    return initialView === 'pi-section' || initialView === 'indian-bank-section';
+    return initialView === 'pi-section' || initialView === 'packing-list-section';
   });
 
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -597,7 +598,7 @@ function App() {
     localStorage.setItem('currentView', currentView);
 
     // Close all forms when changing sections
-    if (currentView === 'ip-section' || currentView === 'customer-section' || currentView === 'pi-section') {
+    if (currentView === 'ip-section' || currentView === 'customer-section' || currentView === 'pi-section' || currentView === 'packing-list-section') {
       fetchImporters(); // Fetch importers to populate the dropdown
       fetchExporters();
       fetchPorts(); // Fetch ports to populate the dropdown
@@ -1289,6 +1290,20 @@ function App() {
             currentUser={currentUser}
           />
         );
+      case 'packing-list-section':
+        return (
+          <PackingList
+            key={refreshKey}
+            importers={importers}
+            exporters={exporters}
+            ports={ports}
+            products={products}
+            fetchPorts={fetchPorts}
+            onDeleteConfirm={setDeleteConfirm}
+            addNotification={addNotification}
+            currentUser={currentUser}
+          />
+        );
       case 'importer-section':
         return (
           <Importer
@@ -1773,11 +1788,36 @@ function App() {
               </div>
             </div>
           </div>
-          <button onClick={() => { setCurrentView('pi-section'); setSidebarOpen(false); }} className={`w-full flex items-center px-4 py-2 rounded-lg transition-all ${currentView === 'pi-section' ? 'bg-blue-50 text-blue-600 shadow-sm' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'}`}>
-            <FileTextIcon className="w-5 h-5 mr-3" />
-            <span className="font-medium text-sm">Proforma Invoice</span>
-
-          </button>
+          <div>
+            <button
+              onClick={() => setPiDropdownOpen(!piDropdownOpen)}
+              className={`w-full flex items-center justify-between px-4 py-2 rounded-lg transition-all ${currentView === 'pi-section' || currentView === 'packing-list-section' ? 'bg-blue-50 text-blue-600 shadow-sm' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'}`}
+            >
+              <div className="flex items-center">
+                <FileTextIcon className="w-5 h-5 mr-3" />
+                <span className="font-medium text-sm">Proforma Invoice</span>
+              </div>
+              <ChevronDownIcon className={`w-4 h-4 transition-transform duration-200 ${piDropdownOpen ? 'transform rotate-180' : ''}`} />
+            </button>
+            <div className={`overflow-hidden transition-all duration-300 ease-in-out ${piDropdownOpen ? 'max-h-48 opacity-100 mt-1' : 'max-h-0 opacity-0'}`}>
+              <div className="pl-7 pr-2 space-y-1">
+                <button
+                  onClick={() => { setCurrentView('pi-section'); setSidebarOpen(false); }}
+                  className={`w-full flex flex-row items-center py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'pi-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'}`}
+                >
+                  <FileTextIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
+                  <span>Proforma Invoice</span>
+                </button>
+                <button
+                  onClick={() => { setCurrentView('packing-list-section'); setSidebarOpen(false); }}
+                  className={`w-full flex flex-row items-center py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'packing-list-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'}`}
+                >
+                  <ClipboardIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
+                  <span>Packing List</span>
+                </button>
+              </div>
+            </div>
+          </div>
           <div>
             <button
               onClick={() => setInsuranceDropdownOpen(!insuranceDropdownOpen)}
