@@ -256,15 +256,7 @@ export const generatePI2PDF = (record) => {
     const descParts = [];
     const numProductsList = record.productsList ? record.productsList.length : 1;
 
-    const showValQty = selectedCerts.some(c => {
-        const lower = c.toLowerCase();
-        return lower.includes('value') && lower.includes('quantity');
-    });
     // Reuse showPacking defined at function top
-
-    if (numProductsList > 1 && showValQty) {
-        descParts.push("VALUE & QUANTITY \u00B1 10% ACCEPTABLE.\n");
-    }
 
     if (showCountryOfOrigin) {
         descParts.push(`COUNTRY OF ORIGIN ${(record.countryOrigin || 'INDIA').toUpperCase()}`);
@@ -275,11 +267,20 @@ export const generatePI2PDF = (record) => {
     if (showPacking) {
         descParts.push("EXPORT STANDARD PACKING");
     }
-    descParts.push(`ADVISING BANK: ${record.indianBank || ''}`);
     descParts.push(`VALIDITY OF PROFORMA INVOICE DATE:${formatDate(record.validityDate)}`);
 
     if (record.descriptionGoods) {
-        descParts.push(`\n${record.descriptionGoods}`);
+        const descWithoutBank = record.descriptionGoods
+            .split('\n')
+            .filter(line => {
+                const trimmed = line.trim().toLowerCase();
+                return !trimmed.startsWith('advising bank') && !trimmed.includes('must be through');
+            })
+            .join('\n')
+            .trim();
+        if (descWithoutBank) {
+            descParts.push(`\n${descWithoutBank}`);
+        }
     }
 
     descParts.push("\n\n\n\n\n\n\n\n\n\n");
@@ -300,7 +301,7 @@ export const generatePI2PDF = (record) => {
         let requiredNewlines = 1; // Base: Product name
         if (prod.hsCodeInd) requiredNewlines += 1; // Extra space for dual HS code
         if (showSafta && isLastProduct && !hasFreight) requiredNewlines += 2.5; // Extra space for SAFTA
-        if (numProducts === 1) requiredNewlines += 2; // Space for VALUE & QUANTITY + buffer for single product layout
+        if (numProducts === 1) requiredNewlines += 1; // Buffer for single product layout
 
         let cellText = "\n".repeat(requiredNewlines);
         if (numProducts === 1) {
@@ -456,14 +457,6 @@ export const generatePI2PDF = (record) => {
                     drawY += 4.5;
                     doc.text("(South Asian Free Trade Area)", centerX, drawY, { align: 'center' });
                     drawY += 5.5;
-                }
-
-                // VALUE & QUANTITY line (only if single product and selected)
-                if (productsList.length === 1 && showValQty) {
-                    drawY += 12; // Move VALUE & QUANTITY down
-                    doc.setFont("helvetica", "bold");
-                    doc.setFontSize(9);
-                    doc.text("VALUE & QUANTITY \u00B1 10% ACCEPTABLE.", cellX + 2, drawY);
                 }
 
                 doc.setFont("helvetica", "normal");

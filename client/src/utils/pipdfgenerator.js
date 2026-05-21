@@ -289,14 +289,14 @@ export const generatePIPDF = (record) => {
 
     doc.line(midX + subColWidthVal, y, midX + subColWidthVal, y + 10); // Vertical divider for Buyer/Country
 
-    const showCountryOfOrigin = true;
+    const showCountryOfOrigin = selectedCerts.some(c => c.toLowerCase().includes('country of origin'));
     // Reuse selectedCerts defined at function top
     const otherCerts = selectedCerts.filter(c => {
         const lower = c.toLowerCase();
         return !lower.includes('country of origin') &&
-               !lower.includes('safta') &&
-               !lower.includes('packing') &&
-               !(lower.includes('value') && lower.includes('quantity'));
+            !lower.includes('safta') &&
+            !lower.includes('packing') &&
+            !(lower.includes('value') && lower.includes('quantity'));
     });
 
     doc.setFont("helvetica", "normal");
@@ -350,7 +350,7 @@ export const generatePIPDF = (record) => {
     const defaultDescLines = [
         "Insurance to be covered by the opener.",
         "Partial Bill & Partial Payment be allowed.",
-        "Negotiation any Bank in India.",
+        "Negotiation is unrestricted in any Bank in India.",
         "All Foreign Bank Charges outside Bangladesh are on account of Beneficiary.",
         "",
         "TRANSHIPMENT: ALLOWED",
@@ -378,26 +378,24 @@ export const generatePIPDF = (record) => {
         // Reserve space for drawing product, HS code etc.
         const numProducts = productsList.length;
         let cellText = "\n\n\n\n";
-        if (numProducts === 1 && showCountryOfOrigin && !isMultiProduct) {
+        if (numProducts === 1 && showCountryOfOrigin) {
             cellText = "\n\n\n\n\n"; // Extra line for Country of Origin text
         }
         if (numProducts === 2) {
-            cellText = "\n\n\n";
+            cellText = (pIdx === 0 && showCountryOfOrigin) ? "\n\n\n\n" : "\n\n\n";
         } else if (numProducts >= 3) {
-            cellText = "\n\n";
+            cellText = (pIdx === 0 && showCountryOfOrigin) ? "\n\n\n" : "\n\n";
         }
-        if (showSafta && isLastProduct) {
-            cellText += "\n\n";
-        }
+
         if (numProducts === 1) {
-            cellText += "\n\n" + extraDescText;
+            const descSpacing = showSafta ? "\n\n\n\n\n\n" : "\n\n";
+            cellText += descSpacing + extraDescText;
         }
 
         tableBody.push([
             {
                 content: cellText,
                 colSpan: 3,
-                rowSpan: hasFreight ? 2 : 1,
                 styles: {
                     halign: 'left',
                     fontStyle: 'normal',
@@ -405,28 +403,21 @@ export const generatePIPDF = (record) => {
                     cellPadding: { top: 2, left: 1.5, right: 1.5, bottom: numProducts === 1 ? 22 : 2 }
                 }
             },
-            { content: prod.quantity ? parseFloat(prod.quantity).toLocaleString('en-US') : '0', styles: { halign: 'center', fontStyle: 'bold' } },
-            { content: prod.rate ? parseFloat(prod.rate).toFixed(3) : '0.000', styles: { halign: 'center', fontStyle: 'bold' } },
-            { content: prod.amount ? parseFloat(prod.amount).toLocaleString('en-IN', { minimumFractionDigits: 2 }) : '0.00', styles: { halign: 'center', fontStyle: 'bold' } }
+            { content: '', styles: { halign: 'center', fontStyle: 'bold' } },
+            { content: '', styles: { halign: 'center', fontStyle: 'bold' } },
+            { content: '', styles: { halign: 'center', fontStyle: 'bold' } }
         ]);
-
-        if (hasFreight) {
-            freightRowIndices.push(tableBody.length);
-            tableBody.push([
-                { content: 'Freight', styles: { halign: 'center', fontStyle: 'bold', valign: 'middle', cellPadding: { top: 2, bottom: 2, left: 1.5, right: 1.5 } } },
-                { content: parseFloat(prod.freight).toFixed(3), styles: { halign: 'center', fontStyle: 'bold', valign: 'middle', cellPadding: { top: 2, bottom: 2, left: 1.5, right: 1.5 } } },
-                { content: prod.totalFreight ? parseFloat(prod.totalFreight).toLocaleString('en-IN', { minimumFractionDigits: 2 }) : '0.00', styles: { halign: 'center', fontStyle: 'bold', valign: 'middle', cellPadding: { top: 2, bottom: 2, left: 1.5, right: 1.5 } } }
-            ]);
-        }
     });
 
     // Description / advising bank row at the end of Style 1 table (only for multi-product)
     if (productsList.length > 1) {
+        const descText = showSafta ? "\n\n\n" + extraDescText : extraDescText;
+        const cellPaddingTop = showSafta ? 2 : 3;
         tableBody.push([
             {
-                content: extraDescText,
+                content: descText,
                 colSpan: 3,
-                styles: { halign: 'left', fontStyle: 'normal', cellPadding: { top: 3, left: 1.5, right: 1.5, bottom: 3 } }
+                styles: { halign: 'left', fontStyle: 'normal', cellPadding: { top: cellPaddingTop, left: 1.5, right: 1.5, bottom: 3 } }
             },
             { content: '', styles: { halign: 'center' } },
             { content: '', styles: { halign: 'center' } },
@@ -498,19 +489,43 @@ export const generatePIPDF = (record) => {
                     gap = 4.8;
                 }
 
-                // Draw Country of Origin above product name for single product
-                if (showCountryOfOrigin && !isMultiProduct && numProducts === 1) {
+                // Draw Country of Origin above product name for the 1st product if selected
+                if (showCountryOfOrigin && pIdx === 0) {
                     doc.setFont("helvetica", "bold");
                     doc.setFontSize(9);
-                    doc.text(`COUNTRY OF ORIGIN OF GOODS: ${(record.countryOrigin || 'INDIA').toUpperCase()}`, centerX, cellY + 5.5, { align: 'center' });
-                    drawY = cellY + 13;
-                    gap = 6;
+                    const originY = numProducts === 1 ? cellY + 5.5 : cellY + 5;
+                    const originText = `COUNTRY OF ORIGIN OF GOODS: ${(record.countryOrigin || 'INDIA').toUpperCase()}`;
+                    doc.text(originText, centerX, originY, { align: 'center' });
+
+                    // Draw underline under Country of Origin
+                    const oWidth = doc.getTextWidth(originText);
+                    doc.setLineWidth(0.3);
+                    doc.line(centerX - oWidth / 2, originY + 1.5, centerX + oWidth / 2, originY + 1.5);
+                    doc.setLineWidth(0.1);
+
+                    if (numProducts === 1) {
+                        drawY = cellY + 13;
+                        gap = 6;
+                    } else if (numProducts === 2) {
+                        drawY = cellY + 11;
+                        gap = 5.5;
+                    } else { // numProducts >= 3
+                        drawY = cellY + 9.5;
+                        gap = 4.8;
+                    }
                 }
 
                 // 2. Product Name — dynamic bold, centered
                 doc.setFont("helvetica", "bold");
                 doc.setFontSize(pNameSize);
                 doc.text(pName, centerX, drawY, { align: 'center' });
+
+                // Add underline under product name
+                const pWidth = doc.getTextWidth(pName);
+                doc.setLineWidth(0.3);
+                doc.line(centerX - pWidth / 2, drawY + 1.5, centerX + pWidth / 2, drawY + 1.5);
+                doc.setLineWidth(0.1);
+
                 drawY += gap;
 
                 // 3. HS Code — dynamic bold, centered
@@ -526,19 +541,15 @@ export const generatePIPDF = (record) => {
                 } else {
                     doc.text(hsCodeLine, centerX, drawY, { align: 'center' });
                 }
-                if (showSafta && pIdx === productsList.length - 1) {
-                    drawY += 1;
-                    doc.setDrawColor(0, 0, 0);
-                    doc.setLineWidth(0.1);
-                    doc.line(cellX, drawY, cellX + cellWidth, drawY);
 
-                    drawY += 5;
+                if (showSafta && numProducts === 1) {
+                    drawY += 6;
                     doc.setFont("helvetica", "bold");
                     doc.setFontSize(8.5);
                     doc.text("THE CERTIFICATE OF ORIGIN UNDER SAFTA", centerX, drawY, { align: 'center' });
                     drawY += 4.5;
                     doc.text("(South Asian Free Trade Area)", centerX, drawY, { align: 'center' });
-                    drawY += 6;
+
                 }
 
                 // Reset
@@ -546,18 +557,85 @@ export const generatePIPDF = (record) => {
                 doc.setFontSize(8.5);
             }
 
-            // Remove middle horizontal line between Product and Freight row
-            if (data.section === 'body' && freightRowIndices.includes(data.row.index)) {
-                // Erase the horizontal line completely with a thick white line
-                doc.setDrawColor(255, 255, 255);
-                doc.setLineWidth(1.5); // Thick enough to cover borders
-                doc.line(data.cell.x, data.cell.y, data.cell.x + data.cell.width, data.cell.y);
+            const isDescRow = productsList.length > 1 && data.row.index === tableBody.length - 1;
+            if (data.section === 'body' && data.column.index === 0 && isDescRow) {
+                if (showSafta) {
+                    const cellX = data.cell.x;
+                    const cellY = data.cell.y;
+                    const cellWidth = data.cell.width;
+                    const centerX = cellX + cellWidth / 2;
 
-                // Redraw the left and right vertical borders for this cell
-                doc.setDrawColor(0, 0, 0);
-                doc.setLineWidth(0.1);
-                doc.line(data.cell.x, data.cell.y - 1, data.cell.x, data.cell.y + data.cell.height);
-                doc.line(data.cell.x + data.cell.width, data.cell.y - 1, data.cell.x + data.cell.width, data.cell.y + data.cell.height);
+                    let drawY = cellY + 5;
+                    doc.setFont("helvetica", "bold");
+                    doc.setFontSize(8.5);
+                    doc.text("THE CERTIFICATE OF ORIGIN UNDER SAFTA", centerX, drawY, { align: 'center' });
+                    drawY += 4.5;
+                    doc.text("(South Asian Free Trade Area)", centerX, drawY, { align: 'center' });
+
+
+                    // Reset
+                    doc.setFont("helvetica", "normal");
+                    doc.setFontSize(8.5);
+                }
+            }
+
+            // Draw quantity, rate, amount values (FOB + Freight stacked in same cell)
+            if (data.section === 'body' && (data.column.index === 3 || data.column.index === 4 || data.column.index === 5) && firstRowIndexForProduct.includes(data.row.index)) {
+                const pIdxVal = firstRowIndexForProduct.indexOf(data.row.index);
+                const prodVal = productsList[pIdxVal];
+                const hasFreightVal = prodVal.freight && parseFloat(prodVal.freight) > 0;
+
+                const cX = data.cell.x;
+                const cY = data.cell.y;
+                const cW = data.cell.width;
+                const cCenterX = cX + cW / 2;
+                const sepY = cY + 10;
+
+                if (data.column.index === 3) {
+                    // Quantity column
+                    doc.setFont("helvetica", "bold");
+                    doc.setFontSize(8.5);
+                    const qtyText = prodVal.quantity ? parseFloat(prodVal.quantity).toLocaleString('en-IN', { minimumFractionDigits: 2 }) : '0';
+                    doc.text(qtyText, cCenterX, cY + 5.5, { align: 'center' });
+
+                    if (hasFreightVal) {
+                        doc.setFont("helvetica", "bold");
+                        doc.setFontSize(8.5);
+                        doc.text('Freight', cCenterX, sepY + 5, { align: 'center' });
+                    }
+                } else if (data.column.index === 4) {
+                    // Rate column - FOB Value label below rate
+                    doc.setFont("helvetica", "bold");
+                    doc.setFontSize(8.5);
+                    const rateText = prodVal.rate ? parseFloat(prodVal.rate).toFixed(3) : '0.000';
+                    doc.text(rateText, cCenterX, cY + 4.5, { align: 'center' });
+                    doc.setFont("helvetica", "normal");
+                    doc.setFontSize(6.5);
+                    doc.text('FOB Value', cCenterX, cY + 8.5, { align: 'center' });
+
+                    if (hasFreightVal) {
+                        doc.setFont("helvetica", "bold");
+                        doc.setFontSize(8.5);
+                        doc.text(parseFloat(prodVal.freight).toFixed(3), cCenterX, sepY + 5, { align: 'center' });
+                    }
+                } else if (data.column.index === 5) {
+                    // Amount column
+                    doc.setFont("helvetica", "bold");
+                    doc.setFontSize(8.5);
+                    const amtText = prodVal.amount ? parseFloat(prodVal.amount).toLocaleString('en-IN', { minimumFractionDigits: 2 }) : '0.00';
+                    doc.text(amtText, cCenterX, cY + 5.5, { align: 'center' });
+
+                    if (hasFreightVal) {
+                        doc.setFont("helvetica", "bold");
+                        doc.setFontSize(8.5);
+                        const freightAmtText = prodVal.totalFreight ? parseFloat(prodVal.totalFreight).toLocaleString('en-IN', { minimumFractionDigits: 2 }) : '0.00';
+                        doc.text(freightAmtText, cCenterX, sepY + 5, { align: 'center' });
+                    }
+                }
+
+                // Reset font
+                doc.setFont("helvetica", "normal");
+                doc.setFontSize(8.5);
             }
         },
         didDrawPage: (data) => {

@@ -19,7 +19,7 @@ function PI({
     addNotification,
     currentUser
 }) {
-    const DEFAULT_DESC_GOODS = "Insurance to be covered by the opener.\nPartial Bill & Partial Payment be allowed.\nNegotiation any Bank in India.\nAll Foreign Bank Charges outside India are on account of Importer.\n\nTRANSHIPMENT: ALLOWED\nPARTIAL SHIPMENT: ALLOWED";
+    const DEFAULT_DESC_GOODS = "Insurance to be covered by the opener.\nPartial Bill & Partial Payment be allowed.\nNegotiation is unrestricted in any Bank in India.\nAll Foreign Bank Charges outside India are on account of Importer.\n\nTRANSHIPMENT: ALLOWED\nPARTIAL SHIPMENT: ALLOWED";
     const DEFAULT_DECLARATION = "1. Deliveries age quoted in good faith, however we shall not be responsible for delays due to reasons beyond our control.\n2. We declare that this invoice shows the actual price of the goods described and that all particulars are true and correct.";
     const STYLE2_DECLARATION = "We declare that this invoice shows the actual price of the goods described and that all particulars are true and correct.\nWe do certify that we have no local agent in Bangladesh and the quoted price is net and no commission is payable.";
 
