@@ -19,7 +19,7 @@ function PI({
     addNotification,
     currentUser
 }) {
-    const DEFAULT_DESC_GOODS = "Insurance to be covered by the opener.\nPartial Bill & Partial Payment be allowed.\nNegotiation any Bank in India.\nThe Importer or Bank will not hold the bill in any circumstances.\nAll Foreign Bank Charges outside India are on account of Importer.\nWeight and measurement are final which is taken by weighing bridge in India.\n\nTRANSHIPMENT: ALLOWED\nPARTIAL SHIPMENT: ALLOWED";
+    const DEFAULT_DESC_GOODS = "Insurance to be covered by the opener.\nPartial Bill & Partial Payment be allowed.\nNegotiation any Bank in India.\nAll Foreign Bank Charges outside India are on account of Importer.\n\nTRANSHIPMENT: ALLOWED\nPARTIAL SHIPMENT: ALLOWED";
     const DEFAULT_DECLARATION = "1. Deliveries age quoted in good faith, however we shall not be responsible for delays due to reasons beyond our control.\n2. We declare that this invoice shows the actual price of the goods described and that all particulars are true and correct.";
     const STYLE2_DECLARATION = "We declare that this invoice shows the actual price of the goods described and that all particulars are true and correct.\nWe do certify that we have no local agent in Bangladesh and the quoted price is net and no commission is payable.";
 
@@ -41,6 +41,7 @@ function PI({
     const [countries, setCountries] = useState([]);
     const [certifications, setCertifications] = useState([]);
     const [certSearch, setCertSearch] = useState('');
+    const [ipSearch, setIpSearch] = useState('');
     const [activeDropdown, setActiveDropdown] = useState(null);
     const [highlightedIndex, setHighlightedIndex] = useState(-1);
     const [toast, setToast] = useState(null);
@@ -89,6 +90,7 @@ function PI({
         countryFinalDest: 'BANGLADESH',
         finalDestination: 'BANGLADESH',
         hsCode: '',
+        ipNumbers: [],
         ipNumber: '',
         ipQuantity: '',
         ipDate: '',
@@ -98,7 +100,7 @@ function PI({
         termsDeliveryPayment: 'CPT [PORT OF DISCHARGE], BANGLADESH, BY ROAD, BY TRUCK AGAINST 100% Irrevocable at Sight Letter of Credit valid for 90 days & Negotiable within 21 days of Shipment.\nPacking: Export Standard P.P/Gunny Bags.',
         declaration: DEFAULT_DECLARATION,
         status: 'Active',
-        certification: ''
+        certification: 'Value & Quantity, Country of Origin'
     });
 
     const ipNumberRef = useRef(null);
@@ -399,10 +401,12 @@ function PI({
                 setCertSearch('');
                 const currentCert = prev.certification || '';
                 const parts = currentCert.split(',').map(s => s.trim()).filter(Boolean);
-                if (parts.includes(value)) {
+                const valueLower = value.toLowerCase();
+                const matchedIndex = parts.findIndex(p => p.toLowerCase() === valueLower);
+                if (matchedIndex > -1) {
                     // Remove if already selected
-                    const newParts = parts.filter(p => p !== value);
-                    updated.certification = newParts.join(', ');
+                    parts.splice(matchedIndex, 1);
+                    updated.certification = parts.join(', ');
                 } else {
                     // Add if not selected
                     parts.push(value);
@@ -413,38 +417,94 @@ function PI({
             if (field === 'ipNumber') {
                 const ip = ipRecords.find(i => i.ipNumber === value);
                 if (ip) {
-                    updated.ipQuantity = ip.quantity || '';
-                    updated.ipDate = ip.closeDate || '';
-                    updated.productName = ip.productName || '';
-                    updated.partyName = ip.ipParty || '';
+                    const currentIpNumbers = [...(prev.ipNumbers || [])];
+                    const alreadySelected = currentIpNumbers.includes(value);
 
-                    // Auto-fill Importer details
-                    const importer = importers.find(i => i.name === ip.ipParty);
-                    if (importer) {
-                        updated.partyAddress = importer.address || '';
-                        updated.partyContact = importer.phone || '';
-                    }
+                    if (alreadySelected) {
+                        // Remove IP and its product
+                        const removedIndex = currentIpNumbers.indexOf(value);
+                        currentIpNumbers.splice(removedIndex, 1);
+                        updated.ipNumbers = currentIpNumbers;
 
-                    // Also try to find HS Code from the product list if product name matches
-                    let hCode = '';
-                    const product = products.find(p => p.name === ip.productName);
-                    if (product) {
-                        hCode = product.hsCode || '';
-                        updated.hsCode = hCode;
-                    }
-
-                    // Sync to productsList[0]
-                    if (!updated.productsList || updated.productsList.length === 0) {
-                        updated.productsList = [{ productName: ip.productName || '', hsCode: hCode, hsCodeInd: product ? (product.hsCodeInd || '') : '', quantity: '', rate: '', amount: '', freight: '', totalFreight: '' }];
+                        // Remove corresponding product from productsList
+                        const currentProducts = [...(prev.productsList || [])];
+                        const prodIdx = currentProducts.findIndex(p => p._fromIp === value);
+                        if (prodIdx > -1) {
+                            currentProducts.splice(prodIdx, 1);
+                        }
+                        if (currentProducts.length === 0) {
+                            currentProducts.push({ productName: '', hsCode: '', quantity: '', rate: '', amount: '', freight: '', totalFreight: '' });
+                        }
+                        updated.productsList = currentProducts;
                     } else {
-                        updated.productsList[0] = {
-                            ...updated.productsList[0],
+                        // Add IP and its product
+                        currentIpNumbers.push(value);
+                        updated.ipNumbers = currentIpNumbers;
+
+                        const product = products.find(p => p.name === ip.productName);
+                        const hCode = product ? (product.hsCode || '') : '';
+                        const hCodeInd = product ? (product.hsCodeInd || '') : '';
+
+                        const newProduct = {
                             productName: ip.productName || '',
                             hsCode: hCode,
-                            hsCodeInd: product ? (product.hsCodeInd || '') : ''
+                            hsCodeInd: hCodeInd,
+                            quantity: '',
+                            rate: '',
+                            amount: '',
+                            freight: '',
+                            totalFreight: '',
+                            _fromIp: value
                         };
+
+                        const currentProducts = [...(prev.productsList || [])];
+                        // If only one empty product exists, replace it
+                        if (currentProducts.length === 1 && !currentProducts[0].productName) {
+                            updated.productsList = [newProduct];
+                        } else {
+                            updated.productsList = [...currentProducts, newProduct];
+                        }
+
+                        // Auto-fill party info from the first selected IP
+                        if (currentIpNumbers.length === 1) {
+                            updated.partyName = ip.ipParty || '';
+                            const importer = importers.find(i => i.name === ip.ipParty);
+                            if (importer) {
+                                updated.partyAddress = importer.address || '';
+                                updated.partyContact = importer.phone || '';
+                            }
+                        }
+                    }
+
+                    // Update ipNumber as comma-separated for backward compat
+                    updated.ipNumber = updated.ipNumbers.join(', ');
+
+                    // Sum all selected IPs' quantities
+                    let totalIpQty = 0;
+                    updated.ipNumbers.forEach(ipNum => {
+                        const rec = ipRecords.find(i => i.ipNumber === ipNum);
+                        if (rec) totalIpQty += parseFloat(rec.quantity) || 0;
+                    });
+                    updated.ipQuantity = totalIpQty > 0 ? totalIpQty.toString() : '';
+
+                    // Use latest closing date
+                    let latestDate = '';
+                    updated.ipNumbers.forEach(ipNum => {
+                        const rec = ipRecords.find(i => i.ipNumber === ipNum);
+                        if (rec && rec.closeDate && rec.closeDate > latestDate) {
+                            latestDate = rec.closeDate;
+                        }
+                    });
+                    updated.ipDate = latestDate;
+
+                    // Sync root-level fields from first product
+                    const firstProd = (updated.productsList || [])[0];
+                    if (firstProd) {
+                        updated.productName = firstProd.productName || '';
+                        updated.hsCode = firstProd.hsCode || '';
                     }
                 }
+                setIpSearch('');
             }
 
             if (field === 'exporterName') {
@@ -619,6 +679,7 @@ function PI({
             countryFinalDest: 'BANGLADESH',
             finalDestination: 'BANGLADESH',
             hsCode: '0806.10.90',
+            ipNumbers: [],
             ipNumber: '',
             ipQuantity: '',
             ipDate: '',
@@ -629,11 +690,12 @@ function PI({
             declaration: DEFAULT_DECLARATION,
             status: 'Active',
             invoiceStyle: 'Style 1 SAA',
-            certification: ''
+            certification: 'Value & Quantity, Country of Origin'
         });
         setEditingId(null);
         setSubmitStatus(null);
         setCertSearch('');
+        setIpSearch('');
     };
 
     const handleEdit = (record) => {
@@ -648,6 +710,8 @@ function PI({
                 freight: record.freight || '',
                 totalFreight: record.totalFreight || ''
               }];
+
+        const parsedIpNumbers = record.ipNumbers || (record.ipNumber ? record.ipNumber.split(',').map(s => s.trim()).filter(Boolean) : []);
 
         setFormData({
             date: record.date || '',
@@ -684,6 +748,7 @@ function PI({
             countryFinalDest: record.countryFinalDest || 'BANGLADESH',
             finalDestination: record.finalDestination || 'BANGLADESH',
             hsCode: record.hsCode || '0806.10.90',
+            ipNumbers: parsedIpNumbers,
             ipNumber: record.ipNumber || '',
             ipQuantity: record.ipQuantity || '',
             ipDate: record.ipDate || '',
@@ -699,6 +764,7 @@ function PI({
         setEditingId(record._id);
         setShowForm(true);
         setCertSearch('');
+        setIpSearch('');
     };
 
     const handleDelete = (id) => {
@@ -773,61 +839,89 @@ function PI({
                         className="grid grid-cols-1 md:grid-cols-3 gap-6 relative z-10"
                     >
                         {/* --- IP Section --- */}
-                        <div className="space-y-2 relative dropdown-container" ref={ipNumberRef}>
-                            <label className="text-sm font-medium text-gray-700">IP Number</label>
-                            <div className="relative">
-                                <input
-                                    type="text"
-                                    name="ipNumber"
-                                    value={formData.ipNumber}
-                                    onChange={(e) => { handleInputChange(e); setActiveDropdown('ipNumber'); setHighlightedIndex(-1); }}
-                                    onFocus={() => { setActiveDropdown('ipNumber'); setHighlightedIndex(-1); }}
-                                    onKeyDown={(e) => handleDropdownKeyDown(e, 'ipNumber', ipRecords.filter(ip => !formData.ipNumber || ip.ipNumber.toLowerCase().includes(formData.ipNumber.toLowerCase())), 'ipNumber')}
-                                    placeholder="Search IP Number..."
-                                    autoComplete="off"
-                                    className="w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-all"
-                                />
-                                {activeDropdown === 'ipNumber' && (
-                                    <div className="absolute z-[60] w-full mt-1 bg-white border border-gray-100 rounded-xl shadow-xl max-h-48 overflow-y-auto">
-                                        {ipRecords.filter(ip => !formData.ipNumber || ip.ipNumber.toLowerCase().includes(formData.ipNumber.toLowerCase())).map((ip, idx) => (
-                                            <button
-                                                key={ip._id}
-                                                type="button"
-                                                onMouseDown={() => handleDropdownSelect('ipNumber', ip.ipNumber)}
-                                                onMouseEnter={() => setHighlightedIndex(idx)}
-                                                className={`w-full px-4 py-2 text-left text-sm ${highlightedIndex === idx || formData.ipNumber === ip.ipNumber ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-blue-50'}`}
-                                            >
-                                                <div className="flex flex-col">
-                                                    <span className="font-bold">{ip.ipNumber}</span>
-                                                    <span className="text-[10px] text-gray-500">{ip.ipParty} • {ip.productName}</span>
-                                                </div>
-                                            </button>
-                                        ))}
-                                    </div>
-                                )}
+                        <div className="col-span-full space-y-4">
+                            {/* IP Search Input */}
+                            <div className="space-y-2 relative dropdown-container max-w-md" ref={ipNumberRef}>
+                                <label className="text-sm font-medium text-gray-700">IP Search & Selection</label>
+                                <div className="relative">
+                                    <input
+                                        type="text"
+                                        name="ipSearch"
+                                        value={ipSearch}
+                                        onChange={(e) => { setIpSearch(e.target.value); setActiveDropdown('ipNumber'); setHighlightedIndex(-1); }}
+                                        onFocus={() => { setActiveDropdown('ipNumber'); setHighlightedIndex(-1); }}
+                                        onKeyDown={(e) => handleDropdownKeyDown(e, 'ipNumber', ipRecords.filter(ip => !ipSearch || ip.ipNumber.toLowerCase().includes(ipSearch.toLowerCase())), 'ipNumber')}
+                                        placeholder="Search & Select IP Numbers..."
+                                        autoComplete="off"
+                                        className="w-full px-4 py-2 bg-white border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-all"
+                                    />
+                                    {activeDropdown === 'ipNumber' && (
+                                        <div className="absolute z-[60] w-full mt-1 bg-white border border-gray-100 rounded-xl shadow-xl max-h-48 overflow-y-auto">
+                                            {ipRecords.filter(ip => !ipSearch || ip.ipNumber.toLowerCase().includes(ipSearch.toLowerCase())).map((ip, idx) => {
+                                                const isSelected = formData.ipNumbers && formData.ipNumbers.includes(ip.ipNumber);
+                                                return (
+                                                    <button
+                                                        key={ip._id}
+                                                        type="button"
+                                                        onMouseDown={() => handleDropdownSelect('ipNumber', ip.ipNumber)}
+                                                        onMouseEnter={() => setHighlightedIndex(idx)}
+                                                        className={`w-full px-4 py-2 text-left text-sm flex items-center justify-between ${highlightedIndex === idx || isSelected ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-blue-50'}`}
+                                                    >
+                                                        <div className="flex flex-col">
+                                                            <span className="font-bold">{ip.ipNumber}</span>
+                                                            <span className="text-[10px] text-gray-500">{ip.ipParty} • {ip.productName}</span>
+                                                        </div>
+                                                        {isSelected && (
+                                                            <span className="text-blue-600 font-bold text-sm">✓</span>
+                                                        )}
+                                                    </button>
+                                                );
+                                            })}
+                                        </div>
+                                    )}
+                                </div>
                             </div>
-                        </div>
 
-                        <div className="space-y-2">
-                            <label className="text-sm font-medium text-gray-700">IP Quantity</label>
-                            <input
-                                type="text"
-                                name="ipQuantity"
-                                value={formData.ipQuantity}
-                                readOnly
-                                placeholder="Auto-filled"
-                                className="w-full px-4 py-2 bg-gray-50 border border-gray-200/60 rounded-lg outline-none transition-all cursor-not-allowed"
-                            />
+                            {/* Selected IPs Rows */}
+                            {formData.ipNumbers && formData.ipNumbers.length > 0 && (
+                                <div className="space-y-3 bg-gray-50/50 p-4 rounded-xl border border-gray-200/40">
+                                    <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider">Selected Import Permits (IP)</h4>
+                                    <div className="space-y-2">
+                                        {formData.ipNumbers.map((ipNum) => {
+                                            const ipRec = ipRecords.find(i => i.ipNumber === ipNum);
+                                            const qty = ipRec?.quantity || '';
+                                            const closeDate = ipRec?.closeDate ? formatDate(ipRec.closeDate) : '';
+                                            return (
+                                                <div key={ipNum} className="flex flex-col md:flex-row items-start md:items-center gap-4 bg-white p-3 rounded-lg border border-gray-200 shadow-sm">
+                                                    <div className="flex-1 min-w-[150px]">
+                                                        <label className="block text-[10px] font-bold text-gray-400 uppercase">IP Number</label>
+                                                        <span className="text-sm font-semibold text-gray-800">{ipNum}</span>
+                                                    </div>
+                                                    <div className="flex-1 min-w-[120px]">
+                                                        <label className="block text-[10px] font-bold text-gray-400 uppercase">IP Quantity</label>
+                                                        <span className="text-sm font-medium text-gray-700">{qty}</span>
+                                                    </div>
+                                                    <div className="flex-1 min-w-[120px]">
+                                                        <label className="block text-[10px] font-bold text-gray-400 uppercase">IP Closing Date</label>
+                                                        <span className="text-sm font-medium text-gray-700">{closeDate || 'N/A'}</span>
+                                                    </div>
+                                                    <div className="flex-shrink-0">
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => handleDropdownSelect('ipNumber', ipNum)}
+                                                            className="text-red-500 hover:text-red-700 p-1.5 rounded-lg hover:bg-red-50 transition-all duration-200"
+                                                            title="Remove IP"
+                                                        >
+                                                            <XIcon className="w-4 h-4" />
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
+                            )}
                         </div>
-
-                        <CustomDatePicker
-                            label="IP Closing Date"
-                            name="ipDate"
-                            value={formData.ipDate}
-                            onChange={() => { }} // Read-only
-                            compact={true}
-                            readOnly={true}
-                        />
 
                         {/* --- PI Info --- */}
                         <CustomDatePicker
@@ -1658,36 +1752,52 @@ function PI({
                                 >
                                     <PlusIcon className="w-4 h-4" />
                                 </button>
-                                {activeDropdown === 'certification' && (
-                                    <div className="absolute z-[60] w-full mt-1 bg-white border border-gray-100 rounded-xl shadow-xl max-h-48 overflow-y-auto">
-                                        {certifications.filter(v => !certSearch || v.value.toLowerCase().includes(certSearch.toLowerCase())).map((v, idx) => {
-                                            const selectedParts = (formData.certification || '').split(',').map(p => p.trim()).filter(Boolean);
-                                            const isSelected = selectedParts.includes(v.value);
-                                            return (
-                                                <div key={v._id} className="flex items-center group">
-                                                    <button
-                                                        key={v._id}
-                                                        type="button"
-                                                        onMouseDown={() => handleDropdownSelect('certification', v.value)}
-                                                        onMouseEnter={() => setHighlightedIndex(idx)}
-                                                        className={`flex-1 px-4 py-2 text-left text-sm flex items-center justify-between ${highlightedIndex === idx || isSelected ? 'bg-blue-50 text-blue-700 font-bold' : 'text-gray-700 hover:bg-blue-50'}`}
-                                                    >
-                                                        <span>{v.value}</span>
-                                                        {isSelected && <span className="text-blue-600 font-bold">✓</span>}
-                                                    </button>
-                                                    <button
-                                                        type="button"
-                                                        onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); handleDeleteQuickMetaData('certification', v._id); }}
-                                                        className="p-2 text-gray-400 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"
-                                                        title="Delete this certification"
-                                                    >
-                                                        <TrashIcon className="w-3.5 h-3.5" />
-                                                    </button>
-                                                </div>
-                                            );
-                                        })}
-                                    </div>
-                                )}
+                                {activeDropdown === 'certification' && (() => {
+                                    const defaultCerts = [
+                                        { _id: 'default-packing', value: 'Packing', isDefault: true },
+                                        { _id: 'default-valqty', value: 'Value & Quantity', isDefault: true },
+                                        { _id: 'default-coo', value: 'Country of Origin', isDefault: true }
+                                    ];
+                                    const merged = [...defaultCerts];
+                                    certifications.forEach(cert => {
+                                        if (!merged.some(d => d.value.toLowerCase() === cert.value.toLowerCase())) {
+                                            merged.push(cert);
+                                        }
+                                    });
+                                    const filtered = merged.filter(v => !certSearch || v.value.toLowerCase().includes(certSearch.toLowerCase()));
+                                    return (
+                                        <div className="absolute z-[60] w-full mt-1 bg-white border border-gray-100 rounded-xl shadow-xl max-h-48 overflow-y-auto">
+                                            {filtered.map((v, idx) => {
+                                                const selectedParts = (formData.certification || '').split(',').map(p => p.trim()).filter(Boolean);
+                                                const isSelected = selectedParts.some(p => p.toLowerCase() === v.value.toLowerCase());
+                                                return (
+                                                    <div key={v._id} className="flex items-center group">
+                                                        <button
+                                                            key={v._id}
+                                                            type="button"
+                                                            onMouseDown={() => handleDropdownSelect('certification', v.value)}
+                                                            onMouseEnter={() => setHighlightedIndex(idx)}
+                                                            className={`flex-1 px-4 py-2 text-left text-sm flex items-center justify-between ${highlightedIndex === idx || isSelected ? 'bg-blue-50 text-blue-700 font-bold' : 'text-gray-700 hover:bg-blue-50'}`}
+                                                        >
+                                                            <span>{v.value}</span>
+                                                            {isSelected && <span className="text-blue-600 font-bold">✓</span>}
+                                                        </button>
+                                                        {!v.isDefault && (
+                                                            <button
+                                                                type="button"
+                                                                onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); handleDeleteQuickMetaData('certification', v._id); }}
+                                                                className="p-2 text-gray-400 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"
+                                                                title="Delete this certification"
+                                                            >
+                                                                <TrashIcon className="w-3.5 h-3.5" />
+                                                            </button>
+                                                        )}
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    );
+                                })()}
                             </div>
                         </div>
 

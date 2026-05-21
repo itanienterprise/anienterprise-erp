@@ -66,6 +66,9 @@ export const generatePIPDF = (record) => {
 
     doc.setFont("helvetica", "normal");
 
+    const selectedCerts = (record.certification || '').split(',').map(s => s.trim()).filter(Boolean);
+    const showPacking = selectedCerts.some(c => c.toLowerCase().includes('packing'));
+
     // Helper function for date formatting
     const formatDate = (dateStr) => {
         if (!dateStr) return '';
@@ -191,7 +194,13 @@ export const generatePIPDF = (record) => {
     // Row 2: Importer vs Shipping Info (Stacked Left)
     y += row1Height;
     const showSafta = record.certification && record.certification.toLowerCase().includes('safta');
-    const termsRefLinesInRow2 = doc.splitTextToSize(record.termsDeliveryPayment || '', rightColWidth - 5);
+    let termsText = record.termsDeliveryPayment || '';
+    if (!showPacking) {
+        termsText = termsText.split('\n')
+            .filter(line => !line.trim().toLowerCase().startsWith('packing:'))
+            .join('\n');
+    }
+    const termsRefLinesInRow2 = doc.splitTextToSize(termsText, rightColWidth - 5);
     const termsHeight = termsRefLinesInRow2.length * 4;
     const saftaHeight = showSafta ? 12 : 0;
     let row2Height = Math.max(55, 24 + termsHeight + saftaHeight);
@@ -280,9 +289,15 @@ export const generatePIPDF = (record) => {
 
     doc.line(midX + subColWidthVal, y, midX + subColWidthVal, y + 10); // Vertical divider for Buyer/Country
 
-    const showCountryOfOrigin = record.certification && record.certification.toLowerCase().includes('country of origin');
-    const selectedCerts = (record.certification || '').split(',').map(s => s.trim()).filter(Boolean);
-    const otherCerts = selectedCerts.filter(c => !c.toLowerCase().includes('country of origin') && !c.toLowerCase().includes('safta'));
+    const showCountryOfOrigin = true;
+    // Reuse selectedCerts defined at function top
+    const otherCerts = selectedCerts.filter(c => {
+        const lower = c.toLowerCase();
+        return !lower.includes('country of origin') &&
+               !lower.includes('safta') &&
+               !lower.includes('packing') &&
+               !(lower.includes('value') && lower.includes('quantity'));
+    });
 
     doc.setFont("helvetica", "normal");
     doc.setFontSize(8);
@@ -325,7 +340,11 @@ export const generatePIPDF = (record) => {
     const firstRowIndexForProduct = [];
     const freightRowIndices = [];
 
-    const valueLine = "VALUE & QUANTITY ± 10% ACCEPTABLE.";
+    const showValQty = selectedCerts.some(c => {
+        const lower = c.toLowerCase();
+        return lower.includes('value') && lower.includes('quantity');
+    });
+    // Reuse showPacking defined at function top
 
     // Default description template (used when descriptionGoods field is empty)
     const defaultDescLines = [
@@ -338,16 +357,21 @@ export const generatePIPDF = (record) => {
         "PARTIAL SHIPMENT: ALLOWED"
     ].join("\n");
 
-    // Prepend the Value & Quantity line at the very top, followed by the Advising Bank, then descriptionGoods (or defaults)
     const bankLine = `ADVISING BANK MUST BE THROUGH: ${record.indianBank || ''}`;
-    const valueLineText = "VALUE & QUANTITY \u00B1 10% ACCEPTABLE. \n";
-    const extraDescText = (valueLineText + "\n" + bankLine + "\n" + (record.descriptionGoods || defaultDescLines)).trim();
-
-
+    let extraDescParts = [];
+    if (showValQty) {
+        extraDescParts.push("VALUE & QUANTITY \u00B1 10% ACCEPTABLE.");
+    }
+    extraDescParts.push(bankLine);
+    if (showPacking) {
+        extraDescParts.push("EXPORT STANDARD PACKING");
+    }
+    const extraDescText = (extraDescParts.join("\n") + "\n" + (record.descriptionGoods || defaultDescLines)).trim();
 
     // Build the table body dynamically for each product
     productsList.forEach((prod, pIdx) => {
         const hasFreight = prod.freight && parseFloat(prod.freight) > 0;
+        const isLastProduct = pIdx === productsList.length - 1;
 
         firstRowIndexForProduct.push(tableBody.length);
 
@@ -362,7 +386,9 @@ export const generatePIPDF = (record) => {
         } else if (numProducts >= 3) {
             cellText = "\n\n";
         }
-
+        if (showSafta && isLastProduct) {
+            cellText += "\n\n";
+        }
         if (numProducts === 1) {
             cellText += "\n\n" + extraDescText;
         }
@@ -500,7 +526,20 @@ export const generatePIPDF = (record) => {
                 } else {
                     doc.text(hsCodeLine, centerX, drawY, { align: 'center' });
                 }
-                drawY += 6;
+                if (showSafta && pIdx === productsList.length - 1) {
+                    drawY += 1;
+                    doc.setDrawColor(0, 0, 0);
+                    doc.setLineWidth(0.1);
+                    doc.line(cellX, drawY, cellX + cellWidth, drawY);
+
+                    drawY += 5;
+                    doc.setFont("helvetica", "bold");
+                    doc.setFontSize(8.5);
+                    doc.text("THE CERTIFICATE OF ORIGIN UNDER SAFTA", centerX, drawY, { align: 'center' });
+                    drawY += 4.5;
+                    doc.text("(South Asian Free Trade Area)", centerX, drawY, { align: 'center' });
+                    drawY += 6;
+                }
 
                 // Reset
                 doc.setFont("helvetica", "normal");

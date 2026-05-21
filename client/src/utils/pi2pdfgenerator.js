@@ -38,6 +38,9 @@ export const generatePI2PDF = (record) => {
 
     doc.setFont("helvetica", "normal");
 
+    const selectedCerts = (record.certification || '').split(',').map(s => s.trim()).filter(Boolean);
+    const showPacking = selectedCerts.some(c => c.toLowerCase().includes('packing'));
+
     const formatDate = (dateStr) => {
         if (!dateStr) return '';
         const d = new Date(dateStr);
@@ -129,8 +132,13 @@ export const generatePI2PDF = (record) => {
     y += row1Height;
     const showSafta = record.certification && record.certification.toLowerCase().includes('safta');
 
-    doc.setFontSize(9); // Set to the target font size before splitting
-    const termsLines = doc.splitTextToSize(record.termsDeliveryPayment || '', rightColWidth - 5);
+    let termsText = record.termsDeliveryPayment || '';
+    if (!showPacking) {
+        termsText = termsText.split('\n')
+            .filter(line => !line.trim().toLowerCase().startsWith('packing:'))
+            .join('\n');
+    }
+    const termsLines = doc.splitTextToSize(termsText, rightColWidth - 5);
     const termsHeight = termsLines.length * 4;
     const saftaHeight = showSafta ? 12 : 0;
     let row2Height = Math.max(61, 24 + termsHeight + saftaHeight);
@@ -183,9 +191,15 @@ export const generatePI2PDF = (record) => {
 
     // Right: Country of Origin / Final Destination
     const subW = rightColWidth / 2;
-    const showCountryOfOrigin = record.certification && record.certification.toLowerCase().includes('country of origin');
-    const selectedCerts = (record.certification || '').split(',').map(s => s.trim()).filter(Boolean);
-    const otherCerts = selectedCerts.filter(c => !c.toLowerCase().includes('country of origin') && !c.toLowerCase().includes('safta'));
+    const showCountryOfOrigin = true;
+    // Reuse selectedCerts defined at function top
+    const otherCerts = selectedCerts.filter(c => {
+        const lower = c.toLowerCase();
+        return !lower.includes('country of origin') &&
+               !lower.includes('safta') &&
+               !lower.includes('packing') &&
+               !(lower.includes('value') && lower.includes('quantity'));
+    });
 
     if (showCountryOfOrigin) {
         doc.setFont("helvetica", "normal");
@@ -242,7 +256,13 @@ export const generatePI2PDF = (record) => {
     const descParts = [];
     const numProductsList = record.productsList ? record.productsList.length : 1;
 
-    if (numProductsList > 1) {
+    const showValQty = selectedCerts.some(c => {
+        const lower = c.toLowerCase();
+        return lower.includes('value') && lower.includes('quantity');
+    });
+    // Reuse showPacking defined at function top
+
+    if (numProductsList > 1 && showValQty) {
         descParts.push("VALUE & QUANTITY \u00B1 10% ACCEPTABLE.\n");
     }
 
@@ -252,7 +272,9 @@ export const generatePI2PDF = (record) => {
     if (otherCerts.length > 0) {
         descParts.push(`CERTIFICATION ${otherCerts.join(', ').toUpperCase()}`);
     }
-    descParts.push("EXPORT STANDARD PACKING");
+    if (showPacking) {
+        descParts.push("EXPORT STANDARD PACKING");
+    }
     descParts.push(`ADVISING BANK: ${record.indianBank || ''}`);
     descParts.push(`VALIDITY OF PROFORMA INVOICE DATE:${formatDate(record.validityDate)}`);
 
@@ -277,6 +299,7 @@ export const generatePI2PDF = (record) => {
         // Calculate required space dynamically
         let requiredNewlines = 1; // Base: Product name
         if (prod.hsCodeInd) requiredNewlines += 1; // Extra space for dual HS code
+        if (showSafta && isLastProduct && !hasFreight) requiredNewlines += 2.5; // Extra space for SAFTA
         if (numProducts === 1) requiredNewlines += 2; // Space for VALUE & QUANTITY + buffer for single product layout
 
         let cellText = "\n".repeat(requiredNewlines);
@@ -287,7 +310,7 @@ export const generatePI2PDF = (record) => {
         tableBody.push([
             {
                 content: cellText,
-                rowSpan: hasFreight ? 2 : 1,
+                rowSpan: (hasFreight && !(showSafta && isLastProduct)) ? 2 : 1,
                 styles: {
                     halign: 'left',
                     fontStyle: 'normal',
@@ -302,11 +325,30 @@ export const generatePI2PDF = (record) => {
 
         if (hasFreight) {
             freightRowIndices.push(tableBody.length);
-            tableBody.push([
-                { content: 'Freight', styles: { halign: 'center', fontStyle: 'bold', valign: 'middle', cellPadding: { top: 4, bottom: 4 }, fontSize: 11 } },
-                { content: parseFloat(prod.freight).toFixed(3), styles: { halign: 'center', fontStyle: 'bold', valign: 'middle', fontSize: 11 } },
-                { content: prod.totalFreight ? parseFloat(prod.totalFreight).toLocaleString('en-IN', { minimumFractionDigits: 2 }) : '0.00', styles: { halign: 'center', fontStyle: 'bold', valign: 'middle', fontSize: 11 } }
-            ]);
+            if (showSafta && isLastProduct) {
+                tableBody.push([
+                    {
+                        content: "THE CERTIFICATE OF ORIGIN UNDER SAFTA\n(South Asian Free Trade Area)",
+                        colSpan: 1,
+                        styles: {
+                            halign: 'center',
+                            valign: 'middle',
+                            fontStyle: 'bold',
+                            fontSize: 9,
+                            cellPadding: { top: 2, bottom: 2 }
+                        }
+                    },
+                    { content: 'Freight', styles: { halign: 'center', fontStyle: 'bold', valign: 'middle', cellPadding: { top: 4, bottom: 4 }, fontSize: 11 } },
+                    { content: parseFloat(prod.freight).toFixed(3), styles: { halign: 'center', fontStyle: 'bold', valign: 'middle', fontSize: 11 } },
+                    { content: prod.totalFreight ? parseFloat(prod.totalFreight).toLocaleString('en-IN', { minimumFractionDigits: 2 }) : '0.00', styles: { halign: 'center', fontStyle: 'bold', valign: 'middle', fontSize: 11 } }
+                ]);
+            } else {
+                tableBody.push([
+                    { content: 'Freight', styles: { halign: 'center', fontStyle: 'bold', valign: 'middle', cellPadding: { top: 4, bottom: 4 }, fontSize: 11 } },
+                    { content: parseFloat(prod.freight).toFixed(3), styles: { halign: 'center', fontStyle: 'bold', valign: 'middle', fontSize: 11 } },
+                    { content: prod.totalFreight ? parseFloat(prod.totalFreight).toLocaleString('en-IN', { minimumFractionDigits: 2 }) : '0.00', styles: { halign: 'center', fontStyle: 'bold', valign: 'middle', fontSize: 11 } }
+                ]);
+            }
         }
     });
 
@@ -400,9 +442,24 @@ export const generatePI2PDF = (record) => {
                     const hsCodeLine = `H.S. CODE NO.${prod.hsCode || ''}`;
                     doc.text(hsCodeLine, centerX, drawY, { align: 'center' });
                 }
+                const hasFreight = prod.freight && parseFloat(prod.freight) > 0;
+                if (showSafta && pIdx === productsList.length - 1 && !hasFreight) {
+                    drawY += 1.5;
+                    doc.setDrawColor(0, 0, 0);
+                    doc.setLineWidth(0.1);
+                    doc.line(cellX, drawY, cellX + cellWidth, drawY);
 
-                // VALUE & QUANTITY line (only if single product)
-                if (productsList.length === 1) {
+                    drawY += 5;
+                    doc.setFont("helvetica", "bold");
+                    doc.setFontSize(9);
+                    doc.text("THE CERTIFICATE OF ORIGIN UNDER SAFTA", centerX, drawY, { align: 'center' });
+                    drawY += 4.5;
+                    doc.text("(South Asian Free Trade Area)", centerX, drawY, { align: 'center' });
+                    drawY += 5.5;
+                }
+
+                // VALUE & QUANTITY line (only if single product and selected)
+                if (productsList.length === 1 && showValQty) {
                     drawY += 12; // Move VALUE & QUANTITY down
                     doc.setFont("helvetica", "bold");
                     doc.setFontSize(9);

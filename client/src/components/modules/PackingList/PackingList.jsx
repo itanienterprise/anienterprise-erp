@@ -78,6 +78,7 @@ function PackingList({
         buyerOrderNo: '',
         buyerOrderDate: '',
         productsList: [{ productName: '', hsCode: '', quantity: '', bagCount: '', netWeight: '', grossWeight: '', rate: '', amount: '', freight: '', totalFreight: '' }],
+        productsImage: '',
         partySignature: '',
         exporterSignature: '',
         trNumber: '',
@@ -195,6 +196,25 @@ function PackingList({
         showToast(`Copied data from PI Number ${pi.piNumber}`);
     };
 
+    const handleProductsImageChange = (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        const validTypes = ['image/jpeg', 'image/png', 'image/jpg'];
+        if (!validTypes.includes(file.type)) {
+            showToast('Please upload a JPG or PNG image.', 'error');
+            return;
+        }
+        const reader = new FileReader();
+        reader.onloadend = () => {
+            setFormData(prev => ({ ...prev, productsImage: reader.result }));
+        };
+        reader.readAsDataURL(file);
+    };
+
+    const removeProductsImage = () => {
+        setFormData(prev => ({ ...prev, productsImage: '' }));
+    };
+
     const handleProductChange = (index, field, value) => {
         setFormData(prev => {
             const newList = [...prev.productsList];
@@ -243,6 +263,7 @@ function PackingList({
             buyerOrderNo: '',
             buyerOrderDate: '',
             productsList: [{ productName: '', hsCode: '', quantity: '', bagCount: '', netWeight: '', grossWeight: '', rate: '', amount: '', freight: '', totalFreight: '' }],
+            productsImage: '',
             partySignature: '',
             exporterSignature: '',
             trNumber: '',
@@ -349,6 +370,7 @@ function PackingList({
                     totalFreight: p.totalFreight || ''
                 }))
                 : [{ productName: '', hsCode: '', quantity: '', bagCount: '', netWeight: '', grossWeight: '', rate: '', amount: '', freight: '', totalFreight: '' }],
+            productsImage: record.productsImage || '',
             partySignature: record.partySignature || '',
             exporterSignature: record.exporterSignature || '',
             status: record.status || 'Active',
@@ -1060,109 +1082,45 @@ function PackingList({
                             </div>
                         </div>
 
-                        {/* --- Product Table --- */}
+                        {/* --- Products & Packaging Image Upload --- */}
                         <div className="space-y-4">
                             <div className="flex items-center justify-between border-b border-gray-200 pb-2">
-                                <h4 className="text-base font-bold text-gray-800 uppercase tracking-wide">Products & Packaging details</h4>
-                                <button
-                                    type="button"
-                                    onClick={addProductRow}
-                                    className="px-3 py-1 bg-blue-50 border border-blue-200 text-blue-600 rounded-lg text-xs font-semibold hover:bg-blue-100 flex items-center gap-1 transition-colors"
-                                >
-                                    <span className="font-bold text-sm">+</span> Add Row
-                                </button>
+                                <h4 className="text-base font-bold text-gray-800 uppercase tracking-wide">Products & Packaging Details</h4>
                             </div>
 
-                            <div className="overflow-x-auto rounded-xl border border-gray-200 shadow-sm bg-white/50">
-                                <table className="w-full border-collapse text-left">
-                                    <thead>
-                                        <tr className="bg-gray-50 border-b border-gray-200 text-[11px] font-semibold text-gray-500 uppercase tracking-wider">
-                                            <th className="px-4 py-3">Product Name*</th>
-                                            <th className="px-4 py-3 w-[15%]">HS Code</th>
-                                            <th className="px-4 py-3 w-[12%] text-center">Invoice Qty</th>
-                                            <th className="px-4 py-3 w-[15%] text-center">Bag/Package Count</th>
-                                            <th className="px-4 py-3 w-[15%] text-center">Net Weight (KG)*</th>
-                                            <th className="px-4 py-3 w-[15%] text-center">Gross Weight (KG)*</th>
-                                            <th className="px-4 py-3 w-[8%] text-center">Actions</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody className="divide-y divide-gray-150">
-                                        {formData.productsList.map((prod, index) => (
-                                            <tr key={index} className="hover:bg-gray-50/50">
-                                                <td className="px-4 py-2">
-                                                    <input
-                                                        type="text"
-                                                        value={prod.productName}
-                                                        onChange={(e) => handleProductChange(index, 'productName', e.target.value)}
-                                                        required
-                                                        placeholder="Search or enter product..."
-                                                        className="w-full px-3 py-1.5 bg-white border border-gray-200 rounded-lg text-sm outline-none focus:border-blue-500"
-                                                    />
-                                                </td>
-                                                <td className="px-4 py-2">
-                                                    <input
-                                                        type="text"
-                                                        value={prod.hsCode}
-                                                        onChange={(e) => handleProductChange(index, 'hsCode', e.target.value)}
-                                                        placeholder="HS Code"
-                                                        className="w-full px-3 py-1.5 bg-white border border-gray-200 rounded-lg text-sm outline-none"
-                                                    />
-                                                </td>
-                                                <td className="px-4 py-2">
-                                                    <input
-                                                        type="number"
-                                                        step="0.001"
-                                                        value={prod.quantity}
-                                                        onChange={(e) => handleProductChange(index, 'quantity', e.target.value)}
-                                                        placeholder="Qty (KG)"
-                                                        className="w-full px-3 py-1.5 bg-white border border-gray-200 rounded-lg text-sm text-center outline-none"
-                                                    />
-                                                </td>
-                                                <td className="px-4 py-2">
-                                                    <input
-                                                        type="number"
-                                                        value={prod.bagCount}
-                                                        onChange={(e) => handleProductChange(index, 'bagCount', e.target.value)}
-                                                        placeholder="Bags Count"
-                                                        className="w-full px-3 py-1.5 bg-white border border-gray-200 rounded-lg text-sm text-center outline-none focus:border-blue-500"
-                                                    />
-                                                </td>
-                                                <td className="px-4 py-2">
-                                                    <input
-                                                        type="number"
-                                                        step="0.001"
-                                                        value={prod.netWeight}
-                                                        onChange={(e) => handleProductChange(index, 'netWeight', e.target.value)}
-                                                        required
-                                                        placeholder="Net Wt (KG)"
-                                                        className="w-full px-3 py-1.5 bg-white border border-gray-200 rounded-lg text-sm text-center outline-none focus:border-blue-500"
-                                                    />
-                                                </td>
-                                                <td className="px-4 py-2">
-                                                    <input
-                                                        type="number"
-                                                        step="0.001"
-                                                        value={prod.grossWeight}
-                                                        onChange={(e) => handleProductChange(index, 'grossWeight', e.target.value)}
-                                                        required
-                                                        placeholder="Gross Wt (KG)"
-                                                        className="w-full px-3 py-1.5 bg-white border border-gray-200 rounded-lg text-sm text-center outline-none focus:border-blue-500"
-                                                    />
-                                                </td>
-                                                <td className="px-4 py-2 text-center">
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => removeProductRow(index)}
-                                                        disabled={formData.productsList.length === 1}
-                                                        className="p-1.5 text-gray-400 hover:text-red-500 rounded-lg hover:bg-red-50 disabled:opacity-40 transition-colors"
-                                                    >
-                                                        <TrashIcon className="w-4 h-4" />
-                                                    </button>
-                                                </td>
-                                            </tr>
-                                        ))}
-                                    </tbody>
-                                </table>
+                            <div className="rounded-xl border border-gray-200 shadow-sm bg-white/50 p-4">
+                                {formData.productsImage ? (
+                                    <div className="relative group">
+                                        <img
+                                            src={formData.productsImage}
+                                            alt="Products & Packaging Details"
+                                            className="w-full max-h-[500px] object-contain rounded-lg border border-gray-200 bg-gray-50 p-2"
+                                        />
+                                        <button
+                                            type="button"
+                                            onClick={removeProductsImage}
+                                            className="absolute top-2 right-2 bg-red-500 text-white rounded-full p-1.5 shadow-lg hover:bg-red-600 transition-all opacity-0 group-hover:opacity-100"
+                                            title="Remove image"
+                                        >
+                                            <XIcon className="w-4 h-4" />
+                                        </button>
+                                        <p className="text-xs text-gray-400 text-center mt-2">Hover over image to see remove option</p>
+                                    </div>
+                                ) : (
+                                    <label className="flex flex-col items-center justify-center w-full h-40 border-2 border-dashed border-gray-300 rounded-xl cursor-pointer hover:bg-blue-50/30 hover:border-blue-400 transition-all group">
+                                        <div className="flex flex-col items-center justify-center py-6">
+                                            <PlusIcon className="w-8 h-8 text-gray-400 group-hover:text-blue-500 mb-2 transition-colors" />
+                                            <p className="text-sm font-semibold text-gray-500 group-hover:text-blue-600 transition-colors">Click to upload Products & Packaging image</p>
+                                            <p className="text-xs text-gray-400 mt-1">Supports JPG, PNG</p>
+                                        </div>
+                                        <input
+                                            type="file"
+                                            className="hidden"
+                                            accept="image/png, image/jpeg, image/jpg"
+                                            onChange={handleProductsImageChange}
+                                        />
+                                    </label>
+                                )}
                             </div>
                         </div>
 

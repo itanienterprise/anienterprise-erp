@@ -220,6 +220,24 @@ export const generatePLPDF = (record, piRecords = [], lcRecords = [], importers 
     y = transStartY + transHeight;
 
     // --- Product / Item Table ---
+    if (record.productsImage) {
+        // Draw uploaded image instead of building the table
+        try {
+            const imgProps = doc.getImageProperties(record.productsImage);
+            const imgWidth = contentWidth;
+            const imgHeight = (imgProps.height * imgWidth) / imgProps.width;
+            // Check if image fits on current page
+            if (y + imgHeight + 10 > pageHeight - 20) {
+                doc.addPage();
+                y = 15;
+            }
+            doc.addImage(record.productsImage, imgProps.fileType || 'PNG', margin, y + 2, imgWidth, imgHeight);
+            y += imgHeight + 6;
+        } catch (e) {
+            console.error('Error drawing products image:', e);
+            y += 10;
+        }
+    } else {
     const headers = [
         ['Marks & Nos', 'Description of Goods & HS Code', 'No. & Kind of Packages', 'Net Weight', 'Gross Weight']
     ];
@@ -339,6 +357,7 @@ export const generatePLPDF = (record, piRecords = [], lcRecords = [], importers 
     });
 
     y += 6;
+    } // end else (no productsImage)
 
     // --- Bottom details (Declaration / Notes & Signatures) ---
     // Ensure all content fits on the page by limiting signature vertical start position

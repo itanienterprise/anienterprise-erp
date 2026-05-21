@@ -12,21 +12,19 @@ const numberToWordsUSD = (amount) => {
         else { if (num >= 20) { s += tens[Math.floor(num / 10)] + ' '; num %= 10; } if (num > 0) { s += units[num] + ' '; } }
         return s;
     };
-    if (amount === 0) return 'Zero Taka Only';
+    if (amount === 0) return 'US Dollar: Zero Only';
     const parts = amount.toFixed(2).split('.');
-    let taka = parseInt(parts[0]), paisa = parseInt(parts[1]);
-    let words = '';
-    if (taka === 0) { words = 'Zero '; } else {
+    let dollar = parseInt(parts[0]), cents = parseInt(parts[1]);
+    let words = 'US Dollar: ';
+    if (dollar === 0) { words += 'Zero '; } else {
         let tw = '';
-        // BDT uses: Crore (1,00,00,000), Lakh (1,00,000), Thousand (1,000)
-        if (taka >= 10000000) { tw += convertChunk(Math.floor(taka / 10000000)) + 'Crore '; taka %= 10000000; }
-        if (taka >= 100000) { tw += convertChunk(Math.floor(taka / 100000)) + 'Lakh '; taka %= 100000; }
-        if (taka >= 1000) { tw += convertChunk(Math.floor(taka / 1000)) + 'Thousand '; taka %= 1000; }
-        if (taka > 0) { tw += convertChunk(taka); }
-        words = tw;
+        if (dollar >= 10000000) { tw += convertChunk(Math.floor(dollar / 10000000)) + 'Crore '; dollar %= 10000000; }
+        if (dollar >= 100000) { tw += convertChunk(Math.floor(dollar / 100000)) + 'Lac '; dollar %= 100000; }
+        if (dollar >= 1000) { tw += convertChunk(Math.floor(dollar / 1000)) + 'Thousand '; dollar %= 1000; }
+        if (dollar > 0) { tw += convertChunk(dollar); }
+        words += tw;
     }
-    words += 'Taka ';
-    words += paisa > 0 ? 'And ' + convertChunk(paisa) + 'Paisa Only' : 'Only';
+    words += cents > 0 ? 'And Cents ' + convertChunk(cents) + 'Only' : 'Only';
     return words.replace(/\s+/g, ' ').trim();
 };
 
@@ -156,6 +154,7 @@ export const generatePL2PDF = (record, piRecords = [], lcRecords = [], importers
             { text: "COUNTRY OF ORIGIN ", bold: true },
             { text: countryOrigin.toUpperCase(), bold: true }
         ]);
+        return curY;
     };
 
     const preCarriageBy = record.preCarriageBy && record.preCarriageBy !== 'ROAD' ? record.preCarriageBy : (pi?.preCarriageBy || record.preCarriageBy || 'ROAD');
@@ -406,6 +405,9 @@ export const generatePL2PDF = (record, piRecords = [], lcRecords = [], importers
         firstRowIndexForProduct.push(tableBody.length);
 
         let requiredNewlines = 1;
+        if (prod.hsCodeInd || pi?.productsList?.[pIdx]?.hsCodeInd) requiredNewlines += 1;
+        const isLastProduct = pIdx === numProducts - 1;
+        if (showSafta && isLastProduct && !hasFreight) requiredNewlines += 2.5;
         if (numProducts === 1) requiredNewlines += 2;
 
         let cellText = "\n".repeat(requiredNewlines);
@@ -414,14 +416,29 @@ export const generatePL2PDF = (record, piRecords = [], lcRecords = [], importers
             cellText += "\n\n" + "\n".repeat(lineCount);
         }
 
+        let bottomPadding = 2;
+        if (pIdx === 0 && record.productsImage) {
+            try {
+                const imgProps = doc.getImageProperties(record.productsImage);
+                const imgWidth = 108; // width inside Column 0 cell
+                const imgHeight = (imgProps.height * imgWidth) / imgProps.width;
+                bottomPadding = imgHeight + 15;
+            } catch (e) {
+                console.error('Error calculating productsImage bottomPadding:', e);
+                bottomPadding = 80;
+            }
+        } else if (numProducts === 1) {
+            bottomPadding = 50;
+        }
+
         tableBody.push([
             {
                 content: cellText,
-                rowSpan: hasFreight ? 2 : 1,
+                rowSpan: (hasFreight && !(showSafta && isLastProduct)) ? 2 : 1,
                 styles: {
                     halign: 'left',
                     fontSize: numProducts === 1 ? 7.5 : 9,
-                    cellPadding: { top: 2, left: 2, right: 2, bottom: numProducts === 1 ? 50 : 2 }
+                    cellPadding: { top: 2, left: 2, right: 2, bottom: bottomPadding }
                 }
             },
             { content: prod.quantity ? `${parseFloat(prod.quantity).toLocaleString('en-US')}\n ` : '0\n ', styles: { halign: 'center', fontStyle: 'bold', valign: 'middle', fontSize: 11 } },
@@ -431,21 +448,52 @@ export const generatePL2PDF = (record, piRecords = [], lcRecords = [], importers
 
         if (hasFreight) {
             freightRowIndices.push(tableBody.length);
-            tableBody.push([
-                { content: 'Freight', styles: { halign: 'center', fontStyle: 'bold', valign: 'middle', cellPadding: { top: 4, bottom: 4 }, fontSize: 11 } },
-                { content: parseFloat(prod.freight).toFixed(3), styles: { halign: 'center', fontStyle: 'bold', valign: 'middle', fontSize: 11 } },
-                { content: prod.totalFreight ? parseFloat(prod.totalFreight).toLocaleString('en-IN', { minimumFractionDigits: 2 }) : '0.00', styles: { halign: 'center', fontStyle: 'bold', valign: 'middle', fontSize: 11 } }
-            ]);
+            if (showSafta && isLastProduct) {
+                tableBody.push([
+                    {
+                        content: "THE CERTIFICATE OF ORIGIN UNDER SAFTA\n(South Asian Free Trade Area)",
+                        colSpan: 1,
+                        styles: {
+                            halign: 'center',
+                            valign: 'middle',
+                            fontStyle: 'bold',
+                            fontSize: 9,
+                            cellPadding: { top: 2, bottom: 2 }
+                        }
+                    },
+                    { content: 'Freight', styles: { halign: 'center', fontStyle: 'bold', valign: 'middle', cellPadding: { top: 4, bottom: 4 }, fontSize: 11 } },
+                    { content: parseFloat(prod.freight).toFixed(3), styles: { halign: 'center', fontStyle: 'bold', valign: 'middle', fontSize: 11 } },
+                    { content: prod.totalFreight ? parseFloat(prod.totalFreight).toLocaleString('en-IN', { minimumFractionDigits: 2 }) : '0.00', styles: { halign: 'center', fontStyle: 'bold', valign: 'middle', fontSize: 11 } }
+                ]);
+            } else {
+                tableBody.push([
+                    { content: 'Freight', styles: { halign: 'center', fontStyle: 'bold', valign: 'middle', cellPadding: { top: 4, bottom: 4 }, fontSize: 11 } },
+                    { content: parseFloat(prod.freight).toFixed(3), styles: { halign: 'center', fontStyle: 'bold', valign: 'middle', fontSize: 11 } },
+                    { content: prod.totalFreight ? parseFloat(prod.totalFreight).toLocaleString('en-IN', { minimumFractionDigits: 2 }) : '0.00', styles: { halign: 'center', fontStyle: 'bold', valign: 'middle', fontSize: 11 } }
+                ]);
+            }
         }
     });
 
     if (productsList.length > 1) {
         const lineCount = extraDescText.split("\n").length;
+        let lastRowBottomPadding = 2;
+        if (record.productsImage) {
+            try {
+                const imgProps = doc.getImageProperties(record.productsImage);
+                const imgWidth = 108; // width inside Column 0 cell
+                const imgHeight = (imgProps.height * imgWidth) / imgProps.width;
+                lastRowBottomPadding = imgHeight + 15;
+            } catch (e) {
+                console.error('Error calculating productsImage lastRowBottomPadding:', e);
+                lastRowBottomPadding = 80;
+            }
+        }
         tableBody.push([
             {
                 content: "\n".repeat(lineCount),
                 colSpan: 1,
-                styles: { halign: 'left', fontStyle: 'normal', fontSize: 9.5, cellPadding: { top: 2, left: 2, right: 2, bottom: 2 } }
+                styles: { halign: 'left', fontStyle: 'normal', fontSize: 9.5, cellPadding: { top: 2, left: 2, right: 2, bottom: lastRowBottomPadding } }
             },
             { content: '', styles: { halign: 'center' } },
             { content: '', styles: { halign: 'center' } },
@@ -525,18 +573,46 @@ export const generatePL2PDF = (record, piRecords = [], lcRecords = [], importers
                     const hsCodeLine = `H.S. CODE NO.${prod.hsCode || ''}`;
                     doc.text(hsCodeLine, centerX, drawY, { align: 'center' });
                 }
+                const hasFreight = prod.freight && parseFloat(prod.freight) > 0;
+                if (showSafta && pIdx === productsList.length - 1 && !hasFreight) {
+                    drawY += 1.5;
+                    doc.setDrawColor(0, 0, 0);
+                    doc.setLineWidth(0.1);
+                    doc.line(cellX, drawY, cellX + cellWidth, drawY);
+
+                    drawY += 5;
+                    doc.setFont("helvetica", "bold");
+                    doc.setFontSize(9);
+                    doc.text("THE CERTIFICATE OF ORIGIN UNDER SAFTA", centerX, drawY, { align: 'center' });
+                    drawY += 4.5;
+                    doc.text("(South Asian Free Trade Area)", centerX, drawY, { align: 'center' });
+                    drawY += 5.5;
+                }
 
                 if (productsList.length === 1) {
                     let descY = drawY + 8;
                     const descFontSize = 7.5;
+                    let endY = descY;
                     
                     if (descriptionGoods) {
                         doc.setFont("helvetica", "normal");
                         doc.setFontSize(descFontSize);
                         const lines = doc.splitTextToSize(descriptionGoods, cellWidth - 5);
                         doc.text(lines, cellX + 3, descY);
+                        endY += lines.length * (descFontSize * 0.46) + 2;
                     } else {
-                        drawDescriptionBlock(cellX + 3, descY, descFontSize);
+                        endY = drawDescriptionBlock(cellX + 3, descY, descFontSize);
+                    }
+
+                    if (record.productsImage) {
+                        try {
+                            const imgProps = doc.getImageProperties(record.productsImage);
+                            const imgWidth = cellWidth - 6;
+                            const imgHeight = (imgProps.height * imgWidth) / imgProps.width;
+                            doc.addImage(record.productsImage, imgProps.fileType || 'PNG', cellX + 3, endY + 2, imgWidth, imgHeight);
+                        } catch (e) {
+                            console.error('Error drawing productsImage in single-row cell:', e);
+                        }
                     }
                 }
 
@@ -550,14 +626,27 @@ export const generatePL2PDF = (record, piRecords = [], lcRecords = [], importers
                 const cellWidth = data.cell.width;
                 const descFontSize = 9.5;
                 let descY = cellY + 5;
+                let endY = descY;
                 
                 if (descriptionGoods) {
                     doc.setFont("helvetica", "normal");
                     doc.setFontSize(descFontSize);
                     const lines = doc.splitTextToSize(descriptionGoods, cellWidth - 5);
                     doc.text(lines, cellX + 3, descY);
+                    endY += lines.length * (descFontSize * 0.46) + 2;
                 } else {
-                    drawDescriptionBlock(cellX + 3, descY, descFontSize);
+                    endY = drawDescriptionBlock(cellX + 3, descY, descFontSize);
+                }
+
+                if (record.productsImage) {
+                    try {
+                        const imgProps = doc.getImageProperties(record.productsImage);
+                        const imgWidth = cellWidth - 6;
+                        const imgHeight = (imgProps.height * imgWidth) / imgProps.width;
+                        doc.addImage(record.productsImage, imgProps.fileType || 'PNG', cellX + 3, endY + 2, imgWidth, imgHeight);
+                    } catch (e) {
+                        console.error('Error drawing productsImage in multi-row cell:', e);
+                    }
                 }
             }
 
@@ -604,6 +693,9 @@ export const generatePL2PDF = (record, piRecords = [], lcRecords = [], importers
         const frt = parseFloat(prod.totalFreight) || 0;
         grandTotal += amt + frt;
     });
+    if (grandTotal === 0 && record.totalAmount) {
+        grandTotal = parseFloat(record.totalAmount) || 0;
+    }
 
     const totalY = y;
     doc.line(margin, totalY, pageWidth - margin, totalY);
