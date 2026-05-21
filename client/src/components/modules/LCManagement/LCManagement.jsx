@@ -461,7 +461,9 @@ const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords
                                     </div>
                                     <div className="space-y-1">
                                         <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">IP Number</span>
-                                        <p className="text-sm font-bold text-gray-800">{data.ipNo || 'N/A'}</p>
+                                        <p className="text-sm font-bold text-gray-800">
+                                            {(data.ipNumbers?.length ? data.ipNumbers.join(', ') : data.ipNo) || 'N/A'}
+                                        </p>
                                     </div>
                                     <div className="space-y-1">
                                         <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Opening Date</span>
@@ -591,6 +593,74 @@ const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords
     );
 };
 
+const getPiIpNumbers = (pi) => {
+    if (!pi) return [];
+    if (Array.isArray(pi.ipNumbers) && pi.ipNumbers.length > 0) return pi.ipNumbers;
+    if (pi.ipNumber) return pi.ipNumber.split(',').map(s => s.trim()).filter(Boolean);
+    return [];
+};
+
+const getRemIpQtyTon = (ipNo, ipRecordsRaw, lcRecords, editingId) => {
+    const selectedIp = ipRecordsRaw.find(ip => ip.ipNumber === ipNo);
+    if (!selectedIp) return 0;
+    const totalLcQtyOnThisIp = lcRecords
+        .filter(lc => {
+            const lcIps = lc.ipNumbers?.length ? lc.ipNumbers : (lc.ipNo ? [lc.ipNo] : []);
+            return lcIps.includes(ipNo) && lc._id !== editingId;
+        })
+        .reduce((sum, lc) => sum + (parseFloat(lc.quantity) || 0), 0);
+    return (parseFloat(selectedIp.quantity || 0) / 1000) - totalLcQtyOnThisIp;
+};
+
+const mapPiProductsToLc = (pi) => {
+    const piProducts = (pi.productsList?.length > 0)
+        ? pi.productsList
+        : (pi.productName
+            ? [{ productName: pi.productName, hsCode: pi.hsCode || '', quantity: pi.quantity || '', rate: pi.rate || '', amount: pi.amount || '' }]
+            : []);
+    return piProducts.map(p => {
+        const qtyTon = p.quantity ? parseFloat(p.quantity) / 1000 : 0;
+        const amt = parseFloat(p.amount) || qtyTon * (parseFloat(p.rate) || 0);
+        const lineFreight = parseFloat(p.totalFreight) || qtyTon * (parseFloat(p.freight) || 0);
+        const totalDollar = amt + lineFreight;
+        return {
+            productName: p.productName || '',
+            hsCode: p.hsCode || '',
+            quantity: qtyTon ? String(qtyTon) : '',
+            rate: p.rate || '',
+            freight: p.freight || '',
+            totalFreight: lineFreight > 0 ? String(lineFreight) : '',
+            totalDollar: totalDollar > 0 ? totalDollar.toFixed(2) : '',
+        };
+    });
+};
+
+const calcLcProductLine = (item) => {
+    const qty = parseFloat(item.quantity) || 0;
+    const r = parseFloat(item.rate) || 0;
+    const f = parseFloat(item.freight) || 0;
+    const amt = qty * r;
+    const totalFreight = qty * f;
+    const totalDollar = amt + totalFreight;
+    return {
+        ...item,
+        totalFreight: totalFreight > 0 ? totalFreight.toFixed(2) : '',
+        totalDollar: totalDollar > 0 ? totalDollar.toFixed(2) : '',
+    };
+};
+
+const syncRootFromProductsList = (state) => {
+    const first = (state.productsList || [])[0];
+    if (first) {
+        state.productName = first.productName || '';
+        state.hsCode = first.hsCode || '';
+        state.quantity = first.quantity || '';
+        state.rate = first.rate || '';
+        state.totalDollar = first.totalDollar || '';
+    }
+    return state;
+};
+
 const LCManagement = ({ addNotification, currentUser }) => {
     const [lcRecords, setLcRecords] = useState([]);
     const [banks, setBanks] = useState([]);
@@ -619,7 +689,6 @@ const LCManagement = ({ addNotification, currentUser }) => {
 
     const canManage = ['admin', 'incharge', 'lc manager', 'border manager', 'data entry'].includes((currentUser?.role || '').toLowerCase());
 
-    const ipRef = useRef(null);
     const piRef = useRef(null);
     const bankRef = useRef(null);
     const importerRef = useRef(null);
@@ -660,27 +729,27 @@ const LCManagement = ({ addNotification, currentUser }) => {
         latestShipmentDate: '',
         marineCoverNote: '',
         marineCNDate: '',
-        port: ''
+        port: '',
+        productsList: [{ productName: '', hsCode: '', quantity: '', rate: '', freight: '', totalFreight: '', totalDollar: '' }],
     });
     const [gpRecords, setGpRecords] = useState([]);
     const [lcExpenses, setLcExpenses] = useState([]);
 
     const informativeQuantities = useMemo(() => {
-        const selectedIp = ipRecordsRaw.find(ip => ip.ipNumber === formData.ipNo);
         const selectedPi = piRecordsRaw.find(pi => pi.piNumber === formData.piNo);
-
-        let remIpQtyTon = 0;
-        if (selectedIp) {
-            const totalLcQtyOnThisIp = lcRecords
-                .filter(lc => lc.ipNo === selectedIp.ipNumber && lc._id !== editingId)
-                .reduce((sum, lc) => sum + (parseFloat(lc.quantity) || 0), 0);
-            remIpQtyTon = (parseFloat(selectedIp.quantity || 0) / 1000) - totalLcQtyOnThisIp;
-        }
-
         const piQtyTon = selectedPi ? (parseFloat(selectedPi.quantity || 0) / 1000) : 0;
 
-        return { remIpQtyTon, piQtyTon };
-    }, [formData.ipNo, formData.piNo, ipRecordsRaw, piRecordsRaw, lcRecords, editingId]);
+        const ipNumbers = formData.ipNumbers?.length
+            ? formData.ipNumbers
+            : (formData.ipNo ? [formData.ipNo] : []);
+
+        const ipEntries = ipNumbers.map(ipNo => ({
+            ipNo,
+            remIpQtyTon: getRemIpQtyTon(ipNo, ipRecordsRaw, lcRecords, editingId),
+        }));
+
+        return { piQtyTon, ipEntries };
+    }, [formData.ipNo, formData.ipNumbers, formData.piNo, ipRecordsRaw, piRecordsRaw, lcRecords, editingId]);
 
     useEffect(() => {
         fetchInitialData();
@@ -688,7 +757,7 @@ const LCManagement = ({ addNotification, currentUser }) => {
 
     useEffect(() => {
         const handleClickOutside = (e) => {
-            const refs = [ipRef, piRef, bankRef, importerRef, exporterRef, productRef, insuranceRef, statusRef];
+            const refs = [piRef, bankRef, importerRef, exporterRef, productRef, insuranceRef, statusRef];
             const isClickInside = refs.some(ref => ref.current && ref.current.contains(e.target));
             if (!isClickInside) {
                 setActiveDropdown(null);
@@ -703,22 +772,6 @@ const LCManagement = ({ addNotification, currentUser }) => {
         setFormData(prev => {
             const newState = { ...prev, [field]: value };
 
-            // Auto-fill logic when IP Number is selected
-            if (field === 'ipNo') {
-                if (value) {
-                    const selectedIp = ipRecordsRaw.find(ip => ip.ipNumber === value);
-                    if (selectedIp) {
-                        if (selectedIp.ipParty) newState.importerName = selectedIp.ipParty;
-                        if (selectedIp.exporterName) newState.exporterName = selectedIp.exporterName;
-                        if (selectedIp.productName) newState.productName = selectedIp.productName;
-                    }
-                } else {
-                    newState.importerName = '';
-                    newState.exporterName = '';
-                    newState.productName = '';
-                }
-            }
-
             // Auto-fill logic when PI Number is selected
             if (field === 'piNo') {
                 if (value) {
@@ -726,19 +779,33 @@ const LCManagement = ({ addNotification, currentUser }) => {
                     if (selectedPi) {
                         if (selectedPi.partyName) newState.importerName = selectedPi.partyName;
                         if (selectedPi.exporterName) newState.exporterName = selectedPi.exporterName;
-                        if (selectedPi.hsCode) newState.hsCode = selectedPi.hsCode;
-                        if (selectedPi.productName) newState.productName = selectedPi.productName;
                         if (selectedPi.date) newState.piOpeningDate = selectedPi.date;
                         const piPort = selectedPi.port || selectedPi.portOfDischarge || selectedPi.portOfLoading;
                         if (piPort) newState.port = piPort;
+
+                        const ipNums = getPiIpNumbers(selectedPi);
+                        newState.ipNumbers = ipNums;
+                        newState.ipNo = ipNums[0] || '';
+
+                        newState.productsList = mapPiProductsToLc(selectedPi);
+                        if (newState.productsList.length === 0) {
+                            newState.productsList = [{ productName: '', hsCode: '', quantity: '', rate: '', freight: '', totalFreight: '', totalDollar: '' }];
+                        }
+                        syncRootFromProductsList(newState);
                     }
                 } else {
                     newState.importerName = '';
                     newState.exporterName = '';
                     newState.hsCode = '';
                     newState.productName = '';
+                    newState.quantity = '';
+                    newState.rate = '';
+                    newState.totalDollar = '';
                     newState.piOpeningDate = '';
                     newState.port = '';
+                    newState.ipNumbers = [];
+                    newState.ipNo = '';
+                    newState.productsList = [{ productName: '', hsCode: '', quantity: '', rate: '', freight: '', totalFreight: '', totalDollar: '' }];
                 }
             }
 
@@ -890,6 +957,43 @@ const LCManagement = ({ addNotification, currentUser }) => {
         }
     };
 
+    const handleLcProductChange = (idx, field, value) => {
+        setFormData(prev => {
+            const list = [...(prev.productsList || [])];
+            list[idx] = calcLcProductLine({ ...list[idx], [field]: value });
+
+            const newState = { ...prev, productsList: list };
+            syncRootFromProductsList(newState);
+
+            if (idx === 0 && ['quantity', 'rate', 'freight', 'totalDollar'].includes(field)) {
+                const dRate = parseFloat(newState.dollarRate) || 0;
+                let tDollar = parseFloat(newState.totalDollar) || 0;
+                if (field === 'quantity' || field === 'rate' || field === 'freight') {
+                    tDollar = parseFloat(list[0]?.totalDollar) || 0;
+                    newState.totalDollar = list[0]?.totalDollar || '';
+                }
+                const totalVal = tDollar * dRate;
+                newState.totalAmount = totalVal > 0 ? totalVal.toFixed(2) : '';
+
+                const exPct = parseFloat(newState.extraPercent) || 0;
+                const prem = parseFloat(newState.premium) || 0;
+                const premRet = parseFloat(newState.premiumReturn) || 0;
+                const pVat = parseFloat(newState.premiumVat) || 0;
+                const stamp = parseFloat(newState.stampCharge) || 0;
+                const baseNetPrem = (totalVal * (prem / 100)) / 100;
+                const netPrem = baseNetPrem + (baseNetPrem * (exPct / 100));
+                newState.netPremium = netPrem > 0 ? netPrem.toFixed(2) : '';
+                const expRet = netPrem * (premRet / 100);
+                newState.expectedReturnAmount = expRet > 0 ? expRet.toFixed(2) : '';
+                const vatAmount = netPrem * (pVat / 100);
+                const gPrem = netPrem + vatAmount + stamp;
+                newState.grossPremium = gPrem > 0 ? gPrem.toFixed(2) : '';
+            }
+
+            return newState;
+        });
+    };
+
     const handleInputChange = (e) => {
         const { name, value } = e.target;
         setFormData(prev => {
@@ -982,8 +1086,17 @@ const LCManagement = ({ addNotification, currentUser }) => {
     };
 
     const handleEdit = (record) => {
+        const loadedProducts = (record.productsList?.length > 0
+            ? record.productsList
+            : [{ productName: record.productName || '', hsCode: record.hsCode || '', quantity: record.quantity || '', rate: record.rate || '', freight: record.freight || '', totalFreight: record.totalFreight || '', totalDollar: record.totalDollar || '' }]
+        ).map(calcLcProductLine);
+        const parsedIpNumbers = record.ipNumbers?.length
+            ? record.ipNumbers
+            : (record.ipNo ? record.ipNo.split(',').map(s => s.trim()).filter(Boolean) : []);
+
         setFormData({
-            ipNo: record.ipNo || '',
+            ipNo: record.ipNo || parsedIpNumbers[0] || '',
+            ipNumbers: parsedIpNumbers,
             lcNo: record.lcNo || '',
             openingDate: record.openingDate || '',
             expiryDate: record.expiryDate || '',
@@ -1013,7 +1126,8 @@ const LCManagement = ({ addNotification, currentUser }) => {
             latestShipmentDate: record.latestShipmentDate || '',
             marineCoverNote: record.marineCoverNote || '',
             marineCNDate: record.marineCNDate || '',
-            port: record.port || ''
+            port: record.port || '',
+            productsList: loadedProducts,
         });
         setEditingId(record._id);
         setShowForm(true);
@@ -1047,6 +1161,7 @@ const LCManagement = ({ addNotification, currentUser }) => {
     const resetForm = () => {
         setFormData({
             ipNo: '',
+            ipNumbers: [],
             lcNo: '',
             openingDate: '',
             expiryDate: '',
@@ -1076,7 +1191,8 @@ const LCManagement = ({ addNotification, currentUser }) => {
             latestShipmentDate: '',
             marineCoverNote: '',
             marineCNDate: '',
-            port: ''
+            port: '',
+            productsList: [{ productName: '', hsCode: '', quantity: '', rate: '', freight: '', totalFreight: '', totalDollar: '' }],
         });
         setEditingId(null);
         setShowForm(false);
@@ -1249,56 +1365,6 @@ const LCManagement = ({ addNotification, currentUser }) => {
                             )}
                         </div>
 
-                        <div className="space-y-1.5 text-left relative" ref={ipRef}>
-                            <label className="text-sm font-semibold text-gray-600 ml-1">IP Number</label>
-                            <div className="relative">
-                                <input
-                                    type="text"
-                                    name="ipNo"
-                                    value={formData.ipNo}
-                                    onChange={handleInputChange}
-                                    onFocus={() => { setActiveDropdown('ipNo'); setHighlightedIndex(-1); }}
-                                    onKeyDown={(e) => handleDropdownKeyDown(e, 'ipNo', 'ipNo', ipList.filter(ip => !formData.ipNo || ip.toLowerCase().includes(formData.ipNo.toLowerCase())))}
-                                    placeholder="Select IP Number"
-                                    autoComplete="off"
-                                    className="w-full px-4 py-2.5 bg-white/50 border border-gray-200/60 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all font-medium pr-10"
-                                />
-                                <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-2">
-                                    {formData.ipNo && (
-                                        <button type="button" onClick={() => handleDropdownSelect('ipNo', '')} className="text-gray-400 hover:text-gray-600">
-                                            <XIcon className="w-4 h-4" />
-                                        </button>
-                                    )}
-                                    <SearchIcon className="w-4 h-4 text-gray-300 pointer-events-none" />
-                                </div>
-                            </div>
-                            {activeDropdown === 'ipNo' && (
-                                <div className="absolute z-[60] w-full mt-1 bg-white border border-gray-100 rounded-xl shadow-xl max-h-48 overflow-y-auto py-1">
-                                    {ipList.filter(ip => !formData.ipNo || ip.toLowerCase().includes(formData.ipNo.toLowerCase())).map((ip, idx) => (
-                                        <button
-                                            key={idx}
-                                            type="button"
-                                            onMouseDown={(e) => { e.preventDefault(); handleDropdownSelect('ipNo', ip); }}
-                                            onMouseEnter={() => setHighlightedIndex(idx)}
-                                            className={`w-full px-4 py-2 text-left text-sm transition-colors font-medium ${formData.ipNo === ip ? 'bg-blue-50 text-blue-700' : highlightedIndex === idx ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-blue-50'}`}
-                                        >
-                                            {ip}
-                                        </button>
-                                    ))}
-                                </div>
-                            )}
-                        </div>
-
-                        <div className="space-y-1.5">
-                            <label className="text-sm font-semibold text-gray-600 ml-1">Remaining IP Qty (Ton)</label>
-                            <input
-                                type="text"
-                                readOnly
-                                value={formData.ipNo ? informativeQuantities.remIpQtyTon.toLocaleString('en-IN', { minimumFractionDigits: 3 }) : ''}
-                                className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200/60 rounded-xl outline-none text-gray-500 font-bold"
-                            />
-                        </div>
-
                         <div className="space-y-1.5 text-left relative" ref={piRef}>
                             <label className="text-sm font-semibold text-gray-600 ml-1">PI Number</label>
                             <div className="relative">
@@ -1359,7 +1425,6 @@ const LCManagement = ({ addNotification, currentUser }) => {
                             />
                         </div>
 
-
                         <div className="space-y-1.5 text-left">
                             <label className="text-sm font-semibold text-gray-600 ml-1">Port</label>
                             <input
@@ -1371,6 +1436,33 @@ const LCManagement = ({ addNotification, currentUser }) => {
                                 className="w-full px-4 py-2.5 bg-white/50 border border-gray-200/60 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all font-medium"
                             />
                         </div>
+
+                        {informativeQuantities.ipEntries.map((entry, idx) => (
+                            <React.Fragment key={entry.ipNo || idx}>
+                                <div className="space-y-1.5">
+                                    <label className="text-sm font-semibold text-gray-600 ml-1">
+                                        IP Number{informativeQuantities.ipEntries.length > 1 ? ` (${idx + 1})` : ''}
+                                    </label>
+                                    <input
+                                        type="text"
+                                        readOnly
+                                        value={entry.ipNo}
+                                        className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200/60 rounded-xl outline-none text-gray-700 font-bold"
+                                    />
+                                </div>
+                                <div className="space-y-1.5">
+                                    <label className="text-sm font-semibold text-gray-600 ml-1">
+                                        Remaining IP Qty (Ton){informativeQuantities.ipEntries.length > 1 ? ` (${idx + 1})` : ''}
+                                    </label>
+                                    <input
+                                        type="text"
+                                        readOnly
+                                        value={entry.remIpQtyTon.toLocaleString('en-IN', { minimumFractionDigits: 3 })}
+                                        className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200/60 rounded-xl outline-none text-gray-500 font-bold"
+                                    />
+                                </div>
+                            </React.Fragment>
+                        ))}
 
                         <div className="space-y-1.5 text-left relative" ref={importerRef}>
                             <label className="text-sm font-semibold text-gray-600 ml-1">Importer</label>
@@ -1455,6 +1547,21 @@ const LCManagement = ({ addNotification, currentUser }) => {
                         </div>
 
                         <div className="space-y-1.5 text-left">
+                            <label className="text-sm font-semibold text-gray-600 ml-1">Dollar Rate (BDT)</label>
+                            <div className="relative">
+                                <span className="absolute left-3 top-1/2 -translate-y-1/2 font-bold text-gray-400">৳</span>
+                                <input
+                                    type="number"
+                                    name="dollarRate"
+                                    value={formData.dollarRate}
+                                    onChange={handleInputChange}
+                                    placeholder="0.00"
+                                    className="w-full px-4 py-2.5 pl-8 bg-white/50 border border-gray-200/60 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all font-medium"
+                                />
+                            </div>
+                        </div>
+
+                        <div className="space-y-1.5 text-left">
                             <label className="text-sm font-semibold text-gray-600 ml-1">Total LC Value</label>
                             <div className="relative">
                                 <span className="absolute left-3 top-1/2 -translate-y-1/2 font-bold text-gray-400">৳</span>
@@ -1513,116 +1620,143 @@ const LCManagement = ({ addNotification, currentUser }) => {
                             </div>
                         </div>
 
-                        <div className="col-span-full grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-6">
-                            <div className="space-y-1.5 text-left">
-                                <label className="text-sm font-semibold text-gray-600 ml-1">H.S Code</label>
-                                <input
-                                    type="text"
-                                    name="hsCode"
-                                    value={formData.hsCode}
-                                    onChange={handleInputChange}
-                                    placeholder="Enter H.S Code"
-                                    className="w-full px-4 py-2.5 bg-white/50 border border-gray-200/60 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all font-medium"
-                                />
-                            </div>
-
-                            <div className="space-y-1.5 text-left relative" ref={productRef}>
-                                <label className="text-sm font-semibold text-gray-600 ml-1">Product</label>
-                                <div className="relative">
-                                    <input
-                                        type="text"
-                                        name="productName"
-                                        value={formData.productName}
-                                        onChange={handleInputChange}
-                                        onFocus={() => { setActiveDropdown('productName'); setHighlightedIndex(-1); }}
-                                        onKeyDown={(e) => handleDropdownKeyDown(e, 'productName', 'productName', productItems.filter(p => !formData.productName || p.toLowerCase().includes(formData.productName.toLowerCase())))}
-                                        placeholder="Select Product"
-                                        autoComplete="off"
-                                        className="w-full px-4 py-2.5 bg-white/50 border border-gray-200/60 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all font-medium pr-10"
-                                    />
-                                    <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-2">
-                                        {formData.productName && (
-                                            <button type="button" onClick={() => handleDropdownSelect('productName', '')} className="text-gray-400 hover:text-gray-600">
-                                                <XIcon className="w-4 h-4" />
-                                            </button>
-                                        )}
-                                        <SearchIcon className="w-4 h-4 text-gray-300 pointer-events-none" />
-                                    </div>
-                                </div>
-                                {activeDropdown === 'productName' && (
-                                    <div className="absolute z-[60] w-full mt-1 bg-white border border-gray-100 rounded-xl shadow-xl max-h-48 overflow-y-auto py-1">
-                                        {productItems.filter(p => !formData.productName || p.toLowerCase().includes(formData.productName.toLowerCase())).map((p, idx) => (
-                                            <button
-                                                key={idx}
-                                                type="button"
-                                                onMouseDown={(e) => { e.preventDefault(); handleDropdownSelect('productName', p); }}
-                                                onMouseEnter={() => setHighlightedIndex(idx)}
-                                                className={`w-full px-4 py-2 text-left text-sm transition-colors font-medium ${formData.productName === p ? 'bg-blue-50 text-blue-700' : highlightedIndex === idx ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-blue-50'}`}
-                                            >
-                                                {p}
-                                            </button>
-                                        ))}
-                                    </div>
+                        {(formData.productsList || [{ productName: '', hsCode: '', quantity: '', rate: '', freight: '', totalFreight: '', totalDollar: '' }]).map((item, prodIdx) => (
+                            <div key={prodIdx} className="col-span-full space-y-3">
+                                {(formData.productsList?.length || 0) > 1 && (
+                                    <p className="text-xs font-bold text-blue-600 uppercase tracking-wider ml-1">Product #{prodIdx + 1}</p>
                                 )}
-                            </div>
+                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-7 gap-6">
+                                    <div className="space-y-1.5 text-left">
+                                        <label className="text-sm font-semibold text-gray-600 ml-1">H.S Code</label>
+                                        <input
+                                            type="text"
+                                            value={item.hsCode}
+                                            onChange={(e) => handleLcProductChange(prodIdx, 'hsCode', e.target.value)}
+                                            placeholder="Enter H.S Code"
+                                            className="w-full px-4 py-2.5 bg-white/50 border border-gray-200/60 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all font-medium"
+                                        />
+                                    </div>
 
-                            <div className="space-y-1.5 text-left">
-                                <label className="text-sm font-semibold text-gray-600 ml-1">Quantity</label>
-                                <input
-                                    type="number"
-                                    name="quantity"
-                                    value={formData.quantity}
-                                    onChange={handleInputChange}
-                                    placeholder="0"
-                                    className="w-full px-4 py-2.5 bg-white/50 border border-gray-200/60 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all font-medium"
-                                />
-                            </div>
+                                    <div className="space-y-1.5 text-left relative" ref={prodIdx === 0 ? productRef : null}>
+                                        <label className="text-sm font-semibold text-gray-600 ml-1">Product</label>
+                                        <div className="relative">
+                                            <input
+                                                type="text"
+                                                value={item.productName}
+                                                onChange={(e) => handleLcProductChange(prodIdx, 'productName', e.target.value)}
+                                                onFocus={() => { setActiveDropdown(`productName_${prodIdx}`); setHighlightedIndex(-1); }}
+                                                onKeyDown={(e) => {
+                                                    const options = productItems.filter(p => !item.productName || p.toLowerCase().includes(item.productName.toLowerCase()));
+                                                    if (e.key === 'Enter' && highlightedIndex >= 0 && highlightedIndex < options.length) {
+                                                        e.preventDefault();
+                                                        handleLcProductChange(prodIdx, 'productName', options[highlightedIndex]);
+                                                        setActiveDropdown(null);
+                                                        setHighlightedIndex(-1);
+                                                        return;
+                                                    }
+                                                    handleDropdownKeyDown(e, `productName_${prodIdx}`, 'productName', options);
+                                                }}
+                                                placeholder="Select Product"
+                                                autoComplete="off"
+                                                className="w-full px-4 py-2.5 bg-white/50 border border-gray-200/60 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all font-medium pr-10"
+                                            />
+                                            <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-2">
+                                                {item.productName && (
+                                                    <button type="button" onClick={() => handleLcProductChange(prodIdx, 'productName', '')} className="text-gray-400 hover:text-gray-600">
+                                                        <XIcon className="w-4 h-4" />
+                                                    </button>
+                                                )}
+                                                <SearchIcon className="w-4 h-4 text-gray-300 pointer-events-none" />
+                                            </div>
+                                        </div>
+                                        {activeDropdown === `productName_${prodIdx}` && (
+                                            <div className="absolute z-[60] w-full mt-1 bg-white border border-gray-100 rounded-xl shadow-xl max-h-48 overflow-y-auto py-1">
+                                                {productItems.filter(p => !item.productName || p.toLowerCase().includes(item.productName.toLowerCase())).map((p, idx) => (
+                                                    <button
+                                                        key={idx}
+                                                        type="button"
+                                                        onMouseDown={(e) => { e.preventDefault(); handleLcProductChange(prodIdx, 'productName', p); }}
+                                                        onMouseEnter={() => setHighlightedIndex(idx)}
+                                                        className={`w-full px-4 py-2 text-left text-sm transition-colors font-medium ${item.productName === p ? 'bg-blue-50 text-blue-700' : highlightedIndex === idx ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-blue-50'}`}
+                                                    >
+                                                        {p}
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        )}
+                                    </div>
 
-                            <div className="space-y-1.5 text-left">
-                                <label className="text-sm font-semibold text-gray-600 ml-1">Rate</label>
-                                <div className="relative">
-                                    <span className="absolute left-3 top-1/2 -translate-y-1/2 font-bold text-gray-400">$</span>
-                                    <input
-                                        type="number"
-                                        name="rate"
-                                        value={formData.rate}
-                                        onChange={handleInputChange}
-                                        placeholder="0.00"
-                                        className="w-full px-4 py-2.5 pl-8 bg-white/50 border border-gray-200/60 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all font-medium"
-                                    />
+                                    <div className="space-y-1.5 text-left">
+                                        <label className="text-sm font-semibold text-gray-600 ml-1">Quantity (Ton)</label>
+                                        <input
+                                            type="number"
+                                            value={item.quantity}
+                                            onChange={(e) => handleLcProductChange(prodIdx, 'quantity', e.target.value)}
+                                            placeholder="0"
+                                            className="w-full px-4 py-2.5 bg-white/50 border border-gray-200/60 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all font-medium"
+                                        />
+                                    </div>
+
+                                    <div className="space-y-1.5 text-left">
+                                        <label className="text-sm font-semibold text-gray-600 ml-1">Rate (Per Ton)</label>
+                                        <div className="relative">
+                                            <span className="absolute left-3 top-1/2 -translate-y-1/2 font-bold text-gray-400">$</span>
+                                            <input
+                                                type="number"
+                                                value={item.rate}
+                                                onChange={(e) => handleLcProductChange(prodIdx, 'rate', e.target.value)}
+                                                step="0.001"
+                                                placeholder="0.00"
+                                                className="w-full px-4 py-2.5 pl-8 bg-white/50 border border-gray-200/60 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all font-medium"
+                                            />
+                                        </div>
+                                    </div>
+
+                                    <div className="space-y-1.5 text-left">
+                                        <label className="text-sm font-semibold text-gray-600 ml-1">Freight (Per Ton)</label>
+                                        <div className="relative">
+                                            <span className="absolute left-3 top-1/2 -translate-y-1/2 font-bold text-gray-400">$</span>
+                                            <input
+                                                type="number"
+                                                value={item.freight}
+                                                onChange={(e) => handleLcProductChange(prodIdx, 'freight', e.target.value)}
+                                                step="0.001"
+                                                placeholder="0.00"
+                                                className="w-full px-4 py-2.5 pl-8 bg-white/50 border border-gray-200/60 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all font-medium"
+                                            />
+                                        </div>
+                                    </div>
+
+                                    <div className="space-y-1.5 text-left">
+                                        <label className="text-sm font-semibold text-gray-600 ml-1">Total Freight</label>
+                                        <div className="relative">
+                                            <span className="absolute left-3 top-1/2 -translate-y-1/2 font-bold text-gray-400">$</span>
+                                            <input
+                                                type="text"
+                                                readOnly
+                                                value={item.totalFreight}
+                                                placeholder="0.00"
+                                                className="w-full px-4 py-2.5 pl-8 bg-gray-50 border border-gray-200/60 rounded-xl outline-none text-gray-600 font-medium cursor-not-allowed"
+                                            />
+                                        </div>
+                                    </div>
+
+                                    <div className="space-y-1.5 text-left">
+                                        <label className="text-sm font-semibold text-gray-600 ml-1">Total Dollar</label>
+                                        <div className="relative">
+                                            <span className="absolute left-3 top-1/2 -translate-y-1/2 font-bold text-gray-400">$</span>
+                                            <input
+                                                type="text"
+                                                readOnly
+                                                value={item.totalDollar}
+                                                placeholder="0.00"
+                                                className="w-full px-4 py-2.5 pl-8 bg-gray-50 border border-gray-200/60 rounded-xl outline-none text-gray-700 font-bold cursor-not-allowed"
+                                            />
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
-
-                            <div className="space-y-1.5 text-left">
-                                <label className="text-sm font-semibold text-gray-600 ml-1">Total Dollar</label>
-                                <div className="relative">
-                                    <span className="absolute left-3 top-1/2 -translate-y-1/2 font-bold text-gray-400">$</span>
-                                    <input
-                                        type="number"
-                                        name="totalDollar"
-                                        value={formData.totalDollar}
-                                        onChange={handleInputChange}
-                                        placeholder="0.00"
-                                        className="w-full px-4 py-2.5 pl-8 bg-white/50 border border-gray-200/60 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all font-medium"
-                                    />
-                                </div>
-                            </div>
-
-                            <div className="space-y-1.5 text-left">
-                                <label className="text-sm font-semibold text-gray-600 ml-1">Dollar Rate (BDT)</label>
-                                <div className="relative">
-                                    <span className="absolute left-3 top-1/2 -translate-y-1/2 font-bold text-gray-400">৳</span>
-                                    <input
-                                        type="number"
-                                        name="dollarRate"
-                                        value={formData.dollarRate}
-                                        onChange={handleInputChange}
-                                        placeholder="0.00"
-                                        className="w-full px-4 py-2.5 pl-8 bg-white/50 border border-gray-200/60 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all font-medium"
-                                    />
-                                </div>
-                            </div>
-                        </div>
+                        ))}
 
                         <div className="col-span-full mb-2 mt-4">
                             <div className="bg-blue-50/30 border-l-4 border-blue-500 px-4 py-2 rounded-r-xl">
