@@ -4,7 +4,7 @@ import {
   MenuIcon, SearchIcon, HomeIcon, UsersIcon, UserIcon, AnchorIcon,
   BarChartIcon, FunnelIcon, XIcon, DollarSignIcon, ShoppingCartIcon,
   ChevronDownIcon, BoxIcon, BellIcon, TrashIcon, VegetableIcon, ReceiptIcon, TrendingUpIcon, LogOutIcon, BriefcaseIcon,
-  GlobeIcon, ArrowUpRightIcon, ArrowDownLeftIcon, LinkIcon, BuildingIcon, ShieldIcon, FileTextIcon, LayoutIcon, LCManagerIcon, RotateCcwIcon, ClipboardIcon
+  GlobeIcon, ArrowUpRightIcon, ArrowDownLeftIcon, LinkIcon, BuildingIcon, ShieldIcon, FileTextIcon, LayoutIcon, LCManagerIcon, RotateCcwIcon, ClipboardIcon, SettingsIcon
 } from './components/Icons';
 
 import { encryptData, decryptData } from './utils/encryption';
@@ -17,6 +17,7 @@ import Port from './components/modules/Port/Port';
 import IPManagement from './components/modules/IPManagement/IPManagement';
 import PI from './components/modules/PI/PI';
 import PackingList from './components/modules/PackingList/PackingList';
+import TRSetup from './components/modules/TRSetup/TRSetup';
 import ProductManagement from './components/modules/Product/ProductManagement';
 import Customer from './components/modules/Customer/Customer';
 import LCReceive from './components/modules/LCReceive/LCReceive';
@@ -395,7 +396,7 @@ function App() {
 
   const [piDropdownOpen, setPiDropdownOpen] = useState(() => {
     const initialView = localStorage.getItem('currentView') || 'dashboard';
-    return initialView === 'pi-section' || initialView === 'packing-list-section';
+    return initialView === 'pi-section' || initialView === 'packing-list-section' || initialView === 'tr-setup-section';
   });
 
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -598,7 +599,7 @@ function App() {
     localStorage.setItem('currentView', currentView);
 
     // Close all forms when changing sections
-    if (currentView === 'ip-section' || currentView === 'customer-section' || currentView === 'pi-section' || currentView === 'packing-list-section') {
+    if (currentView === 'ip-section' || currentView === 'customer-section' || currentView === 'pi-section' || currentView === 'packing-list-section' || currentView === 'tr-setup-section') {
       fetchImporters(); // Fetch importers to populate the dropdown
       fetchExporters();
       fetchPorts(); // Fetch ports to populate the dropdown
@@ -741,6 +742,7 @@ function App() {
                             type === 'pi' ? 'pi' :
                             type === 'lc-expense' ? 'lc-expenses' :
                             type === 'packing-list' ? 'packing-lists' :
+                            type === 'tr-setup' ? 'tr-setups' :
                               'stock';
 
 
@@ -854,7 +856,7 @@ function App() {
         else if (type === 'product') fetchProducts();
         else if (type === 'stock') fetchStockRecords();
 
-        if (['employees', 'sales', 'customer', 'ip', 'cnf', 'bank', 'indian-bank', 'importer', 'exporter', 'port', 'pi', 'lc-expense', 'packing-list'].includes(type) || type.includes('cnf')) {
+        if (['employees', 'sales', 'customer', 'ip', 'cnf', 'bank', 'indian-bank', 'importer', 'exporter', 'port', 'pi', 'lc-expense', 'packing-list', 'tr-setup'].includes(type) || type.includes('cnf')) {
           setRefreshKey(prev => prev + 1);
         }
 
@@ -874,7 +876,8 @@ function App() {
           'pi': 'Proforma Invoice',
           'lc-expense': 'LC Expense',
           'stock': 'Stock Record',
-          'packing-list': 'Packing List'
+          'packing-list': 'Packing List',
+          'tr-setup': 'TR Setup'
         };
         const label = labels[type] || type.toUpperCase();
         addNotification(
@@ -1304,6 +1307,14 @@ function App() {
             onDeleteConfirm={setDeleteConfirm}
             addNotification={addNotification}
             currentUser={currentUser}
+          />
+        );
+      case 'tr-setup-section':
+        return (
+          <TRSetup
+            key={refreshKey}
+            currentUser={currentUser}
+            onDeleteConfirm={setDeleteConfirm}
           />
         );
       case 'importer-section':
@@ -1793,7 +1804,7 @@ function App() {
           <div>
             <button
               onClick={() => setPiDropdownOpen(!piDropdownOpen)}
-              className={`w-full flex items-center justify-between px-4 py-2 rounded-lg transition-all ${currentView === 'pi-section' || currentView === 'packing-list-section' ? 'bg-blue-50 text-blue-600 shadow-sm' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'}`}
+              className={`w-full flex items-center justify-between px-4 py-2 rounded-lg transition-all ${currentView === 'pi-section' || currentView === 'packing-list-section' || currentView === 'tr-setup-section' ? 'bg-blue-50 text-blue-600 shadow-sm' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'}`}
             >
               <div className="flex items-center">
                 <FileTextIcon className="w-5 h-5 mr-3" />
@@ -1801,7 +1812,7 @@ function App() {
               </div>
               <ChevronDownIcon className={`w-4 h-4 transition-transform duration-200 ${piDropdownOpen ? 'transform rotate-180' : ''}`} />
             </button>
-            <div className={`overflow-hidden transition-all duration-300 ease-in-out ${piDropdownOpen ? 'max-h-48 opacity-100 mt-1' : 'max-h-0 opacity-0'}`}>
+            <div className={`overflow-hidden transition-all duration-300 ease-in-out ${piDropdownOpen ? 'max-h-64 opacity-100 mt-1' : 'max-h-0 opacity-0'}`}>
               <div className="pl-7 pr-2 space-y-1">
                 <button
                   onClick={() => { setCurrentView('pi-section'); setSidebarOpen(false); }}
@@ -1816,6 +1827,13 @@ function App() {
                 >
                   <ClipboardIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
                   <span>Packing List</span>
+                </button>
+                <button
+                  onClick={() => { setCurrentView('tr-setup-section'); setSidebarOpen(false); }}
+                  className={`w-full flex flex-row items-center py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'tr-setup-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'}`}
+                >
+                  <SettingsIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
+                  <span>TR Setup</span>
                 </button>
               </div>
             </div>

@@ -27,6 +27,7 @@ function PackingList({
     const [lcRecords, setLcRecords] = useState([]);
     const [banks, setBanks] = useState([]);
     const [ipRecords, setIpRecords] = useState([]);
+    const [trSetups, setTrSetups] = useState([]);
     const [isLoading, setIsLoading] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [submitStatus, setSubmitStatus] = useState(null);
@@ -84,6 +85,7 @@ function PackingList({
         exporterSignature: '',
         trNumber: '',
         trDate: '',
+        trName: '',
         invoiceStyle: 'Style 1 SAA',
         bankName: '',
         branchName: '',
@@ -104,6 +106,12 @@ function PackingList({
     }, []);
 
     useEffect(() => {
+        if (showForm) {
+            fetchTrSetups();
+        }
+    }, [showForm]);
+
+    useEffect(() => {
         const handleClickOutside = (event) => {
             if (activeDropdown && !event.target.closest('.dropdown-container')) {
                 setActiveDropdown(null);
@@ -112,6 +120,16 @@ function PackingList({
         document.addEventListener('mousedown', handleClickOutside);
         return () => document.removeEventListener('mousedown', handleClickOutside);
     }, [activeDropdown]);
+
+    const fetchTrSetups = async () => {
+        try {
+            const response = await axios.get(`${API_BASE_URL}/api/tr-setups`);
+            setTrSetups(Array.isArray(response.data) ? response.data : []);
+        } catch (error) {
+            console.error('Error fetching TR setups:', error);
+            showToast('Failed to load TR Setup names.', 'error');
+        }
+    };
 
     const fetchRecords = async () => {
         setIsLoading(true);
@@ -128,6 +146,7 @@ function PackingList({
             setLcRecords(Array.isArray(lcRes.data) ? lcRes.data : []);
             setBanks(Array.isArray(bankRes.data) ? bankRes.data : []);
             setIpRecords(Array.isArray(ipRes.data) ? ipRes.data : []);
+            await fetchTrSetups();
         } catch (error) {
             console.error('Error fetching data:', error);
             showToast('Failed to fetch records', 'error');
@@ -272,6 +291,7 @@ function PackingList({
             exporterSignature: '',
             trNumber: '',
             trDate: '',
+            trName: '',
             invoiceStyle: 'Style 1 SAA',
             bankName: '',
             branchName: '',
@@ -381,6 +401,7 @@ function PackingList({
             status: record.status || 'Active',
             trNumber: record.trNumber || '',
             trDate: record.trDate ? record.trDate.split('T')[0] : '',
+            trName: record.trName || '',
             invoiceStyle: record.invoiceStyle || 'Style 1 SAA',
             bankName: record.bankName || '',
             branchName: record.branchName || '',
@@ -455,6 +476,15 @@ function PackingList({
         }
         return true;
     });
+
+    const filteredTrSetups = useMemo(() => {
+        const query = (formData.trName || '').trim().toLowerCase();
+        return trSetups.filter(setup => {
+            const setupName = (setup.name || '').trim();
+            if (!setupName) return false;
+            return !query || setupName.toLowerCase().includes(query);
+        });
+    }, [trSetups, formData.trName]);
 
     const filteredPIs = piRecords.filter(pi => {
         if (piSearchQuery) {
@@ -596,28 +626,6 @@ function PackingList({
                                     onChange={handleInputChange}
                                     placeholder="Select Date"
                                     required
-                                />
-                            </div>
-
-                            <div className="space-y-2">
-                                <label className="text-sm font-medium text-gray-700">TR No.</label>
-                                <input
-                                    type="text"
-                                    name="trNumber"
-                                    value={formData.trNumber}
-                                    onChange={handleInputChange}
-                                    placeholder="e.g. 87288"
-                                    className="w-full px-4 py-2 bg-white/50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-all"
-                                />
-                            </div>
-
-                            <div className="space-y-2">
-                                <label className="text-sm font-medium text-gray-700">TR Date</label>
-                                <CustomDatePicker
-                                    name="trDate"
-                                    value={formData.trDate}
-                                    onChange={handleInputChange}
-                                    placeholder="Select TR Date"
                                 />
                             </div>
 
@@ -1100,6 +1108,70 @@ function PackingList({
                             </div>
                         </div>
 
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                            <div className="space-y-2">
+                                <label className="text-sm font-medium text-gray-700">TR No</label>
+                                <input
+                                    type="text"
+                                    name="trNumber"
+                                    value={formData.trNumber}
+                                    onChange={handleInputChange}
+                                    placeholder="e.g. 87288"
+                                    className="w-full px-4 py-2 bg-white/50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-all"
+                                />
+                            </div>
+
+                            <div className="space-y-2">
+                                <label className="text-sm font-medium text-gray-700">TR Date</label>
+                                <CustomDatePicker
+                                    name="trDate"
+                                    value={formData.trDate}
+                                    onChange={handleInputChange}
+                                    placeholder="Select TR Date"
+                                />
+                            </div>
+
+                            <div className="space-y-2 relative dropdown-container">
+                                <label className="text-sm font-medium text-gray-700">TR Name</label>
+                                <input
+                                    type="text"
+                                    name="trName"
+                                    value={formData.trName}
+                                    onChange={(e) => { handleInputChange(e); setActiveDropdown('trName'); setHighlightedIndex(-1); }}
+                                    onFocus={() => { setActiveDropdown('trName'); setHighlightedIndex(-1); }}
+                                    onKeyDown={(e) => handleDropdownKeyDown(e, 'trName', filteredTrSetups, 'trName')}
+                                    className="w-full px-4 py-2 bg-white/50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-all"
+                                    placeholder="Select from TR Setup"
+                                    autoComplete="off"
+                                />
+                                {activeDropdown === 'trName' && (
+                                    <div className="absolute z-[60] w-full mt-1 bg-white border border-gray-200 rounded-xl shadow-xl max-h-40 overflow-y-auto">
+                                        {filteredTrSetups.length > 0 ? (
+                                            filteredTrSetups.map((setup, idx) => (
+                                                <button
+                                                    key={setup._id || setup.name}
+                                                    type="button"
+                                                    onClick={() => {
+                                                        handleDropdownSelect('trName', (setup.name || '').trim());
+                                                    }}
+                                                    onMouseEnter={() => setHighlightedIndex(idx)}
+                                                    className={`w-full px-4 py-2.5 text-left text-sm transition-colors ${highlightedIndex === idx ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-blue-50'}`}
+                                                >
+                                                    <div className="font-medium">{(setup.name || '').trim()}</div>
+                                                </button>
+                                            ))
+                                        ) : (
+                                            <p className="px-4 py-3 text-sm text-gray-500">
+                                                {trSetups.length === 0
+                                                    ? 'No TR Setup found. Add names in TR Setup first.'
+                                                    : 'No matching TR name.'}
+                                            </p>
+                                        )}
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+
                         {/* --- Products & Packaging Image Upload --- */}
                         <div className="space-y-4">
                             <div className="flex items-center justify-between border-b border-gray-200 pb-2">
@@ -1233,9 +1305,9 @@ function PackingList({
                                                     <button
                                                         onClick={() => {
                                                             if (rec.invoiceStyle === 'Style 2 AAS') {
-                                                                generatePL2PDF(rec, piRecords, lcRecords, importers, exporters, banks, ipRecords);
+                                                                generatePL2PDF(rec, piRecords, lcRecords, importers, exporters, banks, ipRecords, trSetups);
                                                             } else {
-                                                                generatePLPDF(rec, piRecords, lcRecords, importers, exporters, ipRecords);
+                                                                generatePLPDF(rec, piRecords, lcRecords, importers, exporters, ipRecords, trSetups);
                                                             }
                                                         }}
                                                         title="Download PDF"
@@ -1327,9 +1399,9 @@ function PackingList({
                                                     <button
                                                         onClick={() => {
                                                             if (rec.invoiceStyle === 'Style 2 AAS') {
-                                                                generatePL2PDF(rec, piRecords, lcRecords, importers, exporters, banks, ipRecords);
+                                                                generatePL2PDF(rec, piRecords, lcRecords, importers, exporters, banks, ipRecords, trSetups);
                                                             } else {
-                                                                generatePLPDF(rec, piRecords, lcRecords, importers, exporters, ipRecords);
+                                                                generatePLPDF(rec, piRecords, lcRecords, importers, exporters, ipRecords, trSetups);
                                                             }
                                                         }}
                                                         className="p-2 text-blue-600 bg-blue-50 border border-blue-100 rounded-lg"

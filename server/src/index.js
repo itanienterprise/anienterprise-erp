@@ -73,6 +73,7 @@ const LCGatePass = require('./models/LCGatePass');
 const LCExpense = require('./models/LCExpense');
 const PI = require('./models/PI');
 const PackingList = require('./models/PackingList');
+const TRSetup = require('./models/TRSetup');
 const MetaData = require('./models/MetaData');
 const CnFPayment = require('./models/CnFPayment');
 const InsurancePayment = require('./models/InsurancePayment');
@@ -1305,6 +1306,52 @@ apiRouter.put('/api/packing-lists/:id', async (req, res) => {
 apiRouter.get('/api/packing-lists', async (req, res) => {
   try {
     const records = await PackingList.find().sort({ createdAt: -1 });
+    const decrypted = records.map(r => {
+      const d = decryptData(r.data);
+      return { ...d, _id: r._id, createdAt: r.createdAt };
+    });
+    res.json(decrypted);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// TR Setup APIs
+apiRouter.post('/api/tr-setups', async (req, res) => {
+  try {
+    const encryptedData = encryptData(req.body);
+    const newRecord = new TRSetup({ data: encryptedData });
+    const savedRecord = await newRecord.save();
+    res.status(201).json({ ...req.body, _id: savedRecord._id, createdAt: savedRecord.createdAt });
+  } catch (err) {
+    res.status(400).json({ message: err.message });
+  }
+});
+
+apiRouter.delete('/api/tr-setups/:id', async (req, res) => {
+  try {
+    const deletedRecord = await TRSetup.findByIdAndDelete(req.params.id);
+    if (!deletedRecord) return res.status(404).json({ message: 'TR Setup record not found' });
+    res.json({ message: 'TR Setup record deleted' });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+apiRouter.put('/api/tr-setups/:id', async (req, res) => {
+  try {
+    const encryptedData = encryptData(req.body);
+    const updatedRecord = await TRSetup.findByIdAndUpdate(req.params.id, { data: encryptedData }, { returnDocument: 'after' });
+    if (!updatedRecord) return res.status(404).json({ message: 'TR Setup record not found' });
+    res.json({ ...req.body, _id: updatedRecord._id, createdAt: updatedRecord.createdAt });
+  } catch (err) {
+    res.status(400).json({ message: err.message });
+  }
+});
+
+apiRouter.get('/api/tr-setups', async (req, res) => {
+  try {
+    const records = await TRSetup.find().sort({ createdAt: -1 });
     const decrypted = records.map(r => {
       const d = decryptData(r.data);
       return { ...d, _id: r._id, createdAt: r.createdAt };

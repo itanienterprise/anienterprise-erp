@@ -1,5 +1,6 @@
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import { appendTrTemplatePage } from './plTrTemplatePage';
 
 const numberToWordsUSD = (amount) => {
     const units = ['', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine'];
@@ -42,7 +43,7 @@ const fitFontSizeOneLine = (doc, text, maxWidth, maxSize = 9, minSize = 4.5, fon
     return minSize;
 };
 
-export const generatePL2PDF = (record, piRecords = [], lcRecords = [], importers = [], exporters = [], banks = [], ipRecords = []) => {
+export const generatePL2PDF = (record, piRecords = [], lcRecords = [], importers = [], exporters = [], banks = [], ipRecords = [], trSetups = []) => {
     const doc = new jsPDF('p', 'mm', 'a4');
     const pageWidth = doc.internal.pageSize.getWidth();
     const pageHeight = doc.internal.pageSize.getHeight();
@@ -934,6 +935,8 @@ export const generatePL2PDF = (record, piRecords = [], lcRecords = [], importers
             console.error('Error adding exporter signature to PDF:', e);
         }
     }
+
+    appendTrTemplatePage(doc, record, trSetups, { margin });
 
     // Open in new tab
     const pdfOutput = doc.output('blob');

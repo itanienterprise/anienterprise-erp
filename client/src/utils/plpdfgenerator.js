@@ -1,5 +1,6 @@
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import { appendTrTemplatePage } from './plTrTemplatePage';
 
 // Helper function to format dates
 const formatDate = (dateString) => {
@@ -16,7 +17,7 @@ const formatDate = (dateString) => {
     }
 };
 
-export const generatePLPDF = (record, piRecords = [], lcRecords = [], importers = [], exporters = [], ipRecords = []) => {
+export const generatePLPDF = (record, piRecords = [], lcRecords = [], importers = [], exporters = [], ipRecords = [], trSetups = []) => {
     const doc = new jsPDF('p', 'mm', 'a4');
     const pageWidth = doc.internal.pageSize.width;
     const pageHeight = doc.internal.pageSize.height;
@@ -439,6 +440,8 @@ export const generatePLPDF = (record, piRecords = [], lcRecords = [], importers 
     doc.setFont("helvetica", "bold");
     doc.setFontSize(10);
     doc.text("Seller", pageWidth - margin - 35, y + 28, { align: 'center' });
+
+    appendTrTemplatePage(doc, record, trSetups, { margin });
 
     // Save/Download PDF
     const filename = `PackingList_${record.packingListNumber || 'Draft'}.pdf`;
