@@ -17,7 +17,7 @@ const formatDate = (dateString) => {
     }
 };
 
-export const generatePLPDF = (record, piRecords = [], lcRecords = [], importers = [], exporters = [], ipRecords = [], trSetups = []) => {
+export const generatePLPDF = async (record, piRecords = [], lcRecords = [], importers = [], exporters = [], ipRecords = [], trSetups = []) => {
     const doc = new jsPDF('p', 'mm', 'a4');
     const pageWidth = doc.internal.pageSize.width;
     const pageHeight = doc.internal.pageSize.height;
@@ -441,7 +441,7 @@ export const generatePLPDF = (record, piRecords = [], lcRecords = [], importers 
     doc.setFontSize(10);
     doc.text("Seller", pageWidth - margin - 35, y + 28, { align: 'center' });
 
-    appendTrTemplatePage(doc, record, trSetups, { margin });
+    await appendTrTemplatePage(doc, record, trSetups);
 
     // Save/Download PDF
     const filename = `PackingList_${record.packingListNumber || 'Draft'}.pdf`;

@@ -43,7 +43,7 @@ const fitFontSizeOneLine = (doc, text, maxWidth, maxSize = 9, minSize = 4.5, fon
     return minSize;
 };
 
-export const generatePL2PDF = (record, piRecords = [], lcRecords = [], importers = [], exporters = [], banks = [], ipRecords = [], trSetups = []) => {
+export const generatePL2PDF = async (record, piRecords = [], lcRecords = [], importers = [], exporters = [], banks = [], ipRecords = [], trSetups = []) => {
     const doc = new jsPDF('p', 'mm', 'a4');
     const pageWidth = doc.internal.pageSize.getWidth();
     const pageHeight = doc.internal.pageSize.getHeight();
@@ -936,7 +936,7 @@ export const generatePL2PDF = (record, piRecords = [], lcRecords = [], importers
         }
     }
 
-    appendTrTemplatePage(doc, record, trSetups, { margin });
+    await appendTrTemplatePage(doc, record, trSetups);
 
     // Open in new tab
     const pdfOutput = doc.output('blob');

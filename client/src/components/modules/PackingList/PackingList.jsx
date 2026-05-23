@@ -4,6 +4,7 @@ import {
 } from '../../Icons';
 import { generatePLPDF } from '../../../utils/plpdfgenerator';
 import { generatePL2PDF } from '../../../utils/pl2pdfgenerator';
+import { preloadAlgerianFont } from '../../../utils/algerianFontLoader';
 import { API_BASE_URL, formatDate } from '../../../utils/helpers';
 import axios from '../../../utils/api';
 import CustomDatePicker from '../../shared/CustomDatePicker';
@@ -103,6 +104,7 @@ function PackingList({
 
     useEffect(() => {
         fetchRecords();
+        preloadAlgerianFont().catch(() => {});
     }, []);
 
     useEffect(() => {
@@ -1303,11 +1305,16 @@ function PackingList({
                                                 </td>
                                                 <td className="px-6 py-4 text-right space-x-2">
                                                     <button
-                                                        onClick={() => {
-                                                            if (rec.invoiceStyle === 'Style 2 AAS') {
-                                                                generatePL2PDF(rec, piRecords, lcRecords, importers, exporters, banks, ipRecords, trSetups);
-                                                            } else {
-                                                                generatePLPDF(rec, piRecords, lcRecords, importers, exporters, ipRecords, trSetups);
+                                                        onClick={async () => {
+                                                            try {
+                                                                if (rec.invoiceStyle === 'Style 2 AAS') {
+                                                                    await generatePL2PDF(rec, piRecords, lcRecords, importers, exporters, banks, ipRecords, trSetups);
+                                                                } else {
+                                                                    await generatePLPDF(rec, piRecords, lcRecords, importers, exporters, ipRecords, trSetups);
+                                                                }
+                                                            } catch (err) {
+                                                                console.error('PDF generation failed:', err);
+                                                                showToast('Failed to generate PDF.', 'error');
                                                             }
                                                         }}
                                                         title="Download PDF"
@@ -1397,11 +1404,16 @@ function PackingList({
                                                 </button>
                                                 <div className="flex gap-2">
                                                     <button
-                                                        onClick={() => {
-                                                            if (rec.invoiceStyle === 'Style 2 AAS') {
-                                                                generatePL2PDF(rec, piRecords, lcRecords, importers, exporters, banks, ipRecords, trSetups);
-                                                            } else {
-                                                                generatePLPDF(rec, piRecords, lcRecords, importers, exporters, ipRecords, trSetups);
+                                                        onClick={async () => {
+                                                            try {
+                                                                if (rec.invoiceStyle === 'Style 2 AAS') {
+                                                                    await generatePL2PDF(rec, piRecords, lcRecords, importers, exporters, banks, ipRecords, trSetups);
+                                                                } else {
+                                                                    await generatePLPDF(rec, piRecords, lcRecords, importers, exporters, ipRecords, trSetups);
+                                                                }
+                                                            } catch (err) {
+                                                                console.error('PDF generation failed:', err);
+                                                                showToast('Failed to generate PDF.', 'error');
                                                             }
                                                         }}
                                                         className="p-2 text-blue-600 bg-blue-50 border border-blue-100 rounded-lg"

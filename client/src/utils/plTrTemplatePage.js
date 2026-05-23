@@ -1,4 +1,4 @@
-import './algerianFontInit';
+import { ensureAlgerianFont, preloadAlgerianFont } from './algerianFontLoader';
 
 const formatTrDate = (dateString) => {
     if (!dateString) return '';
@@ -15,13 +15,12 @@ const formatTrDate = (dateString) => {
 };
 
 const applyAlgerianFont = (doc, fontSize) => {
-    const fonts = doc.getFontList();
-    if (fonts?.Algerian) {
+    if (ensureAlgerianFont(doc)) {
         doc.setFont('Algerian', 'normal');
         doc.setFontSize(fontSize);
         return true;
     }
-    console.warn('Algerian font not available on document, using helvetica');
+    console.warn('[TR PDF] Using helvetica fallback — Algerian could not be loaded');
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(fontSize);
     return false;
@@ -35,9 +34,6 @@ const TR_TEMPLATE_LAYOUT = {
     valueMaxWidth: 0.2
 };
 
-/**
- * Overlay TR No / TR Date on the Consignment Note "No." and "Date" lines.
- */
 const drawConsignmentNoteFields = (doc, record, pageX, pageY, pageWidth, pageHeight) => {
     const trNo = String(record?.trNumber || '').trim();
     const trDate = formatTrDate(record?.trDate);
@@ -49,7 +45,6 @@ const drawConsignmentNoteFields = (doc, record, pageX, pageY, pageWidth, pageHei
     const noY = pageY + pageHeight * layout.noY;
     const dateY = pageY + pageHeight * layout.dateY;
 
-    // Scale with page so Algerian reads clearly on full A4 landscape template
     const fontSize = Math.max(12, Math.round(pageHeight * 0.065));
     applyAlgerianFont(doc, fontSize);
     doc.setTextColor(0, 0, 0);
@@ -64,9 +59,8 @@ const drawConsignmentNoteFields = (doc, record, pageX, pageY, pageWidth, pageHei
 
 /**
  * Appends an A4 landscape page with TR template image filling the full page.
- * Matches packing list record.trName to TR Setup name.
  */
-export const appendTrTemplatePage = (doc, record, trSetups = []) => {
+export const appendTrTemplatePage = async (doc, record, trSetups = []) => {
     const trName = (record?.trName || '').trim().toLowerCase();
     if (!trName || !Array.isArray(trSetups) || trSetups.length === 0) {
         return false;
@@ -81,6 +75,8 @@ export const appendTrTemplatePage = (doc, record, trSetups = []) => {
     }
 
     try {
+        await preloadAlgerianFont();
+
         doc.addPage('a4', 'l');
 
         const pageWidth = doc.internal.pageSize.getWidth();
