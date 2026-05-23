@@ -60,7 +60,7 @@ export const generatePL2PDF = async (record, piRecords = [], lcRecords = [], imp
     };
 
     // Resolve details using database records if missing
-    const pi = piRecords.find(p => p.piNumber === record.piNumber);
+    const pi = piRecords.find(p => (p.piNumber || '').trim().toLowerCase() === (record.piNumber || '').trim().toLowerCase());
     const lc = lcRecords.find(l => l.lcNo === (record.lcNumber || pi?.lcNumber));
     const importer = importers.find(imp => (imp.name || '').toLowerCase().trim() === (record.partyName || '').toLowerCase().trim());
     console.log('PL2 importer lookup:', record.partyName, '-> found:', !!importer, 'irc:', importer?.irc);
@@ -936,7 +936,41 @@ export const generatePL2PDF = async (record, piRecords = [], lcRecords = [], imp
         }
     }
 
-    await appendTrTemplatePage(doc, record, trSetups);
+    const enrichedProductsList = (record.productsList || []).map((prod, idx) => {
+        const piProd = pi?.productsList?.find(p => (p.productName || '').trim().toLowerCase() === (prod.productName || '').trim().toLowerCase()) || pi?.productsList?.[idx];
+        return {
+            ...prod,
+            hsCodeInd: prod.hsCodeInd || piProd?.hsCodeInd || pi?.hsCodeInd || ''
+        };
+    });
+
+    const trLcNo = lc?.lcNo || record.lcNumber || '';
+    const trLcDate = lc?.lcDate ? formatDate(lc.lcDate) : (record.lcDate ? formatDate(record.lcDate) : '');
+    const trBankBin = '000321414-0101';
+    const trIrc = importer?.irc || '';
+    const trTin = importer?.tin || '';
+    const trBin = importer?.bin || '';
+    const trPiNo = pi?.piNumber || record.piNumber || '';
+    const trPiDate = pi?.date ? formatDate(pi.date) : (record.piDate ? formatDate(record.piDate) : '');
+    const trCoverNote = lc?.marineCoverNote || '';
+    const trPiGrandTotal = pi?.grandTotal || (grandTotal > 0 ? grandTotal : '') || record.totalAmount || record.grandTotal || '';
+
+    await appendTrTemplatePage(doc, { 
+        ...record, 
+        bankName, 
+        branchName, 
+        productsList: enrichedProductsList,
+        lcNo: trLcNo,
+        lcDate: trLcDate,
+        bankBin: trBankBin,
+        ircNo: trIrc,
+        tinNo: trTin,
+        binNo: trBin,
+        piNo: trPiNo,
+        piDate: trPiDate,
+        coverNote: trCoverNote,
+        piGrandTotal: trPiGrandTotal
+    }, trSetups);
 
     // Open in new tab
     const pdfOutput = doc.output('blob');

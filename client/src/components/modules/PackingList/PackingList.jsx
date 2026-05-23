@@ -1310,7 +1310,7 @@ function PackingList({
                                                                 if (rec.invoiceStyle === 'Style 2 AAS') {
                                                                     await generatePL2PDF(rec, piRecords, lcRecords, importers, exporters, banks, ipRecords, trSetups);
                                                                 } else {
-                                                                    await generatePLPDF(rec, piRecords, lcRecords, importers, exporters, ipRecords, trSetups);
+                                                                    await generatePLPDF(rec, piRecords, lcRecords, importers, exporters, banks, ipRecords, trSetups);
                                                                 }
                                                             } catch (err) {
                                                                 console.error('PDF generation failed:', err);
@@ -1409,7 +1409,7 @@ function PackingList({
                                                                 if (rec.invoiceStyle === 'Style 2 AAS') {
                                                                     await generatePL2PDF(rec, piRecords, lcRecords, importers, exporters, banks, ipRecords, trSetups);
                                                                 } else {
-                                                                    await generatePLPDF(rec, piRecords, lcRecords, importers, exporters, ipRecords, trSetups);
+                                                                    await generatePLPDF(rec, piRecords, lcRecords, importers, exporters, banks, ipRecords, trSetups);
                                                                 }
                                                             } catch (err) {
                                                                 console.error('PDF generation failed:', err);
