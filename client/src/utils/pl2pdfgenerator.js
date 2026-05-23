@@ -126,7 +126,9 @@ export const generatePL2PDF = (record, piRecords = [], lcRecords = [], importers
         addWrapped(`PRICE AS PER PROFORMA INVOICE: ${piNo} Date:${piDate}`);
 
         if (record.trNumber) {
-            addWrapped(`UNDER TR NO.${record.trNumber}`);
+            const trDateStr = record.trDate ? formatDate(record.trDate) : '';
+            const trLine = trDateStr ? `UNDER TR NO.${record.trNumber} DATE:${trDateStr}` : `UNDER TR NO.${record.trNumber}`;
+            addWrapped(trLine);
             curY += lineSpacing;
         }
 
@@ -229,9 +231,10 @@ export const generatePL2PDF = (record, piRecords = [], lcRecords = [], importers
         ]);
 
         if (record.trNumber) {
+            const trDateStr = record.trDate ? formatDate(record.trDate) : '';
             drawLine([
                 { text: "UNDER TR NO. ", bold: true },
-                { text: record.trNumber, bold: true }
+                { text: trDateStr ? `${record.trNumber} DATE:${trDateStr}` : record.trNumber, bold: true }
             ]);
             curY += lineSpacing;
         }

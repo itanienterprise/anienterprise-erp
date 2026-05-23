@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import {
     FunnelIcon, XIcon, ChevronDownIcon, EditIcon, TrashIcon, SearchIcon, PlusIcon, EyeIcon, PDFIcon
 } from '../../Icons';
@@ -6,6 +6,7 @@ import { generatePIPDF } from '../../../utils/pipdfgenerator';
 import { generatePI2PDF } from '../../../utils/pi2pdfgenerator';
 import { API_BASE_URL, formatDate } from '../../../utils/helpers';
 import axios from '../../../utils/api';
+import { decryptData } from '../../../utils/encryption';
 import CustomDatePicker from '../../shared/CustomDatePicker';
 import './PI.css';
 
@@ -35,6 +36,9 @@ function PI({
     const [editingId, setEditingId] = useState(null);
     const [banks, setBanks] = useState([]);
     const [ipRecords, setIpRecords] = useState([]);
+    const [lcRecords, setLcRecords] = useState([]);
+    const [allStockRecords, setAllStockRecords] = useState([]);
+    const [allSalesRecords, setAllSalesRecords] = useState([]);
     const [preCarriages, setPreCarriages] = useState([]);
     const [receiptPlaces, setReceiptPlaces] = useState([]);
     const [vessels, setVessels] = useState([]);
@@ -150,20 +154,102 @@ function PI({
     const fetchRecords = async () => {
         setIsLoading(true);
         try {
-            const [piRes, bankRes, ipRes] = await Promise.all([
+            const [piRes, bankRes, ipRes, lcRes, stockRes, saleRes] = await Promise.all([
                 axios.get(`${API_BASE_URL}/api/pi`),
                 axios.get(`${API_BASE_URL}/api/banks`),
-                axios.get(`${API_BASE_URL}/api/ip-records`)
+                axios.get(`${API_BASE_URL}/api/ip-records`),
+                axios.get(`${API_BASE_URL}/api/lc-management`),
+                axios.get(`${API_BASE_URL}/api/stock`),
+                axios.get(`${API_BASE_URL}/api/sales`)
             ]);
             setRecords(Array.isArray(piRes.data) ? piRes.data : []);
             setBanks(Array.isArray(bankRes.data) ? bankRes.data : []);
             setIpRecords(Array.isArray(ipRes.data) ? ipRes.data : []);
+            setLcRecords(Array.isArray(lcRes.data) ? lcRes.data : []);
+
+            const rawStock = Array.isArray(stockRes.data) ? stockRes.data : [];
+            const decryptedStock = rawStock.map(item => {
+                try {
+                    let d = item.data ? decryptData(item.data) : item;
+                    if (typeof d === 'string') { try { d = decryptData(d); } catch (e) { } }
+                    else if (d && d.data && typeof d.data === 'string' && !d.lcNo) { try { d = decryptData(d.data); } catch (e) { } }
+                    return d;
+                } catch { return item; }
+            });
+            setAllStockRecords(decryptedStock);
+
+            const rawSales = Array.isArray(saleRes.data) ? saleRes.data : [];
+            const decryptedSales = rawSales.map(item => {
+                try {
+                    let d = item.data ? decryptData(item.data) : item;
+                    if (typeof d === 'string') { try { d = decryptData(d); } catch (e) { } }
+                    else if (d && d.data && typeof d.data === 'string' && !d.lcNo && !d.saleType) { try { d = decryptData(d.data); } catch (e) { } }
+                    return d;
+                } catch { return item; }
+            });
+            setAllSalesRecords(decryptedSales);
         } catch (error) {
             console.error('Error fetching data:', error);
         } finally {
             setIsLoading(false);
         }
     };
+
+    // Helpers for IP balance calculation
+    const cleanLc = (val) => String(val || '').replace(/\D/g, '');
+    const parseNum = (val) => {
+        if (val === null || val === undefined) return 0;
+        return parseFloat(String(val).replace(/[^0-9.]/g, '')) || 0;
+    };
+
+    // Compute IP Balance: IP Qty - actual consumption (stock receipts + border sales)
+    const computeIpBalance = useMemo(() => {
+        const balanceMap = {};
+        ipRecords.forEach(ip => {
+            const ipNoClean = cleanLc(ip.ipNumber);
+            const relatedLcs = lcRecords.filter(lc => cleanLc(lc.ipNo) === ipNoClean);
+            const lcNumbers = relatedLcs.map(lc => cleanLc(lc.lcNo));
+
+            const ipReceiptsMap = {};
+            allStockRecords.forEach(s => {
+                const sLcClean = cleanLc(s.lcNo);
+                const status = (s.status || '').toLowerCase();
+                if (lcNumbers.includes(sLcClean) && (status === 'accepted' || status === 'in stock')) {
+                    const rawDate = s.date || s.receiveDate || s.createdAt || '';
+                    const dateStr = typeof rawDate === 'string' && rawDate.includes('T') ? rawDate.split('T')[0] : rawDate;
+                    const groupVal = s.totalLcQuantity || s.billOfEntry || s.totalLcTruck || s.truckNo || s.truck || 'single';
+                    const key = `${sLcClean}_${dateStr}_${groupVal}`;
+                    if (!ipReceiptsMap[key]) {
+                        const itemSubtotal = (s.entries || []).reduce((iSum, item) => iSum + parseNum(item.inHouseQuantity || item.quantity), 0);
+                        ipReceiptsMap[key] = parseNum(s.totalLcQuantity) || itemSubtotal || parseNum(s.inHouseQuantity) || parseNum(s.quantity);
+                    } else {
+                        if (!s.totalLcQuantity) {
+                            ipReceiptsMap[key] += parseNum(s.inHouseQuantity) || parseNum(s.quantity);
+                        }
+                    }
+                }
+            });
+            let totalConsumption = Object.values(ipReceiptsMap).reduce((sum, qty) => sum + qty, 0);
+
+            allSalesRecords.forEach(s => {
+                const sLcClean = cleanLc(s.lcNo);
+                const status = (s.status || '').toLowerCase();
+                const sTypeLow = (s.saleType || '').toLowerCase().trim();
+                const isBorder = sTypeLow.includes('border') || (s.invoiceNo || '').startsWith('BS') || (!s.saleType && !!(s.lcNo || s.port || s.importer));
+                if (lcNumbers.includes(sLcClean) && status === 'accepted' && isBorder) {
+                    const itemSubtotal = (s.items || []).reduce((iSum, item) => {
+                        const brandSubtotal = (item.brandEntries || []).reduce((bSum, b) => bSum + parseNum(b.quantity), 0);
+                        return iSum + (brandSubtotal || parseNum(item.quantity));
+                    }, 0);
+                    const qty = parseNum(s.currentTotalQty) || parseNum(s.totalQuantity) || parseNum(s.totalQty) || parseNum(s.qty) || parseNum(s.quantity) || parseNum(s.total) || itemSubtotal;
+                    totalConsumption += qty;
+                }
+            });
+
+            balanceMap[ip.ipNumber] = (parseNum(ip.quantity) || 0) - totalConsumption;
+        });
+        return balanceMap;
+    }, [ipRecords, lcRecords, allStockRecords, allSalesRecords]);
 
     const handleInputChange = (e) => {
         const { name, value } = e.target;
@@ -900,6 +986,22 @@ function PI({
                                                     <div className="flex-1 min-w-[120px]">
                                                         <label className="block text-[10px] font-bold text-gray-400 uppercase">IP Quantity</label>
                                                         <span className="text-sm font-medium text-gray-700">{qty}</span>
+                                                    </div>
+                                                    <div className="flex-1 min-w-[120px]">
+                                                        <label className="block text-[10px] font-bold text-gray-400 uppercase">IP Balance</label>
+                                                        {(() => {
+                                                            const balance = computeIpBalance[ipNum];
+                                                            const hasBalance = balance !== undefined;
+                                                            const isLow = hasBalance && balance < 50000;
+                                                            return (
+                                                                <span className={`text-sm font-bold ${
+                                                                    !hasBalance ? 'text-gray-400' :
+                                                                    isLow ? 'text-red-600' : 'text-emerald-600'
+                                                                }`}>
+                                                                    {hasBalance ? balance.toLocaleString('en-US') + ' Kg' : '—'}
+                                                                </span>
+                                                            );
+                                                        })()}
                                                     </div>
                                                     <div className="flex-1 min-w-[120px]">
                                                         <label className="block text-[10px] font-bold text-gray-400 uppercase">IP Closing Date</label>

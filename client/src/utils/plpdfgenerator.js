@@ -271,7 +271,8 @@ export const generatePLPDF = (record, piRecords = [], lcRecords = [], importers 
         descParts.push(`IMPORTEDAGAINEST IRC NO-${irc}`);
         descParts.push(`UNDER INSURANCE COVER NOTE NO: ${coverNote}, DATED.${cnDate}${amnd}\nOF ${insuranceCo}, BOGURA BRANCH, BOGURA, BANGLADESH.\n`);
         descParts.push(`WE CERTIFY THAT THE COUNTRY OF ORIGIN IS MARKED IN ALL THE\nPACKETS/BAGS. WE DO THAT THE GOODS ARE SHIPED STRICTLY IN\nACCORDANCE WITH THE SPECIFICATION HERE BY CERTIFY QUANTITY AND\nPRICE AS PER PROFORMA INVOICE: ${piNo} Date:${piDate}`);
-        const trStr = record.trNumber ? `UNDER TR NO.${record.trNumber}\n\n` : '';
+        const trDateStr = record.trDate ? formatDate(record.trDate) : '';
+        const trStr = record.trNumber ? `UNDER TR NO.${record.trNumber}${trDateStr ? ` DATE:${trDateStr}` : ''}\n\n` : '';
         if (trStr) descParts.push(trStr);
         if (showSafta) {
             const ipNumberVal = record.ipNumber || pi?.ipNumber || '';

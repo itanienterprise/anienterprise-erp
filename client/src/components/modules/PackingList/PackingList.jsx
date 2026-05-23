@@ -83,6 +83,7 @@ function PackingList({
         partySignature: '',
         exporterSignature: '',
         trNumber: '',
+        trDate: '',
         invoiceStyle: 'Style 1 SAA',
         bankName: '',
         branchName: '',
@@ -270,6 +271,7 @@ function PackingList({
             partySignature: '',
             exporterSignature: '',
             trNumber: '',
+            trDate: '',
             invoiceStyle: 'Style 1 SAA',
             bankName: '',
             branchName: '',
@@ -377,8 +379,11 @@ function PackingList({
             partySignature: record.partySignature || '',
             exporterSignature: record.exporterSignature || '',
             status: record.status || 'Active',
+            trNumber: record.trNumber || '',
+            trDate: record.trDate ? record.trDate.split('T')[0] : '',
             invoiceStyle: record.invoiceStyle || 'Style 1 SAA',
             bankName: record.bankName || '',
+            branchName: record.branchName || '',
             lcAmendment: record.lcAmendment || '',
             descriptionGoods: record.descriptionGoods || '',
             termsDeliveryPayment: record.termsDeliveryPayment || '',
@@ -601,8 +606,18 @@ function PackingList({
                                     name="trNumber"
                                     value={formData.trNumber}
                                     onChange={handleInputChange}
-                                    placeholder="e.g. 87288 DATE:04/05/2026"
+                                    placeholder="e.g. 87288"
                                     className="w-full px-4 py-2 bg-white/50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-all"
+                                />
+                            </div>
+
+                            <div className="space-y-2">
+                                <label className="text-sm font-medium text-gray-700">TR Date</label>
+                                <CustomDatePicker
+                                    name="trDate"
+                                    value={formData.trDate}
+                                    onChange={handleInputChange}
+                                    placeholder="Select TR Date"
                                 />
                             </div>
 
