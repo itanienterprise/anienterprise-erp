@@ -26,6 +26,7 @@ function PackingList({
     const [piRecords, setPiRecords] = useState([]);
     const [lcRecords, setLcRecords] = useState([]);
     const [banks, setBanks] = useState([]);
+    const [ipRecords, setIpRecords] = useState([]);
     const [isLoading, setIsLoading] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [submitStatus, setSubmitStatus] = useState(null);
@@ -114,16 +115,18 @@ function PackingList({
     const fetchRecords = async () => {
         setIsLoading(true);
         try {
-            const [plRes, piRes, lcRes, bankRes] = await Promise.all([
+            const [plRes, piRes, lcRes, bankRes, ipRes] = await Promise.all([
                 axios.get(`${API_BASE_URL}/api/packing-lists`),
                 axios.get(`${API_BASE_URL}/api/pi`),
                 axios.get(`${API_BASE_URL}/api/lc-management`),
-                axios.get(`${API_BASE_URL}/api/banks`)
+                axios.get(`${API_BASE_URL}/api/banks`),
+                axios.get(`${API_BASE_URL}/api/ip-records`)
             ]);
             setRecords(Array.isArray(plRes.data) ? plRes.data : []);
             setPiRecords(Array.isArray(piRes.data) ? piRes.data : []);
             setLcRecords(Array.isArray(lcRes.data) ? lcRes.data : []);
             setBanks(Array.isArray(bankRes.data) ? bankRes.data : []);
+            setIpRecords(Array.isArray(ipRes.data) ? ipRes.data : []);
         } catch (error) {
             console.error('Error fetching data:', error);
             showToast('Failed to fetch records', 'error');
@@ -1215,9 +1218,9 @@ function PackingList({
                                                     <button
                                                         onClick={() => {
                                                             if (rec.invoiceStyle === 'Style 2 AAS') {
-                                                                generatePL2PDF(rec, piRecords, lcRecords, importers, exporters, banks);
+                                                                generatePL2PDF(rec, piRecords, lcRecords, importers, exporters, banks, ipRecords);
                                                             } else {
-                                                                generatePLPDF(rec, piRecords, lcRecords, importers, exporters);
+                                                                generatePLPDF(rec, piRecords, lcRecords, importers, exporters, ipRecords);
                                                             }
                                                         }}
                                                         title="Download PDF"
@@ -1309,9 +1312,9 @@ function PackingList({
                                                     <button
                                                         onClick={() => {
                                                             if (rec.invoiceStyle === 'Style 2 AAS') {
-                                                                generatePL2PDF(rec, piRecords, lcRecords, importers, exporters, banks);
+                                                                generatePL2PDF(rec, piRecords, lcRecords, importers, exporters, banks, ipRecords);
                                                             } else {
-                                                                generatePLPDF(rec, piRecords, lcRecords, importers, exporters);
+                                                                generatePLPDF(rec, piRecords, lcRecords, importers, exporters, ipRecords);
                                                             }
                                                         }}
                                                         className="p-2 text-blue-600 bg-blue-50 border border-blue-100 rounded-lg"

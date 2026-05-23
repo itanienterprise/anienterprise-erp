@@ -740,6 +740,7 @@ function App() {
                           type === 'cnf' ? 'cnfs' :
                             type === 'pi' ? 'pi' :
                             type === 'lc-expense' ? 'lc-expenses' :
+                            type === 'packing-list' ? 'packing-lists' :
                               'stock';
 
 
@@ -853,7 +854,7 @@ function App() {
         else if (type === 'product') fetchProducts();
         else if (type === 'stock') fetchStockRecords();
 
-        if (['employees', 'sales', 'customer', 'ip', 'cnf', 'bank', 'indian-bank', 'importer', 'exporter', 'port', 'pi', 'lc-expense'].includes(type) || type.includes('cnf')) {
+        if (['employees', 'sales', 'customer', 'ip', 'cnf', 'bank', 'indian-bank', 'importer', 'exporter', 'port', 'pi', 'lc-expense', 'packing-list'].includes(type) || type.includes('cnf')) {
           setRefreshKey(prev => prev + 1);
         }
 
@@ -872,7 +873,8 @@ function App() {
           'cnf': 'C&F Agent',
           'pi': 'Proforma Invoice',
           'lc-expense': 'LC Expense',
-          'stock': 'Stock Record'
+          'stock': 'Stock Record',
+          'packing-list': 'Packing List'
         };
         const label = labels[type] || type.toUpperCase();
         addNotification(

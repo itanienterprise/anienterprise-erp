@@ -16,7 +16,7 @@ const formatDate = (dateString) => {
     }
 };
 
-export const generatePLPDF = (record, piRecords = [], lcRecords = [], importers = [], exporters = []) => {
+export const generatePLPDF = (record, piRecords = [], lcRecords = [], importers = [], exporters = [], ipRecords = []) => {
     const doc = new jsPDF('p', 'mm', 'a4');
     const pageWidth = doc.internal.pageSize.width;
     const pageHeight = doc.internal.pageSize.height;
@@ -34,6 +34,7 @@ export const generatePLPDF = (record, piRecords = [], lcRecords = [], importers 
     const descriptionGoods = record.descriptionGoods || pi?.descriptionGoods || '';
     const countryOrigin = record.countryOrigin || pi?.countryOrigin || 'INDIA';
     const certification = record.certification || pi?.certification || '';
+    const showSafta = certification && certification.toLowerCase().includes('safta');
     const indianBank = pi?.indianBank || '';
 
     // Page border setup (similar to PI Style 1)
@@ -268,10 +269,21 @@ export const generatePLPDF = (record, piRecords = [], lcRecords = [], importers 
         const bankBin = '000321414-0101'; // Default fallback
 
         descParts.push(`IMPORTEDAGAINEST IRC NO-${irc}`);
-        descParts.push(`UNDER INSURANCE COVER NOTE NO: UNDER INSURANCE COVER NOTE NO:\n${coverNote}, DATED.${cnDate}${amnd} OF ${insuranceCo},\nBOGURA BRANCH, BOGURA, BANGLADESH.\n`);
-        descParts.push(`WE CERTIFY THAT THE COUNTRY OF ORIGIN IS MARKED IN ALL THE\nPACKETS/BAGS. WE DO THAT THE GOODS ARE SHIPED STRICTLY IN\nACCORDANCE WITH THE SPECIFICATION HERE BY CERTIFY QUANTITY AND\nPRICE AS PER PROFORMA INVOICE:\n${piNo} Date:${piDate}`);
-        const trStr = record.trNumber ? `UNDER TR NO.${record.trNumber}\n` : '';
+        descParts.push(`UNDER INSURANCE COVER NOTE NO: ${coverNote}, DATED.${cnDate}${amnd}\nOF ${insuranceCo}, BOGURA BRANCH, BOGURA, BANGLADESH.\n`);
+        descParts.push(`WE CERTIFY THAT THE COUNTRY OF ORIGIN IS MARKED IN ALL THE\nPACKETS/BAGS. WE DO THAT THE GOODS ARE SHIPED STRICTLY IN\nACCORDANCE WITH THE SPECIFICATION HERE BY CERTIFY QUANTITY AND\nPRICE AS PER PROFORMA INVOICE: ${piNo} Date:${piDate}`);
+        const trStr = record.trNumber ? `UNDER TR NO.${record.trNumber}\n\n` : '';
         if (trStr) descParts.push(trStr);
+        if (showSafta) {
+            const ipNumberVal = record.ipNumber || pi?.ipNumber || '';
+            const ipNumbersList = ipNumberVal.split(',').map(s => s.trim()).filter(Boolean);
+            const ipDisplayStr = ipNumbersList.length > 0 ? ipNumbersList.map(ipNo => {
+                const ipRec = ipRecords.find(i => i.ipNumber === ipNo);
+                const rawDate = ipRec?.closeDate || record.ipDate || pi?.ipDate || '';
+                const formattedIpDate = rawDate ? formatDate(rawDate) : '';
+                return formattedIpDate ? `${ipNo} DT.${formattedIpDate}` : ipNo;
+            }).join(', ') : 'N/A';
+            descParts.push(`IMPORT PERMIT NO. ${ipDisplayStr}`);
+        }
         descParts.push(`IMPORTERS TIN NO.${tin}, & BIN-${bin}`);
         descParts.push(`BANK BIN-${bankBin}\n`);
         descParts.push(`Export Standard packing`);

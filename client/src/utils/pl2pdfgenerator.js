@@ -42,7 +42,7 @@ const fitFontSizeOneLine = (doc, text, maxWidth, maxSize = 9, minSize = 4.5, fon
     return minSize;
 };
 
-export const generatePL2PDF = (record, piRecords = [], lcRecords = [], importers = [], exporters = [], banks = []) => {
+export const generatePL2PDF = (record, piRecords = [], lcRecords = [], importers = [], exporters = [], banks = [], ipRecords = []) => {
     const doc = new jsPDF('p', 'mm', 'a4');
     const pageWidth = doc.internal.pageSize.getWidth();
     const pageHeight = doc.internal.pageSize.getHeight();
@@ -80,11 +80,78 @@ export const generatePL2PDF = (record, piRecords = [], lcRecords = [], importers
     const buyerName = record.buyerName || pi?.buyerName || '';
     const otherReferences = record.otherReferences || pi?.otherReferences || '';
     const certification = record.certification || pi?.certification || '';
+    const showSafta = certification && certification.toLowerCase().includes('safta');
 
     const getCertBlockFontSize = (productCount) => {
-        if (productCount <= 1) return 7.5;
-        if (productCount === 2) return 6.5;
-        return 5.75;
+        if (productCount <= 1) return 7.0;
+        if (productCount === 2) return 7.2;
+        return 6.2;
+    };
+
+    const getDescriptionBlockHeight = (fSize, maxWidth = 0) => {
+        const prevFontSize = doc.internal.getFontSize();
+        doc.setFontSize(fSize);
+        doc.setFont('helvetica', 'bold');
+
+        const irc = importer?.irc || '';
+        const coverNote = lc?.marineCoverNote || '';
+        const cnDate = lc?.marineCNDate ? formatDate(lc.marineCNDate) : '';
+        const insuranceCo = lc?.insuranceCo || 'CONTINENTAL INSURANCE LIMITED';
+        const amnd = record.lcAmendment ? ` & ${record.lcAmendment}` : '';
+        const piNo = pi?.piNumber || record.piNumber || '';
+        const piDate = pi?.date ? formatDate(pi.date) : (record.piDate ? formatDate(record.piDate) : '');
+        const tin = importer?.tin || '';
+        const bin = importer?.bin || '';
+        const bankBin = '000321414-0101';
+
+        let curY = 0;
+        const lineSpacing = fSize < 7 ? fSize * 0.38 : fSize * 0.46;
+
+        const addWrapped = (text) => {
+            const lines = maxWidth > 0 ? doc.splitTextToSize(text, maxWidth) : [text];
+            curY += lines.length * lineSpacing;
+        };
+
+        addWrapped(`IMPORTED AGAINST IRC NO-${irc}`);
+
+        if (maxWidth > 0) {
+            addWrapped(`UNDER INSURANCE COVER NOTE NO: ${coverNote}, DATED.${cnDate}${amnd}`);
+            addWrapped(`OF ${insuranceCo}, BOGURA BRANCH, BOGURA, BANGLADESH.`);
+            curY += lineSpacing;
+            addWrapped('WE CERTIFY THAT THE COUNTRY OF ORIGIN IS MARKED IN ALL THE PACKETS/BAGS. WE DO THAT THE GOODS ARE SHIPED STRICTLY IN ACCORDANCE WITH THE SPECIFICATION HERE BY CERTIFY QUANTITY AND');
+        } else {
+            curY += 6 * lineSpacing;
+        }
+
+        addWrapped(`PRICE AS PER PROFORMA INVOICE: ${piNo} Date:${piDate}`);
+
+        if (record.trNumber) {
+            addWrapped(`UNDER TR NO.${record.trNumber}`);
+            curY += lineSpacing;
+        }
+
+        if (showSafta) {
+            const ipNumberVal = record.ipNumber || pi?.ipNumber || '';
+            const ipNumbersList = ipNumberVal.split(',').map(s => s.trim()).filter(Boolean);
+            const ipDisplayStr = ipNumbersList.length > 0 ? ipNumbersList.map(ipNo => {
+                const ipRec = ipRecords.find(i => i.ipNumber === ipNo);
+                const rawDate = ipRec?.closeDate || record.ipDate || pi?.ipDate || '';
+                const formattedIpDate = rawDate ? formatDate(rawDate) : '';
+                return formattedIpDate ? `${ipNo} DATED.${formattedIpDate}` : ipNo;
+            }).join(', ') : 'N/A';
+
+            addWrapped(`IMPORT PERMIT NO. ${ipDisplayStr}`);
+        }
+
+        addWrapped(`IMPORTERS TIN NO.${tin}, & BIN-${bin}`);
+        addWrapped(`BANK BIN-${bankBin}`);
+        addWrapped('Export Standard packing');
+        addWrapped(`COUNTRY OF ORIGIN ${countryOrigin.toUpperCase()}`);
+
+        doc.setFontSize(prevFontSize);
+        doc.setFont('helvetica', 'normal');
+
+        return curY;
     };
 
     const drawDescriptionBlock = (x, startY, fSize, maxWidth = 0) => {
@@ -133,8 +200,8 @@ export const generatePL2PDF = (record, piRecords = [], lcRecords = [], importers
 
         if (maxWidth > 0) {
             drawWrapped(`UNDER INSURANCE COVER NOTE NO: ${coverNote}, DATED.${cnDate}${amnd}`);
-            drawWrapped(`OF ${insuranceCo},`);
-            drawWrapped('BOGURA BRANCH, BOGURA, BANGLADESH.');
+            drawWrapped(`OF ${insuranceCo}, BOGURA BRANCH, BOGURA, BANGLADESH.`);
+            curY += lineSpacing;
             drawWrapped('WE CERTIFY THAT THE COUNTRY OF ORIGIN IS MARKED IN ALL THE PACKETS/BAGS. WE DO THAT THE GOODS ARE SHIPED STRICTLY IN ACCORDANCE WITH THE SPECIFICATION HERE BY CERTIFY QUANTITY AND', false);
         } else {
             drawLine([
@@ -146,18 +213,16 @@ export const generatePL2PDF = (record, piRecords = [], lcRecords = [], importers
             drawLine([
                 { text: "OF " },
                 { text: insuranceCo, bold: true },
-                { text: "," }
+                { text: ", BOGURA BRANCH, BOGURA, BANGLADESH." }
             ]);
-            drawLine([{ text: "BOGURA BRANCH, BOGURA, BANGLADESH." }]);
+            curY += lineSpacing;
             drawLine([{ text: "WE CERTIFY THAT THE COUNTRY OF ORIGIN IS MARKED IN ALL THE" }]);
             drawLine([{ text: "PACKETS/BAGS. WE DO THAT THE GOODS ARE SHIPED STRICTLY IN" }]);
             drawLine([{ text: "ACCORDANCE WITH THE SPECIFICATION HERE BY CERTIFY QUANTITY AND" }]);
         }
 
         drawLine([
-            { text: "PRICE AS PER PROFORMA INVOICE:", bold: true }
-        ]);
-        drawLine([
+            { text: "PRICE AS PER PROFORMA INVOICE: ", bold: true },
             { text: piNo, bold: true },
             { text: " Date:", bold: true },
             { text: piDate, bold: true }
@@ -165,9 +230,30 @@ export const generatePL2PDF = (record, piRecords = [], lcRecords = [], importers
 
         if (record.trNumber) {
             drawLine([
-                { text: "UNDER TR NO.", bold: true },
+                { text: "UNDER TR NO. ", bold: true },
                 { text: record.trNumber, bold: true }
             ]);
+            curY += lineSpacing;
+        }
+
+        if (showSafta) {
+            const ipNumberVal = record.ipNumber || pi?.ipNumber || '';
+            const ipNumbersList = ipNumberVal.split(',').map(s => s.trim()).filter(Boolean);
+            const ipDisplayStr = ipNumbersList.length > 0 ? ipNumbersList.map(ipNo => {
+                const ipRec = ipRecords.find(i => i.ipNumber === ipNo);
+                const rawDate = ipRec?.closeDate || record.ipDate || pi?.ipDate || '';
+                const formattedIpDate = rawDate ? formatDate(rawDate) : '';
+                return formattedIpDate ? `${ipNo} DT.${formattedIpDate}` : ipNo;
+            }).join(', ') : 'N/A';
+
+            if (maxWidth > 0) {
+                drawWrapped(`IMPORT PERMIT NO. ${ipDisplayStr}`);
+            } else {
+                drawLine([
+                    { text: "IMPORT PERMIT NO. ", bold: true },
+                    { text: ipDisplayStr, bold: true }
+                ]);
+            }
         }
 
         drawLine([
@@ -213,12 +299,12 @@ export const generatePL2PDF = (record, piRecords = [], lcRecords = [], importers
     // Main Border
     doc.setDrawColor(0);
     doc.setLineWidth(0.1);
-    doc.rect(margin, margin + 10, contentWidth, pageHeight - (2 * margin) - 10);
+    doc.rect(margin, margin + 8, contentWidth, pageHeight - (2 * margin) - 8);
 
     // --- Header ---
     doc.setFont("helvetica", "bold");
     doc.setFontSize(16);
-    doc.text("INVOICE-CUM PACKING LIST", pageWidth / 2, margin + 7, { align: 'center' });
+    doc.text("INVOICE-CUM PACKING LIST", pageWidth / 2, margin + 5.5, { align: 'center' });
 
     // --- Grid Layout ---
     const leftColWidth = contentWidth * 0.55;
@@ -226,8 +312,8 @@ export const generatePL2PDF = (record, piRecords = [], lcRecords = [], importers
     const midX = margin + leftColWidth;
 
     // Row 1: Exporter vs PI Info
-    let y = margin + 10;
-    let row1Height = 32;
+    let y = margin + 8;
+    let row1Height = 30;
     doc.rect(margin, y, leftColWidth, row1Height);
     doc.rect(midX, y, rightColWidth, row1Height);
 
@@ -283,7 +369,6 @@ export const generatePL2PDF = (record, piRecords = [], lcRecords = [], importers
 
     // Row 2: Importer vs Country/Terms/LC Box
     y += row1Height;
-    const showSafta = certification && certification.toLowerCase().includes('safta');
 
     doc.setFontSize(9);
     let cleanTerms = termsDeliveryPayment || '';
@@ -293,7 +378,7 @@ export const generatePL2PDF = (record, piRecords = [], lcRecords = [], importers
     }
     const termsLines = doc.splitTextToSize(cleanTerms, rightColWidth - 5);
     const termsHeight = termsLines.length * 4;
-    let row2Height = Math.max(61, 24 + termsHeight);
+    let row2Height = Math.max(55, 24 + termsHeight);
     doc.rect(margin, y, leftColWidth, row2Height);
     doc.rect(midX, y, rightColWidth, row2Height);
 
@@ -314,31 +399,31 @@ export const generatePL2PDF = (record, piRecords = [], lcRecords = [], importers
     doc.text(doc.splitTextToSize(impInfo.trim(), leftColWidth - 10), margin + leftColWidth / 2, y + 17, { align: 'center' });
 
     // Shipping rows (left)
-    doc.line(margin, y + 31, margin + leftColWidth, y + 31);
+    doc.line(margin, y + 29, margin + leftColWidth, y + 29);
     doc.setFont("helvetica", "bold");
     doc.setFontSize(8.5);
-    doc.text("Pre-Carriage by", margin + leftColWidth / 4, y + 34.5, { align: 'center' });
-    doc.text("Place of Receipt by Pre-Carrier", margin + (3 * leftColWidth / 4), y + 34.5, { align: 'center' });
+    doc.text("Pre-Carriage by", margin + leftColWidth / 4, y + 32, { align: 'center' });
+    doc.text("Place of Receipt by Pre-Carrier", margin + (3 * leftColWidth / 4), y + 32, { align: 'center' });
     doc.setFontSize(8.5);
-    doc.text(preCarriageBy, margin + leftColWidth / 4, y + 39, { align: 'center' });
-    doc.text(placeOfReceipt, margin + (3 * leftColWidth / 4), y + 39, { align: 'center' });
+    doc.text(preCarriageBy, margin + leftColWidth / 4, y + 36, { align: 'center' });
+    doc.text(placeOfReceipt, margin + (3 * leftColWidth / 4), y + 36, { align: 'center' });
 
-    doc.line(margin, y + 41, margin + leftColWidth, y + 41);
+    doc.line(margin, y + 38.5, margin + leftColWidth, y + 38.5);
     doc.setFontSize(8.5);
-    doc.text("Vessel/Flight No.", margin + leftColWidth / 4, y + 44.5, { align: 'center' });
-    doc.text("Port of Loading", margin + (3 * leftColWidth / 4), y + 44.5, { align: 'center' });
+    doc.text("Vessel/Flight No.", margin + leftColWidth / 4, y + 41.5, { align: 'center' });
+    doc.text("Port of Loading", margin + (3 * leftColWidth / 4), y + 41.5, { align: 'center' });
     doc.setFontSize(8.5);
-    doc.text(vesselFlightNo, margin + leftColWidth / 4, y + 49, { align: 'center' });
-    doc.text(portOfLoading, margin + (3 * leftColWidth / 4), y + 49, { align: 'center' });
+    doc.text(vesselFlightNo, margin + leftColWidth / 4, y + 45.5, { align: 'center' });
+    doc.text(portOfLoading, margin + (3 * leftColWidth / 4), y + 45.5, { align: 'center' });
 
-    doc.line(margin, y + 51, margin + leftColWidth, y + 51);
+    doc.line(margin, y + 47.5, margin + leftColWidth, y + 47.5);
     doc.setFontSize(8.5);
-    doc.text("Port of Discharge", margin + leftColWidth / 4, y + 54.5, { align: 'center' });
-    doc.text("Final Destination", margin + (3 * leftColWidth / 4), y + 54.5, { align: 'center' });
+    doc.text("Port of Discharge", margin + leftColWidth / 4, y + 50.5, { align: 'center' });
+    doc.text("Final Destination", margin + (3 * leftColWidth / 4), y + 50.5, { align: 'center' });
     doc.setFontSize(8.5);
-    doc.text(portOfDischarge, margin + leftColWidth / 4, y + 59, { align: 'center' });
-    doc.text(finalDestination, margin + (3 * leftColWidth / 4), y + 59, { align: 'center' });
-    doc.line(margin + (leftColWidth / 2), y + 31, margin + (leftColWidth / 2), y + row2Height);
+    doc.text(portOfDischarge, margin + leftColWidth / 4, y + 53.5, { align: 'center' });
+    doc.text(finalDestination, margin + (3 * leftColWidth / 4), y + 53.5, { align: 'center' });
+    doc.line(margin + (leftColWidth / 2), y + 29, margin + (leftColWidth / 2), y + row2Height);
 
     // Right: Country of Origin / Final Destination
     const subW = rightColWidth / 2;
@@ -401,7 +486,7 @@ export const generatePL2PDF = (record, piRecords = [], lcRecords = [], importers
     const numProducts = productsList.length;
     // Certification block is drawn via drawDescriptionBlock (not descriptionGoods / terms text)
     const certFontSize = getCertBlockFontSize(numProducts);
-    const certBlockLineCount = 14 + (record.trNumber ? 1 : 0);
+    const certBlockLineCount = 13 + (record.trNumber ? 2 : 0) + (showSafta ? 1 : 0);
 
     const tableBody = [];
     const firstRowIndexForProduct = [];
@@ -437,7 +522,7 @@ export const generatePL2PDF = (record, piRecords = [], lcRecords = [], importers
 
         let requiredNewlines = 1;
         if (prod.hsCodeInd || pi?.productsList?.[pIdx]?.hsCodeInd) requiredNewlines += 1;
-        if (showSafta && isLastProduct && !hasFreight) requiredNewlines += 2.5;
+        if (showSafta && isLastProduct && (!hasFreight || numProducts === 1)) requiredNewlines += 2.5;
         if (numProducts === 1) {
             requiredNewlines += 2;
         } else {
@@ -461,7 +546,7 @@ export const generatePL2PDF = (record, piRecords = [], lcRecords = [], importers
                 bottomPadding = 80;
             }
         } else if (numProducts === 1) {
-            bottomPadding = 50;
+            bottomPadding = showSafta ? 15 : 50;
         }
 
         const descCellStyle = {
@@ -490,7 +575,7 @@ export const generatePL2PDF = (record, piRecords = [], lcRecords = [], importers
             }
         ]);
 
-        if (showSafta && isLastProduct && hasFreight) {
+        if (showSafta && isLastProduct && hasFreight && numProducts > 1) {
             tableBody.push([
                 {
                     content: "THE CERTIFICATE OF ORIGIN UNDER SAFTA\n(South Asian Free Trade Area)",
@@ -512,17 +597,18 @@ export const generatePL2PDF = (record, piRecords = [], lcRecords = [], importers
     });
 
     if (productsList.length > 1) {
-        const descColWidth = contentWidth * 0.52;
+        const descColWidth = contentWidth - 76;
         const descFontSize = certFontSize;
-        const wrapExtraLines = numProducts === 2 ? 4 : 6;
-        let descRowHeight = (certBlockLineCount + wrapExtraLines) * (descFontSize * 0.4) + 6;
+        let exactDescHeight = getDescriptionBlockHeight(descFontSize, descColWidth - 6) + 5;
+        let descRowHeight = exactDescHeight + 4;
         if (record.productsImage) {
             try {
                 const imgProps = doc.getImageProperties(record.productsImage);
                 const imgWidth = descColWidth - 6;
-                descRowHeight += (imgProps.height * imgWidth) / imgProps.width + 6;
+                const imgHeight = (imgProps.height * imgWidth) / imgProps.width;
+                descRowHeight = exactDescHeight - 2 + imgHeight + 4;
             } catch (e) {
-                descRowHeight += 50;
+                descRowHeight = exactDescHeight + 50;
             }
         }
         tableBody.push([
@@ -562,7 +648,7 @@ export const generatePL2PDF = (record, piRecords = [], lcRecords = [], importers
             [
                 { content: '', styles: { fillColor: [255, 255, 255] } },
                 { content: 'Quantity\n(KG.)', styles: { fillColor: [235, 235, 235] } },
-                { content: 'Rate\nUSD\nPer KG.', styles: { fillColor: [235, 235, 235] } },
+                { content: 'Rate USD\nPer KG.', styles: { fillColor: [235, 235, 235] } },
                 { content: 'Amount\nUSD', styles: { fillColor: [235, 235, 235] } }
             ]
         ],
@@ -674,7 +760,8 @@ export const generatePL2PDF = (record, piRecords = [], lcRecords = [], importers
                     doc.text(hsCodeLine, centerX, drawY, { align: 'center' });
                 }
                 const hasFreight = prod.freight && parseFloat(prod.freight) > 0;
-                if (showSafta && pIdx === productsList.length - 1 && !hasFreight) {
+                const shouldDrawSaftaInside = showSafta && pIdx === productsList.length - 1 && (!hasFreight || productsList.length === 1);
+                if (shouldDrawSaftaInside) {
                     drawY += 1.5;
                     doc.setDrawColor(0, 0, 0);
                     doc.setLineWidth(0.1);
@@ -721,7 +808,7 @@ export const generatePL2PDF = (record, piRecords = [], lcRecords = [], importers
                         const imgProps = doc.getImageProperties(record.productsImage);
                         const imgWidth = cellWidth - 6;
                         const imgHeight = (imgProps.height * imgWidth) / imgProps.width;
-                        doc.addImage(record.productsImage, imgProps.fileType || 'PNG', cellX + 3, endY + 2, imgWidth, imgHeight);
+                        doc.addImage(record.productsImage, imgProps.fileType || 'PNG', cellX + 3, endY - 2, imgWidth, imgHeight);
                     } catch (e) {
                         console.error('Error drawing productsImage in multi-row cell:', e);
                     }
@@ -793,9 +880,9 @@ export const generatePL2PDF = (record, piRecords = [], lcRecords = [], importers
     doc.setFont("helvetica", "normal");
     doc.setFontSize(8.5);
     const declLines = doc.splitTextToSize(declText, declTextWidth);
-    const declLineH = 3.8;
-    const amountRowHeight = 8;
-    const amountLineY = totalY + (amountRowHeight / 2) + 1.5;
+    const declLineH = 3.3;
+    const amountRowHeight = 6;
+    const amountLineY = totalY + (amountRowHeight / 2) + 1.2;
     const declY = totalY + amountRowHeight;
     const sigImgY = boxBottom - 18;
 
@@ -825,11 +912,11 @@ export const generatePL2PDF = (record, piRecords = [], lcRecords = [], importers
 
     doc.setFont("helvetica", "bold");
     doc.setFontSize(9);
-    doc.text("DECLARATION:", margin + 2, declY + 5);
+    doc.text("DECLARATION:", margin + 2, declY + 3.5);
     doc.setFont("helvetica", "normal");
     doc.setFontSize(8.5);
     declLines.forEach((line, idx) => {
-        doc.text(line, margin + 2, declY + 10 + (idx * declLineH));
+        doc.text(line, margin + 2, declY + 7.5 + (idx * declLineH));
     });
 
     const sigImageWidth = sigColWidth - 10;
