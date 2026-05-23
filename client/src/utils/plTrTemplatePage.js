@@ -1,3 +1,5 @@
+import './algerianFontInit';
+
 const formatTrDate = (dateString) => {
     if (!dateString) return '';
     try {
@@ -12,44 +14,44 @@ const formatTrDate = (dateString) => {
     }
 };
 
-/** Positions on JAIN PARIVAHAN TR template (ratios of rendered image). */
-const TR_TEMPLATE_LAYOUT = {
-    landscape: {
-        valueX: 0.756,
-        // Lines beside "No." / "Date." in CONSIGNMENT NOTE box (above "From")
-        noY: 0.418,
-        dateY: 0.445,
-        valueMaxWidth: 0.2,
-        fontSize: 9
-    },
-    portrait: {
-        valueX: 0.768,
-        noY: 0.558,
-        dateY: 0.592,
-        valueMaxWidth: 0.2,
-        fontSize: 10
+const applyAlgerianFont = (doc, fontSize) => {
+    const fonts = doc.getFontList();
+    if (fonts?.Algerian) {
+        doc.setFont('Algerian', 'normal');
+        doc.setFontSize(fontSize);
+        return true;
     }
+    console.warn('Algerian font not available on document, using helvetica');
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(fontSize);
+    return false;
+};
+
+/** Overlay positions on full-page A4 landscape TR template (ratios of page). */
+const TR_TEMPLATE_LAYOUT = {
+    valueX: 0.756,
+    noY: 0.418,
+    dateY: 0.445,
+    valueMaxWidth: 0.2
 };
 
 /**
- * Overlay TR No / TR Date on the Consignment Note "No." and "Date" lines
- * (header box above From / To — not the To box or charges table).
+ * Overlay TR No / TR Date on the Consignment Note "No." and "Date" lines.
  */
-const drawConsignmentNoteFields = (doc, record, imgX, imgY, imgWidth, imgHeight, imgProps) => {
+const drawConsignmentNoteFields = (doc, record, pageX, pageY, pageWidth, pageHeight) => {
     const trNo = String(record?.trNumber || '').trim();
     const trDate = formatTrDate(record?.trDate);
     if (!trNo && !trDate) return;
 
-    const isLandscape = (imgProps?.width || imgWidth) >= (imgProps?.height || imgHeight);
-    const layout = isLandscape ? TR_TEMPLATE_LAYOUT.landscape : TR_TEMPLATE_LAYOUT.portrait;
+    const layout = TR_TEMPLATE_LAYOUT;
+    const valueX = pageX + pageWidth * layout.valueX;
+    const valueMaxWidth = pageWidth * layout.valueMaxWidth;
+    const noY = pageY + pageHeight * layout.noY;
+    const dateY = pageY + pageHeight * layout.dateY;
 
-    const valueX = imgX + imgWidth * layout.valueX;
-    const valueMaxWidth = imgWidth * layout.valueMaxWidth;
-    const noY = imgY + imgHeight * layout.noY;
-    const dateY = imgY + imgHeight * layout.dateY;
-
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(layout.fontSize);
+    // Scale with page so Algerian reads clearly on full A4 landscape template
+    const fontSize = Math.max(12, Math.round(pageHeight * 0.065));
+    applyAlgerianFont(doc, fontSize);
     doc.setTextColor(0, 0, 0);
 
     if (trNo) {
@@ -61,12 +63,10 @@ const drawConsignmentNoteFields = (doc, record, imgX, imgY, imgWidth, imgHeight,
 };
 
 /**
- * Appends a new PDF page with the TR Setup format image used as a full-page template.
+ * Appends an A4 landscape page with TR template image filling the full page.
  * Matches packing list record.trName to TR Setup name.
- * Overlays TR No and TR Date on the Consignment Note section.
  */
-export const appendTrTemplatePage = (doc, record, trSetups = [], options = {}) => {
-    const margin = options.margin ?? 10;
+export const appendTrTemplatePage = (doc, record, trSetups = []) => {
     const trName = (record?.trName || '').trim().toLowerCase();
     if (!trName || !Array.isArray(trSetups) || trSetups.length === 0) {
         return false;
@@ -81,26 +81,15 @@ export const appendTrTemplatePage = (doc, record, trSetups = [], options = {}) =
     }
 
     try {
+        doc.addPage('a4', 'l');
+
         const pageWidth = doc.internal.pageSize.getWidth();
         const pageHeight = doc.internal.pageSize.getHeight();
         const imgProps = doc.getImageProperties(trFormat);
         const fileType = imgProps.fileType || 'PNG';
-        const maxWidth = pageWidth - margin * 2;
-        const maxHeight = pageHeight - margin * 2;
 
-        let imgWidth = maxWidth;
-        let imgHeight = (imgProps.height * imgWidth) / imgProps.width;
-        if (imgHeight > maxHeight) {
-            imgHeight = maxHeight;
-            imgWidth = (imgProps.width * imgHeight) / imgProps.height;
-        }
-
-        const x = margin + (maxWidth - imgWidth) / 2;
-        const y = margin + (maxHeight - imgHeight) / 2;
-
-        doc.addPage();
-        doc.addImage(trFormat, fileType, x, y, imgWidth, imgHeight);
-        drawConsignmentNoteFields(doc, record, x, y, imgWidth, imgHeight, imgProps);
+        doc.addImage(trFormat, fileType, 0, 0, pageWidth, pageHeight);
+        drawConsignmentNoteFields(doc, record, 0, 0, pageWidth, pageHeight);
         return true;
     } catch (e) {
         console.error('Error adding TR template page:', e);
