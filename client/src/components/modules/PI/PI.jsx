@@ -962,6 +962,31 @@ function PI({
         return records.find(r => r._id === selectedRevisePiId) || null;
     }, [selectedRevisePiId, records]);
 
+    const selectedPiReviseIpInfo = useMemo(() => {
+        if (!selectedPiForRevise) return [];
+        const ipNumbers = selectedPiForRevise.ipNumbers?.length
+            ? selectedPiForRevise.ipNumbers
+            : (selectedPiForRevise.ipNumber
+                ? selectedPiForRevise.ipNumber.split(',').map(s => s.trim()).filter(Boolean)
+                : []);
+
+        if (ipNumbers.length === 0) return [];
+
+        return ipNumbers.map(ipNum => {
+            const balance = computeIpBalance[ipNum];
+            const ipRec = ipRecords.find(r => r.ipNumber === ipNum);
+            const expiryDate = ipRec?.closeDate ? formatDate(ipRec.closeDate) : 'N/A';
+            const balanceKg = balance !== undefined ? balance : null;
+            return {
+                ipNumber: ipNum,
+                balance: balanceKg,
+                balanceDisplay: balanceKg !== null ? `${balanceKg.toLocaleString('en-US')} kg` : 'N/A',
+                expiryDisplay: expiryDate,
+                isLowBalance: balanceKg !== null && balanceKg < 50000
+            };
+        });
+    }, [selectedPiForRevise, computeIpBalance, ipRecords]);
+
     const resetReviseForm = () => {
         setShowReviseForm(false);
         setSelectedRevisePiId('');
@@ -2372,6 +2397,62 @@ function PI({
                                             />
                                         </div>
                                     </div>
+
+                                    {/* IP rows - one per IP number */}
+                                    {selectedPiReviseIpInfo.length > 0 ? (
+                                        <div className="space-y-3">
+                                            <div className="grid grid-cols-3 gap-6">
+                                                <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">IP</label>
+                                                <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">IP Balance</label>
+                                                <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">IP Expiry Date</label>
+                                            </div>
+                                            {selectedPiReviseIpInfo.map((ipInfo, idx) => (
+                                                <div key={idx} className="grid grid-cols-3 gap-6">
+                                                    <div>
+                                                        <input
+                                                            type="text"
+                                                            readOnly
+                                                            value={ipInfo.ipNumber}
+                                                            className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl outline-none text-gray-800 font-semibold text-sm"
+                                                        />
+                                                    </div>
+                                                    <div>
+                                                        <input
+                                                            type="text"
+                                                            readOnly
+                                                            value={ipInfo.balanceDisplay}
+                                                            className={`w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl outline-none font-bold text-sm ${
+                                                                ipInfo.isLowBalance ? 'text-red-600' : 'text-emerald-600'
+                                                            }`}
+                                                        />
+                                                    </div>
+                                                    <div>
+                                                        <input
+                                                            type="text"
+                                                            readOnly
+                                                            value={ipInfo.expiryDisplay}
+                                                            className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl outline-none text-red-600 font-bold text-sm"
+                                                        />
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    ) : (
+                                        <div className="grid grid-cols-3 gap-6">
+                                            <div className="space-y-1.5">
+                                                <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">IP</label>
+                                                <input type="text" readOnly value="N/A" className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl outline-none text-gray-400 text-sm" />
+                                            </div>
+                                            <div className="space-y-1.5">
+                                                <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">IP Balance</label>
+                                                <input type="text" readOnly value="N/A" className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl outline-none text-gray-400 text-sm" />
+                                            </div>
+                                            <div className="space-y-1.5">
+                                                <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">IP Expiry Date</label>
+                                                <input type="text" readOnly value="N/A" className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl outline-none text-gray-400 text-sm" />
+                                            </div>
+                                        </div>
+                                    )}
 
                                     <div className="space-y-3">
                                         <h5 className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Product Updates</h5>
