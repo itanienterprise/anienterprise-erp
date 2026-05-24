@@ -551,22 +551,32 @@ const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords
                                     </div>
                                     <div className="space-y-1">
                                         <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Extra %</span>
-                                        <p className="text-sm font-bold text-gray-800">{data.extraPercent}%</p>
+                                        <p className="text-sm font-bold text-gray-800">{data.extraPercent || '0'}%</p>
+                                    </div>
+                                    
+                                    <div className="space-y-1">
+                                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Marine Cover Note</span>
+                                        <p className="text-sm font-bold text-gray-800">{data.marineCoverNote || '-'}</p>
+                                    </div>
+                                    <div className="space-y-1">
+                                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Marine C.N Date</span>
+                                        <p className="text-sm font-bold text-gray-800">{data.marineCNDate ? formatDate(data.marineCNDate) : '-'}</p>
                                     </div>
                                     <div className="space-y-1">
                                         <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Premium Rate</span>
-                                        <p className="text-sm font-bold text-gray-800">{data.premium}%</p>
+                                        <p className="text-sm font-bold text-gray-800">{data.premium || '0'}%</p>
                                     </div>
                                     <div className="space-y-1">
                                         <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Premium Return</span>
                                         <p className="text-sm font-bold text-blue-600">{data.premiumReturn || '0'}%</p>
                                     </div>
+                                    
                                     <div className="space-y-1">
                                         <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Return Amount</span>
                                         <p className="text-sm font-bold text-blue-600">৳{parseFloat(data.expectedReturnAmount || 0).toLocaleString('en-IN')}</p>
                                     </div>
                                     <div className="space-y-1">
-                                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">VAT ({data.premiumVat}%)</span>
+                                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">VAT ({data.premiumVat || '0'}%)</span>
                                         <p className="text-sm font-bold text-gray-800">
                                             ৳{(parseFloat(data.netPremium || 0) * (parseFloat(data.premiumVat || 0) / 100)).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                         </p>
@@ -585,6 +595,46 @@ const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords
                                     <span className="text-lg font-black text-blue-700">৳{parseFloat(data.netPremium || 0).toLocaleString('en-US')}</span>
                                 </div>
                             </div>
+
+                            {/* Section 4: Amendment History */}
+                            {data.amendments && data.amendments.length > 0 && (
+                                <div className="pt-6 border-t border-gray-100 animate-in fade-in slide-in-from-bottom-2 duration-300">
+                                    <div className="flex items-center gap-2 mb-4">
+                                        <FileTextIcon className="w-4 h-4 text-gray-400" />
+                                        <h4 className="text-xs font-black text-gray-400 uppercase tracking-widest">Amendment History</h4>
+                                    </div>
+                                    <div className="overflow-x-auto border border-gray-100 rounded-2xl shadow-sm bg-white">
+                                        <table className="w-full text-left border-collapse">
+                                            <thead>
+                                                <tr className="bg-gray-50/50 border-b border-gray-100">
+                                                    <th className="px-6 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider text-nowrap">Amnd No</th>
+                                                    <th className="px-6 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider text-nowrap">Amnd Date</th>
+                                                    <th className="px-6 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider text-nowrap">New Expiry Date</th>
+                                                    <th className="px-6 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider text-right text-nowrap">New Qty</th>
+                                                    <th className="px-6 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider text-right text-nowrap">New Rate</th>
+                                                    <th className="px-6 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider text-right text-nowrap">New Value ($)</th>
+                                                    <th className="px-6 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider text-right text-nowrap">New Value (৳)</th>
+                                                    <th className="px-6 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider text-nowrap">Remarks / Details</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody className="divide-y divide-gray-50">
+                                                {data.amendments.map((amnd, idx) => (
+                                                    <tr key={idx} className="hover:bg-gray-50/50 transition-colors group">
+                                                        <td className="px-6 py-3.5 text-sm font-bold text-gray-900 whitespace-nowrap">{amnd.amendmentNo}</td>
+                                                        <td className="px-6 py-3.5 text-sm font-medium text-gray-600 whitespace-nowrap font-mono">{formatDate(amnd.amendmentDate)}</td>
+                                                        <td className="px-6 py-3.5 text-sm font-medium text-rose-500 whitespace-nowrap font-mono">{amnd.expiryDate ? formatDate(amnd.expiryDate) : '—'}</td>
+                                                        <td className="px-6 py-3.5 text-sm text-right text-gray-800 font-bold whitespace-nowrap">{amnd.quantity ? `${parseFloat(amnd.quantity).toLocaleString('en-US')} Ton` : '—'}</td>
+                                                        <td className="px-6 py-3.5 text-sm text-right text-gray-800 whitespace-nowrap">{amnd.rate ? `$${parseFloat(amnd.rate).toLocaleString('en-IN')}` : '—'}</td>
+                                                        <td className="px-6 py-3.5 text-sm text-right text-blue-600 font-bold whitespace-nowrap">{amnd.totalDollar ? `$${parseFloat(amnd.totalDollar).toLocaleString('en-IN')}` : '—'}</td>
+                                                        <td className="px-6 py-3.5 text-sm text-right text-gray-800 font-bold whitespace-nowrap">{amnd.totalAmount ? `৳${parseFloat(amnd.totalAmount).toLocaleString('en-IN')}` : '—'}</td>
+                                                        <td className="px-6 py-3.5 text-sm text-gray-500 max-w-[200px] truncate" title={amnd.remarks}>{amnd.remarks || '—'}</td>
+                                                    </tr>
+                                                ))}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            )}
                         </div>
                     )}
                 </div>
@@ -687,6 +737,20 @@ const LCManagement = ({ addNotification, currentUser }) => {
     const [idToDelete, setIdToDelete] = useState(null);
     const [deleteStatus, setDeleteStatus] = useState(null);
 
+    // Amendment states
+    const [showAmendmentForm, setShowAmendmentForm] = useState(false);
+    const [selectedAmendmentLcId, setSelectedAmendmentLcId] = useState('');
+    const [amendmentSearchQuery, setAmendmentSearchQuery] = useState('');
+    const [amendmentFormData, setAmendmentFormData] = useState({
+        amendmentNo: '',
+        amendmentDate: '',
+        expiryDate: '',
+        quantity: '',
+        rate: '',
+        dollarRate: '',
+        remarks: ''
+    });
+
     const canManage = ['admin', 'incharge', 'lc manager', 'border manager', 'data entry'].includes((currentUser?.role || '').toLowerCase());
 
     const piRef = useRef(null);
@@ -696,6 +760,7 @@ const LCManagement = ({ addNotification, currentUser }) => {
     const productRef = useRef(null);
     const insuranceRef = useRef(null);
     const statusRef = useRef(null);
+    const amendmentLcRef = useRef(null);
 
 
     const [formData, setFormData] = useState({
@@ -757,7 +822,7 @@ const LCManagement = ({ addNotification, currentUser }) => {
 
     useEffect(() => {
         const handleClickOutside = (e) => {
-            const refs = [piRef, bankRef, importerRef, exporterRef, productRef, insuranceRef, statusRef];
+            const refs = [piRef, bankRef, importerRef, exporterRef, productRef, insuranceRef, statusRef, amendmentLcRef];
             const isClickInside = refs.some(ref => ref.current && ref.current.contains(e.target));
             if (!isClickInside) {
                 setActiveDropdown(null);
@@ -1158,6 +1223,145 @@ const LCManagement = ({ addNotification, currentUser }) => {
         }
     };
 
+    const selectedLcForAmendment = useMemo(() => {
+        return lcRecords.find(lc => lc._id === selectedAmendmentLcId) || null;
+    }, [selectedAmendmentLcId, lcRecords]);
+
+    const filteredLcRecordsForAmendment = useMemo(() => {
+        const q = amendmentSearchQuery.toLowerCase().trim();
+        if (!q) return lcRecords;
+        return lcRecords.filter(lc => (lc.lcNo || '').toLowerCase().includes(q));
+    }, [amendmentSearchQuery, lcRecords]);
+
+    const handleAmendmentLcSelect = (lc) => {
+        setSelectedAmendmentLcId(lc._id);
+        const nextNo = (lc.amendments || []).length + 1;
+        const nextNoStr = `AMENDMENT NO-${String(nextNo).padStart(2, '0')}`;
+        setAmendmentFormData({
+            amendmentNo: nextNoStr,
+            amendmentDate: new Date().toISOString().split('T')[0],
+            expiryDate: lc.expiryDate ? lc.expiryDate.split('T')[0] : '',
+            quantity: lc.quantity || '',
+            rate: lc.rate || '',
+            dollarRate: lc.dollarRate || '',
+            remarks: ''
+        });
+        setAmendmentSearchQuery(lc.lcNo || '');
+        setActiveDropdown(null);
+        setHighlightedIndex(-1);
+    };
+
+    const handleAmendmentSubmit = async (e) => {
+        e.preventDefault();
+        if (!selectedAmendmentLcId) {
+            addNotification?.('Please select an LC Number first.', 'error');
+            return;
+        }
+        if (!amendmentFormData.amendmentNo || !amendmentFormData.amendmentDate) {
+            addNotification?.('Amendment Number and Date are required.', 'error');
+            return;
+        }
+        setIsSaving(true);
+        try {
+            const lc = selectedLcForAmendment;
+            if (!lc) throw new Error('Selected LC not found');
+
+            // Calculate new financial totals
+            const qty = parseFloat(amendmentFormData.quantity) || 0;
+            const r = parseFloat(amendmentFormData.rate) || 0;
+            const dRate = parseFloat(amendmentFormData.dollarRate) || 0;
+
+            const totalDollar = qty * r;
+            const totalAmount = totalDollar * dRate;
+
+            // Recalculate insurance based on the new total amount if there is an insurance company
+            let netPremium = lc.netPremium;
+            let expectedReturnAmount = lc.expectedReturnAmount;
+            let grossPremium = lc.grossPremium;
+
+            if (lc.insuranceCo) {
+                const prem = parseFloat(lc.premium) || 0;
+                const exPct = parseFloat(lc.extraPercent) || 0;
+                const premRet = parseFloat(lc.premiumReturn) || 0;
+                const pVat = parseFloat(lc.premiumVat) || 15;
+                const stamp = parseFloat(lc.stampCharge) || 0;
+
+                const baseNetPrem = (totalAmount * (prem / 100)) / 100;
+                const netP = baseNetPrem + (baseNetPrem * (exPct / 100));
+                netPremium = netP > 0 ? netP.toFixed(2) : '';
+
+                const expRet = netP * (premRet / 100);
+                expectedReturnAmount = expRet > 0 ? expRet.toFixed(2) : '';
+
+                const vatAmount = netP * (pVat / 100);
+                const gPrem = netP + vatAmount + stamp;
+                grossPremium = gPrem > 0 ? gPrem.toFixed(2) : '';
+            }
+
+            // Create amendment log entry
+            const newAmendment = {
+                amendmentNo: amendmentFormData.amendmentNo,
+                amendmentDate: amendmentFormData.amendmentDate,
+                expiryDate: amendmentFormData.expiryDate,
+                quantity: amendmentFormData.quantity,
+                rate: amendmentFormData.rate,
+                dollarRate: amendmentFormData.dollarRate,
+                totalDollar: totalDollar > 0 ? totalDollar.toFixed(2) : '',
+                totalAmount: totalAmount > 0 ? totalAmount.toFixed(2) : '',
+                remarks: amendmentFormData.remarks,
+                createdAt: new Date().toISOString()
+            };
+
+            // Update main LC record fields
+            const updatedLcData = {
+                ...lc,
+                expiryDate: amendmentFormData.expiryDate,
+                quantity: amendmentFormData.quantity,
+                rate: amendmentFormData.rate,
+                dollarRate: amendmentFormData.dollarRate,
+                totalDollar: totalDollar > 0 ? totalDollar.toFixed(2) : '',
+                totalAmount: totalAmount > 0 ? totalAmount.toFixed(2) : '',
+                netPremium,
+                expectedReturnAmount,
+                grossPremium,
+                lcAmendment: `${amendmentFormData.amendmentNo} DATE: ${formatDate(amendmentFormData.amendmentDate)}`,
+                amendments: [...(lc.amendments || []), newAmendment]
+            };
+
+            // Save via PUT
+            await axios.put(`${API_BASE_URL}/api/lc-management/${selectedAmendmentLcId}`, updatedLcData);
+
+            if (addNotification) {
+                addNotification(
+                    'LC Amendment Saved',
+                    `LC No: ${lc.lcNo} has been amended (${amendmentFormData.amendmentNo}) by ${currentUser?.name || currentUser?.username}.`,
+                    ['Admin', 'Incharge', 'Border Manager', 'LC Manager', 'Data Entry']
+                );
+            }
+            addNotification?.('LC Amendment saved successfully', 'success');
+
+            // Reset state
+            setShowAmendmentForm(false);
+            setSelectedAmendmentLcId('');
+            setAmendmentSearchQuery('');
+            setAmendmentFormData({
+                amendmentNo: '',
+                amendmentDate: '',
+                expiryDate: '',
+                quantity: '',
+                rate: '',
+                dollarRate: '',
+                remarks: ''
+            });
+            fetchInitialData();
+        } catch (error) {
+            console.error('Error saving LC amendment:', error);
+            addNotification?.('Failed to save LC amendment', 'error');
+        } finally {
+            setIsSaving(false);
+        }
+    };
+
     const resetForm = () => {
         setFormData({
             ipNo: '',
@@ -1209,7 +1413,7 @@ const LCManagement = ({ addNotification, currentUser }) => {
         <div className="space-y-4 md:space-y-6">
             {/* Standard Module Header */}
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                {!showForm ? (
+                {!showForm && !showAmendmentForm ? (
                     <>
                         <div className="w-full md:w-1/4 text-center md:text-left">
                             <h2 className="text-2xl font-bold text-gray-800">LC Management</h2>
@@ -1233,14 +1437,21 @@ const LCManagement = ({ addNotification, currentUser }) => {
                     <div className="hidden md:block md:flex-1"></div>
                 )}
 
-                {!showForm && canManage && (
-                    <div className="w-full md:w-1/4 flex justify-end gap-3 z-50">
+                {!showForm && !showAmendmentForm && canManage && (
+                    <div className="w-full md:w-auto flex flex-row justify-end gap-3 z-50">
+                        <button
+                            onClick={() => setShowAmendmentForm(true)}
+                            className="w-1/2 md:w-auto px-4 py-2 border border-blue-200 bg-blue-50/10 hover:bg-blue-50/50 text-blue-600 font-bold rounded-xl transition-all transform active:scale-95 md:hover:scale-105 flex items-center justify-center whitespace-nowrap text-sm h-[40px]"
+                        >
+                            <FileTextIcon className="w-4 h-4 mr-1.5 text-blue-500" />
+                            <span>Amendment</span>
+                        </button>
                         <button
                             onClick={() => setShowForm(true)}
-                            className="w-full md:w-auto px-4 py-2.5 md:py-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-medium rounded-xl shadow-lg shadow-blue-500/30 transition-all transform active:scale-95 md:hover:scale-105 flex items-center justify-center"
+                            className="w-1/2 md:w-auto px-4 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold rounded-xl shadow-lg shadow-blue-500/30 transition-all transform active:scale-95 md:hover:scale-105 flex items-center justify-center whitespace-nowrap text-sm h-[40px]"
                         >
-                            <PlusIcon className="w-5 h-5 mr-2" />
-                            <span> New LC</span>
+                            <PlusIcon className="w-4 h-4 mr-1.5" />
+                            <span>New LC</span>
                         </button>
                     </div>
                 )}
@@ -1976,7 +2187,388 @@ const LCManagement = ({ addNotification, currentUser }) => {
                 </div>
             )}
 
-            {!showForm && (
+            {showAmendmentForm && (
+                <div className="lc-form-container relative bg-white/60 backdrop-blur-xl border border-white/40 rounded-2xl shadow-2xl p-5 md:p-8 pb-10">
+                    <div className="absolute -top-24 -right-24 w-64 h-64 bg-blue-500/10 rounded-full blur-3xl text-sm"></div>
+                    <div className="absolute -bottom-24 -left-24 w-64 h-64 bg-indigo-500/10 rounded-full blur-3xl delay-1000"></div>
+
+                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6 md:mb-8 relative z-30 border-b border-gray-200/40 pb-4">
+                        {/* Title */}
+                        <div className="flex items-center gap-2 shrink-0">
+                            <FileTextIcon className="w-5 h-5 text-blue-500" />
+                            <span className="text-base font-bold text-gray-800">LC Amendment Registration</span>
+                        </div>
+
+                        {/* Search Dropdown in same line */}
+                        <div className="flex-1 max-w-md w-full relative dropdown-container" ref={amendmentLcRef}>
+                            <div className="relative w-full">
+                                <input
+                                    type="text"
+                                    placeholder="Search or select LC number..."
+                                    value={amendmentSearchQuery}
+                                    onChange={(e) => {
+                                        setAmendmentSearchQuery(e.target.value);
+                                        setActiveDropdown('amendmentLc');
+                                        setHighlightedIndex(-1);
+                                    }}
+                                    onFocus={() => {
+                                        setActiveDropdown('amendmentLc');
+                                        setHighlightedIndex(-1);
+                                    }}
+                                    className="w-full px-4 py-2 bg-white/70 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all font-medium text-center text-sm shadow-sm h-[38px]"
+                                    required
+                                />
+                                <div className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400">
+                                    <ChevronDownIcon className="w-4 h-4" />
+                                </div>
+                            </div>
+                            {activeDropdown === 'amendmentLc' && filteredLcRecordsForAmendment.length > 0 && (
+                                <div className="absolute z-[100] w-full mt-1 bg-white border border-gray-200 rounded-xl shadow-xl max-h-48 overflow-y-auto">
+                                    {filteredLcRecordsForAmendment.map((lc, idx) => (
+                                        <button
+                                            key={lc._id}
+                                            type="button"
+                                            onClick={() => handleAmendmentLcSelect(lc)}
+                                            className="w-full px-4 py-2 text-center text-sm flex justify-between items-center hover:bg-blue-50 text-gray-700 font-semibold"
+                                        >
+                                            <span className="flex-1 text-center">{lc.lcNo}</span>
+                                            <span className="text-xs text-gray-400 font-normal pr-4">Date: {lc.openingDate ? formatDate(lc.openingDate) : '-'}</span>
+                                        </button>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+
+                        {/* Close button */}
+                        <button
+                            onClick={() => {
+                                setShowAmendmentForm(false);
+                                setSelectedAmendmentLcId('');
+                                setAmendmentSearchQuery('');
+                                setAmendmentFormData({
+                                    amendmentNo: '',
+                                    amendmentDate: '',
+                                    expiryDate: '',
+                                    quantity: '',
+                                    rate: '',
+                                    dollarRate: '',
+                                    remarks: ''
+                                });
+                            }}
+                            className="p-2 hover:bg-gray-100 rounded-xl transition-all group active:scale-95 shrink-0"
+                            title="Close Form"
+                        >
+                            <XIcon className="w-5 h-5 text-gray-400 group-hover:text-rose-500" />
+                        </button>
+                    </div>
+
+                    <form onSubmit={handleAmendmentSubmit} className="space-y-8 relative z-10 w-full">
+                        {selectedAmendmentLcId && selectedLcForAmendment && (
+                            <div className="grid grid-cols-1 lg:grid-cols-4 gap-8 animate-in fade-in slide-in-from-bottom-2 duration-300 w-full text-left">
+                                {/* Left Side: Original Details View (Read-Only) */}
+                                <div className="lg:col-span-1 space-y-6 bg-gray-50/50 border border-gray-100 rounded-2xl p-6">
+                                    <div>
+                                        <h4 className="text-xs font-black text-blue-600 uppercase tracking-widest mb-4">Current LC Details</h4>
+                                        <div className="space-y-4">
+                                            <div className="border-b border-gray-200/50 pb-2">
+                                                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Importer</span>
+                                                <p className="text-sm font-bold text-gray-800 truncate">{selectedLcForAmendment.importerName}</p>
+                                            </div>
+                                            <div className="border-b border-gray-200/50 pb-2">
+                                                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Exporter</span>
+                                                <p className="text-sm font-bold text-gray-800 truncate">{selectedLcForAmendment.exporterName}</p>
+                                            </div>
+                                            <div className="border-b border-gray-200/50 pb-2">
+                                                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Bank Name</span>
+                                                <p className="text-sm font-bold text-gray-800 truncate" title={selectedLcForAmendment.bankName}>{selectedLcForAmendment.bankName}</p>
+                                            </div>
+                                            <div className="border-b border-gray-200/50 pb-2">
+                                                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Opening Date</span>
+                                                <p className="text-sm font-bold text-gray-800 font-mono">{formatDate(selectedLcForAmendment.openingDate)}</p>
+                                            </div>
+                                            <div className="border-b border-gray-200/50 pb-2">
+                                                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Current Expiry Date</span>
+                                                <p className="text-sm font-bold text-rose-500 font-mono">{formatDate(selectedLcForAmendment.expiryDate)}</p>
+                                            </div>
+                                            <div className="border-b border-gray-200/50 pb-2">
+                                                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Current Quantity</span>
+                                                <p className="text-sm font-bold text-gray-800">{parseFloat(selectedLcForAmendment.quantity || 0).toLocaleString('en-US')} Ton</p>
+                                            </div>
+                                            <div className="border-b border-gray-200/50 pb-2">
+                                                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Current Rate</span>
+                                                <p className="text-sm font-bold text-gray-800">${parseFloat(selectedLcForAmendment.rate || 0).toLocaleString('en-IN')}</p>
+                                            </div>
+                                            <div className="border-b border-gray-200/50 pb-2">
+                                                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Current Total Dollar</span>
+                                                <p className="text-sm font-bold text-blue-600">${parseFloat(selectedLcForAmendment.totalDollar || 0).toLocaleString('en-IN')}</p>
+                                            </div>
+                                            <div>
+                                                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Current Total Amount</span>
+                                                <p className="text-sm font-bold text-gray-800">৳{parseFloat(selectedLcForAmendment.totalAmount || 0).toLocaleString('en-IN')}</p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Right Side: Amendment Details Inputs */}
+                                <div className="lg:col-span-2 space-y-6 bg-white border border-gray-100 rounded-2xl p-6 shadow-sm">
+                                    <h4 className="text-xs font-black text-blue-600 uppercase tracking-widest mb-4">Amendment Details</h4>
+                                    
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                        <div className="space-y-1.5">
+                                            <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Amendment Number *</label>
+                                            <input
+                                                type="text"
+                                                name="amendmentNo"
+                                                value={amendmentFormData.amendmentNo}
+                                                onChange={(e) => setAmendmentFormData(prev => ({ ...prev, amendmentNo: e.target.value }))}
+                                                placeholder="e.g. AMENDMENT NO-01"
+                                                className="w-full px-4 py-2.5 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all font-medium"
+                                                required
+                                            />
+                                        </div>
+
+                                        <div className="space-y-1.5">
+                                            <CustomDatePicker
+                                                label="Amendment Date *"
+                                                value={amendmentFormData.amendmentDate}
+                                                onChange={(e) => setAmendmentFormData(prev => ({ ...prev, amendmentDate: e.target.value }))}
+                                                required
+                                                compact={true}
+                                            />
+                                        </div>
+
+                                        <div className="space-y-1.5">
+                                            <CustomDatePicker
+                                                label="New Expiry Date"
+                                                value={amendmentFormData.expiryDate}
+                                                onChange={(e) => setAmendmentFormData(prev => ({ ...prev, expiryDate: e.target.value }))}
+                                                compact={true}
+                                            />
+                                        </div>
+
+                                        <div className="space-y-1.5">
+                                            <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">New Quantity (Ton)</label>
+                                            <input
+                                                type="number"
+                                                step="any"
+                                                name="quantity"
+                                                value={amendmentFormData.quantity}
+                                                onChange={(e) => setAmendmentFormData(prev => ({ ...prev, quantity: e.target.value }))}
+                                                placeholder="e.g. 520.50"
+                                                className="w-full px-4 py-2.5 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all font-medium"
+                                            />
+                                        </div>
+
+                                        <div className="space-y-1.5">
+                                            <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">New Rate ($/Ton)</label>
+                                            <input
+                                                type="number"
+                                                step="any"
+                                                name="rate"
+                                                value={amendmentFormData.rate}
+                                                onChange={(e) => setAmendmentFormData(prev => ({ ...prev, rate: e.target.value }))}
+                                                placeholder="e.g. 350.00"
+                                                className="w-full px-4 py-2.5 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all font-medium"
+                                            />
+                                        </div>
+
+                                        <div className="space-y-1.5">
+                                            <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">New Dollar Rate (৳)</label>
+                                            <input
+                                                type="number"
+                                                step="any"
+                                                name="dollarRate"
+                                                value={amendmentFormData.dollarRate}
+                                                onChange={(e) => setAmendmentFormData(prev => ({ ...prev, dollarRate: e.target.value }))}
+                                                placeholder="e.g. 120.00"
+                                                className="w-full px-4 py-2.5 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all font-medium"
+                                            />
+                                        </div>
+
+                                        <div className="col-span-full space-y-1.5">
+                                            <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Remarks / Amendment Details</label>
+                                            <textarea
+                                                name="remarks"
+                                                value={amendmentFormData.remarks}
+                                                onChange={(e) => setAmendmentFormData(prev => ({ ...prev, remarks: e.target.value }))}
+                                                placeholder="Describe the details of the amendment..."
+                                                rows="3"
+                                                className="w-full px-4 py-2.5 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all font-medium"
+                                            />
+                                        </div>
+                                    </div>
+
+                                    <div className="flex justify-end gap-3 pt-4 border-t border-gray-100">
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                setShowAmendmentForm(false);
+                                                setSelectedAmendmentLcId('');
+                                                setAmendmentSearchQuery('');
+                                                setAmendmentFormData({
+                                                    amendmentNo: '',
+                                                    amendmentDate: '',
+                                                    expiryDate: '',
+                                                    quantity: '',
+                                                    rate: '',
+                                                    dollarRate: '',
+                                                    remarks: ''
+                                                });
+                                            }}
+                                            className="px-6 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-600 font-bold rounded-xl transition-all active:scale-95"
+                                        >
+                                            Cancel
+                                        </button>
+                                        <button
+                                            type="submit"
+                                            disabled={isSaving}
+                                            className="px-8 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold rounded-xl shadow-lg shadow-blue-500/30 transition-all transform hover:scale-105 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
+                                        >
+                                            {isSaving ? 'Saving...' : 'Save Amendment'}
+                                        </button>
+                                    </div>
+                                </div>
+
+                                {/* Right Side: Product & Insurance Details (Read-Only) */}
+                                <div className="lg:col-span-1 space-y-6 bg-gray-50/50 border border-gray-100 rounded-2xl p-6">
+                                    <div>
+                                        <h4 className="text-xs font-black text-blue-600 uppercase tracking-widest mb-4">Product & Insurance</h4>
+                                        <div className="space-y-4">
+                                            {/* Product Details Section */}
+                                            <div className="bg-blue-50/30 p-3 rounded-xl border border-blue-100/50 space-y-3">
+                                                <div className="flex items-center gap-1.5 border-b border-blue-100/50 pb-1.5 mb-1">
+                                                    <DollarSignIcon className="w-3.5 h-3.5 text-blue-500" />
+                                                    <span className="text-[10px] font-black text-blue-600 uppercase tracking-wider">Product Info</span>
+                                                </div>
+                                                {selectedLcForAmendment.productsList && selectedLcForAmendment.productsList.length > 0 ? (
+                                                    <div className="space-y-3">
+                                                        {selectedLcForAmendment.productsList.map((prod, pIdx) => (
+                                                            <div key={pIdx} className="border-b border-gray-200/40 pb-2 last:border-0 last:pb-0">
+                                                                <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider">Item {selectedLcForAmendment.productsList.length > 1 ? pIdx + 1 : ''}</span>
+                                                                <p className="text-xs font-bold text-gray-800 truncate" title={prod.productName}>{prod.productName || '-'}</p>
+                                                                <div className="grid grid-cols-2 gap-2 mt-1">
+                                                                    <div>
+                                                                        <span className="text-[8px] font-semibold text-gray-400 uppercase">Qty</span>
+                                                                        <p className="text-[11px] font-bold text-gray-700">{parseFloat(prod.quantity || 0).toLocaleString('en-US')} Ton</p>
+                                                                    </div>
+                                                                    <div>
+                                                                        <span className="text-[8px] font-semibold text-gray-400 uppercase">Rate</span>
+                                                                        <p className="text-[11px] font-bold text-gray-700">${parseFloat(prod.rate || 0).toLocaleString('en-IN')}</p>
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                ) : (
+                                                    <div className="space-y-2">
+                                                        <div>
+                                                            <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider">Product Name</span>
+                                                            <p className="text-xs font-bold text-gray-800 truncate">{selectedLcForAmendment.productName || selectedLcForAmendment.product || '-'}</p>
+                                                        </div>
+                                                        <div className="grid grid-cols-2 gap-2">
+                                                            <div>
+                                                                <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider">Quantity</span>
+                                                                <p className="text-xs font-bold text-gray-800">{parseFloat(selectedLcForAmendment.quantity || 0).toLocaleString('en-US')} Ton</p>
+                                                            </div>
+                                                            <div>
+                                                                <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider">Rate</span>
+                                                                <p className="text-xs font-bold text-gray-800">${parseFloat(selectedLcForAmendment.rate || 0).toLocaleString('en-IN')}</p>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                )}
+                                                <div className="border-t border-blue-100/50 pt-2 mt-2 text-left">
+                                                    <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider">Port</span>
+                                                    <p className="text-xs font-bold text-gray-800">{selectedLcForAmendment.port || '-'}</p>
+                                                </div>
+                                            </div>
+
+                                            {/* Insurance Details Section */}
+                                            <div className="bg-indigo-50/30 p-3 rounded-xl border border-indigo-100/50 space-y-3">
+                                                <div className="flex items-center gap-1.5 border-b border-indigo-100/50 pb-1.5 mb-1">
+                                                    <ShieldIcon className="w-3.5 h-3.5 text-indigo-500" />
+                                                    <span className="text-[10px] font-black text-indigo-600 uppercase tracking-wider">Insurance Info</span>
+                                                </div>
+                                                <div className="space-y-2 text-left">
+                                                    <div>
+                                                        <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider">Company</span>
+                                                        <p className="text-xs font-bold text-gray-800 truncate" title={selectedLcForAmendment.insuranceCo}>{selectedLcForAmendment.insuranceCo || '-'}</p>
+                                                    </div>
+                                                    <div className="grid grid-cols-2 gap-2">
+                                                        <div>
+                                                            <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider">Policy Type</span>
+                                                            <p className="text-xs font-bold text-gray-800 truncate">{selectedLcForAmendment.policyType || '-'}</p>
+                                                        </div>
+                                                        <div>
+                                                            <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider">Cover Note No</span>
+                                                            <p className="text-xs font-bold text-gray-800 truncate" title={selectedLcForAmendment.marineCoverNote}>{selectedLcForAmendment.marineCoverNote || '-'}</p>
+                                                        </div>
+                                                    </div>
+                                                    <div className="grid grid-cols-2 gap-2">
+                                                        <div>
+                                                            <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider">C.N Date</span>
+                                                            <p className="text-xs font-bold text-gray-800 truncate">{selectedLcForAmendment.marineCNDate ? formatDate(selectedLcForAmendment.marineCNDate) : '-'}</p>
+                                                        </div>
+                                                        <div>
+                                                            <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider">Policy No</span>
+                                                            <p className="text-xs font-bold text-gray-800 truncate" title={selectedLcForAmendment.policyNo}>{selectedLcForAmendment.policyNo || '-'}</p>
+                                                        </div>
+                                                    </div>
+                                                    <div className="grid grid-cols-2 gap-2 border-t border-indigo-100/50 pt-1.5">
+                                                        <div>
+                                                            <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider">Extra %</span>
+                                                            <p className="text-xs font-bold text-gray-800">{selectedLcForAmendment.extraPercent || '0'}%</p>
+                                                        </div>
+                                                        <div>
+                                                            <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider">Premium Rate</span>
+                                                            <p className="text-xs font-bold text-gray-800">{selectedLcForAmendment.premium || '0'}%</p>
+                                                        </div>
+                                                    </div>
+                                                    <div className="grid grid-cols-2 gap-2">
+                                                        <div>
+                                                            <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider">Premium Return</span>
+                                                            <p className="text-xs font-bold text-blue-600">{selectedLcForAmendment.premiumReturn || '0'}%</p>
+                                                        </div>
+                                                        <div>
+                                                            <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider">Return Amount</span>
+                                                            <p className="text-xs font-bold text-blue-600 truncate">৳{parseFloat(selectedLcForAmendment.expectedReturnAmount || 0).toLocaleString('en-IN')}</p>
+                                                        </div>
+                                                    </div>
+                                                    <div className="grid grid-cols-2 gap-2">
+                                                        <div>
+                                                            <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider">VAT ({selectedLcForAmendment.premiumVat || '0'}%)</span>
+                                                            <p className="text-xs font-bold text-gray-800 truncate">
+                                                                ৳{(parseFloat(selectedLcForAmendment.netPremium || 0) * (parseFloat(selectedLcForAmendment.premiumVat || 0) / 100)).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                                            </p>
+                                                        </div>
+                                                        <div>
+                                                            <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider">Stamp Duty</span>
+                                                            <p className="text-xs font-bold text-gray-800">৳{parseFloat(selectedLcForAmendment.stampCharge || 0).toLocaleString('en-IN')}</p>
+                                                        </div>
+                                                    </div>
+                                                    <div className="grid grid-cols-2 gap-2 border-t border-indigo-100/50 pt-1.5 mt-1">
+                                                        <div>
+                                                            <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider">Gross Premium</span>
+                                                            <p className="text-xs font-bold text-gray-800">৳{parseFloat(selectedLcForAmendment.grossPremium || 0).toLocaleString('en-US')}</p>
+                                                        </div>
+                                                        <div>
+                                                            <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider">Net Premium</span>
+                                                            <p className="text-xs font-bold text-indigo-600 truncate">৳{parseFloat(selectedLcForAmendment.netPremium || 0).toLocaleString('en-US')}</p>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+                    </form>
+                </div>
+            )}
+
+            {!showForm && !showAmendmentForm && (
                 <div className="overflow-x-auto bg-white/50 backdrop-blur-xl border border-white/40 rounded-2xl shadow-xl">
                     <table className="w-full text-left border-collapse">
                         <thead>
@@ -2090,7 +2682,16 @@ const LCManagement = ({ addNotification, currentUser }) => {
                                         <tr key={record._id} className="hover:bg-gray-50/50 transition-colors border-b border-gray-50 group">
                                             <td className="px-3 py-4 text-sm font-medium text-gray-600 whitespace-nowrap">{formatDate(record.openingDate)}</td>
                                             <td className="px-3 py-4 text-sm font-medium text-gray-900 whitespace-nowrap">{formatDate(record.expiryDate)}</td>
-                                            <td className="px-3 py-4 text-sm font-bold text-gray-900 whitespace-nowrap">{record.lcNo}</td>
+                                            <td className="px-3 py-4 text-sm font-bold text-gray-900 whitespace-nowrap">
+                                                <div className="flex flex-col">
+                                                    <span>{record.lcNo}</span>
+                                                    {record.amendments?.length > 0 && (
+                                                        <span className="self-start mt-0.5 px-1.5 py-0.5 bg-blue-50 text-blue-600 border border-blue-200/50 rounded text-[9px] font-extrabold uppercase tracking-wide">
+                                                            {record.lcAmendment?.split(' ')[0] || 'Amended'}
+                                                        </span>
+                                                    )}
+                                                </div>
+                                            </td>
                                             <td className="px-3 py-4 text-sm font-medium text-gray-700 whitespace-nowrap truncate max-w-[120px]" title={record.importerName}>{record.importerName}</td>
                                             <td className="px-3 py-4 text-sm text-gray-600 whitespace-nowrap truncate max-w-[120px]" title={record.exporterName}>{record.exporterName}</td>
                                             <td className="px-3 py-4 text-sm text-gray-600 font-medium whitespace-nowrap truncate max-w-[120px]" title={record.bankName}>{record.bankName}</td>
