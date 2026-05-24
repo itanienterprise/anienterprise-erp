@@ -1,5 +1,6 @@
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import { appendTrTemplatePage } from './plTrTemplatePage';
 
 // Helper function to format dates
 const formatDate = (dateString) => {
@@ -16,15 +17,24 @@ const formatDate = (dateString) => {
     }
 };
 
-export const generatePLPDF = (record, piRecords = [], lcRecords = [], importers = [], exporters = [], ipRecords = []) => {
+export const generatePLPDF = async (record, piRecords = [], lcRecords = [], importers = [], exporters = [], banks = [], ipRecords = [], trSetups = []) => {
     const doc = new jsPDF('p', 'mm', 'a4');
     const pageWidth = doc.internal.pageSize.width;
     const pageHeight = doc.internal.pageSize.height;
     const margin = 10;
 
     // Resolve details using database records if missing
-    const pi = piRecords.find(p => p.piNumber === record.piNumber);
+    const pi = piRecords.find(p => (p.piNumber || '').trim().toLowerCase() === (record.piNumber || '').trim().toLowerCase());
     const lc = lcRecords.find(l => l.lcNo === (record.lcNumber || pi?.lcNumber));
+
+    const bankName = record.bankName || lc?.bankName || '';
+    let branchName = record.branchName || '';
+    if (!branchName && bankName && Array.isArray(banks) && banks.length > 0) {
+        const matchedBank = banks.find(b => b.bankName.toLowerCase().trim() === bankName.toLowerCase().trim());
+        if (matchedBank && matchedBank.branches && matchedBank.branches.length > 0) {
+            branchName = matchedBank.branches[0].branch;
+        }
+    }
     const importer = importers.find(imp => imp.name === record.partyName);
 
     const preCarriageBy = record.preCarriageBy && record.preCarriageBy !== 'ROAD' ? record.preCarriageBy : (pi?.preCarriageBy || record.preCarriageBy || 'ROAD');
@@ -439,6 +449,52 @@ export const generatePLPDF = (record, piRecords = [], lcRecords = [], importers 
     doc.setFont("helvetica", "bold");
     doc.setFontSize(10);
     doc.text("Seller", pageWidth - margin - 35, y + 28, { align: 'center' });
+
+    const enrichedProductsList = (record.productsList || []).map((prod, idx) => {
+        const piProd = pi?.productsList?.find(p => (p.productName || '').trim().toLowerCase() === (prod.productName || '').trim().toLowerCase()) || pi?.productsList?.[idx];
+        return {
+            ...prod,
+            hsCodeInd: prod.hsCodeInd || piProd?.hsCodeInd || pi?.hsCodeInd || ''
+        };
+    });
+
+    const trLcNo = lc?.lcNo || record.lcNumber || '';
+    const trLcDate = lc?.lcDate ? formatDate(lc.lcDate) : (record.lcDate ? formatDate(record.lcDate) : '');
+    const trBankBin = '000321414-0101';
+    const trIrc = importer?.irc || '';
+    const trTin = importer?.tin || '';
+    const trBin = importer?.bin || '';
+    const trPiNo = pi?.piNumber || record.piNumber || '';
+    const trPiDate = pi?.date ? formatDate(pi.date) : (record.piDate ? formatDate(record.piDate) : '');
+    const trCoverNote = lc?.marineCoverNote || '';
+    
+    let computedGrandTotal = 0;
+    (record.productsList || []).forEach(prod => {
+        const qty = parseFloat(prod.quantity) || 0;
+        const rate = parseFloat(prod.rate) || 0;
+        const amt = qty * rate;
+        const frt = parseFloat(prod.freight) || 0;
+        computedGrandTotal += amt + frt;
+    });
+
+    const trPiGrandTotal = pi?.grandTotal || (computedGrandTotal > 0 ? computedGrandTotal : '') || record.totalAmount || record.grandTotal || '';
+
+    await appendTrTemplatePage(doc, { 
+        ...record, 
+        bankName, 
+        branchName, 
+        productsList: enrichedProductsList,
+        lcNo: trLcNo,
+        lcDate: trLcDate,
+        bankBin: trBankBin,
+        ircNo: trIrc,
+        tinNo: trTin,
+        binNo: trBin,
+        piNo: trPiNo,
+        piDate: trPiDate,
+        coverNote: trCoverNote,
+        piGrandTotal: trPiGrandTotal
+    }, trSetups);
 
     // Save/Download PDF
     const filename = `PackingList_${record.packingListNumber || 'Draft'}.pdf`;
