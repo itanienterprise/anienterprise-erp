@@ -54,6 +54,7 @@ function PI({
     const [selectedRevisePiId, setSelectedRevisePiId] = useState('');
     const [reviseSearchQuery, setReviseSearchQuery] = useState('');
     const [isReviseSaving, setIsReviseSaving] = useState(false);
+    const [reviseIpSearch, setReviseIpSearch] = useState('');
     const [reviseFormData, setReviseFormData] = useState({
         reviseNo: '',
         reviseDate: '',
@@ -61,7 +62,8 @@ function PI({
         productsList: [],
         grandTotal: '',
         grandTotalQuantity: '',
-        remarks: ''
+        remarks: '',
+        ipNumbers: []
     });
     const toastTimerRef = useRef(null);
 
@@ -964,11 +966,7 @@ function PI({
 
     const selectedPiReviseIpInfo = useMemo(() => {
         if (!selectedPiForRevise) return [];
-        const ipNumbers = selectedPiForRevise.ipNumbers?.length
-            ? selectedPiForRevise.ipNumbers
-            : (selectedPiForRevise.ipNumber
-                ? selectedPiForRevise.ipNumber.split(',').map(s => s.trim()).filter(Boolean)
-                : []);
+        const ipNumbers = reviseFormData.ipNumbers || [];
 
         if (ipNumbers.length === 0) return [];
 
@@ -985,40 +983,169 @@ function PI({
                 isLowBalance: balanceKg !== null && balanceKg < 50000
             };
         });
-    }, [selectedPiForRevise, computeIpBalance, ipRecords]);
+    }, [selectedPiForRevise, reviseFormData.ipNumbers, computeIpBalance, ipRecords]);
 
     const resetReviseForm = () => {
         setShowReviseForm(false);
         setSelectedRevisePiId('');
         setReviseSearchQuery('');
+        setReviseIpSearch('');
         setReviseFormData({
             reviseNo: '',
             reviseDate: '',
             validityDate: '',
+            placeOfReceipt: '',
+            portOfLoading: '',
+            portOfDischarge: '',
+            certification: '',
             productsList: [],
             grandTotal: '',
             grandTotalQuantity: '',
-            remarks: ''
+            remarks: '',
+            ipNumbers: []
         });
+    };
+
+    const handleReviseDropdownSelect = (field, value) => {
+        setReviseFormData(prev => {
+            const updated = { ...prev, [field]: value };
+
+            if (field === 'certification') {
+                setCertSearch('');
+                const currentCert = prev.certification || '';
+                const parts = currentCert.split(',').map(s => s.trim()).filter(Boolean);
+                const valueLower = value.toLowerCase();
+                const matchedIndex = parts.findIndex(p => p.toLowerCase() === valueLower);
+                if (matchedIndex > -1) {
+                    // Remove if already selected
+                    parts.splice(matchedIndex, 1);
+                    updated.certification = parts.join(', ');
+                } else {
+                    // Add if not selected
+                    parts.push(value);
+                    updated.certification = parts.join(', ');
+                }
+            }
+            return updated;
+        });
+        setActiveDropdown(null);
     };
 
     const handleRevisePiSelect = (pi) => {
         setSelectedRevisePiId(pi._id);
         const nextNo = (pi.revisions || []).length + 1;
+        const ipNumbers = pi.ipNumbers?.length
+            ? pi.ipNumbers
+            : (pi.ipNumber
+                ? pi.ipNumber.split(',').map(s => s.trim()).filter(Boolean)
+                : []);
+
         const productsList = getPiProductsList(pi);
-        const { list, grandTotal, grandTotalQuantity } = recalcReviseProducts(productsList);
+        const mappedProducts = productsList.map(prod => {
+            if (prod._fromIp) return prod;
+            const matchingIp = ipNumbers.find(ipNum => {
+                const ipRec = ipRecords.find(r => r.ipNumber === ipNum);
+                return ipRec && ipRec.productName === prod.productName;
+            });
+            if (matchingIp) {
+                return { ...prod, _fromIp: matchingIp };
+            }
+            return prod;
+        });
+
+        const { list, grandTotal, grandTotalQuantity } = recalcReviseProducts(mappedProducts);
         setReviseFormData({
             reviseNo: `REVISE NO-${String(nextNo).padStart(2, '0')}`,
             reviseDate: new Date().toISOString().split('T')[0],
             validityDate: pi.validityDate ? pi.validityDate.split('T')[0] : '',
+            placeOfReceipt: pi.placeOfReceipt || '',
+            portOfLoading: pi.portOfLoading || '',
+            portOfDischarge: pi.portOfDischarge || '',
+            certification: pi.certification || '',
             productsList: list,
             grandTotal,
             grandTotalQuantity,
-            remarks: ''
+            remarks: '',
+            ipNumbers
         });
         setReviseSearchQuery(pi.piNumber || '');
+        setReviseIpSearch('');
         setActiveDropdown(null);
         setHighlightedIndex(-1);
+    };
+
+    const handleReviseIpSelectToggle = (value) => {
+        const ip = ipRecords.find(i => i.ipNumber === value);
+        if (!ip) return;
+
+        setReviseFormData(prev => {
+            const currentIpNumbers = [...(prev.ipNumbers || [])];
+            const alreadySelected = currentIpNumbers.includes(value);
+
+            let updatedIpNumbers = [];
+            let updatedProductsList = [...(prev.productsList || [])];
+
+            if (alreadySelected) {
+                // Remove IP
+                updatedIpNumbers = currentIpNumbers.filter(num => num !== value);
+
+                // Remove corresponding product from productsList
+                let prodIdx = updatedProductsList.findIndex(p => p._fromIp === value);
+                if (prodIdx === -1) {
+                    prodIdx = updatedProductsList.findIndex(p => p.productName === ip.productName);
+                }
+                if (prodIdx > -1) {
+                    updatedProductsList.splice(prodIdx, 1);
+                }
+                if (updatedProductsList.length === 0) {
+                    updatedProductsList.push({ productName: '', hsCode: '', quantity: '', rate: '', amount: '', freight: '', totalFreight: '' });
+                }
+            } else {
+                // Add IP
+                updatedIpNumbers = [...currentIpNumbers, value];
+
+                // Check if product is already in productsList to avoid duplicate products for the same IP
+                const productExists = updatedProductsList.some(p => 
+                    p._fromIp === value || 
+                    (p.productName === ip.productName)
+                );
+
+                if (!productExists) {
+                    const product = products.find(p => p.name === ip.productName);
+                    const hCode = product ? (product.hsCode || '') : '';
+                    const hCodeInd = product ? (product.hsCodeInd || '') : '';
+
+                    const newProduct = {
+                        productName: ip.productName || '',
+                        hsCode: hCode,
+                        hsCodeInd: hCodeInd,
+                        quantity: '',
+                        rate: '',
+                        amount: '',
+                        freight: '',
+                        totalFreight: '',
+                        _fromIp: value
+                    };
+
+                    if (updatedProductsList.length === 1 && !updatedProductsList[0].productName) {
+                        updatedProductsList = [newProduct];
+                    } else {
+                        updatedProductsList = [...updatedProductsList, newProduct];
+                    }
+                }
+            }
+
+            const { list: recalculatedList, grandTotal, grandTotalQuantity } = recalcReviseProducts(updatedProductsList);
+
+            return {
+                ...prev,
+                ipNumbers: updatedIpNumbers,
+                productsList: recalculatedList,
+                grandTotal,
+                grandTotalQuantity
+            };
+        });
+        setReviseIpSearch('');
     };
 
     const handleReviseProductChange = (idx, field, value) => {
@@ -1045,10 +1172,32 @@ function PI({
             const pi = selectedPiForRevise;
             if (!pi) throw new Error('Selected PI not found');
 
+            const updatedIpNumbers = reviseFormData.ipNumbers || [];
+            const updatedIpNumberStr = updatedIpNumbers.join(', ');
+
+            let totalIpQty = 0;
+            updatedIpNumbers.forEach(ipNum => {
+                const rec = ipRecords.find(i => i.ipNumber === ipNum);
+                if (rec) totalIpQty += parseFloat(rec.quantity) || 0;
+            });
+            const updatedIpQuantity = totalIpQty > 0 ? totalIpQty.toString() : '';
+
+            let latestDate = '';
+            updatedIpNumbers.forEach(ipNum => {
+                const rec = ipRecords.find(i => i.ipNumber === ipNum);
+                if (rec && rec.closeDate && rec.closeDate > latestDate) {
+                    latestDate = rec.closeDate;
+                }
+            });
+
             const newRevision = {
                 reviseNo: reviseFormData.reviseNo,
                 reviseDate: reviseFormData.reviseDate,
                 validityDate: reviseFormData.validityDate,
+                placeOfReceipt: reviseFormData.placeOfReceipt,
+                portOfLoading: reviseFormData.portOfLoading,
+                portOfDischarge: reviseFormData.portOfDischarge,
+                certification: reviseFormData.certification,
                 productsList: reviseFormData.productsList,
                 grandTotal: reviseFormData.grandTotal,
                 grandTotalQuantity: reviseFormData.grandTotalQuantity,
@@ -1058,7 +1207,15 @@ function PI({
 
             const updatedPiData = {
                 ...pi,
+                ipNumbers: updatedIpNumbers,
+                ipNumber: updatedIpNumberStr,
+                ipQuantity: updatedIpQuantity,
+                ipDate: latestDate,
                 validityDate: reviseFormData.validityDate,
+                placeOfReceipt: reviseFormData.placeOfReceipt,
+                portOfLoading: reviseFormData.portOfLoading,
+                portOfDischarge: reviseFormData.portOfDischarge,
+                certification: reviseFormData.certification,
                 productsList: reviseFormData.productsList,
                 grandTotal: reviseFormData.grandTotal,
                 grandTotalQuantity: reviseFormData.grandTotalQuantity,
@@ -2398,16 +2555,247 @@ function PI({
                                         </div>
                                     </div>
 
+                                    {/* First Line: Place of Receipt, Port of Loading, Port of Discharge */}
+                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                                        {/* Place of Receipt */}
+                                        <div className="space-y-1.5 relative dropdown-container">
+                                            <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Place of Receipt</label>
+                                            <div className="relative">
+                                                <input
+                                                    type="text"
+                                                    value={reviseFormData.placeOfReceipt || ''}
+                                                    onChange={(e) => {
+                                                        const val = e.target.value;
+                                                        setReviseFormData(prev => ({ ...prev, placeOfReceipt: val }));
+                                                        setActiveDropdown('reviseReceiptPlace');
+                                                        setHighlightedIndex(-1);
+                                                    }}
+                                                    onFocus={() => {
+                                                        setActiveDropdown('reviseReceiptPlace');
+                                                        setHighlightedIndex(-1);
+                                                    }}
+                                                    placeholder="e.g. GHOJADANGA"
+                                                    className="w-full px-4 py-2.5 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all font-medium text-sm"
+                                                    autoComplete="off"
+                                                />
+                                                {activeDropdown === 'reviseReceiptPlace' && (
+                                                    <div className="absolute z-[60] w-full mt-1 bg-white border border-gray-100 rounded-xl shadow-xl max-h-48 overflow-y-auto">
+                                                        {receiptPlaces.filter(v => !reviseFormData.placeOfReceipt || v.value.toLowerCase().includes(reviseFormData.placeOfReceipt.toLowerCase())).map((v, idx) => (
+                                                            <button
+                                                                key={v._id}
+                                                                type="button"
+                                                                onMouseDown={() => handleReviseDropdownSelect('placeOfReceipt', v.value)}
+                                                                onMouseEnter={() => setHighlightedIndex(idx)}
+                                                                className={`w-full px-4 py-2 text-left text-sm flex items-center justify-between ${highlightedIndex === idx || reviseFormData.placeOfReceipt === v.value ? 'bg-blue-50 text-blue-700 font-bold' : 'text-gray-700 hover:bg-blue-50'}`}
+                                                            >
+                                                                {v.value}
+                                                            </button>
+                                                        ))}
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </div>
+
+                                        {/* Port of Loading */}
+                                        <div className="space-y-1.5 relative dropdown-container">
+                                            <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Port of Loading</label>
+                                            <div className="relative">
+                                                <input
+                                                    type="text"
+                                                    value={reviseFormData.portOfLoading || ''}
+                                                    onChange={(e) => {
+                                                        const val = e.target.value;
+                                                        setReviseFormData(prev => ({ ...prev, portOfLoading: val }));
+                                                        setActiveDropdown('revisePortLoading');
+                                                        setHighlightedIndex(-1);
+                                                    }}
+                                                    onFocus={() => {
+                                                        setActiveDropdown('revisePortLoading');
+                                                        setHighlightedIndex(-1);
+                                                    }}
+                                                    placeholder="Search Port of Loading..."
+                                                    className="w-full px-4 py-2.5 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all font-medium text-sm"
+                                                    autoComplete="off"
+                                                />
+                                                {activeDropdown === 'revisePortLoading' && (
+                                                    <div className="absolute z-[60] w-full mt-1 bg-white border border-gray-100 rounded-xl shadow-xl max-h-48 overflow-y-auto">
+                                                        {ports.filter(p => p.isLoadingPort && (!reviseFormData.portOfLoading || p.name.toLowerCase().includes(reviseFormData.portOfLoading.toLowerCase()))).map((p, idx) => (
+                                                            <button
+                                                                key={p._id}
+                                                                type="button"
+                                                                onMouseDown={() => handleReviseDropdownSelect('portOfLoading', p.name)}
+                                                                onMouseEnter={() => setHighlightedIndex(idx)}
+                                                                className={`w-full px-4 py-2 text-left text-sm flex items-center justify-between ${highlightedIndex === idx || reviseFormData.portOfLoading === p.name ? 'bg-blue-50 text-blue-700 font-bold' : 'text-gray-700 hover:bg-blue-50'}`}
+                                                            >
+                                                                {p.name}
+                                                            </button>
+                                                        ))}
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </div>
+
+                                        {/* Port of Discharge */}
+                                        <div className="space-y-1.5 relative dropdown-container">
+                                            <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Port of Discharge</label>
+                                            <div className="relative">
+                                                <input
+                                                    type="text"
+                                                    value={reviseFormData.portOfDischarge || ''}
+                                                    onChange={(e) => {
+                                                        const val = e.target.value;
+                                                        setReviseFormData(prev => ({ ...prev, portOfDischarge: val }));
+                                                        setActiveDropdown('revisePortDischarge');
+                                                        setHighlightedIndex(-1);
+                                                    }}
+                                                    onFocus={() => {
+                                                        setActiveDropdown('revisePortDischarge');
+                                                        setHighlightedIndex(-1);
+                                                    }}
+                                                    placeholder="Search Port of Discharge..."
+                                                    className="w-full px-4 py-2.5 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all font-medium text-sm"
+                                                    autoComplete="off"
+                                                />
+                                                {activeDropdown === 'revisePortDischarge' && (
+                                                    <div className="absolute z-[60] w-full mt-1 bg-white border border-gray-100 rounded-xl shadow-xl max-h-48 overflow-y-auto">
+                                                        {ports.filter(p => !p.isLoadingPort && (!reviseFormData.portOfDischarge || p.name.toLowerCase().includes(reviseFormData.portOfDischarge.toLowerCase()))).map((p, idx) => (
+                                                            <button
+                                                                key={p._id}
+                                                                type="button"
+                                                                onMouseDown={() => handleReviseDropdownSelect('portOfDischarge', p.name)}
+                                                                onMouseEnter={() => setHighlightedIndex(idx)}
+                                                                className={`w-full px-4 py-2 text-left text-sm flex items-center justify-between ${highlightedIndex === idx || reviseFormData.portOfDischarge === p.name ? 'bg-blue-50 text-blue-700 font-bold' : 'text-gray-700 hover:bg-blue-50'}`}
+                                                            >
+                                                                {p.name}
+                                                            </button>
+                                                        ))}
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* Second Line: IP Search & Selection, Certification */}
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                        {/* IP Search & Selection */}
+                                        <div className="space-y-1.5 relative dropdown-container">
+                                            <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">IP Search & Selection</label>
+                                            <div className="relative">
+                                                <input
+                                                    type="text"
+                                                    value={reviseIpSearch}
+                                                    onChange={(e) => {
+                                                        setReviseIpSearch(e.target.value);
+                                                        setActiveDropdown('reviseIpNumber');
+                                                        setHighlightedIndex(-1);
+                                                    }}
+                                                    onFocus={() => {
+                                                        setActiveDropdown('reviseIpNumber');
+                                                        setHighlightedIndex(-1);
+                                                    }}
+                                                    placeholder="Search & Select IP Numbers to Add..."
+                                                    autoComplete="off"
+                                                    className="w-full px-4 py-2.5 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition-all font-medium text-sm"
+                                                />
+                                                {activeDropdown === 'reviseIpNumber' && (
+                                                    <div className="absolute z-[60] w-full mt-1 bg-white border border-gray-100 rounded-xl shadow-xl max-h-48 overflow-y-auto">
+                                                        {ipRecords.filter(ip => !reviseIpSearch || ip.ipNumber.toLowerCase().includes(reviseIpSearch.toLowerCase())).map((ip, idx) => {
+                                                            const isSelected = reviseFormData.ipNumbers && reviseFormData.ipNumbers.includes(ip.ipNumber);
+                                                            return (
+                                                                <button
+                                                                    key={ip._id}
+                                                                    type="button"
+                                                                    onMouseDown={() => handleReviseIpSelectToggle(ip.ipNumber)}
+                                                                    onMouseEnter={() => setHighlightedIndex(idx)}
+                                                                    className={`w-full px-4 py-2 text-left text-sm flex items-center justify-between ${highlightedIndex === idx || isSelected ? 'bg-blue-50 text-blue-700 font-bold' : 'text-gray-700 hover:bg-blue-50'}`}
+                                                                >
+                                                                    <div className="flex flex-col text-left">
+                                                                        <span className="font-bold">{ip.ipNumber}</span>
+                                                                        <span className="text-[10px] text-gray-500">{ip.ipParty} • {ip.productName}</span>
+                                                                    </div>
+                                                                    {isSelected && (
+                                                                        <span className="text-blue-600 font-bold text-sm">✓</span>
+                                                                    )}
+                                                                </button>
+                                                            );
+                                                        })}
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </div>
+
+                                        {/* Certification */}
+                                        <div className="space-y-1.5 relative dropdown-container">
+                                            <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Certification</label>
+                                            <div className="relative">
+                                                <input
+                                                    type="text"
+                                                    value={reviseFormData.certification || ''}
+                                                    onChange={(e) => {
+                                                        const val = e.target.value;
+                                                        setReviseFormData(prev => ({ ...prev, certification: val }));
+                                                        setActiveDropdown('reviseCertification');
+                                                        setHighlightedIndex(-1);
+                                                        const lastPart = val.split(',').pop().trim();
+                                                        setCertSearch(lastPart);
+                                                    }}
+                                                    onFocus={() => {
+                                                        setActiveDropdown('reviseCertification');
+                                                        setHighlightedIndex(-1);
+                                                    }}
+                                                    placeholder="e.g. Packing, Value & Quantity"
+                                                    className="w-full px-4 py-2.5 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all font-medium text-sm pr-10"
+                                                    autoComplete="off"
+                                                />
+                                                {activeDropdown === 'reviseCertification' && (() => {
+                                                    const defaultCerts = [
+                                                        { _id: 'default-packing', value: 'Packing', isDefault: true },
+                                                        { _id: 'default-valqty', value: 'Value & Quantity', isDefault: true },
+                                                        { _id: 'default-coo', value: 'Country of Origin', isDefault: true }
+                                                    ];
+                                                    const merged = [...defaultCerts];
+                                                    certifications.forEach(cert => {
+                                                        if (!merged.some(d => d.value.toLowerCase() === cert.value.toLowerCase())) {
+                                                            merged.push(cert);
+                                                        }
+                                                    });
+                                                    const filtered = merged.filter(v => !certSearch || v.value.toLowerCase().includes(certSearch.toLowerCase()));
+                                                    return (
+                                                        <div className="absolute z-[60] w-full mt-1 bg-white border border-gray-100 rounded-xl shadow-xl max-h-48 overflow-y-auto">
+                                                            {filtered.map((v, idx) => {
+                                                                const selectedParts = (reviseFormData.certification || '').split(',').map(p => p.trim()).filter(Boolean);
+                                                                const isSelected = selectedParts.some(p => p.toLowerCase() === v.value.toLowerCase());
+                                                                return (
+                                                                    <button
+                                                                        key={v._id}
+                                                                        type="button"
+                                                                        onMouseDown={() => handleReviseDropdownSelect('certification', v.value)}
+                                                                        onMouseEnter={() => setHighlightedIndex(idx)}
+                                                                        className={`w-full px-4 py-2 text-left text-sm flex items-center justify-between ${highlightedIndex === idx || isSelected ? 'bg-blue-50 text-blue-700 font-bold' : 'text-gray-700 hover:bg-blue-50'}`}
+                                                                    >
+                                                                        <span>{v.value}</span>
+                                                                        {isSelected && <span className="text-blue-600 font-bold">✓</span>}
+                                                                    </button>
+                                                                );
+                                                            })}
+                                                        </div>
+                                                    );
+                                                })()}
+                                            </div>
+                                        </div>
+                                    </div>
+
                                     {/* IP rows - one per IP number */}
                                     {selectedPiReviseIpInfo.length > 0 ? (
                                         <div className="space-y-3">
-                                            <div className="grid grid-cols-3 gap-6">
+                                            <div className="grid grid-cols-[1fr_1fr_1fr_auto] gap-4 items-center">
                                                 <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">IP</label>
                                                 <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">IP Balance</label>
                                                 <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">IP Expiry Date</label>
+                                                <div className="w-8"></div>
                                             </div>
                                             {selectedPiReviseIpInfo.map((ipInfo, idx) => (
-                                                <div key={idx} className="grid grid-cols-3 gap-6">
+                                                <div key={idx} className="grid grid-cols-[1fr_1fr_1fr_auto] gap-4 items-center">
                                                     <div>
                                                         <input
                                                             type="text"
@@ -2433,6 +2821,16 @@ function PI({
                                                             value={ipInfo.expiryDisplay}
                                                             className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl outline-none text-red-600 font-bold text-sm"
                                                         />
+                                                    </div>
+                                                    <div className="flex-shrink-0 flex items-center justify-center">
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => handleReviseIpSelectToggle(ipInfo.ipNumber)}
+                                                            className="text-red-500 hover:text-red-700 p-1.5 rounded-lg hover:bg-red-50 transition-all duration-200"
+                                                            title="Remove IP"
+                                                        >
+                                                            <XIcon className="w-4 h-4" />
+                                                        </button>
                                                     </div>
                                                 </div>
                                             ))}
@@ -2507,17 +2905,6 @@ function PI({
                                             <span className="text-gray-500">Total Qty: {parseFloat(reviseFormData.grandTotalQuantity || 0).toLocaleString('en-US')} kg</span>
                                             <span className="text-blue-600">Grand Total: ${parseFloat(reviseFormData.grandTotal || 0).toLocaleString()}</span>
                                         </div>
-                                    </div>
-
-                                    <div className="space-y-1.5">
-                                        <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Remarks</label>
-                                        <textarea
-                                            value={reviseFormData.remarks}
-                                            onChange={(e) => setReviseFormData(prev => ({ ...prev, remarks: e.target.value }))}
-                                            rows={3}
-                                            placeholder="Enter revision remarks..."
-                                            className="w-full px-4 py-2.5 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all font-medium resize-none"
-                                        />
                                     </div>
 
                                     <div className="flex justify-end gap-3 pt-4 border-t border-gray-100">
