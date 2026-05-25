@@ -140,11 +140,26 @@ export const generatePIPDF = (record) => {
     doc.text(exporterLines, margin + leftColWidth / 2, y + 21, { align: 'center' });
 
     // PI Info Content
+    const rawPiNumber = record.piNumber || '';
+    const isRevised = rawPiNumber.includes('(REVISED)');
+    const basePiNumber = rawPiNumber.replace('(REVISED)', '').trim();
+
+    doc.setFont("helvetica", "normal");
     doc.setFontSize(7);
     doc.text("Proforma Invoice No:", midX + 2, y + 5);
     doc.setFont("helvetica", "bold");
     doc.setFontSize(8);
-    doc.text(record.piNumber || '', midX + 28, y + 5);
+    doc.text(basePiNumber, midX + 28, y + 5);
+
+    if (isRevised) {
+        const piWidth = doc.getTextWidth(basePiNumber);
+        const centerX = midX + 28 + (piWidth / 2);
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(7);
+        doc.setTextColor(220, 38, 38);
+        doc.text("(REVISED)", centerX, y + 9, { align: 'center' });
+        doc.setTextColor(0, 0, 0);
+    }
 
     // Align Date label and value together at the right
     const dateVal = formatDate(record.date) || '';
@@ -169,12 +184,14 @@ export const generatePIPDF = (record) => {
     doc.setFontSize(8);
     doc.text(dateVal, midX + rightColWidth - 2, y + 5, { align: 'right' });
 
+    const validityY = isRevised ? (y + 13) : (y + 9);
+
     doc.setFont("helvetica", "normal");
     doc.setFontSize(7);
-    doc.text("Proforma Invoice Validity:", midX + 2, y + 9);
+    doc.text("Proforma Invoice Validity:", midX + 2, validityY);
     doc.setFont("helvetica", "bold");
     doc.setFontSize(8);
-    doc.text(formatDate(record.validityDate) || '', midX + rightColWidth - 2, y + 9, { align: 'right' });
+    doc.text(formatDate(record.validityDate) || '', midX + rightColWidth - 2, validityY, { align: 'right' });
 
     doc.line(midX, y + 18, pageWidth - margin, y + 18);
 

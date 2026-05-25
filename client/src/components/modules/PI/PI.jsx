@@ -65,6 +65,8 @@ function PI({
         remarks: '',
         ipNumbers: []
     });
+    const [viewHistoryRecord, setViewHistoryRecord] = useState(null);
+    const [activeHistoryIndex, setActiveHistoryIndex] = useState(0);
     const toastTimerRef = useRef(null);
 
     const showToast = (message, type = 'success', duration = 3000) => {
@@ -841,7 +843,7 @@ function PI({
                 amount: record.amount || '',
                 freight: record.freight || '',
                 totalFreight: record.totalFreight || ''
-              }];
+            }];
 
         const parsedIpNumbers = record.ipNumbers || (record.ipNumber ? record.ipNumber.split(',').map(s => s.trim()).filter(Boolean) : []);
 
@@ -1033,7 +1035,7 @@ function PI({
 
     const handleRevisePiSelect = (pi) => {
         setSelectedRevisePiId(pi._id);
-        const nextNo = (pi.revisions || []).length + 1;
+        const nextNo = (pi.revisions || []).filter(r => r.reviseNo !== 'Original PI').length + 1;
         const ipNumbers = pi.ipNumbers?.length
             ? pi.ipNumbers
             : (pi.ipNumber
@@ -1105,8 +1107,8 @@ function PI({
                 updatedIpNumbers = [...currentIpNumbers, value];
 
                 // Check if product is already in productsList to avoid duplicate products for the same IP
-                const productExists = updatedProductsList.some(p => 
-                    p._fromIp === value || 
+                const productExists = updatedProductsList.some(p =>
+                    p._fromIp === value ||
                     (p.productName === ip.productName)
                 );
 
@@ -1202,8 +1204,29 @@ function PI({
                 grandTotal: reviseFormData.grandTotal,
                 grandTotalQuantity: reviseFormData.grandTotalQuantity,
                 remarks: reviseFormData.remarks,
+                ipNumbers: updatedIpNumbers,
                 createdAt: new Date().toISOString()
             };
+
+            const currentRevisions = [...(pi.revisions || [])];
+            if (currentRevisions.length === 0) {
+                const originalRevision = {
+                    reviseNo: 'Original PI',
+                    reviseDate: pi.date,
+                    validityDate: pi.validityDate,
+                    placeOfReceipt: pi.placeOfReceipt,
+                    portOfLoading: pi.portOfLoading,
+                    portOfDischarge: pi.portOfDischarge,
+                    certification: pi.certification,
+                    productsList: getPiProductsList(pi),
+                    grandTotal: pi.grandTotal,
+                    grandTotalQuantity: pi.grandTotalQuantity,
+                    remarks: pi.remarks || '',
+                    ipNumbers: pi.ipNumbers || (pi.ipNumber ? pi.ipNumber.split(',').map(s => s.trim()).filter(Boolean) : []),
+                    createdAt: pi.createdAt || pi.date || new Date().toISOString()
+                };
+                currentRevisions.push(originalRevision);
+            }
 
             const updatedPiData = {
                 ...pi,
@@ -1220,7 +1243,7 @@ function PI({
                 grandTotal: reviseFormData.grandTotal,
                 grandTotalQuantity: reviseFormData.grandTotalQuantity,
                 piRevision: `${reviseFormData.reviseNo} DATE: ${formatDate(reviseFormData.reviseDate)}`,
-                revisions: [...(pi.revisions || []), newRevision]
+                revisions: [...currentRevisions, newRevision]
             };
 
             await axios.put(`${API_BASE_URL}/api/pi/${selectedRevisePiId}`, updatedPiData);
@@ -1255,6 +1278,62 @@ function PI({
         return true;
     });
 
+    const getHistoryTimeline = (record) => {
+        if (!record) return [];
+        const list = [];
+        const revisions = record.revisions || [];
+        const hasOriginal = revisions.some(r => r.reviseNo === 'Original PI');
+
+        if (revisions.length === 0) {
+            // Unrevised: just original PI using current fields
+            list.push({
+                reviseNo: 'Original PI',
+                reviseDate: record.date,
+                validityDate: record.validityDate,
+                placeOfReceipt: record.placeOfReceipt || 'N/A',
+                portOfLoading: record.portOfLoading || 'N/A',
+                portOfDischarge: record.portOfDischarge || 'N/A',
+                certification: record.certification || 'N/A',
+                productsList: getPiProductsList(record),
+                grandTotal: record.grandTotal,
+                grandTotalQuantity: record.grandTotalQuantity,
+                remarks: record.remarks || '',
+                ipNumbers: record.ipNumbers || (record.ipNumber ? record.ipNumber.split(',').map(s => s.trim()).filter(Boolean) : []),
+                isOriginal: true
+            });
+        } else {
+            // Revised:
+            if (!hasOriginal) {
+                // Synthesize the Original PI for old records if it was not stored
+                list.push({
+                    reviseNo: 'Original PI',
+                    reviseDate: record.date,
+                    validityDate: 'N/A (Historical)',
+                    placeOfReceipt: 'N/A (Historical)',
+                    portOfLoading: 'N/A (Historical)',
+                    portOfDischarge: 'N/A (Historical)',
+                    certification: 'N/A (Historical)',
+                    productsList: [],
+                    grandTotal: 'N/A',
+                    grandTotalQuantity: 'N/A',
+                    remarks: 'Historical original values were not captured prior to first revision.',
+                    ipNumbers: [],
+                    isOriginal: true,
+                    isPlaceholder: true
+                });
+            }
+
+            revisions.forEach(rev => {
+                list.push({
+                    ...rev,
+                    ipNumbers: rev.ipNumbers || (rev.ipNumber ? rev.ipNumber.split(',').map(s => s.trim()).filter(Boolean) : (record.ipNumbers || (record.ipNumber ? record.ipNumber.split(',').map(s => s.trim()).filter(Boolean) : []))),
+                    isOriginal: rev.reviseNo === 'Original PI'
+                });
+            });
+        }
+        return list;
+    };
+
     return (
         <div className="pi-management space-y-6">
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -1265,16 +1344,16 @@ function PI({
                         </div>
 
                         <div className="w-full md:flex-1 md:max-w-md md:mx-auto relative group px-2 md:px-0">
-                        <div className="absolute inset-y-0 left-0 pl-5 md:pl-3.5 flex items-center pointer-events-none">
-                            <SearchIcon className="h-4 w-4 text-gray-400 group-focus-within:text-blue-500 transition-colors" />
-                        </div>
-                        <input
-                            type="text"
-                            placeholder="Search PI No, Importer, or Product..."
-                            value={searchQuery}
-                            onChange={(e) => setSearchQuery(e.target.value)}
-                            className="block w-full pl-12 md:pl-10 pr-4 py-2.5 md:py-2 bg-white/50 border border-gray-200 rounded-xl text-[13px] text-center md:text-left placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all outline-none shadow-sm focus:bg-white"
-                        />
+                            <div className="absolute inset-y-0 left-0 pl-5 md:pl-3.5 flex items-center pointer-events-none">
+                                <SearchIcon className="h-4 w-4 text-gray-400 group-focus-within:text-blue-500 transition-colors" />
+                            </div>
+                            <input
+                                type="text"
+                                placeholder="Search PI No, Importer, or Product..."
+                                value={searchQuery}
+                                onChange={(e) => setSearchQuery(e.target.value)}
+                                className="block w-full pl-12 md:pl-10 pr-4 py-2.5 md:py-2 bg-white/50 border border-gray-200 rounded-xl text-[13px] text-center md:text-left placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all outline-none shadow-sm focus:bg-white"
+                            />
                         </div>
                     </>
                 ) : (
@@ -1386,10 +1465,9 @@ function PI({
                                                             const hasBalance = balance !== undefined;
                                                             const isLow = hasBalance && balance < 50000;
                                                             return (
-                                                                <span className={`text-sm font-bold ${
-                                                                    !hasBalance ? 'text-gray-400' :
+                                                                <span className={`text-sm font-bold ${!hasBalance ? 'text-gray-400' :
                                                                     isLow ? 'text-red-600' : 'text-emerald-600'
-                                                                }`}>
+                                                                    }`}>
                                                                     {hasBalance ? balance.toLocaleString('en-US') + ' Kg' : '—'}
                                                                 </span>
                                                             );
@@ -2809,9 +2887,8 @@ function PI({
                                                             type="text"
                                                             readOnly
                                                             value={ipInfo.balanceDisplay}
-                                                            className={`w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl outline-none font-bold text-sm ${
-                                                                ipInfo.isLowBalance ? 'text-red-600' : 'text-emerald-600'
-                                                            }`}
+                                                            className={`w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl outline-none font-bold text-sm ${ipInfo.isLowBalance ? 'text-red-600' : 'text-emerald-600'
+                                                                }`}
                                                         />
                                                     </div>
                                                     <div>
@@ -3007,8 +3084,11 @@ function PI({
 
                                             return (
                                                 <tr key={record._id} className="hover:bg-gray-50/50 transition-colors">
-                                                    <td className="px-6 py-4 text-sm text-gray-600 font-medium">{formatDate(record.date)}</td>
-                                                    <td className="px-6 py-4 text-sm font-bold text-blue-600">{record.piNumber}</td>
+                                                    <td className="px-6 py-4 text-sm text-gray-600 font-medium">{formatDate(record.revisions && record.revisions.length > 0 ? (record.revisions[record.revisions.length - 1].reviseDate || record.date) : record.date)}</td>
+                                                    <td className="px-6 py-4 text-sm font-bold text-blue-600">
+                                                        {record.piNumber}
+                                                        {record.revisions && record.revisions.length > 0 ? ' (REVISED)' : ''}
+                                                    </td>
                                                     <td className="px-6 py-4 text-sm text-gray-700 font-semibold">{record.partyName}</td>
                                                     <td className="px-6 py-4 text-sm text-gray-700 font-semibold">{record.exporterName}</td>
                                                     <td className="px-6 py-4 text-sm text-gray-600 max-w-[200px] truncate" title={displayProducts}>{displayProducts}</td>
@@ -3026,7 +3106,21 @@ function PI({
                                                         <div className="flex items-center justify-center gap-3">
                                                             <button
                                                                 onClick={() => {
-                                                                    const enriched = { ...record };
+                                                                    setViewHistoryRecord(record);
+                                                                    setActiveHistoryIndex(0);
+                                                                }}
+                                                                className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all active:scale-90"
+                                                                title="View History"
+                                                            >
+                                                                <EyeIcon className="w-5 h-5" />
+                                                            </button>
+                                                            <button
+                                                                onClick={() => {
+                                                                    const enriched = {
+                                                                        ...record,
+                                                                        piNumber: record.revisions && record.revisions.length > 0 ? `${record.piNumber} (REVISED)` : record.piNumber,
+                                                                        date: record.revisions && record.revisions.length > 0 ? (record.revisions[record.revisions.length - 1].reviseDate || record.date) : record.date
+                                                                    };
                                                                     if (!enriched.exporterAddress || !enriched.exporterEmail || !enriched.exporterSignature) {
                                                                         const exp = exporters?.find(e => e.name === enriched.exporterName);
                                                                         if (exp) {
@@ -3057,22 +3151,13 @@ function PI({
                                                                 <PDFIcon className="w-5 h-5" />
                                                             </button>
                                                             {canManage && (
-                                                                <>
-                                                                    <button
-                                                                        onClick={() => handleEdit(record)}
-                                                                        className="p-2 text-gray-400 hover:text-indigo-600 transition-all active:scale-90"
-                                                                        title="Edit Record"
-                                                                    >
-                                                                        <EditIcon className="w-5 h-5" />
-                                                                    </button>
-                                                                    <button
-                                                                        onClick={() => handleDelete(record._id)}
-                                                                        className="p-2 text-gray-400 hover:text-red-600 transition-all active:scale-90"
-                                                                        title="Delete Record"
-                                                                    >
-                                                                        <TrashIcon className="w-5 h-5" />
-                                                                    </button>
-                                                                </>
+                                                                <button
+                                                                    onClick={() => handleDelete(record._id)}
+                                                                    className="p-2 text-gray-400 hover:text-red-600 transition-all active:scale-90"
+                                                                    title="Delete Record"
+                                                                >
+                                                                    <TrashIcon className="w-5 h-5" />
+                                                                </button>
                                                             )}
                                                         </div>
                                                     </td>
@@ -3122,7 +3207,10 @@ function PI({
                                                 <div className="flex items-center min-w-0 flex-1">
                                                     <span className="w-[48px] text-[11px] font-black text-blue-500 uppercase tracking-widest shrink-0 whitespace-nowrap">PI No.</span>
                                                     <span className="text-blue-500 font-bold mx-2">-</span>
-                                                    <span className="text-sm font-black text-gray-900 tracking-tight truncate">{record.piNumber}</span>
+                                                    <span className="text-sm font-black text-gray-900 tracking-tight truncate">
+                                                        {record.piNumber}
+                                                        {record.revisions && record.revisions.length > 0 ? ' (REVISED)' : ''}
+                                                    </span>
                                                 </div>
                                                 <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-widest border shrink-0 ${record.status === 'Active' ? 'bg-green-50 text-green-700 border-green-100' :
                                                     record.status === 'Closed' ? 'bg-gray-100 text-gray-600 border border-gray-200' :
@@ -3138,7 +3226,7 @@ function PI({
                                                     <div className="flex items-center">
                                                         <span className="w-[100px] text-[11px] font-black text-gray-400 uppercase tracking-widest shrink-0">Date</span>
                                                         <span className="text-gray-400 font-bold mx-2">-</span>
-                                                        <span className="text-sm font-bold text-gray-700">{formatDate(record.date)}</span>
+                                                        <span className="text-sm font-bold text-gray-700">{formatDate(record.revisions && record.revisions.length > 0 ? (record.revisions[record.revisions.length - 1].reviseDate || record.date) : record.date)}</span>
                                                     </div>
                                                     <div className="flex items-center">
                                                         <span className="w-[100px] text-[11px] font-black text-gray-400 uppercase tracking-widest shrink-0">Expire Date</span>
@@ -3181,7 +3269,21 @@ function PI({
                                                     <button
                                                         onClick={(e) => {
                                                             e.stopPropagation();
-                                                            const enriched = { ...record };
+                                                            setViewHistoryRecord(record);
+                                                            setActiveHistoryIndex(0);
+                                                        }}
+                                                        className="flex-1 flex items-center justify-center gap-1.5 py-3 bg-blue-50 text-blue-700 rounded-xl font-black text-[10px] uppercase tracking-widest active:scale-95 transition-all"
+                                                    >
+                                                        <EyeIcon className="w-3.5 h-3.5" /> View
+                                                    </button>
+                                                    <button
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            const enriched = {
+                                                                ...record,
+                                                                piNumber: record.revisions && record.revisions.length > 0 ? `${record.piNumber} (REVISED)` : record.piNumber,
+                                                                date: record.revisions && record.revisions.length > 0 ? (record.revisions[record.revisions.length - 1].reviseDate || record.date) : record.date
+                                                            };
                                                             const exp = exporters?.find(e => e.name === enriched.exporterName);
                                                             if (exp) {
                                                                 enriched.exporterAddress = enriched.exporterAddress || exp.address;
@@ -3207,20 +3309,12 @@ function PI({
                                                         <PDFIcon className="w-3.5 h-3.5" /> PDF
                                                     </button>
                                                     {canManage && (
-                                                        <>
-                                                            <button
-                                                                onClick={(e) => { e.stopPropagation(); handleEdit(record); }}
-                                                                className="flex-1 flex items-center justify-center gap-1.5 py-3 bg-indigo-50 text-indigo-700 rounded-xl font-black text-[10px] uppercase tracking-widest active:scale-95 transition-all"
-                                                            >
-                                                                <EditIcon className="w-3.5 h-3.5" /> Edit
-                                                            </button>
-                                                            <button
-                                                                onClick={(e) => { e.stopPropagation(); handleDelete(record._id); }}
-                                                                className="flex-1 flex items-center justify-center gap-1.5 py-3 bg-red-50 text-red-600 rounded-xl font-black text-[10px] uppercase tracking-widest active:scale-95 transition-all"
-                                                            >
-                                                                <TrashIcon className="w-3.5 h-3.5" /> Delete
-                                                            </button>
-                                                        </>
+                                                        <button
+                                                            onClick={(e) => { e.stopPropagation(); handleDelete(record._id); }}
+                                                            className="flex-1 flex items-center justify-center gap-1.5 py-3 bg-red-50 text-red-600 rounded-xl font-black text-[10px] uppercase tracking-widest active:scale-95 transition-all"
+                                                        >
+                                                            <TrashIcon className="w-3.5 h-3.5" /> Delete
+                                                        </button>
                                                     )}
                                                 </div>
                                             </div>
@@ -3264,6 +3358,310 @@ function PI({
                     </button>
                 </div>
             )}
+
+            {/* History Explorer Modal */}
+            {viewHistoryRecord && (() => {
+                const timeline = getHistoryTimeline(viewHistoryRecord);
+                const activeRevision = timeline[activeHistoryIndex] || timeline[0] || {};
+                const activeProducts = activeRevision.productsList || [];
+                const activeIps = activeRevision.ipNumbers || [];
+
+                return (
+                    <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
+                        <div className="bg-white w-full max-w-6xl h-[85vh] rounded-3xl shadow-2xl flex flex-col overflow-hidden border border-gray-100 animate-in zoom-in-95 duration-200">
+                            {/* Modal Header */}
+                            <div className="px-8 py-5 border-b border-gray-100 flex items-center justify-between bg-gray-50/50">
+                                <div className="flex items-center gap-3">
+                                    <div className="p-2.5 bg-blue-100 text-blue-600 rounded-2xl">
+                                        <EyeIcon className="w-6 h-6" />
+                                    </div>
+                                    <div>
+                                        <h3 className="text-lg font-black text-gray-900 tracking-tight">Proforma Invoice History Explorer</h3>
+                                        <p className="text-sm text-gray-500 font-medium">PI Number: <span className="font-bold text-blue-600 font-mono">{viewHistoryRecord.piNumber}{viewHistoryRecord.revisions && viewHistoryRecord.revisions.length > 0 && activeRevision.reviseNo !== 'Original PI' ? ' (REVISED)' : ''}</span> • Date: <span className="font-bold text-gray-800 font-mono">{formatDate(activeRevision.reviseDate || viewHistoryRecord.date)}</span></p>
+                                    </div>
+                                </div>
+                                <button
+                                    onClick={() => setViewHistoryRecord(null)}
+                                    className="p-2 rounded-xl hover:bg-gray-200 text-gray-400 hover:text-gray-600 active:scale-95 transition-all"
+                                >
+                                    <XIcon className="w-5 h-5" />
+                                </button>
+                            </div>
+
+                            {/* Modal Body */}
+                            <div className="flex-1 flex overflow-hidden min-h-0">
+                                {/* Left Sidebar: Timeline */}
+                                <div className="w-60 border-r border-gray-100 overflow-y-auto p-6 bg-gray-50/30 flex-shrink-0">
+                                    <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-6">Revision Timeline</h4>
+                                    <div className="relative border-l border-gray-200 pl-6 ml-3 space-y-8">
+                                        {timeline.map((rev, idx) => {
+                                            const isActive = activeHistoryIndex === idx;
+                                            return (
+                                                <div
+                                                    key={idx}
+                                                    onClick={() => setActiveHistoryIndex(idx)}
+                                                    className="relative cursor-pointer group"
+                                                >
+                                                    {/* Timeline Bullet */}
+                                                    <div className={`absolute -left-[31px] top-1 w-4 h-4 rounded-full border-2 transition-all flex items-center justify-center ${isActive
+                                                        ? 'bg-blue-600 border-blue-600 ring-4 ring-blue-100 scale-110 shadow-sm'
+                                                        : 'bg-white border-gray-300 group-hover:border-blue-400 group-hover:scale-105'
+                                                        }`} />
+
+                                                    {/* Timeline Content Card */}
+                                                    <div className={`p-4 rounded-2xl border transition-all ${isActive
+                                                        ? 'bg-white border-blue-200 shadow-md shadow-blue-500/5'
+                                                        : 'bg-white/50 border-gray-100 hover:border-gray-200 hover:bg-white hover:shadow-sm'
+                                                        }`}>
+                                                        <span className={`text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full ${rev.isOriginal
+                                                            ? 'bg-blue-50 text-blue-700'
+                                                            : 'bg-amber-50 text-amber-700'
+                                                            }`}>
+                                                            {rev.reviseNo}
+                                                        </span>
+                                                        <p className="text-sm font-bold text-gray-800 mt-2">
+                                                            {rev.isOriginal ? 'Initial Creation' : 'Revised State'}
+                                                        </p>
+                                                        <p className="text-sm font-medium text-gray-500 mt-1 font-mono">
+                                                            {formatDate(rev.reviseDate)}
+                                                        </p>
+                                                    </div>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
+
+                                {/* Right Pane: Details */}
+                                <div className="flex-1 overflow-y-auto p-8 space-y-8">
+                                    {activeRevision.isPlaceholder ? (
+                                        <div className="h-full flex flex-col items-center justify-center text-center p-8 bg-gray-50/50 rounded-3xl border border-gray-100">
+                                            <div className="w-16 h-16 rounded-full bg-amber-50 text-amber-500 flex items-center justify-center mb-4">
+                                                <span className="text-2xl">⚠️</span>
+                                            </div>
+                                            <h4 className="text-base font-bold text-gray-800">Original PI Data</h4>
+                                            <p className="text-sm text-gray-500 mt-2 max-w-md">
+                                                This PI was revised prior to the deployment of the detailed history tracking system. Historical initial values were overwritten and are not fully accessible.
+                                            </p>
+                                            <p className="text-xs text-gray-400 mt-4">
+                                                All subsequent revisions and updates are saved and fully trackable.
+                                            </p>
+                                        </div>
+                                    ) : (
+                                        <>
+                                            {/* Details Section */}
+                                            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                                                {/* Card 1: Logistics */}
+                                                <div className="bg-gray-50/50 border border-gray-100 rounded-2xl p-5 space-y-4">
+                                                    <h5 className="text-[10px] font-black text-blue-600 uppercase tracking-widest">Logistics & Route</h5>
+                                                    <div className="space-y-3 text-sm">
+                                                        <div>
+                                                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Place of Receipt</span>
+                                                            <span className="font-bold text-gray-800 mt-0.5 block">{activeRevision.placeOfReceipt || 'N/A'}</span>
+                                                        </div>
+                                                        <div>
+                                                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Port of Loading</span>
+                                                            <span className="font-bold text-gray-800 mt-0.5 block">{activeRevision.portOfLoading || 'N/A'}</span>
+                                                        </div>
+                                                        <div>
+                                                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Port of Discharge</span>
+                                                            <span className="font-bold text-gray-800 mt-0.5 block">{activeRevision.portOfDischarge || 'N/A'}</span>
+                                                        </div>
+                                                    </div>
+                                                </div>
+
+                                                {/* Card 2: Dates & Certifications */}
+                                                <div className="bg-gray-50/50 border border-gray-100 rounded-2xl p-5 space-y-4">
+                                                    <h5 className="text-[10px] font-black text-blue-600 uppercase tracking-widest">Dates & Certification</h5>
+                                                    <div className="space-y-3 text-sm">
+                                                        <div>
+                                                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Revise / Original Date</span>
+                                                            <span className="font-bold text-gray-800 mt-0.5 block font-mono">{formatDate(activeRevision.reviseDate)}</span>
+                                                        </div>
+                                                        <div>
+                                                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Validity Date</span>
+                                                            <span className="font-bold text-rose-500 mt-0.5 block font-mono">{formatDate(activeRevision.validityDate)}</span>
+                                                        </div>
+                                                        <div>
+                                                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block mb-1">Certification</span>
+                                                            <div className="space-y-1">
+                                                                {activeRevision.certification
+                                                                    ? activeRevision.certification.split(',').map((cert, cIdx) => (
+                                                                        <span key={cIdx} className="font-bold text-gray-800 block text-sm">{cert.trim()}</span>
+                                                                    ))
+                                                                    : <span className="font-bold text-gray-800 block text-sm">N/A</span>
+                                                                }
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+
+                                                {/* Card 3: IP Records & Reference */}
+                                                <div className="bg-gray-50/50 border border-gray-100 rounded-2xl p-5 space-y-4">
+                                                    <h5 className="text-[10px] font-black text-blue-600 uppercase tracking-widest">IP Records & Remarks</h5>
+                                                    <div className="space-y-3 text-sm">
+                                                        <div>
+                                                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Import Permission (IP)</span>
+                                                            <div className="flex flex-wrap gap-1.5 mt-1">
+                                                                {activeIps.length > 0 ? (
+                                                                    activeIps.map((ip, i) => (
+                                                                        <span key={i} className="text-sm font-bold bg-blue-50 text-blue-700 px-2 py-0.5 rounded-lg border border-blue-100 font-mono">
+                                                                            {ip}
+                                                                        </span>
+                                                                    ))
+                                                                ) : (
+                                                                    <span className="text-gray-500 font-bold text-sm">N/A</span>
+                                                                )}
+                                                            </div>
+                                                        </div>
+                                                        <div>
+                                                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Remarks</span>
+                                                            <p className="text-sm font-bold text-gray-800 mt-1 max-h-16 overflow-y-auto">{activeRevision.remarks || 'No remarks provided.'}</p>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            {/* Products Table */}
+                                            <div className="space-y-3">
+                                                <h5 className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Products Breakdown</h5>
+                                                <div className="overflow-hidden rounded-2xl border border-gray-100 bg-white">
+                                                    <table className="w-full text-left border-collapse">
+                                                        <thead>
+                                                            <tr className="bg-gray-50 border-b border-gray-100 text-[10px] font-black text-gray-400 uppercase tracking-wider">
+                                                                <th className="px-6 py-3">Product Name</th>
+                                                                <th className="px-6 py-3">HS Code</th>
+                                                                <th className="px-6 py-3 text-right">Quantity (kg)</th>
+                                                                <th className="px-6 py-3 text-right">Rate ($)</th>
+                                                                <th className="px-6 py-3 text-right">Freight</th>
+                                                                <th className="px-6 py-3 text-right">Total Amount</th>
+                                                            </tr>
+                                                        </thead>
+                                                        <tbody className="divide-y divide-gray-50 text-sm">
+                                                            {activeProducts.map((prod, pIdx) => (
+                                                                <tr key={pIdx} className="hover:bg-gray-50/30">
+                                                                    <td className="px-6 py-3.5 font-bold text-gray-800">{prod.productName || 'N/A'}</td>
+                                                                    <td className="px-6 py-3.5 font-mono font-medium text-gray-500">{prod.hsCode || 'N/A'}</td>
+                                                                    <td className="px-6 py-3.5 text-right font-semibold text-gray-700">{parseFloat(prod.quantity || 0).toLocaleString('en-US')} kg</td>
+                                                                    <td className="px-6 py-3.5 text-right font-semibold text-gray-700">${parseFloat(prod.rate || 0).toFixed(2)}</td>
+                                                                    <td className="px-6 py-3.5 text-right font-semibold text-gray-700">${parseFloat(prod.freight || 0).toFixed(2)}</td>
+                                                                    <td className="px-6 py-3.5 text-right font-black text-blue-600">${parseFloat(prod.amount || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+                                                                </tr>
+                                                            ))}
+                                                        </tbody>
+                                                    </table>
+                                                </div>
+
+                                                {/* Totals Summary Cards */}
+                                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 max-w-lg mx-auto pt-6">
+                                                    {/* Total Quantity Card */}
+                                                    <div className="bg-blue-50/40 border border-blue-100 rounded-2xl p-5 text-center shadow-sm">
+                                                        <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest block">Total Quantity</span>
+                                                        <span className="text-xl font-black text-gray-900 mt-1 block">
+                                                            {parseFloat(activeRevision.grandTotalQuantity || 0).toLocaleString('en-US')} kg
+                                                        </span>
+                                                    </div>
+                                                    {/* Grand Total Card */}
+                                                    <div className="bg-blue-600 text-white rounded-2xl p-5 text-center shadow-lg shadow-blue-500/20">
+                                                        <span className="text-[10px] font-black text-blue-200 uppercase tracking-widest block">Grand Total Value</span>
+                                                        <span className="text-xl font-black text-white mt-1 block">
+                                                            ${parseFloat(activeRevision.grandTotal || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                                                        </span>
+                                                    </div>
+                                                </div>
+
+                                                {/* Action Buttons under Cards */}
+                                                <div className="flex items-center justify-center gap-4 pt-6 pb-2">
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => {
+                                                            const enriched = {
+                                                                ...viewHistoryRecord,
+                                                                ...activeRevision,
+                                                                piNumber: `${viewHistoryRecord.piNumber}${activeRevision.reviseNo !== 'Original PI' ? ' (REVISED)' : ''}`
+                                                            };
+
+                                                            // Enrich exporter details if missing
+                                                            if (!enriched.exporterAddress || !enriched.exporterEmail || !enriched.exporterSignature) {
+                                                                const exp = exporters?.find(e => e.name === enriched.exporterName);
+                                                                if (exp) {
+                                                                    enriched.exporterAddress = enriched.exporterAddress || exp.address;
+                                                                    enriched.exporterContact = enriched.exporterContact || exp.phone;
+                                                                    enriched.exporterEmail = enriched.exporterEmail || exp.email;
+                                                                    enriched.exporterSignature = enriched.exporterSignature || exp.signature;
+                                                                }
+                                                            }
+
+                                                            // Enrich importer details if missing
+                                                            if (!enriched.partyAddress || !enriched.partyEmail || !enriched.partySignature) {
+                                                                const imp = importers?.find(i => i.name === enriched.partyName);
+                                                                if (imp) {
+                                                                    enriched.partyAddress = enriched.partyAddress || imp.address;
+                                                                    enriched.partyContact = enriched.partyContact || imp.phone;
+                                                                    enriched.partyEmail = enriched.partyEmail || imp.email;
+                                                                    enriched.partySignature = enriched.partySignature || imp.signature;
+                                                                }
+                                                            }
+
+                                                            if (enriched.invoiceStyle === 'Style 2 AAS') {
+                                                                generatePI2PDF(enriched);
+                                                            } else {
+                                                                generatePIPDF(enriched);
+                                                            }
+                                                        }}
+                                                        className="px-6 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold text-sm rounded-xl shadow-md transition-all transform hover:scale-105 active:scale-95 flex items-center justify-center gap-2"
+                                                    >
+                                                        <PDFIcon className="w-4 h-4 text-white" />
+                                                        <span>Print PI PDF</span>
+                                                    </button>
+                                                    {canManage && (
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => {
+                                                                setViewHistoryRecord(null);
+                                                                if (activeRevision.reviseNo === 'Original PI') {
+                                                                    handleEdit(viewHistoryRecord);
+                                                                } else {
+                                                                    setSelectedRevisePiId(viewHistoryRecord._id);
+                                                                    setReviseSearchQuery(viewHistoryRecord.piNumber || '');
+                                                                    setReviseIpSearch('');
+                                                                    setActiveDropdown(null);
+                                                                    setHighlightedIndex(-1);
+
+                                                                    // Pre-fill reviseFormData with the specific activeRevision values
+                                                                    setReviseFormData({
+                                                                        reviseNo: activeRevision.reviseNo,
+                                                                        reviseDate: activeRevision.reviseDate ? activeRevision.reviseDate.split('T')[0] : new Date().toISOString().split('T')[0],
+                                                                        validityDate: activeRevision.validityDate && activeRevision.validityDate !== 'N/A (Historical)' ? activeRevision.validityDate.split('T')[0] : '',
+                                                                        placeOfReceipt: activeRevision.placeOfReceipt && activeRevision.placeOfReceipt !== 'N/A (Historical)' ? activeRevision.placeOfReceipt : '',
+                                                                        portOfLoading: activeRevision.portOfLoading && activeRevision.portOfLoading !== 'N/A (Historical)' ? activeRevision.portOfLoading : '',
+                                                                        portOfDischarge: activeRevision.portOfDischarge && activeRevision.portOfDischarge !== 'N/A (Historical)' ? activeRevision.portOfDischarge : '',
+                                                                        certification: activeRevision.certification && activeRevision.certification !== 'N/A (Historical)' ? activeRevision.certification : '',
+                                                                        productsList: activeRevision.productsList || [],
+                                                                        grandTotal: activeRevision.grandTotal !== 'N/A' ? activeRevision.grandTotal : 0,
+                                                                        grandTotalQuantity: activeRevision.grandTotalQuantity !== 'N/A' ? activeRevision.grandTotalQuantity : 0,
+                                                                        remarks: activeRevision.remarks && activeRevision.remarks !== 'Historical original values were not captured prior to first revision.' ? activeRevision.remarks : '',
+                                                                        ipNumbers: activeRevision.ipNumbers || []
+                                                                    });
+                                                                    setShowReviseForm(true);
+                                                                }
+                                                            }}
+                                                            className="px-6 py-3 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold text-sm rounded-xl transition-all transform hover:scale-105 active:scale-95 flex items-center justify-center gap-2"
+                                                        >
+                                                            <EditIcon className="w-4 h-4 text-gray-500" />
+                                                            <span>Edit PI</span>
+                                                        </button>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        </>
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                );
+            })()}
         </div>
     );
 }
