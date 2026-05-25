@@ -134,7 +134,20 @@ const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords
     });
 
     // Summary Calculations
-    const totalLcQtyKg = parseNum(data.quantity) * 1000;
+    const products = data.productsList?.length > 0
+        ? data.productsList
+        : [{
+            productName: data.productName || '',
+            hsCode: data.hsCode || '',
+            quantity: data.quantity || '',
+            rate: data.rate || '',
+            freight: data.freight || '',
+            totalFreight: data.totalFreight || '',
+            totalDollar: data.totalDollar || ''
+          }];
+
+    const totalLcQtyTons = products.reduce((sum, p) => sum + (parseFloat(p.quantity) || 0), 0);
+    const totalLcQtyKg = totalLcQtyTons * 1000;
     const consumedQtyKg = consumptionHistory.reduce((sum, item) => sum + parseNum(item.quantity), 0);
     const remQtyKg = totalLcQtyKg - consumedQtyKg;
     // truckNo is a numeric count per entry — sum all values instead of counting unique strings
@@ -494,38 +507,46 @@ const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords
                                     <DollarSignIcon className="w-4 h-4 text-gray-400" />
                                     <h4 className="text-xs font-black text-gray-400 uppercase tracking-widest">Product & Financial Details</h4>
                                 </div>
-                                <div className="grid grid-cols-2 md:grid-cols-4 gap-6 px-2">
-                                    <div className="space-y-1 col-span-2">
-                                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Product Name</span>
-                                        <p className="text-sm font-black text-gray-900">{data.productName}</p>
+                                <div className="space-y-4">
+                                    <div className="overflow-x-auto rounded-xl border border-gray-100 bg-gray-50/50">
+                                        <table className="w-full text-left border-collapse">
+                                            <thead>
+                                                <tr className="bg-gray-100/50 border-b border-gray-200/60">
+                                                    <th className="px-4 py-2.5 text-[10px] font-bold text-gray-400 uppercase tracking-wider">Product Name</th>
+                                                    <th className="px-4 py-2.5 text-[10px] font-bold text-gray-400 uppercase tracking-wider">HS Code</th>
+                                                    <th className="px-4 py-2.5 text-[10px] font-bold text-gray-400 uppercase tracking-wider text-right">Quantity (Ton)</th>
+                                                    <th className="px-4 py-2.5 text-[10px] font-bold text-gray-400 uppercase tracking-wider text-right">Rate (/Ton)</th>
+                                                    <th className="px-4 py-2.5 text-[10px] font-bold text-gray-400 uppercase tracking-wider text-right">Total Dollar</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody className="divide-y divide-gray-100">
+                                                {products.map((item, idx) => (
+                                                    <tr key={idx} className="hover:bg-white/40 transition-colors">
+                                                        <td className="px-4 py-3 text-sm font-bold text-gray-900">{item.productName || '-'}</td>
+                                                        <td className="px-4 py-3 text-sm text-gray-600 font-medium">{item.hsCode || '-'}</td>
+                                                        <td className="px-4 py-3 text-sm text-right text-gray-900 font-black">{parseFloat(item.quantity || 0).toLocaleString('en-US')} <span className="text-[10px] text-gray-400 font-normal">Ton</span></td>
+                                                        <td className="px-4 py-3 text-sm text-right text-gray-700 font-semibold">${parseFloat(item.rate || 0).toLocaleString('en-US')}</td>
+                                                        <td className="px-4 py-3 text-sm text-right text-blue-600 font-black">${parseFloat(item.totalDollar || 0).toLocaleString('en-US')}</td>
+                                                    </tr>
+                                                ))}
+                                            </tbody>
+                                        </table>
                                     </div>
-                                    <div className="space-y-1">
-                                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">HS Code</span>
-                                        <p className="text-sm font-bold text-gray-800">{data.hsCode || '-'}</p>
-                                    </div>
-                                    <div className="space-y-1">
-                                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Port</span>
-                                        <p className="text-sm font-bold text-gray-800">{data.port || '-'}</p>
-                                    </div>
-                                    <div className="space-y-1">
-                                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Quantity</span>
-                                        <p className="text-sm font-black text-gray-900">
-                                            {parseFloat(data.quantity || 0).toLocaleString('en-US')} <span className="text-[10px] text-gray-400 font-normal">Ton</span>
-                                        </p>
-                                    </div>
-                                    <div className="space-y-1">
-                                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Rate</span>
-                                        <p className="text-sm font-bold text-gray-800">
-                                            ${parseFloat(data.rate || 0).toLocaleString('en-IN')} <span className="text-[10px] text-gray-400 font-normal">/Ton</span>
-                                        </p>
-                                    </div>
-                                    <div className="space-y-1">
-                                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Total Dollar</span>
-                                        <p className="text-sm font-black text-blue-600">${parseFloat(data.totalDollar || 0).toLocaleString('en-IN')}</p>
-                                    </div>
-                                    <div className="space-y-1">
-                                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Dollar Rate</span>
-                                        <p className="text-sm font-bold text-gray-800">৳{parseFloat(data.dollarRate || 0).toLocaleString('en-IN')}</p>
+
+                                    {/* Summary Stats */}
+                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                        <div className="p-4 bg-gray-50/50 rounded-xl border border-gray-100 flex flex-col justify-center">
+                                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Port</span>
+                                            <p className="text-sm font-bold text-gray-800">{data.port || '-'}</p>
+                                        </div>
+                                        <div className="p-4 bg-gray-50/50 rounded-xl border border-gray-100 flex flex-col justify-center">
+                                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Dollar Rate</span>
+                                            <p className="text-sm font-bold text-gray-800">৳{parseFloat(data.dollarRate || 0).toLocaleString('en-IN')}</p>
+                                        </div>
+                                        <div className="p-4 bg-blue-50/40 rounded-xl border border-blue-100/50 flex justify-between items-center">
+                                            <span className="text-xs font-black text-blue-800 uppercase tracking-widest">Total Dollar</span>
+                                            <span className="text-lg font-black text-blue-700">${products.reduce((sum, item) => sum + (parseFloat(item.totalDollar) || 0), 0).toLocaleString('en-US')}</span>
+                                        </div>
                                     </div>
                                 </div>
                                 <div className="mt-4 p-4 bg-gray-50 rounded-xl flex justify-between items-center">
@@ -748,7 +769,8 @@ const LCManagement = ({ addNotification, currentUser }) => {
         quantity: '',
         rate: '',
         dollarRate: '',
-        remarks: ''
+        remarks: '',
+        piNo: ''
     });
 
     const canManage = ['admin', 'incharge', 'lc manager', 'border manager', 'data entry'].includes((currentUser?.role || '').toLowerCase());
@@ -761,6 +783,7 @@ const LCManagement = ({ addNotification, currentUser }) => {
     const insuranceRef = useRef(null);
     const statusRef = useRef(null);
     const amendmentLcRef = useRef(null);
+    const amendmentPiRef = useRef(null);
 
 
     const [formData, setFormData] = useState({
@@ -822,7 +845,7 @@ const LCManagement = ({ addNotification, currentUser }) => {
 
     useEffect(() => {
         const handleClickOutside = (e) => {
-            const refs = [piRef, bankRef, importerRef, exporterRef, productRef, insuranceRef, statusRef, amendmentLcRef];
+            const refs = [piRef, bankRef, importerRef, exporterRef, productRef, insuranceRef, statusRef, amendmentLcRef, amendmentPiRef];
             const isClickInside = refs.some(ref => ref.current && ref.current.contains(e.target));
             if (!isClickInside) {
                 setActiveDropdown(null);
@@ -834,6 +857,11 @@ const LCManagement = ({ addNotification, currentUser }) => {
     }, []);
 
     const handleDropdownSelect = (field, value) => {
+        if (field === 'amendmentPiNo') {
+            setAmendmentFormData(prev => ({ ...prev, piNo: value }));
+            setActiveDropdown(null);
+            return;
+        }
         setFormData(prev => {
             const newState = { ...prev, [field]: value };
 
@@ -1227,6 +1255,26 @@ const LCManagement = ({ addNotification, currentUser }) => {
         return lcRecords.find(lc => lc._id === selectedAmendmentLcId) || null;
     }, [selectedAmendmentLcId, lcRecords]);
 
+    const selectedPiForAmendment = useMemo(() => {
+        if (!amendmentFormData.piNo) return null;
+        return piRecordsRaw.find(p => p.piNumber === amendmentFormData.piNo) || null;
+    }, [amendmentFormData.piNo, piRecordsRaw]);
+
+    const piBalanceTon = useMemo(() => {
+        if (!amendmentFormData.piNo) return 0;
+        const linkedPi = piRecordsRaw.find(p => p.piNumber === amendmentFormData.piNo);
+        if (!linkedPi) return 0;
+        const piQtyTon = parseFloat(linkedPi.quantity || 0) / 1000;
+        
+        // Sum of other LC quantities registered under this PI
+        const currentLcId = selectedLcForAmendment?._id;
+        const otherLcQtyTon = lcRecords
+            .filter(lc => lc.piNo === amendmentFormData.piNo && lc._id !== currentLcId)
+            .reduce((sum, lc) => sum + (parseFloat(lc.quantity) || 0), 0);
+            
+        return piQtyTon - otherLcQtyTon;
+    }, [amendmentFormData.piNo, selectedLcForAmendment, piRecordsRaw, lcRecords]);
+
     const filteredLcRecordsForAmendment = useMemo(() => {
         const q = amendmentSearchQuery.toLowerCase().trim();
         if (!q) return lcRecords;
@@ -1244,7 +1292,8 @@ const LCManagement = ({ addNotification, currentUser }) => {
             quantity: lc.quantity || '',
             rate: lc.rate || '',
             dollarRate: lc.dollarRate || '',
-            remarks: ''
+            remarks: '',
+            piNo: lc.piNo || ''
         });
         setAmendmentSearchQuery(lc.lcNo || '');
         setActiveDropdown(null);
@@ -1309,6 +1358,7 @@ const LCManagement = ({ addNotification, currentUser }) => {
                 totalDollar: totalDollar > 0 ? totalDollar.toFixed(2) : '',
                 totalAmount: totalAmount > 0 ? totalAmount.toFixed(2) : '',
                 remarks: amendmentFormData.remarks,
+                piNo: amendmentFormData.piNo,
                 createdAt: new Date().toISOString()
             };
 
@@ -1324,6 +1374,7 @@ const LCManagement = ({ addNotification, currentUser }) => {
                 netPremium,
                 expectedReturnAmount,
                 grossPremium,
+                piNo: amendmentFormData.piNo,
                 lcAmendment: `${amendmentFormData.amendmentNo} DATE: ${formatDate(amendmentFormData.amendmentDate)}`,
                 amendments: [...(lc.amendments || []), newAmendment]
             };
@@ -1351,7 +1402,8 @@ const LCManagement = ({ addNotification, currentUser }) => {
                 quantity: '',
                 rate: '',
                 dollarRate: '',
-                remarks: ''
+                remarks: '',
+                piNo: ''
             });
             fetchInitialData();
         } catch (error) {
@@ -1402,12 +1454,16 @@ const LCManagement = ({ addNotification, currentUser }) => {
         setShowForm(false);
     };
 
-    const filteredRecords = lcRecords.filter(record =>
-        (record.ipNo || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
-        (record.lcNo || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
-        (record.importerName || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
-        (record.bankName || '').toLowerCase().includes(searchQuery.toLowerCase())
-    );
+    const filteredRecords = lcRecords.filter(record => {
+        const query = searchQuery.toLowerCase();
+        const matchesProduct = (record.productName || '').toLowerCase().includes(query) ||
+            (record.productsList && record.productsList.some(p => (p.productName || '').toLowerCase().includes(query)));
+        return (record.ipNo || '').toLowerCase().includes(query) ||
+            (record.lcNo || '').toLowerCase().includes(query) ||
+            (record.importerName || '').toLowerCase().includes(query) ||
+            (record.bankName || '').toLowerCase().includes(query) ||
+            matchesProduct;
+    });
 
     return (
         <div className="space-y-4 md:space-y-6">
@@ -2252,7 +2308,8 @@ const LCManagement = ({ addNotification, currentUser }) => {
                                     quantity: '',
                                     rate: '',
                                     dollarRate: '',
-                                    remarks: ''
+                                    remarks: '',
+                                    piNo: ''
                                 });
                             }}
                             className="p-2 hover:bg-gray-100 rounded-xl transition-all group active:scale-95 shrink-0"
@@ -2270,6 +2327,18 @@ const LCManagement = ({ addNotification, currentUser }) => {
                                     <div>
                                         <h4 className="text-xs font-black text-blue-600 uppercase tracking-widest mb-4">Current LC Details</h4>
                                         <div className="space-y-4">
+                                            <div className="grid grid-cols-2 gap-4 border-b border-gray-200/50 pb-2">
+                                                <div>
+                                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">PI Number</span>
+                                                    <p className="text-sm font-bold text-gray-800 truncate" title={selectedLcForAmendment.piNo}>{selectedLcForAmendment.piNo || 'N/A'}</p>
+                                                </div>
+                                                <div>
+                                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">IP Number</span>
+                                                    <p className="text-sm font-bold text-gray-800 truncate" title={selectedLcForAmendment.ipNumbers?.length ? selectedLcForAmendment.ipNumbers.join(', ') : selectedLcForAmendment.ipNo}>
+                                                        {(selectedLcForAmendment.ipNumbers?.length ? selectedLcForAmendment.ipNumbers.join(', ') : selectedLcForAmendment.ipNo) || 'N/A'}
+                                                    </p>
+                                                </div>
+                                            </div>
                                             <div className="border-b border-gray-200/50 pb-2">
                                                 <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Importer</span>
                                                 <p className="text-sm font-bold text-gray-800 truncate">{selectedLcForAmendment.importerName}</p>
@@ -2282,29 +2351,35 @@ const LCManagement = ({ addNotification, currentUser }) => {
                                                 <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Bank Name</span>
                                                 <p className="text-sm font-bold text-gray-800 truncate" title={selectedLcForAmendment.bankName}>{selectedLcForAmendment.bankName}</p>
                                             </div>
-                                            <div className="border-b border-gray-200/50 pb-2">
-                                                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Opening Date</span>
-                                                <p className="text-sm font-bold text-gray-800 font-mono">{formatDate(selectedLcForAmendment.openingDate)}</p>
+                                            <div className="grid grid-cols-2 gap-4 border-b border-gray-200/50 pb-2">
+                                                <div>
+                                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Opening Date</span>
+                                                    <p className="text-sm font-bold text-gray-800 font-mono">{formatDate(selectedLcForAmendment.openingDate)}</p>
+                                                </div>
+                                                <div>
+                                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Current Expiry Date</span>
+                                                    <p className="text-sm font-bold text-rose-500 font-mono">{formatDate(selectedLcForAmendment.expiryDate)}</p>
+                                                </div>
                                             </div>
-                                            <div className="border-b border-gray-200/50 pb-2">
-                                                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Current Expiry Date</span>
-                                                <p className="text-sm font-bold text-rose-500 font-mono">{formatDate(selectedLcForAmendment.expiryDate)}</p>
+                                            <div className="grid grid-cols-2 gap-4 border-b border-gray-200/50 pb-2">
+                                                <div>
+                                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Current Quantity</span>
+                                                    <p className="text-sm font-bold text-gray-800">{parseFloat(selectedLcForAmendment.quantity || 0).toLocaleString('en-US')} Ton</p>
+                                                </div>
+                                                <div>
+                                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Current Rate</span>
+                                                    <p className="text-sm font-bold text-gray-800">${parseFloat(selectedLcForAmendment.rate || 0).toLocaleString('en-IN')}</p>
+                                                </div>
                                             </div>
-                                            <div className="border-b border-gray-200/50 pb-2">
-                                                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Current Quantity</span>
-                                                <p className="text-sm font-bold text-gray-800">{parseFloat(selectedLcForAmendment.quantity || 0).toLocaleString('en-US')} Ton</p>
-                                            </div>
-                                            <div className="border-b border-gray-200/50 pb-2">
-                                                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Current Rate</span>
-                                                <p className="text-sm font-bold text-gray-800">${parseFloat(selectedLcForAmendment.rate || 0).toLocaleString('en-IN')}</p>
-                                            </div>
-                                            <div className="border-b border-gray-200/50 pb-2">
-                                                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Current Total Dollar</span>
-                                                <p className="text-sm font-bold text-blue-600">${parseFloat(selectedLcForAmendment.totalDollar || 0).toLocaleString('en-IN')}</p>
-                                            </div>
-                                            <div>
-                                                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Current Total Amount</span>
-                                                <p className="text-sm font-bold text-gray-800">৳{parseFloat(selectedLcForAmendment.totalAmount || 0).toLocaleString('en-IN')}</p>
+                                            <div className="grid grid-cols-2 gap-4">
+                                                <div>
+                                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Total Dollar</span>
+                                                    <p className="text-sm font-bold text-blue-600">${parseFloat(selectedLcForAmendment.totalDollar || 0).toLocaleString('en-IN')}</p>
+                                                </div>
+                                                <div>
+                                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Total Amount</span>
+                                                    <p className="text-sm font-bold text-gray-800">৳{parseFloat(selectedLcForAmendment.totalAmount || 0).toLocaleString('en-IN')}</p>
+                                                </div>
                                             </div>
                                         </div>
                                     </div>
@@ -2314,7 +2389,7 @@ const LCManagement = ({ addNotification, currentUser }) => {
                                 <div className="lg:col-span-2 space-y-6 bg-white border border-gray-100 rounded-2xl p-6 shadow-sm">
                                     <h4 className="text-xs font-black text-blue-600 uppercase tracking-widest mb-4">Amendment Details</h4>
                                     
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                                         <div className="space-y-1.5">
                                             <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Amendment Number *</label>
                                             <input
@@ -2346,6 +2421,69 @@ const LCManagement = ({ addNotification, currentUser }) => {
                                                 compact={true}
                                             />
                                         </div>
+
+                                         <div className="space-y-1.5 text-left relative" ref={amendmentPiRef}>
+                                             <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">PI Number</label>
+                                             <div className="relative">
+                                                 <input
+                                                     type="text"
+                                                     value={amendmentFormData.piNo}
+                                                     onChange={(e) => setAmendmentFormData(prev => ({ ...prev, piNo: e.target.value }))}
+                                                     onFocus={() => { setActiveDropdown('amendmentPiNo'); setHighlightedIndex(-1); }}
+                                                     onKeyDown={(e) => handleDropdownKeyDown(e, 'amendmentPiNo', 'amendmentPiNo', piList.filter(pi => !amendmentFormData.piNo || pi.toLowerCase().includes(amendmentFormData.piNo.toLowerCase())))}
+                                                     placeholder="Select PI Number"
+                                                     autoComplete="off"
+                                                     className="w-full px-4 py-2.5 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all font-medium pr-10 text-sm"
+                                                 />
+                                                 <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-2">
+                                                     {amendmentFormData.piNo && (
+                                                         <button type="button" onClick={() => setAmendmentFormData(prev => ({ ...prev, piNo: '' }))} className="text-gray-400 hover:text-gray-600">
+                                                             <XIcon className="w-4 h-4" />
+                                                         </button>
+                                                     )}
+                                                     <SearchIcon className="w-4 h-4 text-gray-300 pointer-events-none" />
+                                                 </div>
+                                             </div>
+                                             {activeDropdown === 'amendmentPiNo' && (
+                                                 <div className="absolute z-[100] w-full mt-1 bg-white border border-gray-100 rounded-xl shadow-xl max-h-48 overflow-y-auto py-1">
+                                                     {piList.filter(pi => !amendmentFormData.piNo || pi.toLowerCase().includes(amendmentFormData.piNo.toLowerCase())).map((pi, idx) => (
+                                                         <button
+                                                             key={idx}
+                                                             type="button"
+                                                             onMouseDown={(e) => {
+                                                                 e.preventDefault();
+                                                                 setAmendmentFormData(prev => ({ ...prev, piNo: pi }));
+                                                                 setActiveDropdown(null);
+                                                             }}
+                                                             onMouseEnter={() => setHighlightedIndex(idx)}
+                                                             className={`w-full px-4 py-2 text-left text-sm transition-colors font-medium ${amendmentFormData.piNo === pi ? 'bg-blue-50 text-blue-700' : highlightedIndex === idx ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-blue-50'}`}
+                                                         >
+                                                             {pi}
+                                                         </button>
+                                                     ))}
+                                                 </div>
+                                             )}
+                                         </div>
+
+                                         <div className="space-y-1.5 text-left">
+                                             <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">PI Balance (Ton)</label>
+                                             <input
+                                                 type="text"
+                                                 readOnly
+                                                 value={selectedPiForAmendment ? `${piBalanceTon.toLocaleString('en-US', { minimumFractionDigits: 3 })} Ton` : 'N/A'}
+                                                 className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl outline-none text-blue-600 font-bold text-sm"
+                                             />
+                                         </div>
+
+                                         <div className="space-y-1.5 text-left">
+                                             <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">PI Expiry Date</label>
+                                             <input
+                                                 type="text"
+                                                 readOnly
+                                                 value={selectedPiForAmendment?.validityDate ? formatDate(selectedPiForAmendment.validityDate) : 'N/A'}
+                                                 className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl outline-none text-gray-500 font-bold text-sm"
+                                             />
+                                         </div>
 
                                         <div className="space-y-1.5">
                                             <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">New Quantity (Ton)</label>
@@ -2413,7 +2551,8 @@ const LCManagement = ({ addNotification, currentUser }) => {
                                                     quantity: '',
                                                     rate: '',
                                                     dollarRate: '',
-                                                    remarks: ''
+                                                    remarks: '',
+                                                    piNo: ''
                                                 });
                                             }}
                                             className="px-6 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-600 font-bold rounded-xl transition-all active:scale-95"
@@ -2614,8 +2753,15 @@ const LCManagement = ({ addNotification, currentUser }) => {
                                     const linkedPi = record.piNo ? piRecordsRaw.find(p => p.piNumber === record.piNo) : null;
                                     const displayPort = record.port || (linkedPi && (linkedPi.port || linkedPi.portOfDischarge || linkedPi.portOfLoading)) || '-';
 
-                                    // Unit conversion for display (Data is in Tons, Table shows Kg)
-                                    const qtyKg = parseNum(record.quantity) * 1000;
+                                    const displayProducts = record.productsList && record.productsList.length > 0
+                                         ? record.productsList.map(p => p.productName).filter(Boolean).join(', ')
+                                         : record.productName || '-';
+
+                                     // Unit conversion for display (Data is in Tons, Table shows Kg)
+                                     const totalQtyTons = record.productsList && record.productsList.length > 0
+                                         ? record.productsList.reduce((sum, p) => sum + (parseFloat(p.quantity) || 0), 0)
+                                         : (parseFloat(record.quantity) || 0);
+                                     const qtyKg = totalQtyTons * 1000;
 
                                     // Calculate Remaining Quantities
                                     // Received: From allStockRecords where lcNo matches and status is NOT requested/rejected
@@ -2696,7 +2842,7 @@ const LCManagement = ({ addNotification, currentUser }) => {
                                             <td className="px-3 py-4 text-sm text-gray-600 whitespace-nowrap truncate max-w-[120px]" title={record.exporterName}>{record.exporterName}</td>
                                             <td className="px-3 py-4 text-sm text-gray-600 font-medium whitespace-nowrap truncate max-w-[120px]" title={record.bankName}>{record.bankName}</td>
                                             <td className="px-3 py-4 text-sm text-gray-600 whitespace-nowrap truncate max-w-[80px]" title={displayPort}>{displayPort}</td>
-                                            <td className="px-3 py-4 text-sm font-bold text-gray-900 whitespace-nowrap truncate max-w-[80px]" title={record.productName}>{record.productName || '-'}</td>
+                                            <td className="px-3 py-4 text-sm font-bold text-gray-900 whitespace-nowrap truncate max-w-[120px]" title={displayProducts}>{displayProducts}</td>
                                             <td className="px-3 py-4 text-sm text-right text-gray-600 whitespace-nowrap">
                                                 <span className="font-bold text-gray-900">{qtyKg.toLocaleString('en-US')}</span> <span className="text-[10px] text-gray-400 font-normal">Kg</span>
                                             </td>

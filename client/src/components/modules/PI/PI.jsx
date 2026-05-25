@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import {
-    FunnelIcon, XIcon, ChevronDownIcon, EditIcon, TrashIcon, SearchIcon, PlusIcon, EyeIcon, PDFIcon
+    FunnelIcon, XIcon, ChevronDownIcon, EditIcon, TrashIcon, SearchIcon, PlusIcon, EyeIcon, PDFIcon, FileTextIcon
 } from '../../Icons';
 import { generatePIPDF } from '../../../utils/pipdfgenerator';
 import { generatePI2PDF } from '../../../utils/pi2pdfgenerator';
@@ -50,6 +50,23 @@ function PI({
     const [highlightedIndex, setHighlightedIndex] = useState(-1);
     const [toast, setToast] = useState(null);
     const [expandedCardId, setExpandedCardId] = useState(null);
+    const [showReviseForm, setShowReviseForm] = useState(false);
+    const [selectedRevisePiId, setSelectedRevisePiId] = useState('');
+    const [reviseSearchQuery, setReviseSearchQuery] = useState('');
+    const [isReviseSaving, setIsReviseSaving] = useState(false);
+    const [reviseIpSearch, setReviseIpSearch] = useState('');
+    const [reviseFormData, setReviseFormData] = useState({
+        reviseNo: '',
+        reviseDate: '',
+        validityDate: '',
+        productsList: [],
+        grandTotal: '',
+        grandTotalQuantity: '',
+        remarks: '',
+        ipNumbers: []
+    });
+    const [viewHistoryRecord, setViewHistoryRecord] = useState(null);
+    const [activeHistoryIndex, setActiveHistoryIndex] = useState(0);
     const toastTimerRef = useRef(null);
 
     const showToast = (message, type = 'success', duration = 3000) => {
@@ -76,6 +93,7 @@ function PI({
         freight: '',
         totalFreight: '',
         grandTotal: '',
+        grandTotalQuantity: '',
         productsList: [{ productName: '', hsCode: '', quantity: '', rate: '', amount: '', freight: '', totalFreight: '' }],
         invoiceStyle: 'Style 1 SAA',
         port: '',
@@ -122,6 +140,7 @@ function PI({
     const certificationRef = useRef(null);
     const statusRef = useRef(null);
     const invoiceStyleRef = useRef(null);
+    const revisePiRef = useRef(null);
 
     useEffect(() => {
         fetchRecords();
@@ -251,6 +270,21 @@ function PI({
         return balanceMap;
     }, [ipRecords, lcRecords, allStockRecords, allSalesRecords]);
 
+    const calculatedGrandTotalQuantity = useMemo(() => {
+        if (!formData.productsList || formData.productsList.length === 0) return 0;
+        return formData.productsList.reduce((sum, item) => sum + (parseFloat(item.quantity) || 0), 0);
+    }, [formData.productsList]);
+
+    const calculatedGrandTotal = useMemo(() => {
+        if (!formData.productsList || formData.productsList.length === 0) return 0;
+        return formData.productsList.reduce((sum, item) => {
+            const q = parseFloat(item.quantity) || 0;
+            const r = parseFloat(item.rate) || 0;
+            const f = parseFloat(item.freight) || 0;
+            return sum + (q * r) + (q * f);
+        }, 0);
+    }, [formData.productsList]);
+
     const handleInputChange = (e) => {
         const { name, value } = e.target;
         setFormData(prev => {
@@ -267,6 +301,7 @@ function PI({
                 updated.amount = amt > 0 ? amt.toFixed(2) : '';
                 updated.totalFreight = totalFreight > 0 ? totalFreight.toFixed(2) : '';
                 updated.grandTotal = grandT > 0 ? grandT.toFixed(2) : '';
+                updated.grandTotalQuantity = q > 0 ? q.toFixed(2) : '';
             }
 
             if (name === 'date' && value) {
@@ -310,18 +345,21 @@ function PI({
 
             // Calculate grand total of all products
             let grandTotalVal = 0;
+            let grandTotalQuantityVal = 0;
             list.forEach(item => {
                 const itemQ = parseFloat(item.quantity) || 0;
                 const itemR = parseFloat(item.rate) || 0;
                 const itemF = parseFloat(item.freight) || 0;
                 grandTotalVal += (itemQ * itemR) + (itemQ * itemF);
+                grandTotalQuantityVal += itemQ;
             });
 
             // Backward compatibility: keep root-level product fields updated with the first product
             const updated = {
                 ...prev,
                 productsList: list,
-                grandTotal: grandTotalVal > 0 ? grandTotalVal.toFixed(2) : ''
+                grandTotal: grandTotalVal > 0 ? grandTotalVal.toFixed(2) : '',
+                grandTotalQuantity: grandTotalQuantityVal > 0 ? grandTotalQuantityVal.toFixed(2) : ''
             };
 
             if (idx === 0) {
@@ -366,17 +404,20 @@ function PI({
 
             // Recalculate grand total
             let grandTotalVal = 0;
+            let grandTotalQuantityVal = 0;
             list.forEach(item => {
                 const itemQ = parseFloat(item.quantity) || 0;
                 const itemR = parseFloat(item.rate) || 0;
                 const itemF = parseFloat(item.freight) || 0;
                 grandTotalVal += (itemQ * itemR) + (itemQ * itemF);
+                grandTotalQuantityVal += itemQ;
             });
 
             const updated = {
                 ...prev,
                 productsList: list,
-                grandTotal: grandTotalVal > 0 ? grandTotalVal.toFixed(2) : ''
+                grandTotal: grandTotalVal > 0 ? grandTotalVal.toFixed(2) : '',
+                grandTotalQuantity: grandTotalQuantityVal > 0 ? grandTotalQuantityVal.toFixed(2) : ''
             };
 
             // Update root-level fields with the first item
@@ -684,13 +725,19 @@ function PI({
         setIsSubmitting(true);
         setSubmitStatus(null);
 
+        const submissionData = {
+            ...formData,
+            grandTotal: calculatedGrandTotal > 0 ? calculatedGrandTotal.toFixed(2) : '',
+            grandTotalQuantity: calculatedGrandTotalQuantity > 0 ? calculatedGrandTotalQuantity.toFixed(2) : ''
+        };
+
         try {
             const url = editingId
                 ? `${API_BASE_URL}/api/pi/${editingId}`
                 : `${API_BASE_URL}/api/pi`;
 
             if (editingId) {
-                await axios.put(url, formData);
+                await axios.put(url, submissionData);
 
                 // Add persistent notification for PI Update
                 if (addNotification) {
@@ -701,7 +748,7 @@ function PI({
                     );
                 }
             } else {
-                await axios.post(url, formData);
+                await axios.post(url, submissionData);
 
                 // Add persistent notification for management roles
                 if (addNotification) {
@@ -748,6 +795,7 @@ function PI({
             freight: '',
             totalFreight: '',
             grandTotal: '',
+            grandTotalQuantity: '',
             productsList: [{ productName: '', hsCode: '', quantity: '', rate: '', amount: '', freight: '', totalFreight: '' }],
             port: '',
             placeOfReceipt: '',
@@ -795,7 +843,7 @@ function PI({
                 amount: record.amount || '',
                 freight: record.freight || '',
                 totalFreight: record.totalFreight || ''
-              }];
+            }];
 
         const parsedIpNumbers = record.ipNumbers || (record.ipNumber ? record.ipNumber.split(',').map(s => s.trim()).filter(Boolean) : []);
 
@@ -817,6 +865,7 @@ function PI({
             freight: record.freight || '',
             totalFreight: record.totalFreight || '',
             grandTotal: record.grandTotal || '',
+            grandTotalQuantity: record.grandTotalQuantity || '',
             productsList: loadedList,
             port: record.port || '',
             placeOfReceipt: record.placeOfReceipt || '',
@@ -864,49 +913,471 @@ function PI({
         }
     };
 
+    const recalcReviseProducts = (list) => {
+        let grandTotalVal = 0;
+        let grandTotalQuantityVal = 0;
+        const updatedList = (list || []).map(item => {
+            const itemQ = parseFloat(item.quantity) || 0;
+            const itemR = parseFloat(item.rate) || 0;
+            const itemF = parseFloat(item.freight) || 0;
+            const amount = itemQ * itemR;
+            const totalFreight = itemQ * itemF;
+            grandTotalVal += amount + totalFreight;
+            grandTotalQuantityVal += itemQ;
+            return {
+                ...item,
+                amount: amount > 0 ? amount.toFixed(2) : '',
+                totalFreight: totalFreight > 0 ? totalFreight.toFixed(2) : ''
+            };
+        });
+        return {
+            list: updatedList,
+            grandTotal: grandTotalVal > 0 ? grandTotalVal.toFixed(2) : '',
+            grandTotalQuantity: grandTotalQuantityVal > 0 ? grandTotalQuantityVal.toFixed(2) : ''
+        };
+    };
+
+    const getPiProductsList = (pi) => {
+        if (pi.productsList && pi.productsList.length > 0) {
+            return pi.productsList.map(p => ({ ...p }));
+        }
+        return [{
+            productName: pi.productName || '',
+            hsCode: pi.hsCode || '',
+            quantity: pi.quantity || '',
+            rate: pi.rate || '',
+            amount: pi.amount || '',
+            freight: pi.freight || '',
+            totalFreight: pi.totalFreight || ''
+        }];
+    };
+
+    const filteredPiRecordsForRevise = useMemo(() => {
+        const q = (reviseSearchQuery || '').trim().toLowerCase();
+        if (!q) return records;
+        return records.filter(pi =>
+            (pi.piNumber || '').toLowerCase().includes(q) ||
+            (pi.partyName || '').toLowerCase().includes(q)
+        );
+    }, [reviseSearchQuery, records]);
+
+    const selectedPiForRevise = useMemo(() => {
+        if (!selectedRevisePiId) return null;
+        return records.find(r => r._id === selectedRevisePiId) || null;
+    }, [selectedRevisePiId, records]);
+
+    const selectedPiReviseIpInfo = useMemo(() => {
+        if (!selectedPiForRevise) return [];
+        const ipNumbers = reviseFormData.ipNumbers || [];
+
+        if (ipNumbers.length === 0) return [];
+
+        return ipNumbers.map(ipNum => {
+            const balance = computeIpBalance[ipNum];
+            const ipRec = ipRecords.find(r => r.ipNumber === ipNum);
+            const expiryDate = ipRec?.closeDate ? formatDate(ipRec.closeDate) : 'N/A';
+            const balanceKg = balance !== undefined ? balance : null;
+            return {
+                ipNumber: ipNum,
+                balance: balanceKg,
+                balanceDisplay: balanceKg !== null ? `${balanceKg.toLocaleString('en-US')} kg` : 'N/A',
+                expiryDisplay: expiryDate,
+                isLowBalance: balanceKg !== null && balanceKg < 50000
+            };
+        });
+    }, [selectedPiForRevise, reviseFormData.ipNumbers, computeIpBalance, ipRecords]);
+
+    const resetReviseForm = () => {
+        setShowReviseForm(false);
+        setSelectedRevisePiId('');
+        setReviseSearchQuery('');
+        setReviseIpSearch('');
+        setReviseFormData({
+            reviseNo: '',
+            reviseDate: '',
+            validityDate: '',
+            placeOfReceipt: '',
+            portOfLoading: '',
+            portOfDischarge: '',
+            certification: '',
+            productsList: [],
+            grandTotal: '',
+            grandTotalQuantity: '',
+            remarks: '',
+            ipNumbers: []
+        });
+    };
+
+    const handleReviseDropdownSelect = (field, value) => {
+        setReviseFormData(prev => {
+            const updated = { ...prev, [field]: value };
+
+            if (field === 'certification') {
+                setCertSearch('');
+                const currentCert = prev.certification || '';
+                const parts = currentCert.split(',').map(s => s.trim()).filter(Boolean);
+                const valueLower = value.toLowerCase();
+                const matchedIndex = parts.findIndex(p => p.toLowerCase() === valueLower);
+                if (matchedIndex > -1) {
+                    // Remove if already selected
+                    parts.splice(matchedIndex, 1);
+                    updated.certification = parts.join(', ');
+                } else {
+                    // Add if not selected
+                    parts.push(value);
+                    updated.certification = parts.join(', ');
+                }
+            }
+            return updated;
+        });
+        setActiveDropdown(null);
+    };
+
+    const handleRevisePiSelect = (pi) => {
+        setSelectedRevisePiId(pi._id);
+        const nextNo = (pi.revisions || []).filter(r => r.reviseNo !== 'Original PI').length + 1;
+        const ipNumbers = pi.ipNumbers?.length
+            ? pi.ipNumbers
+            : (pi.ipNumber
+                ? pi.ipNumber.split(',').map(s => s.trim()).filter(Boolean)
+                : []);
+
+        const productsList = getPiProductsList(pi);
+        const mappedProducts = productsList.map(prod => {
+            if (prod._fromIp) return prod;
+            const matchingIp = ipNumbers.find(ipNum => {
+                const ipRec = ipRecords.find(r => r.ipNumber === ipNum);
+                return ipRec && ipRec.productName === prod.productName;
+            });
+            if (matchingIp) {
+                return { ...prod, _fromIp: matchingIp };
+            }
+            return prod;
+        });
+
+        const { list, grandTotal, grandTotalQuantity } = recalcReviseProducts(mappedProducts);
+        setReviseFormData({
+            reviseNo: `REVISE NO-${String(nextNo).padStart(2, '0')}`,
+            reviseDate: new Date().toISOString().split('T')[0],
+            validityDate: pi.validityDate ? pi.validityDate.split('T')[0] : '',
+            placeOfReceipt: pi.placeOfReceipt || '',
+            portOfLoading: pi.portOfLoading || '',
+            portOfDischarge: pi.portOfDischarge || '',
+            certification: pi.certification || '',
+            productsList: list,
+            grandTotal,
+            grandTotalQuantity,
+            remarks: '',
+            ipNumbers
+        });
+        setReviseSearchQuery(pi.piNumber || '');
+        setReviseIpSearch('');
+        setActiveDropdown(null);
+        setHighlightedIndex(-1);
+    };
+
+    const handleReviseIpSelectToggle = (value) => {
+        const ip = ipRecords.find(i => i.ipNumber === value);
+        if (!ip) return;
+
+        setReviseFormData(prev => {
+            const currentIpNumbers = [...(prev.ipNumbers || [])];
+            const alreadySelected = currentIpNumbers.includes(value);
+
+            let updatedIpNumbers = [];
+            let updatedProductsList = [...(prev.productsList || [])];
+
+            if (alreadySelected) {
+                // Remove IP
+                updatedIpNumbers = currentIpNumbers.filter(num => num !== value);
+
+                // Remove corresponding product from productsList
+                let prodIdx = updatedProductsList.findIndex(p => p._fromIp === value);
+                if (prodIdx === -1) {
+                    prodIdx = updatedProductsList.findIndex(p => p.productName === ip.productName);
+                }
+                if (prodIdx > -1) {
+                    updatedProductsList.splice(prodIdx, 1);
+                }
+                if (updatedProductsList.length === 0) {
+                    updatedProductsList.push({ productName: '', hsCode: '', quantity: '', rate: '', amount: '', freight: '', totalFreight: '' });
+                }
+            } else {
+                // Add IP
+                updatedIpNumbers = [...currentIpNumbers, value];
+
+                // Check if product is already in productsList to avoid duplicate products for the same IP
+                const productExists = updatedProductsList.some(p =>
+                    p._fromIp === value ||
+                    (p.productName === ip.productName)
+                );
+
+                if (!productExists) {
+                    const product = products.find(p => p.name === ip.productName);
+                    const hCode = product ? (product.hsCode || '') : '';
+                    const hCodeInd = product ? (product.hsCodeInd || '') : '';
+
+                    const newProduct = {
+                        productName: ip.productName || '',
+                        hsCode: hCode,
+                        hsCodeInd: hCodeInd,
+                        quantity: '',
+                        rate: '',
+                        amount: '',
+                        freight: '',
+                        totalFreight: '',
+                        _fromIp: value
+                    };
+
+                    if (updatedProductsList.length === 1 && !updatedProductsList[0].productName) {
+                        updatedProductsList = [newProduct];
+                    } else {
+                        updatedProductsList = [...updatedProductsList, newProduct];
+                    }
+                }
+            }
+
+            const { list: recalculatedList, grandTotal, grandTotalQuantity } = recalcReviseProducts(updatedProductsList);
+
+            return {
+                ...prev,
+                ipNumbers: updatedIpNumbers,
+                productsList: recalculatedList,
+                grandTotal,
+                grandTotalQuantity
+            };
+        });
+        setReviseIpSearch('');
+    };
+
+    const handleReviseProductChange = (idx, field, value) => {
+        setReviseFormData(prev => {
+            const list = [...(prev.productsList || [])];
+            list[idx] = { ...list[idx], [field]: value };
+            const { list: updatedList, grandTotal, grandTotalQuantity } = recalcReviseProducts(list);
+            return { ...prev, productsList: updatedList, grandTotal, grandTotalQuantity };
+        });
+    };
+
+    const handleReviseSubmit = async (e) => {
+        e.preventDefault();
+        if (!selectedRevisePiId) {
+            showToast('Please select a PI Number first.', 'error');
+            return;
+        }
+        if (!reviseFormData.reviseNo || !reviseFormData.reviseDate) {
+            showToast('Revise Number and Date are required.', 'error');
+            return;
+        }
+        setIsReviseSaving(true);
+        try {
+            const pi = selectedPiForRevise;
+            if (!pi) throw new Error('Selected PI not found');
+
+            const updatedIpNumbers = reviseFormData.ipNumbers || [];
+            const updatedIpNumberStr = updatedIpNumbers.join(', ');
+
+            let totalIpQty = 0;
+            updatedIpNumbers.forEach(ipNum => {
+                const rec = ipRecords.find(i => i.ipNumber === ipNum);
+                if (rec) totalIpQty += parseFloat(rec.quantity) || 0;
+            });
+            const updatedIpQuantity = totalIpQty > 0 ? totalIpQty.toString() : '';
+
+            let latestDate = '';
+            updatedIpNumbers.forEach(ipNum => {
+                const rec = ipRecords.find(i => i.ipNumber === ipNum);
+                if (rec && rec.closeDate && rec.closeDate > latestDate) {
+                    latestDate = rec.closeDate;
+                }
+            });
+
+            const newRevision = {
+                reviseNo: reviseFormData.reviseNo,
+                reviseDate: reviseFormData.reviseDate,
+                validityDate: reviseFormData.validityDate,
+                placeOfReceipt: reviseFormData.placeOfReceipt,
+                portOfLoading: reviseFormData.portOfLoading,
+                portOfDischarge: reviseFormData.portOfDischarge,
+                certification: reviseFormData.certification,
+                productsList: reviseFormData.productsList,
+                grandTotal: reviseFormData.grandTotal,
+                grandTotalQuantity: reviseFormData.grandTotalQuantity,
+                remarks: reviseFormData.remarks,
+                ipNumbers: updatedIpNumbers,
+                createdAt: new Date().toISOString()
+            };
+
+            const currentRevisions = [...(pi.revisions || [])];
+            if (currentRevisions.length === 0) {
+                const originalRevision = {
+                    reviseNo: 'Original PI',
+                    reviseDate: pi.date,
+                    validityDate: pi.validityDate,
+                    placeOfReceipt: pi.placeOfReceipt,
+                    portOfLoading: pi.portOfLoading,
+                    portOfDischarge: pi.portOfDischarge,
+                    certification: pi.certification,
+                    productsList: getPiProductsList(pi),
+                    grandTotal: pi.grandTotal,
+                    grandTotalQuantity: pi.grandTotalQuantity,
+                    remarks: pi.remarks || '',
+                    ipNumbers: pi.ipNumbers || (pi.ipNumber ? pi.ipNumber.split(',').map(s => s.trim()).filter(Boolean) : []),
+                    createdAt: pi.createdAt || pi.date || new Date().toISOString()
+                };
+                currentRevisions.push(originalRevision);
+            }
+
+            const updatedPiData = {
+                ...pi,
+                ipNumbers: updatedIpNumbers,
+                ipNumber: updatedIpNumberStr,
+                ipQuantity: updatedIpQuantity,
+                ipDate: latestDate,
+                validityDate: reviseFormData.validityDate,
+                placeOfReceipt: reviseFormData.placeOfReceipt,
+                portOfLoading: reviseFormData.portOfLoading,
+                portOfDischarge: reviseFormData.portOfDischarge,
+                certification: reviseFormData.certification,
+                productsList: reviseFormData.productsList,
+                grandTotal: reviseFormData.grandTotal,
+                grandTotalQuantity: reviseFormData.grandTotalQuantity,
+                piRevision: `${reviseFormData.reviseNo} DATE: ${formatDate(reviseFormData.reviseDate)}`,
+                revisions: [...currentRevisions, newRevision]
+            };
+
+            await axios.put(`${API_BASE_URL}/api/pi/${selectedRevisePiId}`, updatedPiData);
+
+            if (addNotification) {
+                addNotification(
+                    'PI Revised',
+                    `PI No: ${pi.piNumber} has been revised (${reviseFormData.reviseNo}) by ${currentUser?.name || currentUser?.username}.`,
+                    ['Admin', 'Incharge', 'Border Manager', 'LC Manager', 'Data Entry']
+                );
+            }
+            showToast('PI revision saved successfully!', 'success');
+            resetReviseForm();
+            fetchRecords();
+        } catch (error) {
+            console.error('Error saving PI revision:', error);
+            showToast('Failed to save PI revision', 'error');
+        } finally {
+            setIsReviseSaving(false);
+        }
+    };
+
     const filteredRecords = records.filter(record => {
         if (searchQuery) {
             const query = searchQuery.toLowerCase();
+            const matchesProduct = (record.productName || '').toLowerCase().includes(query) ||
+                (record.productsList && record.productsList.some(p => (p.productName || '').toLowerCase().includes(query)));
             return (record.piNumber || '').toLowerCase().includes(query) ||
                 (record.partyName || '').toLowerCase().includes(query) ||
-                (record.productName || '').toLowerCase().includes(query);
+                matchesProduct;
         }
         return true;
     });
 
+    const getHistoryTimeline = (record) => {
+        if (!record) return [];
+        const list = [];
+        const revisions = record.revisions || [];
+        const hasOriginal = revisions.some(r => r.reviseNo === 'Original PI');
+
+        if (revisions.length === 0) {
+            // Unrevised: just original PI using current fields
+            list.push({
+                reviseNo: 'Original PI',
+                reviseDate: record.date,
+                validityDate: record.validityDate,
+                placeOfReceipt: record.placeOfReceipt || 'N/A',
+                portOfLoading: record.portOfLoading || 'N/A',
+                portOfDischarge: record.portOfDischarge || 'N/A',
+                certification: record.certification || 'N/A',
+                productsList: getPiProductsList(record),
+                grandTotal: record.grandTotal,
+                grandTotalQuantity: record.grandTotalQuantity,
+                remarks: record.remarks || '',
+                ipNumbers: record.ipNumbers || (record.ipNumber ? record.ipNumber.split(',').map(s => s.trim()).filter(Boolean) : []),
+                isOriginal: true
+            });
+        } else {
+            // Revised:
+            if (!hasOriginal) {
+                // Synthesize the Original PI for old records if it was not stored
+                list.push({
+                    reviseNo: 'Original PI',
+                    reviseDate: record.date,
+                    validityDate: 'N/A (Historical)',
+                    placeOfReceipt: 'N/A (Historical)',
+                    portOfLoading: 'N/A (Historical)',
+                    portOfDischarge: 'N/A (Historical)',
+                    certification: 'N/A (Historical)',
+                    productsList: [],
+                    grandTotal: 'N/A',
+                    grandTotalQuantity: 'N/A',
+                    remarks: 'Historical original values were not captured prior to first revision.',
+                    ipNumbers: [],
+                    isOriginal: true,
+                    isPlaceholder: true
+                });
+            }
+
+            revisions.forEach(rev => {
+                list.push({
+                    ...rev,
+                    ipNumbers: rev.ipNumbers || (rev.ipNumber ? rev.ipNumber.split(',').map(s => s.trim()).filter(Boolean) : (record.ipNumbers || (record.ipNumber ? record.ipNumber.split(',').map(s => s.trim()).filter(Boolean) : []))),
+                    isOriginal: rev.reviseNo === 'Original PI'
+                });
+            });
+        }
+        return list;
+    };
+
     return (
         <div className="pi-management space-y-6">
-            {!showForm && (
-                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                    <div className="w-full md:w-1/4 text-center md:text-left">
-                        <h2 className="text-2xl font-bold text-gray-800" style={{ margin: 0 }}>Proforma Invoice (PI)</h2>
-                    </div>
-
-                    <div className="w-full md:flex-1 md:max-w-md md:mx-auto relative group px-2 md:px-0">
-                        <div className="absolute inset-y-0 left-0 pl-5 md:pl-3.5 flex items-center pointer-events-none">
-                            <SearchIcon className="h-4 w-4 text-gray-400 group-focus-within:text-blue-500 transition-colors" />
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                {!showForm && !showReviseForm ? (
+                    <>
+                        <div className="w-full md:w-1/4 text-center md:text-left">
+                            <h2 className="text-2xl font-bold text-gray-800" style={{ margin: 0 }}>Proforma Invoice (PI)</h2>
                         </div>
-                        <input
-                            type="text"
-                            placeholder="Search PI No, Importer, or Product..."
-                            value={searchQuery}
-                            onChange={(e) => setSearchQuery(e.target.value)}
-                            className="block w-full pl-12 md:pl-10 pr-4 py-2.5 md:py-2 bg-white/50 border border-gray-200 rounded-xl text-[13px] text-center md:text-left placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all outline-none shadow-sm focus:bg-white"
-                        />
-                    </div>
 
-                    <div className="w-full md:w-1/4 flex justify-end z-10 gap-2 sm:gap-3">
-                        {canManage && (
-                            <button
-                                onClick={() => setShowForm(!showForm)}
-                                className="flex-1 md:flex-none px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-xl shadow-lg shadow-blue-500/30 transition-all transform hover:scale-105 flex items-center justify-center whitespace-nowrap"
-                            >
-                                <span className="mr-1.5 font-bold text-lg leading-none">+</span> Add New
-                            </button>
-                        )}
+                        <div className="w-full md:flex-1 md:max-w-md md:mx-auto relative group px-2 md:px-0">
+                            <div className="absolute inset-y-0 left-0 pl-5 md:pl-3.5 flex items-center pointer-events-none">
+                                <SearchIcon className="h-4 w-4 text-gray-400 group-focus-within:text-blue-500 transition-colors" />
+                            </div>
+                            <input
+                                type="text"
+                                placeholder="Search PI No, Importer, or Product..."
+                                value={searchQuery}
+                                onChange={(e) => setSearchQuery(e.target.value)}
+                                className="block w-full pl-12 md:pl-10 pr-4 py-2.5 md:py-2 bg-white/50 border border-gray-200 rounded-xl text-[13px] text-center md:text-left placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all outline-none shadow-sm focus:bg-white"
+                            />
+                        </div>
+                    </>
+                ) : (
+                    <div className="hidden md:block md:flex-1"></div>
+                )}
+
+                {!showForm && !showReviseForm && canManage && (
+                    <div className="w-full md:w-auto flex flex-row justify-end gap-2 sm:gap-3 z-10">
+                        <button
+                            onClick={() => setShowReviseForm(true)}
+                            className="flex-1 md:flex-none px-4 py-2 border border-blue-200 bg-blue-50/10 hover:bg-blue-50/50 text-blue-600 font-bold rounded-xl transition-all transform active:scale-95 md:hover:scale-105 flex items-center justify-center whitespace-nowrap text-sm h-[40px]"
+                        >
+                            <FileTextIcon className="w-4 h-4 mr-1.5 text-blue-500" />
+                            <span>PI Revise</span>
+                        </button>
+                        <button
+                            onClick={() => setShowForm(true)}
+                            className="flex-1 md:flex-none px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-xl shadow-lg shadow-blue-500/30 transition-all transform hover:scale-105 flex items-center justify-center whitespace-nowrap h-[40px]"
+                        >
+                            <span className="mr-1.5 font-bold text-lg leading-none">+</span> Add New
+                        </button>
                     </div>
-                </div>
-            )}
+                )}
+            </div>
 
             {showForm && (
                 <div className="pi-form relative rounded-2xl bg-white/60 backdrop-blur-xl border border-white/50 shadow-2xl p-8 transition-all duration-300">
@@ -994,10 +1465,9 @@ function PI({
                                                             const hasBalance = balance !== undefined;
                                                             const isLow = hasBalance && balance < 50000;
                                                             return (
-                                                                <span className={`text-sm font-bold ${
-                                                                    !hasBalance ? 'text-gray-400' :
+                                                                <span className={`text-sm font-bold ${!hasBalance ? 'text-gray-400' :
                                                                     isLow ? 'text-red-600' : 'text-emerald-600'
-                                                                }`}>
+                                                                    }`}>
                                                                     {hasBalance ? balance.toLocaleString('en-US') + ' Kg' : '—'}
                                                                 </span>
                                                             );
@@ -1811,13 +2281,26 @@ function PI({
                         </div>
 
                         <div className="space-y-2">
+                            <label className="text-sm font-medium text-blue-700 font-bold">Grand Total Quantity</label>
+                            <div className="relative">
+                                <input
+                                    type="text"
+                                    name="grandTotalQuantity"
+                                    value={calculatedGrandTotalQuantity ? calculatedGrandTotalQuantity.toLocaleString('en-US') + ' KG' : '0 KG'}
+                                    readOnly
+                                    className="w-full px-4 py-2 bg-blue-50/50 border border-blue-200/60 rounded-lg outline-none font-bold text-blue-700 transition-all cursor-not-allowed"
+                                />
+                            </div>
+                        </div>
+
+                        <div className="space-y-2">
                             <label className="text-sm font-medium text-gray-700 font-bold text-blue-700">Grand Total (US $)</label>
                             <div className="relative">
                                 <span className="absolute left-3 top-1/2 -translate-y-1/2 text-blue-600 font-bold">$</span>
                                 <input
-                                    type="number"
+                                    type="text"
                                     name="grandTotal"
-                                    value={formData.grandTotal}
+                                    value={calculatedGrandTotal > 0 ? '$ ' + parseFloat(calculatedGrandTotal.toFixed(2)).toLocaleString('en-US', { minimumFractionDigits: 2 }) : '$ 0.00'}
                                     readOnly
                                     placeholder="0.00"
                                     className="w-full pl-8 pr-4 py-2 bg-blue-50/50 border border-blue-200/60 rounded-lg outline-none font-bold text-blue-700 transition-all cursor-not-allowed"
@@ -2011,7 +2494,559 @@ function PI({
                         </div>
                     </form>
                 </div>
-            )}            {!showForm && (
+            )}
+
+            {showReviseForm && (
+                <div className="pi-form relative rounded-2xl bg-white/60 backdrop-blur-xl border border-white/50 shadow-2xl p-5 md:p-8 transition-all duration-300">
+                    <div className="absolute -top-20 -right-20 w-64 h-64 bg-blue-400/20 rounded-full blur-3xl pointer-events-none"></div>
+                    <div className="absolute -bottom-20 -left-20 w-64 h-64 bg-purple-400/20 rounded-full blur-3xl pointer-events-none"></div>
+
+                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6 md:mb-8 relative z-30 border-b border-gray-200/40 pb-4">
+                        <div className="flex items-center gap-2 shrink-0">
+                            <FileTextIcon className="w-5 h-5 text-blue-500" />
+                            <span className="text-base font-bold text-gray-800">PI Revise Registration</span>
+                        </div>
+
+                        <div className="flex-1 max-w-md w-full relative dropdown-container" ref={revisePiRef}>
+                            <div className="relative w-full">
+                                <input
+                                    type="text"
+                                    placeholder="Search or select PI number..."
+                                    value={reviseSearchQuery}
+                                    onChange={(e) => {
+                                        setReviseSearchQuery(e.target.value);
+                                        setActiveDropdown('revisePi');
+                                        setHighlightedIndex(-1);
+                                    }}
+                                    onFocus={() => {
+                                        setActiveDropdown('revisePi');
+                                        setHighlightedIndex(-1);
+                                    }}
+                                    className="w-full px-4 py-2 bg-white/70 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all font-medium text-center text-sm shadow-sm h-[38px]"
+                                />
+                                <div className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400">
+                                    <ChevronDownIcon className="w-4 h-4" />
+                                </div>
+                            </div>
+                            {activeDropdown === 'revisePi' && filteredPiRecordsForRevise.length > 0 && (
+                                <div className="absolute z-[100] w-full mt-1 bg-white border border-gray-200 rounded-xl shadow-xl max-h-48 overflow-y-auto">
+                                    {filteredPiRecordsForRevise.map((pi) => (
+                                        <button
+                                            key={pi._id}
+                                            type="button"
+                                            onClick={() => handleRevisePiSelect(pi)}
+                                            className="w-full px-4 py-2 text-center text-sm flex justify-between items-center hover:bg-blue-50 text-gray-700 font-semibold"
+                                        >
+                                            <span className="flex-1 text-center">{pi.piNumber}</span>
+                                            <span className="text-xs text-gray-400 font-normal pr-4">{pi.partyName || '-'}</span>
+                                        </button>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+
+                        <button
+                            onClick={resetReviseForm}
+                            className="p-2 hover:bg-gray-100 rounded-xl transition-all group active:scale-95 shrink-0"
+                            title="Close Form"
+                        >
+                            <XIcon className="w-5 h-5 text-gray-400 group-hover:text-rose-500" />
+                        </button>
+                    </div>
+
+                    <form onSubmit={handleReviseSubmit} className="space-y-8 relative z-10 w-full">
+                        {selectedRevisePiId && selectedPiForRevise && (
+                            <div className="grid grid-cols-1 lg:grid-cols-4 gap-8 animate-in fade-in slide-in-from-bottom-2 duration-300 w-full text-left">
+                                <div className="lg:col-span-1 space-y-6 bg-gray-50/50 border border-gray-100 rounded-2xl p-6">
+                                    <div>
+                                        <h4 className="text-xs font-black text-blue-600 uppercase tracking-widest mb-4">Current PI Details</h4>
+                                        <div className="space-y-4">
+                                            <div className="border-b border-gray-200/50 pb-2">
+                                                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">PI Number</span>
+                                                <p className="text-sm font-bold text-gray-800 truncate">{selectedPiForRevise.piNumber}</p>
+                                            </div>
+                                            <div className="border-b border-gray-200/50 pb-2">
+                                                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Importer</span>
+                                                <p className="text-sm font-bold text-gray-800 truncate">{selectedPiForRevise.partyName}</p>
+                                            </div>
+                                            <div className="border-b border-gray-200/50 pb-2">
+                                                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Exporter</span>
+                                                <p className="text-sm font-bold text-gray-800 truncate">{selectedPiForRevise.exporterName}</p>
+                                            </div>
+                                            <div className="grid grid-cols-2 gap-4 border-b border-gray-200/50 pb-2">
+                                                <div>
+                                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">PI Date</span>
+                                                    <p className="text-sm font-bold text-gray-800 font-mono">{formatDate(selectedPiForRevise.date)}</p>
+                                                </div>
+                                                <div>
+                                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Current Validity</span>
+                                                    <p className="text-sm font-bold text-rose-500 font-mono">{formatDate(selectedPiForRevise.validityDate)}</p>
+                                                </div>
+                                            </div>
+                                            <div className="grid grid-cols-2 gap-4">
+                                                <div>
+                                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Total Qty</span>
+                                                    <p className="text-sm font-bold text-gray-800">
+                                                        {parseFloat(selectedPiForRevise.grandTotalQuantity || 0).toLocaleString('en-US')} kg
+                                                    </p>
+                                                </div>
+                                                <div>
+                                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Grand Total</span>
+                                                    <p className="text-sm font-bold text-blue-600">${parseFloat(selectedPiForRevise.grandTotal || 0).toLocaleString()}</p>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div className="lg:col-span-2 space-y-6 bg-white border border-gray-100 rounded-2xl p-6 shadow-sm">
+                                    <h4 className="text-xs font-black text-blue-600 uppercase tracking-widest mb-4">Revise Details</h4>
+
+                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                                        <div className="space-y-1.5">
+                                            <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Revise Number *</label>
+                                            <input
+                                                type="text"
+                                                value={reviseFormData.reviseNo}
+                                                onChange={(e) => setReviseFormData(prev => ({ ...prev, reviseNo: e.target.value }))}
+                                                placeholder="e.g. REVISE NO-01"
+                                                className="w-full px-4 py-2.5 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all font-medium"
+                                                required
+                                            />
+                                        </div>
+                                        <div className="space-y-1.5">
+                                            <CustomDatePicker
+                                                label="Revise Date *"
+                                                value={reviseFormData.reviseDate}
+                                                onChange={(e) => setReviseFormData(prev => ({ ...prev, reviseDate: e.target.value }))}
+                                                required
+                                                compact={true}
+                                            />
+                                        </div>
+                                        <div className="space-y-1.5">
+                                            <CustomDatePicker
+                                                label="New Validity Date"
+                                                value={reviseFormData.validityDate}
+                                                onChange={(e) => setReviseFormData(prev => ({ ...prev, validityDate: e.target.value }))}
+                                                compact={true}
+                                            />
+                                        </div>
+                                    </div>
+
+                                    {/* First Line: Place of Receipt, Port of Loading, Port of Discharge */}
+                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                                        {/* Place of Receipt */}
+                                        <div className="space-y-1.5 relative dropdown-container">
+                                            <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Place of Receipt</label>
+                                            <div className="relative">
+                                                <input
+                                                    type="text"
+                                                    value={reviseFormData.placeOfReceipt || ''}
+                                                    onChange={(e) => {
+                                                        const val = e.target.value;
+                                                        setReviseFormData(prev => ({ ...prev, placeOfReceipt: val }));
+                                                        setActiveDropdown('reviseReceiptPlace');
+                                                        setHighlightedIndex(-1);
+                                                    }}
+                                                    onFocus={() => {
+                                                        setActiveDropdown('reviseReceiptPlace');
+                                                        setHighlightedIndex(-1);
+                                                    }}
+                                                    placeholder="e.g. GHOJADANGA"
+                                                    className="w-full px-4 py-2.5 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all font-medium text-sm"
+                                                    autoComplete="off"
+                                                />
+                                                {activeDropdown === 'reviseReceiptPlace' && (
+                                                    <div className="absolute z-[60] w-full mt-1 bg-white border border-gray-100 rounded-xl shadow-xl max-h-48 overflow-y-auto">
+                                                        {receiptPlaces.filter(v => !reviseFormData.placeOfReceipt || v.value.toLowerCase().includes(reviseFormData.placeOfReceipt.toLowerCase())).map((v, idx) => (
+                                                            <button
+                                                                key={v._id}
+                                                                type="button"
+                                                                onMouseDown={() => handleReviseDropdownSelect('placeOfReceipt', v.value)}
+                                                                onMouseEnter={() => setHighlightedIndex(idx)}
+                                                                className={`w-full px-4 py-2 text-left text-sm flex items-center justify-between ${highlightedIndex === idx || reviseFormData.placeOfReceipt === v.value ? 'bg-blue-50 text-blue-700 font-bold' : 'text-gray-700 hover:bg-blue-50'}`}
+                                                            >
+                                                                {v.value}
+                                                            </button>
+                                                        ))}
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </div>
+
+                                        {/* Port of Loading */}
+                                        <div className="space-y-1.5 relative dropdown-container">
+                                            <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Port of Loading</label>
+                                            <div className="relative">
+                                                <input
+                                                    type="text"
+                                                    value={reviseFormData.portOfLoading || ''}
+                                                    onChange={(e) => {
+                                                        const val = e.target.value;
+                                                        setReviseFormData(prev => ({ ...prev, portOfLoading: val }));
+                                                        setActiveDropdown('revisePortLoading');
+                                                        setHighlightedIndex(-1);
+                                                    }}
+                                                    onFocus={() => {
+                                                        setActiveDropdown('revisePortLoading');
+                                                        setHighlightedIndex(-1);
+                                                    }}
+                                                    placeholder="Search Port of Loading..."
+                                                    className="w-full px-4 py-2.5 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all font-medium text-sm"
+                                                    autoComplete="off"
+                                                />
+                                                {activeDropdown === 'revisePortLoading' && (
+                                                    <div className="absolute z-[60] w-full mt-1 bg-white border border-gray-100 rounded-xl shadow-xl max-h-48 overflow-y-auto">
+                                                        {ports.filter(p => p.isLoadingPort && (!reviseFormData.portOfLoading || p.name.toLowerCase().includes(reviseFormData.portOfLoading.toLowerCase()))).map((p, idx) => (
+                                                            <button
+                                                                key={p._id}
+                                                                type="button"
+                                                                onMouseDown={() => handleReviseDropdownSelect('portOfLoading', p.name)}
+                                                                onMouseEnter={() => setHighlightedIndex(idx)}
+                                                                className={`w-full px-4 py-2 text-left text-sm flex items-center justify-between ${highlightedIndex === idx || reviseFormData.portOfLoading === p.name ? 'bg-blue-50 text-blue-700 font-bold' : 'text-gray-700 hover:bg-blue-50'}`}
+                                                            >
+                                                                {p.name}
+                                                            </button>
+                                                        ))}
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </div>
+
+                                        {/* Port of Discharge */}
+                                        <div className="space-y-1.5 relative dropdown-container">
+                                            <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Port of Discharge</label>
+                                            <div className="relative">
+                                                <input
+                                                    type="text"
+                                                    value={reviseFormData.portOfDischarge || ''}
+                                                    onChange={(e) => {
+                                                        const val = e.target.value;
+                                                        setReviseFormData(prev => ({ ...prev, portOfDischarge: val }));
+                                                        setActiveDropdown('revisePortDischarge');
+                                                        setHighlightedIndex(-1);
+                                                    }}
+                                                    onFocus={() => {
+                                                        setActiveDropdown('revisePortDischarge');
+                                                        setHighlightedIndex(-1);
+                                                    }}
+                                                    placeholder="Search Port of Discharge..."
+                                                    className="w-full px-4 py-2.5 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all font-medium text-sm"
+                                                    autoComplete="off"
+                                                />
+                                                {activeDropdown === 'revisePortDischarge' && (
+                                                    <div className="absolute z-[60] w-full mt-1 bg-white border border-gray-100 rounded-xl shadow-xl max-h-48 overflow-y-auto">
+                                                        {ports.filter(p => !p.isLoadingPort && (!reviseFormData.portOfDischarge || p.name.toLowerCase().includes(reviseFormData.portOfDischarge.toLowerCase()))).map((p, idx) => (
+                                                            <button
+                                                                key={p._id}
+                                                                type="button"
+                                                                onMouseDown={() => handleReviseDropdownSelect('portOfDischarge', p.name)}
+                                                                onMouseEnter={() => setHighlightedIndex(idx)}
+                                                                className={`w-full px-4 py-2 text-left text-sm flex items-center justify-between ${highlightedIndex === idx || reviseFormData.portOfDischarge === p.name ? 'bg-blue-50 text-blue-700 font-bold' : 'text-gray-700 hover:bg-blue-50'}`}
+                                                            >
+                                                                {p.name}
+                                                            </button>
+                                                        ))}
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* Second Line: IP Search & Selection, Certification */}
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                        {/* IP Search & Selection */}
+                                        <div className="space-y-1.5 relative dropdown-container">
+                                            <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">IP Search & Selection</label>
+                                            <div className="relative">
+                                                <input
+                                                    type="text"
+                                                    value={reviseIpSearch}
+                                                    onChange={(e) => {
+                                                        setReviseIpSearch(e.target.value);
+                                                        setActiveDropdown('reviseIpNumber');
+                                                        setHighlightedIndex(-1);
+                                                    }}
+                                                    onFocus={() => {
+                                                        setActiveDropdown('reviseIpNumber');
+                                                        setHighlightedIndex(-1);
+                                                    }}
+                                                    placeholder="Search & Select IP Numbers to Add..."
+                                                    autoComplete="off"
+                                                    className="w-full px-4 py-2.5 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition-all font-medium text-sm"
+                                                />
+                                                {activeDropdown === 'reviseIpNumber' && (
+                                                    <div className="absolute z-[60] w-full mt-1 bg-white border border-gray-100 rounded-xl shadow-xl max-h-48 overflow-y-auto">
+                                                        {ipRecords.filter(ip => !reviseIpSearch || ip.ipNumber.toLowerCase().includes(reviseIpSearch.toLowerCase())).map((ip, idx) => {
+                                                            const isSelected = reviseFormData.ipNumbers && reviseFormData.ipNumbers.includes(ip.ipNumber);
+                                                            return (
+                                                                <button
+                                                                    key={ip._id}
+                                                                    type="button"
+                                                                    onMouseDown={() => handleReviseIpSelectToggle(ip.ipNumber)}
+                                                                    onMouseEnter={() => setHighlightedIndex(idx)}
+                                                                    className={`w-full px-4 py-2 text-left text-sm flex items-center justify-between ${highlightedIndex === idx || isSelected ? 'bg-blue-50 text-blue-700 font-bold' : 'text-gray-700 hover:bg-blue-50'}`}
+                                                                >
+                                                                    <div className="flex flex-col text-left">
+                                                                        <span className="font-bold">{ip.ipNumber}</span>
+                                                                        <span className="text-[10px] text-gray-500">{ip.ipParty} • {ip.productName}</span>
+                                                                    </div>
+                                                                    {isSelected && (
+                                                                        <span className="text-blue-600 font-bold text-sm">✓</span>
+                                                                    )}
+                                                                </button>
+                                                            );
+                                                        })}
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </div>
+
+                                        {/* Certification */}
+                                        <div className="space-y-1.5 relative dropdown-container">
+                                            <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Certification</label>
+                                            <div className="relative">
+                                                <input
+                                                    type="text"
+                                                    value={reviseFormData.certification || ''}
+                                                    onChange={(e) => {
+                                                        const val = e.target.value;
+                                                        setReviseFormData(prev => ({ ...prev, certification: val }));
+                                                        setActiveDropdown('reviseCertification');
+                                                        setHighlightedIndex(-1);
+                                                        const lastPart = val.split(',').pop().trim();
+                                                        setCertSearch(lastPart);
+                                                    }}
+                                                    onFocus={() => {
+                                                        setActiveDropdown('reviseCertification');
+                                                        setHighlightedIndex(-1);
+                                                    }}
+                                                    placeholder="e.g. Packing, Value & Quantity"
+                                                    className="w-full px-4 py-2.5 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all font-medium text-sm pr-10"
+                                                    autoComplete="off"
+                                                />
+                                                {activeDropdown === 'reviseCertification' && (() => {
+                                                    const defaultCerts = [
+                                                        { _id: 'default-packing', value: 'Packing', isDefault: true },
+                                                        { _id: 'default-valqty', value: 'Value & Quantity', isDefault: true },
+                                                        { _id: 'default-coo', value: 'Country of Origin', isDefault: true }
+                                                    ];
+                                                    const merged = [...defaultCerts];
+                                                    certifications.forEach(cert => {
+                                                        if (!merged.some(d => d.value.toLowerCase() === cert.value.toLowerCase())) {
+                                                            merged.push(cert);
+                                                        }
+                                                    });
+                                                    const filtered = merged.filter(v => !certSearch || v.value.toLowerCase().includes(certSearch.toLowerCase()));
+                                                    return (
+                                                        <div className="absolute z-[60] w-full mt-1 bg-white border border-gray-100 rounded-xl shadow-xl max-h-48 overflow-y-auto">
+                                                            {filtered.map((v, idx) => {
+                                                                const selectedParts = (reviseFormData.certification || '').split(',').map(p => p.trim()).filter(Boolean);
+                                                                const isSelected = selectedParts.some(p => p.toLowerCase() === v.value.toLowerCase());
+                                                                return (
+                                                                    <button
+                                                                        key={v._id}
+                                                                        type="button"
+                                                                        onMouseDown={() => handleReviseDropdownSelect('certification', v.value)}
+                                                                        onMouseEnter={() => setHighlightedIndex(idx)}
+                                                                        className={`w-full px-4 py-2 text-left text-sm flex items-center justify-between ${highlightedIndex === idx || isSelected ? 'bg-blue-50 text-blue-700 font-bold' : 'text-gray-700 hover:bg-blue-50'}`}
+                                                                    >
+                                                                        <span>{v.value}</span>
+                                                                        {isSelected && <span className="text-blue-600 font-bold">✓</span>}
+                                                                    </button>
+                                                                );
+                                                            })}
+                                                        </div>
+                                                    );
+                                                })()}
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* IP rows - one per IP number */}
+                                    {selectedPiReviseIpInfo.length > 0 ? (
+                                        <div className="space-y-3">
+                                            <div className="grid grid-cols-[1fr_1fr_1fr_auto] gap-4 items-center">
+                                                <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">IP</label>
+                                                <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">IP Balance</label>
+                                                <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">IP Expiry Date</label>
+                                                <div className="w-8"></div>
+                                            </div>
+                                            {selectedPiReviseIpInfo.map((ipInfo, idx) => (
+                                                <div key={idx} className="grid grid-cols-[1fr_1fr_1fr_auto] gap-4 items-center">
+                                                    <div>
+                                                        <input
+                                                            type="text"
+                                                            readOnly
+                                                            value={ipInfo.ipNumber}
+                                                            className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl outline-none text-gray-800 font-semibold text-sm"
+                                                        />
+                                                    </div>
+                                                    <div>
+                                                        <input
+                                                            type="text"
+                                                            readOnly
+                                                            value={ipInfo.balanceDisplay}
+                                                            className={`w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl outline-none font-bold text-sm ${ipInfo.isLowBalance ? 'text-red-600' : 'text-emerald-600'
+                                                                }`}
+                                                        />
+                                                    </div>
+                                                    <div>
+                                                        <input
+                                                            type="text"
+                                                            readOnly
+                                                            value={ipInfo.expiryDisplay}
+                                                            className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl outline-none text-red-600 font-bold text-sm"
+                                                        />
+                                                    </div>
+                                                    <div className="flex-shrink-0 flex items-center justify-center">
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => handleReviseIpSelectToggle(ipInfo.ipNumber)}
+                                                            className="text-red-500 hover:text-red-700 p-1.5 rounded-lg hover:bg-red-50 transition-all duration-200"
+                                                            title="Remove IP"
+                                                        >
+                                                            <XIcon className="w-4 h-4" />
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    ) : (
+                                        <div className="grid grid-cols-3 gap-6">
+                                            <div className="space-y-1.5">
+                                                <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">IP</label>
+                                                <input type="text" readOnly value="N/A" className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl outline-none text-gray-400 text-sm" />
+                                            </div>
+                                            <div className="space-y-1.5">
+                                                <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">IP Balance</label>
+                                                <input type="text" readOnly value="N/A" className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl outline-none text-gray-400 text-sm" />
+                                            </div>
+                                            <div className="space-y-1.5">
+                                                <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">IP Expiry Date</label>
+                                                <input type="text" readOnly value="N/A" className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl outline-none text-gray-400 text-sm" />
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    <div className="space-y-3">
+                                        <h5 className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Product Updates</h5>
+                                        <div className="overflow-x-auto rounded-xl border border-gray-100">
+                                            <table className="w-full text-left text-sm">
+                                                <thead>
+                                                    <tr className="bg-gray-50 text-[10px] font-black text-gray-400 uppercase tracking-wider">
+                                                        <th className="px-3 py-2">Product</th>
+                                                        <th className="px-3 py-2">Qty (kg)</th>
+                                                        <th className="px-3 py-2">Rate ($)</th>
+                                                        <th className="px-3 py-2">Freight</th>
+                                                        <th className="px-3 py-2">Amount</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody className="divide-y divide-gray-50">
+                                                    {(reviseFormData.productsList || []).map((prod, idx) => (
+                                                        <tr key={idx}>
+                                                            <td className="px-3 py-2 font-semibold text-gray-700">{prod.productName || '-'}</td>
+                                                            <td className="px-3 py-2">
+                                                                <input
+                                                                    type="number"
+                                                                    value={prod.quantity}
+                                                                    onChange={(e) => handleReviseProductChange(idx, 'quantity', e.target.value)}
+                                                                    className="w-full px-2 py-1.5 border border-gray-200 rounded-lg text-sm"
+                                                                />
+                                                            </td>
+                                                            <td className="px-3 py-2">
+                                                                <input
+                                                                    type="number"
+                                                                    step="0.01"
+                                                                    value={prod.rate}
+                                                                    onChange={(e) => handleReviseProductChange(idx, 'rate', e.target.value)}
+                                                                    className="w-full px-2 py-1.5 border border-gray-200 rounded-lg text-sm"
+                                                                />
+                                                            </td>
+                                                            <td className="px-3 py-2">
+                                                                <input
+                                                                    type="number"
+                                                                    step="0.01"
+                                                                    value={prod.freight}
+                                                                    onChange={(e) => handleReviseProductChange(idx, 'freight', e.target.value)}
+                                                                    className="w-full px-2 py-1.5 border border-gray-200 rounded-lg text-sm"
+                                                                />
+                                                            </td>
+                                                            <td className="px-3 py-2 font-bold text-blue-600">${parseFloat(prod.amount || 0).toLocaleString()}</td>
+                                                        </tr>
+                                                    ))}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                        <div className="flex justify-end gap-6 text-sm font-bold">
+                                            <span className="text-gray-500">Total Qty: {parseFloat(reviseFormData.grandTotalQuantity || 0).toLocaleString('en-US')} kg</span>
+                                            <span className="text-blue-600">Grand Total: ${parseFloat(reviseFormData.grandTotal || 0).toLocaleString()}</span>
+                                        </div>
+                                    </div>
+
+                                    <div className="flex justify-end gap-3 pt-4 border-t border-gray-100">
+                                        <button
+                                            type="button"
+                                            onClick={resetReviseForm}
+                                            className="px-6 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-600 font-bold rounded-xl transition-all active:scale-95"
+                                        >
+                                            Cancel
+                                        </button>
+                                        <button
+                                            type="submit"
+                                            disabled={isReviseSaving}
+                                            className="px-8 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold rounded-xl shadow-lg shadow-blue-500/30 transition-all transform hover:scale-105 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
+                                        >
+                                            {isReviseSaving ? 'Saving...' : 'Save PI Revise'}
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <div className="lg:col-span-1 space-y-6 bg-gray-50/50 border border-gray-100 rounded-2xl p-6">
+                                    <div>
+                                        <h4 className="text-xs font-black text-blue-600 uppercase tracking-widest mb-4">Current Products</h4>
+                                        <div className="space-y-3">
+                                            {getPiProductsList(selectedPiForRevise).map((prod, pIdx) => (
+                                                <div key={pIdx} className="border-b border-gray-200/40 pb-2 last:border-0 last:pb-0">
+                                                    <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider">
+                                                        Item {getPiProductsList(selectedPiForRevise).length > 1 ? pIdx + 1 : ''}
+                                                    </span>
+                                                    <p className="text-xs font-bold text-gray-800 truncate" title={prod.productName}>{prod.productName || '-'}</p>
+                                                    <div className="grid grid-cols-2 gap-2 mt-1">
+                                                        <div>
+                                                            <span className="text-[8px] font-semibold text-gray-400 uppercase">Qty</span>
+                                                            <p className="text-[11px] font-bold text-gray-700">{parseFloat(prod.quantity || 0).toLocaleString('en-US')} kg</p>
+                                                        </div>
+                                                        <div>
+                                                            <span className="text-[8px] font-semibold text-gray-400 uppercase">Rate</span>
+                                                            <p className="text-[11px] font-bold text-gray-700">${parseFloat(prod.rate || 0).toLocaleString('en-IN')}</p>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                        {(selectedPiForRevise.revisions || []).length > 0 && (
+                                            <div className="mt-6 pt-4 border-t border-gray-200/50">
+                                                <h5 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-3">Revision History</h5>
+                                                <div className="space-y-2 max-h-40 overflow-y-auto">
+                                                    {(selectedPiForRevise.revisions || []).slice().reverse().map((rev, rIdx) => (
+                                                        <div key={rIdx} className="text-[11px] bg-white rounded-lg p-2 border border-gray-100">
+                                                            <p className="font-bold text-blue-600">{rev.reviseNo}</p>
+                                                            <p className="text-gray-500">{formatDate(rev.reviseDate)}</p>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+                    </form>
+                </div>
+            )}
+
+            {!showForm && !showReviseForm && (
                 <div className="space-y-4">
                     {/* Desktop Table View */}
                     <div className="hidden md:block bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
@@ -2038,66 +3073,84 @@ function PI({
                                             </tr>
                                         ))
                                     ) : filteredRecords.length > 0 ? (
-                                        filteredRecords.map(record => (
-                                            <tr key={record._id} className="hover:bg-gray-50/50 transition-colors">
-                                                <td className="px-6 py-4 text-sm text-gray-600 font-medium">{formatDate(record.date)}</td>
-                                                <td className="px-6 py-4 text-sm font-bold text-blue-600">{record.piNumber}</td>
-                                                <td className="px-6 py-4 text-sm text-gray-700 font-semibold">{record.partyName}</td>
-                                                <td className="px-6 py-4 text-sm text-gray-700 font-semibold">{record.exporterName}</td>
-                                                <td className="px-6 py-4 text-sm text-gray-600">{record.productName}</td>
-                                                <td className="px-6 py-4 text-sm text-gray-600 font-bold">{record.quantity} kg</td>
-                                                <td className="px-6 py-4 text-sm text-blue-700 font-bold">${parseFloat(record.grandTotal).toLocaleString()}</td>
-                                                <td className="px-6 py-4">
-                                                    <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest border ${record.status === 'Active' ? 'bg-green-50 text-green-700 border-green-100' :
-                                                        record.status === 'Closed' ? 'bg-gray-100 text-gray-600 border border-gray-200' :
-                                                            'bg-amber-50 text-amber-600 border-amber-100'
-                                                        }`}>
-                                                        {record.status}
-                                                    </span>
-                                                </td>
-                                                <td className="px-6 py-4">
-                                                    <div className="flex items-center justify-center gap-3">
-                                                        <button
-                                                            onClick={() => {
-                                                                const enriched = { ...record };
-                                                                if (!enriched.exporterAddress || !enriched.exporterEmail || !enriched.exporterSignature) {
-                                                                    const exp = exporters?.find(e => e.name === enriched.exporterName);
-                                                                    if (exp) {
-                                                                        enriched.exporterAddress = enriched.exporterAddress || exp.address;
-                                                                        enriched.exporterContact = enriched.exporterContact || exp.phone;
-                                                                        enriched.exporterEmail = enriched.exporterEmail || exp.email;
-                                                                        enriched.exporterSignature = enriched.exporterSignature || exp.signature;
+                                        filteredRecords.map(record => {
+                                            const displayProducts = record.productsList && record.productsList.length > 0
+                                                ? record.productsList.map(p => p.productName).filter(Boolean).join(', ')
+                                                : record.productName || 'N/A';
+
+                                            const totalQty = record.productsList && record.productsList.length > 0
+                                                ? record.productsList.reduce((sum, p) => sum + (parseFloat(p.quantity) || 0), 0)
+                                                : (parseFloat(record.grandTotalQuantity || record.quantity) || 0);
+
+                                            return (
+                                                <tr key={record._id} className="hover:bg-gray-50/50 transition-colors">
+                                                    <td className="px-6 py-4 text-sm text-gray-600 font-medium">{formatDate(record.revisions && record.revisions.length > 0 ? (record.revisions[record.revisions.length - 1].reviseDate || record.date) : record.date)}</td>
+                                                    <td className="px-6 py-4 text-sm font-bold text-blue-600">
+                                                        {record.piNumber}
+                                                        {record.revisions && record.revisions.length > 0 ? ' (REVISED)' : ''}
+                                                    </td>
+                                                    <td className="px-6 py-4 text-sm text-gray-700 font-semibold">{record.partyName}</td>
+                                                    <td className="px-6 py-4 text-sm text-gray-700 font-semibold">{record.exporterName}</td>
+                                                    <td className="px-6 py-4 text-sm text-gray-600 max-w-[200px] truncate" title={displayProducts}>{displayProducts}</td>
+                                                    <td className="px-6 py-4 text-sm text-gray-600 font-bold">{totalQty.toLocaleString('en-US')} kg</td>
+                                                    <td className="px-6 py-4 text-sm text-blue-700 font-bold">${parseFloat(record.grandTotal).toLocaleString()}</td>
+                                                    <td className="px-6 py-4">
+                                                        <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest border ${record.status === 'Active' ? 'bg-green-50 text-green-700 border-green-100' :
+                                                            record.status === 'Closed' ? 'bg-gray-100 text-gray-600 border border-gray-200' :
+                                                                'bg-amber-50 text-amber-600 border-amber-100'
+                                                            }`}>
+                                                            {record.status}
+                                                        </span>
+                                                    </td>
+                                                    <td className="px-6 py-4">
+                                                        <div className="flex items-center justify-center gap-3">
+                                                            <button
+                                                                onClick={() => {
+                                                                    setViewHistoryRecord(record);
+                                                                    setActiveHistoryIndex(0);
+                                                                }}
+                                                                className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all active:scale-90"
+                                                                title="View History"
+                                                            >
+                                                                <EyeIcon className="w-5 h-5" />
+                                                            </button>
+                                                            <button
+                                                                onClick={() => {
+                                                                    const enriched = {
+                                                                        ...record,
+                                                                        piNumber: record.revisions && record.revisions.length > 0 ? `${record.piNumber} (REVISED)` : record.piNumber,
+                                                                        date: record.revisions && record.revisions.length > 0 ? (record.revisions[record.revisions.length - 1].reviseDate || record.date) : record.date
+                                                                    };
+                                                                    if (!enriched.exporterAddress || !enriched.exporterEmail || !enriched.exporterSignature) {
+                                                                        const exp = exporters?.find(e => e.name === enriched.exporterName);
+                                                                        if (exp) {
+                                                                            enriched.exporterAddress = enriched.exporterAddress || exp.address;
+                                                                            enriched.exporterContact = enriched.exporterContact || exp.phone;
+                                                                            enriched.exporterEmail = enriched.exporterEmail || exp.email;
+                                                                            enriched.exporterSignature = enriched.exporterSignature || exp.signature;
+                                                                        }
                                                                     }
-                                                                }
-                                                                if (!enriched.partyAddress || !enriched.partyEmail || !enriched.partySignature) {
-                                                                    const imp = importers?.find(i => i.name === enriched.partyName);
-                                                                    if (imp) {
-                                                                        enriched.partyAddress = enriched.partyAddress || imp.address;
-                                                                        enriched.partyContact = enriched.partyContact || imp.phone;
-                                                                        enriched.partyEmail = enriched.partyEmail || imp.email;
-                                                                        enriched.partySignature = enriched.partySignature || imp.signature;
+                                                                    if (!enriched.partyAddress || !enriched.partyEmail || !enriched.partySignature) {
+                                                                        const imp = importers?.find(i => i.name === enriched.partyName);
+                                                                        if (imp) {
+                                                                            enriched.partyAddress = enriched.partyAddress || imp.address;
+                                                                            enriched.partyContact = enriched.partyContact || imp.phone;
+                                                                            enriched.partyEmail = enriched.partyEmail || imp.email;
+                                                                            enriched.partySignature = enriched.partySignature || imp.signature;
+                                                                        }
                                                                     }
-                                                                }
-                                                                if (enriched.invoiceStyle === 'Style 2 AAS') {
-                                                                    generatePI2PDF(enriched);
-                                                                } else {
-                                                                    generatePIPDF(enriched);
-                                                                }
-                                                            }}
-                                                            className="p-2 text-gray-400 hover:text-blue-600 transition-all active:scale-90"
-                                                            title="Generate PI PDF"
-                                                        >
-                                                            <PDFIcon className="w-5 h-5" />
-                                                        </button>
-                                                        {canManage && (
-                                                            <>
-                                                                <button
-                                                                    onClick={() => handleEdit(record)}
-                                                                    className="p-2 text-gray-400 hover:text-indigo-600 transition-all active:scale-90"
-                                                                    title="Edit Record"
-                                                                >
-                                                                    <EditIcon className="w-5 h-5" />
-                                                                </button>
+                                                                    if (enriched.invoiceStyle === 'Style 2 AAS') {
+                                                                        generatePI2PDF(enriched);
+                                                                    } else {
+                                                                        generatePIPDF(enriched);
+                                                                    }
+                                                                }}
+                                                                className="p-2 text-gray-400 hover:text-blue-600 transition-all active:scale-90"
+                                                                title="Download PDF"
+                                                            >
+                                                                <PDFIcon className="w-5 h-5" />
+                                                            </button>
+                                                            {canManage && (
                                                                 <button
                                                                     onClick={() => handleDelete(record._id)}
                                                                     className="p-2 text-gray-400 hover:text-red-600 transition-all active:scale-90"
@@ -2105,12 +3158,12 @@ function PI({
                                                                 >
                                                                     <TrashIcon className="w-5 h-5" />
                                                                 </button>
-                                                            </>
-                                                        )}
-                                                    </div>
-                                                </td>
-                                            </tr>
-                                        ))
+                                                            )}
+                                                        </div>
+                                                    </td>
+                                                </tr>
+                                            );
+                                        })
                                     ) : (
                                         <tr>
                                             <td colSpan="9" className="px-6 py-12 text-center text-gray-400 font-bold">No PI records found.</td>
@@ -2134,6 +3187,14 @@ function PI({
                         ) : filteredRecords.length > 0 ? (
                             filteredRecords.map(record => {
                                 const isExpanded = expandedCardId === record._id;
+                                const displayProducts = record.productsList && record.productsList.length > 0
+                                    ? record.productsList.map(p => p.productName).filter(Boolean).join(', ')
+                                    : record.productName || 'N/A';
+
+                                const totalQty = record.productsList && record.productsList.length > 0
+                                    ? record.productsList.reduce((sum, p) => sum + (parseFloat(p.quantity) || 0), 0)
+                                    : (parseFloat(record.grandTotalQuantity || record.quantity) || 0);
+
                                 return (
                                     <div
                                         key={record._id}
@@ -2146,7 +3207,10 @@ function PI({
                                                 <div className="flex items-center min-w-0 flex-1">
                                                     <span className="w-[48px] text-[11px] font-black text-blue-500 uppercase tracking-widest shrink-0 whitespace-nowrap">PI No.</span>
                                                     <span className="text-blue-500 font-bold mx-2">-</span>
-                                                    <span className="text-sm font-black text-gray-900 tracking-tight truncate">{record.piNumber}</span>
+                                                    <span className="text-sm font-black text-gray-900 tracking-tight truncate">
+                                                        {record.piNumber}
+                                                        {record.revisions && record.revisions.length > 0 ? ' (REVISED)' : ''}
+                                                    </span>
                                                 </div>
                                                 <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-widest border shrink-0 ${record.status === 'Active' ? 'bg-green-50 text-green-700 border-green-100' :
                                                     record.status === 'Closed' ? 'bg-gray-100 text-gray-600 border border-gray-200' :
@@ -2162,7 +3226,7 @@ function PI({
                                                     <div className="flex items-center">
                                                         <span className="w-[100px] text-[11px] font-black text-gray-400 uppercase tracking-widest shrink-0">Date</span>
                                                         <span className="text-gray-400 font-bold mx-2">-</span>
-                                                        <span className="text-sm font-bold text-gray-700">{formatDate(record.date)}</span>
+                                                        <span className="text-sm font-bold text-gray-700">{formatDate(record.revisions && record.revisions.length > 0 ? (record.revisions[record.revisions.length - 1].reviseDate || record.date) : record.date)}</span>
                                                     </div>
                                                     <div className="flex items-center">
                                                         <span className="w-[100px] text-[11px] font-black text-gray-400 uppercase tracking-widest shrink-0">Expire Date</span>
@@ -2182,7 +3246,12 @@ function PI({
                                                     <div className="flex items-center">
                                                         <span className="w-[100px] text-[11px] font-black text-gray-400 uppercase tracking-widest shrink-0">Product</span>
                                                         <span className="text-gray-400 font-bold mx-2">-</span>
-                                                        <span className="text-sm font-bold text-gray-700 truncate">{record.productName}</span>
+                                                        <span className="text-sm font-bold text-gray-700 truncate" title={displayProducts}>{displayProducts}</span>
+                                                    </div>
+                                                    <div className="flex items-center">
+                                                        <span className="w-[100px] text-[11px] font-black text-gray-400 uppercase tracking-widest shrink-0">Total Qty</span>
+                                                        <span className="text-gray-400 font-bold mx-2">-</span>
+                                                        <span className="text-sm font-bold text-gray-700">{totalQty.toLocaleString('en-US')} kg</span>
                                                     </div>
                                                     <div className="flex items-center">
                                                         <span className="w-[100px] text-[11px] font-black text-indigo-500 uppercase tracking-widest shrink-0">Grand Total</span>
@@ -2200,7 +3269,21 @@ function PI({
                                                     <button
                                                         onClick={(e) => {
                                                             e.stopPropagation();
-                                                            const enriched = { ...record };
+                                                            setViewHistoryRecord(record);
+                                                            setActiveHistoryIndex(0);
+                                                        }}
+                                                        className="flex-1 flex items-center justify-center gap-1.5 py-3 bg-blue-50 text-blue-700 rounded-xl font-black text-[10px] uppercase tracking-widest active:scale-95 transition-all"
+                                                    >
+                                                        <EyeIcon className="w-3.5 h-3.5" /> View
+                                                    </button>
+                                                    <button
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            const enriched = {
+                                                                ...record,
+                                                                piNumber: record.revisions && record.revisions.length > 0 ? `${record.piNumber} (REVISED)` : record.piNumber,
+                                                                date: record.revisions && record.revisions.length > 0 ? (record.revisions[record.revisions.length - 1].reviseDate || record.date) : record.date
+                                                            };
                                                             const exp = exporters?.find(e => e.name === enriched.exporterName);
                                                             if (exp) {
                                                                 enriched.exporterAddress = enriched.exporterAddress || exp.address;
@@ -2226,20 +3309,12 @@ function PI({
                                                         <PDFIcon className="w-3.5 h-3.5" /> PDF
                                                     </button>
                                                     {canManage && (
-                                                        <>
-                                                            <button
-                                                                onClick={(e) => { e.stopPropagation(); handleEdit(record); }}
-                                                                className="flex-1 flex items-center justify-center gap-1.5 py-3 bg-indigo-50 text-indigo-700 rounded-xl font-black text-[10px] uppercase tracking-widest active:scale-95 transition-all"
-                                                            >
-                                                                <EditIcon className="w-3.5 h-3.5" /> Edit
-                                                            </button>
-                                                            <button
-                                                                onClick={(e) => { e.stopPropagation(); handleDelete(record._id); }}
-                                                                className="flex-1 flex items-center justify-center gap-1.5 py-3 bg-red-50 text-red-600 rounded-xl font-black text-[10px] uppercase tracking-widest active:scale-95 transition-all"
-                                                            >
-                                                                <TrashIcon className="w-3.5 h-3.5" /> Delete
-                                                            </button>
-                                                        </>
+                                                        <button
+                                                            onClick={(e) => { e.stopPropagation(); handleDelete(record._id); }}
+                                                            className="flex-1 flex items-center justify-center gap-1.5 py-3 bg-red-50 text-red-600 rounded-xl font-black text-[10px] uppercase tracking-widest active:scale-95 transition-all"
+                                                        >
+                                                            <TrashIcon className="w-3.5 h-3.5" /> Delete
+                                                        </button>
                                                     )}
                                                 </div>
                                             </div>
@@ -2283,6 +3358,310 @@ function PI({
                     </button>
                 </div>
             )}
+
+            {/* History Explorer Modal */}
+            {viewHistoryRecord && (() => {
+                const timeline = getHistoryTimeline(viewHistoryRecord);
+                const activeRevision = timeline[activeHistoryIndex] || timeline[0] || {};
+                const activeProducts = activeRevision.productsList || [];
+                const activeIps = activeRevision.ipNumbers || [];
+
+                return (
+                    <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
+                        <div className="bg-white w-full max-w-6xl h-[85vh] rounded-3xl shadow-2xl flex flex-col overflow-hidden border border-gray-100 animate-in zoom-in-95 duration-200">
+                            {/* Modal Header */}
+                            <div className="px-8 py-5 border-b border-gray-100 flex items-center justify-between bg-gray-50/50">
+                                <div className="flex items-center gap-3">
+                                    <div className="p-2.5 bg-blue-100 text-blue-600 rounded-2xl">
+                                        <EyeIcon className="w-6 h-6" />
+                                    </div>
+                                    <div>
+                                        <h3 className="text-lg font-black text-gray-900 tracking-tight">Proforma Invoice History Explorer</h3>
+                                        <p className="text-sm text-gray-500 font-medium">PI Number: <span className="font-bold text-blue-600 font-mono">{viewHistoryRecord.piNumber}{viewHistoryRecord.revisions && viewHistoryRecord.revisions.length > 0 && activeRevision.reviseNo !== 'Original PI' ? ' (REVISED)' : ''}</span> • Date: <span className="font-bold text-gray-800 font-mono">{formatDate(activeRevision.reviseDate || viewHistoryRecord.date)}</span></p>
+                                    </div>
+                                </div>
+                                <button
+                                    onClick={() => setViewHistoryRecord(null)}
+                                    className="p-2 rounded-xl hover:bg-gray-200 text-gray-400 hover:text-gray-600 active:scale-95 transition-all"
+                                >
+                                    <XIcon className="w-5 h-5" />
+                                </button>
+                            </div>
+
+                            {/* Modal Body */}
+                            <div className="flex-1 flex overflow-hidden min-h-0">
+                                {/* Left Sidebar: Timeline */}
+                                <div className="w-60 border-r border-gray-100 overflow-y-auto p-6 bg-gray-50/30 flex-shrink-0">
+                                    <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-6">Revision Timeline</h4>
+                                    <div className="relative border-l border-gray-200 pl-6 ml-3 space-y-8">
+                                        {timeline.map((rev, idx) => {
+                                            const isActive = activeHistoryIndex === idx;
+                                            return (
+                                                <div
+                                                    key={idx}
+                                                    onClick={() => setActiveHistoryIndex(idx)}
+                                                    className="relative cursor-pointer group"
+                                                >
+                                                    {/* Timeline Bullet */}
+                                                    <div className={`absolute -left-[31px] top-1 w-4 h-4 rounded-full border-2 transition-all flex items-center justify-center ${isActive
+                                                        ? 'bg-blue-600 border-blue-600 ring-4 ring-blue-100 scale-110 shadow-sm'
+                                                        : 'bg-white border-gray-300 group-hover:border-blue-400 group-hover:scale-105'
+                                                        }`} />
+
+                                                    {/* Timeline Content Card */}
+                                                    <div className={`p-4 rounded-2xl border transition-all ${isActive
+                                                        ? 'bg-white border-blue-200 shadow-md shadow-blue-500/5'
+                                                        : 'bg-white/50 border-gray-100 hover:border-gray-200 hover:bg-white hover:shadow-sm'
+                                                        }`}>
+                                                        <span className={`text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full ${rev.isOriginal
+                                                            ? 'bg-blue-50 text-blue-700'
+                                                            : 'bg-amber-50 text-amber-700'
+                                                            }`}>
+                                                            {rev.reviseNo}
+                                                        </span>
+                                                        <p className="text-sm font-bold text-gray-800 mt-2">
+                                                            {rev.isOriginal ? 'Initial Creation' : 'Revised State'}
+                                                        </p>
+                                                        <p className="text-sm font-medium text-gray-500 mt-1 font-mono">
+                                                            {formatDate(rev.reviseDate)}
+                                                        </p>
+                                                    </div>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
+
+                                {/* Right Pane: Details */}
+                                <div className="flex-1 overflow-y-auto p-8 space-y-8">
+                                    {activeRevision.isPlaceholder ? (
+                                        <div className="h-full flex flex-col items-center justify-center text-center p-8 bg-gray-50/50 rounded-3xl border border-gray-100">
+                                            <div className="w-16 h-16 rounded-full bg-amber-50 text-amber-500 flex items-center justify-center mb-4">
+                                                <span className="text-2xl">⚠️</span>
+                                            </div>
+                                            <h4 className="text-base font-bold text-gray-800">Original PI Data</h4>
+                                            <p className="text-sm text-gray-500 mt-2 max-w-md">
+                                                This PI was revised prior to the deployment of the detailed history tracking system. Historical initial values were overwritten and are not fully accessible.
+                                            </p>
+                                            <p className="text-xs text-gray-400 mt-4">
+                                                All subsequent revisions and updates are saved and fully trackable.
+                                            </p>
+                                        </div>
+                                    ) : (
+                                        <>
+                                            {/* Details Section */}
+                                            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                                                {/* Card 1: Logistics */}
+                                                <div className="bg-gray-50/50 border border-gray-100 rounded-2xl p-5 space-y-4">
+                                                    <h5 className="text-[10px] font-black text-blue-600 uppercase tracking-widest">Logistics & Route</h5>
+                                                    <div className="space-y-3 text-sm">
+                                                        <div>
+                                                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Place of Receipt</span>
+                                                            <span className="font-bold text-gray-800 mt-0.5 block">{activeRevision.placeOfReceipt || 'N/A'}</span>
+                                                        </div>
+                                                        <div>
+                                                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Port of Loading</span>
+                                                            <span className="font-bold text-gray-800 mt-0.5 block">{activeRevision.portOfLoading || 'N/A'}</span>
+                                                        </div>
+                                                        <div>
+                                                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Port of Discharge</span>
+                                                            <span className="font-bold text-gray-800 mt-0.5 block">{activeRevision.portOfDischarge || 'N/A'}</span>
+                                                        </div>
+                                                    </div>
+                                                </div>
+
+                                                {/* Card 2: Dates & Certifications */}
+                                                <div className="bg-gray-50/50 border border-gray-100 rounded-2xl p-5 space-y-4">
+                                                    <h5 className="text-[10px] font-black text-blue-600 uppercase tracking-widest">Dates & Certification</h5>
+                                                    <div className="space-y-3 text-sm">
+                                                        <div>
+                                                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Revise / Original Date</span>
+                                                            <span className="font-bold text-gray-800 mt-0.5 block font-mono">{formatDate(activeRevision.reviseDate)}</span>
+                                                        </div>
+                                                        <div>
+                                                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Validity Date</span>
+                                                            <span className="font-bold text-rose-500 mt-0.5 block font-mono">{formatDate(activeRevision.validityDate)}</span>
+                                                        </div>
+                                                        <div>
+                                                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block mb-1">Certification</span>
+                                                            <div className="space-y-1">
+                                                                {activeRevision.certification
+                                                                    ? activeRevision.certification.split(',').map((cert, cIdx) => (
+                                                                        <span key={cIdx} className="font-bold text-gray-800 block text-sm">{cert.trim()}</span>
+                                                                    ))
+                                                                    : <span className="font-bold text-gray-800 block text-sm">N/A</span>
+                                                                }
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+
+                                                {/* Card 3: IP Records & Reference */}
+                                                <div className="bg-gray-50/50 border border-gray-100 rounded-2xl p-5 space-y-4">
+                                                    <h5 className="text-[10px] font-black text-blue-600 uppercase tracking-widest">IP Records & Remarks</h5>
+                                                    <div className="space-y-3 text-sm">
+                                                        <div>
+                                                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Import Permission (IP)</span>
+                                                            <div className="flex flex-wrap gap-1.5 mt-1">
+                                                                {activeIps.length > 0 ? (
+                                                                    activeIps.map((ip, i) => (
+                                                                        <span key={i} className="text-sm font-bold bg-blue-50 text-blue-700 px-2 py-0.5 rounded-lg border border-blue-100 font-mono">
+                                                                            {ip}
+                                                                        </span>
+                                                                    ))
+                                                                ) : (
+                                                                    <span className="text-gray-500 font-bold text-sm">N/A</span>
+                                                                )}
+                                                            </div>
+                                                        </div>
+                                                        <div>
+                                                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Remarks</span>
+                                                            <p className="text-sm font-bold text-gray-800 mt-1 max-h-16 overflow-y-auto">{activeRevision.remarks || 'No remarks provided.'}</p>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            {/* Products Table */}
+                                            <div className="space-y-3">
+                                                <h5 className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Products Breakdown</h5>
+                                                <div className="overflow-hidden rounded-2xl border border-gray-100 bg-white">
+                                                    <table className="w-full text-left border-collapse">
+                                                        <thead>
+                                                            <tr className="bg-gray-50 border-b border-gray-100 text-[10px] font-black text-gray-400 uppercase tracking-wider">
+                                                                <th className="px-6 py-3">Product Name</th>
+                                                                <th className="px-6 py-3">HS Code</th>
+                                                                <th className="px-6 py-3 text-right">Quantity (kg)</th>
+                                                                <th className="px-6 py-3 text-right">Rate ($)</th>
+                                                                <th className="px-6 py-3 text-right">Freight</th>
+                                                                <th className="px-6 py-3 text-right">Total Amount</th>
+                                                            </tr>
+                                                        </thead>
+                                                        <tbody className="divide-y divide-gray-50 text-sm">
+                                                            {activeProducts.map((prod, pIdx) => (
+                                                                <tr key={pIdx} className="hover:bg-gray-50/30">
+                                                                    <td className="px-6 py-3.5 font-bold text-gray-800">{prod.productName || 'N/A'}</td>
+                                                                    <td className="px-6 py-3.5 font-mono font-medium text-gray-500">{prod.hsCode || 'N/A'}</td>
+                                                                    <td className="px-6 py-3.5 text-right font-semibold text-gray-700">{parseFloat(prod.quantity || 0).toLocaleString('en-US')} kg</td>
+                                                                    <td className="px-6 py-3.5 text-right font-semibold text-gray-700">${parseFloat(prod.rate || 0).toFixed(2)}</td>
+                                                                    <td className="px-6 py-3.5 text-right font-semibold text-gray-700">${parseFloat(prod.freight || 0).toFixed(2)}</td>
+                                                                    <td className="px-6 py-3.5 text-right font-black text-blue-600">${parseFloat(prod.amount || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+                                                                </tr>
+                                                            ))}
+                                                        </tbody>
+                                                    </table>
+                                                </div>
+
+                                                {/* Totals Summary Cards */}
+                                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 max-w-lg mx-auto pt-6">
+                                                    {/* Total Quantity Card */}
+                                                    <div className="bg-blue-50/40 border border-blue-100 rounded-2xl p-5 text-center shadow-sm">
+                                                        <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest block">Total Quantity</span>
+                                                        <span className="text-xl font-black text-gray-900 mt-1 block">
+                                                            {parseFloat(activeRevision.grandTotalQuantity || 0).toLocaleString('en-US')} kg
+                                                        </span>
+                                                    </div>
+                                                    {/* Grand Total Card */}
+                                                    <div className="bg-blue-600 text-white rounded-2xl p-5 text-center shadow-lg shadow-blue-500/20">
+                                                        <span className="text-[10px] font-black text-blue-200 uppercase tracking-widest block">Grand Total Value</span>
+                                                        <span className="text-xl font-black text-white mt-1 block">
+                                                            ${parseFloat(activeRevision.grandTotal || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                                                        </span>
+                                                    </div>
+                                                </div>
+
+                                                {/* Action Buttons under Cards */}
+                                                <div className="flex items-center justify-center gap-4 pt-6 pb-2">
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => {
+                                                            const enriched = {
+                                                                ...viewHistoryRecord,
+                                                                ...activeRevision,
+                                                                piNumber: `${viewHistoryRecord.piNumber}${activeRevision.reviseNo !== 'Original PI' ? ' (REVISED)' : ''}`
+                                                            };
+
+                                                            // Enrich exporter details if missing
+                                                            if (!enriched.exporterAddress || !enriched.exporterEmail || !enriched.exporterSignature) {
+                                                                const exp = exporters?.find(e => e.name === enriched.exporterName);
+                                                                if (exp) {
+                                                                    enriched.exporterAddress = enriched.exporterAddress || exp.address;
+                                                                    enriched.exporterContact = enriched.exporterContact || exp.phone;
+                                                                    enriched.exporterEmail = enriched.exporterEmail || exp.email;
+                                                                    enriched.exporterSignature = enriched.exporterSignature || exp.signature;
+                                                                }
+                                                            }
+
+                                                            // Enrich importer details if missing
+                                                            if (!enriched.partyAddress || !enriched.partyEmail || !enriched.partySignature) {
+                                                                const imp = importers?.find(i => i.name === enriched.partyName);
+                                                                if (imp) {
+                                                                    enriched.partyAddress = enriched.partyAddress || imp.address;
+                                                                    enriched.partyContact = enriched.partyContact || imp.phone;
+                                                                    enriched.partyEmail = enriched.partyEmail || imp.email;
+                                                                    enriched.partySignature = enriched.partySignature || imp.signature;
+                                                                }
+                                                            }
+
+                                                            if (enriched.invoiceStyle === 'Style 2 AAS') {
+                                                                generatePI2PDF(enriched);
+                                                            } else {
+                                                                generatePIPDF(enriched);
+                                                            }
+                                                        }}
+                                                        className="px-6 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold text-sm rounded-xl shadow-md transition-all transform hover:scale-105 active:scale-95 flex items-center justify-center gap-2"
+                                                    >
+                                                        <PDFIcon className="w-4 h-4 text-white" />
+                                                        <span>Print PI PDF</span>
+                                                    </button>
+                                                    {canManage && (
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => {
+                                                                setViewHistoryRecord(null);
+                                                                if (activeRevision.reviseNo === 'Original PI') {
+                                                                    handleEdit(viewHistoryRecord);
+                                                                } else {
+                                                                    setSelectedRevisePiId(viewHistoryRecord._id);
+                                                                    setReviseSearchQuery(viewHistoryRecord.piNumber || '');
+                                                                    setReviseIpSearch('');
+                                                                    setActiveDropdown(null);
+                                                                    setHighlightedIndex(-1);
+
+                                                                    // Pre-fill reviseFormData with the specific activeRevision values
+                                                                    setReviseFormData({
+                                                                        reviseNo: activeRevision.reviseNo,
+                                                                        reviseDate: activeRevision.reviseDate ? activeRevision.reviseDate.split('T')[0] : new Date().toISOString().split('T')[0],
+                                                                        validityDate: activeRevision.validityDate && activeRevision.validityDate !== 'N/A (Historical)' ? activeRevision.validityDate.split('T')[0] : '',
+                                                                        placeOfReceipt: activeRevision.placeOfReceipt && activeRevision.placeOfReceipt !== 'N/A (Historical)' ? activeRevision.placeOfReceipt : '',
+                                                                        portOfLoading: activeRevision.portOfLoading && activeRevision.portOfLoading !== 'N/A (Historical)' ? activeRevision.portOfLoading : '',
+                                                                        portOfDischarge: activeRevision.portOfDischarge && activeRevision.portOfDischarge !== 'N/A (Historical)' ? activeRevision.portOfDischarge : '',
+                                                                        certification: activeRevision.certification && activeRevision.certification !== 'N/A (Historical)' ? activeRevision.certification : '',
+                                                                        productsList: activeRevision.productsList || [],
+                                                                        grandTotal: activeRevision.grandTotal !== 'N/A' ? activeRevision.grandTotal : 0,
+                                                                        grandTotalQuantity: activeRevision.grandTotalQuantity !== 'N/A' ? activeRevision.grandTotalQuantity : 0,
+                                                                        remarks: activeRevision.remarks && activeRevision.remarks !== 'Historical original values were not captured prior to first revision.' ? activeRevision.remarks : '',
+                                                                        ipNumbers: activeRevision.ipNumbers || []
+                                                                    });
+                                                                    setShowReviseForm(true);
+                                                                }
+                                                            }}
+                                                            className="px-6 py-3 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold text-sm rounded-xl transition-all transform hover:scale-105 active:scale-95 flex items-center justify-center gap-2"
+                                                        >
+                                                            <EditIcon className="w-4 h-4 text-gray-500" />
+                                                            <span>Edit PI</span>
+                                                        </button>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        </>
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                );
+            })()}
         </div>
     );
 }
