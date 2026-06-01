@@ -244,8 +244,8 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
 
                                 if (stockFilters.warehouse && stockFilters.warehouse.toLowerCase() !== 'all warehouses' && (be.warehouseName || '').trim().toLowerCase() !== stockFilters.warehouse.toLowerCase()) return;
 
-                                const sq = safeParse(be.quantity);
-                                let sp = safeParse(be.packet);
+                                const sq = safeParse(be.quantity) + safeParse(be.returnQty);
+                                let sp = safeParse(be.packet) + safeParse(be.returnPkt);
 
                                 if (sp <= 0 && sq > 0) {
                                     const pSize = brandObj.packetSize || 30;
@@ -438,8 +438,8 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
                     consumedSales.add(saleEntryId);
                     const sDate = (sale.date || '').split('T')[0];
                     const isBefore = startDate && sDate < startDate;
-                    const sq = safeParse(be.quantity);
-                    const sp = safeParse(be.packet);
+                    const sq = safeParse(be.quantity) + safeParse(be.returnQty);
+                    const sp = safeParse(be.packet) + safeParse(be.returnPkt);
                     if (isBefore) {
                         brandObj.openingQuantity -= sq;
                         group.openingQuantity -= sq;
