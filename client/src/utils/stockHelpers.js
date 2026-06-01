@@ -37,6 +37,8 @@ export const calculatePktRemainder = (totalQty, pktSize) => {
 };
 
 export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery = '', warehouseData = [], salesRecords = [], products = [], damages = []) => {
+    const isWhFilter = stockFilters.warehouse && stockFilters.warehouse.trim().toLowerCase() !== 'all warehouses';
+
     const resolveQuality = (pName, bName) => {
         if (!products || !Array.isArray(products)) return '-';
         const targetP = products.find(p => (p.name || p.productName || '').trim().toLowerCase() === (pName || '').trim().toLowerCase());
@@ -105,7 +107,7 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
 
     // 2. Process Warehouse Records (Transfers)
     warehouseData.forEach(whItem => {
-        if (!whItem || whItem.recordType !== 'warehouse') return;
+        if (!whItem || (whItem.recordType !== 'warehouse' && !whItem.productName && !whItem.product && (whItem.location || '').trim().toLowerCase() !== 'returned stock')) return;
         if (seenRecords.has(whItem._id)) return;
         seenRecords.add(whItem._id);
 
@@ -147,12 +149,10 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
         if (endDate && itemDateOnly > endDate) return false;
 
         if (stockFilters.lcNo && (item.lcNo || '').trim() !== stockFilters.lcNo) return false;
-        if (stockFilters.warehouse) {
+        if (isWhFilter) {
             const filterWH = stockFilters.warehouse.trim().toLowerCase();
-            if (filterWH !== 'all warehouses') {
-                const itemWH = (item.whName || item.warehouse || '').trim().toLowerCase();
-                if (!itemWH || (itemWH !== filterWH && !itemWH.includes(filterWH) && !filterWH.includes(itemWH))) return false;
-            }
+            const itemWH = (item.whName || item.warehouse || '').trim().toLowerCase();
+            if (!itemWH || (itemWH !== filterWH && !itemWH.includes(filterWH) && !filterWH.includes(itemWH))) return false;
         }
         if (stockFilters.brand && (item.brand || '').trim() !== stockFilters.brand) return false;
         if (stockFilters.productName) {
@@ -241,7 +241,8 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
                                 const saleEntryId = `${sale._id}_${siIdx}_${beIdx}`;
                                 if (consumedSales.has(saleEntryId)) return;
 
-                                if (stockFilters.warehouse && stockFilters.warehouse.toLowerCase() !== 'all warehouses' && (be.warehouseName || '').trim().toLowerCase() !== stockFilters.warehouse.toLowerCase()) return;
+                                const saleWH = (be.warehouseName || si.whName || si.warehouse || sale.warehouse || sale.whName || '').trim().toLowerCase();
+                                if (isWhFilter && saleWH !== stockFilters.warehouse.toLowerCase()) return;
 
                                 const sq = safeParse(be.quantity) + safeParse(be.returnQty);
                                 let sp = safeParse(be.packet) + safeParse(be.returnPkt);
@@ -285,7 +286,7 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
                 const dWh = (damage.warehouse || '').trim().toLowerCase();
 
                 if (dProdName === keyLower && dBrand === normBrand) {
-                    if (stockFilters.warehouse && stockFilters.warehouse.toLowerCase() !== 'all warehouses') {
+                    if (isWhFilter) {
                         const filterWH = stockFilters.warehouse.toLowerCase();
                         // Skip damage if it has no warehouse or warehouse doesn't match the filter
                         if (!dWh || (dWh !== filterWH && !dWh.includes(filterWH) && !filterWH.includes(dWh))) return;
@@ -314,11 +315,11 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
             brandObj._damagesResolved = true;
         }
 
-        const arrivalQty = stockFilters.warehouse
+        const arrivalQty = isWhFilter
             ? safeParse(item.inHouseQuantity)
             : (item.recordType === 'stock' || (item.recordType === 'warehouse' && (item.location || '').trim().toLowerCase() === 'returned stock') ? safeParse(item.inHouseQuantity ?? item.whQty ?? item.quantity) : 0);
 
-        const arrivalPkt = stockFilters.warehouse
+        const arrivalPkt = isWhFilter
             ? safeParse(item.inHousePacket)
             : (item.recordType === 'stock' || (item.recordType === 'warehouse' && (item.location || '').trim().toLowerCase() === 'returned stock') ? safeParse(item.inHousePacket ?? item.whPkt ?? item.packet) : 0);
 
@@ -377,7 +378,8 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
             }
             const group = groupedStock[sProdName];
             (si.brandEntries || []).forEach((be, beIdx) => {
-                if (stockFilters.warehouse && stockFilters.warehouse.toLowerCase() !== 'all warehouses' && (be.warehouseName || '').trim().toLowerCase() !== stockFilters.warehouse.toLowerCase()) return;
+                const saleWH = (be.warehouseName || si.whName || si.warehouse || sale.warehouse || sale.whName || '').trim().toLowerCase();
+                if (isWhFilter && saleWH !== stockFilters.warehouse.toLowerCase()) return;
                 
                 // ADDED: Brand filter for General products
                 if (stockFilters.brand && (be.brand || '').trim() !== stockFilters.brand) return;
@@ -412,7 +414,7 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
                         const dBrand = (damage.brand || 'No Brand').trim().toLowerCase();
                         const dWh = (damage.warehouse || '').trim().toLowerCase();
                         if (dProdName === sProdName.toLowerCase() && dBrand === normBrand) {
-                            if (stockFilters.warehouse && stockFilters.warehouse.toLowerCase() !== 'all warehouses') {
+                            if (isWhFilter) {
                                 const filterWH = stockFilters.warehouse.toLowerCase();
                                 // Skip damage if it has no warehouse or warehouse doesn't match the filter
                                 if (!dWh || (dWh !== filterWH && !dWh.includes(filterWH) && !filterWH.includes(dWh))) return;
@@ -461,7 +463,7 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
             const damageQty = b.damageQuantity || 0;
             const totalPkt = b.openingPacket + b.periodArrivalPacket;
 
-            const isGrossArrival = !stockFilters.warehouse;
+            const isGrossArrival = !isWhFilter;
             const openingAfterShortage = isGrossArrival ? (totalIn - shortageQty) : totalIn;
             const openingPktAfterShortage = isGrossArrival ? (totalPkt - b.sweepedPacket) : totalPkt;
             
