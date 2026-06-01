@@ -106,6 +106,7 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
     // 2. Process Warehouse Records (Transfers)
     warehouseData.forEach(whItem => {
         if (!whItem || whItem.recordType !== 'warehouse') return;
+        if ((whItem.location || '').trim().toLowerCase() === 'returned stock') return;
         if (seenRecords.has(whItem._id)) return;
         seenRecords.add(whItem._id);
 
