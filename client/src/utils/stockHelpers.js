@@ -106,7 +106,6 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
     // 2. Process Warehouse Records (Transfers)
     warehouseData.forEach(whItem => {
         if (!whItem || whItem.recordType !== 'warehouse') return;
-        if ((whItem.location || '').trim().toLowerCase() === 'returned stock') return;
         if (seenRecords.has(whItem._id)) return;
         seenRecords.add(whItem._id);
 
@@ -317,11 +316,11 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
 
         const arrivalQty = stockFilters.warehouse
             ? safeParse(item.inHouseQuantity)
-            : (item.recordType === 'stock' ? safeParse(item.quantity) : 0);
+            : (item.recordType === 'stock' || (item.recordType === 'warehouse' && (item.location || '').trim().toLowerCase() === 'returned stock') ? safeParse(item.inHouseQuantity ?? item.whQty ?? item.quantity) : 0);
 
         const arrivalPkt = stockFilters.warehouse
             ? safeParse(item.inHousePacket)
-            : (item.recordType === 'stock' ? safeParse(item.packet) : 0);
+            : (item.recordType === 'stock' || (item.recordType === 'warehouse' && (item.location || '').trim().toLowerCase() === 'returned stock') ? safeParse(item.inHousePacket ?? item.whPkt ?? item.packet) : 0);
 
         if (isBefore) {
             brandObj.openingQuantity += arrivalQty;
