@@ -107,7 +107,8 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
 
     // 2. Process Warehouse Records (Transfers)
     warehouseData.forEach(whItem => {
-        if (!whItem || (whItem.recordType !== 'warehouse' && !whItem.productName && !whItem.product && (whItem.location || '').trim().toLowerCase() !== 'returned stock')) return;
+        if (!whItem || (whItem.location || '').trim().toLowerCase() === 'returned stock') return;
+        if (whItem.recordType !== 'warehouse' && !whItem.productName && !whItem.product) return;
         if (seenRecords.has(whItem._id)) return;
         seenRecords.add(whItem._id);
 
@@ -244,8 +245,8 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
                                 const saleWH = (be.warehouseName || si.whName || si.warehouse || sale.warehouse || sale.whName || '').trim().toLowerCase();
                                 if (isWhFilter && saleWH !== stockFilters.warehouse.toLowerCase()) return;
 
-                                const sq = safeParse(be.quantity) + safeParse(be.returnQty);
-                                let sp = safeParse(be.packet) + safeParse(be.returnPkt);
+                                const sq = safeParse(be.quantity);
+                                let sp = safeParse(be.packet);
 
                                 if (sp <= 0 && sq > 0) {
                                     const pSize = brandObj.packetSize || 30;
@@ -317,11 +318,11 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
 
         const arrivalQty = isWhFilter
             ? safeParse(item.inHouseQuantity)
-            : (item.recordType === 'stock' || (item.recordType === 'warehouse' && (item.location || '').trim().toLowerCase() === 'returned stock') ? safeParse(item.inHouseQuantity ?? item.whQty ?? item.quantity) : 0);
+            : (item.recordType === 'stock' ? safeParse(item.inHouseQuantity ?? item.whQty ?? item.quantity) : 0);
 
         const arrivalPkt = isWhFilter
             ? safeParse(item.inHousePacket)
-            : (item.recordType === 'stock' || (item.recordType === 'warehouse' && (item.location || '').trim().toLowerCase() === 'returned stock') ? safeParse(item.inHousePacket ?? item.whPkt ?? item.packet) : 0);
+            : (item.recordType === 'stock' ? safeParse(item.inHousePacket ?? item.whPkt ?? item.packet) : 0);
 
         if (isBefore) {
             brandObj.openingQuantity += arrivalQty;
@@ -439,8 +440,8 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
                     consumedSales.add(saleEntryId);
                     const sDate = (sale.date || '').split('T')[0];
                     const isBefore = startDate && sDate < startDate;
-                    const sq = safeParse(be.quantity) + safeParse(be.returnQty);
-                    const sp = safeParse(be.packet) + safeParse(be.returnPkt);
+                    const sq = safeParse(be.quantity);
+                    const sp = safeParse(be.packet);
                     if (isBefore) {
                         brandObj.openingQuantity -= sq;
                         group.openingQuantity -= sq;
