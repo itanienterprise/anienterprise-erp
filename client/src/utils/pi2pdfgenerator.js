@@ -96,8 +96,16 @@ export const generatePI2PDF = (record) => {
     doc.setFontSize(9);
     doc.setFont("helvetica", "normal");
     let exporterInfo = record.exporterAddress || '';
-    if (record.exporterEmail) exporterInfo += `\nEmail: ${record.exporterEmail}`;
-    doc.text(doc.splitTextToSize(exporterInfo, leftColWidth - 10), margin + leftColWidth / 2, y + 17, { align: 'center' });
+    const exporterPhone = record.exporterContact || '';
+    const exporterEmail = record.exporterEmail || '';
+    const expContactParts = [];
+    if (exporterPhone) expContactParts.push(`Phone: ${exporterPhone}`);
+    if (exporterEmail) expContactParts.push(`Email: ${exporterEmail}`);
+    const expContactLine = expContactParts.join(', ');
+    if (expContactLine) {
+        exporterInfo = exporterInfo.trim() + `\n${expContactLine}`;
+    }
+    doc.text(doc.splitTextToSize(exporterInfo.trim(), leftColWidth - 10), margin + leftColWidth / 2, y + 17, { align: 'center' });
 
     // Right: PI Info - Buyer's Order No/Proforma Invoice No.& Date
     doc.setFont("helvetica", "bold");
@@ -159,7 +167,15 @@ export const generatePI2PDF = (record) => {
     doc.setFontSize(9);
     doc.setFont("helvetica", "normal");
     let impInfo = record.partyAddress || '';
-
+    const phone = record.partyContact || '';
+    const email = record.partyEmail || '';
+    const contactParts = [];
+    if (phone) contactParts.push(`Phone: ${phone}`);
+    if (email) contactParts.push(`Email: ${email}`);
+    const contactLine = contactParts.join(', ');
+    if (contactLine) {
+        impInfo = impInfo.trim() + `\n${contactLine}`;
+    }
     doc.text(doc.splitTextToSize(impInfo.trim(), leftColWidth - 10), margin + leftColWidth / 2, y + 17, { align: 'center' });
 
     // Shipping rows (left)

@@ -60,7 +60,8 @@ export const generatePL2PDF = async (record, piRecords = [], lcRecords = [], imp
     };
 
     // Resolve details using database records if missing
-    const pi = piRecords.find(p => (p.piNumber || '').trim().toLowerCase() === (record.piNumber || '').trim().toLowerCase());
+    const cleanPiNumber = (record.piNumber || '').replace(' (REVISED)', '').trim();
+    const pi = piRecords.find(p => (p.piNumber || '').trim().toLowerCase() === cleanPiNumber.toLowerCase());
     const lc = lcRecords.find(l => l.lcNo === (record.lcNumber || pi?.lcNumber));
     const importer = importers.find(imp => (imp.name || '').toLowerCase().trim() === (record.partyName || '').toLowerCase().trim());
     console.log('PL2 importer lookup:', record.partyName, '-> found:', !!importer, 'irc:', importer?.irc);
@@ -82,6 +83,7 @@ export const generatePL2PDF = async (record, piRecords = [], lcRecords = [], imp
     const otherReferences = record.otherReferences || pi?.otherReferences || '';
     const certification = record.certification || pi?.certification || '';
     const showSafta = certification && certification.toLowerCase().includes('safta');
+    const isPiRevised = (pi?.revisions && pi.revisions.length > 0) || (record.piNumber || '').includes('(REVISED)');
 
     const getCertBlockFontSize = (productCount) => {
         if (productCount <= 1) return 7.0;
@@ -99,8 +101,16 @@ export const generatePL2PDF = async (record, piRecords = [], lcRecords = [], imp
         const cnDate = lc?.marineCNDate ? formatDate(lc.marineCNDate) : '';
         const insuranceCo = lc?.insuranceCo || 'CONTINENTAL INSURANCE LIMITED';
         const amnd = record.lcAmendment ? ` & ${record.lcAmendment}` : '';
-        const piNo = pi?.piNumber || record.piNumber || '';
-        const piDate = pi?.date ? formatDate(pi.date) : (record.piDate ? formatDate(record.piDate) : '');
+        let coverNoteAmnd = amnd;
+        if (record.lcAmendment && lc?.amendments?.length > 0) {
+            const matchedAmnd = lc.amendments[lc.amendments.length - 1];
+            if (matchedAmnd && matchedAmnd.addnNo) {
+                const dateMatch = record.lcAmendment.match(/DATE:\s*([^\s]+)/i);
+                coverNoteAmnd = ` & ADDN NO: ${matchedAmnd.addnNo}${dateMatch ? ` DATE: ${dateMatch[1]}` : ''}`;
+            }
+        }
+        const piNo = pi?.piNumber || '';
+        const piDate = pi?.date ? formatDate(pi.date) : '';
         const tin = importer?.tin || '';
         const bin = importer?.bin || '';
         const bankBin = '000321414-0101';
@@ -116,7 +126,7 @@ export const generatePL2PDF = async (record, piRecords = [], lcRecords = [], imp
         addWrapped(`IMPORTED AGAINST IRC NO-${irc}`);
 
         if (maxWidth > 0) {
-            addWrapped(`UNDER INSURANCE COVER NOTE NO: ${coverNote}, DATED.${cnDate}${amnd}`);
+            addWrapped(`UNDER INSURANCE COVER NOTE NO: ${coverNote}, DATED.${cnDate}${coverNoteAmnd}`);
             addWrapped(`OF ${insuranceCo}, BOGURA BRANCH, BOGURA, BANGLADESH.`);
             curY += lineSpacing;
             addWrapped('WE CERTIFY THAT THE COUNTRY OF ORIGIN IS MARKED IN ALL THE PACKETS/BAGS. WE DO THAT THE GOODS ARE SHIPED STRICTLY IN ACCORDANCE WITH THE SPECIFICATION HERE BY CERTIFY QUANTITY AND');
@@ -124,7 +134,12 @@ export const generatePL2PDF = async (record, piRecords = [], lcRecords = [], imp
             curY += 6 * lineSpacing;
         }
 
-        addWrapped(`PRICE AS PER PROFORMA INVOICE: ${piNo} Date:${piDate}`);
+        if (isPiRevised) {
+            addWrapped(`PRICE AS PER PROFORMA INVOICE: ${cleanPiNumber} Date:${formatDate(pi?.date || '')}`);
+            addWrapped(`& REVISED PI NO: ${record.piNumber || ''} Date:${formatDate(record.piDate)}`);
+        } else {
+            addWrapped(`PRICE AS PER PROFORMA INVOICE: ${piNo || record.piNumber || ''} Date:${piDate || formatDate(record.piDate)}`);
+        }
 
         if (record.trNumber) {
             const trDateStr = record.trDate ? formatDate(record.trDate) : '';
@@ -163,8 +178,16 @@ export const generatePL2PDF = async (record, piRecords = [], lcRecords = [], imp
         const cnDate = lc?.marineCNDate ? formatDate(lc.marineCNDate) : '';
         const insuranceCo = lc?.insuranceCo || 'CONTINENTAL INSURANCE LIMITED';
         const amnd = record.lcAmendment ? ` & ${record.lcAmendment}` : '';
-        const piNo = pi?.piNumber || record.piNumber || '';
-        const piDate = pi?.date ? formatDate(pi.date) : (record.piDate ? formatDate(record.piDate) : '');
+        let coverNoteAmnd = amnd;
+        if (record.lcAmendment && lc?.amendments?.length > 0) {
+            const matchedAmnd = lc.amendments[lc.amendments.length - 1];
+            if (matchedAmnd && matchedAmnd.addnNo) {
+                const dateMatch = record.lcAmendment.match(/DATE:\s*([^\s]+)/i);
+                coverNoteAmnd = ` & ADDN NO: ${matchedAmnd.addnNo}${dateMatch ? ` DATE: ${dateMatch[1]}` : ''}`;
+            }
+        }
+        const piNo = pi?.piNumber || '';
+        const piDate = pi?.date ? formatDate(pi.date) : '';
         const tin = importer?.tin || '';
         const bin = importer?.bin || '';
         const bankBin = '000321414-0101';
@@ -202,7 +225,7 @@ export const generatePL2PDF = async (record, piRecords = [], lcRecords = [], imp
         ]);
 
         if (maxWidth > 0) {
-            drawWrapped(`UNDER INSURANCE COVER NOTE NO: ${coverNote}, DATED.${cnDate}${amnd}`);
+            drawWrapped(`UNDER INSURANCE COVER NOTE NO: ${coverNote}, DATED.${cnDate}${coverNoteAmnd}`);
             drawWrapped(`OF ${insuranceCo}, BOGURA BRANCH, BOGURA, BANGLADESH.`);
             curY += lineSpacing;
             drawWrapped('WE CERTIFY THAT THE COUNTRY OF ORIGIN IS MARKED IN ALL THE PACKETS/BAGS. WE DO THAT THE GOODS ARE SHIPED STRICTLY IN ACCORDANCE WITH THE SPECIFICATION HERE BY CERTIFY QUANTITY AND', false);
@@ -211,7 +234,7 @@ export const generatePL2PDF = async (record, piRecords = [], lcRecords = [], imp
                 { text: "UNDER INSURANCE COVER NOTE NO: ", bold: true },
                 { text: coverNote, bold: true },
                 { text: ", DATED.", bold: true },
-                { text: cnDate + amnd, bold: true }
+                { text: cnDate + coverNoteAmnd, bold: true }
             ]);
             drawLine([
                 { text: "OF " },
@@ -224,12 +247,27 @@ export const generatePL2PDF = async (record, piRecords = [], lcRecords = [], imp
             drawLine([{ text: "ACCORDANCE WITH THE SPECIFICATION HERE BY CERTIFY QUANTITY AND" }]);
         }
 
-        drawLine([
-            { text: "PRICE AS PER PROFORMA INVOICE: ", bold: true },
-            { text: piNo, bold: true },
-            { text: " Date:", bold: true },
-            { text: piDate, bold: true }
-        ]);
+        if (isPiRevised) {
+            drawLine([
+                { text: "PRICE AS PER PROFORMA INVOICE: ", bold: true },
+                { text: cleanPiNumber, bold: true },
+                { text: " Date:", bold: true },
+                { text: formatDate(pi?.date || ''), bold: true }
+            ]);
+            drawLine([
+                { text: "& REVISED PI NO: ", bold: true },
+                { text: record.piNumber || '', bold: true },
+                { text: " Date:", bold: true },
+                { text: formatDate(record.piDate), bold: true }
+            ]);
+        } else {
+            drawLine([
+                { text: "PRICE AS PER PROFORMA INVOICE: ", bold: true },
+                { text: piNo || record.piNumber || '', bold: true },
+                { text: " Date:", bold: true },
+                { text: piDate || formatDate(record.piDate), bold: true }
+            ]);
+        }
 
         if (record.trNumber) {
             const trDateStr = record.trDate ? formatDate(record.trDate) : '';
@@ -317,7 +355,7 @@ export const generatePL2PDF = async (record, piRecords = [], lcRecords = [], imp
 
     // Row 1: Exporter vs PI Info
     let y = margin + 8;
-    let row1Height = 30;
+    const row1Height = isPiRevised ? 34 : 30;
     doc.rect(margin, y, leftColWidth, row1Height);
     doc.rect(midX, y, rightColWidth, row1Height);
 
@@ -330,13 +368,24 @@ export const generatePL2PDF = async (record, piRecords = [], lcRecords = [], imp
 
     doc.setFontSize(14);
     const nameLines = doc.splitTextToSize(record.exporterName || '', leftColWidth - 10);
-    doc.text(nameLines, margin + leftColWidth / 2, y + 12, { align: 'center' });
+    const exporterNameY = isPiRevised ? y + 13 : y + 12;
+    doc.text(nameLines, margin + leftColWidth / 2, exporterNameY, { align: 'center' });
 
     doc.setFontSize(9);
     doc.setFont("helvetica", "normal");
     let exporterInfo = record.exporterAddress || '';
-    if (record.exporterEmail) exporterInfo += `\nEmail: ${record.exporterEmail}`;
-    doc.text(doc.splitTextToSize(exporterInfo, leftColWidth - 10), margin + leftColWidth / 2, y + 17, { align: 'center' });
+    const exporter = exporters?.find(e => e.name === (record.exporterName || pi?.exporterName));
+    const exporterPhone = record.exporterContact || exporter?.phone || '';
+    const exporterEmail = record.exporterEmail || exporter?.email || '';
+    const expContactParts = [];
+    if (exporterPhone) expContactParts.push(`Phone: ${exporterPhone}`);
+    if (exporterEmail) expContactParts.push(`Email: ${exporterEmail}`);
+    const expContactLine = expContactParts.join(', ');
+    if (expContactLine) {
+        exporterInfo = exporterInfo.trim() + `\n${expContactLine}`;
+    }
+    const exporterAddressY = isPiRevised ? y + 19 : y + 17;
+    doc.text(doc.splitTextToSize(exporterInfo.trim(), leftColWidth - 10), margin + leftColWidth / 2, exporterAddressY, { align: 'center' });
 
     // Right: Invoice Info
     doc.setFont("helvetica", "bold");
@@ -354,22 +403,50 @@ export const generatePL2PDF = async (record, piRecords = [], lcRecords = [], imp
     doc.setFont("helvetica", "normal");
     doc.setFontSize(9);
     doc.text("Buyer's Order No /Proforma Invoice No.& Date", midX + 2, y + 16.5);
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(9);
-    doc.text(record.piNumber || '', midX + 2, y + 21);
 
-    const piDateVal = formatDate(record.piDate || pi?.date) || '';
-    doc.setFontSize(8.5);
-    doc.text("DATE-" + piDateVal, midX + rightColWidth - 2, y + 21, { align: 'right' });
+    if (isPiRevised) {
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(8.5);
+        doc.text(cleanPiNumber, midX + 2, y + 21);
 
-    doc.line(midX, y + 24, pageWidth - margin, y + 24);
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(8);
-    doc.text("Seller (if other than consigner)", midX + 2, y + 27.5);
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(8);
-    const buyerLines = doc.splitTextToSize(buyerName || '', rightColWidth - 5);
-    doc.text(buyerLines, midX + 2, y + 30.5);
+        const origPiDateVal = formatDate(pi?.date || '') || '';
+        doc.setFontSize(8.5);
+        doc.text("DATE-" + origPiDateVal, midX + rightColWidth - 2, y + 21, { align: 'right' });
+
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(8.5);
+        doc.text(record.piNumber || '', midX + 2, y + 25);
+
+        const revisedPiDateVal = formatDate(record.piDate) || '';
+        doc.setFontSize(8.5);
+        doc.text("DATE-" + revisedPiDateVal, midX + rightColWidth - 2, y + 25, { align: 'right' });
+
+        doc.line(midX, y + 28, pageWidth - margin, y + 28);
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(8);
+        doc.text("Seller (if other than consigner)", midX + 2, y + 31.5);
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(8);
+        const buyerLines = doc.splitTextToSize(buyerName || '', rightColWidth - 5);
+        doc.text(buyerLines, midX + 2, y + 33.5);
+    } else {
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(9);
+        doc.text(record.piNumber || '', midX + 2, y + 21);
+
+        const piDateVal = formatDate(record.piDate || pi?.date) || '';
+        doc.setFontSize(8.5);
+        doc.text("DATE-" + piDateVal, midX + rightColWidth - 2, y + 21, { align: 'right' });
+
+        doc.line(midX, y + 24, pageWidth - margin, y + 24);
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(8);
+        doc.text("Seller (if other than consigner)", midX + 2, y + 27.5);
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(8);
+        const buyerLines = doc.splitTextToSize(buyerName || '', rightColWidth - 5);
+        doc.text(buyerLines, midX + 2, y + 30.5);
+    }
 
     // Row 2: Importer vs Country/Terms/LC Box
     y += row1Height;
@@ -400,6 +477,15 @@ export const generatePL2PDF = async (record, piRecords = [], lcRecords = [], imp
     doc.setFontSize(9);
     doc.setFont("helvetica", "normal");
     let impInfo = record.partyAddress || '';
+    const phone = record.partyContact || importer?.phone || '';
+    const email = record.partyEmail || importer?.email || '';
+    const contactParts = [];
+    if (phone) contactParts.push(`Phone: ${phone}`);
+    if (email) contactParts.push(`Email: ${email}`);
+    const contactLine = contactParts.join(', ');
+    if (contactLine) {
+        impInfo = impInfo.trim() + `\n${contactLine}`;
+    }
     doc.text(doc.splitTextToSize(impInfo.trim(), leftColWidth - 10), margin + leftColWidth / 2, y + 17, { align: 'center' });
 
     // Shipping rows (left)
@@ -544,7 +630,7 @@ export const generatePL2PDF = async (record, piRecords = [], lcRecords = [], imp
                 const imgProps = doc.getImageProperties(record.productsImage);
                 const imgWidth = 108;
                 const imgHeight = (imgProps.height * imgWidth) / imgProps.width;
-                bottomPadding = imgHeight + 15;
+                bottomPadding = imgHeight + 5;
             } catch (e) {
                 console.error('Error calculating productsImage bottomPadding:', e);
                 bottomPadding = 80;
@@ -610,7 +696,7 @@ export const generatePL2PDF = async (record, piRecords = [], lcRecords = [], imp
                 const imgProps = doc.getImageProperties(record.productsImage);
                 const imgWidth = descColWidth - 6;
                 const imgHeight = (imgProps.height * imgWidth) / imgProps.width;
-                descRowHeight = exactDescHeight - 2 + imgHeight + 4;
+                descRowHeight = exactDescHeight - 8.5 + imgHeight + 3;
             } catch (e) {
                 descRowHeight = exactDescHeight + 50;
             }
@@ -636,6 +722,7 @@ export const generatePL2PDF = async (record, piRecords = [], lcRecords = [], imp
 
     autoTable(doc, {
         startY: y,
+        rowPageBreak: 'avoid',
         margin: { left: margin, right: margin },
         theme: 'grid',
         tableLineColor: [0, 0, 0],
@@ -888,7 +975,7 @@ export const generatePL2PDF = async (record, piRecords = [], lcRecords = [], imp
     const amountRowHeight = 6;
     const amountLineY = totalY + (amountRowHeight / 2) + 1.2;
     const declY = totalY + amountRowHeight;
-    const sigImgY = boxBottom - 18;
+    const sigImgY = declY + 2;
 
     doc.setDrawColor(0, 0, 0);
     doc.setLineWidth(0.1);
@@ -925,7 +1012,6 @@ export const generatePL2PDF = async (record, piRecords = [], lcRecords = [], imp
 
     const sigImageWidth = sigColWidth - 10;
     const sigImageX = sigColX + 5;
-    const exporter = exporters?.find(e => e.name === (record.exporterName || pi?.exporterName));
     const exporterSignature = record.exporterSignature || pi?.exporterSignature || exporter?.signature || '';
 
     if (exporterSignature) {
@@ -950,15 +1036,15 @@ export const generatePL2PDF = async (record, piRecords = [], lcRecords = [], imp
     const trIrc = importer?.irc || '';
     const trTin = importer?.tin || '';
     const trBin = importer?.bin || '';
-    const trPiNo = pi?.piNumber || record.piNumber || '';
-    const trPiDate = pi?.date ? formatDate(pi.date) : (record.piDate ? formatDate(record.piDate) : '');
+    const trPiNo = isPiRevised ? cleanPiNumber : (pi?.piNumber || record.piNumber || '');
+    const trPiDate = isPiRevised ? formatDate(pi?.date || '') : (pi?.date ? formatDate(pi.date) : (record.piDate ? formatDate(record.piDate) : ''));
     const trCoverNote = lc?.marineCoverNote || '';
     const trPiGrandTotal = pi?.grandTotal || (grandTotal > 0 ? grandTotal : '') || record.totalAmount || record.grandTotal || '';
 
-    await appendTrTemplatePage(doc, { 
-        ...record, 
-        bankName, 
-        branchName, 
+    await appendTrTemplatePage(doc, {
+        ...record,
+        bankName,
+        branchName,
         productsList: enrichedProductsList,
         lcNo: trLcNo,
         lcDate: trLcDate,

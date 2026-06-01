@@ -8,10 +8,20 @@ import {
 import { formatDate, API_BASE_URL } from '../../../utils/helpers';
 import { decryptData } from '../../../utils/encryption';
 import CustomDatePicker from '../../shared/CustomDatePicker';
-const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords = [], gpRecords = [], lcExpenses = [] }) => {
+const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords = [], gpRecords = [], lcExpenses = [], piRecordsRaw = [] }) => {
     const [showConsumption, setShowConsumption] = useState(true);
     const [consumptionSearchQuery, setConsumptionSearchQuery] = useState('');
     const [activeTab, setActiveTab] = useState('history');
+    const [activeMilestoneIndex, setActiveMilestoneIndex] = useState(0);
+
+    const timeline = useMemo(() => {
+        return getLCHistoryTimeline(data);
+    }, [data]);
+
+    const activeMilestone = useMemo(() => {
+        return timeline[activeMilestoneIndex] || timeline[0] || {};
+    }, [timeline, activeMilestoneIndex]);
+
     if (!data) return null;
 
     // Failsafe LC Matching helper
@@ -35,11 +45,11 @@ const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords
             // Ensure date key is just the day, so milliseconds in createdAt don't break grouping
             const rawDate = s.date || s.receiveDate || s.createdAt || '';
             const dateStr = typeof rawDate === 'string' && rawDate.includes('T') ? rawDate.split('T')[0] : rawDate;
-            
+
             // Group by date, and total quantity or truck to merge split records from the same transaction
             const groupVal = s.totalLcQuantity || s.billOfEntry || s.totalLcTruck || s.truckNo || s.truck || 'single';
             const key = `${dateStr}_${groupVal}`;
-            
+
             if (!receiptsMap[key]) {
                 const itemSubtotal = (s.entries || []).reduce((iSum, item) => iSum + parseNum(item.inHouseQuantity || item.quantity), 0);
                 const truckNumeric = parseFloat(s.totalLcTruck || s.truckNo || s.truck) || 0;
@@ -65,7 +75,7 @@ const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords
                 }
             }
         });
-        
+
     const relatedReceipts = Object.values(receiptsMap);
 
     const relatedSales = allSalesRecords
@@ -144,7 +154,35 @@ const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords
             freight: data.freight || '',
             totalFreight: data.totalFreight || '',
             totalDollar: data.totalDollar || ''
-          }];
+        }];
+
+    const activeProducts = useMemo(() => {
+        const baseProducts = activeMilestone.productsList?.length > 0
+            ? activeMilestone.productsList
+            : (data.productsList?.length > 0
+                ? data.productsList
+                : [{
+                    productName: data.productName || '',
+                    hsCode: data.hsCode || '',
+                    quantity: data.quantity || '',
+                    rate: data.rate || '',
+                    freight: data.freight || '',
+                    totalFreight: data.totalFreight || '',
+                    totalDollar: data.totalDollar || ''
+                }]);
+
+        return baseProducts.map((p, idx) => {
+            if (idx === 0 && baseProducts.length === 1) {
+                return {
+                    ...p,
+                    quantity: activeMilestone.quantity || p.quantity,
+                    rate: activeMilestone.rate || p.rate,
+                    totalDollar: activeMilestone.totalDollar || p.totalDollar
+                };
+            }
+            return p;
+        });
+    }, [data, activeMilestone]);
 
     const totalLcQtyTons = products.reduce((sum, p) => sum + (parseFloat(p.quantity) || 0), 0);
     const totalLcQtyKg = totalLcQtyTons * 1000;
@@ -460,202 +498,243 @@ const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords
                             )}
                         </div>
                     ) : (
-                        <div className="space-y-8 animate-in fade-in slide-in-from-bottom-2 duration-300">
-                            {/* Section 1: General Information */}
-                            <div>
-                                <div className="flex items-center gap-2 mb-4">
-                                    <GlobeIcon className="w-4 h-4 text-gray-400" />
-                                    <h4 className="text-xs font-black text-gray-400 uppercase tracking-widest">General Information</h4>
-                                </div>
-                                <div className="grid grid-cols-2 md:grid-cols-4 gap-6 px-2">
-                                    <div className="space-y-1">
-                                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">PI Number</span>
-                                        <p className="text-sm font-bold text-blue-600">{data.piNo || 'N/A'}</p>
-                                    </div>
-                                    <div className="space-y-1">
-                                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">IP Number</span>
-                                        <p className="text-sm font-bold text-gray-800">
-                                            {(data.ipNumbers?.length ? data.ipNumbers.join(', ') : data.ipNo) || 'N/A'}
-                                        </p>
-                                    </div>
-                                    <div className="space-y-1">
-                                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Opening Date</span>
-                                        <p className="text-sm font-bold text-gray-800 font-mono tracking-tight">{formatDate(data.openingDate)}</p>
-                                    </div>
-                                    <div className="space-y-1">
-                                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider text-red-500">Expiry Date</span>
-                                        <p className="text-sm font-bold text-red-500 font-mono tracking-tight">{formatDate(data.expiryDate)}</p>
-                                    </div>
-                                    <div className="space-y-1 col-span-2">
-                                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Bank Name</span>
-                                        <p className="text-sm font-bold text-gray-800 truncate" title={data.bankName}>{data.bankName}</p>
-                                    </div>
-                                    <div className="space-y-1">
-                                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Importer</span>
-                                        <p className="text-sm font-bold text-gray-800 truncate">{data.importerName}</p>
-                                    </div>
-                                    <div className="space-y-1">
-                                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Exporter</span>
-                                        <p className="text-sm font-bold text-gray-800 truncate">{data.exporterName}</p>
-                                    </div>
-                                </div>
-                            </div>
+                        <div className="flex gap-8">
+                            {/* Left Timeline Sidebar - Only if there are amendments */}
+                            {timeline.length > 1 && (
+                                <div className="w-60 border-r border-gray-100 pr-6 overflow-y-auto max-h-[70vh] flex-shrink-0 text-left custom-scrollbar">
+                                    <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-6">Amendment Timeline</h4>
+                                    <div className="relative border-l border-gray-200 pl-6 ml-3 space-y-6">
+                                        {timeline.map((rev, idx) => {
+                                            const isActive = activeMilestoneIndex === idx;
+                                            return (
+                                                <div
+                                                    key={idx}
+                                                    onClick={() => setActiveMilestoneIndex(idx)}
+                                                    className="relative cursor-pointer group"
+                                                >
+                                                    {/* Timeline Bullet */}
+                                                    <div className={`absolute -left-[31px] top-1.5 w-4 h-4 rounded-full border-2 transition-all flex items-center justify-center ${isActive
+                                                        ? 'bg-blue-600 border-blue-600 ring-4 ring-blue-100 scale-110 shadow-sm'
+                                                        : 'bg-white border-gray-300 group-hover:border-blue-400 group-hover:scale-105'
+                                                        }`} />
 
-                            {/* Section 2: Product & Financials */}
-                            <div className="pt-6 border-t border-gray-100">
-                                <div className="flex items-center gap-2 mb-4">
-                                    <DollarSignIcon className="w-4 h-4 text-gray-400" />
-                                    <h4 className="text-xs font-black text-gray-400 uppercase tracking-widest">Product & Financial Details</h4>
-                                </div>
-                                <div className="space-y-4">
-                                    <div className="overflow-x-auto rounded-xl border border-gray-100 bg-gray-50/50">
-                                        <table className="w-full text-left border-collapse">
-                                            <thead>
-                                                <tr className="bg-gray-100/50 border-b border-gray-200/60">
-                                                    <th className="px-4 py-2.5 text-[10px] font-bold text-gray-400 uppercase tracking-wider">Product Name</th>
-                                                    <th className="px-4 py-2.5 text-[10px] font-bold text-gray-400 uppercase tracking-wider">HS Code</th>
-                                                    <th className="px-4 py-2.5 text-[10px] font-bold text-gray-400 uppercase tracking-wider text-right">Quantity (Ton)</th>
-                                                    <th className="px-4 py-2.5 text-[10px] font-bold text-gray-400 uppercase tracking-wider text-right">Rate (/Ton)</th>
-                                                    <th className="px-4 py-2.5 text-[10px] font-bold text-gray-400 uppercase tracking-wider text-right">Total Dollar</th>
-                                                </tr>
-                                            </thead>
-                                            <tbody className="divide-y divide-gray-100">
-                                                {products.map((item, idx) => (
-                                                    <tr key={idx} className="hover:bg-white/40 transition-colors">
-                                                        <td className="px-4 py-3 text-sm font-bold text-gray-900">{item.productName || '-'}</td>
-                                                        <td className="px-4 py-3 text-sm text-gray-600 font-medium">{item.hsCode || '-'}</td>
-                                                        <td className="px-4 py-3 text-sm text-right text-gray-900 font-black">{parseFloat(item.quantity || 0).toLocaleString('en-US')} <span className="text-[10px] text-gray-400 font-normal">Ton</span></td>
-                                                        <td className="px-4 py-3 text-sm text-right text-gray-700 font-semibold">${parseFloat(item.rate || 0).toLocaleString('en-US')}</td>
-                                                        <td className="px-4 py-3 text-sm text-right text-blue-600 font-black">${parseFloat(item.totalDollar || 0).toLocaleString('en-US')}</td>
-                                                    </tr>
-                                                ))}
-                                            </tbody>
-                                        </table>
-                                    </div>
-
-                                    {/* Summary Stats */}
-                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                                        <div className="p-4 bg-gray-50/50 rounded-xl border border-gray-100 flex flex-col justify-center">
-                                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Port</span>
-                                            <p className="text-sm font-bold text-gray-800">{data.port || '-'}</p>
-                                        </div>
-                                        <div className="p-4 bg-gray-50/50 rounded-xl border border-gray-100 flex flex-col justify-center">
-                                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Dollar Rate</span>
-                                            <p className="text-sm font-bold text-gray-800">৳{parseFloat(data.dollarRate || 0).toLocaleString('en-IN')}</p>
-                                        </div>
-                                        <div className="p-4 bg-blue-50/40 rounded-xl border border-blue-100/50 flex justify-between items-center">
-                                            <span className="text-xs font-black text-blue-800 uppercase tracking-widest">Total Dollar</span>
-                                            <span className="text-lg font-black text-blue-700">${products.reduce((sum, item) => sum + (parseFloat(item.totalDollar) || 0), 0).toLocaleString('en-US')}</span>
-                                        </div>
-                                    </div>
-                                </div>
-                                <div className="mt-4 p-4 bg-gray-50 rounded-xl flex justify-between items-center">
-                                    <span className="text-xs font-black text-gray-400 uppercase tracking-widest">Total LC Value</span>
-                                    <span className="text-xl font-black text-gray-900">৳{parseFloat(data.totalAmount || 0).toLocaleString('en-IN')}</span>
-                                </div>
-                            </div>
-
-                            {/* Section 3: Insurance Details */}
-                            <div className="pt-6 border-t border-gray-100">
-                                <div className="flex items-center gap-2 mb-4">
-                                    <ShieldIcon className="w-4 h-4 text-gray-400" />
-                                    <h4 className="text-xs font-black text-gray-400 uppercase tracking-widest">Insurance Information</h4>
-                                </div>
-                                <div className="grid grid-cols-2 md:grid-cols-4 gap-6 px-2">
-                                    <div className="space-y-1 col-span-2">
-                                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Insurance Company</span>
-                                        <p className="text-sm font-bold text-gray-800 truncate">{data.insuranceCo || '-'}</p>
-                                    </div>
-                                    <div className="space-y-1">
-                                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Policy Type</span>
-                                        <p className="text-sm font-bold text-gray-800">{data.policyType || '-'}</p>
-                                    </div>
-                                    <div className="space-y-1">
-                                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Extra %</span>
-                                        <p className="text-sm font-bold text-gray-800">{data.extraPercent || '0'}%</p>
-                                    </div>
-                                    
-                                    <div className="space-y-1">
-                                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Marine Cover Note</span>
-                                        <p className="text-sm font-bold text-gray-800">{data.marineCoverNote || '-'}</p>
-                                    </div>
-                                    <div className="space-y-1">
-                                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Marine C.N Date</span>
-                                        <p className="text-sm font-bold text-gray-800">{data.marineCNDate ? formatDate(data.marineCNDate) : '-'}</p>
-                                    </div>
-                                    <div className="space-y-1">
-                                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Premium Rate</span>
-                                        <p className="text-sm font-bold text-gray-800">{data.premium || '0'}%</p>
-                                    </div>
-                                    <div className="space-y-1">
-                                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Premium Return</span>
-                                        <p className="text-sm font-bold text-blue-600">{data.premiumReturn || '0'}%</p>
-                                    </div>
-                                    
-                                    <div className="space-y-1">
-                                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Return Amount</span>
-                                        <p className="text-sm font-bold text-blue-600">৳{parseFloat(data.expectedReturnAmount || 0).toLocaleString('en-IN')}</p>
-                                    </div>
-                                    <div className="space-y-1">
-                                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">VAT ({data.premiumVat || '0'}%)</span>
-                                        <p className="text-sm font-bold text-gray-800">
-                                            ৳{(parseFloat(data.netPremium || 0) * (parseFloat(data.premiumVat || 0) / 100)).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                                        </p>
-                                    </div>
-                                    <div className="space-y-1">
-                                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Stamp Duty</span>
-                                        <p className="text-sm font-bold text-gray-800">৳{parseFloat(data.stampCharge || 0).toLocaleString('en-IN')}</p>
-                                    </div>
-                                    <div className="space-y-1">
-                                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Gross Premium</span>
-                                        <p className="text-sm font-bold text-gray-800">৳{parseFloat(data.grossPremium || 0).toLocaleString('en-US')}</p>
-                                    </div>
-                                </div>
-                                <div className="mt-4 p-4 bg-blue-50 rounded-xl flex justify-between items-center border border-blue-100">
-                                    <span className="text-xs font-black text-blue-600 uppercase tracking-widest">Net Payable Premium</span>
-                                    <span className="text-lg font-black text-blue-700">৳{parseFloat(data.netPremium || 0).toLocaleString('en-US')}</span>
-                                </div>
-                            </div>
-
-                            {/* Section 4: Amendment History */}
-                            {data.amendments && data.amendments.length > 0 && (
-                                <div className="pt-6 border-t border-gray-100 animate-in fade-in slide-in-from-bottom-2 duration-300">
-                                    <div className="flex items-center gap-2 mb-4">
-                                        <FileTextIcon className="w-4 h-4 text-gray-400" />
-                                        <h4 className="text-xs font-black text-gray-400 uppercase tracking-widest">Amendment History</h4>
-                                    </div>
-                                    <div className="overflow-x-auto border border-gray-100 rounded-2xl shadow-sm bg-white">
-                                        <table className="w-full text-left border-collapse">
-                                            <thead>
-                                                <tr className="bg-gray-50/50 border-b border-gray-100">
-                                                    <th className="px-6 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider text-nowrap">Amnd No</th>
-                                                    <th className="px-6 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider text-nowrap">Amnd Date</th>
-                                                    <th className="px-6 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider text-nowrap">New Expiry Date</th>
-                                                    <th className="px-6 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider text-right text-nowrap">New Qty</th>
-                                                    <th className="px-6 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider text-right text-nowrap">New Rate</th>
-                                                    <th className="px-6 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider text-right text-nowrap">New Value ($)</th>
-                                                    <th className="px-6 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider text-right text-nowrap">New Value (৳)</th>
-                                                    <th className="px-6 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider text-nowrap">Remarks / Details</th>
-                                                </tr>
-                                            </thead>
-                                            <tbody className="divide-y divide-gray-50">
-                                                {data.amendments.map((amnd, idx) => (
-                                                    <tr key={idx} className="hover:bg-gray-50/50 transition-colors group">
-                                                        <td className="px-6 py-3.5 text-sm font-bold text-gray-900 whitespace-nowrap">{amnd.amendmentNo}</td>
-                                                        <td className="px-6 py-3.5 text-sm font-medium text-gray-600 whitespace-nowrap font-mono">{formatDate(amnd.amendmentDate)}</td>
-                                                        <td className="px-6 py-3.5 text-sm font-medium text-rose-500 whitespace-nowrap font-mono">{amnd.expiryDate ? formatDate(amnd.expiryDate) : '—'}</td>
-                                                        <td className="px-6 py-3.5 text-sm text-right text-gray-800 font-bold whitespace-nowrap">{amnd.quantity ? `${parseFloat(amnd.quantity).toLocaleString('en-US')} Ton` : '—'}</td>
-                                                        <td className="px-6 py-3.5 text-sm text-right text-gray-800 whitespace-nowrap">{amnd.rate ? `$${parseFloat(amnd.rate).toLocaleString('en-IN')}` : '—'}</td>
-                                                        <td className="px-6 py-3.5 text-sm text-right text-blue-600 font-bold whitespace-nowrap">{amnd.totalDollar ? `$${parseFloat(amnd.totalDollar).toLocaleString('en-IN')}` : '—'}</td>
-                                                        <td className="px-6 py-3.5 text-sm text-right text-gray-800 font-bold whitespace-nowrap">{amnd.totalAmount ? `৳${parseFloat(amnd.totalAmount).toLocaleString('en-IN')}` : '—'}</td>
-                                                        <td className="px-6 py-3.5 text-sm text-gray-500 max-w-[200px] truncate" title={amnd.remarks}>{amnd.remarks || '—'}</td>
-                                                    </tr>
-                                                ))}
-                                            </tbody>
-                                        </table>
+                                                    {/* Timeline Content Card */}
+                                                    <div className={`p-4 rounded-2xl border transition-all ${isActive
+                                                        ? 'bg-white border-blue-200 shadow-md shadow-blue-500/5'
+                                                        : 'bg-white/50 border-gray-100 hover:border-gray-200 hover:bg-white hover:shadow-sm'
+                                                        }`}>
+                                                        <span className={`text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full ${rev.isOriginal
+                                                            ? 'bg-blue-50 text-blue-700'
+                                                            : 'bg-amber-50 text-amber-700'
+                                                            }`}>
+                                                            {rev.amendmentNo || `AMENDMENT NO-${String(idx).padStart(2, '0')}`}
+                                                        </span>
+                                                        {rev.addnNo && (
+                                                            <div className="mt-1">
+                                                                <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[8px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-100">
+                                                                    {rev.addnNo}
+                                                                </span>
+                                                            </div>
+                                                        )}
+                                                        <p className="text-sm font-bold text-gray-800 mt-2">
+                                                            {rev.isOriginal ? 'Initial Opening' : 'Amended State'}
+                                                        </p>
+                                                        <p className="text-[11px] font-medium text-gray-500 mt-1 font-mono">
+                                                            {formatDate(rev.amendmentDate)}
+                                                        </p>
+                                                    </div>
+                                                </div>
+                                            );
+                                        })}
                                     </div>
                                 </div>
                             )}
+
+                            {/* Right Details Panel */}
+                            <div className="flex-1 space-y-8 min-w-0">
+                                {/* Section 1: General Information */}
+                                <div>
+                                    <div className="flex items-center gap-2 mb-4">
+                                        <GlobeIcon className="w-4 h-4 text-gray-400" />
+                                        <h4 className="text-xs font-black text-gray-400 uppercase tracking-widest">General Information</h4>
+                                    </div>
+                                    <div className="grid grid-cols-2 md:grid-cols-4 gap-6 px-2 text-left">
+                                        <div className="space-y-1">
+                                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">PI Number</span>
+                                            <p className="text-sm font-bold text-blue-600">
+                                                {(() => {
+                                                    const rawPiNo = activeMilestone.piNo || data.piNo || '';
+                                                    if (!rawPiNo) return 'N/A';
+                                                    // If already has (REVISED) suffix, display as-is
+                                                    if (rawPiNo.endsWith(' (REVISED)')) return rawPiNo;
+                                                    // Dynamically check if the referenced PI has revisions
+                                                    const cleanPi = rawPiNo.replace(' (REVISED)', '');
+                                                    const piRecord = piRecordsRaw.find(p => p.piNumber === cleanPi);
+                                                    if (piRecord && piRecord.revisions && piRecord.revisions.length > 0) {
+                                                        return `${cleanPi} (REVISED)`;
+                                                    }
+                                                    return rawPiNo;
+                                                })()}
+                                            </p>
+                                        </div>
+                                        <div className="space-y-1">
+                                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">IP Number</span>
+                                            <p className="text-sm font-bold text-gray-800">
+                                                {(data.ipNumbers?.length ? data.ipNumbers.join(', ') : data.ipNo) || 'N/A'}
+                                            </p>
+                                        </div>
+                                        <div className="space-y-1">
+                                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Opening Date</span>
+                                            <p className="text-sm font-bold text-gray-800 font-mono tracking-tight">{formatDate(data.openingDate)}</p>
+                                        </div>
+                                        <div className="space-y-1">
+                                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider text-red-500">Expiry Date</span>
+                                            <p className="text-sm font-bold text-red-500 font-mono tracking-tight">{formatDate(activeMilestone.expiryDate || data.expiryDate)}</p>
+                                        </div>
+                                        <div className="space-y-1 col-span-2">
+                                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Bank Name</span>
+                                            <p className="text-sm font-bold text-gray-800 truncate" title={data.bankName}>{data.bankName}</p>
+                                        </div>
+                                        <div className="space-y-1">
+                                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Importer</span>
+                                            <p className="text-sm font-bold text-gray-800 truncate">{data.importerName}</p>
+                                        </div>
+                                        <div className="space-y-1">
+                                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Exporter</span>
+                                            <p className="text-sm font-bold text-gray-800 truncate">{data.exporterName}</p>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Section 2: Product & Financials */}
+                                <div className="pt-6 border-t border-gray-100">
+                                    <div className="flex items-center gap-2 mb-4">
+                                        <DollarSignIcon className="w-4 h-4 text-gray-400" />
+                                        <h4 className="text-xs font-black text-gray-400 uppercase tracking-widest">Product & Financial Details</h4>
+                                    </div>
+                                    <div className="space-y-4">
+                                        <div className="overflow-x-auto rounded-xl border border-gray-100 bg-gray-50/50">
+                                            <table className="w-full text-left border-collapse">
+                                                <thead>
+                                                    <tr className="bg-gray-100/50 border-b border-gray-200/60">
+                                                        <th className="px-4 py-2.5 text-[10px] font-bold text-gray-400 uppercase tracking-wider">Product Name</th>
+                                                        <th className="px-4 py-2.5 text-[10px] font-bold text-gray-400 uppercase tracking-wider">HS Code</th>
+                                                        <th className="px-4 py-2.5 text-[10px] font-bold text-gray-400 uppercase tracking-wider text-right">Quantity (Ton)</th>
+                                                        <th className="px-4 py-2.5 text-[10px] font-bold text-gray-400 uppercase tracking-wider text-right">Rate (/Ton)</th>
+                                                        <th className="px-4 py-2.5 text-[10px] font-bold text-gray-400 uppercase tracking-wider text-right">Total Dollar</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody className="divide-y divide-gray-100">
+                                                    {activeProducts.map((item, idx) => (
+                                                        <tr key={idx} className="hover:bg-white/40 transition-colors">
+                                                            <td className="px-4 py-3 text-sm font-bold text-gray-900">{item.productName || '-'}</td>
+                                                            <td className="px-4 py-3 text-sm text-gray-600 font-medium">{item.hsCode || '-'}</td>
+                                                            <td className="px-4 py-3 text-sm text-right text-gray-900 font-black">{parseFloat(item.quantity || 0).toLocaleString('en-US')} <span className="text-[10px] text-gray-400 font-normal">Ton</span></td>
+                                                            <td className="px-4 py-3 text-sm text-right text-gray-700 font-semibold">${parseFloat(item.rate || 0).toLocaleString('en-US')}</td>
+                                                            <td className="px-4 py-3 text-sm text-right text-blue-600 font-black">${parseFloat(item.totalDollar || 0).toLocaleString('en-US')}</td>
+                                                        </tr>
+                                                    ))}
+                                                </tbody>
+                                            </table>
+                                        </div>
+
+                                        {/* Summary Stats */}
+                                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-left">
+                                            <div className="p-4 bg-gray-50/50 rounded-xl border border-gray-100 flex flex-col justify-center">
+                                                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Port</span>
+                                                <p className="text-sm font-bold text-gray-800">{data.port || '-'}</p>
+                                            </div>
+                                            <div className="p-4 bg-gray-50/50 rounded-xl border border-gray-100 flex flex-col justify-center">
+                                                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Dollar Rate</span>
+                                                <p className="text-sm font-bold text-gray-800">৳{parseFloat(activeMilestone.dollarRate || data.dollarRate || 0).toLocaleString('en-IN')}</p>
+                                            </div>
+                                            <div className="p-4 bg-blue-50/40 rounded-xl border border-blue-100/50 flex justify-between items-center">
+                                                <span className="text-xs font-black text-blue-800 uppercase tracking-widest text-left">Total Dollar</span>
+                                                <span className="text-lg font-black text-blue-700">${activeProducts.reduce((sum, item) => sum + (parseFloat(item.totalDollar) || 0), 0).toLocaleString('en-US')}</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div className="mt-4 p-4 bg-gray-50 rounded-xl flex justify-between items-center text-left">
+                                        <span className="text-xs font-black text-gray-400 uppercase tracking-widest">Total LC Value</span>
+                                        <span className="text-xl font-black text-gray-900">৳{parseFloat(activeMilestone.totalAmount || data.totalAmount || 0).toLocaleString('en-IN')}</span>
+                                    </div>
+                                </div>
+
+                                {/* Section 3: Insurance Details */}
+                                <div className="pt-6 border-t border-gray-100">
+                                    <div className="flex items-center gap-2 mb-4">
+                                        <ShieldIcon className="w-4 h-4 text-gray-400" />
+                                        <h4 className="text-xs font-black text-gray-400 uppercase tracking-widest text-left">Insurance Information</h4>
+                                    </div>
+                                    <div className="grid grid-cols-2 md:grid-cols-4 gap-6 px-2 text-left">
+                                        <div className="space-y-1 col-span-2">
+                                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Insurance Company</span>
+                                            <p className="text-sm font-bold text-gray-800 truncate">{data.insuranceCo || '-'}</p>
+                                        </div>
+                                        <div className="space-y-1">
+                                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Policy Type</span>
+                                            <p className="text-sm font-bold text-gray-800">{data.policyType || '-'}</p>
+                                        </div>
+                                        <div className="space-y-1">
+                                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Extra %</span>
+                                            <p className="text-sm font-bold text-gray-800">{data.extraPercent || '0'}%</p>
+                                        </div>
+
+                                        <div className="space-y-1">
+                                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Marine Cover Note</span>
+                                            <p className="text-sm font-bold text-gray-800">{data.marineCoverNote || '-'}</p>
+                                        </div>
+                                        <div className="space-y-1">
+                                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Marine C.N Date</span>
+                                            <p className="text-sm font-bold text-gray-800">{data.marineCNDate ? formatDate(data.marineCNDate) : '-'}</p>
+                                        </div>
+                                        <div className="space-y-1">
+                                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Premium Rate</span>
+                                            <p className="text-sm font-bold text-gray-800">{data.premium || '0'}%</p>
+                                        </div>
+                                        <div className="space-y-1">
+                                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Premium Return</span>
+                                            <p className="text-sm font-bold text-blue-600">{data.premiumReturn || '0'}%</p>
+                                        </div>
+
+                                        <div className="space-y-1">
+                                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Return Amount</span>
+                                            <p className="text-sm font-bold text-blue-600">৳{parseFloat(activeMilestone.expectedReturnAmount || data.expectedReturnAmount || 0).toLocaleString('en-IN')}</p>
+                                        </div>
+                                        <div className="space-y-1">
+                                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">VAT ({data.premiumVat || '0'}%)</span>
+                                            <p className="text-sm font-bold text-gray-800">
+                                                ৳{(parseFloat(activeMilestone.netPremium || data.netPremium || 0) * (parseFloat(data.premiumVat || 0) / 100)).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                            </p>
+                                        </div>
+                                        <div className="space-y-1">
+                                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Stamp Duty</span>
+                                            <p className="text-sm font-bold text-gray-800">৳{parseFloat(data.stampCharge || 0).toLocaleString('en-IN')}</p>
+                                        </div>
+                                        <div className="space-y-1">
+                                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Gross Premium</span>
+                                            <p className="text-sm font-bold text-gray-800">৳{parseFloat(activeMilestone.grossPremium || data.grossPremium || 0).toLocaleString('en-US')}</p>
+                                        </div>
+                                    </div>
+                                    <div className="mt-4 p-4 bg-blue-50 rounded-xl flex justify-between items-center border border-blue-100 text-left">
+                                        <span className="text-xs font-black text-blue-600 uppercase tracking-widest">Net Payable Premium</span>
+                                        <span className="text-lg font-black text-blue-700">৳{parseFloat(activeMilestone.netPremium || data.netPremium || 0).toLocaleString('en-US')}</span>
+                                    </div>
+                                </div>
+
+                                {/* Section 4: Amendment Remarks */}
+                                {!activeMilestone.isOriginal && (
+                                    <div className="pt-6 border-t border-gray-100 text-left animate-in fade-in duration-200">
+                                        <div className="flex items-center gap-2 mb-4">
+                                            <FileTextIcon className="w-4 h-4 text-gray-400" />
+                                            <h4 className="text-xs font-black text-gray-400 uppercase tracking-widest">Amendment Remarks</h4>
+                                        </div>
+                                        <div className="p-4 bg-amber-50/30 border border-amber-100 rounded-2xl">
+                                            <p className="text-sm font-medium text-amber-900 leading-relaxed whitespace-pre-wrap">{activeMilestone.remarks || 'No remarks provided for this amendment.'}</p>
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
                         </div>
                     )}
                 </div>
@@ -669,6 +748,69 @@ const getPiIpNumbers = (pi) => {
     if (Array.isArray(pi.ipNumbers) && pi.ipNumbers.length > 0) return pi.ipNumbers;
     if (pi.ipNumber) return pi.ipNumber.split(',').map(s => s.trim()).filter(Boolean);
     return [];
+};
+
+const getLCHistoryTimeline = (lc) => {
+    if (!lc) return [];
+    const timeline = [];
+    const amendments = lc.amendments || [];
+
+    // Check if "Original LC" already exists in the amendments list
+    const hasOriginal = amendments.some(a => a.amendmentNo === 'Original LC');
+
+    if (hasOriginal) {
+        return amendments.map(amnd => ({
+            ...amnd,
+            isOriginal: amnd.amendmentNo === 'Original LC'
+        }));
+    }
+
+    // If no amendments exist, just return a synthesized timeline containing the current LC
+    if (amendments.length === 0) {
+        return [{
+            amendmentNo: 'Original LC',
+            amendmentDate: lc.openingDate,
+            expiryDate: lc.expiryDate,
+            quantity: lc.quantity,
+            rate: lc.rate,
+            dollarRate: lc.dollarRate,
+            totalDollar: lc.totalDollar,
+            totalAmount: lc.totalAmount,
+            netPremium: lc.netPremium,
+            expectedReturnAmount: lc.expectedReturnAmount,
+            grossPremium: lc.grossPremium,
+            piNo: lc.piNo || '',
+            remarks: 'Original LC Details',
+            isOriginal: true
+        }];
+    }
+
+    // Synthesize "Original LC" for old records
+    timeline.push({
+        amendmentNo: 'Original LC',
+        amendmentDate: lc.openingDate,
+        expiryDate: lc.openingDate, // Fallback
+        quantity: amendments[0]?.quantity || lc.quantity, // Try to approximate or fallback
+        rate: amendments[0]?.rate || lc.rate,
+        dollarRate: amendments[0]?.dollarRate || lc.dollarRate,
+        totalDollar: amendments[0]?.totalDollar || lc.totalDollar,
+        totalAmount: amendments[0]?.totalAmount || lc.totalAmount,
+        netPremium: lc.netPremium,
+        expectedReturnAmount: lc.expectedReturnAmount,
+        grossPremium: lc.grossPremium,
+        piNo: lc.piNo || '',
+        remarks: 'Original LC Details (Estimated)',
+        isOriginal: true
+    });
+
+    amendments.forEach(amnd => {
+        timeline.push({
+            ...amnd,
+            isOriginal: false
+        });
+    });
+
+    return timeline;
 };
 
 const getRemIpQtyTon = (ipNo, ipRecordsRaw, lcRecords, editingId) => {
@@ -770,6 +912,7 @@ const LCManagement = ({ addNotification, currentUser }) => {
         rate: '',
         dollarRate: '',
         remarks: '',
+        addnNo: '',
         piNo: ''
     });
 
@@ -839,6 +982,23 @@ const LCManagement = ({ addNotification, currentUser }) => {
         return { piQtyTon, ipEntries };
     }, [formData.ipNo, formData.ipNumbers, formData.piNo, ipRecordsRaw, piRecordsRaw, lcRecords, editingId]);
 
+    const getExpandedDropdownOptions = (currentInputVal) => {
+        const rawOptions = [];
+        piList.forEach(pi => {
+            if (pi.endsWith(' (REVISED)')) {
+                const clean = pi.replace(' (REVISED)', '');
+                rawOptions.push(clean);
+                rawOptions.push(pi);
+            } else {
+                rawOptions.push(pi);
+            }
+        });
+        const uniqueOptions = Array.from(new Set(rawOptions));
+        const q = (currentInputVal || '').toLowerCase().trim();
+        if (!q) return uniqueOptions;
+        return uniqueOptions.filter(opt => opt.toLowerCase().includes(q));
+    };
+
     useEffect(() => {
         fetchInitialData();
     }, []);
@@ -858,7 +1018,42 @@ const LCManagement = ({ addNotification, currentUser }) => {
 
     const handleDropdownSelect = (field, value) => {
         if (field === 'amendmentPiNo') {
-            setAmendmentFormData(prev => ({ ...prev, piNo: value }));
+            const cleanPiNo = value ? value.replace(' (REVISED)', '') : '';
+            const selectedPi = piRecordsRaw.find(pi => pi.piNumber === cleanPiNo);
+
+            setAmendmentFormData(prev => {
+                const nextState = { ...prev, piNo: value };
+                if (selectedPi) {
+                    const isSelectedRevised = value.endsWith(' (REVISED)');
+                    const hasRevisions = selectedPi.revisions && selectedPi.revisions.length > 0;
+
+                    let targetSource = selectedPi;
+                    if (hasRevisions) {
+                        if (isSelectedRevised) {
+                            targetSource = selectedPi;
+                        } else {
+                            const originalRev = selectedPi.revisions.find(r => r.reviseNo === 'Original PI');
+                            if (originalRev) {
+                                targetSource = {
+                                    ...selectedPi,
+                                    ...originalRev
+                                };
+                            }
+                        }
+                    }
+
+                    const firstProd = (targetSource.productsList || [])[0];
+                    const piQtyTons = targetSource.productsList && targetSource.productsList.length > 0
+                        ? targetSource.productsList.reduce((sum, p) => sum + (parseFloat(p.quantity) || 0), 0) / 1000
+                        : (parseFloat(targetSource.grandTotalQuantity || targetSource.quantity) || 0) / 1000;
+
+                    const piRate = firstProd ? (firstProd.rate || '') : (targetSource.rate || '');
+
+                    nextState.quantity = piQtyTons > 0 ? String(piQtyTons) : prev.quantity;
+                    nextState.rate = piRate ? String(piRate) : prev.rate;
+                }
+                return nextState;
+            });
             setActiveDropdown(null);
             return;
         }
@@ -868,19 +1063,39 @@ const LCManagement = ({ addNotification, currentUser }) => {
             // Auto-fill logic when PI Number is selected
             if (field === 'piNo') {
                 if (value) {
-                    const selectedPi = piRecordsRaw.find(pi => pi.piNumber === value);
+                    const cleanValue = value.replace(' (REVISED)', '');
+                    newState.piNo = value;
+                    const selectedPi = piRecordsRaw.find(pi => pi.piNumber === cleanValue);
                     if (selectedPi) {
+                        const isSelectedRevised = value.endsWith(' (REVISED)');
+                        const hasRevisions = selectedPi.revisions && selectedPi.revisions.length > 0;
+
+                        let targetSource = selectedPi;
+                        if (hasRevisions) {
+                            if (isSelectedRevised) {
+                                targetSource = selectedPi;
+                            } else {
+                                const originalRev = selectedPi.revisions.find(r => r.reviseNo === 'Original PI');
+                                if (originalRev) {
+                                    targetSource = {
+                                        ...selectedPi,
+                                        ...originalRev
+                                    };
+                                }
+                            }
+                        }
+
                         if (selectedPi.partyName) newState.importerName = selectedPi.partyName;
                         if (selectedPi.exporterName) newState.exporterName = selectedPi.exporterName;
-                        if (selectedPi.date) newState.piOpeningDate = selectedPi.date;
-                        const piPort = selectedPi.port || selectedPi.portOfDischarge || selectedPi.portOfLoading;
+                        if (targetSource.date) newState.piOpeningDate = targetSource.reviseDate || targetSource.date || selectedPi.date;
+                        const piPort = targetSource.port || targetSource.portOfDischarge || targetSource.portOfLoading;
                         if (piPort) newState.port = piPort;
 
-                        const ipNums = getPiIpNumbers(selectedPi);
+                        const ipNums = getPiIpNumbers(targetSource);
                         newState.ipNumbers = ipNums;
                         newState.ipNo = ipNums[0] || '';
 
-                        newState.productsList = mapPiProductsToLc(selectedPi);
+                        newState.productsList = mapPiProductsToLc(targetSource);
                         if (newState.productsList.length === 0) {
                             newState.productsList = [{ productName: '', hsCode: '', quantity: '', rate: '', freight: '', totalFreight: '', totalDollar: '' }];
                         }
@@ -1039,7 +1254,10 @@ const LCManagement = ({ addNotification, currentUser }) => {
 
             const rawPis = Array.isArray(piRes.data) ? piRes.data : [];
             setPiRecordsRaw(rawPis);
-            setPiList(rawPis.map(pi => pi.piNumber));
+            setPiList(rawPis.map(pi => {
+                const isRevised = pi.revisions && pi.revisions.length > 0;
+                return isRevised ? `${pi.piNumber} (REVISED)` : pi.piNumber;
+            }));
 
             setProductItems(Array.isArray(prodRes.data) ? prodRes.data.map(p => p.name) : []);
         } catch (error) {
@@ -1255,25 +1473,86 @@ const LCManagement = ({ addNotification, currentUser }) => {
         return lcRecords.find(lc => lc._id === selectedAmendmentLcId) || null;
     }, [selectedAmendmentLcId, lcRecords]);
 
+    const amendmentInsuranceInfo = useMemo(() => {
+        if (!selectedLcForAmendment) return null;
+
+        const qty = parseFloat(amendmentFormData.quantity) || 0;
+        const rate = parseFloat(amendmentFormData.rate) || 0;
+        const dRate = parseFloat(amendmentFormData.dollarRate) || 0;
+
+        const totalDollar = rate < 10 ? qty * rate * 1000 : qty * rate;
+        const totalAmount = totalDollar * dRate; // New BDT total
+
+        let netPremium = selectedLcForAmendment.netPremium || '0';
+        let expectedReturnAmount = selectedLcForAmendment.expectedReturnAmount || '0';
+        let grossPremium = selectedLcForAmendment.grossPremium || '0';
+        let vatAmount = 0;
+        const premiumVat = parseFloat(selectedLcForAmendment.premiumVat) || 15;
+
+        if (selectedLcForAmendment.insuranceCo) {
+            const prem = parseFloat(selectedLcForAmendment.premium) || 0;
+            const exPct = parseFloat(selectedLcForAmendment.extraPercent) || 0;
+            const premRet = parseFloat(selectedLcForAmendment.premiumReturn) || 0;
+            const stamp = parseFloat(selectedLcForAmendment.stampCharge) || 0;
+
+            const baseNetPrem = (totalAmount * (prem / 100)) / 100;
+            const netP = baseNetPrem + (baseNetPrem * (exPct / 100));
+            netPremium = netP > 0 ? netP.toFixed(2) : '0';
+
+            const expRet = netP * (premRet / 100);
+            expectedReturnAmount = expRet > 0 ? expRet.toFixed(2) : '0';
+
+            vatAmount = netP * (premiumVat / 100);
+            const gPrem = netP + vatAmount + stamp;
+            grossPremium = gPrem > 0 ? gPrem.toFixed(2) : '0';
+        } else {
+            const netP = parseFloat(netPremium) || 0;
+            vatAmount = netP * (premiumVat / 100);
+        }
+
+        return {
+            netPremium,
+            expectedReturnAmount,
+            grossPremium,
+            vatAmount
+        };
+    }, [
+        selectedLcForAmendment,
+        amendmentFormData.quantity,
+        amendmentFormData.rate,
+        amendmentFormData.dollarRate
+    ]);
+
+
     const selectedPiForAmendment = useMemo(() => {
         if (!amendmentFormData.piNo) return null;
-        return piRecordsRaw.find(p => p.piNumber === amendmentFormData.piNo) || null;
+        const cleanPi = amendmentFormData.piNo.replace(' (REVISED)', '');
+        const basePi = piRecordsRaw.find(p => p.piNumber === cleanPi);
+        if (!basePi) return null;
+
+        const isRevised = amendmentFormData.piNo.endsWith(' (REVISED)');
+        const hasRevisions = basePi.revisions && basePi.revisions.length > 0;
+        if (hasRevisions && !isRevised) {
+            const originalRev = basePi.revisions.find(r => r.reviseNo === 'Original PI');
+            return originalRev ? { ...basePi, ...originalRev } : basePi;
+        }
+        return basePi;
     }, [amendmentFormData.piNo, piRecordsRaw]);
 
     const piBalanceTon = useMemo(() => {
         if (!amendmentFormData.piNo) return 0;
-        const linkedPi = piRecordsRaw.find(p => p.piNumber === amendmentFormData.piNo);
+        const linkedPi = selectedPiForAmendment;
         if (!linkedPi) return 0;
-        const piQtyTon = parseFloat(linkedPi.quantity || 0) / 1000;
-        
+        const piQtyTon = (parseFloat(linkedPi.grandTotalQuantity || linkedPi.quantity || 0) / 1000);
+
         // Sum of other LC quantities registered under this PI
         const currentLcId = selectedLcForAmendment?._id;
         const otherLcQtyTon = lcRecords
             .filter(lc => lc.piNo === amendmentFormData.piNo && lc._id !== currentLcId)
             .reduce((sum, lc) => sum + (parseFloat(lc.quantity) || 0), 0);
-            
+
         return piQtyTon - otherLcQtyTon;
-    }, [amendmentFormData.piNo, selectedLcForAmendment, piRecordsRaw, lcRecords]);
+    }, [amendmentFormData.piNo, selectedLcForAmendment, selectedPiForAmendment, lcRecords]);
 
     const filteredLcRecordsForAmendment = useMemo(() => {
         const q = amendmentSearchQuery.toLowerCase().trim();
@@ -1293,7 +1572,17 @@ const LCManagement = ({ addNotification, currentUser }) => {
             rate: lc.rate || '',
             dollarRate: lc.dollarRate || '',
             remarks: '',
-            piNo: lc.piNo || ''
+            addnNo: '',
+            piNo: (() => {
+                const rawPi = lc.piNo || '';
+                if (!rawPi || rawPi.endsWith(' (REVISED)')) return rawPi;
+                const cleanPi = rawPi.replace(' (REVISED)', '');
+                const piRecord = piRecordsRaw.find(p => p.piNumber === cleanPi);
+                if (piRecord && piRecord.revisions && piRecord.revisions.length > 0) {
+                    return `${cleanPi} (REVISED)`;
+                }
+                return rawPi;
+            })()
         });
         setAmendmentSearchQuery(lc.lcNo || '');
         setActiveDropdown(null);
@@ -1320,7 +1609,7 @@ const LCManagement = ({ addNotification, currentUser }) => {
             const r = parseFloat(amendmentFormData.rate) || 0;
             const dRate = parseFloat(amendmentFormData.dollarRate) || 0;
 
-            const totalDollar = qty * r;
+            const totalDollar = r < 10 ? qty * r * 1000 : qty * r;
             const totalAmount = totalDollar * dRate;
 
             // Recalculate insurance based on the new total amount if there is an insurance company
@@ -1348,6 +1637,85 @@ const LCManagement = ({ addNotification, currentUser }) => {
             }
 
             // Create amendment log entry
+            // Let's build the updated products list for the LC record
+            let updatedProductsList = [];
+            if (selectedPiForAmendment) {
+                // Map products from the selected PI
+                updatedProductsList = mapPiProductsToLc(selectedPiForAmendment);
+            } else if (lc.productsList && lc.productsList.length > 0) {
+                // Copy existing products list
+                updatedProductsList = lc.productsList.map(p => ({ ...p }));
+            } else {
+                // Synthesize from fields
+                updatedProductsList = [{
+                    productName: lc.productName || '',
+                    hsCode: lc.hsCode || '',
+                    quantity: amendmentFormData.quantity,
+                    rate: amendmentFormData.rate,
+                    freight: lc.freight || '',
+                    totalFreight: '',
+                    totalDollar: totalDollar > 0 ? totalDollar.toFixed(2) : ''
+                }];
+            }
+
+            // Adjust product quantities and rates if they were manually overridden in the form
+            const targetQty = parseFloat(amendmentFormData.quantity) || 0;
+            const targetRate = parseFloat(amendmentFormData.rate) || 0;
+
+            if (updatedProductsList.length > 0) {
+                // Compute the sum of base quantities in Tons
+                const baseQtySum = updatedProductsList.reduce((sum, p) => sum + (parseFloat(p.quantity) || 0), 0);
+
+                // If there's a difference between targetQty and baseQtySum, adjust the quantities
+                if (Math.abs(targetQty - baseQtySum) > 0.001) {
+                    if (updatedProductsList.length === 1) {
+                        updatedProductsList[0].quantity = String(targetQty);
+                    } else if (baseQtySum > 0) {
+                        // Proportional scaling for multiple products
+                        const ratio = targetQty / baseQtySum;
+                        updatedProductsList.forEach(p => {
+                            const currentQty = parseFloat(p.quantity) || 0;
+                            p.quantity = String(currentQty * ratio);
+                        });
+                    } else {
+                        // fallback: divide equally
+                        const equalQty = targetQty / updatedProductsList.length;
+                        updatedProductsList.forEach(p => {
+                            p.quantity = String(equalQty);
+                        });
+                    }
+                }
+
+                // Adjust rates if the targetRate is provided and has changed
+                if (targetRate > 0) {
+                    const originalFirstRate = parseFloat(updatedProductsList[0].rate) || 0;
+                    if (Math.abs(targetRate - originalFirstRate) > 0.001) {
+                        updatedProductsList[0].rate = String(targetRate);
+                    }
+                }
+
+                // Recalculate freight, amount, and totalDollar for each product line
+                updatedProductsList.forEach(p => {
+                    const pQty = parseFloat(p.quantity) || 0;
+                    const pRate = parseFloat(p.rate) || 0;
+                    const pFreight = parseFloat(p.freight) || 0;
+
+                    // Support auto per-Kg to per-Ton scaling if rates are input as decimals less than 10
+                    const pRateScaled = pRate < 10 ? pRate * 1000 : pRate;
+                    const pFreightScaled = pFreight < 10 ? pFreight * 1000 : pFreight;
+
+                    const pAmt = pQty * pRateScaled;
+                    const pTotalFreight = pQty * pFreightScaled;
+                    p.totalFreight = pTotalFreight > 0 ? pTotalFreight.toFixed(2) : '0.00';
+                    p.totalDollar = (pAmt + pTotalFreight).toFixed(2);
+                });
+            }
+
+            const firstProduct = updatedProductsList[0];
+            const updatedProductName = firstProduct ? firstProduct.productName : (lc.productName || '');
+            const updatedHsCode = firstProduct ? firstProduct.hsCode : (lc.hsCode || '');
+
+            // Create amendment log entry
             const newAmendment = {
                 amendmentNo: amendmentFormData.amendmentNo,
                 amendmentDate: amendmentFormData.amendmentDate,
@@ -1357,10 +1725,35 @@ const LCManagement = ({ addNotification, currentUser }) => {
                 dollarRate: amendmentFormData.dollarRate,
                 totalDollar: totalDollar > 0 ? totalDollar.toFixed(2) : '',
                 totalAmount: totalAmount > 0 ? totalAmount.toFixed(2) : '',
+                addnNo: amendmentFormData.addnNo || '',
                 remarks: amendmentFormData.remarks,
                 piNo: amendmentFormData.piNo,
+                productsList: updatedProductsList,
                 createdAt: new Date().toISOString()
             };
+
+            const currentAmendments = [...(lc.amendments || [])];
+            if (currentAmendments.length === 0) {
+                const originalLcSnapshot = {
+                    amendmentNo: 'Original LC',
+                    amendmentDate: lc.openingDate,
+                    expiryDate: lc.expiryDate,
+                    quantity: lc.quantity,
+                    rate: lc.rate,
+                    dollarRate: lc.dollarRate,
+                    totalDollar: lc.totalDollar,
+                    totalAmount: lc.totalAmount,
+                    netPremium: lc.netPremium,
+                    expectedReturnAmount: lc.expectedReturnAmount,
+                    grossPremium: lc.grossPremium,
+                    piNo: lc.piNo || '',
+                    remarks: 'Original LC Details',
+                    productsList: lc.productsList || [],
+                    createdAt: lc.createdAt || lc.openingDate || new Date().toISOString()
+                };
+                currentAmendments.push(originalLcSnapshot);
+            }
+            currentAmendments.push(newAmendment);
 
             // Update main LC record fields
             const updatedLcData = {
@@ -1375,8 +1768,11 @@ const LCManagement = ({ addNotification, currentUser }) => {
                 expectedReturnAmount,
                 grossPremium,
                 piNo: amendmentFormData.piNo,
+                productName: updatedProductName,
+                hsCode: updatedHsCode,
+                productsList: updatedProductsList,
                 lcAmendment: `${amendmentFormData.amendmentNo} DATE: ${formatDate(amendmentFormData.amendmentDate)}`,
-                amendments: [...(lc.amendments || []), newAmendment]
+                amendments: currentAmendments
             };
 
             // Save via PUT
@@ -1403,6 +1799,7 @@ const LCManagement = ({ addNotification, currentUser }) => {
                 rate: '',
                 dollarRate: '',
                 remarks: '',
+                addnNo: '',
                 piNo: ''
             });
             fetchInitialData();
@@ -1464,6 +1861,16 @@ const LCManagement = ({ addNotification, currentUser }) => {
             (record.bankName || '').toLowerCase().includes(query) ||
             matchesProduct;
     });
+
+    const amendmentDisplayProducts = selectedPiForAmendment
+        ? mapPiProductsToLc(selectedPiForAmendment)
+        : (selectedLcForAmendment?.productsList && selectedLcForAmendment.productsList.length > 0
+            ? selectedLcForAmendment.productsList.map(calcLcProductLine)
+            : (selectedLcForAmendment ? [{ productName: selectedLcForAmendment.productName || selectedLcForAmendment.product || '', quantity: selectedLcForAmendment.quantity || '', rate: selectedLcForAmendment.rate || '' }] : []));
+
+    const amendmentDisplayPort = selectedPiForAmendment
+        ? (selectedPiForAmendment.port || selectedPiForAmendment.portOfDischarge || selectedPiForAmendment.portOfLoading || '-')
+        : (selectedLcForAmendment?.port || '-');
 
     return (
         <div className="space-y-4 md:space-y-6">
@@ -1641,7 +2048,7 @@ const LCManagement = ({ addNotification, currentUser }) => {
                                     value={formData.piNo}
                                     onChange={handleInputChange}
                                     onFocus={() => { setActiveDropdown('piNo'); setHighlightedIndex(-1); }}
-                                    onKeyDown={(e) => handleDropdownKeyDown(e, 'piNo', 'piNo', piList.filter(pi => !formData.piNo || pi.toLowerCase().includes(formData.piNo.toLowerCase())))}
+                                    onKeyDown={(e) => handleDropdownKeyDown(e, 'piNo', 'piNo', getExpandedDropdownOptions(formData.piNo))}
                                     placeholder="Select PI Number"
                                     autoComplete="off"
                                     className="w-full px-4 py-2.5 bg-white/50 border border-gray-200/60 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all font-medium pr-10"
@@ -1657,7 +2064,7 @@ const LCManagement = ({ addNotification, currentUser }) => {
                             </div>
                             {activeDropdown === 'piNo' && (
                                 <div className="absolute z-[60] w-full mt-1 bg-white border border-gray-100 rounded-xl shadow-xl max-h-48 overflow-y-auto py-1">
-                                    {piList.filter(pi => !formData.piNo || pi.toLowerCase().includes(formData.piNo.toLowerCase())).map((pi, idx) => (
+                                    {getExpandedDropdownOptions(formData.piNo).map((pi, idx) => (
                                         <button
                                             key={idx}
                                             type="button"
@@ -2309,6 +2716,7 @@ const LCManagement = ({ addNotification, currentUser }) => {
                                     rate: '',
                                     dollarRate: '',
                                     remarks: '',
+                                    addnNo: '',
                                     piNo: ''
                                 });
                             }}
@@ -2330,7 +2738,19 @@ const LCManagement = ({ addNotification, currentUser }) => {
                                             <div className="grid grid-cols-2 gap-4 border-b border-gray-200/50 pb-2">
                                                 <div>
                                                     <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">PI Number</span>
-                                                    <p className="text-sm font-bold text-gray-800 truncate" title={selectedLcForAmendment.piNo}>{selectedLcForAmendment.piNo || 'N/A'}</p>
+                                                    <p className="text-sm font-bold text-gray-800 truncate" title={selectedLcForAmendment.piNo}>
+                                                        {(() => {
+                                                            const rawPiNo = selectedLcForAmendment.piNo || '';
+                                                            if (!rawPiNo) return 'N/A';
+                                                            if (rawPiNo.endsWith(' (REVISED)')) return rawPiNo;
+                                                            const cleanPi = rawPiNo.replace(' (REVISED)', '');
+                                                            const piRecord = piRecordsRaw.find(p => p.piNumber === cleanPi);
+                                                            if (piRecord && piRecord.revisions && piRecord.revisions.length > 0) {
+                                                                return `${cleanPi} (REVISED)`;
+                                                            }
+                                                            return rawPiNo;
+                                                        })()}
+                                                    </p>
                                                 </div>
                                                 <div>
                                                     <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">IP Number</span>
@@ -2388,7 +2808,7 @@ const LCManagement = ({ addNotification, currentUser }) => {
                                 {/* Right Side: Amendment Details Inputs */}
                                 <div className="lg:col-span-2 space-y-6 bg-white border border-gray-100 rounded-2xl p-6 shadow-sm">
                                     <h4 className="text-xs font-black text-blue-600 uppercase tracking-widest mb-4">Amendment Details</h4>
-                                    
+
                                     <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                                         <div className="space-y-1.5">
                                             <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Amendment Number *</label>
@@ -2422,68 +2842,67 @@ const LCManagement = ({ addNotification, currentUser }) => {
                                             />
                                         </div>
 
-                                         <div className="space-y-1.5 text-left relative" ref={amendmentPiRef}>
-                                             <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">PI Number</label>
-                                             <div className="relative">
-                                                 <input
-                                                     type="text"
-                                                     value={amendmentFormData.piNo}
-                                                     onChange={(e) => setAmendmentFormData(prev => ({ ...prev, piNo: e.target.value }))}
-                                                     onFocus={() => { setActiveDropdown('amendmentPiNo'); setHighlightedIndex(-1); }}
-                                                     onKeyDown={(e) => handleDropdownKeyDown(e, 'amendmentPiNo', 'amendmentPiNo', piList.filter(pi => !amendmentFormData.piNo || pi.toLowerCase().includes(amendmentFormData.piNo.toLowerCase())))}
-                                                     placeholder="Select PI Number"
-                                                     autoComplete="off"
-                                                     className="w-full px-4 py-2.5 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all font-medium pr-10 text-sm"
-                                                 />
-                                                 <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-2">
-                                                     {amendmentFormData.piNo && (
-                                                         <button type="button" onClick={() => setAmendmentFormData(prev => ({ ...prev, piNo: '' }))} className="text-gray-400 hover:text-gray-600">
-                                                             <XIcon className="w-4 h-4" />
-                                                         </button>
-                                                     )}
-                                                     <SearchIcon className="w-4 h-4 text-gray-300 pointer-events-none" />
-                                                 </div>
-                                             </div>
-                                             {activeDropdown === 'amendmentPiNo' && (
-                                                 <div className="absolute z-[100] w-full mt-1 bg-white border border-gray-100 rounded-xl shadow-xl max-h-48 overflow-y-auto py-1">
-                                                     {piList.filter(pi => !amendmentFormData.piNo || pi.toLowerCase().includes(amendmentFormData.piNo.toLowerCase())).map((pi, idx) => (
-                                                         <button
-                                                             key={idx}
-                                                             type="button"
-                                                             onMouseDown={(e) => {
-                                                                 e.preventDefault();
-                                                                 setAmendmentFormData(prev => ({ ...prev, piNo: pi }));
-                                                                 setActiveDropdown(null);
-                                                             }}
-                                                             onMouseEnter={() => setHighlightedIndex(idx)}
-                                                             className={`w-full px-4 py-2 text-left text-sm transition-colors font-medium ${amendmentFormData.piNo === pi ? 'bg-blue-50 text-blue-700' : highlightedIndex === idx ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-blue-50'}`}
-                                                         >
-                                                             {pi}
-                                                         </button>
-                                                     ))}
-                                                 </div>
-                                             )}
-                                         </div>
+                                        <div className="space-y-1.5 text-left relative" ref={amendmentPiRef}>
+                                            <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">PI Number</label>
+                                            <div className="relative">
+                                                <input
+                                                    type="text"
+                                                    value={amendmentFormData.piNo}
+                                                    onChange={(e) => setAmendmentFormData(prev => ({ ...prev, piNo: e.target.value }))}
+                                                    onFocus={() => { setActiveDropdown('amendmentPiNo'); setHighlightedIndex(-1); }}
+                                                    onKeyDown={(e) => handleDropdownKeyDown(e, 'amendmentPiNo', 'amendmentPiNo', getExpandedDropdownOptions(amendmentFormData.piNo))}
+                                                    placeholder="Select PI Number"
+                                                    autoComplete="off"
+                                                    className="w-full px-4 py-2.5 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all font-medium pr-10 text-sm"
+                                                />
+                                                <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-2">
+                                                    {amendmentFormData.piNo && (
+                                                        <button type="button" onClick={() => setAmendmentFormData(prev => ({ ...prev, piNo: '' }))} className="text-gray-400 hover:text-gray-600">
+                                                            <XIcon className="w-4 h-4" />
+                                                        </button>
+                                                    )}
+                                                    <SearchIcon className="w-4 h-4 text-gray-300 pointer-events-none" />
+                                                </div>
+                                            </div>
+                                            {activeDropdown === 'amendmentPiNo' && (
+                                                <div className="absolute z-[100] w-full mt-1 bg-white border border-gray-100 rounded-xl shadow-xl max-h-48 overflow-y-auto py-1">
+                                                    {getExpandedDropdownOptions(amendmentFormData.piNo).map((pi, idx) => (
+                                                        <button
+                                                            key={idx}
+                                                            type="button"
+                                                            onMouseDown={(e) => {
+                                                                e.preventDefault();
+                                                                handleDropdownSelect('amendmentPiNo', pi);
+                                                            }}
+                                                            onMouseEnter={() => setHighlightedIndex(idx)}
+                                                            className={`w-full px-4 py-2 text-left text-sm transition-colors font-medium ${amendmentFormData.piNo === pi ? 'bg-blue-50 text-blue-700' : highlightedIndex === idx ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-blue-50'}`}
+                                                        >
+                                                            {pi}
+                                                        </button>
+                                                    ))}
+                                                </div>
+                                            )}
+                                        </div>
 
-                                         <div className="space-y-1.5 text-left">
-                                             <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">PI Balance (Ton)</label>
-                                             <input
-                                                 type="text"
-                                                 readOnly
-                                                 value={selectedPiForAmendment ? `${piBalanceTon.toLocaleString('en-US', { minimumFractionDigits: 3 })} Ton` : 'N/A'}
-                                                 className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl outline-none text-blue-600 font-bold text-sm"
-                                             />
-                                         </div>
+                                        <div className="space-y-1.5 text-left">
+                                            <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">PI Balance (Ton)</label>
+                                            <input
+                                                type="text"
+                                                readOnly
+                                                value={selectedPiForAmendment ? `${piBalanceTon.toLocaleString('en-US', { minimumFractionDigits: 3 })} Ton` : 'N/A'}
+                                                className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl outline-none text-blue-600 font-bold text-sm"
+                                            />
+                                        </div>
 
-                                         <div className="space-y-1.5 text-left">
-                                             <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">PI Expiry Date</label>
-                                             <input
-                                                 type="text"
-                                                 readOnly
-                                                 value={selectedPiForAmendment?.validityDate ? formatDate(selectedPiForAmendment.validityDate) : 'N/A'}
-                                                 className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl outline-none text-gray-500 font-bold text-sm"
-                                             />
-                                         </div>
+                                        <div className="space-y-1.5 text-left">
+                                            <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">PI Expiry Date</label>
+                                            <input
+                                                type="text"
+                                                readOnly
+                                                value={selectedPiForAmendment?.validityDate ? formatDate(selectedPiForAmendment.validityDate) : 'N/A'}
+                                                className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl outline-none text-gray-500 font-bold text-sm"
+                                            />
+                                        </div>
 
                                         <div className="space-y-1.5">
                                             <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">New Quantity (Ton)</label>
@@ -2520,6 +2939,18 @@ const LCManagement = ({ addNotification, currentUser }) => {
                                                 value={amendmentFormData.dollarRate}
                                                 onChange={(e) => setAmendmentFormData(prev => ({ ...prev, dollarRate: e.target.value }))}
                                                 placeholder="e.g. 120.00"
+                                                className="w-full px-4 py-2.5 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all font-medium"
+                                            />
+                                        </div>
+
+                                        <div className="col-span-full space-y-1.5 text-left">
+                                            <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">ADDN Number</label>
+                                            <input
+                                                type="text"
+                                                name="addnNo"
+                                                value={amendmentFormData.addnNo || ''}
+                                                onChange={(e) => setAmendmentFormData(prev => ({ ...prev, addnNo: e.target.value }))}
+                                                placeholder="e.g. ADDN-01"
                                                 className="w-full px-4 py-2.5 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all font-medium"
                                             />
                                         </div>
@@ -2580,11 +3011,11 @@ const LCManagement = ({ addNotification, currentUser }) => {
                                                     <DollarSignIcon className="w-3.5 h-3.5 text-blue-500" />
                                                     <span className="text-[10px] font-black text-blue-600 uppercase tracking-wider">Product Info</span>
                                                 </div>
-                                                {selectedLcForAmendment.productsList && selectedLcForAmendment.productsList.length > 0 ? (
+                                                {amendmentDisplayProducts && amendmentDisplayProducts.length > 0 ? (
                                                     <div className="space-y-3">
-                                                        {selectedLcForAmendment.productsList.map((prod, pIdx) => (
-                                                            <div key={pIdx} className="border-b border-gray-200/40 pb-2 last:border-0 last:pb-0">
-                                                                <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider">Item {selectedLcForAmendment.productsList.length > 1 ? pIdx + 1 : ''}</span>
+                                                        {amendmentDisplayProducts.map((prod, pIdx) => (
+                                                            <div key={pIdx} className="border-b border-gray-200/40 pb-2 last:border-0 last:pb-0 text-left">
+                                                                <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider">Item {amendmentDisplayProducts.length > 1 ? pIdx + 1 : ''}</span>
                                                                 <p className="text-xs font-bold text-gray-800 truncate" title={prod.productName}>{prod.productName || '-'}</p>
                                                                 <div className="grid grid-cols-2 gap-2 mt-1">
                                                                     <div>
@@ -2600,26 +3031,38 @@ const LCManagement = ({ addNotification, currentUser }) => {
                                                         ))}
                                                     </div>
                                                 ) : (
-                                                    <div className="space-y-2">
+                                                    <div className="space-y-2 text-left">
                                                         <div>
                                                             <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider">Product Name</span>
-                                                            <p className="text-xs font-bold text-gray-800 truncate">{selectedLcForAmendment.productName || selectedLcForAmendment.product || '-'}</p>
+                                                            <p className="text-xs font-bold text-gray-800 truncate">
+                                                                {selectedPiForAmendment
+                                                                    ? (selectedPiForAmendment.productName || '-')
+                                                                    : (selectedLcForAmendment.productName || selectedLcForAmendment.product || '-')}
+                                                            </p>
                                                         </div>
-                                                        <div className="grid grid-cols-2 gap-2">
+                                                        <div className="grid grid-cols-2 gap-2 text-left">
                                                             <div>
                                                                 <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider">Quantity</span>
-                                                                <p className="text-xs font-bold text-gray-800">{parseFloat(selectedLcForAmendment.quantity || 0).toLocaleString('en-US')} Ton</p>
+                                                                <p className="text-xs font-bold text-gray-800">
+                                                                    {selectedPiForAmendment
+                                                                        ? `${((parseFloat(selectedPiForAmendment.grandTotalQuantity || selectedPiForAmendment.quantity) || 0) / 1000).toLocaleString('en-US')} Ton`
+                                                                        : `${parseFloat(selectedLcForAmendment.quantity || 0).toLocaleString('en-US')} Ton`}
+                                                                </p>
                                                             </div>
                                                             <div>
                                                                 <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider">Rate</span>
-                                                                <p className="text-xs font-bold text-gray-800">${parseFloat(selectedLcForAmendment.rate || 0).toLocaleString('en-IN')}</p>
+                                                                <p className="text-xs font-bold text-gray-800">
+                                                                    {selectedPiForAmendment
+                                                                        ? `$${parseFloat(selectedPiForAmendment.rate || 0).toLocaleString('en-IN')}`
+                                                                        : `$${parseFloat(selectedLcForAmendment.rate || 0).toLocaleString('en-IN')}`}
+                                                                </p>
                                                             </div>
                                                         </div>
                                                     </div>
                                                 )}
                                                 <div className="border-t border-blue-100/50 pt-2 mt-2 text-left">
                                                     <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider">Port</span>
-                                                    <p className="text-xs font-bold text-gray-800">{selectedLcForAmendment.port || '-'}</p>
+                                                    <p className="text-xs font-bold text-gray-800">{amendmentDisplayPort}</p>
                                                 </div>
                                             </div>
 
@@ -2671,14 +3114,14 @@ const LCManagement = ({ addNotification, currentUser }) => {
                                                         </div>
                                                         <div>
                                                             <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider">Return Amount</span>
-                                                            <p className="text-xs font-bold text-blue-600 truncate">৳{parseFloat(selectedLcForAmendment.expectedReturnAmount || 0).toLocaleString('en-IN')}</p>
+                                                            <p className="text-xs font-bold text-blue-600 truncate">৳{parseFloat(amendmentInsuranceInfo?.expectedReturnAmount || 0).toLocaleString('en-IN')}</p>
                                                         </div>
                                                     </div>
                                                     <div className="grid grid-cols-2 gap-2">
                                                         <div>
                                                             <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider">VAT ({selectedLcForAmendment.premiumVat || '0'}%)</span>
                                                             <p className="text-xs font-bold text-gray-800 truncate">
-                                                                ৳{(parseFloat(selectedLcForAmendment.netPremium || 0) * (parseFloat(selectedLcForAmendment.premiumVat || 0) / 100)).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                                                ৳{parseFloat(amendmentInsuranceInfo?.vatAmount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                                             </p>
                                                         </div>
                                                         <div>
@@ -2689,11 +3132,11 @@ const LCManagement = ({ addNotification, currentUser }) => {
                                                     <div className="grid grid-cols-2 gap-2 border-t border-indigo-100/50 pt-1.5 mt-1">
                                                         <div>
                                                             <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider">Gross Premium</span>
-                                                            <p className="text-xs font-bold text-gray-800">৳{parseFloat(selectedLcForAmendment.grossPremium || 0).toLocaleString('en-US')}</p>
+                                                            <p className="text-xs font-bold text-gray-800">৳{parseFloat(amendmentInsuranceInfo?.grossPremium || 0).toLocaleString('en-US')}</p>
                                                         </div>
                                                         <div>
                                                             <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider">Net Premium</span>
-                                                            <p className="text-xs font-bold text-indigo-600 truncate">৳{parseFloat(selectedLcForAmendment.netPremium || 0).toLocaleString('en-US')}</p>
+                                                            <p className="text-xs font-bold text-indigo-600 truncate">৳{parseFloat(amendmentInsuranceInfo?.netPremium || 0).toLocaleString('en-US')}</p>
                                                         </div>
                                                     </div>
                                                 </div>
@@ -2754,14 +3197,14 @@ const LCManagement = ({ addNotification, currentUser }) => {
                                     const displayPort = record.port || (linkedPi && (linkedPi.port || linkedPi.portOfDischarge || linkedPi.portOfLoading)) || '-';
 
                                     const displayProducts = record.productsList && record.productsList.length > 0
-                                         ? record.productsList.map(p => p.productName).filter(Boolean).join(', ')
-                                         : record.productName || '-';
+                                        ? record.productsList.map(p => p.productName).filter(Boolean).join(', ')
+                                        : record.productName || '-';
 
-                                     // Unit conversion for display (Data is in Tons, Table shows Kg)
-                                     const totalQtyTons = record.productsList && record.productsList.length > 0
-                                         ? record.productsList.reduce((sum, p) => sum + (parseFloat(p.quantity) || 0), 0)
-                                         : (parseFloat(record.quantity) || 0);
-                                     const qtyKg = totalQtyTons * 1000;
+                                    // Unit conversion for display (Data is in Tons, Table shows Kg)
+                                    const totalQtyTons = record.productsList && record.productsList.length > 0
+                                        ? record.productsList.reduce((sum, p) => sum + (parseFloat(p.quantity) || 0), 0)
+                                        : (parseFloat(record.quantity) || 0);
+                                    const qtyKg = totalQtyTons * 1000;
 
                                     // Calculate Remaining Quantities
                                     // Received: From allStockRecords where lcNo matches and status is NOT requested/rejected
@@ -2779,7 +3222,7 @@ const LCManagement = ({ addNotification, currentUser }) => {
                                             const dateStr = typeof rawDate === 'string' && rawDate.includes('T') ? rawDate.split('T')[0] : rawDate;
                                             const groupVal = s.totalLcQuantity || s.billOfEntry || s.totalLcTruck || s.truckNo || s.truck || 'single';
                                             const key = `${dateStr}_${groupVal}`;
-                                            
+
                                             if (!receiptsMapForBalance[key]) {
                                                 const itemSubtotal = (s.entries || []).reduce((iSum, item) => iSum + parseNum(item.inHouseQuantity || item.quantity), 0);
                                                 receiptsMapForBalance[key] = parseNum(s.totalLcQuantity) || itemSubtotal || parseNum(s.inHouseQuantity) || parseNum(s.quantity);
@@ -2920,6 +3363,7 @@ const LCManagement = ({ addNotification, currentUser }) => {
                     allSalesRecords={allSalesRecords}
                     gpRecords={gpRecords}
                     lcExpenses={lcExpenses}
+                    piRecordsRaw={piRecordsRaw}
                 />
             )}
 
@@ -2943,7 +3387,7 @@ const LCManagement = ({ addNotification, currentUser }) => {
                                 </div>
                                 <h3 className="text-xl font-black text-gray-900 text-center mb-2">Delete Record?</h3>
                                 <p className="text-sm text-gray-500 text-center mb-8">Are you sure you want to delete this LC record? This action cannot be undone.</p>
-                                
+
                                 <div className="grid grid-cols-2 gap-3">
                                     <button
                                         onClick={() => {

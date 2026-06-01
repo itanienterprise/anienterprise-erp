@@ -3107,7 +3107,8 @@ function PI({
                                                             <button
                                                                 onClick={() => {
                                                                     setViewHistoryRecord(record);
-                                                                    setActiveHistoryIndex(0);
+                                                                    const tl = getHistoryTimeline(record);
+                                                                    setActiveHistoryIndex(tl.length > 1 ? tl.length - 1 : 0);
                                                                 }}
                                                                 className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all active:scale-90"
                                                                 title="View History"
@@ -3270,7 +3271,8 @@ function PI({
                                                         onClick={(e) => {
                                                             e.stopPropagation();
                                                             setViewHistoryRecord(record);
-                                                            setActiveHistoryIndex(0);
+                                                            const tl = getHistoryTimeline(record);
+                                                            setActiveHistoryIndex(tl.length > 1 ? tl.length - 1 : 0);
                                                         }}
                                                         className="flex-1 flex items-center justify-center gap-1.5 py-3 bg-blue-50 text-blue-700 rounded-xl font-black text-[10px] uppercase tracking-widest active:scale-95 transition-all"
                                                     >
@@ -3366,6 +3368,14 @@ function PI({
                 const activeProducts = activeRevision.productsList || [];
                 const activeIps = activeRevision.ipNumbers || [];
 
+                // Look up linked LC number for this PI
+                const cleanPiNum = viewHistoryRecord.piNumber || '';
+                const linkedLc = lcRecords.find(lc => {
+                    const lcPi = (lc.piNo || '').replace(' (REVISED)', '');
+                    return lcPi === cleanPiNum;
+                });
+                const linkedLcNo = linkedLc ? linkedLc.lcNo : null;
+
                 return (
                     <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
                         <div className="bg-white w-full max-w-6xl h-[85vh] rounded-3xl shadow-2xl flex flex-col overflow-hidden border border-gray-100 animate-in zoom-in-95 duration-200">
@@ -3377,7 +3387,15 @@ function PI({
                                     </div>
                                     <div>
                                         <h3 className="text-lg font-black text-gray-900 tracking-tight">Proforma Invoice History Explorer</h3>
-                                        <p className="text-sm text-gray-500 font-medium">PI Number: <span className="font-bold text-blue-600 font-mono">{viewHistoryRecord.piNumber}{viewHistoryRecord.revisions && viewHistoryRecord.revisions.length > 0 && activeRevision.reviseNo !== 'Original PI' ? ' (REVISED)' : ''}</span> • Date: <span className="font-bold text-gray-800 font-mono">{formatDate(activeRevision.reviseDate || viewHistoryRecord.date)}</span></p>
+                                        <p className="text-sm text-gray-500 font-medium">
+                                            PI Number: <span className="font-bold text-blue-600 font-mono">{viewHistoryRecord.piNumber}{viewHistoryRecord.revisions && viewHistoryRecord.revisions.length > 0 && activeRevision.reviseNo !== 'Original PI' ? ' (REVISED)' : ''}</span>
+                                            {' • '}Date: <span className="font-bold text-gray-800 font-mono">{formatDate(activeRevision.reviseDate || viewHistoryRecord.date)}</span>
+                                            {linkedLcNo && (
+                                                <>
+                                                    {' • '}LC: <span className="font-bold text-emerald-600 font-mono">{linkedLcNo}</span>
+                                                </>
+                                            )}
+                                        </p>
                                     </div>
                                 </div>
                                 <button
@@ -3496,10 +3514,20 @@ function PI({
                                                     </div>
                                                 </div>
 
-                                                {/* Card 3: IP Records & Reference */}
+                                                {/* Card 3: IP Records, LC & Reference */}
                                                 <div className="bg-gray-50/50 border border-gray-100 rounded-2xl p-5 space-y-4">
-                                                    <h5 className="text-[10px] font-black text-blue-600 uppercase tracking-widest">IP Records & Remarks</h5>
+                                                    <h5 className="text-[10px] font-black text-blue-600 uppercase tracking-widest">IP Records, LC & Remarks</h5>
                                                     <div className="space-y-3 text-sm">
+                                                        <div>
+                                                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">LC Number</span>
+                                                            {linkedLcNo ? (
+                                                                <span className="text-sm font-bold bg-emerald-50 text-emerald-700 px-2 py-0.5 rounded-lg border border-emerald-100 font-mono inline-block mt-1">
+                                                                    {linkedLcNo}
+                                                                </span>
+                                                            ) : (
+                                                                <span className="text-gray-500 font-bold text-sm">No LC Linked</span>
+                                                            )}
+                                                        </div>
                                                         <div>
                                                             <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Import Permission (IP)</span>
                                                             <div className="flex flex-wrap gap-1.5 mt-1">
