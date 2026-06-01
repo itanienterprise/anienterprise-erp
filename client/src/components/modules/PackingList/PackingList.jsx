@@ -38,10 +38,10 @@ function PackingList({
     const [highlightedIndex, setHighlightedIndex] = useState(-1);
     const [toast, setToast] = useState(null);
     const [expandedCardId, setExpandedCardId] = useState(null);
-    
+
     // Auto-population dropdown state
     const [piSearchQuery, setPiSearchQuery] = useState('');
-    
+
     const toastTimerRef = useRef(null);
     const piDropdownRef = useRef(null);
     const importerRef = useRef(null);
@@ -104,7 +104,7 @@ function PackingList({
 
     useEffect(() => {
         fetchRecords();
-        preloadAlgerianFont().catch(() => {});
+        preloadAlgerianFont().catch(() => { });
     }, []);
 
     useEffect(() => {
@@ -164,11 +164,26 @@ function PackingList({
 
     // Auto-populate form when a Proforma Invoice is selected
     const handlePISelect = (pi) => {
-        const matchedLc = lcRecords?.find(l => l.lcNo === pi.lcNumber);
+        // Determine if this PI is revised
+        const isRevised = pi.revisions && pi.revisions.length > 0;
+        const displayPiNumber = isRevised ? `${pi.piNumber} (REVISED)` : (pi.piNumber || '');
+
+        // Look up the LC that references this PI number
+        const cleanPiNo = pi.piNumber || '';
+        const matchedLcByPi = lcRecords?.find(lc => {
+            const lcPi = (lc.piNo || '').replace(' (REVISED)', '');
+            return lcPi === cleanPiNo;
+        });
+
+        // Use the PI's revised date if available
+        const piDate = isRevised
+            ? (pi.revisions[pi.revisions.length - 1].reviseDate || pi.date || '')
+            : (pi.date || '');
+
         setFormData(prev => ({
             ...prev,
-            piNumber: pi.piNumber || '',
-            piDate: pi.date ? pi.date.split('T')[0] : '',
+            piNumber: displayPiNumber,
+            piDate: piDate ? piDate.split('T')[0] : '',
             partyName: pi.partyName || '',
             partyAddress: pi.partyAddress || '',
             partyContact: pi.partyContact || '',
@@ -185,13 +200,13 @@ function PackingList({
             marksNo: pi.marksNo || '',
             buyerOrderNo: pi.buyerOrderNo || '',
             buyerOrderDate: pi.buyerOrderDate ? pi.buyerOrderDate.split('T')[0] : '',
-            lcNumber: pi.lcNumber || '',
-            lcDate: pi.lcDate ? pi.lcDate.split('T')[0] : '',
+            lcNumber: matchedLcByPi ? (matchedLcByPi.lcNo || '') : '',
+            lcDate: matchedLcByPi ? (matchedLcByPi.openingDate ? matchedLcByPi.openingDate.split('T')[0] : '') : '',
             partySignature: pi.partySignature || '',
             exporterSignature: pi.exporterSignature || '',
             invoiceStyle: pi.invoiceStyle || 'Style 1 SAA',
-            bankName: matchedLc ? (matchedLc.bankName || '') : '',
-            lcAmendment: '',
+            bankName: matchedLcByPi ? (matchedLcByPi.bankName || '') : '',
+            lcAmendment: matchedLcByPi ? (matchedLcByPi.lcAmendment || '') : '',
             descriptionGoods: pi.descriptionGoods || '',
             termsDeliveryPayment: pi.termsDeliveryPayment || '',
             totalAmount: pi.totalAmount || '',
@@ -218,7 +233,7 @@ function PackingList({
         }));
         setPiSearchQuery('');
         setActiveDropdown(null);
-        showToast(`Copied data from PI Number ${pi.piNumber}`);
+        showToast(`Copied data from PI Number ${displayPiNumber}`);
     };
 
     const handleProductsImageChange = (e) => {
@@ -328,7 +343,7 @@ function PackingList({
                 const response = await axios.put(`${API_BASE_URL}/api/packing-lists/${editingId}`, formData);
                 setRecords(prev => prev.map(rec => rec._id === editingId ? response.data : rec));
                 showToast('Packing List updated successfully.');
-                
+
                 // Add system notification
                 addNotification(
                     'Packing List Updated',
@@ -499,19 +514,22 @@ function PackingList({
 
     const filteredLcs = useMemo(() => {
         let list = lcRecords;
-        
+
         // Filter by PI number if one is entered
         if (formData.piNumber) {
-            const piNoClean = (formData.piNumber || '').trim().toLowerCase();
-            list = list.filter(lc => (lc.piNo || '').trim().toLowerCase() === piNoClean);
+            const piNoClean = (formData.piNumber || '').replace(' (REVISED)', '').trim().toLowerCase();
+            list = list.filter(lc => {
+                const lcPiClean = (lc.piNo || '').replace(' (REVISED)', '').trim().toLowerCase();
+                return lcPiClean === piNoClean;
+            });
         }
-        
+
         // Filter by the search input typed inside the LC Number field
         if (formData.lcNumber) {
             const search = formData.lcNumber.toLowerCase();
             list = list.filter(lc => (lc.lcNo || '').toLowerCase().includes(search));
         }
-        
+
         return list;
     }, [lcRecords, formData.piNumber, formData.lcNumber]);
 
@@ -594,7 +612,12 @@ function PackingList({
                                                 onMouseEnter={() => setHighlightedIndex(idx)}
                                                 className={`w-full px-4 py-2.5 text-left text-sm flex justify-between items-center ${highlightedIndex === idx ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-blue-50'}`}
                                             >
-                                                <span className="font-semibold">{pi.piNumber}</span>
+                                                <span className="font-semibold">
+                                                    {pi.piNumber}
+                                                    {pi.revisions && pi.revisions.length > 0 && (
+                                                        <span className="ml-1.5 text-[10px] font-bold text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200">REVISED</span>
+                                                    )}
+                                                </span>
                                                 <span className="text-xs text-gray-500 truncate max-w-[200px]">{pi.partyName}</span>
                                             </button>
                                         ))}

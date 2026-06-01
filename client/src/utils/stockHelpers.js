@@ -151,7 +151,7 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
             const filterWH = stockFilters.warehouse.trim().toLowerCase();
             if (filterWH !== 'all warehouses') {
                 const itemWH = (item.whName || item.warehouse || '').trim().toLowerCase();
-                if (itemWH !== filterWH && !itemWH.includes(filterWH) && !filterWH.includes(itemWH)) return false;
+                if (!itemWH || (itemWH !== filterWH && !itemWH.includes(filterWH) && !filterWH.includes(itemWH))) return false;
             }
         }
         if (stockFilters.brand && (item.brand || '').trim() !== stockFilters.brand) return false;
@@ -287,7 +287,8 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
                 if (dProdName === keyLower && dBrand === normBrand) {
                     if (stockFilters.warehouse && stockFilters.warehouse.toLowerCase() !== 'all warehouses') {
                         const filterWH = stockFilters.warehouse.toLowerCase();
-                        if (dWh !== filterWH && !dWh.includes(filterWH) && !filterWH.includes(dWh)) return;
+                        // Skip damage if it has no warehouse or warehouse doesn't match the filter
+                        if (!dWh || (dWh !== filterWH && !dWh.includes(filterWH) && !filterWH.includes(dWh))) return;
                     }
 
                     const dq = safeParse(damage.quantity);
@@ -409,7 +410,13 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
                         const isBefore = startDate && dDate < startDate;
                         const dProdName = (damage.productName || '').trim().toLowerCase();
                         const dBrand = (damage.brand || 'No Brand').trim().toLowerCase();
+                        const dWh = (damage.warehouse || '').trim().toLowerCase();
                         if (dProdName === sProdName.toLowerCase() && dBrand === normBrand) {
+                            if (stockFilters.warehouse && stockFilters.warehouse.toLowerCase() !== 'all warehouses') {
+                                const filterWH = stockFilters.warehouse.toLowerCase();
+                                // Skip damage if it has no warehouse or warehouse doesn't match the filter
+                                if (!dWh || (dWh !== filterWH && !dWh.includes(filterWH) && !filterWH.includes(dWh))) return;
+                            }
                             const dq = safeParse(damage.quantity);
                             let dp = safeParse(damage.packet) || (brandObj.packetSize > 0 ? dq / brandObj.packetSize : 0);
                             if (isBefore) {
