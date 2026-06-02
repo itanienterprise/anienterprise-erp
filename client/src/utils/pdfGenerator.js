@@ -3516,12 +3516,12 @@ export const generateCnFHistoryReportPDF = (reportData, agentInfo, filters) => {
                 0: { cellWidth: 20, halign: 'center' }, // Date
                 1: { cellWidth: 28, halign: 'left' }, // LC No
                 2: { cellWidth: 36, halign: 'left' },   // Importer
-                3: { cellWidth: 36, halign: 'left' },   // Exporter
-                4: { cellWidth: 30, halign: 'left' },   // Product
-                5: { cellWidth: 15, halign: 'center' }, // Port
+                3: { cellWidth: 38, halign: 'left' },   // Exporter
+                4: { cellWidth: 25, halign: 'left' },   // Product
+                5: { cellWidth: 22, halign: 'center' }, // Port
                 6: { cellWidth: 16, halign: 'center' }, // UOM
                 7: { cellWidth: 15, halign: 'center' }, // Trucks
-                8: { cellWidth: 26, halign: 'right' },  // QTY
+                8: { cellWidth: 20, halign: 'right' },  // QTY
                 9: { cellWidth: 24, halign: 'right' },  // Commission
                 10: { cellWidth: 31, halign: 'right' }   // Total
             }
