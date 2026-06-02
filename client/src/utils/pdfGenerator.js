@@ -2501,6 +2501,11 @@ export const generateSalesReportPDF = (reportData, filters, summary, saleType = 
                     row.push(item.brand);
                 }
 
+                if (saleType !== 'Border' && idx === 0) {
+                    row.push({ content: (sale.challanNo || '-'), rowSpan: flatItems.length });
+                    row.push({ content: (sale.truckNo || '-'), rowSpan: flatItems.length });
+                }
+
                 row.push(parseFloat(item.quantity).toLocaleString('en-US'));
 
                 if (saleType === 'Border') {
@@ -2536,10 +2541,10 @@ export const generateSalesReportPDF = (reportData, filters, summary, saleType = 
 
         const headRow = saleType === 'Border'
             ? [['SL', 'Date', 'LC No', 'Importer', 'Port', 'IND C&F', 'BD C&F', 'Party Name', 'Product', 'Qty', 'Truck', 'Price', 'Total']]
-            : [['SL', 'Date', 'Invoice', 'Company', 'Product', 'Brand', 'Qty', 'Price', 'Total', 'Truck Fare', 'Balance']];
+            : [['SL', 'Date', 'Invoice', 'Company', 'Product', 'Brand', 'Challan No', 'Truck No', 'Qty', 'Price', 'Total', 'Truck Fare', 'Balance']];
 
         const footRow = [[
-            { content: 'GRAND TOTAL', colSpan: saleType === 'Border' ? 9 : 6, styles: { halign: 'right', fontStyle: 'bold' } },
+            { content: 'GRAND TOTAL', colSpan: saleType === 'Border' ? 9 : 8, styles: { halign: 'right', fontStyle: 'bold' } },
             { content: saleType === 'Border' ? '-' : summary.totalQty.toLocaleString('en-US'), styles: { halign: 'right', fontStyle: 'bold' } },
             { content: saleType === 'Border' ? totalTrucks.toLocaleString('en-US') : '', styles: { halign: 'center', fontStyle: 'bold' } },
             ...(saleType === 'Border' ? [
@@ -2591,17 +2596,19 @@ export const generateSalesReportPDF = (reportData, filters, summary, saleType = 
                 11: { cellWidth: 18, halign: 'right' },    // Price (Reduced)
                 12: { cellWidth: 24, halign: 'right' }     // Total
             } : {
-                0: { cellWidth: 7, halign: 'center' },     // SL
+                0: { cellWidth: 9, halign: 'center' },     // SL
                 1: { cellWidth: 20, halign: 'center' },    // Date
-                2: { cellWidth: 18, halign: 'center' },    // Invoice
-                3: { cellWidth: 50 },                       // Company (Increased)
-                4: { cellWidth: 20, overflow: 'linebreak' }, // Product (Reduced)
-                5: { cellWidth: 35, noWrap: false, overflow: 'linebreak' }, // Brand (Reduced)
-                6: { cellWidth: 20, halign: 'right' },     // Qty
-                7: { cellWidth: 12, halign: 'right' },     // Price (Reduced)
-                8: { cellWidth: 30, halign: 'right' },     // Total (Increased)
-                9: { cellWidth: 30, halign: 'right' },    // Truck Fare (Increased)
-                10: { cellWidth: 35, halign: 'right' }     // Balance (Increased)
+                2: { cellWidth: 16, halign: 'center' },    // Invoice (Reduced)
+                3: { cellWidth: 35 },                       // Company
+                4: { cellWidth: 22, overflow: 'linebreak' }, // Product
+                5: { cellWidth: 30, noWrap: false, overflow: 'linebreak' }, // Brand
+                6: { cellWidth: 19, overflow: 'linebreak' }, // Challan No
+                7: { cellWidth: 20, overflow: 'linebreak' }, // Truck No
+                8: { cellWidth: 18, halign: 'right' },     // Qty
+                9: { cellWidth: 15, halign: 'right' },     // Price
+                10: { cellWidth: 26, halign: 'right' },    // Total
+                11: { cellWidth: 22, halign: 'right' },    // Truck Fare (Reduced)
+                12: { cellWidth: 30, halign: 'right' }     // Balance
             },
             margin: { left: saleType === 'Border' ? (pageWidth - 277) / 2 : (pageWidth - 277) / 2, right: margin }
         });

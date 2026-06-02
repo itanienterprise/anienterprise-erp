@@ -934,6 +934,7 @@ export const generatePL2PDF = async (record, piRecords = [], lcRecords = [], imp
             y = data.cursor.y;
         }
     });
+    y = doc.lastAutoTable.finalY;
 
     // Total Row
     let grandTotal = 0;
@@ -1026,7 +1027,9 @@ export const generatePL2PDF = async (record, piRecords = [], lcRecords = [], imp
         const piProd = pi?.productsList?.find(p => (p.productName || '').trim().toLowerCase() === (prod.productName || '').trim().toLowerCase()) || pi?.productsList?.[idx];
         return {
             ...prod,
-            hsCodeInd: prod.hsCodeInd || piProd?.hsCodeInd || pi?.hsCodeInd || ''
+            hsCodeInd: prod.hsCodeInd || piProd?.hsCodeInd || pi?.hsCodeInd || '',
+            freight: prod.freight || piProd?.freight || '',
+            totalFreight: prod.totalFreight || piProd?.totalFreight || ''
         };
     });
 
@@ -1055,7 +1058,8 @@ export const generatePL2PDF = async (record, piRecords = [], lcRecords = [], imp
         piNo: trPiNo,
         piDate: trPiDate,
         coverNote: trCoverNote,
-        piGrandTotal: trPiGrandTotal
+        piGrandTotal: trPiGrandTotal,
+        packingType: record.packingType || pi?.packingType || ''
     }, trSetups);
 
     // Open in new tab

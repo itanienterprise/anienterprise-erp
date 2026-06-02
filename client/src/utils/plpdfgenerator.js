@@ -437,6 +437,7 @@ export const generatePLPDF = async (record, piRecords = [], lcRecords = [], impo
                 y = data.cursor.y;
             }
         });
+        y = doc.lastAutoTable.finalY;
 
         y += 6;
     } // end else (no productsImage)
@@ -512,7 +513,9 @@ export const generatePLPDF = async (record, piRecords = [], lcRecords = [], impo
         const piProd = pi?.productsList?.find(p => (p.productName || '').trim().toLowerCase() === (prod.productName || '').trim().toLowerCase()) || pi?.productsList?.[idx];
         return {
             ...prod,
-            hsCodeInd: prod.hsCodeInd || piProd?.hsCodeInd || pi?.hsCodeInd || ''
+            hsCodeInd: prod.hsCodeInd || piProd?.hsCodeInd || pi?.hsCodeInd || '',
+            freight: prod.freight || piProd?.freight || '',
+            totalFreight: prod.totalFreight || piProd?.totalFreight || ''
         };
     });
 
@@ -551,7 +554,8 @@ export const generatePLPDF = async (record, piRecords = [], lcRecords = [], impo
         piNo: trPiNo,
         piDate: trPiDate,
         coverNote: trCoverNote,
-        piGrandTotal: trPiGrandTotal
+        piGrandTotal: trPiGrandTotal,
+        packingType: record.packingType || pi?.packingType || ''
     }, trSetups);
 
     // Save/Download PDF

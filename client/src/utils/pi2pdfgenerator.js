@@ -145,6 +145,16 @@ export const generatePI2PDF = (record) => {
         termsText = termsText.split('\n')
             .filter(line => !line.trim().toLowerCase().startsWith('packing:'))
             .join('\n');
+    } else if (record.packingType) {
+        const formattedPacking = record.packingType.split(',').map(s => s.trim()).join(' / ');
+        termsText = termsText.split('\n')
+            .map(line => {
+                if (line.trim().toLowerCase().startsWith('packing:')) {
+                    return `Packing: ${formattedPacking}`;
+                }
+                return line;
+            })
+            .join('\n');
     }
     const termsLines = doc.splitTextToSize(termsText, rightColWidth - 5);
     const termsHeight = termsLines.length * 4;
@@ -287,7 +297,11 @@ export const generatePI2PDF = (record) => {
         descParts.push(`COUNTRY OF ORIGIN ${(record.countryOrigin || 'INDIA').toUpperCase()}`);
     }
     if (showPacking) {
-        descParts.push('EXPORT STANDARD PACKING');
+        if (record.packingType) {
+            descParts.push(`EXPORT STANDARD PACKING: ${record.packingType.split(',').map(s => s.trim().toUpperCase()).join(' / ')}`);
+        } else {
+            descParts.push('EXPORT STANDARD PACKING');
+        }
     }
     if (record.indianBank) {
         descParts.push(`ADVISING BANK MUST BE THROUGH: ${record.indianBank}`);
@@ -631,6 +645,7 @@ export const generatePI2PDF = (record) => {
             y = data.cursor.y;
         }
     });
+    y = doc.lastAutoTable.finalY;
 
     // --- Buyer signature/stamp area (inside the table, at bottom of description) ---
     // Removed signature drawing from here as requested to avoid overlapping text.

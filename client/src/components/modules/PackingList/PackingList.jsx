@@ -87,6 +87,8 @@ function PackingList({
         trNumber: '',
         trDate: '',
         trName: '',
+        demurrage: '03',
+        days: '05',
         invoiceStyle: 'Style 1 SAA',
         bankName: '',
         branchName: '',
@@ -309,6 +311,8 @@ function PackingList({
             trNumber: '',
             trDate: '',
             trName: '',
+            demurrage: '03',
+            days: '05',
             invoiceStyle: 'Style 1 SAA',
             bankName: '',
             branchName: '',
@@ -419,6 +423,8 @@ function PackingList({
             trNumber: record.trNumber || '',
             trDate: record.trDate ? record.trDate.split('T')[0] : '',
             trName: record.trName || '',
+            demurrage: record.demurrage || '03',
+            days: record.days || '05',
             invoiceStyle: record.invoiceStyle || 'Style 1 SAA',
             bankName: record.bankName || '',
             branchName: record.branchName || '',
@@ -1197,11 +1203,155 @@ function PackingList({
                             </div>
                         </div>
 
+                        {/* --- Rinku-only: Demurrage & Days --- */}
+                        {formData.trName && formData.trName.trim().toLowerCase().includes('rinku') && (
+                            <div className="grid grid-cols-2 gap-4 p-4 bg-orange-50/60 border border-orange-200/60 rounded-xl">
+                                <div className="space-y-2">
+                                    <label className="text-sm font-medium text-gray-700">Demurrage</label>
+                                    <input
+                                        type="text"
+                                        name="demurrage"
+                                        value={formData.demurrage}
+                                        onChange={handleInputChange}
+                                        placeholder="e.g. 03"
+                                        className="w-full px-4 py-2 bg-white/70 border border-orange-200 rounded-lg focus:ring-2 focus:ring-orange-400 outline-none transition-all"
+                                    />
+                                </div>
+                                <div className="space-y-2">
+                                    <label className="text-sm font-medium text-gray-700">Days</label>
+                                    <input
+                                        type="text"
+                                        name="days"
+                                        value={formData.days}
+                                        onChange={handleInputChange}
+                                        placeholder="e.g. 05"
+                                        className="w-full px-4 py-2 bg-white/70 border border-orange-200 rounded-lg focus:ring-2 focus:ring-orange-400 outline-none transition-all"
+                                    />
+                                </div>
+                            </div>
+                        )}
+
                         {/* --- Products & Packaging Image Upload --- */}
-                        <div className="space-y-4">
+                        <div className="space-y-6">
                             <div className="flex items-center justify-between border-b border-gray-200 pb-2">
                                 <h4 className="text-base font-bold text-gray-800 uppercase tracking-wide">Products & Packaging Details</h4>
                             </div>
+
+                            {/* --- Products List Dynamic Editor --- */}
+                            <div className="space-y-4">
+                                {(formData.productsList || [{ productName: '', hsCode: '', quantity: '', bagCount: '', netWeight: '', grossWeight: '' }]).map((item, idx) => (
+                                    <div key={idx} className="p-5 bg-white/40 backdrop-blur-md border border-gray-200/50 rounded-2xl relative space-y-4 shadow-sm hover:shadow-md transition-all duration-200">
+                                        <div className="flex items-center justify-between border-b border-gray-200/40 pb-2">
+                                            <div className="flex items-center gap-2">
+                                                <span className="text-xs font-bold text-blue-700 bg-blue-50 px-2.5 py-1 rounded-lg border border-blue-100">Product #{idx + 1}</span>
+                                                <span className="text-sm font-bold text-gray-800 truncate max-w-[200px] md:max-w-md" title={item.productName}>
+                                                    {item.productName || 'New Product Entry'}
+                                                </span>
+                                            </div>
+                                            {formData.productsList && formData.productsList.length > 1 && (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => removeProductRow(idx)}
+                                                    className="text-red-500 hover:text-red-700 p-1.5 rounded-lg hover:bg-red-50 transition-all duration-200"
+                                                    title="Remove Product"
+                                                >
+                                                    <TrashIcon className="w-4 h-4" />
+                                                </button>
+                                            )}
+                                        </div>
+
+                                        <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
+                                            {/* Product Name */}
+                                            <div className="md:col-span-3 space-y-1.5">
+                                                <label className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Product Name</label>
+                                                <input
+                                                    type="text"
+                                                    value={item.productName}
+                                                    onChange={(e) => handleProductChange(idx, 'productName', e.target.value)}
+                                                    placeholder="Product Description"
+                                                    required
+                                                    className="w-full px-3.5 py-2 bg-white/80 border border-gray-200 rounded-lg text-[13px] focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
+                                                />
+                                            </div>
+
+                                            {/* HS Code */}
+                                            <div className="md:col-span-2 space-y-1.5">
+                                                <label className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider">HS Code</label>
+                                                <input
+                                                    type="text"
+                                                    value={item.hsCode}
+                                                    onChange={(e) => handleProductChange(idx, 'hsCode', e.target.value)}
+                                                    placeholder="HS Code"
+                                                    className="w-full px-3.5 py-2 bg-white/80 border border-gray-200 rounded-lg text-[13px] focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
+                                                />
+                                            </div>
+
+                                            {/* Quantity (KG) */}
+                                            <div className="md:col-span-1 space-y-1.5">
+                                                <label className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider truncate block" title="PI Qty (KG)">PI Qty</label>
+                                                <input
+                                                    type="number"
+                                                    value={item.quantity}
+                                                    readOnly
+                                                    disabled
+                                                    placeholder="Qty"
+                                                    className="w-full px-2 py-2 bg-gray-50 border border-gray-200 rounded-lg text-[13px] text-gray-500 cursor-not-allowed outline-none text-center"
+                                                />
+                                            </div>
+
+                                            {/* Bag Count */}
+                                            <div className="md:col-span-2 space-y-1.5">
+                                                <label className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Bag Count</label>
+                                                <input
+                                                    type="number"
+                                                    value={item.bagCount}
+                                                    onChange={(e) => handleProductChange(idx, 'bagCount', e.target.value)}
+                                                    placeholder="e.g. 500"
+                                                    className="w-full px-3.5 py-2 bg-white/80 border border-gray-200 rounded-lg text-[13px] focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
+                                                />
+                                            </div>
+
+                                            {/* Net Weight */}
+                                            <div className="md:col-span-2 space-y-1.5">
+                                                <label className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Net Weight (KG)</label>
+                                                <input
+                                                    type="number"
+                                                    value={item.netWeight}
+                                                    onChange={(e) => handleProductChange(idx, 'netWeight', e.target.value)}
+                                                    placeholder="Net Wt"
+                                                    className="w-full px-3.5 py-2 bg-white/80 border border-gray-200 rounded-lg text-[13px] focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
+                                                />
+                                            </div>
+
+                                            {/* Gross Weight */}
+                                            <div className="md:col-span-2 space-y-1.5">
+                                                <label className="text-[11px] font-bold text-indigo-600 uppercase tracking-wider truncate block" title="Gross Weight (KG)">Gross Wt (KG)*</label>
+                                                <input
+                                                    type="number"
+                                                    value={item.grossWeight}
+                                                    onChange={(e) => handleProductChange(idx, 'grossWeight', e.target.value)}
+                                                    placeholder="Gross Wt"
+                                                    required
+                                                    className="w-full px-3.5 py-2 bg-indigo-50/20 border border-indigo-200 focus:border-indigo-500 rounded-lg text-[13px] font-bold text-indigo-700 placeholder-indigo-300 focus:ring-2 focus:ring-indigo-500/20 outline-none transition-all"
+                                                />
+                                            </div>
+                                        </div>
+                                    </div>
+                                ))}
+
+                                <div className="flex justify-end pt-1">
+                                    <button
+                                        type="button"
+                                        onClick={addProductRow}
+                                        className="flex items-center gap-1.5 px-4 py-2 bg-gray-50 hover:bg-gray-100 text-gray-600 border border-gray-200 hover:border-gray-300 font-semibold rounded-xl text-xs transition-all shadow-sm"
+                                    >
+                                        <PlusIcon className="w-3.5 h-3.5" /> Add Another Product
+                                    </button>
+                                </div>
+                            </div>
+
+                            {/* Divider between product table and packaging image upload */}
+                            <div className="border-t border-gray-200/50 my-6"></div>
 
                             <div className="rounded-xl border border-gray-200 shadow-sm bg-white/50 p-4">
                                 {formData.productsImage ? (

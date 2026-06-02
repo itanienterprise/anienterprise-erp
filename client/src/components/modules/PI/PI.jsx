@@ -45,6 +45,8 @@ function PI({
     const [countries, setCountries] = useState([]);
     const [certifications, setCertifications] = useState([]);
     const [certSearch, setCertSearch] = useState('');
+    const [packingTypes, setPackingTypes] = useState([]);
+    const [packSearch, setPackSearch] = useState('');
     const [ipSearch, setIpSearch] = useState('');
     const [activeDropdown, setActiveDropdown] = useState(null);
     const [highlightedIndex, setHighlightedIndex] = useState(-1);
@@ -59,6 +61,10 @@ function PI({
         reviseNo: '',
         reviseDate: '',
         validityDate: '',
+        placeOfReceipt: '',
+        portOfLoading: '',
+        portOfDischarge: '',
+        certification: '',
         productsList: [],
         grandTotal: '',
         grandTotalQuantity: '',
@@ -122,7 +128,8 @@ function PI({
         termsDeliveryPayment: 'CPT [PORT OF DISCHARGE], BANGLADESH, BY ROAD, BY TRUCK AGAINST 100% Irrevocable at Sight Letter of Credit valid for 90 days & Negotiable within 21 days of Shipment.\nPacking: Export Standard P.P/Gunny Bags.',
         declaration: DEFAULT_DECLARATION,
         status: 'Active',
-        certification: 'Value & Quantity, Country of Origin'
+        certification: 'Value & Quantity, Country of Origin',
+        packingType: ''
     });
 
     const ipNumberRef = useRef(null);
@@ -138,6 +145,7 @@ function PI({
     const countryOriginRef = useRef(null);
     const countryFinalDestRef = useRef(null);
     const certificationRef = useRef(null);
+    const packingTypeRef = useRef(null);
     const statusRef = useRef(null);
     const invoiceStyleRef = useRef(null);
     const revisePiRef = useRef(null);
@@ -149,6 +157,7 @@ function PI({
         fetchMetaData('vessel', setVessels);
         fetchMetaData('country', setCountries);
         fetchMetaData('certification', setCertifications);
+        fetchMetaData('packingType', setPackingTypes);
     }, []);
 
     useEffect(() => {
@@ -476,6 +485,7 @@ function PI({
             else if (category === 'vessel') fetchMetaData(category, setVessels);
             else if (category === 'country') fetchMetaData(category, setCountries);
             else if (category === 'certification') fetchMetaData(category, setCertifications);
+            else if (category === 'packingType') fetchMetaData(category, setPackingTypes);
         } catch (error) {
             console.error(`Error adding quick ${category}:`, error);
         }
@@ -490,6 +500,7 @@ function PI({
             else if (category === 'vessel') fetchMetaData(category, setVessels);
             else if (category === 'country') fetchMetaData(category, setCountries);
             else if (category === 'certification') fetchMetaData(category, setCertifications);
+            else if (category === 'packingType') fetchMetaData(category, setPackingTypes);
         } catch (error) {
             console.error(`Error deleting quick ${category}:`, error);
             showToast('Failed to delete option', 'error');
@@ -538,6 +549,23 @@ function PI({
                     // Add if not selected
                     parts.push(value);
                     updated.certification = parts.join(', ');
+                }
+            }
+
+            if (field === 'packingType') {
+                setPackSearch('');
+                const currentPack = prev.packingType || '';
+                const parts = currentPack.split(',').map(s => s.trim()).filter(Boolean);
+                const valueLower = value.toLowerCase();
+                const matchedIndex = parts.findIndex(p => p.toLowerCase() === valueLower);
+                if (matchedIndex > -1) {
+                    // Remove if already selected
+                    parts.splice(matchedIndex, 1);
+                    updated.packingType = parts.join(', ');
+                } else {
+                    // Add if not selected
+                    parts.push(value);
+                    updated.packingType = parts.join(', ');
                 }
             }
 
@@ -681,7 +709,7 @@ function PI({
 
             return updated;
         });
-        if (field !== 'certification') {
+        if (field !== 'certification' && field !== 'packingType') {
             setActiveDropdown(null);
             setHighlightedIndex(-1);
         }
@@ -824,7 +852,8 @@ function PI({
             declaration: DEFAULT_DECLARATION,
             status: 'Active',
             invoiceStyle: 'Style 1 SAA',
-            certification: 'Value & Quantity, Country of Origin'
+            certification: 'Value & Quantity, Country of Origin',
+            packingType: ''
         });
         setEditingId(null);
         setSubmitStatus(null);
@@ -894,7 +923,8 @@ function PI({
             declaration: record.declaration || DEFAULT_DECLARATION,
             status: record.status || 'Active',
             invoiceStyle: record.invoiceStyle || 'Style 1 SAA',
-            certification: record.certification || ''
+            certification: record.certification || '',
+            packingType: record.packingType || ''
         });
         setEditingId(record._id);
         setShowForm(true);
@@ -1000,6 +1030,7 @@ function PI({
             portOfLoading: '',
             portOfDischarge: '',
             certification: '',
+            packingType: '',
             productsList: [],
             grandTotal: '',
             grandTotalQuantity: '',
@@ -1026,6 +1057,23 @@ function PI({
                     // Add if not selected
                     parts.push(value);
                     updated.certification = parts.join(', ');
+                }
+            }
+
+            if (field === 'packingType') {
+                setPackSearch('');
+                const currentPack = prev.packingType || '';
+                const parts = currentPack.split(',').map(s => s.trim()).filter(Boolean);
+                const valueLower = value.toLowerCase();
+                const matchedIndex = parts.findIndex(p => p.toLowerCase() === valueLower);
+                if (matchedIndex > -1) {
+                    // Remove if already selected
+                    parts.splice(matchedIndex, 1);
+                    updated.packingType = parts.join(', ');
+                } else {
+                    // Add if not selected
+                    parts.push(value);
+                    updated.packingType = parts.join(', ');
                 }
             }
             return updated;
@@ -1064,6 +1112,7 @@ function PI({
             portOfLoading: pi.portOfLoading || '',
             portOfDischarge: pi.portOfDischarge || '',
             certification: pi.certification || '',
+            packingType: pi.packingType || '',
             productsList: list,
             grandTotal,
             grandTotalQuantity,
@@ -1200,6 +1249,7 @@ function PI({
                 portOfLoading: reviseFormData.portOfLoading,
                 portOfDischarge: reviseFormData.portOfDischarge,
                 certification: reviseFormData.certification,
+                packingType: reviseFormData.packingType || '',
                 productsList: reviseFormData.productsList,
                 grandTotal: reviseFormData.grandTotal,
                 grandTotalQuantity: reviseFormData.grandTotalQuantity,
@@ -1218,6 +1268,7 @@ function PI({
                     portOfLoading: pi.portOfLoading,
                     portOfDischarge: pi.portOfDischarge,
                     certification: pi.certification,
+                    packingType: pi.packingType || '',
                     productsList: getPiProductsList(pi),
                     grandTotal: pi.grandTotal,
                     grandTotalQuantity: pi.grandTotalQuantity,
@@ -1239,6 +1290,7 @@ function PI({
                 portOfLoading: reviseFormData.portOfLoading,
                 portOfDischarge: reviseFormData.portOfDischarge,
                 certification: reviseFormData.certification,
+                packingType: reviseFormData.packingType || '',
                 productsList: reviseFormData.productsList,
                 grandTotal: reviseFormData.grandTotal,
                 grandTotalQuantity: reviseFormData.grandTotalQuantity,
@@ -1294,6 +1346,7 @@ function PI({
                 portOfLoading: record.portOfLoading || 'N/A',
                 portOfDischarge: record.portOfDischarge || 'N/A',
                 certification: record.certification || 'N/A',
+                packingType: record.packingType || 'N/A',
                 productsList: getPiProductsList(record),
                 grandTotal: record.grandTotal,
                 grandTotalQuantity: record.grandTotalQuantity,
@@ -1313,6 +1366,7 @@ function PI({
                     portOfLoading: 'N/A (Historical)',
                     portOfDischarge: 'N/A (Historical)',
                     certification: 'N/A (Historical)',
+                    packingType: 'N/A (Historical)',
                     productsList: [],
                     grandTotal: 'N/A',
                     grandTotalQuantity: 'N/A',
@@ -2386,6 +2440,91 @@ function PI({
                             </div>
                         </div>
 
+                        {/* Conditional Packing Type Field */}
+                        {(() => {
+                            const isPackingSelected = (formData.certification || '').split(',').map(s => s.trim().toLowerCase()).includes('packing');
+                            if (!isPackingSelected) return null;
+                            return (
+                                <div className="space-y-2 relative dropdown-container" ref={packingTypeRef}>
+                                    <label className="text-sm font-medium text-gray-700 font-bold text-blue-700">Packing Type</label>
+                                    <div className="relative">
+                                        <input
+                                            type="text"
+                                            name="packingType"
+                                            value={formData.packingType || ''}
+                                            onChange={(e) => {
+                                                handleInputChange(e);
+                                                setActiveDropdown('packingType');
+                                                setHighlightedIndex(-1);
+                                                const val = e.target.value;
+                                                const lastPart = val.split(',').pop().trim();
+                                                setPackSearch(lastPart);
+                                            }}
+                                            onFocus={() => { setActiveDropdown('packingType'); setHighlightedIndex(-1); }}
+                                            onKeyDown={(e) => handleDropdownKeyDown(e, 'packingType', packingTypes.filter(v => !packSearch || v.value.toLowerCase().includes(packSearch.toLowerCase())), 'packingType')}
+                                            autoComplete="off"
+                                            placeholder="e.g. Export Standard P.P Bags"
+                                            className="w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-all pr-10"
+                                        />
+                                        <button
+                                            type="button"
+                                            onClick={() => handleAddQuickMetaData('packingType', formData.packingType)}
+                                            className="absolute right-2 top-1/2 -translate-y-1/2 text-blue-500 hover:text-blue-700 p-1"
+                                            title="Add new packing type"
+                                        >
+                                            <PlusIcon className="w-4 h-4" />
+                                        </button>
+                                        {activeDropdown === 'packingType' && (() => {
+                                            const defaultPacks = [
+                                                { _id: 'default-ppbags', value: 'Export Standard P.P Bags', isDefault: true },
+                                                { _id: 'default-gunnybags', value: 'Gunny Bags', isDefault: true },
+                                                { _id: 'default-jutebags', value: 'Jute Bags', isDefault: true }
+                                            ];
+                                            const merged = [...defaultPacks];
+                                            packingTypes.forEach(pack => {
+                                                if (!merged.some(d => d.value.toLowerCase() === pack.value.toLowerCase())) {
+                                                    merged.push(pack);
+                                                }
+                                            });
+                                            const filtered = merged.filter(v => !packSearch || v.value.toLowerCase().includes(packSearch.toLowerCase()));
+                                            return (
+                                                <div className="absolute z-[60] w-full mt-1 bg-white border border-gray-100 rounded-xl shadow-xl max-h-48 overflow-y-auto">
+                                                    {filtered.map((v, idx) => {
+                                                        const selectedParts = (formData.packingType || '').split(',').map(p => p.trim()).filter(Boolean);
+                                                        const isSelected = selectedParts.some(p => p.toLowerCase() === v.value.toLowerCase());
+                                                        return (
+                                                            <div key={v._id} className="flex items-center group">
+                                                                <button
+                                                                    key={v._id}
+                                                                    type="button"
+                                                                    onMouseDown={() => handleDropdownSelect('packingType', v.value)}
+                                                                    onMouseEnter={() => setHighlightedIndex(idx)}
+                                                                    className={`flex-1 px-4 py-2 text-left text-sm flex items-center justify-between ${highlightedIndex === idx || isSelected ? 'bg-blue-50 text-blue-700 font-bold' : 'text-gray-700 hover:bg-blue-50'}`}
+                                                                >
+                                                                    <span>{v.value}</span>
+                                                                    {isSelected && <span className="text-blue-600 font-bold">✓</span>}
+                                                                </button>
+                                                                {!v.isDefault && (
+                                                                    <button
+                                                                        type="button"
+                                                                        onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); handleDeleteQuickMetaData('packingType', v._id); }}
+                                                                        className="p-2 text-gray-400 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"
+                                                                        title="Delete this packing type"
+                                                                    >
+                                                                        <TrashIcon className="w-3.5 h-3.5" />
+                                                                    </button>
+                                                                )}
+                                                            </div>
+                                                        );
+                                                    })}
+                                                </div>
+                                            );
+                                        })()}
+                                    </div>
+                                </div>
+                            );
+                        })()}
+
                         <div className="space-y-2 relative dropdown-container" ref={invoiceStyleRef}>
                             <label className="text-sm font-medium text-gray-700 font-bold text-blue-700">Invoice Style</label>
                             <div className="relative">
@@ -2862,6 +3001,72 @@ function PI({
                                             </div>
                                         </div>
                                     </div>
+
+                                    {/* Conditional Packing Type Field for Revise Form */}
+                                    {(() => {
+                                        const isPackingSelected = (reviseFormData.certification || '').split(',').map(s => s.trim().toLowerCase()).includes('packing');
+                                        if (!isPackingSelected) return null;
+                                        return (
+                                            <div className="mt-4 space-y-1.5 relative dropdown-container">
+                                                <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Packing Type</label>
+                                                <div className="relative">
+                                                    <input
+                                                        type="text"
+                                                        value={reviseFormData.packingType || ''}
+                                                        onChange={(e) => {
+                                                            const val = e.target.value;
+                                                            setReviseFormData(prev => ({ ...prev, packingType: val }));
+                                                            setActiveDropdown('revisePackingType');
+                                                            setHighlightedIndex(-1);
+                                                            const lastPart = val.split(',').pop().trim();
+                                                            setPackSearch(lastPart);
+                                                        }}
+                                                        onFocus={() => {
+                                                            setActiveDropdown('revisePackingType');
+                                                            setHighlightedIndex(-1);
+                                                        }}
+                                                        placeholder="e.g. Export Standard P.P Bags"
+                                                        className="w-full px-4 py-2.5 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all font-medium text-sm pr-10"
+                                                        autoComplete="off"
+                                                    />
+                                                    {activeDropdown === 'revisePackingType' && (() => {
+                                                        const defaultPacks = [
+                                                            { _id: 'default-ppbags', value: 'Export Standard P.P Bags', isDefault: true },
+                                                            { _id: 'default-gunnybags', value: 'Gunny Bags', isDefault: true },
+                                                            { _id: 'default-jutebags', value: 'Jute Bags', isDefault: true }
+                                                        ];
+                                                        const merged = [...defaultPacks];
+                                                        packingTypes.forEach(pack => {
+                                                            if (!merged.some(d => d.value.toLowerCase() === pack.value.toLowerCase())) {
+                                                                merged.push(pack);
+                                                            }
+                                                        });
+                                                        const filtered = merged.filter(v => !packSearch || v.value.toLowerCase().includes(packSearch.toLowerCase()));
+                                                        return (
+                                                            <div className="absolute z-[60] w-full mt-1 bg-white border border-gray-100 rounded-xl shadow-xl max-h-48 overflow-y-auto">
+                                                                {filtered.map((v, idx) => {
+                                                                    const selectedParts = (reviseFormData.packingType || '').split(',').map(p => p.trim()).filter(Boolean);
+                                                                    const isSelected = selectedParts.some(p => p.toLowerCase() === v.value.toLowerCase());
+                                                                    return (
+                                                                        <button
+                                                                            key={v._id}
+                                                                            type="button"
+                                                                            onMouseDown={() => handleReviseDropdownSelect('packingType', v.value)}
+                                                                            onMouseEnter={() => setHighlightedIndex(idx)}
+                                                                            className={`w-full px-4 py-2 text-left text-sm flex items-center justify-between ${highlightedIndex === idx || isSelected ? 'bg-blue-50 text-blue-700 font-bold' : 'text-gray-700 hover:bg-blue-50'}`}
+                                                                        >
+                                                                            <span>{v.value}</span>
+                                                                            {isSelected && <span className="text-blue-600 font-bold">✓</span>}
+                                                                        </button>
+                                                                    );
+                                                                })}
+                                                            </div>
+                                                        );
+                                                    })()}
+                                                </div>
+                                            </div>
+                                        );
+                                    })()}
 
                                     {/* IP rows - one per IP number */}
                                     {selectedPiReviseIpInfo.length > 0 ? (
@@ -3510,6 +3715,19 @@ function PI({
                                                                     : <span className="font-bold text-gray-800 block text-sm">N/A</span>
                                                                 }
                                                             </div>
+                                                         {activeRevision.certification && activeRevision.certification.split(',').map(s => s.trim().toLowerCase()).includes('packing') && (
+                                                             <div className="mt-3">
+                                                                 <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block mb-1">Packing Type</span>
+                                                                 <div className="space-y-1">
+                                                                     {activeRevision.packingType
+                                                                         ? activeRevision.packingType.split(',').map((pack, pIdx) => (
+                                                                             <span key={pIdx} className="font-bold text-gray-800 block text-sm">{pack.trim()}</span>
+                                                                         ))
+                                                                         : <span className="font-bold text-gray-800 block text-sm">N/A</span>
+                                                                     }
+                                                                 </div>
+                                                             </div>
+                                                         )}
                                                         </div>
                                                     </div>
                                                 </div>
@@ -3665,6 +3883,7 @@ function PI({
                                                                         portOfLoading: activeRevision.portOfLoading && activeRevision.portOfLoading !== 'N/A (Historical)' ? activeRevision.portOfLoading : '',
                                                                         portOfDischarge: activeRevision.portOfDischarge && activeRevision.portOfDischarge !== 'N/A (Historical)' ? activeRevision.portOfDischarge : '',
                                                                         certification: activeRevision.certification && activeRevision.certification !== 'N/A (Historical)' ? activeRevision.certification : '',
+                                                                        packingType: activeRevision.packingType && activeRevision.packingType !== 'N/A (Historical)' ? activeRevision.packingType : '',
                                                                         productsList: activeRevision.productsList || [],
                                                                         grandTotal: activeRevision.grandTotal !== 'N/A' ? activeRevision.grandTotal : 0,
                                                                         grandTotalQuantity: activeRevision.grandTotalQuantity !== 'N/A' ? activeRevision.grandTotalQuantity : 0,
