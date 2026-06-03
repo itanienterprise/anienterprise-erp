@@ -905,27 +905,32 @@ const getPiIpNumbers = (pi) => {
     return [];
 };
 
-const getLCHistoryTimeline = (lc) => {
+export const getLCHistoryTimeline = (lc) => {
     if (!lc) return [];
-    const timeline = [];
-    const amendments = lc.amendments || [];
 
-    // Check if "Original LC" already exists in the amendments list
+    const getMilestoneTotalQty = (mil) => {
+        if (!mil) return 0;
+        if (mil.productsList && mil.productsList.length > 0) {
+            return mil.productsList.reduce((sum, p) => sum + (parseFloat(p.quantity) || 0), 0);
+        }
+        return parseFloat(mil.quantity || 0);
+    };
+
+    const amendments = lc.amendments || [];
     const hasOriginal = amendments.some(a => a.amendmentNo === 'Original LC');
 
+    let baseTimeline = [];
+
     if (hasOriginal) {
-        return amendments.map(amnd => ({
+        baseTimeline = amendments.map(amnd => ({
             ...amnd,
             isOriginal: amnd.amendmentNo === 'Original LC'
         }));
-    }
-
-    // If no amendments exist, just return a synthesized timeline containing the current LC
-    if (amendments.length === 0) {
+    } else if (amendments.length === 0) {
         const totalQty = lc.productsList && lc.productsList.length > 0
             ? lc.productsList.reduce((sum, p) => sum + (parseFloat(p.quantity) || 0), 0)
             : lc.quantity;
-        return [{
+        baseTimeline = [{
             amendmentNo: 'Original LC',
             amendmentDate: lc.openingDate,
             expiryDate: lc.expiryDate,
@@ -943,42 +948,102 @@ const getLCHistoryTimeline = (lc) => {
             remarks: 'Original LC Details',
             isOriginal: true
         }];
+    } else {
+        const origQty = amendments[0]?.productsList && amendments[0].productsList.length > 0
+            ? amendments[0].productsList.reduce((sum, p) => sum + (parseFloat(p.quantity) || 0), 0)
+            : (lc.productsList && lc.productsList.length > 0
+                ? lc.productsList.reduce((sum, p) => sum + (parseFloat(p.quantity) || 0), 0)
+                : (amendments[0]?.quantity || lc.quantity));
+
+        baseTimeline.push({
+            amendmentNo: 'Original LC',
+            amendmentDate: lc.openingDate,
+            expiryDate: lc.openingDate, // Fallback
+            quantity: origQty,
+            rate: amendments[0]?.rate || lc.rate,
+            dollarRate: amendments[0]?.dollarRate || lc.dollarRate,
+            totalDollar: amendments[0]?.totalDollar || lc.totalDollar,
+            totalAmount: amendments[0]?.totalAmount || lc.totalAmount,
+            netPremium: lc.netPremium,
+            expectedReturnAmount: lc.expectedReturnAmount,
+            grossPremium: lc.grossPremium,
+            piNo: lc.piNo || '',
+            port: lc.port || '',
+            latestShipmentDate: lc.latestShipmentDate || '',
+            remarks: 'Original LC Details (Estimated)',
+            isOriginal: true
+        });
+
+        amendments.forEach(amnd => {
+            baseTimeline.push({
+                ...amnd,
+                isOriginal: false
+            });
+        });
     }
 
-    // Synthesize "Original LC" for old records
-    const origQty = amendments[0]?.productsList && amendments[0].productsList.length > 0
-        ? amendments[0].productsList.reduce((sum, p) => sum + (parseFloat(p.quantity) || 0), 0)
-        : (lc.productsList && lc.productsList.length > 0
-            ? lc.productsList.reduce((sum, p) => sum + (parseFloat(p.quantity) || 0), 0)
-            : (amendments[0]?.quantity || lc.quantity));
+    // Now enrich baseTimeline with calculated premiums
+    return baseTimeline.map((item, idx) => {
+        let netPremium = item.netPremium;
+        let expectedReturnAmount = item.expectedReturnAmount;
+        let grossPremium = item.grossPremium;
 
-    timeline.push({
-        amendmentNo: 'Original LC',
-        amendmentDate: lc.openingDate,
-        expiryDate: lc.openingDate, // Fallback
-        quantity: origQty,
-        rate: amendments[0]?.rate || lc.rate,
-        dollarRate: amendments[0]?.dollarRate || lc.dollarRate,
-        totalDollar: amendments[0]?.totalDollar || lc.totalDollar,
-        totalAmount: amendments[0]?.totalAmount || lc.totalAmount,
-        netPremium: lc.netPremium,
-        expectedReturnAmount: lc.expectedReturnAmount,
-        grossPremium: lc.grossPremium,
-        piNo: lc.piNo || '',
-        port: lc.port || '',
-        latestShipmentDate: lc.latestShipmentDate || '',
-        remarks: 'Original LC Details (Estimated)',
-        isOriginal: true
+        if (lc.insuranceCo) {
+            let baseAmount = 0;
+            if (item.isOriginal) {
+                baseAmount = parseFloat(item.totalAmount) || 0;
+            } else {
+                const prevMilestone = idx > 0 ? baseTimeline[idx - 1] : null;
+                const activeQty = getMilestoneTotalQty(item);
+                const prevQty = prevMilestone ? getMilestoneTotalQty(prevMilestone) : 0;
+                const diffQty = activeQty - prevQty;
+
+                const rVal = parseFloat(item.rate || 0);
+                const ratePerTon = rVal < 10 ? rVal * 1000 : rVal;
+
+                const activeProducts = item.productsList?.length > 0
+                    ? item.productsList
+                    : (lc.productsList?.length > 0 ? lc.productsList : []);
+                const fVal = parseFloat(activeProducts[0]?.freight || lc.freight || 0);
+                const freightPerTon = fVal < 0.1 ? fVal * 1000 : fVal;
+
+                const dollarRate = parseFloat(item.dollarRate || lc.dollarRate || 0);
+                const diffDollar = diffQty * (ratePerTon + freightPerTon);
+                const diffAmount = diffDollar * dollarRate;
+                baseAmount = Math.abs(diffAmount);
+            }
+
+            if (baseAmount > 0) {
+                const prem = parseFloat(lc.premium) || 0;
+                const exPct = parseFloat(lc.extraPercent) || 0;
+                const premRet = parseFloat(lc.premiumReturn) || 0;
+                const pVat = parseFloat(lc.premiumVat) || 15;
+                const stamp = parseFloat(lc.stampCharge) || 0;
+
+                const baseNetPrem = (baseAmount * (prem / 100)) / 100;
+                const netP = baseNetPrem + (baseNetPrem * (exPct / 100));
+                netPremium = netP > 0 ? netP.toFixed(2) : '0';
+
+                const expRet = netP * (premRet / 100);
+                expectedReturnAmount = expRet > 0 ? expRet.toFixed(2) : '0';
+
+                const vatAmount = netP * (pVat / 100);
+                const gPrem = netP + vatAmount + stamp;
+                grossPremium = gPrem > 0 ? gPrem.toFixed(2) : '0';
+            }
+        } else {
+            netPremium = '0';
+            expectedReturnAmount = '0';
+            grossPremium = '0';
+        }
+
+        return {
+            ...item,
+            netPremium: netPremium || item.netPremium || '0',
+            expectedReturnAmount: expectedReturnAmount || item.expectedReturnAmount || '0',
+            grossPremium: grossPremium || item.grossPremium || '0'
+        };
     });
-
-    amendments.forEach(amnd => {
-        timeline.push({
-            ...amnd,
-            isOriginal: false
-        });
-    });
-
-    return timeline;
 };
 
 const getRemIpQtyTon = (ipNo, ipRecordsRaw, lcRecords, editingId) => {
@@ -1870,29 +1935,10 @@ const LCManagement = ({ addNotification, currentUser }) => {
             const totalDollar = qty * targetRateScaled;
             const totalAmount = totalDollar * dRate;
 
-            // Recalculate insurance based on the new total amount if there is an insurance company
+            // Initialize overall LC insurance values (will be recalculated at the end)
             let netPremium = lc.netPremium;
             let expectedReturnAmount = lc.expectedReturnAmount;
             let grossPremium = lc.grossPremium;
-
-            if (lc.insuranceCo) {
-                const prem = parseFloat(lc.premium) || 0;
-                const exPct = parseFloat(lc.extraPercent) || 0;
-                const premRet = parseFloat(lc.premiumReturn) || 0;
-                const pVat = parseFloat(lc.premiumVat) || 15;
-                const stamp = parseFloat(lc.stampCharge) || 0;
-
-                const baseNetPrem = (totalAmount * (prem / 100)) / 100;
-                const netP = baseNetPrem + (baseNetPrem * (exPct / 100));
-                netPremium = netP > 0 ? netP.toFixed(2) : '';
-
-                const expRet = netP * (premRet / 100);
-                expectedReturnAmount = expRet > 0 ? expRet.toFixed(2) : '';
-
-                const vatAmount = netP * (pVat / 100);
-                const gPrem = netP + vatAmount + stamp;
-                grossPremium = gPrem > 0 ? gPrem.toFixed(2) : '';
-            }
 
             // Create amendment log entry
             // Let's build the updated products list for the LC record
@@ -1969,8 +2015,64 @@ const LCManagement = ({ addNotification, currentUser }) => {
             const updatedProductName = firstProduct ? firstProduct.productName : (lc.productName || '');
             const updatedHsCode = firstProduct ? firstProduct.hsCode : (lc.hsCode || '');
 
-            // Create or update amendment log entry
+            // Recalculate insurance based on the amendment value (difference) if there is an insurance company
+            let amndNetPremium = '0';
+            let amndExpectedReturnAmount = '0';
+            let amndGrossPremium = '0';
+
+            const getMilestoneTotalQty = (mil) => {
+                if (!mil) return 0;
+                if (mil.productsList && mil.productsList.length > 0) {
+                    return mil.productsList.reduce((sum, p) => sum + (parseFloat(p.quantity) || 0), 0);
+                }
+                return parseFloat(mil.quantity || 0);
+            };
+
             const currentAmendments = [...(lc.amendments || [])];
+            const prevQty = editingAmendmentNo
+                ? (() => {
+                    const idx = currentAmendments.findIndex(a => a.amendmentNo === editingAmendmentNo);
+                    return idx > 0 ? getMilestoneTotalQty(currentAmendments[idx - 1]) : getMilestoneTotalQty(lc);
+                  })()
+                : (currentAmendments.length > 0 ? getMilestoneTotalQty(currentAmendments[currentAmendments.length - 1]) : getMilestoneTotalQty(lc));
+
+            const fVal = parseFloat(updatedProductsList[0]?.freight || lc.freight || 0);
+            const freightPerTon = fVal < 0.1 ? fVal * 1000 : fVal;
+
+            const diffQty = qty - prevQty;
+            const diffDollar = diffQty * (targetRateScaled + freightPerTon);
+            const diffAmount = diffDollar * dRate;
+            const baseAmount = Math.abs(diffAmount);
+
+            if (editingAmendmentNo) {
+                const existingAmnd = currentAmendments.find(a => a.amendmentNo === editingAmendmentNo);
+                if (existingAmnd) {
+                    amndNetPremium = existingAmnd.netPremium || '0';
+                    amndExpectedReturnAmount = existingAmnd.expectedReturnAmount || '0';
+                    amndGrossPremium = existingAmnd.grossPremium || '0';
+                }
+            }
+
+            if (lc.insuranceCo && baseAmount > 0) {
+                const prem = parseFloat(lc.premium) || 0;
+                const exPct = parseFloat(lc.extraPercent) || 0;
+                const premRet = parseFloat(lc.premiumReturn) || 0;
+                const pVat = parseFloat(lc.premiumVat) || 15;
+                const stamp = parseFloat(lc.stampCharge) || 0;
+
+                const baseNetPrem = (baseAmount * (prem / 100)) / 100;
+                const netP = baseNetPrem + (baseNetPrem * (exPct / 100));
+                amndNetPremium = netP > 0 ? netP.toFixed(2) : '0';
+
+                const expRet = netP * (premRet / 100);
+                amndExpectedReturnAmount = expRet > 0 ? expRet.toFixed(2) : '0';
+
+                const vatAmount = netP * (pVat / 100);
+                const gPrem = netP + vatAmount + stamp;
+                amndGrossPremium = gPrem > 0 ? gPrem.toFixed(2) : '0';
+            }
+
+            // Create or update amendment log entry
             const finalSavedRate = targetRateScaled > 0 ? String(targetRateScaled) : amendmentFormData.rate;
             
             if (editingAmendmentNo) {
@@ -1987,6 +2089,9 @@ const LCManagement = ({ addNotification, currentUser }) => {
                         dollarRate: amendmentFormData.dollarRate,
                         totalDollar: totalDollar > 0 ? totalDollar.toFixed(2) : '',
                         totalAmount: totalAmount > 0 ? totalAmount.toFixed(2) : '',
+                        netPremium: amndNetPremium,
+                        expectedReturnAmount: amndExpectedReturnAmount,
+                        grossPremium: amndGrossPremium,
                         addnNo: amendmentFormData.addnNo || '',
                         addnDate: amendmentFormData.addnDate || '',
                         port: amendmentFormData.port || '',
@@ -2007,6 +2112,9 @@ const LCManagement = ({ addNotification, currentUser }) => {
                     dollarRate: amendmentFormData.dollarRate,
                     totalDollar: totalDollar > 0 ? totalDollar.toFixed(2) : '',
                     totalAmount: totalAmount > 0 ? totalAmount.toFixed(2) : '',
+                    netPremium: amndNetPremium,
+                    expectedReturnAmount: amndExpectedReturnAmount,
+                    grossPremium: amndGrossPremium,
                     addnNo: amendmentFormData.addnNo || '',
                     addnDate: amendmentFormData.addnDate || '',
                     port: amendmentFormData.port || '',
