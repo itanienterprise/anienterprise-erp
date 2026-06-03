@@ -3,6 +3,7 @@ import { SearchIcon, PlusIcon, EditIcon, TrashIcon, ShieldIcon, XIcon, ChevronDo
 import { API_BASE_URL, formatDate } from '../../../utils/helpers';
 import axios from '../../../utils/api';
 import CustomDatePicker from '../../shared/CustomDatePicker';
+import { getLCHistoryTimeline } from '../LCManagement/LCManagement';
 
 const Insurance = ({ onDeleteConfirm }) => {
     const [insuranceRecords, setInsuranceRecords] = useState([]);
@@ -181,9 +182,29 @@ const Insurance = ({ onDeleteConfirm }) => {
             if (!totals[co]) {
                 totals[co] = { totalPremium: 0, returnAmount: 0, lcs: [] };
             }
-            totals[co].totalPremium += parseFloat(lc.grossPremium || 0);
-            totals[co].returnAmount += parseFloat(lc.expectedReturnAmount || 0);
-            totals[co].lcs.push(lc);
+
+            const timeline = getLCHistoryTimeline(lc);
+            timeline.forEach(milestone => {
+                const milestoneNetPremium = parseFloat(milestone.netPremium || 0);
+                const milestoneGrossPremium = parseFloat(milestone.grossPremium || 0);
+                const milestoneExpectedReturn = parseFloat(milestone.expectedReturnAmount || 0);
+
+                // Add to totals
+                totals[co].totalPremium += milestoneGrossPremium;
+                totals[co].returnAmount += milestoneExpectedReturn;
+
+                // Push onto the lcs array
+                totals[co].lcs.push({
+                    ...lc,
+                    openingDate: milestone.isOriginal ? lc.openingDate : milestone.amendmentDate,
+                    lcNo: milestone.isOriginal ? lc.lcNo : `${lc.lcNo} (${milestone.amendmentNo})`,
+                    grossPremium: milestoneGrossPremium,
+                    netPremium: milestoneNetPremium,
+                    expectedReturnAmount: milestoneExpectedReturn,
+                    isOriginal: milestone.isOriginal,
+                    amendmentNo: milestone.amendmentNo
+                });
+            });
         });
         return totals;
     }, [lcRecords]);
