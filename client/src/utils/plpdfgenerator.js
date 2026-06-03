@@ -437,6 +437,7 @@ export const generatePLPDF = async (record, piRecords = [], lcRecords = [], impo
                 y = data.cursor.y;
             }
         });
+        y = doc.lastAutoTable.finalY;
 
         y += 6;
     } // end else (no productsImage)
@@ -512,7 +513,9 @@ export const generatePLPDF = async (record, piRecords = [], lcRecords = [], impo
         const piProd = pi?.productsList?.find(p => (p.productName || '').trim().toLowerCase() === (prod.productName || '').trim().toLowerCase()) || pi?.productsList?.[idx];
         return {
             ...prod,
-            hsCodeInd: prod.hsCodeInd || piProd?.hsCodeInd || pi?.hsCodeInd || ''
+            hsCodeInd: prod.hsCodeInd || piProd?.hsCodeInd || pi?.hsCodeInd || '',
+            freight: prod.freight || piProd?.freight || '',
+            totalFreight: prod.totalFreight || piProd?.totalFreight || ''
         };
     });
 
@@ -522,9 +525,36 @@ export const generatePLPDF = async (record, piRecords = [], lcRecords = [], impo
     const trIrc = importer?.irc || '';
     const trTin = importer?.tin || '';
     const trBin = importer?.bin || '';
-    const trPiNo = isPiRevised ? cleanPiNumber : (pi?.piNumber || record.piNumber || '');
-    const trPiDate = isPiRevised ? formatDate(pi?.date || '') : (pi?.date ? formatDate(pi.date) : (record.piDate ? formatDate(record.piDate) : ''));
-    const trCoverNote = lc?.marineCoverNote || '';
+    const trPiNo = isPiRevised ? (record.piNumber || '') : (pi?.piNumber || record.piNumber || '');
+    const trPiDate = isPiRevised ? formatDate(record.piDate) : (pi?.date ? formatDate(pi.date) : (record.piDate ? formatDate(record.piDate) : ''));
+    
+    const cnDateStr = lc?.marineCNDate ? formatDate(lc.marineCNDate) : '';
+    let trCoverNote = lc?.marineCoverNote || '';
+    if (trCoverNote && cnDateStr) {
+        trCoverNote = `${trCoverNote} DATED.${cnDateStr}`;
+    }
+    
+    let trAmendmentLine = '';
+    if (record.lcAmendment) {
+        if (lc?.amendments?.length > 0) {
+            const matchedAmnd = lc.amendments[lc.amendments.length - 1];
+            if (matchedAmnd && matchedAmnd.addnNo) {
+                const dateMatch = record.lcAmendment.match(/DATE:\s*([^\s]+)/i);
+                const amndDate = dateMatch ? dateMatch[1] : '';
+                trCoverNote += ` & ADDN NO: ${matchedAmnd.addnNo}${amndDate ? ` DATE: ${amndDate}` : ''}`;
+            }
+        }
+        
+        const amndNoMatch = record.lcAmendment.match(/AMENDMENT\s*NO-?\s*([^\s]+)/i);
+        const amndDateMatch = record.lcAmendment.match(/DATE:\s*([^\s]+)/i);
+        const amndNo = amndNoMatch ? amndNoMatch[1] : '';
+        const amndDate = amndDateMatch ? amndDateMatch[1] : '';
+        if (amndNo) {
+            trAmendmentLine = `AMENDMENT NO - ${amndNo}${amndDate ? ` DATE: ${amndDate}` : ''}`;
+        } else {
+            trAmendmentLine = record.lcAmendment;
+        }
+    }
 
     let computedGrandTotal = 0;
     (record.productsList || []).forEach(prod => {
@@ -535,7 +565,7 @@ export const generatePLPDF = async (record, piRecords = [], lcRecords = [], impo
         computedGrandTotal += amt + frt;
     });
 
-    const trPiGrandTotal = pi?.grandTotal || (computedGrandTotal > 0 ? computedGrandTotal : '') || record.totalAmount || record.grandTotal || '';
+    const trPiGrandTotal = (computedGrandTotal > 0 ? computedGrandTotal : '') || pi?.grandTotal || record.totalAmount || record.grandTotal || '';
 
     await appendTrTemplatePage(doc, {
         ...record,
@@ -551,7 +581,9 @@ export const generatePLPDF = async (record, piRecords = [], lcRecords = [], impo
         piNo: trPiNo,
         piDate: trPiDate,
         coverNote: trCoverNote,
-        piGrandTotal: trPiGrandTotal
+        amendmentLine: trAmendmentLine,
+        piGrandTotal: trPiGrandTotal,
+        packingType: record.packingType || pi?.packingType || ''
     }, trSetups);
 
     // Save/Download PDF

@@ -488,6 +488,8 @@ const SaleManagement = ({
     const [formData, setFormData] = useState({
         date: '',
         invoiceNo: '',
+        challanNo: '',
+        truckNo: '',
         customerId: '',
         companyName: '',
         customerName: '',
@@ -1319,6 +1321,8 @@ const SaleManagement = ({
         setFormData({
             date: '',
             invoiceNo: '',
+            challanNo: '',
+            truckNo: '',
             customerId: '',
             companyName: '',
             customerName: '',
@@ -2646,7 +2650,7 @@ const SaleManagement = ({
                         autoComplete="off"
                         className="grid grid-cols-1 md:grid-cols-2 gap-6 relative z-10"
                     >
-                        <div className={`grid grid-cols-1 ${saleType === 'Border' ? 'md:grid-cols-5' : 'md:grid-cols-6'} gap-4 col-span-2`}>
+                        <div className={`grid grid-cols-1 ${saleType === 'Border' ? 'md:grid-cols-5' : 'md:grid-cols-7'} gap-4 col-span-2`}>
                             <CustomDatePicker
                                 label="Date"
                                 name="date"
@@ -2655,7 +2659,37 @@ const SaleManagement = ({
                                 compact={true}
                                 readOnly={isFieldReadOnly(originalData?.date)}
                             />
-                            <div className="sale-mgmt-input-group">
+
+                            {saleType !== 'Border' && (
+                                <>
+                                    <div className="sale-mgmt-input-group">
+                                        <label className="sale-mgmt-label">Challan- No</label>
+                                        <input
+                                            autoComplete="off"
+                                            type="text"
+                                            name="challanNo"
+                                            value={formData.challanNo || ''}
+                                            onChange={handleInputChange}
+                                            placeholder="Challan No"
+                                            className="sale-mgmt-input"
+                                        />
+                                    </div>
+                                    <div className="sale-mgmt-input-group">
+                                        <label className="sale-mgmt-label">Truck No</label>
+                                        <input
+                                            autoComplete="off"
+                                            type="text"
+                                            name="truckNo"
+                                            value={formData.truckNo || ''}
+                                            onChange={handleInputChange}
+                                            placeholder="Truck No"
+                                            className="sale-mgmt-input"
+                                        />
+                                    </div>
+                                </>
+                            )}
+
+                            <div className="sale-mgmt-input-group" style={{ display: 'none' }}>
                                 <label className="sale-mgmt-label">Invoice No</label>
                                 <input autoComplete="off" type="text" name="invoiceNo" value={formData.invoiceNo} readOnly placeholder="Auto-generated" className="sale-mgmt-input sale-mgmt-input-readonly cursor-default" />
                             </div>
@@ -3799,11 +3833,14 @@ const SaleManagement = ({
                                         </th>
                                         <th className="sale-mgmt-th">Product</th>
                                         <th className="sale-mgmt-th">Brand</th>
+                                        <th className="sale-mgmt-th cursor-pointer group" onClick={() => handleSort('challanNo')}>
+                                            <div className="flex items-center">Challan No {renderSortIcon('challanNo')}</div>
+                                        </th>
+                                        <th className="sale-mgmt-th cursor-pointer group w-[100px] max-w-[100px] whitespace-normal" onClick={() => handleSort('truckNo')}>
+                                            <div className="flex items-center">Truck No {renderSortIcon('truckNo')}</div>
+                                        </th>
                                         <th className="sale-mgmt-th text-center font-bold">Quantity</th>
                                         <th className="sale-mgmt-th text-center font-bold">Rate</th>
-                                        <th className="sale-mgmt-th text-center cursor-pointer group" onClick={() => handleSort('discount')}>
-                                            <div className="flex items-center justify-center">Discount {renderSortIcon('discount')}</div>
-                                        </th>
                                         <th className="sale-mgmt-th text-center cursor-pointer group" onClick={() => handleSort('totalAmount')}>
                                             <div className="flex items-center justify-center">Total {renderSortIcon('totalAmount')}</div>
                                         </th>
@@ -3819,9 +3856,9 @@ const SaleManagement = ({
                             </thead>
                             <tbody className="divide-y divide-gray-50">
                                 {isLoading ? (
-                                    <tr><td colSpan={saleType === 'Border' ? "15" : "12"} className="px-3 py-20 text-center text-gray-400 font-medium">Loading sales records...</td></tr>
+                                    <tr><td colSpan={saleType === 'Border' ? "15" : "14"} className="px-3 py-20 text-center text-gray-400 font-medium">Loading sales records...</td></tr>
                                 ) : getFilteredData().length === 0 ? (
-                                    <tr><td colSpan={saleType === 'Border' ? "15" : "12"} className="px-3 py-20 text-center text-gray-400 font-medium">No sales records found</td></tr>
+                                    <tr><td colSpan={saleType === 'Border' ? "15" : "14"} className="px-3 py-20 text-center text-gray-400 font-medium">No sales records found</td></tr>
                                 ) : getFilteredData().map((sale, index) => {
                                     const isExpanded = expandedRows.includes(sale._id);
                                     const isMultiple = (sale.items && sale.items.length > 0)
@@ -3985,6 +4022,12 @@ const SaleManagement = ({
                                                     </div>
                                                 )}
                                             </td>
+                                            <td className="px-3 py-4 whitespace-nowrap">
+                                                <div className="text-[13px] font-semibold text-gray-800">{sale.challanNo || '-'}</div>
+                                            </td>
+                                            <td className="px-3 py-4 whitespace-normal break-words w-[100px] max-w-[100px]">
+                                                <div className="text-[13px] font-semibold text-gray-800">{sale.truckNo || '-'}</div>
+                                            </td>
                                             <td className="px-3 py-4 whitespace-nowrap text-center">
                                                 {isMultiple && !isExpanded ? (
                                                     <div className="inline-block px-3 py-1 bg-blue-50 text-blue-700 rounded-lg border border-blue-100/50 text-[13px] font-black">
@@ -4012,11 +4055,6 @@ const SaleManagement = ({
                                                         ))}
                                                     </div>
                                                 )}
-                                            </td>
-                                            <td className="px-3 py-4 whitespace-nowrap text-center">
-                                                <div className="text-[13px] font-bold text-red-600">
-                                                    {parseFloat(sale.discount || 0) > 0 ? `-৳ ${parseFloat(sale.discount).toLocaleString('en-IN')}` : '-'}
-                                                </div>
                                             </td>
                                             <td className="px-3 py-4 whitespace-nowrap text-center">
                                                 <div className="text-[13px] font-black text-gray-900">

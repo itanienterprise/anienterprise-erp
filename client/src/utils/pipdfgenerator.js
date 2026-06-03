@@ -224,6 +224,16 @@ export const generatePIPDF = (record) => {
         termsText = termsText.split('\n')
             .filter(line => !line.trim().toLowerCase().startsWith('packing:'))
             .join('\n');
+    } else if (record.packingType) {
+        const formattedPacking = record.packingType.split(',').map(s => s.trim()).join(' / ');
+        termsText = termsText.split('\n')
+            .map(line => {
+                if (line.trim().toLowerCase().startsWith('packing:')) {
+                    return `Packing: ${formattedPacking}`;
+                }
+                return line;
+            })
+            .join('\n');
     }
     const termsRefLinesInRow2 = doc.splitTextToSize(termsText, rightColWidth - 5);
     const termsHeight = termsRefLinesInRow2.length * 4;
@@ -398,7 +408,11 @@ export const generatePIPDF = (record) => {
     }
     extraDescParts.push(bankLine);
     if (showPacking) {
-        extraDescParts.push("EXPORT STANDARD PACKING");
+        if (record.packingType) {
+            extraDescParts.push(`EXPORT STANDARD PACKING: ${record.packingType.split(',').map(s => s.trim().toUpperCase()).join(' / ')}`);
+        } else {
+            extraDescParts.push("EXPORT STANDARD PACKING");
+        }
     }
     const extraDescText = (extraDescParts.join("\n") + "\n" + (record.descriptionGoods || defaultDescLines)).trim();
 
@@ -676,6 +690,7 @@ export const generatePIPDF = (record) => {
             y = data.cursor.y;
         }
     });
+    y = doc.lastAutoTable.finalY;
 
     // Total Row & Amount in Words (Same row)
     const totalY = y;

@@ -316,13 +316,8 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
             brandObj._damagesResolved = true;
         }
 
-        const arrivalQty = isWhFilter
-            ? safeParse(item.inHouseQuantity)
-            : (item.recordType === 'stock' ? safeParse(item.inHouseQuantity ?? item.whQty ?? item.quantity) : 0);
-
-        const arrivalPkt = isWhFilter
-            ? safeParse(item.inHousePacket)
-            : (item.recordType === 'stock' ? safeParse(item.inHousePacket ?? item.whPkt ?? item.packet) : 0);
+        const arrivalQty = safeParse(item.inHouseQuantity);
+        const arrivalPkt = safeParse(item.inHousePacket);
 
         if (isBefore) {
             brandObj.openingQuantity += arrivalQty;
@@ -464,7 +459,7 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
             const damageQty = b.damageQuantity || 0;
             const totalPkt = b.openingPacket + b.periodArrivalPacket;
 
-            const isGrossArrival = !isWhFilter;
+            const isGrossArrival = false;
             const openingAfterShortage = isGrossArrival ? (totalIn - shortageQty) : totalIn;
             const openingPktAfterShortage = isGrossArrival ? (totalPkt - b.sweepedPacket) : totalPkt;
             

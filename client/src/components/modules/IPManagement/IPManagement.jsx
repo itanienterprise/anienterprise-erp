@@ -12,19 +12,94 @@ import './IPManagement.css';
 const ViewIPLCsModal = ({ ipRecord, lcRecords, allStockRecords = [], allSalesRecords = [], onClose }) => {
     if (!ipRecord) return null;
 
-    const relatedLCs = lcRecords.filter(lc => lc.ipNo === ipRecord.ipNumber);
+    const cleanLc = (val) => String(val || '').replace(/\D/g, '');
 
     const parseNum = (val) => {
         if (val === null || val === undefined) return 0;
         return parseFloat(String(val).replace(/[^0-9.]/g, '')) || 0;
     };
 
-    const cleanLc = (val) => String(val || '').replace(/\D/g, '');
+    const getLcQtyForIpInKg = (lc, ip) => {
+        const targetProductName = (ip.productName || '').toLowerCase().trim();
+        if (Array.isArray(lc.productsList) && lc.productsList.length > 0) {
+            const matchedProducts = lc.productsList.filter(p => 
+                (p.productName || '').toLowerCase().trim() === targetProductName
+            );
+            if (matchedProducts.length > 0) {
+                return matchedProducts.reduce((sum, p) => sum + (parseNum(p.quantity) * 1000), 0);
+            }
+        }
+        if ((lc.productName || '').toLowerCase().trim() === targetProductName) {
+            return parseNum(lc.quantity) * 1000;
+        }
+        return 0;
+    };
+
+    const getLcStates = (lc) => {
+        if (!lc) return [];
+        const amendments = lc.amendments || [];
+        const hasOriginal = amendments.some(a => a.amendmentNo === 'Original LC');
+
+        if (hasOriginal) {
+            return amendments.map(amnd => ({
+                ...amnd,
+                isOriginal: amnd.amendmentNo === 'Original LC'
+            }));
+        }
+
+        if (amendments.length === 0) {
+            return [{
+                amendmentNo: 'Original LC',
+                amendmentDate: lc.openingDate,
+                expiryDate: lc.expiryDate,
+                quantity: lc.quantity,
+                rate: lc.rate,
+                dollarRate: lc.dollarRate,
+                totalDollar: lc.totalDollar,
+                totalAmount: lc.totalAmount,
+                remarks: 'Original LC Details',
+                productsList: lc.productsList || [],
+                isOriginal: true
+            }];
+        }
+
+        // Synthesize "Original LC" for older records that have amendments but lack 'Original LC'
+        const states = [{
+            amendmentNo: 'Original LC',
+            amendmentDate: lc.openingDate,
+            expiryDate: lc.expiryDate || lc.openingDate,
+            quantity: amendments[0]?.quantity || lc.quantity,
+            rate: amendments[0]?.rate || lc.rate,
+            dollarRate: amendments[0]?.dollarRate || lc.dollarRate,
+            totalDollar: amendments[0]?.totalDollar || lc.totalDollar,
+            totalAmount: amendments[0]?.totalAmount || lc.totalAmount,
+            remarks: 'Original LC Details',
+            productsList: amendments[0]?.productsList || lc.productsList || [],
+            isOriginal: true
+        }];
+
+        amendments.forEach(amnd => {
+            states.push({
+                ...amnd,
+                isOriginal: false
+            });
+        });
+
+        return states;
+    };
+
+    const ipNoClean = cleanLc(ipRecord.ipNumber);
+    const relatedLCs = lcRecords.filter(lc => {
+        const lcIps = Array.isArray(lc.ipNumbers) && lc.ipNumbers.length > 0
+            ? lc.ipNumbers.map(s => cleanLc(s)).filter(Boolean)
+            : (lc.ipNo || '').split(',').map(s => cleanLc(s.trim())).filter(Boolean);
+        return lcIps.includes(ipNoClean);
+    });
 
     // Compute remaining quantity for each LC (same logic as LCManagement table)
     const computeLcRemQty = (lc) => {
         const lcNoClean = cleanLc(lc.lcNo);
-        const qtyKg = parseNum(lc.quantity) * 1000;
+        const qtyKg = getLcQtyForIpInKg(lc, ipRecord);
 
         const receiptsMapForBalance = {};
         allStockRecords
@@ -74,14 +149,14 @@ const ViewIPLCsModal = ({ ipRecord, lcRecords, allStockRecords = [], allSalesRec
     };
 
     // Calculate total quantity used and remaining for this IP
-    const totalLcQtyKg = relatedLCs.reduce((sum, lc) => sum + (parseNum(lc.quantity) * 1000), 0);
+    const totalLcQtyKg = relatedLCs.reduce((sum, lc) => sum + getLcQtyForIpInKg(lc, ipRecord), 0);
     const ipQtyKg = parseNum(ipRecord.quantity);
     const ipRemQtyKg = ipQtyKg - totalLcQtyKg;
 
     return (
         <div className="fixed inset-0 z-[2000] flex items-center justify-center p-4">
             <div className="absolute inset-0 bg-gray-900/60 backdrop-blur-sm" onClick={onClose}></div>
-            <div className="relative bg-white border border-gray-100 rounded-3xl shadow-2xl w-full max-w-5xl animate-in zoom-in duration-300 flex flex-col max-h-[90vh] overflow-hidden">
+            <div className="relative bg-white border border-gray-100 rounded-3xl shadow-2xl w-full max-w-7xl animate-in zoom-in duration-300 flex flex-col max-h-[90vh] overflow-hidden">
                 {/* Header - Solid & Fixed at top */}
                 <div className="bg-white px-6 py-5 border-b border-gray-100 flex items-center justify-between z-20">
                     <div className="flex items-center gap-4">
@@ -163,50 +238,88 @@ const ViewIPLCsModal = ({ ipRecord, lcRecords, allStockRecords = [], allSalesRec
                             </thead>
                             <tbody className="divide-y divide-gray-50">
                                 {relatedLCs.length > 0 ? (
-                                    relatedLCs.map((lc, idx) => {
-                                        const lcQtyTon = parseNum(lc.quantity);
-                                        const lcQtyKg = lcQtyTon * 1000;
-                                        const lcRemQtyKg = computeLcRemQty(lc);
-                                        return (
-                                            <tr key={lc._id || idx} className="hover:bg-gray-50/50 transition-colors">
-                                                <td className="px-5 py-3.5 text-sm font-medium text-gray-600 whitespace-nowrap">{formatDate(lc.openingDate)}</td>
-                                                <td className="px-5 py-3.5 text-sm font-medium text-red-500 whitespace-nowrap">{formatDate(lc.expiryDate)}</td>
-                                                <td className="px-5 py-3.5 text-sm font-black text-blue-600 whitespace-nowrap">{lc.lcNo || '-'}</td>
-                                                <td className="px-5 py-3.5 text-sm font-medium text-gray-800 uppercase">{lc.bankName || '-'}</td>
-                                                <td className="px-5 py-3.5 text-sm font-medium text-right text-gray-900 whitespace-nowrap">
-                                                    {lcQtyKg.toLocaleString('en-US')} <span className="text-[10px] text-gray-400 font-normal uppercase">kg</span>
-                                                </td>
-                                                <td className="px-5 py-3.5 text-sm font-medium text-right whitespace-nowrap">
-                                                    <span className={`font-black ${lcRemQtyKg <= 0 ? 'text-emerald-600' : 'text-blue-600'}`}>{lcRemQtyKg.toLocaleString('en-US')}</span> <span className="text-[10px] text-gray-400 font-normal uppercase">kg</span>
-                                                </td>
-                                                <td className="px-5 py-3.5 text-center whitespace-nowrap">
-                                                    {(() => {
-                                                        const today = new Date();
-                                                        today.setHours(0, 0, 0, 0);
-                                                        const exp = new Date(lc.expiryDate);
-                                                        exp.setHours(0, 0, 0, 0);
-                                                        const diffDays = Math.ceil((exp - today) / (1000 * 60 * 60 * 24));
+                                    relatedLCs.flatMap((lc, lcIdx) => {
+                                        const states = getLcStates(lc);
+                                        const productRemQtyKg = computeLcRemQty(lc);
+                                        const latestQtyKg = getLcQtyForIpInKg(lc, ipRecord);
+                                        const productConsumptionKg = latestQtyKg - productRemQtyKg;
 
-                                                        let statusText = "Active";
-                                                        let statusClass = "bg-green-50 text-green-700 border-green-100";
+                                        return states.map((state, sIdx) => {
+                                            const stateQtyKg = getLcQtyForIpInKg(state, ipRecord);
+                                            const stateRemQtyKg = Math.max(0, stateQtyKg - productConsumptionKg);
+                                            const isLastState = sIdx === states.length - 1;
+                                            const isOriginalState = state.amendmentNo === 'Original LC';
+                                            
+                                            // Calculate diff for quantity
+                                            const prevQtyKg = sIdx > 0 ? getLcQtyForIpInKg(states[sIdx - 1], ipRecord) : 0;
+                                            const diffQtyKg = stateQtyKg - prevQtyKg;
 
-                                                        if (exp < today) {
-                                                            statusText = "Expired";
-                                                            statusClass = "bg-red-50 text-red-600 border-red-100";
-                                                        } else if (diffDays <= 5) {
-                                                            statusText = "Expire Soon";
-                                                            statusClass = "bg-amber-50 text-amber-600 border-amber-100";
-                                                        }
+                                            return (
+                                                <tr key={`${lc._id || lcIdx}_${sIdx}`} className={`${isLastState ? 'hover:bg-gray-50/50' : 'bg-gray-50/20 text-gray-500'} transition-colors`}>
+                                                    <td className="px-5 py-3.5 text-sm font-medium whitespace-nowrap">{formatDate(state.amendmentDate || state.openingDate || lc.openingDate)}</td>
+                                                    <td className={`px-5 py-3.5 text-sm font-medium whitespace-nowrap ${isLastState ? 'text-red-500' : 'text-red-400'}`}>{formatDate(state.expiryDate)}</td>
+                                                    <td className="px-5 py-3.5 text-sm whitespace-nowrap">
+                                                        <span className={`font-black ${isLastState ? 'text-blue-600' : 'text-blue-400'}`}>
+                                                            {lc.lcNo || '-'}
+                                                            {!isOriginalState && (
+                                                                <span className={`text-[11px] font-bold ml-1.5 ${isLastState ? 'text-amber-600' : 'text-amber-500/80'}`}>
+                                                                    ({state.amendmentNo})
+                                                                </span>
+                                                            )}
+                                                        </span>
+                                                    </td>
+                                                    <td className="px-5 py-3.5 text-sm font-medium uppercase">{lc.bankName || '-'}</td>
+                                                    <td className="px-5 py-3.5 text-sm font-medium text-right whitespace-nowrap">
+                                                         <span className={
+                                                             sIdx > 0
+                                                                 ? (diffQtyKg > 0 ? 'text-green-600 font-black' : diffQtyKg < 0 ? 'text-red-500 font-black' : 'text-gray-400')
+                                                                 : (isLastState ? 'text-gray-900 font-bold' : '')
+                                                         }>
+                                                             {sIdx > 0 && diffQtyKg > 0 ? '+' : ''}
+                                                             {(sIdx > 0 ? diffQtyKg : stateQtyKg).toLocaleString('en-US')} kg
+                                                         </span>
+                                                    </td>
+                                                    <td className="px-5 py-3.5 text-sm font-medium text-right whitespace-nowrap">
+                                                        <span className={`font-black ${isLastState ? (stateRemQtyKg <= 0 ? 'text-emerald-600' : 'text-blue-600') : 'text-gray-400'}`}>
+                                                            {stateRemQtyKg.toLocaleString('en-US')}
+                                                        </span> <span className="text-[10px] font-normal uppercase text-gray-400">kg</span>
+                                                    </td>
+                                                    <td className="px-5 py-3.5 text-center whitespace-nowrap">
+                                                        {(() => {
+                                                            if (!isLastState) {
+                                                                return (
+                                                                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider border bg-gray-50 text-gray-400 border-gray-100">
+                                                                        Amended
+                                                                    </span>
+                                                                );
+                                                            }
+                                                            const today = new Date();
+                                                            today.setHours(0, 0, 0, 0);
+                                                            const exp = new Date(state.expiryDate);
+                                                            exp.setHours(0, 0, 0, 0);
+                                                            const diffDays = Math.ceil((exp - today) / (1000 * 60 * 60 * 24));
 
-                                                        return (
-                                                            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider border ${statusClass}`}>
-                                                                {statusText}
-                                                            </span>
-                                                        );
-                                                    })()}
-                                                </td>
-                                            </tr>
-                                        );
+                                                            let statusText = "Active";
+                                                            let statusClass = "bg-green-50 text-green-700 border-green-100";
+
+                                                            if (exp < today) {
+                                                                statusText = "Expired";
+                                                                statusClass = "bg-red-50 text-red-600 border-red-100";
+                                                            } else if (diffDays <= 5) {
+                                                                statusText = "Expire Soon";
+                                                                statusClass = "bg-amber-50 text-amber-600 border-amber-100";
+                                                            }
+
+                                                            return (
+                                                                <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider border ${statusClass}`}>
+                                                                    {statusText}
+                                                                </span>
+                                                            );
+                                                        })()}
+                                                    </td>
+                                                </tr>
+                                            );
+                                        });
                                     })
                                 ) : (
                                     <tr>
@@ -220,70 +333,101 @@ const ViewIPLCsModal = ({ ipRecord, lcRecords, allStockRecords = [], allSalesRec
                     {/* Mobile Card List View */}
                     <div className="md:hidden space-y-4">
                         {relatedLCs.length > 0 ? (
-                            relatedLCs.map((lc, idx) => {
-                                const lcQtyKg = parseNum(lc.quantity) * 1000;
-                                const lcRemQtyKg = computeLcRemQty(lc);
+                            relatedLCs.flatMap((lc, lcIdx) => {
+                                const states = getLcStates(lc);
+                                const productRemQtyKg = computeLcRemQty(lc);
+                                const latestQtyKg = getLcQtyForIpInKg(lc, ipRecord);
+                                const productConsumptionKg = latestQtyKg - productRemQtyKg;
 
-                                const today = new Date();
-                                today.setHours(0, 0, 0, 0);
-                                const exp = new Date(lc.expiryDate);
-                                exp.setHours(0, 0, 0, 0);
-                                const diffDays = Math.ceil((exp - today) / (1000 * 60 * 60 * 24));
+                                return states.map((state, sIdx) => {
+                                    const stateQtyKg = getLcQtyForIpInKg(state, ipRecord);
+                                    const stateRemQtyKg = Math.max(0, stateQtyKg - productConsumptionKg);
+                                    const isLastState = sIdx === states.length - 1;
+                                    const isOriginalState = state.amendmentNo === 'Original LC';
+                                    
+                                    const prevQtyKg = sIdx > 0 ? getLcQtyForIpInKg(states[sIdx - 1], ipRecord) : 0;
+                                    const diffQtyKg = stateQtyKg - prevQtyKg;
 
-                                let statusText = "Active";
-                                let statusClass = "bg-green-50 text-green-700 border-green-100";
-                                if (exp < today) {
-                                    statusText = "Expired";
-                                    statusClass = "bg-red-50 text-red-600 border-red-100";
-                                } else if (diffDays <= 5) {
-                                    statusText = "Expire Soon";
-                                    statusClass = "bg-amber-50 text-amber-600 border-amber-100";
-                                }
+                                    const today = new Date();
+                                    today.setHours(0, 0, 0, 0);
+                                    const exp = new Date(state.expiryDate);
+                                    exp.setHours(0, 0, 0, 0);
+                                    const diffDays = Math.ceil((exp - today) / (1000 * 60 * 60 * 24));
 
-                                return (
-                                    <div key={lc._id || idx} className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm">
-                                        {/* Card Top: LC No & Status */}
-                                        <div className="flex justify-between items-center mb-3">
-                                            <div className="flex items-center min-w-0 flex-1">
-                                                <span className="w-[48px] text-[11px] font-black text-blue-500 uppercase tracking-widest shrink-0 whitespace-nowrap">LC No.</span>
-                                                <span className="text-blue-500 font-bold mx-2">-</span>
-                                                <span className="text-sm font-black text-gray-900 tracking-tight truncate">{lc.lcNo || '-'}</span>
+                                    let statusText = "Active";
+                                    let statusClass = "bg-green-50 text-green-700 border-green-100";
+                                    if (!isLastState) {
+                                        statusText = "Amended";
+                                        statusClass = "bg-gray-50 text-gray-500 border-gray-100";
+                                    } else if (exp < today) {
+                                        statusText = "Expired";
+                                        statusClass = "bg-red-50 text-red-600 border-red-100";
+                                    } else if (diffDays <= 5) {
+                                        statusText = "Expire Soon";
+                                        statusClass = "bg-amber-50 text-amber-600 border-amber-100";
+                                    }
+
+                                    return (
+                                        <div key={`${lc._id || lcIdx}_${sIdx}`} className={`bg-white p-5 rounded-2xl border shadow-sm ${isLastState ? 'border-gray-100' : 'border-gray-100/60 bg-gray-50/10'}`}>
+                                            {/* Card Top: LC No & Status */}
+                                            <div className="flex justify-between items-center mb-3">
+                                                <div className="flex flex-col min-w-0 flex-1">
+                                                    <div className="flex items-center min-w-0">
+                                                        <span className={`w-[48px] text-[11px] font-black uppercase tracking-widest shrink-0 whitespace-nowrap ${isLastState ? 'text-blue-500' : 'text-blue-400'}`}>LC No.</span>
+                                                        <span className={`font-bold mx-2 ${isLastState ? 'text-blue-500' : 'text-blue-400'}`}>-</span>
+                                                        <span className={`text-sm font-black tracking-tight truncate ${isLastState ? 'text-gray-900' : 'text-gray-500'}`}>
+                                                            {lc.lcNo || '-'}
+                                                            {!isOriginalState && (
+                                                                <span className={`text-[11px] font-bold ml-1.5 ${isLastState ? 'text-amber-600' : 'text-amber-500/80'}`}>
+                                                                    ({state.amendmentNo})
+                                                                </span>
+                                                            )}
+                                                        </span>
+                                                    </div>
+                                                </div>
+                                                <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-widest border shrink-0 ${statusClass}`}>
+                                                    {statusText}
+                                                </span>
                                             </div>
-                                            <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-widest border shrink-0 ${statusClass}`}>
-                                                {statusText}
-                                            </span>
+
+                                            {/* Card Details: Standardized Grid */}
+                                            <div className="space-y-1 pt-1 border-t border-gray-50 mt-1">
+                                                <div className="flex items-center pt-2">
+                                                    <span className="w-[100px] text-[11px] font-black text-gray-400 uppercase tracking-widest shrink-0">Date</span>
+                                                    <span className="text-gray-400 font-bold mx-2">-</span>
+                                                    <span className={`text-sm font-bold ${isLastState ? 'text-gray-700' : 'text-gray-500'}`}>{formatDate(state.amendmentDate || state.openingDate || lc.openingDate)}</span>
+                                                </div>
+                                                <div className="flex items-center">
+                                                    <span className="w-[100px] text-[11px] font-black text-gray-400 uppercase tracking-widest shrink-0">Expiry Date</span>
+                                                    <span className="text-gray-400 font-bold mx-2">-</span>
+                                                    <span className={`text-sm font-black ${isLastState ? 'text-red-500' : 'text-red-400'}`}>{formatDate(state.expiryDate)}</span>
+                                                </div>
+                                                <div className="flex items-center">
+                                                    <span className="w-[100px] text-[11px] font-black text-gray-400 uppercase tracking-widest shrink-0">Bank Name</span>
+                                                    <span className="text-gray-400 font-bold mx-2">-</span>
+                                                    <span className={`text-sm font-bold uppercase truncate ${isLastState ? 'text-gray-800' : 'text-gray-500'}`}>{lc.bankName || '-'}</span>
+                                                </div>
+                                                <div className="flex items-center">
+                                                     <span className="w-[100px] text-[11px] font-black text-gray-400 uppercase tracking-widest shrink-0">Quantity</span>
+                                                     <span className="text-gray-400 font-bold mx-2">-</span>
+                                                     <span className={`text-sm ${
+                                                         sIdx > 0
+                                                             ? (diffQtyKg > 0 ? 'text-green-600 font-black' : diffQtyKg < 0 ? 'text-red-500 font-black' : 'text-gray-400')
+                                                             : (isLastState ? 'text-gray-900 font-bold' : 'text-gray-700 font-medium')
+                                                     }`}>
+                                                         {sIdx > 0 && diffQtyKg > 0 ? '+' : ''}
+                                                         {(sIdx > 0 ? diffQtyKg : stateQtyKg).toLocaleString('en-US')} kg
+                                                     </span>
+                                                </div>
+                                                <div className="flex items-center">
+                                                    <span className={`w-[100px] text-[11px] font-black uppercase tracking-widest shrink-0 ${isLastState ? 'text-blue-500' : 'text-gray-400'}`}>Rem. LC Qty</span>
+                                                    <span className={`font-bold mx-2 ${isLastState ? 'text-blue-500' : 'text-gray-400'}`}>-</span>
+                                                    <span className={`text-sm font-black ${isLastState ? (stateRemQtyKg <= 0 ? 'text-emerald-600' : 'text-blue-600') : 'text-gray-400'}`}>{stateRemQtyKg.toLocaleString('en-US')} kg</span>
+                                                </div>
+                                            </div>
                                         </div>
-
-                                        {/* Card Details: Standardized Grid */}
-                                        <div className="space-y-1 pt-1 border-t border-gray-50 mt-1">
-                                            <div className="flex items-center pt-2">
-                                                <span className="w-[100px] text-[11px] font-black text-gray-400 uppercase tracking-widest shrink-0">Opening Date</span>
-                                                <span className="text-gray-400 font-bold mx-2">-</span>
-                                                <span className="text-sm font-bold text-gray-700">{formatDate(lc.openingDate)}</span>
-                                            </div>
-                                            <div className="flex items-center">
-                                                <span className="w-[100px] text-[11px] font-black text-gray-400 uppercase tracking-widest shrink-0">Expiry Date</span>
-                                                <span className="text-gray-400 font-bold mx-2">-</span>
-                                                <span className="text-sm font-black text-red-500">{formatDate(lc.expiryDate)}</span>
-                                            </div>
-                                            <div className="flex items-center">
-                                                <span className="w-[100px] text-[11px] font-black text-gray-400 uppercase tracking-widest shrink-0">Bank Name</span>
-                                                <span className="text-gray-400 font-bold mx-2">-</span>
-                                                <span className="text-sm font-bold text-gray-800 uppercase truncate">{lc.bankName || '-'}</span>
-                                            </div>
-                                            <div className="flex items-center">
-                                                <span className="w-[100px] text-[11px] font-black text-gray-400 uppercase tracking-widest shrink-0">Quantity</span>
-                                                <span className="text-gray-400 font-bold mx-2">-</span>
-                                                <span className="text-sm font-bold text-gray-900">{lcQtyKg.toLocaleString('en-US')} kg</span>
-                                            </div>
-                                            <div className="flex items-center">
-                                                <span className="w-[100px] text-[11px] font-black text-blue-500 uppercase tracking-widest shrink-0">Rem. LC Qty</span>
-                                                <span className="text-blue-500 font-bold mx-2">-</span>
-                                                <span className={`text-sm font-black ${lcRemQtyKg <= 0 ? 'text-emerald-600' : 'text-blue-600'}`}>{lcRemQtyKg.toLocaleString('en-US')} kg</span>
-                                            </div>
-                                        </div>
-                                    </div>
-                                );
+                                    );
+                                });
                             })
                         ) : (
                             <div className="p-8 text-center bg-gray-50 rounded-2xl border border-gray-100 border-dashed">
@@ -498,11 +642,33 @@ function IPManagement({
     const enrichedIpRecords = useMemo(() => {
         return ipRecords.map(ip => {
             const ipNoClean = cleanLc(ip.ipNumber);
-            const relatedLcs = lcRecords.filter(lc => cleanLc(lc.ipNo) === ipNoClean);
+            const relatedLcs = lcRecords.filter(lc => {
+                const lcIps = Array.isArray(lc.ipNumbers) && lc.ipNumbers.length > 0
+                    ? lc.ipNumbers.map(s => cleanLc(s)).filter(Boolean)
+                    : (lc.ipNo || '').split(',').map(s => cleanLc(s.trim())).filter(Boolean);
+                return lcIps.includes(ipNoClean);
+            });
             const lcNumbers = relatedLcs.map(lc => cleanLc(lc.lcNo));
 
             // 1. LC Rem (kg) - Based on LC commitments
-            const totalLcQtyInKg = relatedLcs.reduce((sum, lc) => sum + (parseNum(lc.quantity) * 1000), 0);
+            const getLcQtyForIpInKg = (lc, targetIp) => {
+                const targetProductName = (targetIp.productName || '').toLowerCase().trim();
+                if (Array.isArray(lc.productsList) && lc.productsList.length > 0) {
+                    const matchedProducts = lc.productsList.filter(p => 
+                        (p.productName || '').toLowerCase().trim() === targetProductName
+                    );
+                    if (matchedProducts.length > 0) {
+                        return matchedProducts.reduce((sum, p) => sum + (parseNum(p.quantity) * 1000), 0);
+                    }
+                }
+                if ((lc.productName || '').toLowerCase().trim() === targetProductName) {
+                    return parseNum(lc.quantity) * 1000;
+                }
+                return 0;
+            };
+
+            // 1. LC Rem (kg) - Based on LC commitments
+            const totalLcQtyInKg = relatedLcs.reduce((sum, lc) => sum + getLcQtyForIpInKg(lc, ip), 0);
             const calculatedRemQty = (parseNum(ip.quantity) || 0) - totalLcQtyInKg;
 
             // 2. IP Balance - Based on actual consumption (LC Receive + Border Sale)
