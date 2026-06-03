@@ -72,6 +72,7 @@ const TR_TEMPLATE_LAYOUT = {
     freightAmountY: 0.690,
     packagesX: 0.09,
     packagesY: 0.720,
+    descMaxWidth: 0.40,
 };
 
 /** Overlay positions for Rinku Commercial Carrier TR template (ratios of page).
@@ -109,8 +110,9 @@ const RINKU_TEMPLATE_LAYOUT = {
     packagesY: 0.720,
     demurrageX: 0.20,
     demurrageY: 0.165,
-    daysX: 0.17,
+    daysX: 0.18,
     daysY: 0.195,
+    descMaxWidth: 0.38,
 };
 
 /**
@@ -341,45 +343,56 @@ const drawConsignmentNoteFields = (doc, record, pageX, pageY, pageWidth, pageHei
             const x = pageX + pageWidth * layout.descLeftX;
             const startY = pageY + pageHeight * layout.descY;
             const lineSpacing = pageHeight * 0.0155; // Snug relative line spacing (~3.67mm)
-            const lcY = startY + 3 * lineSpacing;
+            let currentLineY = startY + 3 * lineSpacing;
+
+            const maxWidth = pageWidth * (layout.descMaxWidth || 0.40);
+
+            const drawWrappedLine = (text) => {
+                if (!text) return;
+                const lines = doc.splitTextToSize(text, maxWidth);
+                lines.forEach(line => {
+                    doc.text(line, x, currentLineY, { charSpace: -0.15 });
+                    currentLineY += lineSpacing;
+                });
+            };
 
             const lcText = `L.C NO- ${lcNo} DATE: ${lcDate} BANK BIN: ${bankBin}`;
-            doc.text(lcText, x, lcY, { charSpace: -0.15 });
+            drawWrappedLine(lcText);
 
-            let currentLineY = lcY + lineSpacing;
             if (bankName) {
                 const bankText = `OF ${bankName}${branchName ? `, ${branchName}` : ''}`;
-                doc.text(bankText, x, currentLineY, { charSpace: -0.15 });
-                currentLineY += lineSpacing;
+                drawWrappedLine(bankText);
             }
 
             const ircNo = String(record?.ircNo || '').trim().toUpperCase();
             if (ircNo) {
                 const ircText = `IMPORTER I.R.C NO- ${ircNo}`;
-                doc.text(ircText, x, currentLineY, { charSpace: -0.15 });
-                currentLineY += lineSpacing;
+                drawWrappedLine(ircText);
             }
 
             const tinNo = String(record?.tinNo || '').trim().toUpperCase();
             const binNo = String(record?.binNo || '').trim().toUpperCase();
             if (tinNo || binNo) {
                 const tinBinText = `IMPORTER'S TIN: ${tinNo} & BIN: ${binNo}`;
-                doc.text(tinBinText, x, currentLineY, { charSpace: -0.15 });
-                currentLineY += lineSpacing;
+                drawWrappedLine(tinBinText);
             }
 
             const piNo = String(record?.piNo || '').trim().toUpperCase();
             const piDate = String(record?.piDate || '').trim().toUpperCase();
             if (piNo || piDate) {
                 const piText = `PROFORMA INVOICE NO: ${piNo} DT: ${piDate}`;
-                doc.text(piText, x, currentLineY, { charSpace: -0.15 });
-                currentLineY += lineSpacing;
+                drawWrappedLine(piText);
             }
 
             const coverNote = String(record?.coverNote || '').trim().toUpperCase();
             if (coverNote) {
                 const coverNoteText = `UNDER INSURANCE COVER NOTE NO: ${coverNote}`;
-                doc.text(coverNoteText, x, currentLineY, { charSpace: -0.15 });
+                drawWrappedLine(coverNoteText);
+            }
+
+            const amendmentLine = String(record?.amendmentLine || '').trim().toUpperCase();
+            if (amendmentLine) {
+                drawWrappedLine(amendmentLine);
             }
         }
     }

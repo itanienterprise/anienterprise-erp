@@ -235,7 +235,12 @@ function PI({
         const balanceMap = {};
         ipRecords.forEach(ip => {
             const ipNoClean = cleanLc(ip.ipNumber);
-            const relatedLcs = lcRecords.filter(lc => cleanLc(lc.ipNo) === ipNoClean);
+            const relatedLcs = lcRecords.filter(lc => {
+                const lcIps = Array.isArray(lc.ipNumbers) && lc.ipNumbers.length > 0
+                    ? lc.ipNumbers.map(s => cleanLc(s)).filter(Boolean)
+                    : (lc.ipNo || '').split(',').map(s => cleanLc(s.trim())).filter(Boolean);
+                return lcIps.includes(ipNoClean);
+            });
             const lcNumbers = relatedLcs.map(lc => cleanLc(lc.lcNo));
 
             const ipReceiptsMap = {};

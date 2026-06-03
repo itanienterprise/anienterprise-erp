@@ -10,6 +10,33 @@ import axios from '../../../utils/api';
 import CustomDatePicker from '../../shared/CustomDatePicker';
 import './PackingList.css';
 
+const numberToWordsUSD = (amount) => {
+    const units = ['', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine'];
+    const teens = ['Ten', 'Eleven', 'Twelve', 'Thirteen', 'Fourteen', 'Fifteen', 'Sixteen', 'Seventeen', 'Eighteen', 'Nineteen'];
+    const tens = ['', '', 'Twenty', 'Thirty', 'Forty', 'Fifty', 'Sixty', 'Seventy', 'Eighty', 'Ninety'];
+    const convertChunk = (num) => {
+        let s = '';
+        if (num >= 100) { s += units[Math.floor(num / 100)] + ' Hundred '; num %= 100; }
+        if (num >= 10 && num <= 19) { s += teens[num - 10] + ' '; }
+        else { if (num >= 20) { s += tens[Math.floor(num / 10)] + ' '; num %= 10; } if (num > 0) { s += units[num] + ' '; } }
+        return s;
+    };
+    if (amount === 0) return 'US Dollar: Zero Only';
+    const parts = amount.toFixed(2).split('.');
+    let dollar = parseInt(parts[0]), cents = parseInt(parts[1]);
+    let words = 'US Dollar: ';
+    if (dollar === 0) { words += 'Zero '; } else {
+        let tw = '';
+        if (dollar >= 10000000) { tw += convertChunk(Math.floor(dollar / 10000000)) + 'Crore '; dollar %= 10000000; }
+        if (dollar >= 100000) { tw += convertChunk(Math.floor(dollar / 100000)) + 'Lac '; dollar %= 100000; }
+        if (dollar >= 1000) { tw += convertChunk(Math.floor(dollar / 1000)) + 'Thousand '; dollar %= 1000; }
+        if (dollar > 0) { tw += convertChunk(dollar); }
+        words += tw;
+    }
+    words += cents > 0 ? 'And Cents ' + convertChunk(cents) + 'Only' : 'Only';
+    return words.replace(/\s+/g, ' ').trim();
+};
+
 function PackingList({
     importers = [],
     exporters = [],
@@ -89,7 +116,7 @@ function PackingList({
         trName: '',
         demurrage: '03',
         days: '05',
-        invoiceStyle: 'Style 1 SAA',
+        invoiceStyle: 'Style 2 AAS',
         bankName: '',
         branchName: '',
         lcAmendment: '',
@@ -167,7 +194,7 @@ function PackingList({
     // Auto-populate form when a Proforma Invoice is selected
     const handlePISelect = (pi) => {
         // Determine if this PI is revised
-        const isRevised = pi.revisions && pi.revisions.length > 0;
+        const isRevised = pi.isRevisedOption;
         const displayPiNumber = isRevised ? `${pi.piNumber} (REVISED)` : (pi.piNumber || '');
 
         // Look up the LC that references this PI number
@@ -179,8 +206,84 @@ function PackingList({
 
         // Use the PI's revised date if available
         const piDate = isRevised
-            ? (pi.revisions[pi.revisions.length - 1].reviseDate || pi.date || '')
+            ? (pi.revisions && pi.revisions.length > 0 ? (pi.revisions[pi.revisions.length - 1].reviseDate || pi.date || '') : (pi.date || ''))
             : (pi.date || '');
+
+        let revisedTotalAmount = 0;
+        let mappedProducts = [];
+        if (isRevised && pi.revisions && pi.revisions.length > 0) {
+            const originalRev = pi.revisions.find(r => r.reviseNo === 'Original PI');
+            const originalProducts = originalRev?.productsList || [];
+
+            // Filter and map only the changed products
+            const revisedProducts = pi.productsList || [];
+            revisedProducts.forEach(p => {
+                const origProd = originalProducts.find(op => op.productName?.trim().toLowerCase() === p.productName?.trim().toLowerCase());
+                const origQty = origProd ? (parseFloat(origProd.quantity) || 0) : 0;
+                const revQty = parseFloat(p.quantity) || 0;
+                const diffQty = revQty - origQty;
+
+                if (diffQty !== 0) {
+                    // This product has changed!
+                    const calculatedAmt = diffQty * (parseFloat(p.rate) || 0);
+                    const calculatedFrt = diffQty * (parseFloat(p.freight) || 0);
+                    revisedTotalAmount += calculatedAmt + calculatedFrt;
+                    mappedProducts.push({
+                        productName: p.productName || '',
+                        hsCode: p.hsCode || '',
+                        quantity: String(diffQty), // Show the increased/changed quantity instead of the total
+                        bagCount: '',
+                        netWeight: String(diffQty), // Net Weight shows the increased/changed quantity
+                        grossWeight: '',
+                        rate: p.rate || '',
+                        amount: String(calculatedAmt.toFixed(2)),
+                        freight: p.freight || '',
+                        totalFreight: String(calculatedFrt.toFixed(2))
+                    });
+                }
+            });
+
+            // Fallback: If for some reason no products are changed, show all
+            if (mappedProducts.length === 0) {
+                mappedProducts = revisedProducts.map(p => {
+                    const amt = parseFloat(p.amount) || 0;
+                    const frt = parseFloat(p.totalFreight) || 0;
+                    revisedTotalAmount += amt + frt;
+                    return {
+                        productName: p.productName || '',
+                        hsCode: p.hsCode || '',
+                        quantity: p.quantity || '',
+                        bagCount: '',
+                        netWeight: p.quantity || '',
+                        grossWeight: '',
+                        rate: p.rate || '',
+                        amount: p.amount || '',
+                        freight: p.freight || '',
+                        totalFreight: p.totalFreight || ''
+                    };
+                });
+            }
+        } else {
+            // Unrevised or Original option selected: show all products, netWeight = full quantity
+            const productsSource = pi.productsList || [];
+            mappedProducts = productsSource.map(p => ({
+                productName: p.productName || '',
+                hsCode: p.hsCode || '',
+                quantity: p.quantity || '',
+                bagCount: '',
+                netWeight: p.quantity || '',
+                grossWeight: '',
+                rate: p.rate || '',
+                amount: p.amount || '',
+                freight: p.freight || '',
+                totalFreight: p.totalFreight || ''
+            }));
+        }
+
+        // Ensure we always have at least one product row
+        if (mappedProducts.length === 0) {
+            mappedProducts = [{ productName: '', hsCode: '', quantity: '', bagCount: '', netWeight: '', grossWeight: '', rate: '', amount: '', freight: '', totalFreight: '' }];
+        }
 
         setFormData(prev => ({
             ...prev,
@@ -206,32 +309,19 @@ function PackingList({
             lcDate: matchedLcByPi ? (matchedLcByPi.openingDate ? matchedLcByPi.openingDate.split('T')[0] : '') : '',
             partySignature: pi.partySignature || '',
             exporterSignature: pi.exporterSignature || '',
-            invoiceStyle: pi.invoiceStyle || 'Style 1 SAA',
+            invoiceStyle: pi.invoiceStyle || 'Style 2 AAS',
             bankName: matchedLcByPi ? (matchedLcByPi.bankName || '') : '',
             lcAmendment: matchedLcByPi ? (matchedLcByPi.lcAmendment || '') : '',
             descriptionGoods: pi.descriptionGoods || '',
             termsDeliveryPayment: pi.termsDeliveryPayment || '',
-            totalAmount: pi.totalAmount || '',
-            totalAmountWords: pi.totalAmountWords || '',
+            totalAmount: isRevised ? String(revisedTotalAmount.toFixed(2)) : (pi.totalAmount || ''),
+            totalAmountWords: isRevised ? numberToWordsUSD(revisedTotalAmount) : (pi.totalAmountWords || ''),
             countryOrigin: pi.countryOrigin || 'INDIA',
             countryFinalDest: pi.countryFinalDest || 'BANGLADESH',
             certification: pi.certification || '',
             otherReferences: pi.otherReferences || '',
             buyerName: pi.buyerName || '',
-            productsList: Array.isArray(pi.productsList) && pi.productsList.length > 0
-                ? pi.productsList.map(p => ({
-                    productName: p.productName || '',
-                    hsCode: p.hsCode || '',
-                    quantity: p.quantity || '',
-                    bagCount: '',
-                    netWeight: p.quantity || '', // default net weight to product quantity
-                    grossWeight: '',
-                    rate: p.rate || '',
-                    amount: p.amount || '',
-                    freight: p.freight || '',
-                    totalFreight: p.totalFreight || ''
-                }))
-                : [{ productName: '', hsCode: '', quantity: '', bagCount: '', netWeight: '', grossWeight: '', rate: '', amount: '', freight: '', totalFreight: '' }]
+            productsList: mappedProducts
         }));
         setPiSearchQuery('');
         setActiveDropdown(null);
@@ -313,7 +403,7 @@ function PackingList({
             trName: '',
             demurrage: '03',
             days: '05',
-            invoiceStyle: 'Style 1 SAA',
+            invoiceStyle: 'Style 2 AAS',
             bankName: '',
             branchName: '',
             lcAmendment: '',
@@ -425,7 +515,7 @@ function PackingList({
             trName: record.trName || '',
             demurrage: record.demurrage || '03',
             days: record.days || '05',
-            invoiceStyle: record.invoiceStyle || 'Style 1 SAA',
+            invoiceStyle: record.invoiceStyle || 'Style 2 AAS',
             bankName: record.bankName || '',
             branchName: record.branchName || '',
             lcAmendment: record.lcAmendment || '',
@@ -509,14 +599,54 @@ function PackingList({
         });
     }, [trSetups, formData.trName]);
 
-    const filteredPIs = piRecords.filter(pi => {
-        if (piSearchQuery) {
-            const query = piSearchQuery.toLowerCase();
-            return (pi.piNumber || '').toLowerCase().includes(query) ||
-                (pi.partyName || '').toLowerCase().includes(query);
-        }
-        return true;
-    });
+    const piOptions = useMemo(() => {
+        const list = [];
+        piRecords.forEach(pi => {
+            const hasRevisions = pi.revisions && pi.revisions.length > 0;
+            if (hasRevisions) {
+                // 1. Revised PI (latest state)
+                const latestRev = pi.revisions[pi.revisions.length - 1];
+                list.push({
+                    ...pi,
+                    ...latestRev,
+                    _dropdownKey: `${pi._id}-revised`,
+                    isRevisedOption: true,
+                    displayPiNumber: pi.piNumber,
+                });
+                // 2. Original/Old PI
+                const originalRev = pi.revisions.find(r => r.reviseNo === 'Original PI');
+                if (originalRev) {
+                    list.push({
+                        ...pi,
+                        ...originalRev,
+                        _dropdownKey: `${pi._id}-original`,
+                        isRevisedOption: false,
+                        displayPiNumber: pi.piNumber,
+                    });
+                }
+            } else {
+                list.push({
+                    ...pi,
+                    _dropdownKey: pi._id,
+                    isRevisedOption: false,
+                    displayPiNumber: pi.piNumber,
+                });
+            }
+        });
+        return list;
+    }, [piRecords]);
+
+    const filteredPIs = useMemo(() => {
+        return piOptions.filter(pi => {
+            if (piSearchQuery) {
+                const query = piSearchQuery.toLowerCase();
+                return (pi.displayPiNumber || '').toLowerCase().includes(query) ||
+                    (pi.partyName || '').toLowerCase().includes(query);
+            }
+            return true;
+        });
+    }, [piOptions, piSearchQuery]);
+
 
     const filteredLcs = useMemo(() => {
         let list = lcRecords;
@@ -612,7 +742,7 @@ function PackingList({
                                     <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-xl shadow-xl max-h-48 overflow-y-auto">
                                         {filteredPIs.map((pi, idx) => (
                                             <button
-                                                key={pi._id}
+                                                key={pi._dropdownKey}
                                                 type="button"
                                                 onClick={() => handlePISelect(pi)}
                                                 onMouseEnter={() => setHighlightedIndex(idx)}
@@ -620,8 +750,12 @@ function PackingList({
                                             >
                                                 <span className="font-semibold">
                                                     {pi.piNumber}
-                                                    {pi.revisions && pi.revisions.length > 0 && (
+                                                    {pi.isRevisedOption ? (
                                                         <span className="ml-1.5 text-[10px] font-bold text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200">REVISED</span>
+                                                    ) : (
+                                                        pi.revisions && pi.revisions.length > 0 && (
+                                                            <span className="ml-1.5 text-[10px] font-bold text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded border border-blue-200">ORIGINAL</span>
+                                                        )
                                                     )}
                                                 </span>
                                                 <span className="text-xs text-gray-500 truncate max-w-[200px]">{pi.partyName}</span>
@@ -761,16 +895,6 @@ function PackingList({
                             </div>
 
                             <div className="space-y-2">
-                                <label className="text-sm font-semibold text-blue-700">Invoice Style</label>
-                                <select
-                                    name="invoiceStyle"
-                                    value={formData.invoiceStyle || 'Style 1 SAA'}
-                                    onChange={handleInputChange}
-                                    className="w-full px-4 py-2 bg-white border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-all font-medium text-gray-900"
-                                >
-                                    <option value="Style 1 SAA">Style 1 SAA</option>
-                                    <option value="Style 2 AAS">Style 2 AAS</option>
-                                </select>
                             </div>
 
                             <div className="space-y-2 relative dropdown-container" ref={bankRef}>
@@ -1480,11 +1604,7 @@ function PackingList({
                                                     <button
                                                         onClick={async () => {
                                                             try {
-                                                                if (rec.invoiceStyle === 'Style 2 AAS') {
                                                                     await generatePL2PDF(rec, piRecords, lcRecords, importers, exporters, banks, ipRecords, trSetups);
-                                                                } else {
-                                                                    await generatePLPDF(rec, piRecords, lcRecords, importers, exporters, banks, ipRecords, trSetups);
-                                                                }
                                                             } catch (err) {
                                                                 console.error('PDF generation failed:', err);
                                                                 showToast('Failed to generate PDF.', 'error');
@@ -1579,11 +1699,7 @@ function PackingList({
                                                     <button
                                                         onClick={async () => {
                                                             try {
-                                                                if (rec.invoiceStyle === 'Style 2 AAS') {
                                                                     await generatePL2PDF(rec, piRecords, lcRecords, importers, exporters, banks, ipRecords, trSetups);
-                                                                } else {
-                                                                    await generatePLPDF(rec, piRecords, lcRecords, importers, exporters, banks, ipRecords, trSetups);
-                                                                }
                                                             } catch (err) {
                                                                 console.error('PDF generation failed:', err);
                                                                 showToast('Failed to generate PDF.', 'error');

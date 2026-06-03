@@ -8,7 +8,7 @@ import {
 import { formatDate, API_BASE_URL } from '../../../utils/helpers';
 import { decryptData } from '../../../utils/encryption';
 import CustomDatePicker from '../../shared/CustomDatePicker';
-const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords = [], gpRecords = [], lcExpenses = [], piRecordsRaw = [] }) => {
+const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords = [], gpRecords = [], lcExpenses = [], piRecordsRaw = [], onEdit, onEditAmendment, canManage }) => {
     const [showConsumption, setShowConsumption] = useState(true);
     const [consumptionSearchQuery, setConsumptionSearchQuery] = useState('');
     const [activeTab, setActiveTab] = useState('history');
@@ -21,6 +21,14 @@ const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords
     const activeMilestone = useMemo(() => {
         return timeline[activeMilestoneIndex] || timeline[0] || {};
     }, [timeline, activeMilestoneIndex]);
+
+    const getMilestoneTotalQty = (mil) => {
+        if (!mil) return 0;
+        if (mil.productsList && mil.productsList.length > 0) {
+            return mil.productsList.reduce((sum, p) => sum + (parseFloat(p.quantity) || 0), 0);
+        }
+        return parseFloat(mil.quantity || 0);
+    };
 
     if (!data) return null;
 
@@ -172,15 +180,23 @@ const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords
                 }]);
 
         return baseProducts.map((p, idx) => {
+            const fVal = parseFloat(p.freight || 0);
+            const scaledFreight = fVal > 0 ? (fVal < 0.1 ? String(fVal * 1000) : String(fVal)) : '';
             if (idx === 0 && baseProducts.length === 1) {
+                const rVal = parseFloat(activeMilestone.rate || p.rate || 0);
+                const scaledRate = rVal > 0 ? (rVal < 10 ? String(rVal * 1000) : String(activeMilestone.rate || p.rate)) : '';
                 return {
                     ...p,
                     quantity: activeMilestone.quantity || p.quantity,
-                    rate: activeMilestone.rate || p.rate,
+                    rate: scaledRate,
+                    freight: scaledFreight,
                     totalDollar: activeMilestone.totalDollar || p.totalDollar
                 };
             }
-            return p;
+            return {
+                ...p,
+                freight: scaledFreight
+            };
         });
     }, [data, activeMilestone]);
 
@@ -194,7 +210,7 @@ const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords
     return (
         <div className="fixed inset-0 z-[2000] flex items-center justify-center p-4">
             <div className="absolute inset-0 bg-gray-900/60 backdrop-blur-sm" onClick={onClose}></div>
-            <div className="relative bg-white border border-gray-100 rounded-2xl shadow-2xl w-full max-w-6xl overflow-hidden animate-in zoom-in duration-300">
+            <div className="relative bg-white border border-gray-100 rounded-2xl shadow-2xl w-full max-w-7xl overflow-hidden animate-in zoom-in duration-300">
                 {/* Header */}
                 <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 bg-gray-50/50">
                     {/* Left: LC Info */}
@@ -579,9 +595,19 @@ const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords
                                         </div>
                                         <div className="space-y-1">
                                             <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">IP Number</span>
-                                            <p className="text-sm font-bold text-gray-800">
-                                                {(data.ipNumbers?.length ? data.ipNumbers.join(', ') : data.ipNo) || 'N/A'}
-                                            </p>
+                                            <div className="flex flex-col gap-0.5">
+                                                {(() => {
+                                                    const ips = data.ipNumbers?.length
+                                                        ? data.ipNumbers
+                                                        : (data.ipNo ? data.ipNo.split(',').map(s => s.trim()).filter(Boolean) : []);
+                                                    if (ips.length === 0) return <span className="text-sm font-bold text-gray-800">N/A</span>;
+                                                    return ips.map((ip, idx) => (
+                                                        <span key={idx} className="block text-sm font-bold text-gray-800">
+                                                            {ip}
+                                                        </span>
+                                                    ));
+                                                })()}
+                                            </div>
                                         </div>
                                         <div className="space-y-1">
                                             <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Opening Date</span>
@@ -595,13 +621,40 @@ const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords
                                             <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Bank Name</span>
                                             <p className="text-sm font-bold text-gray-800 truncate" title={data.bankName}>{data.bankName}</p>
                                         </div>
-                                        <div className="space-y-1">
+                                        <div className="space-y-1 col-span-2">
                                             <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Importer</span>
-                                            <p className="text-sm font-bold text-gray-800 truncate">{data.importerName}</p>
+                                            <p className="text-sm font-bold text-gray-800 truncate" title={data.importerName}>{data.importerName}</p>
                                         </div>
-                                        <div className="space-y-1">
-                                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Exporter</span>
-                                            <p className="text-sm font-bold text-gray-800 truncate">{data.exporterName}</p>
+                                        <div className="col-span-4 grid grid-cols-3 gap-6">
+                                            <div className="space-y-1">
+                                                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Exporter</span>
+                                                <p className="text-sm font-bold text-gray-800 truncate" title={data.exporterName}>{data.exporterName}</p>
+                                            </div>
+                                            <div className="space-y-1">
+                                                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Latest Shipment Date</span>
+                                                <p className="text-sm font-bold text-gray-800 font-mono tracking-tight">
+                                                    {(() => {
+                                                        if (!activeMilestone.isOriginal && activeMilestoneIndex > 0) {
+                                                            // For amendments: show the previous milestone's shipment date (before this amendment extended it)
+                                                            const prev = timeline[activeMilestoneIndex - 1];
+                                                            return formatDate(prev.extendedShipmentDate || prev.latestShipmentDate) || 'N/A';
+                                                        }
+                                                        // For Original LC: only use the snapshot's own latestShipmentDate.
+                                                        // Do NOT fall back to data.latestShipmentDate — that gets overwritten with the latest amendment's extended date.
+                                                        return formatDate(activeMilestone.latestShipmentDate) || formatDate(data.latestShipmentDate) || 'N/A';
+                                                    })()}
+                                                </p>
+                                            </div>
+                                            {!activeMilestone.isOriginal ? (
+                                                <div className="space-y-1">
+                                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Extended Shipment Date</span>
+                                                    <p className="text-sm font-bold text-gray-800 font-mono tracking-tight">
+                                                        {formatDate(activeMilestone.extendedShipmentDate) || 'N/A'}
+                                                    </p>
+                                                </div>
+                                            ) : (
+                                                <div />
+                                            )}
                                         </div>
                                     </div>
                                 </div>
@@ -621,6 +674,7 @@ const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords
                                                         <th className="px-4 py-2.5 text-[10px] font-bold text-gray-400 uppercase tracking-wider">HS Code</th>
                                                         <th className="px-4 py-2.5 text-[10px] font-bold text-gray-400 uppercase tracking-wider text-right">Quantity (Ton)</th>
                                                         <th className="px-4 py-2.5 text-[10px] font-bold text-gray-400 uppercase tracking-wider text-right">Rate (/Ton)</th>
+                                                        <th className="px-4 py-2.5 text-[10px] font-bold text-gray-400 uppercase tracking-wider text-right">Freight (/Ton)</th>
                                                         <th className="px-4 py-2.5 text-[10px] font-bold text-gray-400 uppercase tracking-wider text-right">Total Dollar</th>
                                                     </tr>
                                                 </thead>
@@ -631,6 +685,7 @@ const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords
                                                             <td className="px-4 py-3 text-sm text-gray-600 font-medium">{item.hsCode || '-'}</td>
                                                             <td className="px-4 py-3 text-sm text-right text-gray-900 font-black">{parseFloat(item.quantity || 0).toLocaleString('en-US')} <span className="text-[10px] text-gray-400 font-normal">Ton</span></td>
                                                             <td className="px-4 py-3 text-sm text-right text-gray-700 font-semibold">${parseFloat(item.rate || 0).toLocaleString('en-US')}</td>
+                                                            <td className="px-4 py-3 text-sm text-right text-gray-700 font-semibold">${parseFloat(item.freight || 0).toLocaleString('en-US')}</td>
                                                             <td className="px-4 py-3 text-sm text-right text-blue-600 font-black">${parseFloat(item.totalDollar || 0).toLocaleString('en-US')}</td>
                                                         </tr>
                                                     ))}
@@ -642,7 +697,7 @@ const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords
                                         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-left">
                                             <div className="p-4 bg-gray-50/50 rounded-xl border border-gray-100 flex flex-col justify-center">
                                                 <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Port</span>
-                                                <p className="text-sm font-bold text-gray-800">{data.port || '-'}</p>
+                                                <p className="text-sm font-bold text-gray-800">{activeMilestone.port || data.port || '-'}</p>
                                             </div>
                                             <div className="p-4 bg-gray-50/50 rounded-xl border border-gray-100 flex flex-col justify-center">
                                                 <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Dollar Rate</span>
@@ -658,6 +713,75 @@ const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords
                                         <span className="text-xs font-black text-gray-400 uppercase tracking-widest">Total LC Value</span>
                                         <span className="text-xl font-black text-gray-900">৳{parseFloat(activeMilestone.totalAmount || data.totalAmount || 0).toLocaleString('en-IN')}</span>
                                     </div>
+
+                                    {!activeMilestone.isOriginal && (
+                                        <div className="mt-4 p-4 bg-blue-50/30 border border-blue-100 rounded-xl grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-x-8 gap-y-4 text-left animate-in fade-in duration-200">
+                                            {(() => {
+                                                const prevMilestone = activeMilestoneIndex > 0 ? timeline[activeMilestoneIndex - 1] : null;
+                                                const activeQty = getMilestoneTotalQty(activeMilestone);
+                                                const prevQty = prevMilestone ? getMilestoneTotalQty(prevMilestone) : 0;
+                                                const diffQty = activeQty - prevQty;
+                                                
+                                                const rVal = parseFloat(activeMilestone.rate || 0);
+                                                const ratePerTon = rVal < 10 ? rVal * 1000 : rVal;
+                                                
+                                                const fVal = parseFloat(activeProducts[0]?.freight || data.freight || 0);
+                                                const freightPerTon = fVal < 0.1 ? fVal * 1000 : fVal;
+                                                
+                                                const dollarRate = parseFloat(activeMilestone.dollarRate || data.dollarRate || 0);
+                                                const diffDollar = diffQty * (ratePerTon + freightPerTon);
+                                                const diffAmount = diffDollar * dollarRate;
+                                                const sign = diffQty >= 0 ? '+' : '';
+                                                
+                                                return (
+                                                    <>
+                                                        {/* Card 1: Total Amendment Qty */}
+                                                        <div>
+                                                            <span className="text-[9px] font-bold text-blue-600 uppercase tracking-wider whitespace-nowrap block mb-1">Total Amendment Qty</span>
+                                                            <p className="text-sm font-black text-blue-800 whitespace-nowrap">
+                                                                {sign}{parseFloat(diffQty.toFixed(3)).toLocaleString('en-US')} Ton
+                                                            </p>
+                                                        </div>
+                                                        {/* Card 2: Amendment Rate */}
+                                                        <div>
+                                                            <span className="text-[9px] font-bold text-blue-600 uppercase tracking-wider whitespace-nowrap block mb-1">Amendment Rate</span>
+                                                            <p className="text-sm font-black text-blue-800 whitespace-nowrap">
+                                                                ${ratePerTon.toLocaleString('en-US')} /Ton
+                                                            </p>
+                                                        </div>
+                                                        {/* Card 3: Freight */}
+                                                        <div>
+                                                            <span className="text-[9px] font-bold text-blue-600 uppercase tracking-wider whitespace-nowrap block mb-1">Freight</span>
+                                                            <p className="text-sm font-black text-blue-800 whitespace-nowrap">
+                                                                ${freightPerTon.toLocaleString('en-US')} /Ton
+                                                            </p>
+                                                        </div>
+                                                        {/* Card 4: Total Amendment Dollar */}
+                                                        <div>
+                                                            <span className="text-[9px] font-bold text-blue-600 uppercase tracking-wider whitespace-nowrap block mb-1">Total Amendment Dollar</span>
+                                                            <p className="text-sm font-black text-blue-800 whitespace-nowrap">
+                                                                {sign}${parseFloat(diffDollar.toFixed(2)).toLocaleString('en-US')}
+                                                            </p>
+                                                        </div>
+                                                        {/* Card 5: Amendment Dollar Rate */}
+                                                        <div>
+                                                            <span className="text-[9px] font-bold text-blue-600 uppercase tracking-wider whitespace-nowrap block mb-1">Amendment Dollar Rate</span>
+                                                            <p className="text-sm font-black text-blue-800 whitespace-nowrap">
+                                                                ৳{dollarRate.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                                                            </p>
+                                                        </div>
+                                                        {/* Card 6: Amendment Value */}
+                                                        <div>
+                                                            <span className="text-[9px] font-bold text-blue-600 uppercase tracking-wider whitespace-nowrap block mb-1">Amendment Value</span>
+                                                            <p className="text-sm font-black text-blue-800 whitespace-nowrap">
+                                                                {sign}৳{parseFloat(diffAmount.toFixed(2)).toLocaleString('en-IN')}
+                                                            </p>
+                                                        </div>
+                                                    </>
+                                                );
+                                            })()}
+                                        </div>
+                                    )}
                                 </div>
 
                                 {/* Section 3: Insurance Details */}
@@ -683,10 +807,20 @@ const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords
                                         <div className="space-y-1">
                                             <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Marine Cover Note</span>
                                             <p className="text-sm font-bold text-gray-800">{data.marineCoverNote || '-'}</p>
+                                            {activeMilestone.addnNo && (
+                                                <p className="text-[11px] font-bold text-amber-600 mt-1 whitespace-nowrap">
+                                                    ADDN: {activeMilestone.addnNo}
+                                                </p>
+                                            )}
                                         </div>
                                         <div className="space-y-1">
                                             <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Marine C.N Date</span>
                                             <p className="text-sm font-bold text-gray-800">{data.marineCNDate ? formatDate(data.marineCNDate) : '-'}</p>
+                                            {activeMilestone.addnNo && (activeMilestone.addnDate || activeMilestone.amendmentDate) && (
+                                                <p className="text-[11px] font-bold text-amber-600 mt-1 whitespace-nowrap">
+                                                    DATE: {formatDate(activeMilestone.addnDate || activeMilestone.amendmentDate)}
+                                                </p>
+                                            )}
                                         </div>
                                         <div className="space-y-1">
                                             <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Premium Rate</span>
@@ -734,6 +868,27 @@ const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords
                                         </div>
                                     </div>
                                 )}
+
+                                {/* Edit Button */}
+                                {canManage && (onEdit || onEditAmendment) && (
+                                    <div className="flex justify-end gap-3 pt-6 border-t border-gray-100">
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                onClose();
+                                                if (activeMilestone.isOriginal) {
+                                                    onEdit?.(data);
+                                                } else {
+                                                    onEditAmendment?.(data, activeMilestone);
+                                                }
+                                            }}
+                                            className="px-6 py-3 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold text-sm rounded-xl transition-all transform hover:scale-105 active:scale-95 flex items-center justify-center gap-2"
+                                        >
+                                            <EditIcon className="w-4 h-4 text-gray-500" />
+                                            <span>{activeMilestone.isOriginal ? 'Edit Original LC' : 'Edit Amendment'}</span>
+                                        </button>
+                                    </div>
+                                )}
                             </div>
                         </div>
                     )}
@@ -767,11 +922,14 @@ const getLCHistoryTimeline = (lc) => {
 
     // If no amendments exist, just return a synthesized timeline containing the current LC
     if (amendments.length === 0) {
+        const totalQty = lc.productsList && lc.productsList.length > 0
+            ? lc.productsList.reduce((sum, p) => sum + (parseFloat(p.quantity) || 0), 0)
+            : lc.quantity;
         return [{
             amendmentNo: 'Original LC',
             amendmentDate: lc.openingDate,
             expiryDate: lc.expiryDate,
-            quantity: lc.quantity,
+            quantity: totalQty,
             rate: lc.rate,
             dollarRate: lc.dollarRate,
             totalDollar: lc.totalDollar,
@@ -780,17 +938,25 @@ const getLCHistoryTimeline = (lc) => {
             expectedReturnAmount: lc.expectedReturnAmount,
             grossPremium: lc.grossPremium,
             piNo: lc.piNo || '',
+            port: lc.port || '',
+            latestShipmentDate: lc.latestShipmentDate || '',
             remarks: 'Original LC Details',
             isOriginal: true
         }];
     }
 
     // Synthesize "Original LC" for old records
+    const origQty = amendments[0]?.productsList && amendments[0].productsList.length > 0
+        ? amendments[0].productsList.reduce((sum, p) => sum + (parseFloat(p.quantity) || 0), 0)
+        : (lc.productsList && lc.productsList.length > 0
+            ? lc.productsList.reduce((sum, p) => sum + (parseFloat(p.quantity) || 0), 0)
+            : (amendments[0]?.quantity || lc.quantity));
+
     timeline.push({
         amendmentNo: 'Original LC',
         amendmentDate: lc.openingDate,
         expiryDate: lc.openingDate, // Fallback
-        quantity: amendments[0]?.quantity || lc.quantity, // Try to approximate or fallback
+        quantity: origQty,
         rate: amendments[0]?.rate || lc.rate,
         dollarRate: amendments[0]?.dollarRate || lc.dollarRate,
         totalDollar: amendments[0]?.totalDollar || lc.totalDollar,
@@ -799,6 +965,8 @@ const getLCHistoryTimeline = (lc) => {
         expectedReturnAmount: lc.expectedReturnAmount,
         grossPremium: lc.grossPremium,
         piNo: lc.piNo || '',
+        port: lc.port || '',
+        latestShipmentDate: lc.latestShipmentDate || '',
         remarks: 'Original LC Details (Estimated)',
         isOriginal: true
     });
@@ -833,15 +1001,21 @@ const mapPiProductsToLc = (pi) => {
             : []);
     return piProducts.map(p => {
         const qtyTon = p.quantity ? parseFloat(p.quantity) / 1000 : 0;
-        const amt = parseFloat(p.amount) || qtyTon * (parseFloat(p.rate) || 0);
-        const lineFreight = parseFloat(p.totalFreight) || qtyTon * (parseFloat(p.freight) || 0);
+        // PI rate/freight are per-kg; LC expects per-ton → multiply rate by 1000, freight by 100000
+        const ratePerKg = parseFloat(p.rate) || 0;
+        const freightPerKg = parseFloat(p.freight) || 0;
+        const ratePerTon = ratePerKg * 1000;
+        const freightPerTon = freightPerKg * 1000;
+        // PI p.amount = qty_kg × rate_per_kg = qty_ton × rate_per_ton, so reuse directly
+        const amt = parseFloat(p.amount) || qtyTon * ratePerTon;
+        const lineFreight = parseFloat(p.totalFreight) || qtyTon * freightPerTon;
         const totalDollar = amt + lineFreight;
         return {
             productName: p.productName || '',
             hsCode: p.hsCode || '',
             quantity: qtyTon ? String(qtyTon) : '',
-            rate: p.rate || '',
-            freight: p.freight || '',
+            rate: ratePerTon > 0 ? String(ratePerTon) : '',
+            freight: freightPerTon > 0 ? String(freightPerTon) : '',
             totalFreight: lineFreight > 0 ? String(lineFreight) : '',
             totalDollar: totalDollar > 0 ? totalDollar.toFixed(2) : '',
         };
@@ -863,14 +1037,17 @@ const calcLcProductLine = (item) => {
 };
 
 const syncRootFromProductsList = (state) => {
-    const first = (state.productsList || [])[0];
+    const products = state.productsList || [];
+    const first = products[0];
     if (first) {
         state.productName = first.productName || '';
         state.hsCode = first.hsCode || '';
         state.quantity = first.quantity || '';
         state.rate = first.rate || '';
-        state.totalDollar = first.totalDollar || '';
     }
+    // Sum totalDollar across ALL product lines
+    const sumDollar = products.reduce((acc, p) => acc + (parseFloat(p.totalDollar) || 0), 0);
+    state.totalDollar = sumDollar > 0 ? sumDollar.toFixed(2) : '';
     return state;
 };
 
@@ -896,6 +1073,7 @@ const LCManagement = ({ addNotification, currentUser }) => {
     const [isSaving, setIsSaving] = useState(false);
     const [allStockRecords, setAllStockRecords] = useState([]);
     const [allSalesRecords, setAllSalesRecords] = useState([]);
+    const [ports, setPorts] = useState([]);
     const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
     const [idToDelete, setIdToDelete] = useState(null);
     const [deleteStatus, setDeleteStatus] = useState(null);
@@ -904,6 +1082,7 @@ const LCManagement = ({ addNotification, currentUser }) => {
     const [showAmendmentForm, setShowAmendmentForm] = useState(false);
     const [selectedAmendmentLcId, setSelectedAmendmentLcId] = useState('');
     const [amendmentSearchQuery, setAmendmentSearchQuery] = useState('');
+    const [editingAmendmentNo, setEditingAmendmentNo] = useState('');
     const [amendmentFormData, setAmendmentFormData] = useState({
         amendmentNo: '',
         amendmentDate: '',
@@ -913,6 +1092,9 @@ const LCManagement = ({ addNotification, currentUser }) => {
         dollarRate: '',
         remarks: '',
         addnNo: '',
+        addnDate: '',
+        port: '',
+        extendedShipmentDate: '',
         piNo: ''
     });
 
@@ -927,6 +1109,8 @@ const LCManagement = ({ addNotification, currentUser }) => {
     const statusRef = useRef(null);
     const amendmentLcRef = useRef(null);
     const amendmentPiRef = useRef(null);
+    const portRef = useRef(null);
+    const amendmentPortRef = useRef(null);
 
 
     const [formData, setFormData] = useState({
@@ -1005,7 +1189,7 @@ const LCManagement = ({ addNotification, currentUser }) => {
 
     useEffect(() => {
         const handleClickOutside = (e) => {
-            const refs = [piRef, bankRef, importerRef, exporterRef, productRef, insuranceRef, statusRef, amendmentLcRef, amendmentPiRef];
+            const refs = [piRef, bankRef, importerRef, exporterRef, productRef, insuranceRef, statusRef, amendmentLcRef, amendmentPiRef, portRef, amendmentPortRef];
             const isClickInside = refs.some(ref => ref.current && ref.current.contains(e.target));
             if (!isClickInside) {
                 setActiveDropdown(null);
@@ -1017,6 +1201,11 @@ const LCManagement = ({ addNotification, currentUser }) => {
     }, []);
 
     const handleDropdownSelect = (field, value) => {
+        if (field === 'amendmentPort') {
+            setAmendmentFormData(prev => ({ ...prev, port: value }));
+            setActiveDropdown(null);
+            return;
+        }
         if (field === 'amendmentPiNo') {
             const cleanPiNo = value ? value.replace(' (REVISED)', '') : '';
             const selectedPi = piRecordsRaw.find(pi => pi.piNumber === cleanPiNo);
@@ -1183,7 +1372,7 @@ const LCManagement = ({ addNotification, currentUser }) => {
     const fetchInitialData = async () => {
         setIsLoading(true);
         try {
-            const [lcRes, bankRes, impRes, expRes, insRes, ipRes, piRes, prodRes, stockRes, saleRes, gpRes, expenseRes] = await Promise.all([
+            const [lcRes, bankRes, impRes, expRes, insRes, ipRes, piRes, prodRes, stockRes, saleRes, gpRes, expenseRes, portRes] = await Promise.all([
                 axios.get(`${API_BASE_URL}/api/lc-management`),
                 axios.get(`${API_BASE_URL}/api/banks`),
                 axios.get(`${API_BASE_URL}/api/importers`),
@@ -1195,7 +1384,8 @@ const LCManagement = ({ addNotification, currentUser }) => {
                 axios.get(`${API_BASE_URL}/api/stock`),
                 axios.get(`${API_BASE_URL}/api/sales`),
                 axios.get(`${API_BASE_URL}/api/lc-gp`),
-                axios.get(`${API_BASE_URL}/api/lc-expenses`)
+                axios.get(`${API_BASE_URL}/api/lc-expenses`),
+                axios.get(`${API_BASE_URL}/api/ports`)
             ]);
             setGpRecords(Array.isArray(gpRes.data) ? gpRes.data : []);
             setLcExpenses(Array.isArray(expenseRes.data) ? expenseRes.data : []);
@@ -1260,6 +1450,7 @@ const LCManagement = ({ addNotification, currentUser }) => {
             }));
 
             setProductItems(Array.isArray(prodRes.data) ? prodRes.data.map(p => p.name) : []);
+            setPorts(Array.isArray(portRes.data) ? portRes.data : []);
         } catch (error) {
             console.error('Error fetching LC initial data:', error);
             addNotification?.('Failed to load LC records', 'error');
@@ -1276,30 +1467,26 @@ const LCManagement = ({ addNotification, currentUser }) => {
             const newState = { ...prev, productsList: list };
             syncRootFromProductsList(newState);
 
-            if (idx === 0 && ['quantity', 'rate', 'freight', 'totalDollar'].includes(field)) {
-                const dRate = parseFloat(newState.dollarRate) || 0;
-                let tDollar = parseFloat(newState.totalDollar) || 0;
-                if (field === 'quantity' || field === 'rate' || field === 'freight') {
-                    tDollar = parseFloat(list[0]?.totalDollar) || 0;
-                    newState.totalDollar = list[0]?.totalDollar || '';
-                }
-                const totalVal = tDollar * dRate;
-                newState.totalAmount = totalVal > 0 ? totalVal.toFixed(2) : '';
+            // Recalculate totalAmount and insurance for ANY product change
+            const dRate = parseFloat(newState.dollarRate) || 0;
+            // sumDollar is already updated by syncRootFromProductsList
+            const tDollar = parseFloat(newState.totalDollar) || 0;
+            const totalVal = tDollar * dRate;
+            newState.totalAmount = totalVal > 0 ? totalVal.toFixed(2) : '';
 
-                const exPct = parseFloat(newState.extraPercent) || 0;
-                const prem = parseFloat(newState.premium) || 0;
-                const premRet = parseFloat(newState.premiumReturn) || 0;
-                const pVat = parseFloat(newState.premiumVat) || 0;
-                const stamp = parseFloat(newState.stampCharge) || 0;
-                const baseNetPrem = (totalVal * (prem / 100)) / 100;
-                const netPrem = baseNetPrem + (baseNetPrem * (exPct / 100));
-                newState.netPremium = netPrem > 0 ? netPrem.toFixed(2) : '';
-                const expRet = netPrem * (premRet / 100);
-                newState.expectedReturnAmount = expRet > 0 ? expRet.toFixed(2) : '';
-                const vatAmount = netPrem * (pVat / 100);
-                const gPrem = netPrem + vatAmount + stamp;
-                newState.grossPremium = gPrem > 0 ? gPrem.toFixed(2) : '';
-            }
+            const exPct = parseFloat(newState.extraPercent) || 0;
+            const prem = parseFloat(newState.premium) || 0;
+            const premRet = parseFloat(newState.premiumReturn) || 0;
+            const pVat = parseFloat(newState.premiumVat) || 0;
+            const stamp = parseFloat(newState.stampCharge) || 0;
+            const baseNetPrem = (totalVal * (prem / 100)) / 100;
+            const netPrem = baseNetPrem + (baseNetPrem * (exPct / 100));
+            newState.netPremium = netPrem > 0 ? netPrem.toFixed(2) : '';
+            const expRet = netPrem * (premRet / 100);
+            newState.expectedReturnAmount = expRet > 0 ? expRet.toFixed(2) : '';
+            const vatAmount = netPrem * (pVat / 100);
+            const gPrem = netPrem + vatAmount + stamp;
+            newState.grossPremium = gPrem > 0 ? gPrem.toFixed(2) : '';
 
             return newState;
         });
@@ -1445,6 +1632,34 @@ const LCManagement = ({ addNotification, currentUser }) => {
         window.scrollTo({ top: 0, behavior: 'smooth' });
     };
 
+    const handleEditAmendment = (record, milestone) => {
+        setSelectedAmendmentLcId(record._id);
+        setEditingAmendmentNo(milestone.amendmentNo);
+        setAmendmentSearchQuery(record.lcNo || '');
+        const milQty = milestone.productsList && milestone.productsList.length > 0
+            ? milestone.productsList.reduce((sum, p) => sum + (parseFloat(p.quantity) || 0), 0)
+            : (milestone.quantity || '');
+        setAmendmentFormData({
+            amendmentNo: milestone.amendmentNo || '',
+            amendmentDate: milestone.amendmentDate ? milestone.amendmentDate.split('T')[0] : '',
+            expiryDate: milestone.expiryDate ? milestone.expiryDate.split('T')[0] : '',
+            quantity: milQty || '',
+            rate: (() => {
+                const rVal = parseFloat(milestone.rate || 0);
+                return rVal > 0 ? (rVal < 10 ? String(rVal * 1000) : String(milestone.rate)) : '';
+            })(),
+            dollarRate: milestone.dollarRate || '',
+            remarks: milestone.remarks || '',
+            addnNo: milestone.addnNo || '',
+            addnDate: milestone.addnDate ? milestone.addnDate.split('T')[0] : '',
+            port: milestone.port || record.port || '',
+            extendedShipmentDate: milestone.extendedShipmentDate ? milestone.extendedShipmentDate.split('T')[0] : (milestone.latestShipmentDate ? milestone.latestShipmentDate.split('T')[0] : ''),
+            piNo: milestone.piNo || ''
+        });
+        setShowAmendmentForm(true);
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+    };
+
     const handleDelete = (id) => {
         setIdToDelete(id);
         setShowDeleteConfirm(true);
@@ -1564,25 +1779,67 @@ const LCManagement = ({ addNotification, currentUser }) => {
         setSelectedAmendmentLcId(lc._id);
         const nextNo = (lc.amendments || []).length + 1;
         const nextNoStr = `AMENDMENT NO-${String(nextNo).padStart(2, '0')}`;
+
+        const prefilledPiNo = (() => {
+            const rawPi = lc.piNo || '';
+            if (!rawPi || rawPi.endsWith(' (REVISED)')) return rawPi;
+            const cleanPi = rawPi.replace(' (REVISED)', '');
+            const piRecord = piRecordsRaw.find(p => p.piNumber === cleanPi);
+            if (piRecord && piRecord.revisions && piRecord.revisions.length > 0) {
+                return `${cleanPi} (REVISED)`;
+            }
+            return rawPi;
+        })();
+
+        let resolvedQty = lc.productsList && lc.productsList.length > 0
+            ? lc.productsList.reduce((sum, p) => sum + (parseFloat(p.quantity) || 0), 0)
+            : (parseFloat(lc.quantity) || 0);
+        let resolvedRate = '';
+        if (lc.rate) {
+            const rVal = parseFloat(lc.rate);
+            resolvedRate = rVal < 10 ? String(rVal * 1000) : String(lc.rate);
+        }
+
+        if (prefilledPiNo && prefilledPiNo !== lc.piNo) {
+            const cleanPi = prefilledPiNo.replace(' (REVISED)', '');
+            const piRecord = piRecordsRaw.find(p => p.piNumber === cleanPi);
+            if (piRecord) {
+                const isSelectedRevised = prefilledPiNo.endsWith(' (REVISED)');
+                const hasRevisions = piRecord.revisions && piRecord.revisions.length > 0;
+                let targetSource = piRecord;
+                if (hasRevisions && !isSelectedRevised) {
+                    const originalRev = piRecord.revisions.find(r => r.reviseNo === 'Original PI');
+                    if (originalRev) targetSource = { ...piRecord, ...originalRev };
+                }
+                const firstProd = (targetSource.productsList || [])[0];
+                const piQtyTons = targetSource.productsList && targetSource.productsList.length > 0
+                    ? targetSource.productsList.reduce((sum, p) => sum + (parseFloat(p.quantity) || 0), 0) / 1000
+                    : (parseFloat(targetSource.grandTotalQuantity || targetSource.quantity) || 0) / 1000;
+                
+                if (piQtyTons > 0) resolvedQty = piQtyTons;
+                if (firstProd?.rate) {
+                    const rVal = parseFloat(firstProd.rate);
+                    resolvedRate = rVal < 10 ? String(rVal * 1000) : String(firstProd.rate);
+                } else if (targetSource.rate) {
+                    const rVal = parseFloat(targetSource.rate);
+                    resolvedRate = rVal < 10 ? String(rVal * 1000) : String(targetSource.rate);
+                }
+            }
+        }
+
         setAmendmentFormData({
             amendmentNo: nextNoStr,
             amendmentDate: new Date().toISOString().split('T')[0],
             expiryDate: lc.expiryDate ? lc.expiryDate.split('T')[0] : '',
-            quantity: lc.quantity || '',
-            rate: lc.rate || '',
+            quantity: resolvedQty || '',
+            rate: resolvedRate || '',
             dollarRate: lc.dollarRate || '',
             remarks: '',
             addnNo: '',
-            piNo: (() => {
-                const rawPi = lc.piNo || '';
-                if (!rawPi || rawPi.endsWith(' (REVISED)')) return rawPi;
-                const cleanPi = rawPi.replace(' (REVISED)', '');
-                const piRecord = piRecordsRaw.find(p => p.piNumber === cleanPi);
-                if (piRecord && piRecord.revisions && piRecord.revisions.length > 0) {
-                    return `${cleanPi} (REVISED)`;
-                }
-                return rawPi;
-            })()
+            addnDate: '',
+            port: lc.port || '',
+            extendedShipmentDate: lc.latestShipmentDate ? lc.latestShipmentDate.split('T')[0] : '',
+            piNo: prefilledPiNo
         });
         setAmendmentSearchQuery(lc.lcNo || '');
         setActiveDropdown(null);
@@ -1609,7 +1866,8 @@ const LCManagement = ({ addNotification, currentUser }) => {
             const r = parseFloat(amendmentFormData.rate) || 0;
             const dRate = parseFloat(amendmentFormData.dollarRate) || 0;
 
-            const totalDollar = r < 10 ? qty * r * 1000 : qty * r;
+            const targetRateScaled = r > 0 ? (r < 10 ? r * 1000 : r) : 0;
+            const totalDollar = qty * targetRateScaled;
             const totalAmount = totalDollar * dRate;
 
             // Recalculate insurance based on the new total amount if there is an insurance company
@@ -1687,10 +1945,10 @@ const LCManagement = ({ addNotification, currentUser }) => {
                 }
 
                 // Adjust rates if the targetRate is provided and has changed
-                if (targetRate > 0) {
+                if (targetRateScaled > 0) {
                     const originalFirstRate = parseFloat(updatedProductsList[0].rate) || 0;
-                    if (Math.abs(targetRate - originalFirstRate) > 0.001) {
-                        updatedProductsList[0].rate = String(targetRate);
+                    if (Math.abs(targetRateScaled - originalFirstRate) > 0.001) {
+                        updatedProductsList[0].rate = String(targetRateScaled);
                     }
                 }
 
@@ -1700,12 +1958,8 @@ const LCManagement = ({ addNotification, currentUser }) => {
                     const pRate = parseFloat(p.rate) || 0;
                     const pFreight = parseFloat(p.freight) || 0;
 
-                    // Support auto per-Kg to per-Ton scaling if rates are input as decimals less than 10
-                    const pRateScaled = pRate < 10 ? pRate * 1000 : pRate;
-                    const pFreightScaled = pFreight < 10 ? pFreight * 1000 : pFreight;
-
-                    const pAmt = pQty * pRateScaled;
-                    const pTotalFreight = pQty * pFreightScaled;
+                    const pAmt = pQty * pRate;
+                    const pTotalFreight = pQty * pFreight;
                     p.totalFreight = pTotalFreight > 0 ? pTotalFreight.toFixed(2) : '0.00';
                     p.totalDollar = (pAmt + pTotalFreight).toFixed(2);
                 });
@@ -1715,63 +1969,126 @@ const LCManagement = ({ addNotification, currentUser }) => {
             const updatedProductName = firstProduct ? firstProduct.productName : (lc.productName || '');
             const updatedHsCode = firstProduct ? firstProduct.hsCode : (lc.hsCode || '');
 
-            // Create amendment log entry
-            const newAmendment = {
-                amendmentNo: amendmentFormData.amendmentNo,
-                amendmentDate: amendmentFormData.amendmentDate,
-                expiryDate: amendmentFormData.expiryDate,
-                quantity: amendmentFormData.quantity,
-                rate: amendmentFormData.rate,
-                dollarRate: amendmentFormData.dollarRate,
-                totalDollar: totalDollar > 0 ? totalDollar.toFixed(2) : '',
-                totalAmount: totalAmount > 0 ? totalAmount.toFixed(2) : '',
-                addnNo: amendmentFormData.addnNo || '',
-                remarks: amendmentFormData.remarks,
-                piNo: amendmentFormData.piNo,
-                productsList: updatedProductsList,
-                createdAt: new Date().toISOString()
-            };
-
+            // Create or update amendment log entry
             const currentAmendments = [...(lc.amendments || [])];
-            if (currentAmendments.length === 0) {
-                const originalLcSnapshot = {
-                    amendmentNo: 'Original LC',
-                    amendmentDate: lc.openingDate,
-                    expiryDate: lc.expiryDate,
-                    quantity: lc.quantity,
-                    rate: lc.rate,
-                    dollarRate: lc.dollarRate,
-                    totalDollar: lc.totalDollar,
-                    totalAmount: lc.totalAmount,
-                    netPremium: lc.netPremium,
-                    expectedReturnAmount: lc.expectedReturnAmount,
-                    grossPremium: lc.grossPremium,
-                    piNo: lc.piNo || '',
-                    remarks: 'Original LC Details',
-                    productsList: lc.productsList || [],
-                    createdAt: lc.createdAt || lc.openingDate || new Date().toISOString()
+            const finalSavedRate = targetRateScaled > 0 ? String(targetRateScaled) : amendmentFormData.rate;
+            
+            if (editingAmendmentNo) {
+                const idx = currentAmendments.findIndex(a => a.amendmentNo === editingAmendmentNo);
+                if (idx !== -1) {
+                    const existingAmnd = currentAmendments[idx];
+                    const updatedAmendment = {
+                        ...existingAmnd,
+                        amendmentNo: amendmentFormData.amendmentNo,
+                        amendmentDate: amendmentFormData.amendmentDate,
+                        expiryDate: amendmentFormData.expiryDate,
+                        quantity: amendmentFormData.quantity,
+                        rate: finalSavedRate,
+                        dollarRate: amendmentFormData.dollarRate,
+                        totalDollar: totalDollar > 0 ? totalDollar.toFixed(2) : '',
+                        totalAmount: totalAmount > 0 ? totalAmount.toFixed(2) : '',
+                        addnNo: amendmentFormData.addnNo || '',
+                        addnDate: amendmentFormData.addnDate || '',
+                        port: amendmentFormData.port || '',
+                        extendedShipmentDate: amendmentFormData.extendedShipmentDate || '',
+                        remarks: amendmentFormData.remarks,
+                        piNo: amendmentFormData.piNo,
+                        productsList: updatedProductsList
+                    };
+                    currentAmendments[idx] = updatedAmendment;
+                }
+            } else {
+                const newAmendment = {
+                    amendmentNo: amendmentFormData.amendmentNo,
+                    amendmentDate: amendmentFormData.amendmentDate,
+                    expiryDate: amendmentFormData.expiryDate,
+                    quantity: amendmentFormData.quantity,
+                    rate: finalSavedRate,
+                    dollarRate: amendmentFormData.dollarRate,
+                    totalDollar: totalDollar > 0 ? totalDollar.toFixed(2) : '',
+                    totalAmount: totalAmount > 0 ? totalAmount.toFixed(2) : '',
+                    addnNo: amendmentFormData.addnNo || '',
+                    addnDate: amendmentFormData.addnDate || '',
+                    port: amendmentFormData.port || '',
+                    extendedShipmentDate: amendmentFormData.extendedShipmentDate || '',
+                    remarks: amendmentFormData.remarks,
+                    piNo: amendmentFormData.piNo,
+                    productsList: updatedProductsList,
+                    createdAt: new Date().toISOString()
                 };
-                currentAmendments.push(originalLcSnapshot);
-            }
-            currentAmendments.push(newAmendment);
 
-            // Update main LC record fields
+                if (currentAmendments.length === 0) {
+                    const originalLcSnapshot = {
+                        amendmentNo: 'Original LC',
+                        amendmentDate: lc.openingDate,
+                        expiryDate: lc.expiryDate,
+                        quantity: lc.quantity,
+                        rate: lc.rate,
+                        dollarRate: lc.dollarRate,
+                        totalDollar: lc.totalDollar,
+                        totalAmount: lc.totalAmount,
+                        netPremium: lc.netPremium,
+                        expectedReturnAmount: lc.expectedReturnAmount,
+                        grossPremium: lc.grossPremium,
+                        piNo: lc.piNo || '',
+                        latestShipmentDate: lc.latestShipmentDate || '',
+                        remarks: 'Original LC Details',
+                        productsList: lc.productsList || [],
+                        createdAt: lc.createdAt || lc.openingDate || new Date().toISOString()
+                    };
+                    currentAmendments.push(originalLcSnapshot);
+                }
+                currentAmendments.push(newAmendment);
+            }
+
+            const latestState = currentAmendments.length > 0 ? currentAmendments[currentAmendments.length - 1] : lc;
+
+            // Recalculate insurance based on the latest state's total amount
+            netPremium = lc.netPremium;
+            expectedReturnAmount = lc.expectedReturnAmount;
+            grossPremium = lc.grossPremium;
+
+            const latestTotalAmount = parseFloat(latestState.totalAmount) || 0;
+            if (lc.insuranceCo && latestTotalAmount > 0) {
+                const prem = parseFloat(lc.premium) || 0;
+                const exPct = parseFloat(lc.extraPercent) || 0;
+                const premRet = parseFloat(lc.premiumReturn) || 0;
+                const pVat = parseFloat(lc.premiumVat) || 15;
+                const stamp = parseFloat(lc.stampCharge) || 0;
+
+                const baseNetPrem = (latestTotalAmount * (prem / 100)) / 100;
+                const netP = baseNetPrem + (baseNetPrem * (exPct / 100));
+                netPremium = netP > 0 ? netP.toFixed(2) : '';
+
+                const expRet = netP * (premRet / 100);
+                expectedReturnAmount = expRet > 0 ? expRet.toFixed(2) : '';
+
+                const vatAmount = netP * (pVat / 100);
+                const gPrem = netP + vatAmount + stamp;
+                grossPremium = gPrem > 0 ? gPrem.toFixed(2) : '';
+            }
+
+            // Update main LC record fields to match the latest state
             const updatedLcData = {
                 ...lc,
-                expiryDate: amendmentFormData.expiryDate,
-                quantity: amendmentFormData.quantity,
-                rate: amendmentFormData.rate,
-                dollarRate: amendmentFormData.dollarRate,
-                totalDollar: totalDollar > 0 ? totalDollar.toFixed(2) : '',
-                totalAmount: totalAmount > 0 ? totalAmount.toFixed(2) : '',
+                expiryDate: latestState.expiryDate,
+                quantity: latestState.quantity,
+                rate: latestState.rate,
+                dollarRate: latestState.dollarRate,
+                totalDollar: latestState.totalDollar,
+                totalAmount: latestState.totalAmount,
                 netPremium,
                 expectedReturnAmount,
                 grossPremium,
-                piNo: amendmentFormData.piNo,
-                productName: updatedProductName,
-                hsCode: updatedHsCode,
-                productsList: updatedProductsList,
-                lcAmendment: `${amendmentFormData.amendmentNo} DATE: ${formatDate(amendmentFormData.amendmentDate)}`,
+                piNo: latestState.piNo,
+                port: latestState.port || lc.port || '',
+                latestShipmentDate: latestState.extendedShipmentDate || latestState.latestShipmentDate || lc.latestShipmentDate || '',
+                productName: latestState.productsList?.[0]?.productName || lc.productName || '',
+                hsCode: latestState.productsList?.[0]?.hsCode || lc.hsCode || '',
+                productsList: latestState.productsList || [],
+                lcAmendment: latestState.amendmentNo === 'Original LC'
+                    ? ''
+                    : `${latestState.amendmentNo} DATE: ${formatDate(latestState.amendmentDate)}`,
                 amendments: currentAmendments
             };
 
@@ -1780,8 +2097,8 @@ const LCManagement = ({ addNotification, currentUser }) => {
 
             if (addNotification) {
                 addNotification(
-                    'LC Amendment Saved',
-                    `LC No: ${lc.lcNo} has been amended (${amendmentFormData.amendmentNo}) by ${currentUser?.name || currentUser?.username}.`,
+                    editingAmendmentNo ? 'LC Amendment Updated' : 'LC Amendment Saved',
+                    `LC No: ${lc.lcNo} amendment (${amendmentFormData.amendmentNo}) has been saved by ${currentUser?.name || currentUser?.username}.`,
                     ['Admin', 'Incharge', 'Border Manager', 'LC Manager', 'Data Entry']
                 );
             }
@@ -1791,6 +2108,7 @@ const LCManagement = ({ addNotification, currentUser }) => {
             setShowAmendmentForm(false);
             setSelectedAmendmentLcId('');
             setAmendmentSearchQuery('');
+            setEditingAmendmentNo('');
             setAmendmentFormData({
                 amendmentNo: '',
                 amendmentDate: '',
@@ -1800,6 +2118,9 @@ const LCManagement = ({ addNotification, currentUser }) => {
                 dollarRate: '',
                 remarks: '',
                 addnNo: '',
+                addnDate: '',
+                port: '',
+                extendedShipmentDate: '',
                 piNo: ''
             });
             fetchInitialData();
@@ -2099,16 +2420,55 @@ const LCManagement = ({ addNotification, currentUser }) => {
                             />
                         </div>
 
-                        <div className="space-y-1.5 text-left">
+                        <div className="space-y-1.5 text-left relative" ref={portRef}>
                             <label className="text-sm font-semibold text-gray-600 ml-1">Port</label>
-                            <input
-                                type="text"
-                                name="port"
-                                value={formData.port}
-                                onChange={handleInputChange}
-                                placeholder="Enter Port Name"
-                                className="w-full px-4 py-2.5 bg-white/50 border border-gray-200/60 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all font-medium"
-                            />
+                            <div className="relative">
+                                <input
+                                    type="text"
+                                    name="port"
+                                    value={formData.port}
+                                    onChange={(e) => {
+                                        setFormData(prev => ({ ...prev, port: e.target.value }));
+                                        setActiveDropdown('port');
+                                        setHighlightedIndex(-1);
+                                    }}
+                                    onFocus={() => {
+                                        setActiveDropdown('port');
+                                        setHighlightedIndex(-1);
+                                    }}
+                                    placeholder="Select Port Name"
+                                    autoComplete="off"
+                                    className="w-full px-4 py-2.5 bg-white/50 border border-gray-200/60 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all font-medium pr-10"
+                                />
+                                <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-2">
+                                    {formData.port && (
+                                        <button type="button" onClick={() => setFormData(prev => ({ ...prev, port: '' }))} className="text-gray-400 hover:text-gray-600">
+                                            <XIcon className="w-4 h-4" />
+                                        </button>
+                                    )}
+                                    <SearchIcon className="w-4 h-4 text-gray-300 pointer-events-none" />
+                                </div>
+                            </div>
+                            {activeDropdown === 'port' && (
+                                <div className="absolute z-[100] w-full mt-1 bg-white border border-gray-200 rounded-xl shadow-xl max-h-48 overflow-y-auto py-1">
+                                    {ports
+                                        .filter(p => !p.isLoadingPort && (!formData.port || p.name.toLowerCase().includes(formData.port.toLowerCase())))
+                                        .map((p, idx) => (
+                                            <button
+                                                key={idx}
+                                                type="button"
+                                                onMouseDown={(e) => {
+                                                    e.preventDefault();
+                                                    handleDropdownSelect('port', p.name);
+                                                }}
+                                                onMouseEnter={() => setHighlightedIndex(idx)}
+                                                className={`w-full px-4 py-2 text-left text-sm transition-colors font-medium ${formData.port === p.name ? 'bg-blue-50 text-blue-700' : highlightedIndex === idx ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-blue-50'}`}
+                                            >
+                                                {p.name}
+                                            </button>
+                                        ))}
+                                </div>
+                            )}
                         </div>
 
                         {informativeQuantities.ipEntries.map((entry, idx) => (
@@ -2708,6 +3068,7 @@ const LCManagement = ({ addNotification, currentUser }) => {
                                 setShowAmendmentForm(false);
                                 setSelectedAmendmentLcId('');
                                 setAmendmentSearchQuery('');
+                                setEditingAmendmentNo('');
                                 setAmendmentFormData({
                                     amendmentNo: '',
                                     amendmentDate: '',
@@ -2717,6 +3078,9 @@ const LCManagement = ({ addNotification, currentUser }) => {
                                     dollarRate: '',
                                     remarks: '',
                                     addnNo: '',
+                                    addnDate: '',
+                                    port: '',
+                                    extendedShipmentDate: '',
                                     piNo: ''
                                 });
                             }}
@@ -2735,28 +3099,36 @@ const LCManagement = ({ addNotification, currentUser }) => {
                                     <div>
                                         <h4 className="text-xs font-black text-blue-600 uppercase tracking-widest mb-4">Current LC Details</h4>
                                         <div className="space-y-4">
-                                            <div className="grid grid-cols-2 gap-4 border-b border-gray-200/50 pb-2">
-                                                <div>
-                                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">PI Number</span>
-                                                    <p className="text-sm font-bold text-gray-800 truncate" title={selectedLcForAmendment.piNo}>
-                                                        {(() => {
-                                                            const rawPiNo = selectedLcForAmendment.piNo || '';
-                                                            if (!rawPiNo) return 'N/A';
-                                                            if (rawPiNo.endsWith(' (REVISED)')) return rawPiNo;
-                                                            const cleanPi = rawPiNo.replace(' (REVISED)', '');
-                                                            const piRecord = piRecordsRaw.find(p => p.piNumber === cleanPi);
-                                                            if (piRecord && piRecord.revisions && piRecord.revisions.length > 0) {
-                                                                return `${cleanPi} (REVISED)`;
-                                                            }
-                                                            return rawPiNo;
-                                                        })()}
-                                                    </p>
-                                                </div>
-                                                <div>
-                                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">IP Number</span>
-                                                    <p className="text-sm font-bold text-gray-800 truncate" title={selectedLcForAmendment.ipNumbers?.length ? selectedLcForAmendment.ipNumbers.join(', ') : selectedLcForAmendment.ipNo}>
-                                                        {(selectedLcForAmendment.ipNumbers?.length ? selectedLcForAmendment.ipNumbers.join(', ') : selectedLcForAmendment.ipNo) || 'N/A'}
-                                                    </p>
+                                            <div className="border-b border-gray-200/50 pb-2">
+                                                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">PI Number</span>
+                                                <p className="text-sm font-bold text-blue-600 truncate" title={selectedLcForAmendment.piNo}>
+                                                    {(() => {
+                                                        const rawPiNo = selectedLcForAmendment.piNo || '';
+                                                        if (!rawPiNo) return 'N/A';
+                                                        if (rawPiNo.endsWith(' (REVISED)')) return rawPiNo;
+                                                        const cleanPi = rawPiNo.replace(' (REVISED)', '');
+                                                        const piRecord = piRecordsRaw.find(p => p.piNumber === cleanPi);
+                                                        if (piRecord && piRecord.revisions && piRecord.revisions.length > 0) {
+                                                            return `${cleanPi} (REVISED)`;
+                                                        }
+                                                        return rawPiNo;
+                                                    })()}
+                                                </p>
+                                            </div>
+                                            <div className="border-b border-gray-200/50 pb-2">
+                                                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">IP Number</span>
+                                                <div className="flex flex-col gap-0.5">
+                                                    {(() => {
+                                                        const ips = selectedLcForAmendment.ipNumbers?.length
+                                                            ? selectedLcForAmendment.ipNumbers
+                                                            : (selectedLcForAmendment.ipNo ? selectedLcForAmendment.ipNo.split(',').map(s => s.trim()).filter(Boolean) : []);
+                                                        if (ips.length === 0) return <span className="text-sm font-bold text-gray-800">N/A</span>;
+                                                        return ips.map((ip, idx) => (
+                                                            <span key={idx} className="block text-sm font-bold text-gray-800">
+                                                                {ip}
+                                                            </span>
+                                                        ));
+                                                    })()}
                                                 </div>
                                             </div>
                                             <div className="border-b border-gray-200/50 pb-2">
@@ -2779,6 +3151,10 @@ const LCManagement = ({ addNotification, currentUser }) => {
                                                 <div>
                                                     <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Current Expiry Date</span>
                                                     <p className="text-sm font-bold text-rose-500 font-mono">{formatDate(selectedLcForAmendment.expiryDate)}</p>
+                                                </div>
+                                                <div>
+                                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Latest Shipment Date</span>
+                                                    <p className="text-sm font-bold text-gray-800 font-mono">{formatDate(selectedLcForAmendment.latestShipmentDate) || 'N/A'}</p>
                                                 </div>
                                             </div>
                                             <div className="grid grid-cols-2 gap-4 border-b border-gray-200/50 pb-2">
@@ -2943,16 +3319,89 @@ const LCManagement = ({ addNotification, currentUser }) => {
                                             />
                                         </div>
 
-                                        <div className="col-span-full space-y-1.5 text-left">
-                                            <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">ADDN Number</label>
-                                            <input
-                                                type="text"
-                                                name="addnNo"
-                                                value={amendmentFormData.addnNo || ''}
-                                                onChange={(e) => setAmendmentFormData(prev => ({ ...prev, addnNo: e.target.value }))}
-                                                placeholder="e.g. ADDN-01"
-                                                className="w-full px-4 py-2.5 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all font-medium"
-                                            />
+                                        <div className="col-span-full grid grid-cols-1 md:grid-cols-2 gap-6">
+                                            <div className="space-y-1.5 text-left">
+                                                <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">ADDN Number</label>
+                                                <input
+                                                    type="text"
+                                                    name="addnNo"
+                                                    value={amendmentFormData.addnNo || ''}
+                                                    onChange={(e) => setAmendmentFormData(prev => ({ ...prev, addnNo: e.target.value }))}
+                                                    placeholder="e.g. ADDN-01"
+                                                    className="w-full px-4 py-2.5 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all font-medium"
+                                                />
+                                            </div>
+
+                                            <div className="space-y-1.5">
+                                                <CustomDatePicker
+                                                    label="ADDN Date"
+                                                    value={amendmentFormData.addnDate}
+                                                    onChange={(e) => setAmendmentFormData(prev => ({ ...prev, addnDate: e.target.value }))}
+                                                    compact={true}
+                                                />
+                                            </div>
+                                        </div>
+
+                                        <div className="col-span-full grid grid-cols-1 md:grid-cols-2 gap-6">
+                                            <div className="space-y-1.5 text-left relative" ref={amendmentPortRef}>
+                                                <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Port</label>
+                                                <div className="relative">
+                                                    <input
+                                                        type="text"
+                                                        name="port"
+                                                        value={amendmentFormData.port || ''}
+                                                        onChange={(e) => {
+                                                            setAmendmentFormData(prev => ({ ...prev, port: e.target.value }));
+                                                            setActiveDropdown('amendmentPort');
+                                                            setHighlightedIndex(-1);
+                                                        }}
+                                                        onFocus={() => {
+                                                            setActiveDropdown('amendmentPort');
+                                                            setHighlightedIndex(-1);
+                                                        }}
+                                                        placeholder="Select Port Name"
+                                                        autoComplete="off"
+                                                        className="w-full px-4 py-2.5 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all font-medium pr-10 text-sm"
+                                                    />
+                                                    <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-2">
+                                                        {amendmentFormData.port && (
+                                                            <button type="button" onClick={() => setAmendmentFormData(prev => ({ ...prev, port: '' }))} className="text-gray-400 hover:text-gray-600">
+                                                                <XIcon className="w-4 h-4" />
+                                                            </button>
+                                                        )}
+                                                        <SearchIcon className="w-4 h-4 text-gray-300 pointer-events-none" />
+                                                    </div>
+                                                </div>
+                                                {activeDropdown === 'amendmentPort' && (
+                                                    <div className="absolute z-[100] w-full mt-1 bg-white border border-gray-200 rounded-xl shadow-xl max-h-48 overflow-y-auto py-1">
+                                                        {ports
+                                                            .filter(p => !p.isLoadingPort && (!amendmentFormData.port || p.name.toLowerCase().includes(amendmentFormData.port.toLowerCase())))
+                                                            .map((p, idx) => (
+                                                                <button
+                                                                    key={idx}
+                                                                    type="button"
+                                                                    onMouseDown={(e) => {
+                                                                        e.preventDefault();
+                                                                        handleDropdownSelect('amendmentPort', p.name);
+                                                                    }}
+                                                                    onMouseEnter={() => setHighlightedIndex(idx)}
+                                                                    className={`w-full px-4 py-2 text-left text-sm transition-colors font-medium ${amendmentFormData.port === p.name ? 'bg-blue-50 text-blue-700' : highlightedIndex === idx ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-blue-50'}`}
+                                                                >
+                                                                    {p.name}
+                                                                </button>
+                                                            ))}
+                                                    </div>
+                                                )}
+                                            </div>
+
+                                            <div className="space-y-1.5">
+                                                <CustomDatePicker
+                                                    label="Extended Shipment Date"
+                                                    value={amendmentFormData.extendedShipmentDate}
+                                                    onChange={(e) => setAmendmentFormData(prev => ({ ...prev, extendedShipmentDate: e.target.value }))}
+                                                    compact={true}
+                                                />
+                                            </div>
                                         </div>
 
                                         <div className="col-span-full space-y-1.5">
@@ -2975,6 +3424,7 @@ const LCManagement = ({ addNotification, currentUser }) => {
                                                 setShowAmendmentForm(false);
                                                 setSelectedAmendmentLcId('');
                                                 setAmendmentSearchQuery('');
+                                                setEditingAmendmentNo('');
                                                 setAmendmentFormData({
                                                     amendmentNo: '',
                                                     amendmentDate: '',
@@ -2983,6 +3433,10 @@ const LCManagement = ({ addNotification, currentUser }) => {
                                                     rate: '',
                                                     dollarRate: '',
                                                     remarks: '',
+                                                    addnNo: '',
+                                                    addnDate: '',
+                                                    port: '',
+                                                    extendedShipmentDate: '',
                                                     piNo: ''
                                                 });
                                             }}
@@ -3364,6 +3818,9 @@ const LCManagement = ({ addNotification, currentUser }) => {
                     gpRecords={gpRecords}
                     lcExpenses={lcExpenses}
                     piRecordsRaw={piRecordsRaw}
+                    onEdit={handleEdit}
+                    onEditAmendment={handleEditAmendment}
+                    canManage={canManage}
                 />
             )}
 
