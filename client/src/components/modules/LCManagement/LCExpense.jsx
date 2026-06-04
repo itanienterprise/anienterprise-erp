@@ -42,11 +42,13 @@ const LCExpense = ({ currentUser, addNotification, onDeleteConfirm, refreshKey }
 
     const [bdCnfs, setBdCnfs] = useState([]);
     const cnfAgentRef = React.useRef(null);
+    const [stockRecords, setStockRecords] = useState([]);
 
     useEffect(() => {
         fetchExpenses();
         fetchLCs();
         fetchCnfs();
+        fetchStockRecords();
     }, [refreshKey]);
 
     useEffect(() => {
@@ -120,6 +122,15 @@ const LCExpense = ({ currentUser, addNotification, onDeleteConfirm, refreshKey }
         }
     };
 
+    const fetchStockRecords = async () => {
+        try {
+            const response = await axios.get(`${API_BASE_URL}/api/stock`);
+            setStockRecords(Array.isArray(response.data) ? response.data : []);
+        } catch (error) {
+            console.error('Error fetching stock records:', error);
+        }
+    };
+
     const handleInputChange = (e) => {
         const { name, value } = e.target;
         setFormData(prev => ({ ...prev, [name]: value }));
@@ -186,6 +197,35 @@ const LCExpense = ({ currentUser, addNotification, onDeleteConfirm, refreshKey }
     });
 
     const totalAmount = filteredExpenses.reduce((sum, exp) => sum + (parseFloat(exp.amount) || 0), 0);
+
+    const getCalculatedTotalBill = () => {
+        if (!formData.lcNo || !formData.expenseHead) return 0;
+        
+        const selectedLc = lcs.find(lc => lc.lcNo === formData.lcNo);
+        if (!selectedLc) return 0;
+
+        if (formData.expenseHead === 'Bank Charges') {
+            const originalBankBill = parseFloat(selectedLc.totalBankBill || selectedLc.bankBill || 0);
+            const amendmentsBankBill = selectedLc.amendments ? selectedLc.amendments.reduce((sum, amnd) => {
+                return sum + (parseFloat(amnd.totalAmendmentBankBill || amnd.amendmentBill || amnd.amendmentBankBill) || 0);
+            }, 0) : 0;
+            return originalBankBill + amendmentsBankBill;
+        }
+
+        if (formData.expenseHead === 'C&F Commission') {
+            if (!formData.cnfAgent) return 0;
+            const cleanAgent = formData.cnfAgent.toLowerCase().trim();
+            const filteredStock = stockRecords.filter(
+                record => record.lcNo === formData.lcNo &&
+                (record.bdCnF || '').toLowerCase().trim() === cleanAgent
+            );
+            return filteredStock.reduce((sum, r) => sum + (parseFloat(r.bdCnFCost) || 0), 0);
+        }
+
+        return 0;
+    };
+
+    const totalBillVal = getCalculatedTotalBill();
 
     return (
         <div className="space-y-4 md:space-y-6">
@@ -512,6 +552,18 @@ const LCExpense = ({ currentUser, addNotification, onDeleteConfirm, refreshKey }
                                     )}
                                 </div>
                             )}
+
+                            <div key={formData.expenseHead} className="space-y-1.5 text-left animate-in fade-in zoom-in duration-300">
+                                <label className="text-sm font-semibold text-gray-600 ml-1">
+                                    {formData.expenseHead ? `Total ${formData.expenseHead} Bill` : 'Total Bill'} (৳)
+                                </label>
+                                <input
+                                    type="text"
+                                    value={(totalBillVal || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                                    readOnly
+                                    className="w-full px-4 py-2.5 bg-gray-50/80 border border-gray-200/60 rounded-xl outline-none transition-all font-bold text-gray-500 cursor-not-allowed"
+                                />
+                            </div>
 
                             <div className="space-y-1.5 text-left">
                                 <label className="text-sm font-semibold text-gray-600 ml-1">Amount (৳) <span className="text-red-500">*</span></label>

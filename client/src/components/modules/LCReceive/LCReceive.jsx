@@ -948,14 +948,41 @@ function LCReceive({
         }
     };
 
+    function getLcActiveProducts(lc) {
+        if (!lc) return [];
+        
+        // Find the latest amendment with productsList
+        const amendments = lc.amendments || [];
+        for (let i = amendments.length - 1; i >= 0; i--) {
+            if (amendments[i].productsList && amendments[i].productsList.length > 0) {
+                return amendments[i].productsList;
+            }
+        }
+        
+        // Fall back to the LC's baseline productsList
+        if (lc.productsList && lc.productsList.length > 0) {
+            return lc.productsList;
+        }
+        
+        // Fall back to lc.productName
+        if (lc.productName) {
+            return [{ productName: lc.productName }];
+        }
+        
+        return [];
+    }
+
     const getFilteredLCs = (input) => {
         if (!input) return lcRecords;
         const lowInput = input.toLowerCase();
-        return lcRecords.filter(r =>
-            (r.lcNo || '').toLowerCase().includes(lowInput) ||
-            (r.importerName || '').toLowerCase().includes(lowInput) ||
-            (r.productName || '').toLowerCase().includes(lowInput)
-        );
+        return lcRecords.filter(r => {
+            const activeProds = getLcActiveProducts(r);
+            const matchesProduct = activeProds.some(p => (p.productName || '').toLowerCase().includes(lowInput));
+            return (r.lcNo || '').toLowerCase().includes(lowInput) ||
+                (r.importerName || '').toLowerCase().includes(lowInput) ||
+                (r.productName || '').toLowerCase().includes(lowInput) ||
+                matchesProduct;
+        });
     };
 
     const getFilteredCnFs = (input, type) => {
@@ -979,16 +1006,18 @@ function LCReceive({
                     if (selectedLc.exporterName) newData.exporter = selectedLc.exporterName;
 
                     // Also auto-fill first product if empty
-                    if (selectedLc.productName && prev.productEntries.length === 1 && !prev.productEntries[0].productName) {
+                    const activeProds = getLcActiveProducts(selectedLc);
+                    const firstProdName = activeProds[0]?.productName || selectedLc.productName;
+                    if (firstProdName && prev.productEntries.length === 1 && !prev.productEntries[0].productName) {
                         const updatedProducts = [...prev.productEntries];
                         updatedProducts[0] = {
                             ...updatedProducts[0],
-                            productName: selectedLc.productName
+                            productName: firstProdName
                         };
                         // Standard logic: in single mode, auto-fill brand too
                         if (!updatedProducts[0].isMultiBrand && updatedProducts[0].brandEntries[0]) {
                             updatedProducts[0].brandEntries = [
-                                { ...updatedProducts[0].brandEntries[0], brand: selectedLc.productName }
+                                { ...updatedProducts[0].brandEntries[0], brand: firstProdName }
                             ];
                         }
                         newData.productEntries = updatedProducts;
@@ -1499,8 +1528,37 @@ function LCReceive({
     };
 
     const getFilteredProducts = (input) => {
-        if (!input) return products;
-        return products.filter(p => p.name.toLowerCase().includes(input.toLowerCase()));
+        let availableProducts = products;
+
+        if (stockFormData.lcNo) {
+            const selectedLc = lcRecords.find(lc => lc.lcNo === stockFormData.lcNo);
+            if (selectedLc) {
+                const activeLcProducts = getLcActiveProducts(selectedLc);
+                if (activeLcProducts.length > 0) {
+                    const lcProductNames = activeLcProducts.map(p => (p.productName || '').trim());
+                    const lcProductNamesLower = lcProductNames.map(name => name.toLowerCase());
+                    
+                    // Filter existing products
+                    const matchedProducts = products.filter(p => lcProductNamesLower.includes(p.name.toLowerCase()));
+                    
+                    // Identify any LC product name that is not in the database products list
+                    const missingProducts = lcProductNames.filter(name => 
+                        name && !matchedProducts.some(p => p.name.toLowerCase() === name.toLowerCase())
+                    ).map(name => ({
+                        _id: `temp-${name}`,
+                        name: name,
+                        brands: []
+                    }));
+                    
+                    availableProducts = [...matchedProducts, ...missingProducts];
+                } else {
+                    availableProducts = [];
+                }
+            }
+        }
+
+        if (!input) return availableProducts;
+        return availableProducts.filter(p => p.name.toLowerCase().includes(input.toLowerCase()));
     };
 
     const getFilteredBrands = (input, productName) => {
@@ -2194,7 +2252,11 @@ function LCReceive({
                                                 >
                                                     <div className="flex flex-col">
                                                         <span className="font-bold">{lc.lcNo}</span>
-                                                        <span className="text-[10px] text-gray-500">{lc.importerName} • {lc.productName}</span>
+                                                        <span className="text-[10px] text-gray-500">
+                                                            {lc.importerName} • {
+                                                                getLcActiveProducts(lc).map(p => p.productName).filter(Boolean).join(', ') || lc.productName || 'No Product'
+                                                            }
+                                                        </span>
                                                     </div>
                                                 </button>
                                             ))}
