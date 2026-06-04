@@ -37,6 +37,13 @@ const numberToWordsUSD = (amount) => {
     return words.replace(/\s+/g, ' ').trim();
 };
 
+const getRevName = (name) => {
+    if (!name) return 'Original PI';
+    if (name === 'Original PI') return 'Original PI';
+    const match = name.match(/REVISE NO-(\d+)/i);
+    return match ? `Revised ${parseInt(match[1])}` : name;
+};
+
 function PackingList({
     importers = [],
     exporters = [],
@@ -61,6 +68,7 @@ function PackingList({
     const [submitStatus, setSubmitStatus] = useState(null);
     const [searchQuery, setSearchQuery] = useState('');
     const [editingId, setEditingId] = useState(null);
+    const [selectedPiRaw, setSelectedPiRaw] = useState(null);
     const [activeDropdown, setActiveDropdown] = useState(null);
     const [highlightedIndex, setHighlightedIndex] = useState(-1);
     const [toast, setToast] = useState(null);
@@ -128,7 +136,8 @@ function PackingList({
         countryFinalDest: 'BANGLADESH',
         certification: '',
         otherReferences: '',
-        buyerName: ''
+        buyerName: '',
+        selectedRevisionNo: ''
     });
 
     useEffect(() => {
@@ -191,32 +200,34 @@ function PackingList({
         setFormData(prev => ({ ...prev, [name]: value }));
     };
 
-    // Auto-populate form when a Proforma Invoice is selected
-    const handlePISelect = (pi) => {
-        // Determine if this PI is revised
-        const isRevised = pi.isRevisedOption;
-        const displayPiNumber = isRevised ? `${pi.piNumber} (REVISED)` : (pi.piNumber || '');
+    const loadPiRevision = (rawPi, revisionNo) => {
+        const isRevised = revisionNo && revisionNo !== 'Original PI';
+        const displayPiNumber = isRevised ? `${rawPi.piNumber} (REVISED)` : (rawPi.piNumber || '');
 
         // Look up the LC that references this PI number
-        const cleanPiNo = pi.piNumber || '';
+        const cleanPiNo = rawPi.piNumber || '';
         const matchedLcByPi = lcRecords?.find(lc => {
             const lcPi = (lc.piNo || '').replace(' (REVISED)', '');
             return lcPi === cleanPiNo;
         });
 
-        // Use the PI's revised date if available
-        const piDate = isRevised
-            ? (pi.revisions && pi.revisions.length > 0 ? (pi.revisions[pi.revisions.length - 1].reviseDate || pi.date || '') : (pi.date || ''))
-            : (pi.date || '');
+        // The revisions array in rawPi
+        const revisions = rawPi.revisions || [];
+        // The selected revision object (could be 'Original PI' or subsequent revisions)
+        const selectedRev = revisions.find(r => r.reviseNo === revisionNo) || rawPi;
+
+        // Use the selected revision's date if available
+        const piDate = selectedRev.reviseDate || selectedRev.date || rawPi.date || '';
 
         let revisedTotalAmount = 0;
         let mappedProducts = [];
-        if (isRevised && pi.revisions && pi.revisions.length > 0) {
-            const originalRev = pi.revisions.find(r => r.reviseNo === 'Original PI');
+
+        if (isRevised && revisions.length > 0) {
+            const originalRev = revisions.find(r => r.reviseNo === 'Original PI') || rawPi;
             const originalProducts = originalRev?.productsList || [];
 
-            // Filter and map only the changed products
-            const revisedProducts = pi.productsList || [];
+            // Filter and map only the changed products between selected revision and original revision
+            const revisedProducts = selectedRev.productsList || [];
             revisedProducts.forEach(p => {
                 const origProd = originalProducts.find(op => op.productName?.trim().toLowerCase() === p.productName?.trim().toLowerCase());
                 const origQty = origProd ? (parseFloat(origProd.quantity) || 0) : 0;
@@ -225,15 +236,18 @@ function PackingList({
 
                 if (diffQty !== 0) {
                     // This product has changed!
-                    const calculatedAmt = diffQty * (parseFloat(p.rate) || 0);
-                    const calculatedFrt = diffQty * (parseFloat(p.freight) || 0);
+                    // If quantity decreased (diffQty < 0), show remaining value (revQty).
+                    // If quantity increased (diffQty > 0), keep the difference (diffQty).
+                    const displayQty = diffQty < 0 ? revQty : diffQty;
+                    const calculatedAmt = displayQty * (parseFloat(p.rate) || 0);
+                    const calculatedFrt = displayQty * (parseFloat(p.freight) || 0);
                     revisedTotalAmount += calculatedAmt + calculatedFrt;
                     mappedProducts.push({
                         productName: p.productName || '',
                         hsCode: p.hsCode || '',
-                        quantity: String(diffQty), // Show the increased/changed quantity instead of the total
+                        quantity: String(displayQty),
                         bagCount: '',
-                        netWeight: String(diffQty), // Net Weight shows the increased/changed quantity
+                        netWeight: String(displayQty),
                         grossWeight: '',
                         rate: p.rate || '',
                         amount: String(calculatedAmt.toFixed(2)),
@@ -243,7 +257,6 @@ function PackingList({
                 }
             });
 
-            // Fallback: If for some reason no products are changed, show all
             if (mappedProducts.length === 0) {
                 mappedProducts = revisedProducts.map(p => {
                     const amt = parseFloat(p.amount) || 0;
@@ -264,8 +277,8 @@ function PackingList({
                 });
             }
         } else {
-            // Unrevised or Original option selected: show all products, netWeight = full quantity
-            const productsSource = pi.productsList || [];
+            // Unrevised or Original option: show all products, netWeight = full quantity of selectedRev/rawPi
+            const productsSource = selectedRev.productsList || rawPi.productsList || [];
             mappedProducts = productsSource.map(p => ({
                 productName: p.productName || '',
                 hsCode: p.hsCode || '',
@@ -280,7 +293,6 @@ function PackingList({
             }));
         }
 
-        // Ensure we always have at least one product row
         if (mappedProducts.length === 0) {
             mappedProducts = [{ productName: '', hsCode: '', quantity: '', bagCount: '', netWeight: '', grossWeight: '', rate: '', amount: '', freight: '', totalFreight: '' }];
         }
@@ -289,43 +301,51 @@ function PackingList({
             ...prev,
             piNumber: displayPiNumber,
             piDate: piDate ? piDate.split('T')[0] : '',
-            partyName: pi.partyName || '',
-            partyAddress: pi.partyAddress || '',
-            partyContact: pi.partyContact || '',
-            exporterName: pi.exporterName || '',
-            exporterAddress: pi.exporterAddress || '',
-            exporterContact: pi.exporterContact || '',
-            exporterEmail: pi.exporterEmail || '',
-            portOfLoading: pi.portOfLoading || '',
-            portOfDischarge: pi.portOfDischarge || '',
-            vesselFlightNo: pi.vesselFlightNo || 'BY TRUCK',
-            preCarriageBy: pi.preCarriageBy || 'ROAD',
-            placeOfReceipt: pi.placeOfReceipt || pi.placeOfReceiptByPreCarrier || 'BY ROAD',
-            finalDestination: pi.finalDestination || 'BANGLADESH',
-            marksNo: pi.marksNo || '',
-            buyerOrderNo: pi.buyerOrderNo || '',
-            buyerOrderDate: pi.buyerOrderDate ? pi.buyerOrderDate.split('T')[0] : '',
+            partyName: rawPi.partyName || '',
+            partyAddress: rawPi.partyAddress || '',
+            partyContact: rawPi.partyContact || '',
+            exporterName: rawPi.exporterName || '',
+            exporterAddress: rawPi.exporterAddress || '',
+            exporterContact: rawPi.exporterContact || '',
+            exporterEmail: rawPi.exporterEmail || '',
+            portOfLoading: rawPi.portOfLoading || '',
+            portOfDischarge: rawPi.portOfDischarge || '',
+            vesselFlightNo: rawPi.vesselFlightNo || 'BY TRUCK',
+            preCarriageBy: rawPi.preCarriageBy || 'ROAD',
+            placeOfReceipt: rawPi.placeOfReceipt || rawPi.placeOfReceiptByPreCarrier || 'BY ROAD',
+            finalDestination: rawPi.finalDestination || 'BANGLADESH',
+            marksNo: rawPi.marksNo || '',
+            buyerOrderNo: rawPi.buyerOrderNo || '',
+            buyerOrderDate: rawPi.buyerOrderDate ? rawPi.buyerOrderDate.split('T')[0] : '',
             lcNumber: matchedLcByPi ? (matchedLcByPi.lcNo || '') : '',
             lcDate: matchedLcByPi ? (matchedLcByPi.openingDate ? matchedLcByPi.openingDate.split('T')[0] : '') : '',
-            partySignature: pi.partySignature || '',
-            exporterSignature: pi.exporterSignature || '',
-            invoiceStyle: pi.invoiceStyle || 'Style 2 AAS',
+            partySignature: rawPi.partySignature || '',
+            exporterSignature: rawPi.exporterSignature || '',
+            invoiceStyle: rawPi.invoiceStyle || 'Style 2 AAS',
             bankName: matchedLcByPi ? (matchedLcByPi.bankName || '') : '',
             lcAmendment: matchedLcByPi ? (matchedLcByPi.lcAmendment || '') : '',
-            descriptionGoods: pi.descriptionGoods || '',
-            termsDeliveryPayment: pi.termsDeliveryPayment || '',
-            totalAmount: isRevised ? String(revisedTotalAmount.toFixed(2)) : (pi.totalAmount || ''),
-            totalAmountWords: isRevised ? numberToWordsUSD(revisedTotalAmount) : (pi.totalAmountWords || ''),
-            countryOrigin: pi.countryOrigin || 'INDIA',
-            countryFinalDest: pi.countryFinalDest || 'BANGLADESH',
-            certification: pi.certification || '',
-            otherReferences: pi.otherReferences || '',
-            buyerName: pi.buyerName || '',
+            descriptionGoods: rawPi.descriptionGoods || '',
+            termsDeliveryPayment: rawPi.termsDeliveryPayment || '',
+            totalAmount: isRevised ? String(revisedTotalAmount.toFixed(2)) : (selectedRev.totalAmount || rawPi.totalAmount || ''),
+            totalAmountWords: isRevised ? numberToWordsUSD(revisedTotalAmount) : (selectedRev.totalAmountWords || rawPi.totalAmountWords || ''),
+            countryOrigin: rawPi.countryOrigin || 'INDIA',
+            countryFinalDest: rawPi.countryFinalDest || 'BANGLADESH',
+            certification: rawPi.certification || '',
+            otherReferences: rawPi.otherReferences || '',
+            buyerName: rawPi.buyerName || '',
+            selectedRevisionNo: revisionNo,
             productsList: mappedProducts
         }));
         setPiSearchQuery('');
         setActiveDropdown(null);
         showToast(`Copied data from PI Number ${displayPiNumber}`);
+    };
+
+    // Auto-populate form when a Proforma Invoice is selected
+    const handlePISelect = (pi) => {
+        const rawPi = pi.rawPi || pi;
+        setSelectedPiRaw(rawPi);
+        loadPiRevision(rawPi, 'Original PI');
     };
 
     const handleProductsImageChange = (e) => {
@@ -415,11 +435,13 @@ function PackingList({
             countryFinalDest: 'BANGLADESH',
             certification: '',
             otherReferences: '',
-            buyerName: ''
+            buyerName: '',
+            selectedRevisionNo: ''
         });
         setPiSearchQuery('');
         setEditingId(null);
         setSubmitStatus(null);
+        setSelectedPiRaw(null);
     };
 
     const handleSubmit = async (e) => {
@@ -469,6 +491,20 @@ function PackingList({
 
     const handleEditClick = (record) => {
         setEditingId(record._id);
+
+        const basePiNumber = (record.piNumber || '').replace(' (REVISED)', '').trim();
+        const matchedRawPi = piRecords.find(pi => (pi.piNumber || '').trim() === basePiNumber);
+        setSelectedPiRaw(matchedRawPi || null);
+
+        let revisionNo = record.selectedRevisionNo || '';
+        if (!revisionNo && matchedRawPi && matchedRawPi.revisions && matchedRawPi.revisions.length > 0) {
+            if ((record.piNumber || '').includes('(REVISED)')) {
+                revisionNo = matchedRawPi.revisions[matchedRawPi.revisions.length - 1].reviseNo || 'Original PI';
+            } else {
+                revisionNo = 'Original PI';
+            }
+        }
+
         setFormData({
             packingListNumber: record.packingListNumber || '',
             date: record.date ? record.date.split('T')[0] : '',
@@ -527,7 +563,8 @@ function PackingList({
             countryFinalDest: record.countryFinalDest || 'BANGLADESH',
             certification: record.certification || '',
             otherReferences: record.otherReferences || '',
-            buyerName: record.buyerName || ''
+            buyerName: record.buyerName || '',
+            selectedRevisionNo: revisionNo
         });
         setShowForm(true);
     };
@@ -604,16 +641,7 @@ function PackingList({
         piRecords.forEach(pi => {
             const hasRevisions = pi.revisions && pi.revisions.length > 0;
             if (hasRevisions) {
-                // 1. Revised PI (latest state)
-                const latestRev = pi.revisions[pi.revisions.length - 1];
-                list.push({
-                    ...pi,
-                    ...latestRev,
-                    _dropdownKey: `${pi._id}-revised`,
-                    isRevisedOption: true,
-                    displayPiNumber: pi.piNumber,
-                });
-                // 2. Original/Old PI
+                // Only show Original PI in the selection list
                 const originalRev = pi.revisions.find(r => r.reviseNo === 'Original PI');
                 if (originalRev) {
                     list.push({
@@ -622,6 +650,15 @@ function PackingList({
                         _dropdownKey: `${pi._id}-original`,
                         isRevisedOption: false,
                         displayPiNumber: pi.piNumber,
+                        rawPi: pi
+                    });
+                } else {
+                    list.push({
+                        ...pi,
+                        _dropdownKey: pi._id,
+                        isRevisedOption: false,
+                        displayPiNumber: pi.piNumber,
+                        rawPi: pi
                     });
                 }
             } else {
@@ -630,6 +667,7 @@ function PackingList({
                     _dropdownKey: pi._id,
                     isRevisedOption: false,
                     displayPiNumber: pi.piNumber,
+                    rawPi: pi
                 });
             }
         });
@@ -725,42 +763,81 @@ function PackingList({
                     {!editingId && (
                         <div className="mb-8 p-4 bg-blue-50/50 border border-blue-100 rounded-xl relative z-20 dropdown-container" ref={piDropdownRef}>
                             <label className="block text-xs font-semibold text-blue-700 uppercase tracking-wider mb-2">Auto-populate from Proforma Invoice (PI)</label>
-                            <div className="relative max-w-md">
-                                <input
-                                    type="text"
-                                    placeholder="Search PI number or importer name to pre-fill..."
-                                    value={piSearchQuery}
-                                    onChange={(e) => { setPiSearchQuery(e.target.value); setActiveDropdown('piList'); setHighlightedIndex(-1); }}
-                                    onFocus={() => { setActiveDropdown('piList'); setHighlightedIndex(-1); }}
-                                    onKeyDown={(e) => handleDropdownKeyDown(e, 'piList', filteredPIs)}
-                                    className="w-full pl-10 pr-4 py-2 border border-blue-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
-                                />
-                                <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
-                                    <SearchIcon className="h-4 w-4 text-blue-400" />
+                            <div className="flex flex-col sm:flex-row gap-4 items-stretch sm:items-center">
+                                <div className="relative flex-1 max-w-md">
+                                    <input
+                                        type="text"
+                                        placeholder="Search PI number or importer name to pre-fill..."
+                                        value={piSearchQuery}
+                                        onChange={(e) => { setPiSearchQuery(e.target.value); setActiveDropdown('piList'); setHighlightedIndex(-1); }}
+                                        onFocus={() => { setActiveDropdown('piList'); setHighlightedIndex(-1); }}
+                                        onKeyDown={(e) => handleDropdownKeyDown(e, 'piList', filteredPIs)}
+                                        className="w-full pl-10 pr-4 py-2 border border-blue-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 bg-white"
+                                    />
+                                    <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
+                                        <SearchIcon className="h-4 w-4 text-blue-400" />
+                                    </div>
+                                    {activeDropdown === 'piList' && filteredPIs.length > 0 && (
+                                        <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-xl shadow-xl max-h-48 overflow-y-auto">
+                                            {filteredPIs.map((pi, idx) => (
+                                                <button
+                                                    key={pi._dropdownKey}
+                                                    type="button"
+                                                    onClick={() => handlePISelect(pi)}
+                                                    onMouseEnter={() => setHighlightedIndex(idx)}
+                                                    className={`w-full px-4 py-2.5 text-left text-sm flex justify-between items-center ${highlightedIndex === idx ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-blue-50'}`}
+                                                >
+                                                    <span className="font-semibold">
+                                                        {pi.piNumber}
+                                                        {pi.isRevisedOption ? (
+                                                            <span className="ml-1.5 text-[10px] font-bold text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200">REVISED</span>
+                                                        ) : (
+                                                            pi.revisions && pi.revisions.length > 0 && (
+                                                                <span className="ml-1.5 text-[10px] font-bold text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded border border-blue-200">ORIGINAL</span>
+                                                            )
+                                                        )}
+                                                    </span>
+                                                    <span className="text-xs text-gray-500 truncate max-w-[200px]">{pi.partyName}</span>
+                                                </button>
+                                            ))}
+                                        </div>
+                                    )}
                                 </div>
-                                {activeDropdown === 'piList' && filteredPIs.length > 0 && (
-                                    <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-xl shadow-xl max-h-48 overflow-y-auto">
-                                        {filteredPIs.map((pi, idx) => (
+
+                                {selectedPiRaw && selectedPiRaw.revisions && selectedPiRaw.revisions.length > 0 && (
+                                    <div className="w-full sm:w-64 animate-in fade-in slide-in-from-left-2 duration-300 flex items-center gap-2 relative">
+                                        <span className="text-xs font-semibold text-blue-700 uppercase shrink-0">Revision:</span>
+                                        <div className="relative flex-1">
                                             <button
-                                                key={pi._dropdownKey}
                                                 type="button"
-                                                onClick={() => handlePISelect(pi)}
-                                                onMouseEnter={() => setHighlightedIndex(idx)}
-                                                className={`w-full px-4 py-2.5 text-left text-sm flex justify-between items-center ${highlightedIndex === idx ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-blue-50'}`}
+                                                onClick={() => setActiveDropdown(activeDropdown === 'piRevisions' ? null : 'piRevisions')}
+                                                className="w-full px-4 py-2 border border-blue-200 rounded-lg text-sm bg-white text-gray-700 hover:bg-gray-50 flex items-center justify-between outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all font-medium text-left"
                                             >
-                                                <span className="font-semibold">
-                                                    {pi.piNumber}
-                                                    {pi.isRevisedOption ? (
-                                                        <span className="ml-1.5 text-[10px] font-bold text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200">REVISED</span>
-                                                    ) : (
-                                                        pi.revisions && pi.revisions.length > 0 && (
-                                                            <span className="ml-1.5 text-[10px] font-bold text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded border border-blue-200">ORIGINAL</span>
-                                                        )
-                                                    )}
-                                                </span>
-                                                <span className="text-xs text-gray-500 truncate max-w-[200px]">{pi.partyName}</span>
+                                                <span>{getRevName(formData.selectedRevisionNo || 'Original PI')}</span>
+                                                <ChevronDownIcon className={`h-4 w-4 text-blue-400 transition-transform duration-200 ${activeDropdown === 'piRevisions' ? 'transform rotate-180' : ''}`} />
                                             </button>
-                                        ))}
+                                            {activeDropdown === 'piRevisions' && (
+                                                <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-xl shadow-xl max-h-48 overflow-y-auto">
+                                                    {selectedPiRaw.revisions.map((rev) => (
+                                                        <button
+                                                            key={rev.reviseNo}
+                                                            type="button"
+                                                            onClick={() => {
+                                                                loadPiRevision(selectedPiRaw, rev.reviseNo);
+                                                                setActiveDropdown(null);
+                                                            }}
+                                                            className={`w-full px-4 py-2.5 text-left text-sm flex justify-between items-center transition-colors ${
+                                                                (formData.selectedRevisionNo || 'Original PI') === rev.reviseNo
+                                                                    ? 'bg-blue-50 text-blue-700 font-semibold'
+                                                                    : 'text-gray-700 hover:bg-blue-50 hover:text-blue-700'
+                                                            }`}
+                                                        >
+                                                            <span>{getRevName(rev.reviseNo)}</span>
+                                                        </button>
+                                                    ))}
+                                                </div>
+                                            )}
+                                        </div>
                                     </div>
                                 )}
                             </div>
@@ -805,6 +882,7 @@ function PackingList({
                                     placeholder="PI Reference No"
                                 />
                             </div>
+
 
                             <div className="space-y-2">
                                 <label className="text-sm font-medium text-gray-700">PI Date</label>

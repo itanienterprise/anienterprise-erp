@@ -13,10 +13,26 @@ const Bank = ({ onDeleteConfirm }) => {
     const [searchQuery, setSearchQuery] = useState('');
     const [editingId, setEditingId] = useState(null);
     const [expandedRowKey, setExpandedRowKey] = useState(null);
+    const [expandedBranchKey, setExpandedBranchKey] = useState(null);
     const [formData, setFormData] = useState({
         bankName: '',
         binNo: '',
-        branches: [{ branch: '', accountName: '', accountNo: '' }],
+        branches: [{ 
+            branch: '', 
+            accountName: '', 
+            accountNo: '',
+            lcCommission: '',
+            vatOnCommission: '',
+            swiftCharge: '',
+            vatOnSwiftCharge: '',
+            lcApplicationForm: '',
+            mpCharge: '',
+            stampCharge: '',
+            amendmentCommission: '',
+            amendmentVatOnCommission: '',
+            amendmentSwiftCharge: '',
+            amendmentVatOnSwift: ''
+        }],
         isIndian: false,
         status: 'Active'
     });
@@ -52,7 +68,22 @@ const Bank = ({ onDeleteConfirm }) => {
     const addBranchRow = () => {
         setFormData(prev => ({
             ...prev,
-            branches: [...prev.branches, { branch: '', accountName: '', accountNo: '' }]
+            branches: [...prev.branches, { 
+                branch: '', 
+                accountName: '', 
+                accountNo: '',
+                lcCommission: '',
+                vatOnCommission: '',
+                swiftCharge: '',
+                vatOnSwiftCharge: '',
+                lcApplicationForm: '',
+                mpCharge: '',
+                stampCharge: '',
+                amendmentCommission: '',
+                amendmentVatOnCommission: '',
+                amendmentSwiftCharge: '',
+                amendmentVatOnSwift: ''
+            }]
         }));
     };
 
@@ -99,7 +130,22 @@ const Bank = ({ onDeleteConfirm }) => {
         setFormData({
             bankName: '',
             binNo: '',
-            branches: [{ branch: '', accountName: '', accountNo: '' }],
+            branches: [{ 
+                branch: '', 
+                accountName: '', 
+                accountNo: '',
+                lcCommission: '',
+                vatOnCommission: '',
+                swiftCharge: '',
+                vatOnSwiftCharge: '',
+                lcApplicationForm: '',
+                mpCharge: '',
+                stampCharge: '',
+                amendmentCommission: '',
+                amendmentVatOnCommission: '',
+                amendmentSwiftCharge: '',
+                amendmentVatOnSwift: ''
+            }],
             isIndian: false,
             status: 'Active'
         });
@@ -109,13 +155,30 @@ const Bank = ({ onDeleteConfirm }) => {
 
     const handleEdit = (bank) => {
         // Handle backwards compatibility for banks saved with old structure
-        const branches = bank.branches || [
+        const rawBranches = bank.branches || [
             {
                 branch: bank.branch || '',
                 accountName: bank.accountName || '',
                 accountNo: bank.accountNo || ''
             }
         ];
+
+        const branches = rawBranches.map(b => ({
+            branch: b.branch || '',
+            accountName: b.accountName || '',
+            accountNo: b.accountNo || '',
+            lcCommission: b.lcCommission !== undefined ? b.lcCommission : '',
+            vatOnCommission: b.vatOnCommission !== undefined ? b.vatOnCommission : '',
+            swiftCharge: b.swiftCharge !== undefined ? b.swiftCharge : '',
+            vatOnSwiftCharge: b.vatOnSwiftCharge !== undefined ? b.vatOnSwiftCharge : '',
+            lcApplicationForm: b.lcApplicationForm !== undefined ? b.lcApplicationForm : '',
+            mpCharge: b.mpCharge !== undefined ? b.mpCharge : '',
+            stampCharge: b.stampCharge !== undefined ? b.stampCharge : '',
+            amendmentCommission: b.amendmentCommission !== undefined ? b.amendmentCommission : '',
+            amendmentVatOnCommission: b.amendmentVatOnCommission !== undefined ? b.amendmentVatOnCommission : '',
+            amendmentSwiftCharge: b.amendmentSwiftCharge !== undefined ? b.amendmentSwiftCharge : '',
+            amendmentVatOnSwift: b.amendmentVatOnSwift !== undefined ? b.amendmentVatOnSwift : ''
+        }));
 
         setFormData({
             bankName: bank.bankName || '',
@@ -299,52 +362,235 @@ const Bank = ({ onDeleteConfirm }) => {
 
                             <div className="space-y-3">
                                 {formData.branches.map((branch, index) => (
-                                    <div key={index} className="grid grid-cols-1 md:grid-cols-3 gap-4 p-4 bg-gray-50/50 rounded-2xl border border-gray-100 relative group/row">
-                                        <div className="space-y-1.5">
-                                            <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider ml-1">Branch</label>
-                                            <input
-                                                type="text"
-                                                name="branch"
-                                                value={branch.branch}
-                                                onChange={(e) => handleBranchChange(index, e)}
-                                                required
-                                                placeholder="Branch Name"
-                                                className="w-full px-4 py-2 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all text-sm"
-                                            />
-                                        </div>
-                                        <div className="space-y-1.5">
-                                            <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider ml-1">Account Name</label>
-                                            <input
-                                                type="text"
-                                                name="accountName"
-                                                value={branch.accountName}
-                                                onChange={(e) => handleBranchChange(index, e)}
-                                                required
-                                                placeholder="Account Name"
-                                                className="w-full px-4 py-2 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all text-sm"
-                                            />
-                                        </div>
-                                        <div className="space-y-1.5 relative">
-                                            <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider ml-1">Account No</label>
-                                            <div className="flex gap-2">
+                                    <div key={index} className="flex flex-col gap-4 p-5 bg-gray-50/50 rounded-2xl border border-gray-100 relative group/row">
+                                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                            <div className="space-y-1.5">
+                                                <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider ml-1">Branch</label>
                                                 <input
                                                     type="text"
-                                                    name="accountNo"
-                                                    value={branch.accountNo}
+                                                    name="branch"
+                                                    value={branch.branch}
                                                     onChange={(e) => handleBranchChange(index, e)}
                                                     required
-                                                    placeholder="Account Number"
-                                                    className="w-full px-4 py-2 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all text-sm"
+                                                    placeholder="Branch Name"
+                                                    className="w-full px-4 py-2 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all text-sm shadow-sm"
                                                 />
-                                                {formData.branches.length > 1 && (
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => removeBranchRow(index)}
-                                                        className="p-2 text-gray-400 hover:text-rose-500 hover:bg-rose-50 rounded-xl transition-all border border-transparent hover:border-rose-100"
-                                                    >
-                                                        <TrashIcon className="w-4 h-4" />
-                                                    </button>
-                                                )}
+                                            </div>
+                                            <div className="space-y-1.5">
+                                                <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider ml-1">Account Name</label>
+                                                <input
+                                                    type="text"
+                                                    name="accountName"
+                                                    value={branch.accountName}
+                                                    onChange={(e) => handleBranchChange(index, e)}
+                                                    required
+                                                    placeholder="Account Name"
+                                                    className="w-full px-4 py-2 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all text-sm shadow-sm"
+                                                />
+                                            </div>
+                                            <div className="space-y-1.5 relative">
+                                                <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider ml-1">Account No</label>
+                                                <div className="flex gap-2">
+                                                    <input
+                                                        type="text"
+                                                        name="accountNo"
+                                                        value={branch.accountNo}
+                                                        onChange={(e) => handleBranchChange(index, e)}
+                                                        required
+                                                        placeholder="Account Number"
+                                                        className="w-full px-4 py-2 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all text-sm shadow-sm"
+                                                    />
+                                                    {formData.branches.length > 1 && (
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => removeBranchRow(index)}
+                                                            className="p-2 text-gray-400 hover:text-rose-500 hover:bg-rose-50 rounded-xl transition-all border border-transparent hover:border-rose-100 shrink-0"
+                                                        >
+                                                            <TrashIcon className="w-4 h-4" />
+                                                        </button>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <div className="border-t border-gray-200/50 my-1"></div>
+
+                                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                                            {/* New LC Bill Details */}
+                                            <div className="bg-white/60 p-4 rounded-xl border border-gray-200/60 space-y-4">
+                                                <h4 className="text-xs font-bold text-blue-600 uppercase tracking-wider border-b border-blue-50 pb-2 flex items-center">
+                                                    <span>New LC Bill</span>
+                                                </h4>
+                                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                                    <div className="space-y-1.5">
+                                                        <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider ml-1">LC Commission</label>
+                                                        <div className="relative">
+                                                            <input
+                                                                type="number"
+                                                                step="any"
+                                                                name="lcCommission"
+                                                                value={branch.lcCommission}
+                                                                onChange={(e) => handleBranchChange(index, e)}
+                                                                placeholder="0.00"
+                                                                className="w-full pl-3 pr-8 py-2 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all text-xs shadow-sm"
+                                                            />
+                                                            <span className="absolute inset-y-0 right-0 pr-3 flex items-center text-xs font-bold text-gray-400 pointer-events-none">%</span>
+                                                        </div>
+                                                    </div>
+
+                                                    <div className="space-y-1.5">
+                                                        <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider ml-1">VAT on Commission</label>
+                                                        <div className="relative">
+                                                            <input
+                                                                type="number"
+                                                                step="any"
+                                                                name="vatOnCommission"
+                                                                value={branch.vatOnCommission}
+                                                                onChange={(e) => handleBranchChange(index, e)}
+                                                                placeholder="0.00"
+                                                                className="w-full pl-3 pr-8 py-2 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all text-xs shadow-sm"
+                                                            />
+                                                            <span className="absolute inset-y-0 right-0 pr-3 flex items-center text-xs font-bold text-gray-400 pointer-events-none">%</span>
+                                                        </div>
+                                                    </div>
+
+                                                    <div className="space-y-1.5">
+                                                        <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider ml-1">SWIFT Charge</label>
+                                                        <input
+                                                            type="number"
+                                                            step="any"
+                                                            name="swiftCharge"
+                                                            value={branch.swiftCharge}
+                                                            onChange={(e) => handleBranchChange(index, e)}
+                                                            placeholder="0.00"
+                                                            className="w-full px-3 py-2 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all text-xs shadow-sm"
+                                                        />
+                                                    </div>
+
+                                                    <div className="space-y-1.5">
+                                                        <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider ml-1">VAT on SWIFT Charge</label>
+                                                        <div className="relative">
+                                                            <input
+                                                                type="number"
+                                                                step="any"
+                                                                name="vatOnSwiftCharge"
+                                                                value={branch.vatOnSwiftCharge}
+                                                                onChange={(e) => handleBranchChange(index, e)}
+                                                                placeholder="0.00"
+                                                                className="w-full pl-3 pr-8 py-2 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all text-xs shadow-sm"
+                                                            />
+                                                            <span className="absolute inset-y-0 right-0 pr-3 flex items-center text-xs font-bold text-gray-400 pointer-events-none">%</span>
+                                                        </div>
+                                                    </div>
+
+                                                    <div className="space-y-1.5">
+                                                        <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider ml-1">LC Application Form</label>
+                                                        <input
+                                                            type="number"
+                                                            step="any"
+                                                            name="lcApplicationForm"
+                                                            value={branch.lcApplicationForm}
+                                                            onChange={(e) => handleBranchChange(index, e)}
+                                                            placeholder="0.00"
+                                                            className="w-full px-3 py-2 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all text-xs shadow-sm"
+                                                        />
+                                                    </div>
+
+                                                    <div className="space-y-1.5">
+                                                        <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider ml-1">MP Charge</label>
+                                                        <input
+                                                            type="number"
+                                                            step="any"
+                                                            name="mpCharge"
+                                                            value={branch.mpCharge}
+                                                            onChange={(e) => handleBranchChange(index, e)}
+                                                            placeholder="0.00"
+                                                            className="w-full px-3 py-2 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all text-xs shadow-sm"
+                                                        />
+                                                    </div>
+
+                                                    <div className="space-y-1.5">
+                                                        <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider ml-1">Stamp Charge</label>
+                                                        <input
+                                                            type="number"
+                                                            step="any"
+                                                            name="stampCharge"
+                                                            value={branch.stampCharge}
+                                                            onChange={(e) => handleBranchChange(index, e)}
+                                                            placeholder="0.00"
+                                                            className="w-full px-3 py-2 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all text-xs shadow-sm"
+                                                        />
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            {/* Amendment Bill Details */}
+                                            <div className="bg-white/60 p-4 rounded-xl border border-gray-200/60 space-y-4">
+                                                <h4 className="text-xs font-bold text-indigo-600 uppercase tracking-wider border-b border-indigo-50 pb-2 flex items-center">
+                                                    <span>Amendment Bill</span>
+                                                </h4>
+                                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                                    <div className="space-y-1.5">
+                                                        <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider ml-1">Commission on Amendment</label>
+                                                        <div className="relative">
+                                                            <input
+                                                                type="number"
+                                                                step="any"
+                                                                name="amendmentCommission"
+                                                                value={branch.amendmentCommission}
+                                                                onChange={(e) => handleBranchChange(index, e)}
+                                                                placeholder="0.00"
+                                                                className="w-full pl-3 pr-8 py-2 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all text-xs shadow-sm"
+                                                            />
+                                                            <span className="absolute inset-y-0 right-0 pr-3 flex items-center text-xs font-bold text-gray-400 pointer-events-none">%</span>
+                                                        </div>
+                                                    </div>
+
+                                                    <div className="space-y-1.5">
+                                                        <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider ml-1">VAT on Commission</label>
+                                                        <div className="relative">
+                                                            <input
+                                                                type="number"
+                                                                step="any"
+                                                                name="amendmentVatOnCommission"
+                                                                value={branch.amendmentVatOnCommission}
+                                                                onChange={(e) => handleBranchChange(index, e)}
+                                                                placeholder="0.00"
+                                                                className="w-full pl-3 pr-8 py-2 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all text-xs shadow-sm"
+                                                            />
+                                                            <span className="absolute inset-y-0 right-0 pr-3 flex items-center text-xs font-bold text-gray-400 pointer-events-none">%</span>
+                                                        </div>
+                                                    </div>
+
+                                                    <div className="space-y-1.5">
+                                                        <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider ml-1">SWIFT Charge</label>
+                                                        <input
+                                                            type="number"
+                                                            step="any"
+                                                            name="amendmentSwiftCharge"
+                                                            value={branch.amendmentSwiftCharge}
+                                                            onChange={(e) => handleBranchChange(index, e)}
+                                                            placeholder="0.00"
+                                                            className="w-full px-3 py-2 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all text-xs shadow-sm"
+                                                        />
+                                                    </div>
+
+                                                    <div className="space-y-1.5">
+                                                        <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider ml-1">VAT on SWIFT</label>
+                                                        <div className="relative">
+                                                            <input
+                                                                type="number"
+                                                                step="any"
+                                                                name="amendmentVatOnSwift"
+                                                                value={branch.amendmentVatOnSwift}
+                                                                onChange={(e) => handleBranchChange(index, e)}
+                                                                placeholder="0.00"
+                                                                className="w-full pl-3 pr-8 py-2 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all text-xs shadow-sm"
+                                                            />
+                                                            <span className="absolute inset-y-0 right-0 pr-3 flex items-center text-xs font-bold text-gray-400 pointer-events-none">%</span>
+                                                        </div>
+                                                    </div>
+                                                </div>
                                             </div>
                                         </div>
                                     </div>
@@ -412,37 +658,118 @@ const Bank = ({ onDeleteConfirm }) => {
                                 ) : displayBanks.length > 0 ? (
                                     displayBanks.map((group) => (
                                         <React.Fragment key={group.bankName}>
-                                            {group.items.map((item, idx) => (
-                                                <tr key={item.uniqueRowKey} className="hover:bg-gray-50/50 transition-colors group border-b border-gray-100 last:border-b-0">
-                                                    <td className="px-6 py-4 text-[13px] font-bold text-gray-700">
-                                                        {idx === 0 ? group.bankName : ''}
-                                                    </td>
-                                                    <td className="px-6 py-4 text-[13px] font-medium text-gray-600">
-                                                        {idx === 0 ? (item.binNo || '-') : ''}
-                                                    </td>
-                                                    <td className="px-6 py-4 text-[13px] font-medium text-gray-600">{item.branch}</td>
-                                                    <td className="px-6 py-4 text-[13px] font-medium text-gray-600">{item.accountName}</td>
-                                                    <td className="px-6 py-4 text-[13px] font-medium text-gray-600">{item.accountNo}</td>
-                                                    <td className="px-6 py-4 text-center">
-                                                        <div className="flex justify-center items-center gap-2">
-                                                            <button 
-                                                                onClick={() => handleEdit(item)}
-                                                                className="p-1.5 hover:bg-blue-50 text-gray-400 hover:text-blue-600 rounded-lg transition-all"
-                                                                title="Edit"
-                                                            >
-                                                                <EditIcon className="w-4 h-4" />
-                                                            </button>
-                                                            <button 
-                                                                onClick={() => handleDelete(item._id)}
-                                                                className="p-1.5 hover:bg-red-50 text-gray-400 hover:text-red-500 rounded-lg transition-all"
-                                                                title="Delete"
-                                                            >
-                                                                <TrashIcon className="w-4 h-4" />
-                                                            </button>
-                                                        </div>
-                                                    </td>
-                                                </tr>
-                                            ))}
+                                            {group.items.map((item, idx) => {
+                                                const isBranchExpanded = expandedBranchKey === item.uniqueRowKey;
+                                                return (
+                                                    <React.Fragment key={item.uniqueRowKey}>
+                                                        <tr className="hover:bg-gray-50/50 transition-colors group border-b border-gray-100 last:border-b-0">
+                                                            <td className="px-6 py-4 text-[13px] font-bold text-gray-700">
+                                                                {idx === 0 ? group.bankName : ''}
+                                                            </td>
+                                                            <td className="px-6 py-4 text-[13px] font-medium text-gray-600">
+                                                                {idx === 0 ? (item.binNo || '-') : ''}
+                                                            </td>
+                                                            <td className="px-6 py-4 text-[13px] font-medium text-gray-600">{item.branch}</td>
+                                                            <td className="px-6 py-4 text-[13px] font-medium text-gray-600">{item.accountName}</td>
+                                                            <td className="px-6 py-4 text-[13px] font-medium text-gray-600">{item.accountNo}</td>
+                                                            <td className="px-6 py-4 text-center">
+                                                                <div className="flex justify-center items-center gap-2">
+                                                                    <button 
+                                                                        onClick={() => setExpandedBranchKey(prev => prev === item.uniqueRowKey ? null : item.uniqueRowKey)}
+                                                                        className={`p-1.5 rounded-lg transition-all ${isBranchExpanded ? 'bg-blue-50 text-blue-600' : 'hover:bg-gray-100 text-gray-400 hover:text-gray-600'}`}
+                                                                        title="View Charges"
+                                                                    >
+                                                                        {isBranchExpanded ? (
+                                                                            <ChevronUpIcon className="w-4 h-4" />
+                                                                        ) : (
+                                                                            <ChevronDownIcon className="w-4 h-4" />
+                                                                        )}
+                                                                    </button>
+                                                                    <button 
+                                                                        onClick={() => handleEdit(item)}
+                                                                        className="p-1.5 hover:bg-blue-50 text-gray-400 hover:text-blue-600 rounded-lg transition-all"
+                                                                        title="Edit"
+                                                                    >
+                                                                        <EditIcon className="w-4 h-4" />
+                                                                    </button>
+                                                                    <button 
+                                                                        onClick={() => handleDelete(item._id)}
+                                                                        className="p-1.5 hover:bg-red-50 text-gray-400 hover:text-red-500 rounded-lg transition-all"
+                                                                        title="Delete"
+                                                                    >
+                                                                        <TrashIcon className="w-4 h-4" />
+                                                                    </button>
+                                                                </div>
+                                                            </td>
+                                                        </tr>
+                                                        {isBranchExpanded && (
+                                                            <tr className="bg-gray-50/30">
+                                                                <td colSpan="6" className="px-6 py-4 border-b border-gray-100">
+                                                                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 bg-white p-5 rounded-2xl border border-gray-100/85 shadow-inner animate-in fade-in duration-300">
+                                                                        {/* New LC Bill Charges */}
+                                                                        <div className="space-y-3">
+                                                                            <h4 className="text-xs font-black text-blue-600 uppercase tracking-widest border-b border-blue-50 pb-2">New LC Bill Charges</h4>
+                                                                            <div className="grid grid-cols-2 sm:grid-cols-3 gap-y-3 gap-x-4">
+                                                                                <div className="space-y-0.5">
+                                                                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">LC Commission</span>
+                                                                                    <p className="text-xs font-black text-gray-800">{item.lcCommission ? `${item.lcCommission}%` : '-'}</p>
+                                                                                </div>
+                                                                                <div className="space-y-0.5">
+                                                                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">VAT on Commission</span>
+                                                                                    <p className="text-xs font-black text-gray-800">{item.vatOnCommission ? `${item.vatOnCommission}%` : '-'}</p>
+                                                                                </div>
+                                                                                <div className="space-y-0.5">
+                                                                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">SWIFT Charge</span>
+                                                                                    <p className="text-xs font-black text-gray-800">{item.swiftCharge !== undefined && item.swiftCharge !== '' ? `${item.swiftCharge}` : '-'}</p>
+                                                                                </div>
+                                                                                <div className="space-y-0.5">
+                                                                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">VAT on SWIFT Charge</span>
+                                                                                    <p className="text-xs font-black text-gray-800">{item.vatOnSwiftCharge ? `${item.vatOnSwiftCharge}%` : '-'}</p>
+                                                                                </div>
+                                                                                <div className="space-y-0.5">
+                                                                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">LC Application Form</span>
+                                                                                    <p className="text-xs font-black text-gray-800">{item.lcApplicationForm !== undefined && item.lcApplicationForm !== '' ? `${item.lcApplicationForm}` : '-'}</p>
+                                                                                </div>
+                                                                                <div className="space-y-0.5">
+                                                                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">MP Charge</span>
+                                                                                    <p className="text-xs font-black text-gray-800">{item.mpCharge !== undefined && item.mpCharge !== '' ? `${item.mpCharge}` : '-'}</p>
+                                                                                </div>
+                                                                                <div className="space-y-0.5">
+                                                                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Stamp Charge</span>
+                                                                                    <p className="text-xs font-black text-gray-800">{item.stampCharge !== undefined && item.stampCharge !== '' ? `${item.stampCharge}` : '-'}</p>
+                                                                                </div>
+                                                                            </div>
+                                                                        </div>
+
+                                                                        {/* Amendment Bill Charges */}
+                                                                        <div className="space-y-3">
+                                                                            <h4 className="text-xs font-black text-indigo-600 uppercase tracking-widest border-b border-indigo-50 pb-2">Amendment Bill Charges</h4>
+                                                                            <div className="grid grid-cols-2 sm:grid-cols-3 gap-y-3 gap-x-4">
+                                                                                <div className="space-y-0.5">
+                                                                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Commission on Amendment</span>
+                                                                                    <p className="text-xs font-black text-gray-800">{item.amendmentCommission ? `${item.amendmentCommission}%` : '-'}</p>
+                                                                                </div>
+                                                                                <div className="space-y-0.5">
+                                                                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">VAT on Commission</span>
+                                                                                    <p className="text-xs font-black text-gray-800">{item.amendmentVatOnCommission ? `${item.amendmentVatOnCommission}%` : '-'}</p>
+                                                                                </div>
+                                                                                <div className="space-y-0.5">
+                                                                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">SWIFT Charge</span>
+                                                                                    <p className="text-xs font-black text-gray-800">{item.amendmentSwiftCharge !== undefined && item.amendmentSwiftCharge !== '' ? `${item.amendmentSwiftCharge}` : '-'}</p>
+                                                                                </div>
+                                                                                <div className="space-y-0.5">
+                                                                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">VAT on SWIFT</span>
+                                                                                    <p className="text-xs font-black text-gray-800">{item.amendmentVatOnSwift ? `${item.amendmentVatOnSwift}%` : '-'}</p>
+                                                                                </div>
+                                                                            </div>
+                                                                        </div>
+                                                                    </div>
+                                                                </td>
+                                                            </tr>
+                                                        )}
+                                                    </React.Fragment>
+                                                );
+                                            })}
                                         </React.Fragment>
                                     ))
                                 ) : (
@@ -531,6 +858,66 @@ const Bank = ({ onDeleteConfirm }) => {
                                                             <div className="flex items-center text-[13px]">
                                                                 <span className="w-32 text-[11px] font-bold text-blue-400 uppercase tracking-wider shrink-0">Account No -</span>
                                                                 <span className="font-black text-blue-600 select-all tracking-tight">{item.accountNo}</span>
+                                                            </div>
+
+                                                            <div className="border-t border-gray-200/50 my-2"></div>
+
+                                                            <div className="space-y-4">
+                                                                <div className="space-y-2">
+                                                                    <h4 className="text-[11px] font-black text-blue-600 uppercase tracking-wider">New LC Bill Charges</h4>
+                                                                    <div className="grid grid-cols-2 gap-2 text-xs">
+                                                                        <div className="bg-white/80 p-2 rounded-xl border border-gray-150/40">
+                                                                            <span className="text-[9px] font-bold text-gray-400 uppercase block leading-tight">LC Comm.</span>
+                                                                            <span className="font-black text-gray-800">{item.lcCommission ? `${item.lcCommission}%` : '-'}</span>
+                                                                        </div>
+                                                                        <div className="bg-white/80 p-2 rounded-xl border border-gray-150/40">
+                                                                            <span className="text-[9px] font-bold text-gray-400 uppercase block leading-tight">VAT on Comm.</span>
+                                                                            <span className="font-black text-gray-800">{item.vatOnCommission ? `${item.vatOnCommission}%` : '-'}</span>
+                                                                        </div>
+                                                                        <div className="bg-white/80 p-2 rounded-xl border border-gray-150/40">
+                                                                            <span className="text-[9px] font-bold text-gray-400 uppercase block leading-tight">SWIFT</span>
+                                                                            <span className="font-black text-gray-800">{item.swiftCharge !== undefined && item.swiftCharge !== '' ? `${item.swiftCharge}` : '-'}</span>
+                                                                        </div>
+                                                                        <div className="bg-white/80 p-2 rounded-xl border border-gray-150/40">
+                                                                            <span className="text-[9px] font-bold text-gray-400 uppercase block leading-tight">VAT on SWIFT</span>
+                                                                            <span className="font-black text-gray-800">{item.vatOnSwiftCharge ? `${item.vatOnSwiftCharge}%` : '-'}</span>
+                                                                        </div>
+                                                                        <div className="bg-white/80 p-2 rounded-xl border border-gray-150/40">
+                                                                            <span className="text-[9px] font-bold text-gray-400 uppercase block leading-tight">LC App Form</span>
+                                                                            <span className="font-black text-gray-800">{item.lcApplicationForm !== undefined && item.lcApplicationForm !== '' ? `${item.lcApplicationForm}` : '-'}</span>
+                                                                        </div>
+                                                                        <div className="bg-white/80 p-2 rounded-xl border border-gray-150/40">
+                                                                            <span className="text-[9px] font-bold text-gray-400 uppercase block leading-tight">MP Charge</span>
+                                                                            <span className="font-black text-gray-800">{item.mpCharge !== undefined && item.mpCharge !== '' ? `${item.mpCharge}` : '-'}</span>
+                                                                        </div>
+                                                                        <div className="bg-white/80 p-2 rounded-xl border border-gray-150/40 col-span-2">
+                                                                            <span className="text-[9px] font-bold text-gray-400 uppercase block leading-tight">Stamp Charge</span>
+                                                                            <span className="font-black text-gray-800">{item.stampCharge !== undefined && item.stampCharge !== '' ? `${item.stampCharge}` : '-'}</span>
+                                                                        </div>
+                                                                    </div>
+                                                                </div>
+
+                                                                <div className="space-y-2">
+                                                                    <h4 className="text-[11px] font-black text-indigo-600 uppercase tracking-wider">Amendment Bill Charges</h4>
+                                                                    <div className="grid grid-cols-2 gap-2 text-xs">
+                                                                        <div className="bg-white/80 p-2 rounded-xl border border-gray-150/40">
+                                                                            <span className="text-[9px] font-bold text-gray-400 uppercase block leading-tight">Amendment Comm.</span>
+                                                                            <span className="font-black text-gray-800">{item.amendmentCommission ? `${item.amendmentCommission}%` : '-'}</span>
+                                                                        </div>
+                                                                        <div className="bg-white/80 p-2 rounded-xl border border-gray-150/40">
+                                                                            <span className="text-[9px] font-bold text-gray-400 uppercase block leading-tight">VAT on Comm.</span>
+                                                                            <span className="font-black text-gray-800">{item.amendmentVatOnCommission ? `${item.amendmentVatOnCommission}%` : '-'}</span>
+                                                                        </div>
+                                                                        <div className="bg-white/80 p-2 rounded-xl border border-gray-150/40">
+                                                                            <span className="text-[9px] font-bold text-gray-400 uppercase block leading-tight">SWIFT</span>
+                                                                            <span className="font-black text-gray-800">{item.amendmentSwiftCharge !== undefined && item.amendmentSwiftCharge !== '' ? `${item.amendmentSwiftCharge}` : '-'}</span>
+                                                                        </div>
+                                                                        <div className="bg-white/80 p-2 rounded-xl border border-gray-150/40">
+                                                                            <span className="text-[9px] font-bold text-gray-400 uppercase block leading-tight">VAT on SWIFT</span>
+                                                                            <span className="font-black text-gray-800">{item.amendmentVatOnSwift ? `${item.amendmentVatOnSwift}%` : '-'}</span>
+                                                                        </div>
+                                                                    </div>
+                                                                </div>
                                                             </div>
                                                         </div>
                                                     </div>
