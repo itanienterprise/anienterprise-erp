@@ -3,7 +3,7 @@ import axios from '../../../utils/api';
 import {
     PlusIcon, XIcon, EditIcon, TrashIcon, SearchIcon,
     LCManagerIcon, ShieldIcon, BuildingIcon, GlobeIcon,
-    DollarSignIcon, CalendarIcon, ChevronDownIcon, EyeIcon, FileTextIcon, CheckIcon
+    DollarSignIcon, CalendarIcon, ChevronDownIcon, ChevronUpIcon, EyeIcon, FileTextIcon, CheckIcon
 } from '../../Icons';
 import { formatDate, API_BASE_URL } from '../../../utils/helpers';
 import { decryptData } from '../../../utils/encryption';
@@ -13,6 +13,26 @@ const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords
     const [consumptionSearchQuery, setConsumptionSearchQuery] = useState('');
     const [activeTab, setActiveTab] = useState('history');
     const [activeMilestoneIndex, setActiveMilestoneIndex] = useState(0);
+    const [insurancePayments, setInsurancePayments] = useState([]);
+    const [cnfPayments, setCnfPayments] = useState([]);
+
+    useEffect(() => {
+        const fetchPaymentsData = async () => {
+            try {
+                const [insPayRes, cnfPayRes] = await Promise.all([
+                    axios.get(`${API_BASE_URL}/api/insurance-payments`),
+                    axios.get(`${API_BASE_URL}/api/cnf-payments`)
+                ]);
+                setInsurancePayments(Array.isArray(insPayRes.data) ? insPayRes.data : []);
+                setCnfPayments(Array.isArray(cnfPayRes.data) ? cnfPayRes.data : []);
+            } catch (error) {
+                console.error("Error fetching payments in modal:", error);
+            }
+        };
+        if (data && data.lcNo) {
+            fetchPaymentsData();
+        }
+    }, [data]);
 
     const timeline = useMemo(() => {
         return getLCHistoryTimeline(data);
@@ -207,6 +227,222 @@ const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords
     // truckNo is a numeric count per entry — sum all values instead of counting unique strings
     const truckCount = consumptionHistory.reduce((sum, item) => sum + (item.truckCount || 0), 0);
 
+    const getCnfBillStatus = (agentName) => {
+        if (!agentName) return "Unpaid";
+        const cleanAgent = agentName.toLowerCase().trim();
+        const totalEarned = lcExpenses
+            .filter(e => e.cnfAgent && e.cnfAgent.toLowerCase().trim() === cleanAgent)
+            .reduce((sum, e) => sum + (parseFloat(e.amount) || 0), 0);
+        const totalPaid = cnfPayments
+            .filter(p => p.cnfName && p.cnfName.toLowerCase().trim() === cleanAgent)
+            .reduce((sum, p) => sum + (parseFloat(p.amount) || 0), 0);
+
+        if (totalPaid >= totalEarned && totalEarned > 0) return "Paid";
+        if (totalPaid > 0 && totalPaid < totalEarned) return "Partial Paid";
+        return "Unpaid";
+    };
+
+    const bills = [];
+
+    // Calculate total bank charges paid from LC expenses
+    const totalBankChargesPaid = lcExpenses
+        .filter(e => e.lcNo === data.lcNo && e.expenseHead === 'Bank Charges')
+        .reduce((sum, e) => sum + (parseFloat(e.amount) || 0), 0);
+
+    let remainingBankPaid = totalBankChargesPaid;
+    let lastBankBillIdx = -1;
+
+    // 1. Bank Bill (Original)
+    const bankBillAmt = parseFloat(data.totalBankBill || data.bankBill) || 0;
+    if (bankBillAmt > 0) {
+        const paid = Math.min(remainingBankPaid, bankBillAmt);
+        remainingBankPaid -= paid;
+
+        let originalBankStatus = "Unpaid";
+        if (paid >= bankBillAmt) {
+            originalBankStatus = "Paid";
+        } else if (paid > 0) {
+            originalBankStatus = "Partial Paid";
+        }
+
+        bills.push({
+            date: data.openingDate || data.createdAt,
+            billHead: "Bank Bill",
+            name: data.bankName || "Bank",
+            totalBill: bankBillAmt,
+            paidBill: paid,
+            billBalance: Math.max(0, bankBillAmt - paid),
+            status: originalBankStatus
+        });
+        lastBankBillIdx = bills.length - 1;
+    }
+
+    // 2. Bank Bill (Amendments)
+    if (data.amendments && data.amendments.length > 0) {
+        data.amendments.forEach((amnd, idx) => {
+            const amndBillAmt = parseFloat(amnd.totalAmendmentBankBill || amnd.amendmentBill || amnd.amendmentBankBill) || 0;
+            if (amndBillAmt > 0) {
+                const paid = Math.min(remainingBankPaid, amndBillAmt);
+                remainingBankPaid -= paid;
+
+                let amndStatus = "Unpaid";
+                if (paid >= amndBillAmt) {
+                    amndStatus = "Paid";
+                } else if (paid > 0) {
+                    amndStatus = "Partial Paid";
+                }
+
+                bills.push({
+                    date: amnd.amendmentDate || data.openingDate,
+                    billHead: `Bank Bill (${amnd.amendmentNo || `Amend #${idx + 1}`})`,
+                    name: data.bankName || "Bank",
+                    totalBill: amndBillAmt,
+                    paidBill: paid,
+                    billBalance: Math.max(0, amndBillAmt - paid),
+                    status: amndStatus
+                });
+                lastBankBillIdx = bills.length - 1;
+            }
+        });
+    }
+
+    // If there is excess bank charges paid, attribute to last bank charges bill row
+    if (remainingBankPaid > 0 && lastBankBillIdx !== -1) {
+        bills[lastBankBillIdx].paidBill += remainingBankPaid;
+        bills[lastBankBillIdx].billBalance = Math.max(0, bills[lastBankBillIdx].totalBill - bills[lastBankBillIdx].paidBill);
+        bills[lastBankBillIdx].status = "Paid";
+    }
+
+    // 3. Insurance Bill
+    const insBillAmt = parseFloat(data.grossPremium || data.netPremium) || 0;
+    if (insBillAmt > 0) {
+        const paidAmt = insurancePayments
+            .filter(p => p.lcNo === data.lcNo && p.type !== 'Return Collection')
+            .reduce((sum, p) => sum + (parseFloat(p.amount) || 0), 0);
+
+        const paid = Math.min(paidAmt, insBillAmt);
+        let status = "Unpaid";
+        if (paid >= insBillAmt) {
+            status = "Paid";
+        } else if (paid > 0) {
+            status = "Partial Paid";
+        }
+
+        bills.push({
+            date: data.marineCNDate || data.openingDate || data.createdAt,
+            billHead: "Insurance Bill",
+            name: data.insuranceCo || "Insurance",
+            totalBill: insBillAmt,
+            paidBill: paid,
+            billBalance: Math.max(0, insBillAmt - paid),
+            status: status
+        });
+    }
+
+    // 4. Expenses (C&F and Others)
+    const cnfAgentPaidMap = {};
+    lcExpenses
+        .filter(e => cleanLc(e.lcNo) === lcNoClean && e.expenseHead === 'C&F Commission' && e.cnfAgent)
+        .forEach(e => {
+            const cleanAgent = e.cnfAgent.toLowerCase().trim();
+            cnfAgentPaidMap[cleanAgent] = (cnfAgentPaidMap[cleanAgent] || 0) + (parseFloat(e.amount) || 0);
+        });
+
+    const cnfAgentPaidRemaining = { ...cnfAgentPaidMap };
+
+    // Find all stock arrivals for this LC with C&F info
+    const cnfArrivals = allStockRecords.filter(s => {
+        const recordLcNoClean = cleanLc(s.lcNo);
+        const status = (s.status || '').toLowerCase();
+        return recordLcNoClean === lcNoClean && (status === 'accepted' || status === 'in stock') && s.bdCnF;
+    });
+
+    const processedCnfAgents = new Set();
+    const lastCnfBillIdxMap = {};
+
+    cnfArrivals.forEach(s => {
+        const billAmt = parseFloat(s.bdCnFCost) || 0;
+        if (billAmt <= 0) return;
+
+        const cleanAgent = s.bdCnF.toLowerCase().trim();
+        processedCnfAgents.add(cleanAgent);
+
+        const remainingPaid = cnfAgentPaidRemaining[cleanAgent] || 0;
+        const paid = Math.min(remainingPaid, billAmt);
+        if (cnfAgentPaidRemaining[cleanAgent] !== undefined) {
+            cnfAgentPaidRemaining[cleanAgent] -= paid;
+        }
+
+        let billStatus = "Unpaid";
+        if (paid >= billAmt) billStatus = "Paid";
+        else if (paid > 0) billStatus = "Partial Paid";
+
+        bills.push({
+            date: s.date || s.createdAt,
+            billHead: "C&F Bill",
+            name: s.bdCnF,
+            totalBill: billAmt,
+            paidBill: paid,
+            billBalance: Math.max(0, billAmt - paid),
+            status: billStatus
+        });
+        lastCnfBillIdxMap[cleanAgent] = bills.length - 1;
+    });
+
+    // If there is excess C&F paid, attribute to last C&F bill row
+    Object.keys(cnfAgentPaidRemaining).forEach(agentKey => {
+        const remaining = cnfAgentPaidRemaining[agentKey];
+        if (remaining > 0) {
+            const lastIdx = lastCnfBillIdxMap[agentKey];
+            if (lastIdx !== undefined) {
+                bills[lastIdx].paidBill += remaining;
+                bills[lastIdx].billBalance = Math.max(0, bills[lastIdx].totalBill - bills[lastIdx].paidBill);
+                bills[lastIdx].status = "Paid";
+                cnfAgentPaidRemaining[agentKey] = 0;
+            }
+        }
+    });
+
+    // If there are C&F agents with payments but no stock records, push them
+    Object.keys(cnfAgentPaidMap).forEach(agentKey => {
+        if (!processedCnfAgents.has(agentKey)) {
+            const firstExp = lcExpenses.find(e => cleanLc(e.lcNo) === lcNoClean && e.expenseHead === 'C&F Commission' && e.cnfAgent && e.cnfAgent.toLowerCase().trim() === agentKey);
+            const totalPaid = cnfAgentPaidMap[agentKey];
+            bills.push({
+                date: firstExp ? firstExp.date : (data.openingDate || data.createdAt),
+                billHead: "C&F Bill",
+                name: firstExp ? firstExp.cnfAgent : agentKey.toUpperCase(),
+                totalBill: 0,
+                paidBill: totalPaid,
+                billBalance: 0,
+                status: "Paid"
+            });
+        }
+    });
+
+    // Push other expenses as "Other Bills"
+    const otherExpenses = lcExpenses.filter(e => cleanLc(e.lcNo) === lcNoClean && e.expenseHead !== 'C&F Commission');
+    otherExpenses.forEach(exp => {
+        const billAmt = parseFloat(exp.amount) || 0;
+        bills.push({
+            date: exp.date,
+            billHead: exp.expenseHead || "Other Bill",
+            name: exp.expenseHead || "Other Name",
+            totalBill: billAmt,
+            paidBill: billAmt,
+            billBalance: 0,
+            status: "Paid"
+        });
+    });
+
+    const filteredBills = bills.filter(b => {
+        const q = (consumptionSearchQuery || "").toLowerCase();
+        return !q ||
+            b.billHead.toLowerCase().includes(q) ||
+            b.name.toLowerCase().includes(q) ||
+            b.status.toLowerCase().includes(q);
+    });
+
     return (
         <div className="fixed inset-0 z-[2000] flex items-center justify-center p-4">
             <div className="absolute inset-0 bg-gray-900/60 backdrop-blur-sm" onClick={onClose}></div>
@@ -253,7 +489,7 @@ const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords
                             </div>
                             {/* Tab Buttons */}
                             <div className="flex items-center gap-2">
-                                {['history', 'gp', 'expense'].map(tab => (
+                                {['history', 'gp', 'bill', 'expense'].map(tab => (
                                     <button
                                         key={tab}
                                         onClick={() => { setActiveTab(tab); setConsumptionSearchQuery(''); }}
@@ -262,7 +498,7 @@ const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords
                                             : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50'
                                             }`}
                                     >
-                                        {tab === 'history' ? 'LC History' : tab === 'gp' ? 'G.P List' : 'Expense'}
+                                        {tab === 'history' ? 'LC History' : tab === 'gp' ? 'G.P List' : tab === 'bill' ? 'LC Bill' : 'Expense'}
                                     </button>
                                 ))}
                             </div>
@@ -459,6 +695,88 @@ const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords
                                                 </td>
                                                 <td className="px-6 py-4 text-sm font-medium text-right text-blue-600">
                                                     ৳{filteredGpRecords.reduce((sum, gp) => sum + parseNum(gp.gpValue), 0).toLocaleString('en-IN')}
+                                                </td>
+                                                <td></td>
+                                            </tr>
+                                        </tfoot>
+                                    </table>
+                                </div>
+                            ) : activeTab === 'bill' ? (
+                                /* LC Bill Details Table */
+                                <div className="overflow-hidden border border-gray-100 rounded-2xl shadow-sm">
+                                    <table className="w-full text-left border-collapse">
+                                        <thead>
+                                            <tr className="bg-gray-50/50 border-b border-gray-100">
+                                                <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Date</th>
+                                                <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Bill Head</th>
+                                                <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Name</th>
+                                                <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-right">Total Bill</th>
+                                                <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-right">Paid Bill</th>
+                                                <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-right">Bill Balance</th>
+                                                <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-center">Status</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody className="divide-y divide-gray-50 font-medium">
+                                            {filteredBills.length > 0 ? (
+                                                filteredBills.map((bill, idx) => (
+                                                    <tr key={idx} className="hover:bg-gray-50/50 transition-colors group">
+                                                        <td className="px-6 py-4 text-sm text-gray-600 whitespace-nowrap">
+                                                            {formatDate(bill.date)}
+                                                        </td>
+                                                        <td className="px-6 py-4 text-sm font-bold text-blue-600">
+                                                            {bill.billHead}
+                                                        </td>
+                                                        <td className="px-6 py-4 text-sm text-gray-800 uppercase">
+                                                            {bill.name || '-'}
+                                                        </td>
+                                                        <td className="px-6 py-4 text-sm font-black text-right text-gray-900 whitespace-nowrap">
+                                                            ৳{bill.totalBill.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                                                        </td>
+                                                        <td className="px-6 py-4 text-sm font-black text-right text-emerald-600 whitespace-nowrap">
+                                                            ৳{(bill.paidBill || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                                                        </td>
+                                                        <td className="px-6 py-4 text-sm font-black text-right text-rose-600 whitespace-nowrap">
+                                                            {bill.billBalance < 0
+                                                                ? `-৳${Math.abs(bill.billBalance).toLocaleString('en-IN', { minimumFractionDigits: 2 })}`
+                                                                : `৳${(bill.billBalance || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}`
+                                                            }
+                                                        </td>
+                                                        <td className="px-6 py-4 text-center">
+                                                            <span className={`px-3 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider border ${bill.status === 'Paid'
+                                                                    ? 'bg-emerald-50 text-emerald-600 border-emerald-100/50'
+                                                                    : bill.status === 'Partial Paid'
+                                                                        ? 'bg-amber-50 text-amber-600 border-amber-100/50'
+                                                                        : 'bg-rose-50 text-rose-600 border-rose-100/50'
+                                                                }`}>
+                                                                {bill.status}
+                                                            </span>
+                                                        </td>
+                                                    </tr>
+                                                ))
+                                            ) : (
+                                                <tr>
+                                                    <td colSpan="7" className="px-6 py-12 text-center text-gray-400 font-bold">
+                                                        {consumptionSearchQuery ? 'No bills match your search.' : 'No bills found for this LC.'}
+                                                    </td>
+                                                </tr>
+                                            )}
+                                        </tbody>
+                                        <tfoot className="bg-gray-50/30">
+                                            <tr>
+                                                <td colSpan="3" className="px-6 py-4 text-right text-xs font-medium text-gray-400 uppercase tracking-wider">Total Bills:</td>
+                                                <td className="px-6 py-4 text-sm font-black text-right text-blue-600">
+                                                    ৳{filteredBills.reduce((sum, b) => sum + b.totalBill, 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                                                </td>
+                                                <td className="px-6 py-4 text-sm font-black text-right text-emerald-600">
+                                                    ৳{filteredBills.reduce((sum, b) => sum + (b.paidBill || 0), 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                                                </td>
+                                                <td className="px-6 py-4 text-sm font-black text-right text-rose-600">
+                                                    {(() => {
+                                                        const bal = filteredBills.reduce((sum, b) => sum + (b.billBalance || 0), 0);
+                                                        return bal < 0
+                                                            ? `-৳${Math.abs(bal).toLocaleString('en-IN', { minimumFractionDigits: 2 })}`
+                                                            : `৳${bal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`;
+                                                    })()}
                                                 </td>
                                                 <td></td>
                                             </tr>
@@ -721,18 +1039,18 @@ const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords
                                                 const activeQty = getMilestoneTotalQty(activeMilestone);
                                                 const prevQty = prevMilestone ? getMilestoneTotalQty(prevMilestone) : 0;
                                                 const diffQty = activeQty - prevQty;
-                                                
+
                                                 const rVal = parseFloat(activeMilestone.rate || 0);
                                                 const ratePerTon = rVal < 10 ? rVal * 1000 : rVal;
-                                                
+
                                                 const fVal = parseFloat(activeProducts[0]?.freight || data.freight || 0);
                                                 const freightPerTon = fVal < 0.1 ? fVal * 1000 : fVal;
-                                                
+
                                                 const dollarRate = parseFloat(activeMilestone.dollarRate || data.dollarRate || 0);
                                                 const diffDollar = diffQty * (ratePerTon + freightPerTon);
                                                 const diffAmount = diffDollar * dollarRate;
                                                 const sign = diffQty >= 0 ? '+' : '';
-                                                
+
                                                 return (
                                                     <div className="space-y-4">
                                                         <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-x-8 gap-y-4">
@@ -1302,24 +1620,24 @@ const calculateAmendmentBillsValue = (state, lc, banksRaw, editingAmendmentNo = 
     const selectedBank = banksRaw.find(b => (b.bankName || '').trim().toUpperCase() === (lc.bankName || '').trim().toUpperCase());
     const selectedBranch = selectedBank?.branches?.find(br => br.branch === lc.bankBranch);
 
-    const margin = state.amendmentMargin !== undefined && state.amendmentMargin !== '' 
-        ? (parseFloat(state.amendmentMargin) || 0) 
+    const margin = state.amendmentMargin !== undefined && state.amendmentMargin !== ''
+        ? (parseFloat(state.amendmentMargin) || 0)
         : (lc.bankMargin !== undefined && lc.bankMargin !== '' ? parseFloat(lc.bankMargin) : 0);
 
-    const amendmentCommission = state.amendmentCommission !== undefined && state.amendmentCommission !== '' 
-        ? (parseFloat(state.amendmentCommission) || 0) 
+    const amendmentCommission = state.amendmentCommission !== undefined && state.amendmentCommission !== ''
+        ? (parseFloat(state.amendmentCommission) || 0)
         : (selectedBranch?.amendmentCommission !== undefined && selectedBranch?.amendmentCommission !== '' ? parseFloat(selectedBranch.amendmentCommission) : 0);
 
-    const amendmentVatOnCommission = state.amendmentVatOnCommission !== undefined && state.amendmentVatOnCommission !== '' 
-        ? (parseFloat(state.amendmentVatOnCommission) || 0) 
+    const amendmentVatOnCommission = state.amendmentVatOnCommission !== undefined && state.amendmentVatOnCommission !== ''
+        ? (parseFloat(state.amendmentVatOnCommission) || 0)
         : (selectedBranch?.amendmentVatOnCommission !== undefined && selectedBranch?.amendmentVatOnCommission !== '' ? parseFloat(selectedBranch.amendmentVatOnCommission) : 0);
 
-    const amendmentSwiftCharge = state.amendmentSwiftCharge !== undefined && state.amendmentSwiftCharge !== '' 
-        ? (parseFloat(state.amendmentSwiftCharge) || 0) 
+    const amendmentSwiftCharge = state.amendmentSwiftCharge !== undefined && state.amendmentSwiftCharge !== ''
+        ? (parseFloat(state.amendmentSwiftCharge) || 0)
         : (selectedBranch?.amendmentSwiftCharge !== undefined && selectedBranch?.amendmentSwiftCharge !== '' ? parseFloat(selectedBranch.amendmentSwiftCharge) : 0);
 
-    const amendmentVatOnSwift = state.amendmentVatOnSwift !== undefined && state.amendmentVatOnSwift !== '' 
-        ? (parseFloat(state.amendmentVatOnSwift) || 0) 
+    const amendmentVatOnSwift = state.amendmentVatOnSwift !== undefined && state.amendmentVatOnSwift !== ''
+        ? (parseFloat(state.amendmentVatOnSwift) || 0)
         : (selectedBranch?.amendmentVatOnSwift !== undefined && selectedBranch?.amendmentVatOnSwift !== '' ? parseFloat(selectedBranch.amendmentVatOnSwift) : 0);
 
     const currentAmendments = [...(lc.amendments || [])];
@@ -1335,15 +1653,15 @@ const calculateAmendmentBillsValue = (state, lc, banksRaw, editingAmendmentNo = 
         ? (() => {
             const idx = currentAmendments.findIndex(a => a.amendmentNo === editingAmendmentNo);
             return idx > 0 ? currentAmendments[idx - 1] : lc;
-          })()
+        })()
         : (currentAmendments.length > 0 ? currentAmendments[currentAmendments.length - 1] : lc);
 
     const prevQty = getMilestoneTotalQty(prevMilestone);
     const prevAmount = parseFloat(prevMilestone.totalAmount || lc.totalAmount || 0);
-    
+
     const prevMargin = parseFloat(
-        prevMilestone.amendmentMargin !== undefined && prevMilestone.amendmentMargin !== '' 
-            ? prevMilestone.amendmentMargin 
+        prevMilestone.amendmentMargin !== undefined && prevMilestone.amendmentMargin !== ''
+            ? prevMilestone.amendmentMargin
             : (prevMilestone.bankMargin !== undefined && prevMilestone.bankMargin !== '' ? prevMilestone.bankMargin : (lc.bankMargin || 0))
     );
 
@@ -1411,6 +1729,93 @@ const syncAmendmentBills = (state, lc, banksRaw, editingAmendmentNo = '', ignore
         state.totalAmendmentBankBill = tot > 0 ? tot.toFixed(2) : '';
     }
     return state;
+};
+
+const getBankBillBreakdown = (record) => {
+    const totalAmount = parseFloat(record.totalAmount) || 0;
+    const margin = parseFloat(record.bankMargin) || 0;
+    const marginBill = parseFloat(record.marginBill) || (totalAmount * (margin / 100));
+
+    const bankLcCommission = parseFloat(record.bankLcCommission) || 0;
+    const bankVatOnCommission = parseFloat(record.bankVatOnCommission) || 0;
+    const bankSwiftCharge = parseFloat(record.bankSwiftCharge) || 0;
+    const bankVatOnSwiftCharge = parseFloat(record.bankVatOnSwiftCharge) || 0;
+    const bankLcApplicationForm = parseFloat(record.bankLcApplicationForm) || 0;
+    const bankMpCharge = parseFloat(record.bankMpCharge) || 0;
+    const bankStampCharge = parseFloat(record.bankStampCharge) || 0;
+
+    const commissionAmt = totalAmount * (bankLcCommission / 100);
+    const vatOnCommissionAmt = commissionAmt * (bankVatOnCommission / 100);
+    const vatOnSwiftChargeAmt = bankSwiftCharge * (bankVatOnSwiftCharge / 100);
+
+    const bankBill = parseFloat(record.bankBill) || (commissionAmt + vatOnCommissionAmt + bankSwiftCharge + vatOnSwiftChargeAmt + bankLcApplicationForm + bankMpCharge + bankStampCharge);
+    const totalBankBill = parseFloat(record.totalBankBill) || (marginBill + bankBill);
+
+    return {
+        margin,
+        marginBill,
+        bankLcCommission,
+        commissionAmt,
+        bankVatOnCommission,
+        vatOnCommissionAmt,
+        bankSwiftCharge,
+        bankVatOnSwiftCharge,
+        vatOnSwiftChargeAmt,
+        bankLcApplicationForm,
+        bankMpCharge,
+        bankStampCharge,
+        bankBill,
+        totalBankBill
+    };
+};
+
+const getAmendmentBreakdown = (record) => {
+    const amendments = (record.amendments || []).filter(a => a.amendmentNo !== 'Original LC');
+    let totalAmendmentBankBill = 0;
+    let totalAmendmentMarginBill = 0;
+    let totalAmendmentCombined = 0;
+
+    const list = amendments.map((amnd, index) => {
+        const bankBill = parseFloat(amnd.amendmentBankBill || amnd.amendmentBill) || 0;
+        const marginBill = parseFloat(amnd.amendmentMarginBill) || 0;
+        const totalBill = parseFloat(amnd.totalAmendmentBankBill || amnd.amendmentBill) || (bankBill + marginBill);
+
+        totalAmendmentBankBill += bankBill;
+        totalAmendmentMarginBill += marginBill;
+        totalAmendmentCombined += totalBill;
+
+        const swiftCharge = parseFloat(amnd.amendmentSwiftCharge) || 0;
+        const vatOnSwift = parseFloat(amnd.amendmentVatOnSwift) || 0;
+        const vatOnSwiftAmt = swiftCharge * (vatOnSwift / 100);
+
+        const vatOnCommission = parseFloat(amnd.amendmentVatOnCommission) || 0;
+        const commissionTotal = Math.max(0, bankBill - swiftCharge - vatOnSwiftAmt);
+        const commissionAmt = commissionTotal / (1 + vatOnCommission / 100);
+        const vatOnCommissionAmt = commissionTotal - commissionAmt;
+
+        return {
+            amendmentNo: amnd.amendmentNo || `Amendment-${String(index + 1).padStart(2, '0')}`,
+            amendmentDate: amnd.amendmentDate,
+            bankBill,
+            marginBill,
+            totalBill,
+            commission: amnd.amendmentCommission || '0',
+            commissionAmt,
+            vatOnCommission,
+            vatOnCommissionAmt,
+            swiftCharge,
+            vatOnSwift,
+            vatOnSwiftAmt,
+            margin: amnd.amendmentMargin || '0'
+        };
+    });
+
+    return {
+        list,
+        totalAmendmentBankBill,
+        totalAmendmentMarginBill,
+        totalAmendmentCombined
+    };
 };
 
 const LCManagement = ({ addNotification, currentUser }) => {
@@ -1534,6 +1939,7 @@ const LCManagement = ({ addNotification, currentUser }) => {
     });
     const [gpRecords, setGpRecords] = useState([]);
     const [lcExpenses, setLcExpenses] = useState([]);
+    const [expandedLcKey, setExpandedLcKey] = useState(null);
 
     const informativeQuantities = useMemo(() => {
         const selectedPi = piRecordsRaw.find(pi => pi.piNumber === formData.piNo);
@@ -2197,7 +2603,7 @@ const LCManagement = ({ addNotification, currentUser }) => {
             ? (() => {
                 const idx = currentAmendments.findIndex(a => a.amendmentNo === editingAmendmentNo);
                 return idx > 0 ? currentAmendments[idx - 1] : selectedLcForAmendment;
-              })()
+            })()
             : (currentAmendments.length > 0 ? currentAmendments[currentAmendments.length - 1] : selectedLcForAmendment);
 
         const prevQty = getMilestoneTotalQty(prevMilestone);
@@ -2337,7 +2743,7 @@ const LCManagement = ({ addNotification, currentUser }) => {
                 const piQtyTons = targetSource.productsList && targetSource.productsList.length > 0
                     ? targetSource.productsList.reduce((sum, p) => sum + (parseFloat(p.quantity) || 0), 0) / 1000
                     : (parseFloat(targetSource.grandTotalQuantity || targetSource.quantity) || 0) / 1000;
-                
+
                 if (piQtyTons > 0) resolvedQty = piQtyTons;
                 if (firstProd?.rate) {
                     const rVal = parseFloat(firstProd.rate);
@@ -2510,12 +2916,13 @@ const LCManagement = ({ addNotification, currentUser }) => {
             };
 
             const currentAmendments = [...(lc.amendments || [])];
-            const prevQty = editingAmendmentNo
+            const prevMilestone = editingAmendmentNo
                 ? (() => {
                     const idx = currentAmendments.findIndex(a => a.amendmentNo === editingAmendmentNo);
-                    return idx > 0 ? getMilestoneTotalQty(currentAmendments[idx - 1]) : getMilestoneTotalQty(lc);
-                  })()
-                : (currentAmendments.length > 0 ? getMilestoneTotalQty(currentAmendments[currentAmendments.length - 1]) : getMilestoneTotalQty(lc));
+                    return idx > 0 ? currentAmendments[idx - 1] : lc;
+                })()
+                : (currentAmendments.length > 0 ? currentAmendments[currentAmendments.length - 1] : lc);
+            const prevQty = getMilestoneTotalQty(prevMilestone);
 
             const fVal = parseFloat(updatedProductsList[0]?.freight || lc.freight || 0);
             const freightPerTon = fVal < 0.1 ? fVal * 1000 : fVal;
@@ -2564,7 +2971,7 @@ const LCManagement = ({ addNotification, currentUser }) => {
 
             // Create or update amendment log entry
             const finalSavedRate = targetRateScaled > 0 ? String(targetRateScaled) : amendmentFormData.rate;
-            
+
             if (editingAmendmentNo) {
                 const idx = currentAmendments.findIndex(a => a.amendmentNo === editingAmendmentNo);
                 if (idx !== -1) {
@@ -4752,80 +5159,264 @@ const LCManagement = ({ addNotification, currentUser }) => {
                                     const remGpKg = Math.max(0, qtyKg - totalGpQtyKg);
 
                                     return (
-                                        <tr key={record._id} className="hover:bg-gray-50/50 transition-colors border-b border-gray-50 group">
-                                            <td className="px-3 py-4 text-sm font-medium text-gray-600 whitespace-nowrap">{formatDate(record.openingDate)}</td>
-                                            <td className="px-3 py-4 text-sm font-medium text-gray-900 whitespace-nowrap">{formatDate(record.expiryDate)}</td>
-                                            <td className="px-3 py-4 text-sm font-bold text-gray-900 whitespace-nowrap">
-                                                <div className="flex flex-col">
-                                                    <span>{record.lcNo}</span>
-                                                    {record.amendments?.length > 0 && (
-                                                        <span className="self-start mt-0.5 px-1.5 py-0.5 bg-blue-50 text-blue-600 border border-blue-200/50 rounded text-[9px] font-extrabold uppercase tracking-wide">
-                                                            {record.lcAmendment?.split(' ')[0] || 'Amended'}
-                                                        </span>
-                                                    )}
-                                                </div>
-                                            </td>
-                                            <td className="px-3 py-4 text-sm font-medium text-gray-700 whitespace-nowrap truncate max-w-[120px]" title={record.importerName}>{record.importerName}</td>
-                                            <td className="px-3 py-4 text-sm text-gray-600 whitespace-nowrap truncate max-w-[120px]" title={record.exporterName}>{record.exporterName}</td>
-                                            <td className="px-3 py-4 text-sm text-gray-600 font-medium whitespace-nowrap truncate max-w-[120px]" title={record.bankName}>{record.bankName}</td>
-                                            <td className="px-3 py-4 text-sm text-gray-600 whitespace-nowrap truncate max-w-[80px]" title={displayPort}>{displayPort}</td>
-                                            <td className="px-3 py-4 text-sm font-bold text-gray-900 whitespace-nowrap truncate max-w-[120px]" title={displayProducts}>{displayProducts}</td>
-                                            <td className="px-3 py-4 text-sm text-right text-gray-600 whitespace-nowrap">
-                                                <span className="font-bold text-gray-900">{qtyKg.toLocaleString('en-US')}</span> <span className="text-[10px] text-gray-400 font-normal">Kg</span>
-                                            </td>
-                                            <td className="px-3 py-4 text-sm text-right font-black text-gray-900 whitespace-nowrap">৳{parseFloat(record.totalAmount || 0).toLocaleString('en-IN')}</td>
-                                            <td className="px-3 py-4 text-sm text-right whitespace-nowrap">
-                                                <span className={`font-black ${combinedRemKg <= 0 ? 'text-emerald-600' : 'text-blue-600'}`}>
-                                                    {combinedRemKg.toLocaleString('en-IN')} <span className="text-[10px] text-gray-400 font-medium whitespace-nowrap">Kg</span>
-                                                </span>
-                                            </td>
-                                            <td className="px-3 py-4 text-sm text-right whitespace-nowrap">
-                                                <span className={`font-black ${remGpKg <= 0 ? 'text-emerald-600' : 'text-indigo-600'}`}>
-                                                    {remGpKg.toLocaleString('en-US')} <span className="text-[10px] text-gray-400 font-medium whitespace-nowrap">Kg</span>
-                                                </span>
-                                            </td>
-                                            <td className="px-3 py-4 text-sm text-right whitespace-nowrap">
-                                                {(() => {
-                                                    const totalExpense = lcExpenses
-                                                        .filter(exp => exp.lcNo === record.lcNo)
-                                                        .reduce((sum, exp) => sum + (parseFloat(exp.amount) || 0), 0);
-                                                    return (
-                                                        <span className={`font-black ${totalExpense > 0 ? 'text-rose-600' : 'text-gray-400'}`}>
-                                                            {totalExpense > 0 ? `৳${totalExpense.toLocaleString('en-IN')}` : '—'}
-                                                        </span>
-                                                    );
-                                                })()}
-                                            </td>
-                                            <td className="px-3 py-4 text-center">
-                                                <div className="flex items-center justify-center gap-4">
-                                                    <button
-                                                        onClick={() => setViewData(record)}
-                                                        className="text-gray-400 hover:text-blue-600 transition-colors"
-                                                        title="View Details"
-                                                    >
-                                                        <EyeIcon className="w-5 h-5" />
-                                                    </button>
-                                                    {canManage && (
-                                                        <>
-                                                            <button
-                                                                onClick={() => handleEdit(record)}
-                                                                className="text-gray-400 hover:text-blue-600 transition-colors"
-                                                                title="Edit Record"
-                                                            >
-                                                                <EditIcon className="w-5 h-5" />
-                                                            </button>
-                                                            <button
-                                                                onClick={() => handleDelete(record._id)}
-                                                                className="text-gray-400 hover:text-red-600 transition-colors"
-                                                                title="Delete Record"
-                                                            >
-                                                                <TrashIcon className="w-5 h-5" />
-                                                            </button>
-                                                        </>
-                                                    )}
-                                                </div>
-                                            </td>
-                                        </tr>
+                                        <React.Fragment key={record._id}>
+                                            <tr className="hover:bg-gray-50/50 transition-colors border-b border-gray-50 group">
+                                                <td className="px-3 py-4 text-sm font-medium text-gray-600 whitespace-nowrap">{formatDate(record.openingDate)}</td>
+                                                <td className="px-3 py-4 text-sm font-medium text-gray-900 whitespace-nowrap">{formatDate(record.expiryDate)}</td>
+                                                <td className="px-3 py-4 text-sm font-bold text-gray-900 whitespace-nowrap">
+                                                    <div className="flex flex-col">
+                                                        <span>{record.lcNo}</span>
+                                                        {record.amendments?.length > 0 && (
+                                                            <span className="self-start mt-0.5 px-1.5 py-0.5 bg-blue-50 text-blue-600 border border-blue-200/50 rounded text-[9px] font-extrabold uppercase tracking-wide">
+                                                                {record.lcAmendment?.split(' ')[0] || 'Amended'}
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                </td>
+                                                <td className="px-3 py-4 text-sm font-medium text-gray-700 whitespace-nowrap truncate max-w-[120px]" title={record.importerName}>{record.importerName}</td>
+                                                <td className="px-3 py-4 text-sm text-gray-600 whitespace-nowrap truncate max-w-[120px]" title={record.exporterName}>{record.exporterName}</td>
+                                                <td className="px-3 py-4 text-sm text-gray-600 font-medium whitespace-nowrap truncate max-w-[120px]" title={record.bankName}>{record.bankName}</td>
+                                                <td className="px-3 py-4 text-sm text-gray-600 whitespace-nowrap truncate max-w-[80px]" title={displayPort}>{displayPort}</td>
+                                                <td className="px-3 py-4 text-sm font-bold text-gray-900 whitespace-nowrap truncate max-w-[120px]" title={displayProducts}>{displayProducts}</td>
+                                                <td className="px-3 py-4 text-sm text-right text-gray-600 whitespace-nowrap">
+                                                    <span className="font-bold text-gray-900">{qtyKg.toLocaleString('en-US')}</span> <span className="text-[10px] text-gray-400 font-normal">Kg</span>
+                                                </td>
+                                                <td className="px-3 py-4 text-sm text-right font-black text-gray-900 whitespace-nowrap">৳{parseFloat(record.totalAmount || 0).toLocaleString('en-IN')}</td>
+                                                <td className="px-3 py-4 text-sm text-right whitespace-nowrap">
+                                                    <span className={`font-black ${combinedRemKg <= 0 ? 'text-emerald-600' : 'text-blue-600'}`}>
+                                                        {combinedRemKg.toLocaleString('en-IN')} <span className="text-[10px] text-gray-400 font-medium whitespace-nowrap">Kg</span>
+                                                    </span>
+                                                </td>
+                                                <td className="px-3 py-4 text-sm text-right whitespace-nowrap">
+                                                    <span className={`font-black ${remGpKg <= 0 ? 'text-emerald-600' : 'text-indigo-600'}`}>
+                                                        {remGpKg.toLocaleString('en-US')} <span className="text-[10px] text-gray-400 font-medium whitespace-nowrap">Kg</span>
+                                                    </span>
+                                                </td>
+                                                <td className="px-3 py-4 text-sm text-right whitespace-nowrap">
+                                                    {(() => {
+                                                        const totalExpense = lcExpenses
+                                                            .filter(exp => exp.lcNo === record.lcNo)
+                                                            .reduce((sum, exp) => sum + (parseFloat(exp.amount) || 0), 0);
+                                                        return (
+                                                            <span className={`font-black ${totalExpense > 0 ? 'text-rose-600' : 'text-gray-400'}`}>
+                                                                {totalExpense > 0 ? `৳${totalExpense.toLocaleString('en-IN')}` : '—'}
+                                                            </span>
+                                                        );
+                                                    })()}
+                                                </td>
+                                                <td className="px-3 py-4 text-center">
+                                                    <div className="flex items-center justify-center gap-4">
+                                                        <button
+                                                            onClick={() => setExpandedLcKey(prev => prev === record._id ? null : record._id)}
+                                                            className={`p-1.5 rounded-lg transition-all ${expandedLcKey === record._id ? 'bg-blue-50 text-blue-600' : 'text-gray-400 hover:bg-gray-100 hover:text-gray-600'}`}
+                                                            title="View Charges"
+                                                        >
+                                                            {expandedLcKey === record._id ? (
+                                                                <ChevronUpIcon className="w-4 h-4" />
+                                                            ) : (
+                                                                <ChevronDownIcon className="w-4 h-4" />
+                                                            )}
+                                                        </button>
+                                                        <button
+                                                            onClick={() => setViewData(record)}
+                                                            className="text-gray-400 hover:text-blue-600 transition-colors"
+                                                            title="View Details"
+                                                        >
+                                                            <EyeIcon className="w-5 h-5" />
+                                                        </button>
+                                                        {canManage && (
+                                                            <>
+                                                                <button
+                                                                    onClick={() => handleEdit(record)}
+                                                                    className="text-gray-400 hover:text-blue-600 transition-colors"
+                                                                    title="Edit Record"
+                                                                >
+                                                                    <EditIcon className="w-5 h-5" />
+                                                                </button>
+                                                                <button
+                                                                    onClick={() => handleDelete(record._id)}
+                                                                    className="text-gray-400 hover:text-red-600 transition-colors"
+                                                                    title="Delete Record"
+                                                                >
+                                                                    <TrashIcon className="w-5 h-5" />
+                                                                </button>
+                                                            </>
+                                                        )}
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                            {/* Expandable Sub-row containing Charges Breakdown */}
+                                            {expandedLcKey === record._id && (
+                                                <tr className="bg-gray-50/40">
+                                                    <td colSpan="14" className="px-6 py-4 border-b border-gray-100">
+                                                        <div className="flex flex-col gap-6 bg-white p-5 rounded-2xl border border-gray-100 shadow-inner animate-in fade-in duration-300">
+                                                            {/* New LC Bill Charges */}
+                                                            <div className="space-y-3">
+                                                                <h4 className="text-sm font-black text-blue-600 uppercase tracking-widest border-b border-blue-50 pb-2 flex items-center justify-between">
+                                                                    <span>New LC Bill Charges</span>
+                                                                    {record.bankName && (
+                                                                        <span className="text-xs text-gray-400 font-bold normal-case">
+                                                                            {record.bankName} {record.bankBranch ? `(${record.bankBranch})` : ''}
+                                                                        </span>
+                                                                    )}
+                                                                </h4>
+                                                                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-y-4 gap-x-6 text-left">
+                                                                    <div className="space-y-0.5">
+                                                                        <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">LC Commission</span>
+                                                                        <p className="text-sm font-black text-gray-800">
+                                                                            {record.bankLcCommission ? `${record.bankLcCommission}%` : '-'}
+                                                                        </p>
+                                                                    </div>
+                                                                    <div className="space-y-0.5">
+                                                                        <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">VAT on Commission</span>
+                                                                        <p className="text-sm font-black text-gray-800">
+                                                                            {record.bankVatOnCommission ? `${record.bankVatOnCommission}%` : '-'}
+                                                                        </p>
+                                                                    </div>
+                                                                    <div className="space-y-0.5">
+                                                                        <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">SWIFT Charge</span>
+                                                                        <p className="text-sm font-black text-gray-800">
+                                                                            {record.bankSwiftCharge !== undefined && record.bankSwiftCharge !== '' ? `৳${parseFloat(record.bankSwiftCharge).toLocaleString('en-IN')}` : '-'}
+                                                                        </p>
+                                                                    </div>
+                                                                    <div className="space-y-0.5">
+                                                                        <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">VAT on SWIFT Charge</span>
+                                                                        <p className="text-sm font-black text-gray-800">
+                                                                            {record.bankVatOnSwiftCharge ? `${record.bankVatOnSwiftCharge}%` : '-'}
+                                                                        </p>
+                                                                    </div>
+                                                                    <div className="space-y-0.5">
+                                                                        <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">LC Application Form</span>
+                                                                        <p className="text-sm font-black text-gray-800">
+                                                                            {record.bankLcApplicationForm !== undefined && record.bankLcApplicationForm !== '' ? `৳${parseFloat(record.bankLcApplicationForm).toLocaleString('en-IN')}` : '-'}
+                                                                        </p>
+                                                                    </div>
+                                                                    <div className="space-y-0.5">
+                                                                        <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">MP Charge</span>
+                                                                        <p className="text-sm font-black text-gray-800">
+                                                                            {record.bankMpCharge !== undefined && record.bankMpCharge !== '' ? `৳${parseFloat(record.bankMpCharge).toLocaleString('en-IN')}` : '-'}
+                                                                        </p>
+                                                                    </div>
+                                                                    <div className="space-y-0.5">
+                                                                        <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Stamp Charge</span>
+                                                                        <p className="text-sm font-black text-gray-800">
+                                                                            {record.bankStampCharge !== undefined && record.bankStampCharge !== '' ? `৳${parseFloat(record.bankStampCharge).toLocaleString('en-IN')}` : '-'}
+                                                                        </p>
+                                                                    </div>
+                                                                    <div className="space-y-0.5">
+                                                                        <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Margin</span>
+                                                                        <p className="text-sm font-black text-gray-800">
+                                                                            {record.bankMargin ? `${record.bankMargin}%` : '-'}
+                                                                        </p>
+                                                                    </div>
+                                                                    <div className="space-y-0.5">
+                                                                        <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Margin Bill</span>
+                                                                        <p className="text-sm font-black text-blue-600">
+                                                                            {record.marginBill ? `৳${parseFloat(record.marginBill).toLocaleString('en-IN', { minimumFractionDigits: 2 })}` : '-'}
+                                                                        </p>
+                                                                    </div>
+                                                                    <div className="space-y-0.5">
+                                                                        <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Bank Bill</span>
+                                                                        <p className="text-sm font-black text-rose-600">
+                                                                            {record.bankBill ? `৳${parseFloat(record.bankBill).toLocaleString('en-IN', { minimumFractionDigits: 2 })}` : '-'}
+                                                                        </p>
+                                                                    </div>
+                                                                    <div className="space-y-0.5">
+                                                                        <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Total Bank Bill</span>
+                                                                        <p className="text-sm font-black text-blue-600 font-extrabold">
+                                                                            {record.totalBankBill ? `৳${parseFloat(record.totalBankBill).toLocaleString('en-IN', { minimumFractionDigits: 2 })}` : '-'}
+                                                                        </p>
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+
+                                                            {/* Amendment Bill Charges */}
+                                                            {record.amendments && record.amendments.filter(amnd => amnd.amendmentNo !== 'Original LC').length > 0 && (
+                                                                <div className="space-y-3">
+                                                                    <h4 className="text-sm font-black text-indigo-600 uppercase tracking-widest border-b border-indigo-50 pb-2 flex items-center justify-between">
+                                                                        <span>Amendment Bill Charges</span>
+                                                                    </h4>
+                                                                    <div className="space-y-4 max-h-[300px] overflow-y-auto custom-scrollbar pr-2">
+                                                                        {record.amendments
+                                                                            .filter(amnd => amnd.amendmentNo !== 'Original LC')
+                                                                            .map((amnd, index) => {
+                                                                                const swiftCharge = parseFloat(amnd.amendmentSwiftCharge) || 0;
+                                                                                const vatOnSwift = parseFloat(amnd.amendmentVatOnSwift) || 0;
+                                                                                const vatOnSwiftAmt = swiftCharge * (vatOnSwift / 100);
+
+                                                                                const bankBill = parseFloat(amnd.amendmentBankBill || amnd.amendmentBill) || 0;
+                                                                                const vatOnCommission = parseFloat(amnd.amendmentVatOnCommission) || 0;
+                                                                                const commissionTotal = Math.max(0, bankBill - swiftCharge - vatOnSwiftAmt);
+                                                                                const commissionAmt = commissionTotal / (1 + vatOnCommission / 100);
+                                                                                const vatOnCommissionAmt = commissionTotal - commissionAmt;
+
+                                                                                return (
+                                                                                    <div key={index} className="p-3 bg-gray-50/50 border border-gray-100 rounded-xl space-y-2">
+                                                                                        <div className="flex justify-between items-center border-b border-gray-200/50 pb-1">
+                                                                                            <span className="text-sm font-black text-indigo-600 uppercase tracking-wider">
+                                                                                                {amnd.amendmentNo || `Amendment-${String(index + 1).padStart(2, '0')}`}
+                                                                                            </span>
+                                                                                            {amnd.amendmentDate && (
+                                                                                                <span className="text-sm font-semibold text-gray-500 font-mono">
+                                                                                                    {formatDate(amnd.amendmentDate)}
+                                                                                                </span>
+                                                                                            )}
+                                                                                        </div>
+                                                                                        <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-7 gap-4 text-left">
+                                                                                            <div className="space-y-0.5">
+                                                                                                <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Commission ({amnd.amendmentCommission || 0}%)</span>
+                                                                                                <p className="text-sm font-black text-gray-800">
+                                                                                                    ৳{Math.round(commissionAmt).toLocaleString('en-IN')}
+                                                                                                </p>
+                                                                                            </div>
+                                                                                            <div className="space-y-0.5">
+                                                                                                <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">VAT on Comm. ({amnd.amendmentVatOnCommission || 0}%)</span>
+                                                                                                <p className="text-sm font-black text-gray-800">
+                                                                                                    ৳{Math.round(vatOnCommissionAmt).toLocaleString('en-IN')}
+                                                                                                </p>
+                                                                                            </div>
+                                                                                            <div className="space-y-0.5">
+                                                                                                <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">SWIFT Charge</span>
+                                                                                                <p className="text-sm font-black text-gray-800">
+                                                                                                    {amnd.amendmentSwiftCharge !== undefined && amnd.amendmentSwiftCharge !== '' ? `৳${parseFloat(amnd.amendmentSwiftCharge).toLocaleString('en-IN')}` : '-'}
+                                                                                                </p>
+                                                                                            </div>
+                                                                                            <div className="space-y-0.5">
+                                                                                                <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">VAT on SWIFT ({amnd.amendmentVatOnSwift || 0}%)</span>
+                                                                                                <p className="text-sm font-black text-gray-800">
+                                                                                                    ৳{Math.round(vatOnSwiftAmt).toLocaleString('en-IN')}
+                                                                                                </p>
+                                                                                            </div>
+                                                                                            <div className="space-y-0.5">
+                                                                                                <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Margin</span>
+                                                                                                <p className="text-sm font-black text-gray-800">
+                                                                                                    {amnd.amendmentMargin !== undefined && amnd.amendmentMargin !== '' ? `${amnd.amendmentMargin}%` : (record.bankMargin ? `${record.bankMargin}%` : '-')}
+                                                                                                </p>
+                                                                                            </div>
+                                                                                            <div className="space-y-0.5">
+                                                                                                <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Amendment Bill</span>
+                                                                                                <p className="text-sm font-extrabold text-rose-600">
+                                                                                                    {amnd.amendmentBankBill ? `৳${parseFloat(amnd.amendmentBankBill).toLocaleString('en-IN', { minimumFractionDigits: 2 })}` : '-'}
+                                                                                                </p>
+                                                                                            </div>
+                                                                                            <div className="space-y-0.5">
+                                                                                                <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Total Bill (+ Margin)</span>
+                                                                                                <p className="text-sm font-black text-blue-600">
+                                                                                                    {(amnd.totalAmendmentBankBill || amnd.amendmentBill) ? `৳${parseFloat(amnd.totalAmendmentBankBill || amnd.amendmentBill).toLocaleString('en-IN', { minimumFractionDigits: 2 })}` : '-'}
+                                                                                                </p>
+                                                                                            </div>
+                                                                                        </div>
+                                                                                    </div>
+                                                                                );
+                                                                            })}
+                                                                    </div>
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    </td>
+                                                </tr>
+                                            )}
+                                        </React.Fragment>
                                     );
                                 })
                             ) : (
