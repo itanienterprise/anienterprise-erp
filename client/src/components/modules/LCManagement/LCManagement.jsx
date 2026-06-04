@@ -715,7 +715,7 @@ const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords
                                     </div>
 
                                     {!activeMilestone.isOriginal && (
-                                        <div className="mt-4 p-4 bg-blue-50/30 border border-blue-100 rounded-xl grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-x-8 gap-y-4 text-left animate-in fade-in duration-200">
+                                        <div className="mt-4 p-4 bg-blue-50/30 border border-blue-100 rounded-xl space-y-4 text-left animate-in fade-in duration-200">
                                             {(() => {
                                                 const prevMilestone = activeMilestoneIndex > 0 ? timeline[activeMilestoneIndex - 1] : null;
                                                 const activeQty = getMilestoneTotalQty(activeMilestone);
@@ -734,54 +734,180 @@ const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords
                                                 const sign = diffQty >= 0 ? '+' : '';
                                                 
                                                 return (
-                                                    <>
-                                                        {/* Card 1: Total Amendment Qty */}
-                                                        <div>
-                                                            <span className="text-[9px] font-bold text-blue-600 uppercase tracking-wider whitespace-nowrap block mb-1">Total Amendment Qty</span>
-                                                            <p className="text-sm font-black text-blue-800 whitespace-nowrap">
-                                                                {sign}{parseFloat(diffQty.toFixed(3)).toLocaleString('en-US')} Ton
-                                                            </p>
+                                                    <div className="space-y-4">
+                                                        <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-x-8 gap-y-4">
+                                                            {/* Card 1: Total Amendment Qty */}
+                                                            <div>
+                                                                <span className="text-[9px] font-bold text-blue-600 uppercase tracking-wider whitespace-nowrap block mb-1">Total Amendment Qty</span>
+                                                                <p className="text-sm font-black text-blue-800 whitespace-nowrap">
+                                                                    {sign}{parseFloat(diffQty.toFixed(3)).toLocaleString('en-US')} Ton
+                                                                </p>
+                                                            </div>
+                                                            {/* Card 2: Amendment Rate */}
+                                                            <div>
+                                                                <span className="text-[9px] font-bold text-blue-600 uppercase tracking-wider whitespace-nowrap block mb-1">Amendment Rate</span>
+                                                                <p className="text-sm font-black text-blue-800 whitespace-nowrap">
+                                                                    ${ratePerTon.toLocaleString('en-US')} /Ton
+                                                                </p>
+                                                            </div>
+                                                            {/* Card 3: Freight */}
+                                                            <div>
+                                                                <span className="text-[9px] font-bold text-blue-600 uppercase tracking-wider whitespace-nowrap block mb-1">Freight</span>
+                                                                <p className="text-sm font-black text-blue-800 whitespace-nowrap">
+                                                                    ${freightPerTon.toLocaleString('en-US')} /Ton
+                                                                </p>
+                                                            </div>
+                                                            {/* Card 4: Total Amendment Dollar */}
+                                                            <div>
+                                                                <span className="text-[9px] font-bold text-blue-600 uppercase tracking-wider whitespace-nowrap block mb-1">Total Amendment Dollar</span>
+                                                                <p className="text-sm font-black text-blue-800 whitespace-nowrap">
+                                                                    {sign}${parseFloat(diffDollar.toFixed(2)).toLocaleString('en-US')}
+                                                                </p>
+                                                            </div>
+                                                            {/* Card 5: Amendment Dollar Rate */}
+                                                            <div>
+                                                                <span className="text-[9px] font-bold text-blue-600 uppercase tracking-wider whitespace-nowrap block mb-1">Amendment Dollar Rate</span>
+                                                                <p className="text-sm font-black text-blue-800 whitespace-nowrap">
+                                                                    ৳{dollarRate.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                                                                </p>
+                                                            </div>
+                                                            {/* Card 6: Amendment Value */}
+                                                            <div>
+                                                                <span className="text-[9px] font-bold text-blue-600 uppercase tracking-wider whitespace-nowrap block mb-1">Amendment Value</span>
+                                                                <p className="text-sm font-black text-blue-800 whitespace-nowrap">
+                                                                    {sign}৳{parseFloat(diffAmount.toFixed(2)).toLocaleString('en-IN')}
+                                                                </p>
+                                                            </div>
                                                         </div>
-                                                        {/* Card 2: Amendment Rate */}
-                                                        <div>
-                                                            <span className="text-[9px] font-bold text-blue-600 uppercase tracking-wider whitespace-nowrap block mb-1">Amendment Rate</span>
-                                                            <p className="text-sm font-black text-blue-800 whitespace-nowrap">
-                                                                ${ratePerTon.toLocaleString('en-US')} /Ton
-                                                            </p>
+
+                                                        <div className="border-t border-blue-100/50 pt-3 text-left">
+                                                            <span className="text-[10px] font-black text-indigo-600 uppercase tracking-widest block mb-2">Amendment Bank Bill Details</span>
+                                                            <div className="grid grid-cols-2 md:grid-cols-5 gap-x-8 gap-y-4 mb-3">
+                                                                <div>
+                                                                    <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider block mb-1">Margin</span>
+                                                                    <p className="text-xs font-bold text-gray-700">
+                                                                        {activeMilestone.amendmentMargin !== undefined && activeMilestone.amendmentMargin !== '' ? `${activeMilestone.amendmentMargin}%` : '-'}
+                                                                    </p>
+                                                                </div>
+                                                                <div>
+                                                                    <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider block mb-1">Comm. on Amendment</span>
+                                                                    <p className="text-xs font-bold text-gray-700">
+                                                                        {activeMilestone.amendmentCommission !== undefined && activeMilestone.amendmentCommission !== '' ? `${activeMilestone.amendmentCommission}%` : '-'}
+                                                                    </p>
+                                                                </div>
+                                                                <div>
+                                                                    <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider block mb-1">VAT on Comm.</span>
+                                                                    <p className="text-xs font-bold text-gray-700">
+                                                                        {activeMilestone.amendmentVatOnCommission !== undefined && activeMilestone.amendmentVatOnCommission !== '' ? `${activeMilestone.amendmentVatOnCommission}%` : '-'}
+                                                                    </p>
+                                                                </div>
+                                                                <div>
+                                                                    <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider block mb-1">Swift Charge</span>
+                                                                    <p className="text-xs font-bold text-gray-700">
+                                                                        {activeMilestone.amendmentSwiftCharge !== undefined && activeMilestone.amendmentSwiftCharge !== '' ? `৳${parseFloat(activeMilestone.amendmentSwiftCharge).toLocaleString('en-IN')}` : '-'}
+                                                                    </p>
+                                                                </div>
+                                                                <div>
+                                                                    <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider block mb-1">VAT on Swift</span>
+                                                                    <p className="text-xs font-bold text-gray-700">
+                                                                        {activeMilestone.amendmentVatOnSwift !== undefined && activeMilestone.amendmentVatOnSwift !== '' ? `${activeMilestone.amendmentVatOnSwift}%` : '-'}
+                                                                    </p>
+                                                                </div>
+                                                            </div>
+                                                            <div className="grid grid-cols-1 md:grid-cols-3 gap-x-8 gap-y-4 pt-3 border-t border-dashed border-blue-100/50">
+                                                                <div>
+                                                                    <span className="text-[9px] font-bold text-blue-600 uppercase tracking-wider block mb-1">Amendment Margin Bill</span>
+                                                                    <p className="text-sm font-black text-blue-800 font-semibold">
+                                                                        ৳{activeMilestone.amendmentMarginBill ? parseFloat(activeMilestone.amendmentMarginBill).toLocaleString('en-IN', { minimumFractionDigits: 2 }) : '0.00'}
+                                                                    </p>
+                                                                </div>
+                                                                <div>
+                                                                    <span className="text-[9px] font-bold text-blue-600 uppercase tracking-wider block mb-1">Amendment Bank Bill</span>
+                                                                    <p className="text-sm font-black text-blue-800 font-semibold">
+                                                                        ৳{activeMilestone.amendmentBankBill ? parseFloat(activeMilestone.amendmentBankBill).toLocaleString('en-IN', { minimumFractionDigits: 2 }) : '0.00'}
+                                                                    </p>
+                                                                </div>
+                                                                <div>
+                                                                    <span className="text-[9px] font-bold text-indigo-600 uppercase tracking-wider block mb-1">Total Amendment Bank Bill</span>
+                                                                    <p className="text-sm font-black text-indigo-900">
+                                                                        ৳{(activeMilestone.totalAmendmentBankBill || activeMilestone.amendmentBill) ? parseFloat(activeMilestone.totalAmendmentBankBill || activeMilestone.amendmentBill).toLocaleString('en-IN', { minimumFractionDigits: 2 }) : '0.00'}
+                                                                    </p>
+                                                                </div>
+                                                            </div>
                                                         </div>
-                                                        {/* Card 3: Freight */}
-                                                        <div>
-                                                            <span className="text-[9px] font-bold text-blue-600 uppercase tracking-wider whitespace-nowrap block mb-1">Freight</span>
-                                                            <p className="text-sm font-black text-blue-800 whitespace-nowrap">
-                                                                ${freightPerTon.toLocaleString('en-US')} /Ton
-                                                            </p>
-                                                        </div>
-                                                        {/* Card 4: Total Amendment Dollar */}
-                                                        <div>
-                                                            <span className="text-[9px] font-bold text-blue-600 uppercase tracking-wider whitespace-nowrap block mb-1">Total Amendment Dollar</span>
-                                                            <p className="text-sm font-black text-blue-800 whitespace-nowrap">
-                                                                {sign}${parseFloat(diffDollar.toFixed(2)).toLocaleString('en-US')}
-                                                            </p>
-                                                        </div>
-                                                        {/* Card 5: Amendment Dollar Rate */}
-                                                        <div>
-                                                            <span className="text-[9px] font-bold text-blue-600 uppercase tracking-wider whitespace-nowrap block mb-1">Amendment Dollar Rate</span>
-                                                            <p className="text-sm font-black text-blue-800 whitespace-nowrap">
-                                                                ৳{dollarRate.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-                                                            </p>
-                                                        </div>
-                                                        {/* Card 6: Amendment Value */}
-                                                        <div>
-                                                            <span className="text-[9px] font-bold text-blue-600 uppercase tracking-wider whitespace-nowrap block mb-1">Amendment Value</span>
-                                                            <p className="text-sm font-black text-blue-800 whitespace-nowrap">
-                                                                {sign}৳{parseFloat(diffAmount.toFixed(2)).toLocaleString('en-IN')}
-                                                            </p>
-                                                        </div>
-                                                    </>
+                                                    </div>
                                                 );
                                             })()}
                                         </div>
                                     )}
+                                </div>
+
+                                {/* Section 2.5: Bank Information */}
+                                <div className="pt-6 border-t border-gray-100">
+                                    <div className="flex items-center gap-2 mb-4">
+                                        <BuildingIcon className="w-4 h-4 text-gray-400" />
+                                        <h4 className="text-xs font-black text-gray-400 uppercase tracking-widest text-left">Bank Information</h4>
+                                    </div>
+                                    <div className="grid grid-cols-2 md:grid-cols-4 gap-6 px-2 text-left">
+                                        <div className="space-y-1">
+                                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Issuing Bank</span>
+                                            <p className="text-sm font-bold text-gray-800">{data.bankName || '-'}</p>
+                                        </div>
+                                        <div className="space-y-1">
+                                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Branch</span>
+                                            <p className="text-sm font-bold text-gray-800">{data.bankBranch || '-'}</p>
+                                        </div>
+                                        <div className="space-y-1">
+                                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Margin</span>
+                                            <p className="text-sm font-bold text-gray-800">{data.bankMargin ? `${data.bankMargin}%` : '-'}</p>
+                                        </div>
+                                        <div className="space-y-1">
+                                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">LC Commission</span>
+                                            <p className="text-sm font-bold text-gray-800">{data.bankLcCommission ? `${data.bankLcCommission}%` : '-'}</p>
+                                        </div>
+                                        <div className="space-y-1">
+                                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">VAT on Commission</span>
+                                            <p className="text-sm font-bold text-gray-800">{data.bankVatOnCommission ? `${data.bankVatOnCommission}%` : '-'}</p>
+                                        </div>
+                                        <div className="space-y-1">
+                                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Swift Charge</span>
+                                            <p className="text-sm font-bold text-gray-800">৳{parseFloat(data.bankSwiftCharge || 0).toLocaleString('en-IN')}</p>
+                                        </div>
+                                        <div className="space-y-1">
+                                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">VAT on Swift Charge</span>
+                                            <p className="text-sm font-bold text-gray-800">{data.bankVatOnSwiftCharge ? `${data.bankVatOnSwiftCharge}%` : '-'}</p>
+                                        </div>
+                                        <div className="space-y-1">
+                                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">LC Application Form</span>
+                                            <p className="text-sm font-bold text-gray-800">৳{parseFloat(data.bankLcApplicationForm || 0).toLocaleString('en-IN')}</p>
+                                        </div>
+                                        <div className="space-y-1">
+                                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">MP Charge</span>
+                                            <p className="text-sm font-bold text-gray-800">৳{parseFloat(data.bankMpCharge || 0).toLocaleString('en-IN')}</p>
+                                        </div>
+                                        <div className="space-y-1">
+                                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Stamp Charge</span>
+                                            <p className="text-sm font-bold text-gray-800">৳{parseFloat(data.bankStampCharge || 0).toLocaleString('en-IN')}</p>
+                                        </div>
+                                        <div className="space-y-1">
+                                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Margin Bill</span>
+                                            <p className="text-sm font-bold text-gray-800">
+                                                {data.marginBill ? `৳${parseFloat(data.marginBill).toLocaleString('en-IN', { minimumFractionDigits: 2 })}` : '-'}
+                                            </p>
+                                        </div>
+                                        <div className="space-y-1">
+                                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Bank Bill</span>
+                                            <p className="text-sm font-bold text-gray-800">
+                                                {data.bankBill ? `৳${parseFloat(data.bankBill).toLocaleString('en-IN', { minimumFractionDigits: 2 })}` : '-'}
+                                            </p>
+                                        </div>
+                                        <div className="space-y-1">
+                                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Total Bank Bill</span>
+                                            <p className="text-sm font-black text-blue-600">
+                                                {data.totalBankBill ? `৳${parseFloat(data.totalBankBill).toLocaleString('en-IN', { minimumFractionDigits: 2 })}` : '-'}
+                                            </p>
+                                        </div>
+                                    </div>
                                 </div>
 
                                 {/* Section 3: Insurance Details */}
@@ -994,10 +1120,18 @@ export const getLCHistoryTimeline = (lc) => {
                 baseAmount = parseFloat(item.totalAmount) || 0;
             } else {
                 const prevMilestone = idx > 0 ? baseTimeline[idx - 1] : null;
-                const activeQty = getMilestoneTotalQty(item);
                 const prevQty = prevMilestone ? getMilestoneTotalQty(prevMilestone) : 0;
-                const diffQty = activeQty - prevQty;
+                const prevRVal = prevMilestone ? parseFloat(prevMilestone.rate || 0) : 0;
+                const prevRateScaled = prevRVal > 0 ? (prevRVal < 10 ? prevRVal * 1000 : prevRVal) : 0;
+                const prevProducts = prevMilestone?.productsList?.length > 0
+                    ? prevMilestone.productsList
+                    : (lc.productsList?.length > 0 ? lc.productsList : []);
+                const prevFVal = parseFloat(prevProducts[0]?.freight || lc.freight || 0);
+                const prevFreightPerTon = prevFVal < 0.1 ? prevFVal * 1000 : prevFVal;
 
+                const prevDollarValue = prevQty * (prevRateScaled + prevFreightPerTon);
+
+                const activeQty = getMilestoneTotalQty(item);
                 const rVal = parseFloat(item.rate || 0);
                 const ratePerTon = rVal < 10 ? rVal * 1000 : rVal;
 
@@ -1007,8 +1141,9 @@ export const getLCHistoryTimeline = (lc) => {
                 const fVal = parseFloat(activeProducts[0]?.freight || lc.freight || 0);
                 const freightPerTon = fVal < 0.1 ? fVal * 1000 : fVal;
 
+                const newDollarValue = activeQty * (ratePerTon + freightPerTon);
+                const diffDollar = newDollarValue - prevDollarValue;
                 const dollarRate = parseFloat(item.dollarRate || lc.dollarRate || 0);
-                const diffDollar = diffQty * (ratePerTon + freightPerTon);
                 const diffAmount = diffDollar * dollarRate;
                 baseAmount = Math.abs(diffAmount);
             }
@@ -1116,9 +1251,172 @@ const syncRootFromProductsList = (state) => {
     return state;
 };
 
+const calculateBankBills = (state) => {
+    const totalAmount = parseFloat(state.totalAmount) || 0;
+    const margin = parseFloat(state.bankMargin) || 0;
+    const marginBill = totalAmount * (margin / 100);
+
+    const bankLcCommission = parseFloat(state.bankLcCommission) || 0;
+    const bankVatOnCommission = parseFloat(state.bankVatOnCommission) || 0;
+    const bankSwiftCharge = parseFloat(state.bankSwiftCharge) || 0;
+    const bankVatOnSwiftCharge = parseFloat(state.bankVatOnSwiftCharge) || 0;
+    const bankLcApplicationForm = parseFloat(state.bankLcApplicationForm) || 0;
+    const bankMpCharge = parseFloat(state.bankMpCharge) || 0;
+    const bankStampCharge = parseFloat(state.bankStampCharge) || 0;
+
+    const lcCommissionAmt = totalAmount * (bankLcCommission / 100);
+    const vatOnCommissionAmt = lcCommissionAmt * (bankVatOnCommission / 100);
+    const vatOnSwiftChargeAmt = bankSwiftCharge * (bankVatOnSwiftCharge / 100);
+
+    const bankBill = lcCommissionAmt + vatOnCommissionAmt + bankSwiftCharge + vatOnSwiftChargeAmt + bankLcApplicationForm + bankMpCharge + bankStampCharge;
+
+    const totalBankBill = marginBill + bankBill;
+
+    return {
+        marginBill: marginBill > 0 ? marginBill.toFixed(2) : '',
+        bankBill: bankBill > 0 ? bankBill.toFixed(2) : '',
+        totalBankBill: totalBankBill > 0 ? totalBankBill.toFixed(2) : ''
+    };
+};
+
+const syncBankBills = (state) => {
+    const bills = calculateBankBills(state);
+    state.marginBill = bills.marginBill;
+    state.bankBill = bills.bankBill;
+    state.totalBankBill = bills.totalBankBill;
+    return state;
+};
+
+const calculateAmendmentBillsValue = (state, lc, banksRaw, editingAmendmentNo = '') => {
+    if (!lc) return {
+        amendmentMargin: '',
+        amendmentCommission: '',
+        amendmentVatOnCommission: '',
+        amendmentSwiftCharge: '',
+        amendmentVatOnSwift: '',
+        amendmentMarginBill: '',
+        amendmentBankBill: '',
+        totalAmendmentBankBill: ''
+    };
+
+    const selectedBank = banksRaw.find(b => (b.bankName || '').trim().toUpperCase() === (lc.bankName || '').trim().toUpperCase());
+    const selectedBranch = selectedBank?.branches?.find(br => br.branch === lc.bankBranch);
+
+    const margin = state.amendmentMargin !== undefined && state.amendmentMargin !== '' 
+        ? (parseFloat(state.amendmentMargin) || 0) 
+        : (lc.bankMargin !== undefined && lc.bankMargin !== '' ? parseFloat(lc.bankMargin) : 0);
+
+    const amendmentCommission = state.amendmentCommission !== undefined && state.amendmentCommission !== '' 
+        ? (parseFloat(state.amendmentCommission) || 0) 
+        : (selectedBranch?.amendmentCommission !== undefined && selectedBranch?.amendmentCommission !== '' ? parseFloat(selectedBranch.amendmentCommission) : 0);
+
+    const amendmentVatOnCommission = state.amendmentVatOnCommission !== undefined && state.amendmentVatOnCommission !== '' 
+        ? (parseFloat(state.amendmentVatOnCommission) || 0) 
+        : (selectedBranch?.amendmentVatOnCommission !== undefined && selectedBranch?.amendmentVatOnCommission !== '' ? parseFloat(selectedBranch.amendmentVatOnCommission) : 0);
+
+    const amendmentSwiftCharge = state.amendmentSwiftCharge !== undefined && state.amendmentSwiftCharge !== '' 
+        ? (parseFloat(state.amendmentSwiftCharge) || 0) 
+        : (selectedBranch?.amendmentSwiftCharge !== undefined && selectedBranch?.amendmentSwiftCharge !== '' ? parseFloat(selectedBranch.amendmentSwiftCharge) : 0);
+
+    const amendmentVatOnSwift = state.amendmentVatOnSwift !== undefined && state.amendmentVatOnSwift !== '' 
+        ? (parseFloat(state.amendmentVatOnSwift) || 0) 
+        : (selectedBranch?.amendmentVatOnSwift !== undefined && selectedBranch?.amendmentVatOnSwift !== '' ? parseFloat(selectedBranch.amendmentVatOnSwift) : 0);
+
+    const currentAmendments = [...(lc.amendments || [])];
+    const getMilestoneTotalQty = (mil) => {
+        if (!mil) return 0;
+        if (mil.productsList && mil.productsList.length > 0) {
+            return mil.productsList.reduce((sum, p) => sum + (parseFloat(p.quantity) || 0), 0);
+        }
+        return parseFloat(mil.quantity || 0);
+    };
+
+    const prevMilestone = editingAmendmentNo
+        ? (() => {
+            const idx = currentAmendments.findIndex(a => a.amendmentNo === editingAmendmentNo);
+            return idx > 0 ? currentAmendments[idx - 1] : lc;
+          })()
+        : (currentAmendments.length > 0 ? currentAmendments[currentAmendments.length - 1] : lc);
+
+    const prevQty = getMilestoneTotalQty(prevMilestone);
+    const prevAmount = parseFloat(prevMilestone.totalAmount || lc.totalAmount || 0);
+    
+    const prevMargin = parseFloat(
+        prevMilestone.amendmentMargin !== undefined && prevMilestone.amendmentMargin !== '' 
+            ? prevMilestone.amendmentMargin 
+            : (prevMilestone.bankMargin !== undefined && prevMilestone.bankMargin !== '' ? prevMilestone.bankMargin : (lc.bankMargin || 0))
+    );
+
+    const qty = parseFloat(state.quantity) || 0;
+    const r = parseFloat(state.rate) || 0;
+    const dRate = parseFloat(state.dollarRate) || 0;
+    const targetRateScaled = r > 0 ? (r < 10 ? r * 1000 : r) : 0;
+
+    const firstProduct = (lc.productsList || [])[0];
+    const fVal = parseFloat(firstProduct?.freight || lc.freight || 0);
+    const freightPerTon = fVal < 0.1 ? fVal * 1000 : fVal;
+
+    // Fetch previous rates to compute accurate value difference
+    const prevRVal = parseFloat(prevMilestone.rate || 0);
+    const prevRateScaled = prevRVal > 0 ? (prevRVal < 10 ? prevRVal * 1000 : prevRVal) : 0;
+    const prevFirstProduct = (prevMilestone.productsList || [])[0];
+    const prevFVal = parseFloat(prevFirstProduct?.freight || prevMilestone.freight || lc.freight || 0);
+    const prevFreightPerTon = prevFVal < 0.1 ? prevFVal * 1000 : prevFVal;
+
+    const prevDollarValue = prevQty * (prevRateScaled + prevFreightPerTon);
+    const newDollarValue = qty * (targetRateScaled + freightPerTon);
+    const diffDollar = newDollarValue - prevDollarValue;
+    const diffAmount = diffDollar * dRate;
+    const baseAmount = Math.abs(diffAmount);
+
+    const newAmount = newDollarValue * dRate;
+
+    const calculatedMarginBill = baseAmount * (margin / 100);
+
+    const commissionAmt = baseAmount * (amendmentCommission / 100);
+    const vatOnCommissionAmt = commissionAmt * (amendmentVatOnCommission / 100);
+    const swiftCharge = amendmentSwiftCharge;
+    const vatOnSwiftChargeAmt = swiftCharge * (amendmentVatOnSwift / 100);
+
+    const calculatedBankBill = commissionAmt + vatOnCommissionAmt + swiftCharge + vatOnSwiftChargeAmt;
+    const calculatedTotalBill = calculatedMarginBill + calculatedBankBill;
+
+    return {
+        amendmentMargin: state.amendmentMargin !== undefined ? state.amendmentMargin : (lc.bankMargin || ''),
+        amendmentCommission: state.amendmentCommission !== undefined ? state.amendmentCommission : (selectedBranch?.amendmentCommission || ''),
+        amendmentVatOnCommission: state.amendmentVatOnCommission !== undefined ? state.amendmentVatOnCommission : (selectedBranch?.amendmentVatOnCommission || ''),
+        amendmentSwiftCharge: state.amendmentSwiftCharge !== undefined ? state.amendmentSwiftCharge : (selectedBranch?.amendmentSwiftCharge !== undefined && selectedBranch?.amendmentSwiftCharge !== '' ? String(selectedBranch.amendmentSwiftCharge) : ''),
+        amendmentVatOnSwift: state.amendmentVatOnSwift !== undefined ? state.amendmentVatOnSwift : (selectedBranch?.amendmentVatOnSwift || ''),
+        amendmentMarginBill: calculatedMarginBill >= 0 ? calculatedMarginBill.toFixed(2) : '',
+        amendmentBankBill: calculatedBankBill >= 0 ? calculatedBankBill.toFixed(2) : '',
+        totalAmendmentBankBill: calculatedTotalBill >= 0 ? calculatedTotalBill.toFixed(2) : ''
+    };
+};
+
+const syncAmendmentBills = (state, lc, banksRaw, editingAmendmentNo = '', ignoreOverride = false) => {
+    if (!ignoreOverride) {
+        const bills = calculateAmendmentBillsValue(state, lc, banksRaw, editingAmendmentNo);
+        state.amendmentMargin = bills.amendmentMargin;
+        state.amendmentCommission = bills.amendmentCommission;
+        state.amendmentVatOnCommission = bills.amendmentVatOnCommission;
+        state.amendmentSwiftCharge = bills.amendmentSwiftCharge;
+        state.amendmentVatOnSwift = bills.amendmentVatOnSwift;
+        state.amendmentMarginBill = bills.amendmentMarginBill;
+        state.amendmentBankBill = bills.amendmentBankBill;
+        state.totalAmendmentBankBill = bills.totalAmendmentBankBill;
+    } else {
+        const mBill = parseFloat(state.amendmentMarginBill) || 0;
+        const bBill = parseFloat(state.amendmentBankBill) || 0;
+        const tot = mBill + bBill;
+        state.totalAmendmentBankBill = tot > 0 ? tot.toFixed(2) : '';
+    }
+    return state;
+};
+
 const LCManagement = ({ addNotification, currentUser }) => {
     const [lcRecords, setLcRecords] = useState([]);
     const [banks, setBanks] = useState([]);
+    const [banksRaw, setBanksRaw] = useState([]);
     const [importers, setImporters] = useState([]);
     const [exporters, setExporters] = useState([]);
     const [insuranceCos, setInsuranceCos] = useState([]);
@@ -1160,13 +1458,23 @@ const LCManagement = ({ addNotification, currentUser }) => {
         addnDate: '',
         port: '',
         extendedShipmentDate: '',
-        piNo: ''
+        piNo: '',
+        amendmentMargin: '',
+        amendmentCommission: '',
+        amendmentVatOnCommission: '',
+        amendmentSwiftCharge: '',
+        amendmentVatOnSwift: '',
+        amendmentMarginBill: '',
+        amendmentBankBill: '',
+        totalAmendmentBankBill: '',
+        amendmentBill: ''
     });
 
     const canManage = ['admin', 'incharge', 'lc manager', 'border manager', 'data entry'].includes((currentUser?.role || '').toLowerCase());
 
     const piRef = useRef(null);
     const bankRef = useRef(null);
+    const branchRef = useRef(null);
     const importerRef = useRef(null);
     const exporterRef = useRef(null);
     const productRef = useRef(null);
@@ -1211,6 +1519,18 @@ const LCManagement = ({ addNotification, currentUser }) => {
         marineCNDate: '',
         port: '',
         productsList: [{ productName: '', hsCode: '', quantity: '', rate: '', freight: '', totalFreight: '', totalDollar: '' }],
+        bankBranch: '',
+        bankMargin: '',
+        bankLcCommission: '',
+        bankVatOnCommission: '',
+        bankSwiftCharge: '',
+        bankVatOnSwiftCharge: '',
+        bankLcApplicationForm: '',
+        bankMpCharge: '',
+        bankStampCharge: '',
+        marginBill: '',
+        bankBill: '',
+        totalBankBill: '',
     });
     const [gpRecords, setGpRecords] = useState([]);
     const [lcExpenses, setLcExpenses] = useState([]);
@@ -1254,7 +1574,7 @@ const LCManagement = ({ addNotification, currentUser }) => {
 
     useEffect(() => {
         const handleClickOutside = (e) => {
-            const refs = [piRef, bankRef, importerRef, exporterRef, productRef, insuranceRef, statusRef, amendmentLcRef, amendmentPiRef, portRef, amendmentPortRef];
+            const refs = [piRef, bankRef, branchRef, importerRef, exporterRef, productRef, insuranceRef, statusRef, amendmentLcRef, amendmentPiRef, portRef, amendmentPortRef];
             const isClickInside = refs.some(ref => ref.current && ref.current.contains(e.target));
             if (!isClickInside) {
                 setActiveDropdown(null);
@@ -1306,6 +1626,7 @@ const LCManagement = ({ addNotification, currentUser }) => {
                     nextState.quantity = piQtyTons > 0 ? String(piQtyTons) : prev.quantity;
                     nextState.rate = piRate ? String(piRate) : prev.rate;
                 }
+                syncAmendmentBills(nextState, selectedLcForAmendment, banksRaw, editingAmendmentNo);
                 return nextState;
             });
             setActiveDropdown(null);
@@ -1354,6 +1675,10 @@ const LCManagement = ({ addNotification, currentUser }) => {
                             newState.productsList = [{ productName: '', hsCode: '', quantity: '', rate: '', freight: '', totalFreight: '', totalDollar: '' }];
                         }
                         syncRootFromProductsList(newState);
+                        const dRate = parseFloat(newState.dollarRate || prev.dollarRate) || 0;
+                        const tDollar = parseFloat(newState.totalDollar) || 0;
+                        const totalVal = tDollar * dRate;
+                        newState.totalAmount = totalVal > 0 ? totalVal.toFixed(2) : '';
                     }
                 } else {
                     newState.importerName = '';
@@ -1411,6 +1736,47 @@ const LCManagement = ({ addNotification, currentUser }) => {
                 }
             }
 
+            if (field === 'bankName') {
+                newState.bankName = value;
+                if (!value) {
+                    newState.bankBranch = '';
+                    newState.bankLcCommission = '';
+                    newState.bankVatOnCommission = '';
+                    newState.bankSwiftCharge = '';
+                    newState.bankVatOnSwiftCharge = '';
+                    newState.bankLcApplicationForm = '';
+                    newState.bankMpCharge = '';
+                    newState.bankStampCharge = '';
+                }
+            }
+
+            if (field === 'bankBranch') {
+                if (value) {
+                    const selectedBank = banksRaw.find(b => (b.bankName || '').trim().toUpperCase() === (newState.bankName || prev.bankName || '').trim().toUpperCase());
+                    const selectedBranch = selectedBank?.branches?.find(br => br.branch === value);
+                    if (selectedBranch) {
+                        newState.bankBranch = value;
+                        newState.bankLcCommission = selectedBranch.lcCommission || '';
+                        newState.bankVatOnCommission = selectedBranch.vatOnCommission || '';
+                        newState.bankSwiftCharge = selectedBranch.swiftCharge || '';
+                        newState.bankVatOnSwiftCharge = selectedBranch.vatOnSwiftCharge || '';
+                        newState.bankLcApplicationForm = selectedBranch.lcApplicationForm || '';
+                        newState.bankMpCharge = selectedBranch.mpCharge || '';
+                        newState.bankStampCharge = selectedBranch.stampCharge || '';
+                    }
+                } else {
+                    newState.bankBranch = '';
+                    newState.bankLcCommission = '';
+                    newState.bankVatOnCommission = '';
+                    newState.bankSwiftCharge = '';
+                    newState.bankVatOnSwiftCharge = '';
+                    newState.bankLcApplicationForm = '';
+                    newState.bankMpCharge = '';
+                    newState.bankStampCharge = '';
+                }
+            }
+
+            syncBankBills(newState);
             return newState;
         });
         setActiveDropdown(null);
@@ -1493,6 +1859,7 @@ const LCManagement = ({ addNotification, currentUser }) => {
 
             // Filter banks to only show those NOT marked as Indian (from PI Module)
             const moduleBanks = Array.isArray(bankRes.data) ? bankRes.data.filter(b => !b.isIndian) : [];
+            setBanksRaw(moduleBanks);
             const uniqueBankNames = Array.from(new Set(moduleBanks.map(b => (b.bankName || '').trim().toUpperCase()))).filter(Boolean);
             setBanks(uniqueBankNames);
 
@@ -1553,6 +1920,7 @@ const LCManagement = ({ addNotification, currentUser }) => {
             const gPrem = netPrem + vatAmount + stamp;
             newState.grossPremium = gPrem > 0 ? gPrem.toFixed(2) : '';
 
+            syncBankBills(newState);
             return newState;
         });
     };
@@ -1601,6 +1969,40 @@ const LCManagement = ({ addNotification, currentUser }) => {
                 const vatAmount = netPrem * (pVat / 100);
                 const gPrem = netPrem + vatAmount + stamp;
                 newState.grossPremium = gPrem > 0 ? gPrem.toFixed(2) : '';
+            }
+
+            if (name === 'bankName') {
+                if (!value) {
+                    newState.bankBranch = '';
+                    newState.bankLcCommission = '';
+                    newState.bankVatOnCommission = '';
+                    newState.bankSwiftCharge = '';
+                    newState.bankVatOnSwiftCharge = '';
+                    newState.bankLcApplicationForm = '';
+                    newState.bankMpCharge = '';
+                    newState.bankStampCharge = '';
+                }
+            }
+
+            if (name === 'bankBranch') {
+                if (!value) {
+                    newState.bankLcCommission = '';
+                    newState.bankVatOnCommission = '';
+                    newState.bankSwiftCharge = '';
+                    newState.bankVatOnSwiftCharge = '';
+                    newState.bankLcApplicationForm = '';
+                    newState.bankMpCharge = '';
+                    newState.bankStampCharge = '';
+                }
+            }
+
+            if (name === 'marginBill' || name === 'bankBill') {
+                const mb = parseFloat(name === 'marginBill' ? value : prev.marginBill) || 0;
+                const bb = parseFloat(name === 'bankBill' ? value : prev.bankBill) || 0;
+                const sum = mb + bb;
+                newState.totalBankBill = sum > 0 ? sum.toFixed(2) : '';
+            } else if (['quantity', 'rate', 'totalDollar', 'dollarRate', 'totalAmount', 'bankMargin', 'bankLcCommission', 'bankVatOnCommission', 'bankSwiftCharge', 'bankVatOnSwiftCharge', 'bankLcApplicationForm', 'bankMpCharge', 'bankStampCharge'].includes(name)) {
+                syncBankBills(newState);
             }
 
             return newState;
@@ -1691,6 +2093,18 @@ const LCManagement = ({ addNotification, currentUser }) => {
             marineCNDate: record.marineCNDate || '',
             port: record.port || '',
             productsList: loadedProducts,
+            bankBranch: record.bankBranch || '',
+            bankMargin: record.bankMargin || '',
+            bankLcCommission: record.bankLcCommission || '',
+            bankVatOnCommission: record.bankVatOnCommission || '',
+            bankSwiftCharge: record.bankSwiftCharge || '',
+            bankVatOnSwiftCharge: record.bankVatOnSwiftCharge || '',
+            bankLcApplicationForm: record.bankLcApplicationForm || '',
+            bankMpCharge: record.bankMpCharge || '',
+            bankStampCharge: record.bankStampCharge || '',
+            marginBill: record.marginBill || '',
+            bankBill: record.bankBill || '',
+            totalBankBill: record.totalBankBill || '',
         });
         setEditingId(record._id);
         setShowForm(true);
@@ -1719,7 +2133,16 @@ const LCManagement = ({ addNotification, currentUser }) => {
             addnDate: milestone.addnDate ? milestone.addnDate.split('T')[0] : '',
             port: milestone.port || record.port || '',
             extendedShipmentDate: milestone.extendedShipmentDate ? milestone.extendedShipmentDate.split('T')[0] : (milestone.latestShipmentDate ? milestone.latestShipmentDate.split('T')[0] : ''),
-            piNo: milestone.piNo || ''
+            piNo: milestone.piNo || '',
+            amendmentMargin: milestone.amendmentMargin !== undefined ? milestone.amendmentMargin : undefined,
+            amendmentCommission: milestone.amendmentCommission !== undefined ? milestone.amendmentCommission : undefined,
+            amendmentVatOnCommission: milestone.amendmentVatOnCommission !== undefined ? milestone.amendmentVatOnCommission : undefined,
+            amendmentSwiftCharge: milestone.amendmentSwiftCharge !== undefined ? milestone.amendmentSwiftCharge : undefined,
+            amendmentVatOnSwift: milestone.amendmentVatOnSwift !== undefined ? milestone.amendmentVatOnSwift : undefined,
+            amendmentMarginBill: milestone.amendmentMarginBill !== undefined ? milestone.amendmentMarginBill : '',
+            amendmentBankBill: milestone.amendmentBankBill !== undefined ? milestone.amendmentBankBill : '',
+            totalAmendmentBankBill: milestone.totalAmendmentBankBill !== undefined ? milestone.totalAmendmentBankBill : (milestone.amendmentBill || ''),
+            amendmentBill: milestone.totalAmendmentBankBill !== undefined ? milestone.totalAmendmentBankBill : (milestone.amendmentBill || '')
         });
         setShowAmendmentForm(true);
         window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -1759,23 +2182,56 @@ const LCManagement = ({ addNotification, currentUser }) => {
         const qty = parseFloat(amendmentFormData.quantity) || 0;
         const rate = parseFloat(amendmentFormData.rate) || 0;
         const dRate = parseFloat(amendmentFormData.dollarRate) || 0;
+        const targetRateScaled = rate > 0 ? (rate < 10 ? rate * 1000 : rate) : 0;
 
-        const totalDollar = rate < 10 ? qty * rate * 1000 : qty * rate;
-        const totalAmount = totalDollar * dRate; // New BDT total
+        const currentAmendments = [...(selectedLcForAmendment.amendments || [])];
+        const getMilestoneTotalQty = (mil) => {
+            if (!mil) return 0;
+            if (mil.productsList && mil.productsList.length > 0) {
+                return mil.productsList.reduce((sum, p) => sum + (parseFloat(p.quantity) || 0), 0);
+            }
+            return parseFloat(mil.quantity || 0);
+        };
 
-        let netPremium = selectedLcForAmendment.netPremium || '0';
-        let expectedReturnAmount = selectedLcForAmendment.expectedReturnAmount || '0';
-        let grossPremium = selectedLcForAmendment.grossPremium || '0';
+        const prevMilestone = editingAmendmentNo
+            ? (() => {
+                const idx = currentAmendments.findIndex(a => a.amendmentNo === editingAmendmentNo);
+                return idx > 0 ? currentAmendments[idx - 1] : selectedLcForAmendment;
+              })()
+            : (currentAmendments.length > 0 ? currentAmendments[currentAmendments.length - 1] : selectedLcForAmendment);
+
+        const prevQty = getMilestoneTotalQty(prevMilestone);
+        const prevRVal = parseFloat(prevMilestone.rate || 0);
+        const prevRateScaled = prevRVal > 0 ? (prevRVal < 10 ? prevRVal * 1000 : prevRVal) : 0;
+        const prevProducts = prevMilestone?.productsList?.length > 0
+            ? prevMilestone.productsList
+            : (selectedLcForAmendment.productsList?.length > 0 ? selectedLcForAmendment.productsList : []);
+        const prevFVal = parseFloat(prevProducts[0]?.freight || selectedLcForAmendment.freight || 0);
+        const prevFreightPerTon = prevFVal < 0.1 ? prevFVal * 1000 : prevFVal;
+
+        const firstProduct = (selectedLcForAmendment.productsList || [])[0];
+        const fVal = parseFloat(firstProduct?.freight || selectedLcForAmendment.freight || 0);
+        const freightPerTon = fVal < 0.1 ? fVal * 1000 : fVal;
+
+        const prevDollarValue = prevQty * (prevRateScaled + prevFreightPerTon);
+        const newDollarValue = qty * (targetRateScaled + freightPerTon);
+        const diffDollar = newDollarValue - prevDollarValue;
+        const diffAmount = diffDollar * dRate;
+        const baseAmount = Math.abs(diffAmount);
+
+        let netPremium = '0';
+        let expectedReturnAmount = '0';
+        let grossPremium = '0';
         let vatAmount = 0;
         const premiumVat = parseFloat(selectedLcForAmendment.premiumVat) || 15;
 
-        if (selectedLcForAmendment.insuranceCo) {
+        if (selectedLcForAmendment.insuranceCo && baseAmount > 0) {
             const prem = parseFloat(selectedLcForAmendment.premium) || 0;
             const exPct = parseFloat(selectedLcForAmendment.extraPercent) || 0;
             const premRet = parseFloat(selectedLcForAmendment.premiumReturn) || 0;
             const stamp = parseFloat(selectedLcForAmendment.stampCharge) || 0;
 
-            const baseNetPrem = (totalAmount * (prem / 100)) / 100;
+            const baseNetPrem = (baseAmount * (prem / 100)) / 100;
             const netP = baseNetPrem + (baseNetPrem * (exPct / 100));
             netPremium = netP > 0 ? netP.toFixed(2) : '0';
 
@@ -1786,7 +2242,7 @@ const LCManagement = ({ addNotification, currentUser }) => {
             const gPrem = netP + vatAmount + stamp;
             grossPremium = gPrem > 0 ? gPrem.toFixed(2) : '0';
         } else {
-            const netP = parseFloat(netPremium) || 0;
+            const netP = parseFloat(selectedLcForAmendment.netPremium) || 0;
             vatAmount = netP * (premiumVat / 100);
         }
 
@@ -1800,7 +2256,8 @@ const LCManagement = ({ addNotification, currentUser }) => {
         selectedLcForAmendment,
         amendmentFormData.quantity,
         amendmentFormData.rate,
-        amendmentFormData.dollarRate
+        amendmentFormData.dollarRate,
+        editingAmendmentNo
     ]);
 
 
@@ -1892,7 +2349,7 @@ const LCManagement = ({ addNotification, currentUser }) => {
             }
         }
 
-        setAmendmentFormData({
+        const initialFormState = {
             amendmentNo: nextNoStr,
             amendmentDate: new Date().toISOString().split('T')[0],
             expiryDate: lc.expiryDate ? lc.expiryDate.split('T')[0] : '',
@@ -1904,11 +2361,35 @@ const LCManagement = ({ addNotification, currentUser }) => {
             addnDate: '',
             port: lc.port || '',
             extendedShipmentDate: lc.latestShipmentDate ? lc.latestShipmentDate.split('T')[0] : '',
-            piNo: prefilledPiNo
-        });
+            piNo: prefilledPiNo,
+            amendmentMargin: undefined,
+            amendmentCommission: undefined,
+            amendmentVatOnCommission: undefined,
+            amendmentSwiftCharge: undefined,
+            amendmentVatOnSwift: undefined,
+            amendmentMarginBill: '',
+            amendmentBankBill: '',
+            totalAmendmentBankBill: '',
+            amendmentBill: ''
+        };
+        syncAmendmentBills(initialFormState, lc, banksRaw);
+        setAmendmentFormData(initialFormState);
         setAmendmentSearchQuery(lc.lcNo || '');
         setActiveDropdown(null);
         setHighlightedIndex(-1);
+    };
+
+    const handleAmendmentInputChange = (e) => {
+        const { name, value } = e.target;
+        setAmendmentFormData(prev => {
+            const nextState = { ...prev, [name]: value };
+            if (name === 'amendmentMarginBill' || name === 'amendmentBankBill') {
+                syncAmendmentBills(nextState, selectedLcForAmendment, banksRaw, editingAmendmentNo, true);
+            } else if (name !== 'totalAmendmentBankBill') {
+                syncAmendmentBills(nextState, selectedLcForAmendment, banksRaw, editingAmendmentNo, false);
+            }
+            return nextState;
+        });
     };
 
     const handleAmendmentSubmit = async (e) => {
@@ -2039,8 +2520,17 @@ const LCManagement = ({ addNotification, currentUser }) => {
             const fVal = parseFloat(updatedProductsList[0]?.freight || lc.freight || 0);
             const freightPerTon = fVal < 0.1 ? fVal * 1000 : fVal;
 
-            const diffQty = qty - prevQty;
-            const diffDollar = diffQty * (targetRateScaled + freightPerTon);
+            const prevRVal = parseFloat(prevMilestone.rate || 0);
+            const prevRateScaled = prevRVal > 0 ? (prevRVal < 10 ? prevRVal * 1000 : prevRVal) : 0;
+            const prevProducts = prevMilestone?.productsList?.length > 0
+                ? prevMilestone.productsList
+                : (lc.productsList?.length > 0 ? lc.productsList : []);
+            const prevFVal = parseFloat(prevProducts[0]?.freight || lc.freight || 0);
+            const prevFreightPerTon = prevFVal < 0.1 ? prevFVal * 1000 : prevFVal;
+
+            const prevDollarValue = prevQty * (prevRateScaled + prevFreightPerTon);
+            const newDollarValue = qty * (targetRateScaled + freightPerTon);
+            const diffDollar = newDollarValue - prevDollarValue;
             const diffAmount = diffDollar * dRate;
             const baseAmount = Math.abs(diffAmount);
 
@@ -2098,7 +2588,16 @@ const LCManagement = ({ addNotification, currentUser }) => {
                         extendedShipmentDate: amendmentFormData.extendedShipmentDate || '',
                         remarks: amendmentFormData.remarks,
                         piNo: amendmentFormData.piNo,
-                        productsList: updatedProductsList
+                        productsList: updatedProductsList,
+                        amendmentMargin: amendmentFormData.amendmentMargin || '',
+                        amendmentCommission: amendmentFormData.amendmentCommission || '',
+                        amendmentVatOnCommission: amendmentFormData.amendmentVatOnCommission || '',
+                        amendmentSwiftCharge: amendmentFormData.amendmentSwiftCharge || '',
+                        amendmentVatOnSwift: amendmentFormData.amendmentVatOnSwift || '',
+                        amendmentMarginBill: amendmentFormData.amendmentMarginBill || '',
+                        amendmentBankBill: amendmentFormData.amendmentBankBill || '',
+                        totalAmendmentBankBill: amendmentFormData.totalAmendmentBankBill || '',
+                        amendmentBill: amendmentFormData.totalAmendmentBankBill || ''
                     };
                     currentAmendments[idx] = updatedAmendment;
                 }
@@ -2122,6 +2621,15 @@ const LCManagement = ({ addNotification, currentUser }) => {
                     remarks: amendmentFormData.remarks,
                     piNo: amendmentFormData.piNo,
                     productsList: updatedProductsList,
+                    amendmentMargin: amendmentFormData.amendmentMargin || '',
+                    amendmentCommission: amendmentFormData.amendmentCommission || '',
+                    amendmentVatOnCommission: amendmentFormData.amendmentVatOnCommission || '',
+                    amendmentSwiftCharge: amendmentFormData.amendmentSwiftCharge || '',
+                    amendmentVatOnSwift: amendmentFormData.amendmentVatOnSwift || '',
+                    amendmentMarginBill: amendmentFormData.amendmentMarginBill || '',
+                    amendmentBankBill: amendmentFormData.amendmentBankBill || '',
+                    totalAmendmentBankBill: amendmentFormData.totalAmendmentBankBill || '',
+                    amendmentBill: amendmentFormData.totalAmendmentBankBill || '',
                     createdAt: new Date().toISOString()
                 };
 
@@ -2229,7 +2737,16 @@ const LCManagement = ({ addNotification, currentUser }) => {
                 addnDate: '',
                 port: '',
                 extendedShipmentDate: '',
-                piNo: ''
+                piNo: '',
+                amendmentMargin: '',
+                amendmentCommission: '',
+                amendmentVatOnCommission: '',
+                amendmentSwiftCharge: '',
+                amendmentVatOnSwift: '',
+                amendmentMarginBill: '',
+                amendmentBankBill: '',
+                totalAmendmentBankBill: '',
+                amendmentBill: ''
             });
             fetchInitialData();
         } catch (error) {
@@ -2275,6 +2792,18 @@ const LCManagement = ({ addNotification, currentUser }) => {
             marineCNDate: '',
             port: '',
             productsList: [{ productName: '', hsCode: '', quantity: '', rate: '', freight: '', totalFreight: '', totalDollar: '' }],
+            bankBranch: '',
+            bankMargin: '',
+            bankLcCommission: '',
+            bankVatOnCommission: '',
+            bankSwiftCharge: '',
+            bankVatOnSwiftCharge: '',
+            bankLcApplicationForm: '',
+            bankMpCharge: '',
+            bankStampCharge: '',
+            marginBill: '',
+            bankBill: '',
+            totalBankBill: '',
         });
         setEditingId(null);
         setShowForm(false);
@@ -2413,6 +2942,15 @@ const LCManagement = ({ addNotification, currentUser }) => {
                             />
                         </div>
 
+                        <div className="space-y-1.5">
+                            <CustomDatePicker
+                                label="Latest Shipment Date"
+                                value={formData.latestShipmentDate}
+                                onChange={(e) => setFormData(prev => ({ ...prev, latestShipmentDate: e.target.value }))}
+                                compact={true}
+                            />
+                        </div>
+
                         <div className="space-y-1.5 text-left">
                             <label className="text-sm font-semibold text-gray-600 ml-1">LC Number</label>
                             <input
@@ -2425,47 +2963,6 @@ const LCManagement = ({ addNotification, currentUser }) => {
                                 placeholder="Enter LC Number"
                                 className="w-full px-4 py-2.5 bg-white/50 border border-gray-200/60 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all font-medium"
                             />
-                        </div>
-
-                        <div className="space-y-1.5 text-left relative" ref={bankRef}>
-                            <label className="text-sm font-semibold text-gray-600 ml-1">Issuing Bank</label>
-                            <div className="relative">
-                                <input
-                                    type="text"
-                                    name="bankName"
-                                    value={formData.bankName}
-                                    onChange={handleInputChange}
-                                    onFocus={() => { setActiveDropdown('bankName'); setHighlightedIndex(-1); }}
-                                    onKeyDown={(e) => handleDropdownKeyDown(e, 'bankName', 'bankName', banks.filter(b => !formData.bankName || b.toLowerCase().includes(formData.bankName.toLowerCase())))}
-                                    placeholder="Select Bank"
-                                    autoComplete="off"
-                                    required
-                                    className="w-full px-4 py-2.5 bg-white/50 border border-gray-200/60 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all font-medium pr-10"
-                                />
-                                <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-2">
-                                    {formData.bankName && (
-                                        <button type="button" onClick={() => handleDropdownSelect('bankName', '')} className="text-gray-400 hover:text-gray-600">
-                                            <XIcon className="w-4 h-4" />
-                                        </button>
-                                    )}
-                                    <SearchIcon className="w-4 h-4 text-gray-300 pointer-events-none" />
-                                </div>
-                            </div>
-                            {activeDropdown === 'bankName' && (
-                                <div className="absolute z-[60] w-full mt-1 bg-white border border-gray-100 rounded-xl shadow-xl max-h-48 overflow-y-auto py-1">
-                                    {banks.filter(b => !formData.bankName || b.toLowerCase().includes(formData.bankName.toLowerCase())).map((bank, idx) => (
-                                        <button
-                                            key={idx}
-                                            type="button"
-                                            onMouseDown={(e) => { e.preventDefault(); handleDropdownSelect('bankName', bank); }}
-                                            onMouseEnter={() => setHighlightedIndex(idx)}
-                                            className={`w-full px-4 py-2 text-left text-sm transition-colors font-medium ${formData.bankName === bank ? 'bg-blue-50 text-blue-700' : highlightedIndex === idx ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-blue-50'}`}
-                                        >
-                                            {bank}
-                                        </button>
-                                    ))}
-                                </div>
-                            )}
                         </div>
 
                         <div className="space-y-1.5 text-left relative" ref={piRef}>
@@ -2718,15 +3215,6 @@ const LCManagement = ({ addNotification, currentUser }) => {
                             </div>
                         </div>
 
-                        <div className="space-y-1.5">
-                            <CustomDatePicker
-                                label="Latest Shipment Date"
-                                value={formData.latestShipmentDate}
-                                onChange={(e) => setFormData(prev => ({ ...prev, latestShipmentDate: e.target.value }))}
-                                compact={true}
-                            />
-                        </div>
-
                         <div className="space-y-1.5 text-left relative" ref={statusRef}>
                             <label className="text-sm font-semibold text-gray-600 ml-1">Status</label>
                             <div className="relative">
@@ -2753,6 +3241,51 @@ const LCManagement = ({ addNotification, currentUser }) => {
                                         ))}
                                     </div>
                                 )}
+                            </div>
+                        </div>
+
+                        <div className="space-y-1.5 text-left">
+                            <label className="text-sm font-semibold text-gray-600 ml-1">Margin Bill</label>
+                            <div className="relative">
+                                <span className="absolute left-3 top-1/2 -translate-y-1/2 font-bold text-gray-400">৳</span>
+                                <input
+                                    type="number"
+                                    name="marginBill"
+                                    value={formData.marginBill}
+                                    onChange={handleInputChange}
+                                    placeholder="0.00"
+                                    className="w-full px-4 py-2.5 pl-8 bg-white/50 border border-gray-200/60 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all font-medium"
+                                />
+                            </div>
+                        </div>
+
+                        <div className="space-y-1.5 text-left">
+                            <label className="text-sm font-semibold text-gray-600 ml-1">Bank Bill</label>
+                            <div className="relative">
+                                <span className="absolute left-3 top-1/2 -translate-y-1/2 font-bold text-gray-400">৳</span>
+                                <input
+                                    type="number"
+                                    name="bankBill"
+                                    value={formData.bankBill}
+                                    onChange={handleInputChange}
+                                    placeholder="0.00"
+                                    className="w-full px-4 py-2.5 pl-8 bg-white/50 border border-gray-200/60 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all font-medium"
+                                />
+                            </div>
+                        </div>
+
+                        <div className="space-y-1.5 text-left">
+                            <label className="text-sm font-semibold text-gray-600 ml-1">Total Bank Bill</label>
+                            <div className="relative">
+                                <span className="absolute left-3 top-1/2 -translate-y-1/2 font-bold text-gray-500">৳</span>
+                                <input
+                                    type="number"
+                                    name="totalBankBill"
+                                    readOnly
+                                    value={formData.totalBankBill}
+                                    placeholder="0.00"
+                                    className="w-full px-4 py-2.5 pl-8 bg-gray-50 border border-gray-200/60 rounded-xl outline-none text-gray-500 font-bold"
+                                />
                             </div>
                         </div>
 
@@ -2899,6 +3432,235 @@ const LCManagement = ({ addNotification, currentUser }) => {
                                 </div>
                             </div>
                         ))}
+
+                        <div className="col-span-full mb-2 mt-4">
+                            <div className="bg-blue-50/30 border-l-4 border-blue-500 px-4 py-2 rounded-r-xl">
+                                <h3 className="text-[11px] font-bold text-blue-600 uppercase tracking-wider">Bank Details</h3>
+                            </div>
+                        </div>
+
+                        <div className="col-span-full grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
+                            {/* Issuing Bank Dropdown Input */}
+                            <div className="space-y-1.5 text-left relative" ref={bankRef}>
+                                <label className="text-sm font-semibold text-gray-600 ml-1">Issuing Bank</label>
+                                <div className="relative">
+                                    <input
+                                        type="text"
+                                        name="bankName"
+                                        value={formData.bankName}
+                                        onChange={handleInputChange}
+                                        onFocus={() => { setActiveDropdown('bankName'); setHighlightedIndex(-1); }}
+                                        onKeyDown={(e) => handleDropdownKeyDown(e, 'bankName', 'bankName', banks.filter(b => !formData.bankName || b.toLowerCase().includes(formData.bankName.toLowerCase())))}
+                                        placeholder="Select Bank"
+                                        autoComplete="off"
+                                        required
+                                        className="w-full px-4 py-2.5 bg-white/50 border border-gray-200/60 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all font-medium pr-10"
+                                    />
+                                    <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-2">
+                                        {formData.bankName && (
+                                            <button type="button" onClick={() => handleDropdownSelect('bankName', '')} className="text-gray-400 hover:text-gray-600">
+                                                <XIcon className="w-4 h-4" />
+                                            </button>
+                                        )}
+                                        <SearchIcon className="w-4 h-4 text-gray-300 pointer-events-none" />
+                                    </div>
+                                </div>
+                                {activeDropdown === 'bankName' && (
+                                    <div className="absolute z-[60] w-full mt-1 bg-white border border-gray-100 rounded-xl shadow-xl max-h-48 overflow-y-auto py-1">
+                                        {banks.filter(b => !formData.bankName || b.toLowerCase().includes(formData.bankName.toLowerCase())).map((bank, idx) => (
+                                            <button
+                                                key={idx}
+                                                type="button"
+                                                onMouseDown={(e) => { e.preventDefault(); handleDropdownSelect('bankName', bank); }}
+                                                onMouseEnter={() => setHighlightedIndex(idx)}
+                                                className={`w-full px-4 py-2 text-left text-sm transition-colors font-medium ${formData.bankName === bank ? 'bg-blue-50 text-blue-700' : highlightedIndex === idx ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-blue-50'}`}
+                                            >
+                                                {bank}
+                                            </button>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* Branch Dropdown Input */}
+                            <div className="space-y-1.5 text-left relative" ref={branchRef}>
+                                <label className="text-sm font-semibold text-gray-600 ml-1">Branch</label>
+                                <div className="relative">
+                                    <input
+                                        type="text"
+                                        name="bankBranch"
+                                        value={formData.bankBranch}
+                                        onChange={handleInputChange}
+                                        onFocus={() => { setActiveDropdown('bankBranch'); setHighlightedIndex(-1); }}
+                                        onKeyDown={(e) => {
+                                            const selectedBank = banksRaw.find(b => (b.bankName || '').trim().toUpperCase() === (formData.bankName || '').trim().toUpperCase());
+                                            const branchesList = selectedBank?.branches || [];
+                                            const options = branchesList.filter(br => !formData.bankBranch || br.branch.toLowerCase().includes(formData.bankBranch.toLowerCase())).map(br => br.branch);
+                                            handleDropdownKeyDown(e, 'bankBranch', 'bankBranch', options);
+                                        }}
+                                        placeholder="Select Branch"
+                                        autoComplete="off"
+                                        className="w-full px-4 py-2.5 bg-white/50 border border-gray-200/60 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all font-medium pr-10"
+                                    />
+                                    <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-2">
+                                        {formData.bankBranch && (
+                                            <button type="button" onClick={() => handleDropdownSelect('bankBranch', '')} className="text-gray-400 hover:text-gray-600">
+                                                <XIcon className="w-4 h-4" />
+                                            </button>
+                                        )}
+                                        <SearchIcon className="w-4 h-4 text-gray-300 pointer-events-none" />
+                                    </div>
+                                </div>
+                                {activeDropdown === 'bankBranch' && (() => {
+                                    const selectedBank = banksRaw.find(b => (b.bankName || '').trim().toUpperCase() === (formData.bankName || '').trim().toUpperCase());
+                                    const branchesList = selectedBank?.branches || [];
+                                    const filteredBranches = branchesList.filter(br => !formData.bankBranch || br.branch.toLowerCase().includes(formData.bankBranch.toLowerCase()));
+                                    return (
+                                        <div className="absolute z-[60] w-full mt-1 bg-white border border-gray-100 rounded-xl shadow-xl max-h-48 overflow-y-auto py-1">
+                                            {filteredBranches.map((br, idx) => (
+                                                <button
+                                                    key={idx}
+                                                    type="button"
+                                                    onMouseDown={(e) => { e.preventDefault(); handleDropdownSelect('bankBranch', br.branch); }}
+                                                    onMouseEnter={() => setHighlightedIndex(idx)}
+                                                    className={`w-full px-4 py-2 text-left text-sm transition-colors font-medium ${formData.bankBranch === br.branch ? 'bg-blue-50 text-blue-700' : highlightedIndex === idx ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-blue-50'}`}
+                                                >
+                                                    {br.branch}
+                                                </button>
+                                            ))}
+                                        </div>
+                                    );
+                                })()}
+                            </div>
+
+                            {/* Margin (%) */}
+                            <div className="space-y-1.5 text-left">
+                                <label className="text-sm font-semibold text-gray-600 ml-1">Margin</label>
+                                <div className="relative">
+                                    <input
+                                        type="number"
+                                        name="bankMargin"
+                                        value={formData.bankMargin}
+                                        onChange={handleInputChange}
+                                        placeholder="0"
+                                        className="w-full px-4 py-2.5 pr-8 bg-white/50 border border-gray-200/60 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all font-medium"
+                                    />
+                                    <span className="absolute right-4 top-1/2 -translate-y-1/2 font-bold text-gray-400">%</span>
+                                </div>
+                            </div>
+
+                            {/* LC Commission (%) */}
+                            <div className="space-y-1.5 text-left">
+                                <label className="text-sm font-semibold text-gray-600 ml-1">LC Commission</label>
+                                <div className="relative">
+                                    <input
+                                        type="number"
+                                        name="bankLcCommission"
+                                        value={formData.bankLcCommission}
+                                        onChange={handleInputChange}
+                                        placeholder="0.00"
+                                        className="w-full px-4 py-2.5 pr-8 bg-white/50 border border-gray-200/60 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all font-medium"
+                                    />
+                                    <span className="absolute right-4 top-1/2 -translate-y-1/2 font-bold text-gray-400">%</span>
+                                </div>
+                            </div>
+
+                            {/* VAT on Commission (%) */}
+                            <div className="space-y-1.5 text-left">
+                                <label className="text-sm font-semibold text-gray-600 ml-1">VAT on Commission</label>
+                                <div className="relative">
+                                    <input
+                                        type="number"
+                                        name="bankVatOnCommission"
+                                        value={formData.bankVatOnCommission}
+                                        onChange={handleInputChange}
+                                        placeholder="0.00"
+                                        className="w-full px-4 py-2.5 pr-8 bg-white/50 border border-gray-200/60 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all font-medium"
+                                    />
+                                    <span className="absolute right-4 top-1/2 -translate-y-1/2 font-bold text-gray-400">%</span>
+                                </div>
+                            </div>
+
+                            {/* Swift Charge */}
+                            <div className="space-y-1.5 text-left">
+                                <label className="text-sm font-semibold text-gray-600 ml-1">Swift Charge</label>
+                                <div className="relative">
+                                    <span className="absolute left-3 top-1/2 -translate-y-1/2 font-bold text-gray-400">৳</span>
+                                    <input
+                                        type="number"
+                                        name="bankSwiftCharge"
+                                        value={formData.bankSwiftCharge}
+                                        onChange={handleInputChange}
+                                        placeholder="0"
+                                        className="w-full px-4 py-2.5 pl-8 bg-white/50 border border-gray-200/60 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all font-medium"
+                                    />
+                                </div>
+                            </div>
+
+                            {/* VAT on Swift Charge (%) */}
+                            <div className="space-y-1.5 text-left">
+                                <label className="text-sm font-semibold text-gray-600 ml-1">VAT on Swift Charge</label>
+                                <div className="relative">
+                                    <input
+                                        type="number"
+                                        name="bankVatOnSwiftCharge"
+                                        value={formData.bankVatOnSwiftCharge}
+                                        onChange={handleInputChange}
+                                        placeholder="0.00"
+                                        className="w-full px-4 py-2.5 pr-8 bg-white/50 border border-gray-200/60 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all font-medium"
+                                    />
+                                    <span className="absolute right-4 top-1/2 -translate-y-1/2 font-bold text-gray-400">%</span>
+                                </div>
+                            </div>
+
+                            {/* LC Application Form */}
+                            <div className="space-y-1.5 text-left">
+                                <label className="text-sm font-semibold text-gray-600 ml-1">LC Application Form</label>
+                                <div className="relative">
+                                    <span className="absolute left-3 top-1/2 -translate-y-1/2 font-bold text-gray-400">৳</span>
+                                    <input
+                                        type="number"
+                                        name="bankLcApplicationForm"
+                                        value={formData.bankLcApplicationForm}
+                                        onChange={handleInputChange}
+                                        placeholder="0"
+                                        className="w-full px-4 py-2.5 pl-8 bg-white/50 border border-gray-200/60 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all font-medium"
+                                    />
+                                </div>
+                            </div>
+
+                            {/* MP Charge */}
+                            <div className="space-y-1.5 text-left">
+                                <label className="text-sm font-semibold text-gray-600 ml-1">MP Charge</label>
+                                <div className="relative">
+                                    <span className="absolute left-3 top-1/2 -translate-y-1/2 font-bold text-gray-400">৳</span>
+                                    <input
+                                        type="number"
+                                        name="bankMpCharge"
+                                        value={formData.bankMpCharge}
+                                        onChange={handleInputChange}
+                                        placeholder="0"
+                                        className="w-full px-4 py-2.5 pl-8 bg-white/50 border border-gray-200/60 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all font-medium"
+                                    />
+                                </div>
+                            </div>
+
+                            {/* Stamp Charge */}
+                            <div className="space-y-1.5 text-left">
+                                <label className="text-sm font-semibold text-gray-600 ml-1">Stamp Charge</label>
+                                <div className="relative">
+                                    <span className="absolute left-3 top-1/2 -translate-y-1/2 font-bold text-gray-400">৳</span>
+                                    <input
+                                        type="number"
+                                        name="bankStampCharge"
+                                        value={formData.bankStampCharge}
+                                        onChange={handleInputChange}
+                                        placeholder="0"
+                                        className="w-full px-4 py-2.5 pl-8 bg-white/50 border border-gray-200/60 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all font-medium"
+                                    />
+                                </div>
+                            </div>
+                        </div>
 
                         <div className="col-span-full mb-2 mt-4">
                             <div className="bg-blue-50/30 border-l-4 border-blue-500 px-4 py-2 rounded-r-xl">
@@ -3189,7 +3951,16 @@ const LCManagement = ({ addNotification, currentUser }) => {
                                     addnDate: '',
                                     port: '',
                                     extendedShipmentDate: '',
-                                    piNo: ''
+                                    piNo: '',
+                                    amendmentMargin: '',
+                                    amendmentCommission: '',
+                                    amendmentVatOnCommission: '',
+                                    amendmentSwiftCharge: '',
+                                    amendmentVatOnSwift: '',
+                                    amendmentMarginBill: '',
+                                    amendmentBankBill: '',
+                                    totalAmendmentBankBill: '',
+                                    amendmentBill: ''
                                 });
                             }}
                             className="p-2 hover:bg-gray-100 rounded-xl transition-all group active:scale-95 shrink-0"
@@ -3395,7 +4166,7 @@ const LCManagement = ({ addNotification, currentUser }) => {
                                                 step="any"
                                                 name="quantity"
                                                 value={amendmentFormData.quantity}
-                                                onChange={(e) => setAmendmentFormData(prev => ({ ...prev, quantity: e.target.value }))}
+                                                onChange={handleAmendmentInputChange}
                                                 placeholder="e.g. 520.50"
                                                 className="w-full px-4 py-2.5 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all font-medium"
                                             />
@@ -3408,7 +4179,7 @@ const LCManagement = ({ addNotification, currentUser }) => {
                                                 step="any"
                                                 name="rate"
                                                 value={amendmentFormData.rate}
-                                                onChange={(e) => setAmendmentFormData(prev => ({ ...prev, rate: e.target.value }))}
+                                                onChange={handleAmendmentInputChange}
                                                 placeholder="e.g. 350.00"
                                                 className="w-full px-4 py-2.5 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all font-medium"
                                             />
@@ -3421,7 +4192,7 @@ const LCManagement = ({ addNotification, currentUser }) => {
                                                 step="any"
                                                 name="dollarRate"
                                                 value={amendmentFormData.dollarRate}
-                                                onChange={(e) => setAmendmentFormData(prev => ({ ...prev, dollarRate: e.target.value }))}
+                                                onChange={handleAmendmentInputChange}
                                                 placeholder="e.g. 120.00"
                                                 className="w-full px-4 py-2.5 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all font-medium"
                                             />
@@ -3512,6 +4283,124 @@ const LCManagement = ({ addNotification, currentUser }) => {
                                             </div>
                                         </div>
 
+                                        {/* Amendment Bank Details & Bills */}
+                                        <div className="col-span-full border-t border-dashed border-gray-200 pt-6">
+                                            <h4 className="text-xs font-black text-blue-600 uppercase tracking-widest text-left mb-4">Amendment Bank Details</h4>
+                                            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-6">
+                                                <div className="space-y-1.5 text-left">
+                                                    <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider whitespace-nowrap">Margin (%)</label>
+                                                    <input
+                                                        type="number"
+                                                        step="any"
+                                                        name="amendmentMargin"
+                                                        value={amendmentFormData.amendmentMargin || ''}
+                                                        onChange={handleAmendmentInputChange}
+                                                        placeholder="0.00"
+                                                        className="w-full px-4 py-2.5 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all font-medium text-sm"
+                                                    />
+                                                </div>
+                                                <div className="space-y-1.5 text-left">
+                                                    <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider whitespace-nowrap">Comm. on Amnd. (%)</label>
+                                                    <input
+                                                        type="number"
+                                                        step="any"
+                                                        name="amendmentCommission"
+                                                        value={amendmentFormData.amendmentCommission || ''}
+                                                        onChange={handleAmendmentInputChange}
+                                                        placeholder="0.00"
+                                                        className="w-full px-4 py-2.5 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all font-medium text-sm"
+                                                    />
+                                                </div>
+                                                <div className="space-y-1.5 text-left">
+                                                    <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider whitespace-nowrap">VAT on Comm. (%)</label>
+                                                    <input
+                                                        type="number"
+                                                        step="any"
+                                                        name="amendmentVatOnCommission"
+                                                        value={amendmentFormData.amendmentVatOnCommission || ''}
+                                                        onChange={handleAmendmentInputChange}
+                                                        placeholder="0.00"
+                                                        className="w-full px-4 py-2.5 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all font-medium text-sm"
+                                                    />
+                                                </div>
+                                                <div className="space-y-1.5 text-left">
+                                                    <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider whitespace-nowrap">Swift Charge</label>
+                                                    <div className="relative">
+                                                        <span className="absolute left-3 top-1/2 -translate-y-1/2 font-bold text-gray-400 text-sm">৳</span>
+                                                        <input
+                                                            type="number"
+                                                            step="any"
+                                                            name="amendmentSwiftCharge"
+                                                            value={amendmentFormData.amendmentSwiftCharge || ''}
+                                                            onChange={handleAmendmentInputChange}
+                                                            placeholder="0.00"
+                                                            className="w-full px-4 py-2.5 pl-8 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all font-medium text-sm"
+                                                        />
+                                                    </div>
+                                                </div>
+                                                <div className="space-y-1.5 text-left">
+                                                    <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider whitespace-nowrap">VAT on Swift (%)</label>
+                                                    <input
+                                                        type="number"
+                                                        step="any"
+                                                        name="amendmentVatOnSwift"
+                                                        value={amendmentFormData.amendmentVatOnSwift || ''}
+                                                        onChange={handleAmendmentInputChange}
+                                                        placeholder="0.00"
+                                                        className="w-full px-4 py-2.5 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all font-medium text-sm"
+                                                    />
+                                                </div>
+                                            </div>
+
+                                            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-6">
+                                                <div className="space-y-1.5 text-left">
+                                                    <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Amendment Margin Bill</label>
+                                                    <div className="relative">
+                                                        <span className="absolute left-3 top-1/2 -translate-y-1/2 font-bold text-gray-400 text-sm">৳</span>
+                                                        <input
+                                                            type="number"
+                                                            step="any"
+                                                            name="amendmentMarginBill"
+                                                            value={amendmentFormData.amendmentMarginBill || ''}
+                                                            onChange={handleAmendmentInputChange}
+                                                            placeholder="0.00"
+                                                            className="w-full px-4 py-2.5 pl-8 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all font-medium text-sm font-semibold text-gray-800"
+                                                        />
+                                                    </div>
+                                                </div>
+                                                <div className="space-y-1.5 text-left">
+                                                    <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Amendment Bank Bill</label>
+                                                    <div className="relative">
+                                                        <span className="absolute left-3 top-1/2 -translate-y-1/2 font-bold text-gray-400 text-sm">৳</span>
+                                                        <input
+                                                            type="number"
+                                                            step="any"
+                                                            name="amendmentBankBill"
+                                                            value={amendmentFormData.amendmentBankBill || ''}
+                                                            onChange={handleAmendmentInputChange}
+                                                            placeholder="0.00"
+                                                            className="w-full px-4 py-2.5 pl-8 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all font-medium text-sm font-semibold text-gray-800"
+                                                        />
+                                                    </div>
+                                                </div>
+                                                <div className="space-y-1.5 text-left">
+                                                    <label className="text-[11px] font-bold text-indigo-500 uppercase tracking-wider font-extrabold">Total Amendment Bank Bill</label>
+                                                    <div className="relative">
+                                                        <span className="absolute left-3 top-1/2 -translate-y-1/2 font-bold text-indigo-400 text-sm">৳</span>
+                                                        <input
+                                                            type="number"
+                                                            step="any"
+                                                            name="totalAmendmentBankBill"
+                                                            value={amendmentFormData.totalAmendmentBankBill || ''}
+                                                            placeholder="0.00"
+                                                            className="w-full px-4 py-2.5 pl-8 bg-blue-50 border border-blue-100 rounded-xl outline-none transition-all font-black text-sm text-blue-700"
+                                                            readOnly
+                                                        />
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+
                                         <div className="col-span-full space-y-1.5">
                                             <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Remarks / Amendment Details</label>
                                             <textarea
@@ -3545,7 +4434,16 @@ const LCManagement = ({ addNotification, currentUser }) => {
                                                     addnDate: '',
                                                     port: '',
                                                     extendedShipmentDate: '',
-                                                    piNo: ''
+                                                    piNo: '',
+                                                    amendmentMargin: '',
+                                                    amendmentCommission: '',
+                                                    amendmentVatOnCommission: '',
+                                                    amendmentSwiftCharge: '',
+                                                    amendmentVatOnSwift: '',
+                                                    amendmentMarginBill: '',
+                                                    amendmentBankBill: '',
+                                                    totalAmendmentBankBill: '',
+                                                    amendmentBill: ''
                                                 });
                                             }}
                                             className="px-6 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-600 font-bold rounded-xl transition-all active:scale-95"
@@ -3625,6 +4523,30 @@ const LCManagement = ({ addNotification, currentUser }) => {
                                                 <div className="border-t border-blue-100/50 pt-2 mt-2 text-left">
                                                     <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider">Port</span>
                                                     <p className="text-xs font-bold text-gray-800">{amendmentDisplayPort}</p>
+                                                </div>
+                                            </div>
+
+                                            {/* Bank Details Section */}
+                                            <div className="bg-blue-50/30 p-3 rounded-xl border border-blue-100/50 space-y-3">
+                                                <div className="flex items-center gap-1.5 border-b border-blue-100/50 pb-1.5 mb-1">
+                                                    <BuildingIcon className="w-3.5 h-3.5 text-blue-500" />
+                                                    <span className="text-[10px] font-black text-blue-600 uppercase tracking-wider">Bank Info</span>
+                                                </div>
+                                                <div className="space-y-2 text-left">
+                                                    <div>
+                                                        <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider">Issuing Bank</span>
+                                                        <p className="text-xs font-bold text-gray-800 truncate" title={selectedLcForAmendment.bankName}>{selectedLcForAmendment.bankName || '-'}</p>
+                                                    </div>
+                                                    <div className="grid grid-cols-2 gap-2">
+                                                        <div>
+                                                            <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider">Branch</span>
+                                                            <p className="text-xs font-bold text-gray-800 truncate">{selectedLcForAmendment.bankBranch || '-'}</p>
+                                                        </div>
+                                                        <div>
+                                                            <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider">Margin</span>
+                                                            <p className="text-xs font-bold text-gray-800">{selectedLcForAmendment.bankMargin ? `${selectedLcForAmendment.bankMargin}%` : '-'}</p>
+                                                        </div>
+                                                    </div>
                                                 </div>
                                             </div>
 
