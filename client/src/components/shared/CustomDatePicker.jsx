@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { CalendarIcon, ChevronLeftIcon, ChevronRightIcon } from '../Icons';
 import './CustomDatePicker.css';
 
@@ -77,6 +77,17 @@ const CustomDatePicker = ({
         'July', 'August', 'September', 'October', 'November', 'December'
     ];
 
+    const years = useMemo(() => {
+        const currentYear = new Date().getFullYear();
+        const startYear = currentYear - 30;
+        const endYear = currentYear + 10;
+        const list = [];
+        for (let y = startYear; y <= endYear; y++) {
+            list.push(y);
+        }
+        return list;
+    }, []);
+
     const getDaysInMonth = (month, year) => new Date(year, month + 1, 0).getDate();
     const getFirstDayOfMonth = (month, year) => new Date(year, month, 1).getDay();
 
@@ -153,8 +164,31 @@ const CustomDatePicker = ({
                         >
                             <ChevronLeftIcon className="w-5 h-5" />
                         </button>
-                        <div className="date-picker-month-year">
-                            {months[viewDate.getMonth()]} {viewDate.getFullYear()}
+                        <div className="date-picker-month-year flex items-center justify-center gap-1">
+                            <select
+                                value={viewDate.getMonth()}
+                                onChange={(e) => {
+                                    setViewDate(new Date(viewDate.getFullYear(), parseInt(e.target.value), 1));
+                                }}
+                                onMouseDown={(e) => e.stopPropagation()}
+                                className="date-picker-header-select"
+                            >
+                                {months.map((m, idx) => (
+                                    <option key={m} value={idx}>{m.slice(0, 3)}</option>
+                                ))}
+                            </select>
+                            <select
+                                value={viewDate.getFullYear()}
+                                onChange={(e) => {
+                                    setViewDate(new Date(parseInt(e.target.value), viewDate.getMonth(), 1));
+                                }}
+                                onMouseDown={(e) => e.stopPropagation()}
+                                className="date-picker-header-select"
+                            >
+                                {years.map(y => (
+                                    <option key={y} value={y}>{y}</option>
+                                ))}
+                            </select>
                         </div>
                         <button
                             type="button"
