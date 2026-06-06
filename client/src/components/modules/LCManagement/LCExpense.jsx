@@ -33,6 +33,7 @@ const LCExpense = ({ currentUser, addNotification, onDeleteConfirm, refreshKey }
 
     const expenseHeads = [
         "Bank Charges",
+        "Margin Bill",
         "Customs Duty",
         "C&F Commission",
         "Port Demurrage",
@@ -188,7 +189,56 @@ const LCExpense = ({ currentUser, addNotification, onDeleteConfirm, refreshKey }
         setFormData(initialFormData);
     };
 
-    const filteredExpenses = expenses.filter(exp => {
+    const combinedExpenses = React.useMemo(() => {
+        const list = [...expenses.filter(e => e.type !== 'bill')];
+        
+        lcs.forEach(data => {
+            const marginPaidAmt = parseFloat(data.marginPaid) || (() => {
+                const total = parseFloat(data.totalAmount) || 0;
+                const margin = parseFloat(data.bankMargin) || 0;
+                return total * (margin / 100);
+            })();
+            if (marginPaidAmt > 0) {
+                list.push({
+                    _id: `margin-paid-virtual-${data._id || data.lcNo}`,
+                    date: data.openingDate || data.createdAt,
+                    lcNo: data.lcNo,
+                    expenseHead: `Margin Paid (${data.bankMargin || 0}%)`,
+                    bankName: data.bankName || 'Bank',
+                    amount: marginPaidAmt,
+                    remarks: 'Paid Margin',
+                    isVirtual: true
+                });
+            }
+
+            if (data.amendments && data.amendments.length > 0) {
+                data.amendments.forEach((amnd, idx) => {
+                    if (amnd.amendmentNo === 'Original LC') return;
+                    const margin = amnd.amendmentMargin !== undefined ? (parseFloat(amnd.amendmentMargin) || 0) : (data.bankMargin !== undefined ? parseFloat(data.bankMargin) : 0);
+                    const amndMarginPaid = parseFloat(amnd.amendmentMarginPaid) || (() => {
+                        const amndMarginBill = parseFloat(amnd.amendmentMarginBill) || 0;
+                        return amndMarginBill * (margin / 100);
+                    })();
+                    if (amndMarginPaid > 0) {
+                        list.push({
+                            _id: `amnd-margin-paid-virtual-${data._id || data.lcNo}-\idx}`.replace('idx', idx),
+                            date: amnd.amendmentDate || data.openingDate,
+                            lcNo: data.lcNo,
+                            expenseHead: `Margin Paid (${margin}%) (${amnd.amendmentNo || `Amend #${idx + 1}`})`,
+                            bankName: data.bankName || 'Bank',
+                            amount: amndMarginPaid,
+                            remarks: `Paid Margin for ${amnd.amendmentNo || `Amend #${idx + 1}`}`,
+                            isVirtual: true
+                        });
+                    }
+                });
+            }
+        });
+
+        return list.sort((a, b) => new Date(b.date) - new Date(a.date));
+    }, [expenses, lcs]);
+
+    const filteredExpenses = combinedExpenses.filter(exp => {
         const query = searchQuery.toLowerCase();
         return (
             (exp.lcNo || '').toLowerCase().includes(query) ||
@@ -204,22 +254,91 @@ const LCExpense = ({ currentUser, addNotification, onDeleteConfirm, refreshKey }
         const selectedLc = lcs.find(lc => lc.lcNo === formData.lcNo);
         if (!selectedLc) return 0;
 
-        if (formData.expenseHead === 'Bank Charges') {
-            const originalBankBill = parseFloat(selectedLc.totalBankBill || selectedLc.bankBill || 0);
+        const head = formData.expenseHead;
+        if (!head) return 0;
+
+        if (head === 'Bank Charges') {
+            const originalBankBill = parseFloat(selectedLc.bankBill) || 0;
             const amendmentsBankBill = selectedLc.amendments ? selectedLc.amendments.reduce((sum, amnd) => {
-                return sum + (parseFloat(amnd.totalAmendmentBankBill || amnd.amendmentBill || amnd.amendmentBankBill) || 0);
+                return sum + (parseFloat(amnd.amendmentBankBill) || 0);
             }, 0) : 0;
-            return originalBankBill + amendmentsBankBill;
+            const customBankBills = expenses
+                .filter(exp => exp.lcNo === formData.lcNo && exp.expenseHead === 'Bank Charges' && exp.type === 'bill')
+                .reduce((sum, exp) => sum + (parseFloat(exp.amount) || 0), 0);
+            const totalBankBill = originalBankBill + amendmentsBankBill + customBankBills;
+
+            // Subtract already registered bank charges (excluding current record being edited)
+            const registeredBankCharges = expenses
+                .filter(exp => exp.lcNo === formData.lcNo && exp.expenseHead === 'Bank Charges' && exp._id !== editingId && exp.type !== 'bill')
+                .reduce((sum, exp) => sum + (parseFloat(exp.amount) || 0), 0);
+
+            return Math.max(0, totalBankBill - registeredBankCharges);
         }
 
-        if (formData.expenseHead === 'C&F Commission') {
+        if (head === 'Margin Bill') {
+            const originalMarginBill = parseFloat(selectedLc.marginBill || selectedLc.totalAmount || 0);
+            const amendmentsMarginBill = selectedLc.amendments ? selectedLc.amendments.reduce((sum, amnd) => {
+                if (amnd.amendmentNo === 'Original LC') return sum;
+                return sum + (parseFloat(amnd.amendmentMarginBill) || 0);
+            }, 0) : 0;
+            const customMarginBills = expenses
+                .filter(exp => exp.lcNo === formData.lcNo && exp.expenseHead === 'Margin Bill' && exp.type === 'bill')
+                .reduce((sum, exp) => sum + (parseFloat(exp.amount) || 0), 0);
+            const totalMarginBill = originalMarginBill + amendmentsMarginBill + customMarginBills;
+
+            const originalMarginPaid = parseFloat(selectedLc.marginPaid) || (() => {
+                const total = parseFloat(selectedLc.totalAmount) || 0;
+                const margin = parseFloat(selectedLc.bankMargin) || 0;
+                return total * (margin / 100);
+            })();
+            const amendmentsMarginPaid = selectedLc.amendments ? selectedLc.amendments.reduce((sum, amnd) => {
+                if (amnd.amendmentNo === 'Original LC') return sum;
+                const margin = amnd.amendmentMargin !== undefined ? (parseFloat(amnd.amendmentMargin) || 0) : (selectedLc.bankMargin !== undefined ? parseFloat(selectedLc.bankMargin) : 0);
+                const amndMarginPaid = parseFloat(amnd.amendmentMarginPaid) || (() => {
+                    const amndMarginBill = parseFloat(amnd.amendmentMarginBill) || 0;
+                    return amndMarginBill * (margin / 100);
+                })();
+                return sum + amndMarginPaid;
+            }, 0) : 0;
+            const totalMarginPaid = originalMarginPaid + amendmentsMarginPaid;
+
+            // Subtract already registered payments for Margin Bill (excluding current record being edited)
+            const registeredPayments = expenses
+                .filter(exp => exp.lcNo === formData.lcNo && exp.expenseHead === 'Margin Bill' && exp._id !== editingId && exp.type !== 'bill')
+                .reduce((sum, exp) => sum + (parseFloat(exp.amount) || 0), 0);
+
+            return Math.max(0, totalMarginBill - totalMarginPaid - registeredPayments);
+        }
+
+        if (head === 'C&F Commission') {
             if (!formData.cnfAgent) return 0;
             const cleanAgent = formData.cnfAgent.toLowerCase().trim();
             const filteredStock = stockRecords.filter(
                 record => record.lcNo === formData.lcNo &&
                 (record.bdCnF || '').toLowerCase().trim() === cleanAgent
             );
-            return filteredStock.reduce((sum, r) => sum + (parseFloat(r.bdCnFCost) || 0), 0);
+            const customCnfBills = expenses
+                .filter(exp => exp.lcNo === formData.lcNo && exp.expenseHead === 'C&F Commission' && exp.cnfAgent && exp.cnfAgent.toLowerCase().trim() === cleanAgent && exp.type === 'bill')
+                .reduce((sum, exp) => sum + (parseFloat(exp.amount) || 0), 0);
+            const totalCnfBill = filteredStock.reduce((sum, r) => sum + (parseFloat(r.bdCnFCost) || 0), 0) + customCnfBills;
+
+            const registeredCnfPaid = expenses
+                .filter(exp => exp.lcNo === formData.lcNo && exp.expenseHead === 'C&F Commission' && exp.cnfAgent && exp.cnfAgent.toLowerCase().trim() === cleanAgent && exp._id !== editingId && exp.type !== 'bill')
+                .reduce((sum, exp) => sum + (parseFloat(exp.amount) || 0), 0);
+
+            return Math.max(0, totalCnfBill - registeredCnfPaid);
+        }
+
+        // For any other custom heads (e.g. Customs Duty, Port Demurrage, Transport Cost, Other)
+        const customBills = expenses
+            .filter(exp => exp.lcNo === formData.lcNo && exp.expenseHead === head && exp.type === 'bill')
+            .reduce((sum, exp) => sum + (parseFloat(exp.amount) || 0), 0);
+
+        if (customBills > 0) {
+            const registeredPayments = expenses
+                .filter(exp => exp.lcNo === formData.lcNo && exp.expenseHead === head && exp._id !== editingId && exp.type !== 'bill')
+                .reduce((sum, exp) => sum + (parseFloat(exp.amount) || 0), 0);
+            return Math.max(0, customBills - registeredPayments);
         }
 
         return 0;
@@ -316,22 +435,26 @@ const LCExpense = ({ currentUser, addNotification, onDeleteConfirm, refreshKey }
                                                 ৳{parseFloat(exp.amount || 0).toLocaleString('en-IN')}
                                             </td>
                                             <td className="px-6 py-4 text-center">
-                                                <div className="flex items-center justify-center gap-2">
-                                                    <button
-                                                        onClick={() => handleEdit(exp)}
-                                                        className="p-2 hover:bg-blue-50 text-gray-400 hover:text-blue-600 rounded-xl transition-all active:scale-90"
-                                                        title="Edit Expense"
-                                                    >
-                                                        <EditIcon className="w-4 h-4" />
-                                                    </button>
-                                                    <button
-                                                        onClick={() => handleDelete(exp._id)}
-                                                        className="p-2 hover:bg-rose-50 text-gray-400 hover:text-rose-600 rounded-xl transition-all active:scale-90"
-                                                        title="Delete Expense"
-                                                    >
-                                                        <TrashIcon className="w-4 h-4" />
-                                                    </button>
-                                                </div>
+                                                {!exp.isVirtual ? (
+                                                    <div className="flex items-center justify-center gap-2">
+                                                        <button
+                                                            onClick={() => handleEdit(exp)}
+                                                            className="p-2 hover:bg-blue-50 text-gray-400 hover:text-blue-600 rounded-xl transition-all active:scale-90"
+                                                            title="Edit Expense"
+                                                        >
+                                                            <EditIcon className="w-4 h-4" />
+                                                        </button>
+                                                        <button
+                                                            onClick={() => handleDelete(exp._id)}
+                                                            className="p-2 hover:bg-rose-50 text-gray-400 hover:text-rose-600 rounded-xl transition-all active:scale-90"
+                                                            title="Delete Expense"
+                                                        >
+                                                            <TrashIcon className="w-4 h-4" />
+                                                        </button>
+                                                    </div>
+                                                ) : (
+                                                    <span className="text-xs font-semibold text-gray-400 italic">Read-only</span>
+                                                )}
                                             </td>
                                         </tr>
                                     ))
@@ -486,7 +609,7 @@ const LCExpense = ({ currentUser, addNotification, onDeleteConfirm, refreshKey }
                                 )}
                             </div>
 
-                            {formData.expenseHead === 'Bank Charges' && (
+                            {(formData.expenseHead === 'Bank Charges' || formData.expenseHead === 'Margin Bill') && (
                                 <div className="space-y-1.5 text-left animate-in fade-in zoom-in duration-300">
                                     <label className="text-sm font-semibold text-gray-600 ml-1">Bank Name</label>
                                     <input
@@ -555,7 +678,21 @@ const LCExpense = ({ currentUser, addNotification, onDeleteConfirm, refreshKey }
 
                             <div key={formData.expenseHead} className="space-y-1.5 text-left animate-in fade-in zoom-in duration-300">
                                 <label className="text-sm font-semibold text-gray-600 ml-1">
-                                    {formData.expenseHead ? `Total ${formData.expenseHead} Bill` : 'Total Bill'} (৳)
+                                    {(() => {
+                                        const head = formData.expenseHead;
+                                        if (!head) return 'Total Bill';
+                                        
+                                        if (head === 'Bank Charges' || head === 'Margin Bill' || head === 'C&F Commission') {
+                                            return `${head} Balance`;
+                                        }
+                                        
+                                        const hasBills = expenses.some(exp => exp.lcNo === formData.lcNo && exp.expenseHead === head && exp.type === 'bill');
+                                        if (hasBills) {
+                                            return `${head} Balance`;
+                                        }
+                                        
+                                        return `Total ${head} Bill`;
+                                    })()}
                                 </label>
                                 <input
                                     type="text"

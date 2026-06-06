@@ -4,6 +4,13 @@ import { API_BASE_URL, formatDate } from '../../../utils/helpers';
 import { encryptData, decryptData } from '../../../utils/encryption';
 import axios from '../../../utils/api';
 
+const EyeIcon = ({ className }) => (
+    <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+    </svg>
+);
+
 const Bank = ({ onDeleteConfirm }) => {
     const [banks, setBanks] = useState([]);
     const [showForm, setShowForm] = useState(false);
@@ -14,6 +21,10 @@ const Bank = ({ onDeleteConfirm }) => {
     const [editingId, setEditingId] = useState(null);
     const [expandedRowKey, setExpandedRowKey] = useState(null);
     const [expandedBranchKey, setExpandedBranchKey] = useState(null);
+    // LC Bill History modal state
+    const [lcBillHistoryBank, setLcBillHistoryBank] = useState(null); // bank name being viewed
+    const [lcBillHistoryRows, setLcBillHistoryRows] = useState([]);
+    const [lcBillHistoryLoading, setLcBillHistoryLoading] = useState(false);
     const [formData, setFormData] = useState({
         bankName: '',
         binNo: '',
@@ -52,6 +63,96 @@ const Bank = ({ onDeleteConfirm }) => {
             setIsLoading(false);
         }
     };
+
+    const openLcBillHistory = async (bankName) => {
+        setLcBillHistoryBank(bankName);
+        setLcBillHistoryLoading(true);
+        setLcBillHistoryRows([]);
+        try {
+            const [lcRes, expRes] = await Promise.all([
+                axios.get(`${API_BASE_URL}/api/lc-management`),
+                axios.get(`${API_BASE_URL}/api/lc-expenses`)
+            ]);
+            const lcRecords = Array.isArray(lcRes.data) ? lcRes.data : [];
+            const expenses = Array.isArray(expRes.data) ? expRes.data : [];
+
+            const cleanBankName = (bankName || '').trim().toUpperCase();
+
+            // Filter LC records that belong to this bank
+            const matchingLcs = lcRecords.filter(lc => {
+                const lcBank = (lc.bankName || '').trim().toUpperCase();
+                return lcBank === cleanBankName;
+            });
+
+            const rows = [];
+
+            matchingLcs.forEach(lc => {
+                const amendments = Array.isArray(lc.amendments) ? lc.amendments : [];
+
+                // Helper: total paid bank charges from expenses (type !== bill)
+                const bankChargePaid = expenses
+                    .filter(e => e.lcNo === lc.lcNo && e.expenseHead === 'Bank Charges' && e.type !== 'bill')
+                    .reduce((s, e) => s + (parseFloat(e.amount) || 0), 0);
+
+                // Helper: total paid margin bill from expenses (type !== bill)
+                const marginExpPaid = expenses
+                    .filter(e => e.lcNo === lc.lcNo && e.expenseHead === 'Margin Bill' && e.type !== 'bill')
+                    .reduce((s, e) => s + (parseFloat(e.amount) || 0), 0);
+
+                // --- Original LC row ---
+                const origMarginBill = parseFloat(lc.marginBill) || parseFloat(lc.totalAmount) || 0;
+                const origMarginPaid = parseFloat(lc.marginPaid) || (origMarginBill * ((parseFloat(lc.bankMargin) || 0) / 100));
+                const origBankBill = parseFloat(lc.bankBill) || 0;
+
+                // Distribute bank charge payments across bills FIFO
+                let remBankPaid = bankChargePaid;
+                const origBankPaid = Math.min(remBankPaid, origBankBill);
+                remBankPaid -= origBankPaid;
+
+                rows.push({
+                    date: lc.openingDate || lc.createdAt,
+                    lcNo: lc.lcNo,
+                    importer: lc.importer || '-',
+                    billType: 'Opening LC',
+                    marginBill: origMarginBill,
+                    marginPaid: origMarginPaid + marginExpPaid,
+                    bankBill: origBankBill,
+                    bankPaid: origBankPaid
+                });
+
+                // --- Amendment rows ---
+                amendments.forEach((amnd, idx) => {
+                    if (amnd.amendmentNo === 'Original LC') return;
+                    const amndMarginBill = parseFloat(amnd.amendmentMarginBill) || 0;
+                    const amndMargin = amnd.amendmentMargin !== undefined ? (parseFloat(amnd.amendmentMargin) || 0) : (parseFloat(lc.bankMargin) || 0);
+                    const amndMarginPaid = parseFloat(amnd.amendmentMarginPaid) || (amndMarginBill * (amndMargin / 100));
+                    const amndBankBill = parseFloat(amnd.amendmentBankBill) || parseFloat(amnd.totalAmendmentBankBill) || parseFloat(amnd.amendmentBill) || 0;
+                    const amndBankPaid = Math.min(remBankPaid, amndBankBill);
+                    remBankPaid -= amndBankPaid;
+
+                    rows.push({
+                        date: amnd.amendmentDate || lc.openingDate || lc.createdAt,
+                        lcNo: lc.lcNo,
+                        importer: lc.importer || '-',
+                        billType: amnd.amendmentNo || `Amendment #${idx + 1}`,
+                        marginBill: amndMarginBill,
+                        marginPaid: amndMarginPaid,
+                        bankBill: amndBankBill,
+                        bankPaid: amndBankPaid
+                    });
+                });
+            });
+
+            // Sort by date descending
+            rows.sort((a, b) => new Date(b.date) - new Date(a.date));
+            setLcBillHistoryRows(rows);
+        } catch (err) {
+            console.error('Error loading LC bill history:', err);
+        } finally {
+            setLcBillHistoryLoading(false);
+        }
+    };
+
 
     const handleInputChange = (e) => {
         const { name, value } = e.target;
@@ -675,6 +776,13 @@ const Bank = ({ onDeleteConfirm }) => {
                                                             <td className="px-6 py-4 text-center">
                                                                 <div className="flex justify-center items-center gap-2">
                                                                     <button 
+                                                                        onClick={() => openLcBillHistory(group.bankName)}
+                                                                        className="p-1.5 hover:bg-emerald-50 text-gray-400 hover:text-emerald-600 rounded-lg transition-all"
+                                                                        title="LC Bill History"
+                                                                    >
+                                                                        <EyeIcon className="w-4 h-4" />
+                                                                    </button>
+                                                                    <button 
                                                                         onClick={() => setExpandedBranchKey(prev => prev === item.uniqueRowKey ? null : item.uniqueRowKey)}
                                                                         className={`p-1.5 rounded-lg transition-all ${isBranchExpanded ? 'bg-blue-50 text-blue-600' : 'hover:bg-gray-100 text-gray-400 hover:text-gray-600'}`}
                                                                         title="View Charges"
@@ -938,6 +1046,111 @@ const Bank = ({ onDeleteConfirm }) => {
                             </div>
                         </div>
                     )}
+                </div>
+            </div>
+        )}
+
+        {/* LC Bill History Modal */}
+        {lcBillHistoryBank && (
+            <div className="fixed inset-0 z-[3000] flex items-center justify-center p-4">
+                <div className="absolute inset-0 bg-gray-900/60 backdrop-blur-sm" onClick={() => setLcBillHistoryBank(null)} />
+                <div className="relative bg-white border border-gray-100 rounded-2xl shadow-2xl w-full max-w-6xl overflow-hidden animate-in zoom-in duration-300 flex flex-col max-h-[90vh]">
+                    {/* Header */}
+                    <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 bg-gradient-to-r from-blue-50 to-indigo-50 shrink-0">
+                        <div className="flex items-center gap-3">
+                            <div className="p-2 bg-blue-600 text-white rounded-xl">
+                                <EyeIcon className="w-5 h-5" />
+                            </div>
+                            <div>
+                                <h3 className="text-lg font-black text-gray-900">LC Bill History</h3>
+                                <p className="text-xs font-bold text-blue-600 uppercase tracking-widest">{lcBillHistoryBank}</p>
+                            </div>
+                        </div>
+                        <button onClick={() => setLcBillHistoryBank(null)} className="p-2 text-gray-400 hover:text-gray-600 rounded-full hover:bg-white transition-all">
+                            <XIcon className="w-5 h-5" />
+                        </button>
+                    </div>
+
+                    {/* Table */}
+                    <div className="overflow-y-auto flex-1 p-6">
+                        {lcBillHistoryLoading ? (
+                            <div className="flex items-center justify-center py-20">
+                                <div className="w-10 h-10 border-4 border-blue-100 border-t-blue-600 rounded-full animate-spin" />
+                            </div>
+                        ) : lcBillHistoryRows.length === 0 ? (
+                            <div className="flex flex-col items-center justify-center py-20 text-gray-400">
+                                <div className="p-4 bg-gray-50 rounded-full mb-4">
+                                    <EyeIcon className="w-10 h-10 text-gray-300" />
+                                </div>
+                                <p className="font-bold text-gray-500">No LC bill history found</p>
+                                <p className="text-sm mt-1">No LC records are linked to <span className="font-bold text-blue-600">{lcBillHistoryBank}</span></p>
+                            </div>
+                        ) : (
+                            <div className="overflow-hidden border border-gray-100 rounded-2xl shadow-sm">
+                                <table className="w-full text-left border-collapse">
+                                    <thead>
+                                        <tr className="bg-gray-50/50 border-b border-gray-100">
+                                            <th className="px-5 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest whitespace-nowrap">Date</th>
+                                            <th className="px-5 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest whitespace-nowrap">LC No</th>
+                                            <th className="px-5 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">Importer</th>
+                                            <th className="px-5 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest whitespace-nowrap">Bill Type</th>
+                                            <th className="px-5 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest text-right whitespace-nowrap">Margin Bill</th>
+                                            <th className="px-5 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest text-right whitespace-nowrap">Margin Paid</th>
+                                            <th className="px-5 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest text-right whitespace-nowrap">Bank Charge</th>
+                                            <th className="px-5 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest text-right whitespace-nowrap">Bank Paid</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-gray-50 font-medium">
+                                        {lcBillHistoryRows.map((row, idx) => (
+                                            <tr key={idx} className="hover:bg-blue-50/30 transition-colors">
+                                                <td className="px-5 py-3.5 text-sm text-gray-600 whitespace-nowrap">{formatDate(row.date)}</td>
+                                                <td className="px-5 py-3.5 text-sm font-black text-blue-600 whitespace-nowrap">{row.lcNo}</td>
+                                                <td className="px-5 py-3.5 text-sm text-gray-800 uppercase max-w-[160px] truncate">{row.importer}</td>
+                                                <td className="px-5 py-3.5 whitespace-nowrap">
+                                                    <span className={`inline-flex items-center px-2.5 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider border ${
+                                                        row.billType === 'Opening LC'
+                                                            ? 'bg-blue-50 text-blue-700 border-blue-100'
+                                                            : 'bg-amber-50 text-amber-700 border-amber-100'
+                                                    }`}>
+                                                        {row.billType}
+                                                    </span>
+                                                </td>
+                                                <td className="px-5 py-3.5 text-sm font-bold text-right text-gray-900 whitespace-nowrap">
+                                                    {row.marginBill > 0 ? `৳${row.marginBill.toLocaleString('en-IN', { minimumFractionDigits: 2 })}` : '-'}
+                                                </td>
+                                                <td className="px-5 py-3.5 text-sm font-bold text-right text-emerald-600 whitespace-nowrap">
+                                                    {row.marginPaid > 0 ? `৳${row.marginPaid.toLocaleString('en-IN', { minimumFractionDigits: 2 })}` : '-'}
+                                                </td>
+                                                <td className="px-5 py-3.5 text-sm font-bold text-right text-gray-900 whitespace-nowrap">
+                                                    {row.bankBill > 0 ? `৳${row.bankBill.toLocaleString('en-IN', { minimumFractionDigits: 2 })}` : '-'}
+                                                </td>
+                                                <td className="px-5 py-3.5 text-sm font-bold text-right text-emerald-600 whitespace-nowrap">
+                                                    {row.bankPaid > 0 ? `৳${row.bankPaid.toLocaleString('en-IN', { minimumFractionDigits: 2 })}` : '-'}
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                    <tfoot className="bg-gradient-to-r from-blue-50/50 to-indigo-50/50 border-t border-gray-100">
+                                        <tr>
+                                            <td colSpan="4" className="px-5 py-4 text-xs font-black text-gray-500 uppercase tracking-wider text-right">Total:</td>
+                                            <td className="px-5 py-4 text-sm font-black text-right text-blue-700">
+                                                ৳{lcBillHistoryRows.reduce((s, r) => s + r.marginBill, 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                                            </td>
+                                            <td className="px-5 py-4 text-sm font-black text-right text-emerald-600">
+                                                ৳{lcBillHistoryRows.reduce((s, r) => s + r.marginPaid, 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                                            </td>
+                                            <td className="px-5 py-4 text-sm font-black text-right text-blue-700">
+                                                ৳{lcBillHistoryRows.reduce((s, r) => s + r.bankBill, 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                                            </td>
+                                            <td className="px-5 py-4 text-sm font-black text-right text-emerald-600">
+                                                ৳{lcBillHistoryRows.reduce((s, r) => s + r.bankPaid, 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                                            </td>
+                                        </tr>
+                                    </tfoot>
+                                </table>
+                            </div>
+                        )}
+                    </div>
                 </div>
             </div>
         )}

@@ -8,13 +8,101 @@ import {
 import { formatDate, API_BASE_URL } from '../../../utils/helpers';
 import { decryptData } from '../../../utils/encryption';
 import CustomDatePicker from '../../shared/CustomDatePicker';
-const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords = [], gpRecords = [], lcExpenses = [], piRecordsRaw = [], onEdit, onEditAmendment, canManage }) => {
+const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords = [], gpRecords = [], lcExpenses = [], piRecordsRaw = [], onEdit, onEditAmendment, canManage, onRefresh }) => {
     const [showConsumption, setShowConsumption] = useState(true);
     const [consumptionSearchQuery, setConsumptionSearchQuery] = useState('');
     const [activeTab, setActiveTab] = useState('history');
     const [activeMilestoneIndex, setActiveMilestoneIndex] = useState(0);
     const [insurancePayments, setInsurancePayments] = useState([]);
     const [cnfPayments, setCnfPayments] = useState([]);
+
+    // States for Add Bill inside modal
+    const [showAddBillModal, setShowAddBillModal] = useState(false);
+    const [billFormData, setBillFormData] = useState({
+        date: new Date().toISOString().split('T')[0],
+        lcNo: data.lcNo,
+        bankName: data.bankName || '',
+        expenseHead: '',
+        cnfAgent: '',
+        amount: '',
+        remarks: ''
+    });
+    const [isSavingBill, setIsSavingBill] = useState(false);
+    const [bdCnfs, setBdCnfs] = useState([]);
+    const [billHeadDropdownOpen, setBillHeadDropdownOpen] = useState(false);
+    const [billHeadQuery, setBillHeadQuery] = useState('');
+    const [billHeadHighlight, setBillHeadHighlight] = useState(-1);
+    const billHeadRef = React.useRef(null);
+
+
+    useEffect(() => {
+        const fetchCnfs = async () => {
+            try {
+                const response = await axios.get(`${API_BASE_URL}/api/cnfs`);
+                const bdAgents = Array.isArray(response.data) ? response.data.filter(c => c.type !== 'Indian') : [];
+                const agentNames = Array.from(new Set(bdAgents.map(a => a.name).filter(Boolean)));
+                setBdCnfs(agentNames);
+            } catch (error) {
+                console.error("Error fetching C&F Agents in details modal:", error);
+            }
+        };
+        fetchCnfs();
+    }, []);
+
+    // Close bill head dropdown on outside click
+    useEffect(() => {
+        const handleClickOutside = (e) => {
+            if (billHeadRef.current && !billHeadRef.current.contains(e.target)) {
+                setBillHeadDropdownOpen(false);
+            }
+        };
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, []);
+
+    const expenseHeads = [
+        "Bank Charges",
+        "Margin Bill",
+        "Customs Duty",
+        "C&F Commission",
+        "Port Demurrage",
+        "Transport Cost",
+        "Other"
+    ];
+
+
+
+    const handleSaveBill = async (e) => {
+        e.preventDefault();
+        setIsSavingBill(true);
+        try {
+            const dataToSubmit = {
+                ...billFormData,
+                amount: parseFloat(billFormData.amount) || 0,
+                type: 'bill'
+            };
+            await axios.post(`${API_BASE_URL}/api/lc-expenses`, dataToSubmit);
+            setShowAddBillModal(false);
+            setBillFormData({
+                date: new Date().toISOString().split('T')[0],
+                lcNo: data.lcNo,
+                bankName: data.bankName || '',
+                expenseHead: '',
+                cnfAgent: '',
+                amount: '',
+                remarks: ''
+            });
+            setBillHeadQuery('');
+            setBillHeadDropdownOpen(false);
+            if (onRefresh) {
+                await onRefresh();
+            }
+        } catch (error) {
+            console.error("Error saving bill inside modal:", error);
+        } finally {
+            setIsSavingBill(false);
+        }
+    };
 
     useEffect(() => {
         const fetchPaymentsData = async () => {
@@ -244,16 +332,49 @@ const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords
 
     const bills = [];
 
-    // Calculate total bank charges paid from LC expenses
+    // Calculate total bank charges paid from LC expenses (excluding added bills)
     const totalBankChargesPaid = lcExpenses
-        .filter(e => e.lcNo === data.lcNo && e.expenseHead === 'Bank Charges')
+        .filter(e => e.lcNo === data.lcNo && e.expenseHead === 'Bank Charges' && e.type !== 'bill')
         .reduce((sum, e) => sum + (parseFloat(e.amount) || 0), 0);
 
     let remainingBankPaid = totalBankChargesPaid;
     let lastBankBillIdx = -1;
 
-    // 1. Bank Bill (Original)
-    const bankBillAmt = parseFloat(data.totalBankBill || data.bankBill) || 0;
+    // Calculate total margin payments from LC expenses (excluding added bills)
+    const totalMarginPayments = lcExpenses
+        .filter(e => e.lcNo === data.lcNo && e.expenseHead === 'Margin Bill' && e.type !== 'bill')
+        .reduce((sum, e) => sum + (parseFloat(e.amount) || 0), 0);
+
+    // 1. Margin Bill (Original)
+    const marginBillAmt = parseFloat(data.marginBill) || parseFloat(data.totalAmount) || 0;
+    if (marginBillAmt > 0) {
+        const marginPaidAmt = (parseFloat(data.marginPaid) || (() => {
+            const total = parseFloat(data.totalAmount) || 0;
+            const margin = parseFloat(data.bankMargin) || 0;
+            return total * (margin / 100);
+        })()) + totalMarginPayments;
+
+        let marginStatus = "Unpaid";
+        if (marginPaidAmt >= marginBillAmt) {
+            marginStatus = "Paid";
+        } else if (marginPaidAmt > 0) {
+            marginStatus = "Partial Paid";
+        }
+
+        bills.push({
+            date: data.openingDate || data.createdAt,
+            billHead: "Margin Bill",
+            name: data.bankName || "Bank",
+            totalBill: marginBillAmt,
+            paidBill: marginPaidAmt,
+            billBalance: Math.max(0, marginBillAmt - marginPaidAmt),
+            status: marginStatus
+        });
+    }
+
+    // 2. Bank Bill (Original)
+    const isNewBilling = data.marginPaid !== undefined || data.marginBill !== undefined;
+    const bankBillAmt = isNewBilling ? (parseFloat(data.bankBill) || 0) : (parseFloat(data.totalBankBill || data.bankBill) || 0);
     if (bankBillAmt > 0) {
         const paid = Math.min(remainingBankPaid, bankBillAmt);
         remainingBankPaid -= paid;
@@ -277,10 +398,40 @@ const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords
         lastBankBillIdx = bills.length - 1;
     }
 
-    // 2. Bank Bill (Amendments)
+    // 3. Margin Bill & Bank Bill (Amendments)
     if (data.amendments && data.amendments.length > 0) {
         data.amendments.forEach((amnd, idx) => {
-            const amndBillAmt = parseFloat(amnd.totalAmendmentBankBill || amnd.amendmentBill || amnd.amendmentBankBill) || 0;
+            if (amnd.amendmentNo === 'Original LC') return;
+
+            // Push Amendment Margin Bill
+            const amndMarginBill = parseFloat(amnd.amendmentMarginBill) || 0;
+            if (amndMarginBill > 0) {
+                const amndMarginPaid = parseFloat(amnd.amendmentMarginPaid) || (() => {
+                    const margin = amnd.amendmentMargin !== undefined ? (parseFloat(amnd.amendmentMargin) || 0) : (data.bankMargin !== undefined ? parseFloat(data.bankMargin) : 0);
+                    return amndMarginBill * (margin / 100);
+                })();
+
+                let amndMarginStatus = "Unpaid";
+                if (amndMarginPaid >= amndMarginBill) {
+                    amndMarginStatus = "Paid";
+                } else if (amndMarginPaid > 0) {
+                    amndMarginStatus = "Partial Paid";
+                }
+
+                bills.push({
+                    date: amnd.amendmentDate || data.openingDate,
+                    billHead: `Margin Bill (${amnd.amendmentNo || `Amend #${idx + 1}`})`,
+                    name: data.bankName || "Bank",
+                    totalBill: amndMarginBill,
+                    paidBill: amndMarginPaid,
+                    billBalance: Math.max(0, amndMarginBill - amndMarginPaid),
+                    status: amndMarginStatus
+                });
+            }
+
+            // Push Amendment Bank Bill
+            const isAmndNewBilling = amnd.amendmentMarginPaid !== undefined || amnd.amendmentMarginBill !== undefined;
+            const amndBillAmt = isAmndNewBilling ? (parseFloat(amnd.amendmentBankBill) || 0) : (parseFloat(amnd.totalAmendmentBankBill || amnd.amendmentBill || amnd.amendmentBankBill) || 0);
             if (amndBillAmt > 0) {
                 const paid = Math.min(remainingBankPaid, amndBillAmt);
                 remainingBankPaid -= paid;
@@ -311,6 +462,7 @@ const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords
         bills[lastBankBillIdx].paidBill += remainingBankPaid;
         bills[lastBankBillIdx].billBalance = Math.max(0, bills[lastBankBillIdx].totalBill - bills[lastBankBillIdx].paidBill);
         bills[lastBankBillIdx].status = "Paid";
+        remainingBankPaid = 0; // consumed by original bill — don't carry over to custom bills
     }
 
     // 3. Insurance Bill
@@ -342,7 +494,7 @@ const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords
     // 4. Expenses (C&F and Others)
     const cnfAgentPaidMap = {};
     lcExpenses
-        .filter(e => cleanLc(e.lcNo) === lcNoClean && e.expenseHead === 'C&F Commission' && e.cnfAgent)
+        .filter(e => cleanLc(e.lcNo) === lcNoClean && e.expenseHead === 'C&F Commission' && e.cnfAgent && e.type !== 'bill')
         .forEach(e => {
             const cleanAgent = e.cnfAgent.toLowerCase().trim();
             cnfAgentPaidMap[cleanAgent] = (cnfAgentPaidMap[cleanAgent] || 0) + (parseFloat(e.amount) || 0);
@@ -420,19 +572,104 @@ const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords
         }
     });
 
-    // Push other expenses as "Other Bills"
-    const otherExpenses = lcExpenses.filter(e => cleanLc(e.lcNo) === lcNoClean && e.expenseHead !== 'C&F Commission');
-    otherExpenses.forEach(exp => {
-        const billAmt = parseFloat(exp.amount) || 0;
-        bills.push({
-            date: exp.date,
-            billHead: exp.expenseHead || "Other Bill",
-            name: exp.expenseHead || "Other Name",
+    // Separate bills and payments (expenses)
+    const registeredBills = lcExpenses.filter(e => cleanLc(e.lcNo) === lcNoClean && e.type === 'bill');
+    const registeredPayments = lcExpenses.filter(e => cleanLc(e.lcNo) === lcNoClean && e.type !== 'bill');
+
+    const paymentsByHead = {};
+    registeredPayments.forEach(pay => {
+        const head = pay.expenseHead || 'Other';
+        // C&F Commission has its own stock-arrival based tracking — skip it here
+        // Bank Charges and Margin Bill are handled below using residuals after original bills are filled
+        if (head === 'C&F Commission') return;
+        if (head === 'Bank Charges') return;
+        if (head === 'Margin Bill') return;
+
+        paymentsByHead[head] = paymentsByHead[head] || [];
+        paymentsByHead[head].push(pay);
+    });
+
+    const billPaymentsRemaining = {};
+    Object.keys(paymentsByHead).forEach(head => {
+        billPaymentsRemaining[head] = paymentsByHead[head].reduce((sum, p) => sum + (parseFloat(p.amount) || 0), 0);
+    });
+
+    // Inject residual Bank Charges and Margin Bill payments that weren't consumed by original/amendment bills
+    // remainingBankPaid = any leftover after filling original Bank Bill + amendment bank bills
+    if (remainingBankPaid > 0) {
+        billPaymentsRemaining['Bank Charges'] = remainingBankPaid;
+        paymentsByHead['Bank Charges'] = [{ expenseHead: 'Bank Charges', amount: remainingBankPaid }];
+    }
+    // For Margin Bill: compute how much of totalMarginPayments wasn't used by original + amendment margin bills
+    const totalMarginBillsInBills = bills.filter(b => b.billHead === 'Margin Bill' || b.billHead.startsWith('Margin Bill (')).reduce((sum, b) => sum + b.paidBill, 0);
+    const residualMarginPayment = Math.max(0, totalMarginPayments - totalMarginBillsInBills);
+    if (residualMarginPayment > 0) {
+        billPaymentsRemaining['Margin Bill'] = residualMarginPayment;
+        paymentsByHead['Margin Bill'] = [{ expenseHead: 'Margin Bill', amount: residualMarginPayment }];
+    }
+
+    const billRows = [];
+    const lastBillIdxByHead = {};
+
+    registeredBills.forEach((bill) => {
+        const head = bill.expenseHead || 'Other';
+        const billAmt = parseFloat(bill.amount) || 0;
+        const remainingPaid = billPaymentsRemaining[head] || 0;
+        const paid = Math.min(remainingPaid, billAmt);
+
+        if (billPaymentsRemaining[head] !== undefined) {
+            billPaymentsRemaining[head] -= paid;
+        }
+
+        let billStatus = "Unpaid";
+        if (paid >= billAmt) billStatus = "Paid";
+        else if (paid > 0) billStatus = "Partial Paid";
+
+        billRows.push({
+            date: bill.date,
+            billHead: bill.expenseHead || "Other Bill",
+            name: bill.cnfAgent || bill.bankName || bill.remarks || bill.expenseHead || "Other Name",
             totalBill: billAmt,
-            paidBill: billAmt,
-            billBalance: 0,
-            status: "Paid"
+            paidBill: paid,
+            billBalance: Math.max(0, billAmt - paid),
+            status: billStatus
         });
+
+        lastBillIdxByHead[head] = billRows.length - 1;
+    });
+
+    // If there are excess payments remaining for a head, add to the last bill row of that head
+    Object.keys(billPaymentsRemaining).forEach(head => {
+        const remaining = billPaymentsRemaining[head];
+        if (remaining > 0) {
+            const lastIdx = lastBillIdxByHead[head];
+            if (lastIdx !== undefined) {
+                billRows[lastIdx].paidBill += remaining;
+                billRows[lastIdx].billBalance = Math.max(0, billRows[lastIdx].totalBill - billRows[lastIdx].paidBill);
+                billRows[lastIdx].status = billRows[lastIdx].paidBill >= billRows[lastIdx].totalBill ? "Paid" : "Partial Paid";
+                billPaymentsRemaining[head] = 0;
+            }
+        }
+    });
+
+    bills.push(...billRows);
+
+    // Unbilled payments fallback
+    Object.keys(paymentsByHead).forEach(head => {
+        if (lastBillIdxByHead[head] === undefined) {
+            paymentsByHead[head].forEach(pay => {
+                const billAmt = parseFloat(pay.amount) || 0;
+                bills.push({
+                    date: pay.date,
+                    billHead: pay.expenseHead || "Other Bill",
+                    name: pay.cnfAgent || pay.bankName || pay.remarks || pay.expenseHead || "Other Name",
+                    totalBill: billAmt,
+                    paidBill: billAmt,
+                    billBalance: 0,
+                    status: "Paid"
+                });
+            });
+        }
     });
 
     const filteredBills = bills.filter(b => {
@@ -507,6 +744,15 @@ const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords
 
                     {/* Right: Action Buttons */}
                     <div className="flex items-center gap-2 shrink-0">
+                        {showConsumption && activeTab === 'bill' && (
+                            <button
+                                onClick={() => setShowAddBillModal(true)}
+                                className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white shadow-md shadow-blue-500/20 transition-all transform active:scale-95"
+                            >
+                                <PlusIcon className="w-4 h-4" />
+                                <span>Add Bill</span>
+                            </button>
+                        )}
                         <button
                             onClick={() => setShowConsumption(!showConsumption)}
                             className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold transition-all border ${showConsumption
@@ -791,20 +1037,62 @@ const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords
                                             <tr className="bg-gray-50/50 border-b border-gray-100">
                                                 <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Date</th>
                                                 <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Expense Head</th>
-                                                <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider">C&F Agent</th>
+                                                <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Name</th>
                                                 <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-right">Amount</th>
                                                 <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Remarks</th>
                                             </tr>
                                         </thead>
                                         <tbody className="divide-y divide-gray-50">
                                             {(() => {
-                                                const filtered = lcExpenses.filter(exp => exp.lcNo === data.lcNo);
+                                                const filtered = [...lcExpenses.filter(exp => exp.lcNo === data.lcNo && exp.type !== 'bill')];
+
+                                                // Check if original Margin is Paid
+                                                const marginPaidAmt = parseFloat(data.marginPaid) || (() => {
+                                                    const total = parseFloat(data.totalAmount) || 0;
+                                                    const margin = parseFloat(data.bankMargin) || 0;
+                                                    return total * (margin / 100);
+                                                })();
+                                                if (marginPaidAmt > 0) {
+                                                    filtered.unshift({
+                                                        _id: 'margin-paid-virtual',
+                                                        date: data.openingDate || data.createdAt,
+                                                        expenseHead: `Margin Paid (${data.bankMargin || 0}%)`,
+                                                        bankName: data.bankName || 'Bank',
+                                                        amount: marginPaidAmt,
+                                                        remarks: 'Paid Margin'
+                                                    });
+                                                }
+
+                                                // Check if amendment Margin is Paid
+                                                if (data.amendments && data.amendments.length > 0) {
+                                                    data.amendments.forEach((amnd, idx) => {
+                                                        if (amnd.amendmentNo === 'Original LC') return;
+                                                        const margin = amnd.amendmentMargin !== undefined ? (parseFloat(amnd.amendmentMargin) || 0) : (data.bankMargin !== undefined ? parseFloat(data.bankMargin) : 0);
+                                                        const amndMarginPaid = parseFloat(amnd.amendmentMarginPaid) || (() => {
+                                                            const amndMarginBill = parseFloat(amnd.amendmentMarginBill) || 0;
+                                                            return amndMarginBill * (margin / 100);
+                                                        })();
+                                                        if (amndMarginPaid > 0) {
+                                                            filtered.push({
+                                                                _id: `amnd-margin-paid-virtual-${idx}`,
+                                                                date: amnd.amendmentDate || data.openingDate,
+                                                                expenseHead: `Margin Paid (${margin}%) (${amnd.amendmentNo || `Amend #${idx + 1}`})`,
+                                                                bankName: data.bankName || 'Bank',
+                                                                amount: amndMarginPaid,
+                                                                remarks: `Paid Margin for ${amnd.amendmentNo || `Amend #${idx + 1}`}`
+                                                            });
+                                                        }
+                                                    });
+                                                }
+
                                                 return filtered.length > 0 ? (
                                                     filtered.map((exp, idx) => (
                                                         <tr key={exp._id || idx} className="hover:bg-gray-50/50 transition-colors group">
                                                             <td className="px-6 py-4 text-sm font-medium text-gray-600 whitespace-nowrap">{formatDate(exp.date)}</td>
                                                             <td className="px-6 py-4 text-sm font-medium text-gray-900">{exp.expenseHead || '-'}</td>
-                                                            <td className="px-6 py-4 text-sm font-medium text-gray-800">{exp.cnfAgent || '-'}</td>
+                                                            <td className="px-6 py-4 text-sm font-medium text-gray-800">
+                                                                {exp.cnfAgent || exp.bankName || exp.insuranceCo || exp.insuranceName || exp.name || '-'}
+                                                            </td>
                                                             <td className="px-6 py-4 text-sm font-bold text-right text-rose-600 whitespace-nowrap">৳{parseNum(exp.amount).toLocaleString('en-IN')}</td>
                                                             <td className="px-6 py-4 text-sm text-gray-500 truncate max-w-[200px]">{exp.remarks || '-'}</td>
                                                         </tr>
@@ -822,7 +1110,28 @@ const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords
                                             <tr>
                                                 <td colSpan="3" className="px-6 py-4 text-right text-xs font-medium text-gray-400 uppercase tracking-wider">Total Expense:</td>
                                                 <td className="px-6 py-4 text-sm font-bold text-right text-rose-600">
-                                                    ৳{lcExpenses.filter(exp => exp.lcNo === data.lcNo).reduce((sum, exp) => sum + parseNum(exp.amount), 0).toLocaleString('en-IN')}
+                                                    {(() => {
+                                                        const filtered = [...lcExpenses.filter(exp => exp.lcNo === data.lcNo && exp.type !== 'bill')];
+                                                        const marginPaidAmt = parseFloat(data.marginPaid) || (() => {
+                                                            const total = parseFloat(data.totalAmount) || 0;
+                                                            const margin = parseFloat(data.bankMargin) || 0;
+                                                            return total * (margin / 100);
+                                                        })();
+                                                        let total = filtered.reduce((sum, exp) => sum + parseNum(exp.amount), 0);
+                                                        if (marginPaidAmt > 0) total += marginPaidAmt;
+                                                        if (data.amendments && data.amendments.length > 0) {
+                                                            data.amendments.forEach((amnd) => {
+                                                                if (amnd.amendmentNo === 'Original LC') return;
+                                                                const margin = amnd.amendmentMargin !== undefined ? (parseFloat(amnd.amendmentMargin) || 0) : (data.bankMargin !== undefined ? parseFloat(data.bankMargin) : 0);
+                                                                const amndMarginPaid = parseFloat(amnd.amendmentMarginPaid) || (() => {
+                                                                    const amndMarginBill = parseFloat(amnd.amendmentMarginBill) || 0;
+                                                                    return amndMarginBill * (margin / 100);
+                                                                })();
+                                                                if (amndMarginPaid > 0) total += amndMarginPaid;
+                                                            });
+                                                        }
+                                                        return `৳${total.toLocaleString('en-IN')}`;
+                                                    })()}
                                                 </td>
                                                 <td></td>
                                             </tr>
@@ -1050,6 +1359,17 @@ const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords
                                                 const diffDollar = diffQty * (ratePerTon + freightPerTon);
                                                 const diffAmount = diffDollar * dollarRate;
                                                 const sign = diffQty >= 0 ? '+' : '';
+                                                const isAmndBillActive = activeMilestone.amendmentLcBillEnabled !== undefined
+                                                    ? activeMilestone.amendmentLcBillEnabled
+                                                    : !!(activeMilestone.amendmentCommission || activeMilestone.amendmentSwiftCharge);
+                                                const activeMilestoneMarginPaid = activeMilestone.amendmentMarginPaid !== undefined 
+                                                    ? activeMilestone.amendmentMarginPaid 
+                                                    : (() => {
+                                                        const margin = activeMilestone.amendmentMargin !== undefined ? (parseFloat(activeMilestone.amendmentMargin) || 0) : (data.bankMargin !== undefined ? parseFloat(data.bankMargin) : 0);
+                                                        const mb = parseFloat(activeMilestone.amendmentMarginBill) || 0;
+                                                        const mp = mb * (margin / 100);
+                                                        return mp > 0 ? mp.toFixed(2) : '';
+                                                    })();
 
                                                 return (
                                                     <div className="space-y-4">
@@ -1107,32 +1427,36 @@ const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords
                                                                         {activeMilestone.amendmentMargin !== undefined && activeMilestone.amendmentMargin !== '' ? `${activeMilestone.amendmentMargin}%` : '-'}
                                                                     </p>
                                                                 </div>
-                                                                <div>
-                                                                    <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider block mb-1">Comm. on Amendment</span>
-                                                                    <p className="text-xs font-bold text-gray-700">
-                                                                        {activeMilestone.amendmentCommission !== undefined && activeMilestone.amendmentCommission !== '' ? `${activeMilestone.amendmentCommission}%` : '-'}
-                                                                    </p>
-                                                                </div>
-                                                                <div>
-                                                                    <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider block mb-1">VAT on Comm.</span>
-                                                                    <p className="text-xs font-bold text-gray-700">
-                                                                        {activeMilestone.amendmentVatOnCommission !== undefined && activeMilestone.amendmentVatOnCommission !== '' ? `${activeMilestone.amendmentVatOnCommission}%` : '-'}
-                                                                    </p>
-                                                                </div>
-                                                                <div>
-                                                                    <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider block mb-1">Swift Charge</span>
-                                                                    <p className="text-xs font-bold text-gray-700">
-                                                                        {activeMilestone.amendmentSwiftCharge !== undefined && activeMilestone.amendmentSwiftCharge !== '' ? `৳${parseFloat(activeMilestone.amendmentSwiftCharge).toLocaleString('en-IN')}` : '-'}
-                                                                    </p>
-                                                                </div>
-                                                                <div>
-                                                                    <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider block mb-1">VAT on Swift</span>
-                                                                    <p className="text-xs font-bold text-gray-700">
-                                                                        {activeMilestone.amendmentVatOnSwift !== undefined && activeMilestone.amendmentVatOnSwift !== '' ? `${activeMilestone.amendmentVatOnSwift}%` : '-'}
-                                                                    </p>
-                                                                </div>
+                                                                {isAmndBillActive && (
+                                                                    <>
+                                                                        <div>
+                                                                            <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider block mb-1">Comm. on Amendment</span>
+                                                                            <p className="text-xs font-bold text-gray-700">
+                                                                                {activeMilestone.amendmentCommission !== undefined && activeMilestone.amendmentCommission !== '' ? `${activeMilestone.amendmentCommission}%` : '-'}
+                                                                            </p>
+                                                                        </div>
+                                                                        <div>
+                                                                            <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider block mb-1">VAT on Comm.</span>
+                                                                            <p className="text-xs font-bold text-gray-700">
+                                                                                {activeMilestone.amendmentVatOnCommission !== undefined && activeMilestone.amendmentVatOnCommission !== '' ? `${activeMilestone.amendmentVatOnCommission}%` : '-'}
+                                                                            </p>
+                                                                        </div>
+                                                                        <div>
+                                                                            <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider block mb-1">Swift Charge</span>
+                                                                            <p className="text-xs font-bold text-gray-700">
+                                                                                {activeMilestone.amendmentSwiftCharge !== undefined && activeMilestone.amendmentSwiftCharge !== '' ? `৳${parseFloat(activeMilestone.amendmentSwiftCharge).toLocaleString('en-IN')}` : '-'}
+                                                                            </p>
+                                                                        </div>
+                                                                        <div>
+                                                                            <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider block mb-1">VAT on Swift</span>
+                                                                            <p className="text-xs font-bold text-gray-700">
+                                                                                {activeMilestone.amendmentVatOnSwift !== undefined && activeMilestone.amendmentVatOnSwift !== '' ? `${activeMilestone.amendmentVatOnSwift}%` : '-'}
+                                                                            </p>
+                                                                        </div>
+                                                                    </>
+                                                                )}
                                                             </div>
-                                                            <div className="grid grid-cols-1 md:grid-cols-3 gap-x-8 gap-y-4 pt-3 border-t border-dashed border-blue-100/50">
+                                                            <div className={`grid grid-cols-1 ${isAmndBillActive ? 'md:grid-cols-4' : 'md:grid-cols-3'} gap-x-8 gap-y-4 pt-3 border-t border-dashed border-blue-100/50`}>
                                                                 <div>
                                                                     <span className="text-[9px] font-bold text-blue-600 uppercase tracking-wider block mb-1">Amendment Margin Bill</span>
                                                                     <p className="text-sm font-black text-blue-800 font-semibold">
@@ -1140,11 +1464,19 @@ const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords
                                                                     </p>
                                                                 </div>
                                                                 <div>
-                                                                    <span className="text-[9px] font-bold text-blue-600 uppercase tracking-wider block mb-1">Amendment Bank Bill</span>
+                                                                    <span className="text-[9px] font-bold text-blue-600 uppercase tracking-wider block mb-1">Amendment Margin Paid</span>
                                                                     <p className="text-sm font-black text-blue-800 font-semibold">
-                                                                        ৳{activeMilestone.amendmentBankBill ? parseFloat(activeMilestone.amendmentBankBill).toLocaleString('en-IN', { minimumFractionDigits: 2 }) : '0.00'}
+                                                                        ৳{activeMilestoneMarginPaid ? parseFloat(activeMilestoneMarginPaid).toLocaleString('en-IN', { minimumFractionDigits: 2 }) : '0.00'}
                                                                     </p>
                                                                 </div>
+                                                                {isAmndBillActive && (
+                                                                    <div>
+                                                                        <span className="text-[9px] font-bold text-blue-600 uppercase tracking-wider block mb-1">Amendment Bank Bill</span>
+                                                                        <p className="text-sm font-black text-blue-800 font-semibold">
+                                                                            ৳{activeMilestone.amendmentBankBill ? parseFloat(activeMilestone.amendmentBankBill).toLocaleString('en-IN', { minimumFractionDigits: 2 }) : '0.00'}
+                                                                        </p>
+                                                                    </div>
+                                                                )}
                                                                 <div>
                                                                     <span className="text-[9px] font-bold text-indigo-600 uppercase tracking-wider block mb-1">Total Amendment Bank Bill</span>
                                                                     <p className="text-sm font-black text-indigo-900">
@@ -1179,46 +1511,52 @@ const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords
                                             <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Margin</span>
                                             <p className="text-sm font-bold text-gray-800">{data.bankMargin ? `${data.bankMargin}%` : '-'}</p>
                                         </div>
-                                        <div className="space-y-1">
-                                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">LC Commission</span>
-                                            <p className="text-sm font-bold text-gray-800">{data.bankLcCommission ? `${data.bankLcCommission}%` : '-'}</p>
-                                        </div>
-                                        <div className="space-y-1">
-                                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">VAT on Commission</span>
-                                            <p className="text-sm font-bold text-gray-800">{data.bankVatOnCommission ? `${data.bankVatOnCommission}%` : '-'}</p>
-                                        </div>
-                                        <div className="space-y-1">
-                                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Swift Charge</span>
-                                            <p className="text-sm font-bold text-gray-800">৳{parseFloat(data.bankSwiftCharge || 0).toLocaleString('en-IN')}</p>
-                                        </div>
-                                        <div className="space-y-1">
-                                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">VAT on Swift Charge</span>
-                                            <p className="text-sm font-bold text-gray-800">{data.bankVatOnSwiftCharge ? `${data.bankVatOnSwiftCharge}%` : '-'}</p>
-                                        </div>
-                                        <div className="space-y-1">
-                                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">LC Application Form</span>
-                                            <p className="text-sm font-bold text-gray-800">৳{parseFloat(data.bankLcApplicationForm || 0).toLocaleString('en-IN')}</p>
-                                        </div>
-                                        <div className="space-y-1">
-                                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">MP Charge</span>
-                                            <p className="text-sm font-bold text-gray-800">৳{parseFloat(data.bankMpCharge || 0).toLocaleString('en-IN')}</p>
-                                        </div>
-                                        <div className="space-y-1">
-                                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Stamp Charge</span>
-                                            <p className="text-sm font-bold text-gray-800">৳{parseFloat(data.bankStampCharge || 0).toLocaleString('en-IN')}</p>
-                                        </div>
+                                        {(data.lcBillEnabled !== undefined ? data.lcBillEnabled : !!(data.bankLcCommission || data.bankSwiftCharge || data.bankLcApplicationForm || data.bankMpCharge || data.bankStampCharge)) && (
+                                            <>
+                                                <div className="space-y-1">
+                                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">LC Commission</span>
+                                                    <p className="text-sm font-bold text-gray-800">{data.bankLcCommission ? `${data.bankLcCommission}%` : '-'}</p>
+                                                </div>
+                                                <div className="space-y-1">
+                                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">VAT on Commission</span>
+                                                    <p className="text-sm font-bold text-gray-800">{data.bankVatOnCommission ? `${data.bankVatOnCommission}%` : '-'}</p>
+                                                </div>
+                                                <div className="space-y-1">
+                                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Swift Charge</span>
+                                                    <p className="text-sm font-bold text-gray-800">৳{parseFloat(data.bankSwiftCharge || 0).toLocaleString('en-IN')}</p>
+                                                </div>
+                                                <div className="space-y-1">
+                                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">VAT on Swift Charge</span>
+                                                    <p className="text-sm font-bold text-gray-800">{data.bankVatOnSwiftCharge ? `${data.bankVatOnSwiftCharge}%` : '-'}</p>
+                                                </div>
+                                                <div className="space-y-1">
+                                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">LC Application Form</span>
+                                                    <p className="text-sm font-bold text-gray-800">৳{parseFloat(data.bankLcApplicationForm || 0).toLocaleString('en-IN')}</p>
+                                                </div>
+                                                <div className="space-y-1">
+                                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">MP Charge</span>
+                                                    <p className="text-sm font-bold text-gray-800">৳{parseFloat(data.bankMpCharge || 0).toLocaleString('en-IN')}</p>
+                                                </div>
+                                                <div className="space-y-1">
+                                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Stamp Charge</span>
+                                                    <p className="text-sm font-bold text-gray-800">৳{parseFloat(data.bankStampCharge || 0).toLocaleString('en-IN')}</p>
+                                                </div>
+                                            </>
+                                        )}
                                         <div className="space-y-1">
                                             <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Margin Bill</span>
                                             <p className="text-sm font-bold text-gray-800">
                                                 {data.marginBill ? `৳${parseFloat(data.marginBill).toLocaleString('en-IN', { minimumFractionDigits: 2 })}` : '-'}
                                             </p>
                                         </div>
-                                        <div className="space-y-1">
-                                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Bank Bill</span>
-                                            <p className="text-sm font-bold text-gray-800">
-                                                {data.bankBill ? `৳${parseFloat(data.bankBill).toLocaleString('en-IN', { minimumFractionDigits: 2 })}` : '-'}
-                                            </p>
-                                        </div>
+                                        {(data.lcBillEnabled !== undefined ? data.lcBillEnabled : !!(data.bankLcCommission || data.bankSwiftCharge || data.bankLcApplicationForm || data.bankMpCharge || data.bankStampCharge)) && (
+                                            <div className="space-y-1">
+                                                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Bank Bill</span>
+                                                <p className="text-sm font-bold text-gray-800">
+                                                    {data.bankBill ? `৳${parseFloat(data.bankBill).toLocaleString('en-IN', { minimumFractionDigits: 2 })}` : '-'}
+                                                </p>
+                                            </div>
+                                        )}
                                         <div className="space-y-1">
                                             <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Total Bank Bill</span>
                                             <p className="text-sm font-black text-blue-600">
@@ -1337,6 +1675,188 @@ const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords
                         </div>
                     )}
                 </div>
+
+            {/* Add Bill Form Modal Overlay */}
+            {showAddBillModal && (
+                <div className="fixed inset-0 z-[2100] flex items-center justify-center p-4">
+                    <div className="absolute inset-0 bg-gray-900/60 backdrop-blur-sm" onClick={() => setShowAddBillModal(false)}></div>
+                    <div className="relative bg-white border border-gray-100 rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden animate-in zoom-in duration-300">
+                        {/* Header */}
+                        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 bg-gray-50/50">
+                            <div>
+                                <h3 className="text-lg font-bold text-gray-900">Add New Bill</h3>
+                                <p className="text-xs text-blue-500 font-bold uppercase tracking-widest mt-0.5">LC NO: {data.lcNo}</p>
+                            </div>
+                            <button onClick={() => setShowAddBillModal(false)} className="p-2 text-gray-400 hover:text-gray-600 rounded-full hover:bg-white transition-all">
+                                <XIcon className="w-5 h-5" />
+                            </button>
+                        </div>
+                        {/* Form */}
+                        <form onSubmit={handleSaveBill} className="p-6 space-y-4">
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div className="space-y-1.5 text-left">
+                                    <CustomDatePicker
+                                        label="Date"
+                                        value={billFormData.date}
+                                        onChange={(e) => setBillFormData(prev => ({ ...prev, date: e.target.value }))}
+                                        compact={true}
+                                        required
+                                    />
+                                </div>
+                                <div className="space-y-1.5 text-left relative" ref={billHeadRef}>
+                                    <label className="text-sm font-semibold text-gray-600 ml-1">Bill Head <span className="text-red-500">*</span></label>
+                                    <div className="relative">
+                                        <input
+                                            type="text"
+                                            value={billHeadQuery || billFormData.expenseHead}
+                                            onChange={(e) => {
+                                                setBillHeadQuery(e.target.value);
+                                                setBillFormData(prev => ({ ...prev, expenseHead: '', cnfAgent: '' }));
+                                                setBillHeadDropdownOpen(true);
+                                                setBillHeadHighlight(-1);
+                                            }}
+                                            onFocus={() => { setBillHeadDropdownOpen(true); setBillHeadHighlight(-1); }}
+                                            onKeyDown={(e) => {
+                                                const filtered = expenseHeads.filter(h => !billHeadQuery || h.toLowerCase().includes(billHeadQuery.toLowerCase()));
+                                                if (e.key === 'ArrowDown') {
+                                                    e.preventDefault();
+                                                    setBillHeadHighlight(prev => Math.min(prev + 1, filtered.length - 1));
+                                                } else if (e.key === 'ArrowUp') {
+                                                    e.preventDefault();
+                                                    setBillHeadHighlight(prev => Math.max(prev - 1, 0));
+                                                } else if (e.key === 'Enter') {
+                                                    e.preventDefault();
+                                                    if (billHeadHighlight >= 0 && billHeadHighlight < filtered.length) {
+                                                        setBillFormData(prev => ({ ...prev, expenseHead: filtered[billHeadHighlight], cnfAgent: '' }));
+                                                        setBillHeadQuery('');
+                                                        setBillHeadDropdownOpen(false);
+                                                    }
+                                                } else if (e.key === 'Escape') {
+                                                    setBillHeadDropdownOpen(false);
+                                                }
+                                            }}
+                                            className="w-full px-4 py-2.5 bg-white/50 border border-gray-200/60 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all font-medium pr-10"
+                                            placeholder="Search Bill Head"
+                                            autoComplete="nope"
+                                            required={!billFormData.expenseHead}
+                                        />
+                                        <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1.5">
+                                            {(billFormData.expenseHead || billHeadQuery) && (
+                                                <button type="button" onClick={() => { setBillFormData(prev => ({ ...prev, expenseHead: '', cnfAgent: '' })); setBillHeadQuery(''); setBillHeadDropdownOpen(false); }} className="text-gray-400 hover:text-gray-600">
+                                                    <XIcon className="w-4 h-4" />
+                                                </button>
+                                            )}
+                                            <SearchIcon className="w-4 h-4 text-gray-300" />
+                                        </div>
+                                    </div>
+                                    {billHeadDropdownOpen && (
+                                        <div className="absolute z-[100] w-full mt-1 bg-white border border-gray-100 rounded-xl shadow-xl max-h-60 overflow-y-auto py-1">
+                                            {expenseHeads.filter(h => !billHeadQuery || h.toLowerCase().includes(billHeadQuery.toLowerCase())).map((head, idx) => (
+                                                <button
+                                                    key={head}
+                                                    type="button"
+                                                    onMouseDown={(e) => {
+                                                        e.preventDefault();
+                                                        setBillFormData(prev => ({ ...prev, expenseHead: head, cnfAgent: '' }));
+                                                        setBillHeadQuery('');
+                                                        setBillHeadDropdownOpen(false);
+                                                    }}
+                                                    onMouseEnter={() => setBillHeadHighlight(idx)}
+                                                    className={`w-full px-4 py-2.5 text-left text-sm transition-colors flex items-center justify-between ${billHeadHighlight === idx ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-blue-50'}`}
+                                                >
+                                                    <span className="font-medium">{head}</span>
+                                                </button>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
+
+                            </div>
+
+                            {/* Conditional Bank Name */}
+                            {(billFormData.expenseHead === 'Bank Charges' || billFormData.expenseHead === 'Margin Bill') && (
+                                <div className="space-y-1.5 text-left">
+                                    <label className="text-sm font-semibold text-gray-600 ml-1">Bank Name</label>
+                                    <input
+                                        type="text"
+                                        value={billFormData.bankName}
+                                        readOnly
+                                        className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-xl outline-none text-gray-500 font-semibold cursor-not-allowed"
+                                    />
+                                </div>
+                            )}
+
+                            {/* Conditional C&F Agent */}
+                            {billFormData.expenseHead === 'C&F Commission' && (
+                                <div className="space-y-1.5 text-left">
+                                    <label className="text-sm font-semibold text-gray-600 ml-1">C&F Agent *</label>
+                                    <div className="relative">
+                                        <select
+                                            value={billFormData.cnfAgent}
+                                            onChange={(e) => setBillFormData(prev => ({ ...prev, cnfAgent: e.target.value }))}
+                                            className="w-full px-4 py-2 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all font-medium appearance-none pr-10 cursor-pointer"
+                                            required
+                                        >
+                                            <option value="">Select C&F Agent</option>
+                                            {bdCnfs.map(cnf => (
+                                                <option key={cnf} value={cnf}>{cnf}</option>
+                                            ))}
+                                        </select>
+                                        <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
+                                            <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path>
+                                            </svg>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+
+
+                            <div className="space-y-1.5 text-left">
+                                <label className="text-sm font-semibold text-gray-600 ml-1">Amount (৳) *</label>
+                                <input
+                                    type="number"
+                                    value={billFormData.amount}
+                                    onChange={(e) => setBillFormData(prev => ({ ...prev, amount: e.target.value }))}
+                                    required
+                                    min="0"
+                                    step="0.01"
+                                    placeholder="0.00"
+                                    className="w-full px-4 py-2 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all font-bold"
+                                />
+                            </div>
+
+                            <div className="space-y-1.5 text-left">
+                                <label className="text-sm font-semibold text-gray-600 ml-1">Remarks</label>
+                                <textarea
+                                    value={billFormData.remarks}
+                                    onChange={(e) => setBillFormData(prev => ({ ...prev, remarks: e.target.value }))}
+                                    placeholder="Optional details..."
+                                    rows="2"
+                                    className="w-full px-4 py-2 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all font-medium"
+                                />
+                            </div>
+
+                            <div className="flex justify-end gap-3 pt-4 border-t border-gray-100">
+                                <button
+                                    type="button"
+                                    onClick={() => setShowAddBillModal(false)}
+                                    className="px-5 py-2 bg-gray-50 hover:bg-gray-100 text-gray-700 font-bold rounded-xl transition-all text-sm"
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    type="submit"
+                                    disabled={isSavingBill}
+                                    className="px-6 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold rounded-xl transition-all text-sm"
+                                >
+                                    {isSavingBill ? 'Saving...' : 'Save Bill'}
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            )}
             </div>
         </div>
     );
@@ -1572,26 +2092,35 @@ const syncRootFromProductsList = (state) => {
 const calculateBankBills = (state) => {
     const totalAmount = parseFloat(state.totalAmount) || 0;
     const margin = parseFloat(state.bankMargin) || 0;
-    const marginBill = totalAmount * (margin / 100);
+    const marginBill = totalAmount; // Margin bill is = total lc value
+    const marginPaid = totalAmount * (margin / 100); // margin paid is the value is Margin %
 
-    const bankLcCommission = parseFloat(state.bankLcCommission) || 0;
-    const bankVatOnCommission = parseFloat(state.bankVatOnCommission) || 0;
-    const bankSwiftCharge = parseFloat(state.bankSwiftCharge) || 0;
-    const bankVatOnSwiftCharge = parseFloat(state.bankVatOnSwiftCharge) || 0;
-    const bankLcApplicationForm = parseFloat(state.bankLcApplicationForm) || 0;
-    const bankMpCharge = parseFloat(state.bankMpCharge) || 0;
-    const bankStampCharge = parseFloat(state.bankStampCharge) || 0;
+    const isLcBillActive = state.lcBillEnabled !== undefined 
+        ? state.lcBillEnabled 
+        : !!(state.bankLcCommission || state.bankSwiftCharge || state.bankLcApplicationForm || state.bankMpCharge || state.bankStampCharge);
 
-    const lcCommissionAmt = totalAmount * (bankLcCommission / 100);
-    const vatOnCommissionAmt = lcCommissionAmt * (bankVatOnCommission / 100);
-    const vatOnSwiftChargeAmt = bankSwiftCharge * (bankVatOnSwiftCharge / 100);
+    let bankBill = 0;
+    if (isLcBillActive) {
+        const bankLcCommission = parseFloat(state.bankLcCommission) || 0;
+        const bankVatOnCommission = parseFloat(state.bankVatOnCommission) || 0;
+        const bankSwiftCharge = parseFloat(state.bankSwiftCharge) || 0;
+        const bankVatOnSwiftCharge = parseFloat(state.bankVatOnSwiftCharge) || 0;
+        const bankLcApplicationForm = parseFloat(state.bankLcApplicationForm) || 0;
+        const bankMpCharge = parseFloat(state.bankMpCharge) || 0;
+        const bankStampCharge = parseFloat(state.bankStampCharge) || 0;
 
-    const bankBill = lcCommissionAmt + vatOnCommissionAmt + bankSwiftCharge + vatOnSwiftChargeAmt + bankLcApplicationForm + bankMpCharge + bankStampCharge;
+        const lcCommissionAmt = totalAmount * (bankLcCommission / 100);
+        const vatOnCommissionAmt = lcCommissionAmt * (bankVatOnCommission / 100);
+        const vatOnSwiftChargeAmt = bankSwiftCharge * (bankVatOnSwiftCharge / 100);
 
-    const totalBankBill = marginBill + bankBill;
+        bankBill = lcCommissionAmt + vatOnCommissionAmt + bankSwiftCharge + vatOnSwiftChargeAmt + bankLcApplicationForm + bankMpCharge + bankStampCharge;
+    }
+
+    const totalBankBill = (marginBill + bankBill) - marginPaid;
 
     return {
         marginBill: marginBill > 0 ? marginBill.toFixed(2) : '',
+        marginPaid: marginPaid > 0 ? marginPaid.toFixed(2) : '',
         bankBill: bankBill > 0 ? bankBill.toFixed(2) : '',
         totalBankBill: totalBankBill > 0 ? totalBankBill.toFixed(2) : ''
     };
@@ -1600,6 +2129,7 @@ const calculateBankBills = (state) => {
 const syncBankBills = (state) => {
     const bills = calculateBankBills(state);
     state.marginBill = bills.marginBill;
+    state.marginPaid = bills.marginPaid;
     state.bankBill = bills.bankBill;
     state.totalBankBill = bills.totalBankBill;
     return state;
@@ -1623,6 +2153,10 @@ const calculateAmendmentBillsValue = (state, lc, banksRaw, editingAmendmentNo = 
     const margin = state.amendmentMargin !== undefined && state.amendmentMargin !== ''
         ? (parseFloat(state.amendmentMargin) || 0)
         : (lc.bankMargin !== undefined && lc.bankMargin !== '' ? parseFloat(lc.bankMargin) : 0);
+
+    const isAmndBillActive = state.amendmentLcBillEnabled !== undefined
+        ? state.amendmentLcBillEnabled
+        : !!(state.amendmentCommission || state.amendmentSwiftCharge);
 
     const amendmentCommission = state.amendmentCommission !== undefined && state.amendmentCommission !== ''
         ? (parseFloat(state.amendmentCommission) || 0)
@@ -1689,24 +2223,34 @@ const calculateAmendmentBillsValue = (state, lc, banksRaw, editingAmendmentNo = 
 
     const newAmount = newDollarValue * dRate;
 
-    const calculatedMarginBill = baseAmount * (margin / 100);
+    const calculatedMarginBill = baseAmount;
+    const calculatedMarginPaid = baseAmount * (margin / 100);
 
     const commissionAmt = baseAmount * (amendmentCommission / 100);
     const vatOnCommissionAmt = commissionAmt * (amendmentVatOnCommission / 100);
     const swiftCharge = amendmentSwiftCharge;
     const vatOnSwiftChargeAmt = swiftCharge * (amendmentVatOnSwift / 100);
 
-    const calculatedBankBill = commissionAmt + vatOnCommissionAmt + swiftCharge + vatOnSwiftChargeAmt;
-    const calculatedTotalBill = calculatedMarginBill + calculatedBankBill;
+    const calculatedBankBill = isAmndBillActive ? (commissionAmt + vatOnCommissionAmt + swiftCharge + vatOnSwiftChargeAmt) : 0;
+    const calculatedTotalBill = (calculatedMarginBill + calculatedBankBill) - calculatedMarginPaid;
 
     return {
         amendmentMargin: state.amendmentMargin !== undefined ? state.amendmentMargin : (lc.bankMargin || ''),
-        amendmentCommission: state.amendmentCommission !== undefined ? state.amendmentCommission : (selectedBranch?.amendmentCommission || ''),
-        amendmentVatOnCommission: state.amendmentVatOnCommission !== undefined ? state.amendmentVatOnCommission : (selectedBranch?.amendmentVatOnCommission || ''),
-        amendmentSwiftCharge: state.amendmentSwiftCharge !== undefined ? state.amendmentSwiftCharge : (selectedBranch?.amendmentSwiftCharge !== undefined && selectedBranch?.amendmentSwiftCharge !== '' ? String(selectedBranch.amendmentSwiftCharge) : ''),
-        amendmentVatOnSwift: state.amendmentVatOnSwift !== undefined ? state.amendmentVatOnSwift : (selectedBranch?.amendmentVatOnSwift || ''),
+        amendmentCommission: isAmndBillActive
+            ? (state.amendmentCommission !== undefined ? state.amendmentCommission : (selectedBranch?.amendmentCommission || ''))
+            : '',
+        amendmentVatOnCommission: isAmndBillActive
+            ? (state.amendmentVatOnCommission !== undefined ? state.amendmentVatOnCommission : (selectedBranch?.amendmentVatOnCommission || ''))
+            : '',
+        amendmentSwiftCharge: isAmndBillActive
+            ? (state.amendmentSwiftCharge !== undefined ? state.amendmentSwiftCharge : (selectedBranch?.amendmentSwiftCharge !== undefined && selectedBranch?.amendmentSwiftCharge !== '' ? String(selectedBranch.amendmentSwiftCharge) : ''))
+            : '',
+        amendmentVatOnSwift: isAmndBillActive
+            ? (state.amendmentVatOnSwift !== undefined ? state.amendmentVatOnSwift : (selectedBranch?.amendmentVatOnSwift || ''))
+            : '',
         amendmentMarginBill: calculatedMarginBill >= 0 ? calculatedMarginBill.toFixed(2) : '',
-        amendmentBankBill: calculatedBankBill >= 0 ? calculatedBankBill.toFixed(2) : '',
+        amendmentMarginPaid: calculatedMarginPaid >= 0 ? calculatedMarginPaid.toFixed(2) : '',
+        amendmentBankBill: isAmndBillActive && calculatedBankBill >= 0 ? calculatedBankBill.toFixed(2) : '',
         totalAmendmentBankBill: calculatedTotalBill >= 0 ? calculatedTotalBill.toFixed(2) : ''
     };
 };
@@ -1720,12 +2264,17 @@ const syncAmendmentBills = (state, lc, banksRaw, editingAmendmentNo = '', ignore
         state.amendmentSwiftCharge = bills.amendmentSwiftCharge;
         state.amendmentVatOnSwift = bills.amendmentVatOnSwift;
         state.amendmentMarginBill = bills.amendmentMarginBill;
+        state.amendmentMarginPaid = bills.amendmentMarginPaid;
         state.amendmentBankBill = bills.amendmentBankBill;
         state.totalAmendmentBankBill = bills.totalAmendmentBankBill;
     } else {
         const mBill = parseFloat(state.amendmentMarginBill) || 0;
-        const bBill = parseFloat(state.amendmentBankBill) || 0;
-        const tot = mBill + bBill;
+        const mPaid = parseFloat(state.amendmentMarginPaid) || 0;
+        const isAmndBillActive = state.amendmentLcBillEnabled !== undefined
+            ? state.amendmentLcBillEnabled
+            : !!(state.amendmentCommission || state.amendmentSwiftCharge);
+        const bBill = isAmndBillActive ? (parseFloat(state.amendmentBankBill) || 0) : 0;
+        const tot = (mBill + bBill) - mPaid;
         state.totalAmendmentBankBill = tot > 0 ? tot.toFixed(2) : '';
     }
     return state;
@@ -1734,7 +2283,8 @@ const syncAmendmentBills = (state, lc, banksRaw, editingAmendmentNo = '', ignore
 const getBankBillBreakdown = (record) => {
     const totalAmount = parseFloat(record.totalAmount) || 0;
     const margin = parseFloat(record.bankMargin) || 0;
-    const marginBill = parseFloat(record.marginBill) || (totalAmount * (margin / 100));
+    const marginBill = parseFloat(record.marginBill) || totalAmount;
+    const marginPaid = parseFloat(record.marginPaid) || (totalAmount * (margin / 100));
 
     const bankLcCommission = parseFloat(record.bankLcCommission) || 0;
     const bankVatOnCommission = parseFloat(record.bankVatOnCommission) || 0;
@@ -1749,11 +2299,12 @@ const getBankBillBreakdown = (record) => {
     const vatOnSwiftChargeAmt = bankSwiftCharge * (bankVatOnSwiftCharge / 100);
 
     const bankBill = parseFloat(record.bankBill) || (commissionAmt + vatOnCommissionAmt + bankSwiftCharge + vatOnSwiftChargeAmt + bankLcApplicationForm + bankMpCharge + bankStampCharge);
-    const totalBankBill = parseFloat(record.totalBankBill) || (marginBill + bankBill);
+    const totalBankBill = parseFloat(record.totalBankBill) || ((marginBill + bankBill) - marginPaid);
 
     return {
         margin,
         marginBill,
+        marginPaid,
         bankLcCommission,
         commissionAmt,
         bankVatOnCommission,
@@ -1773,22 +2324,31 @@ const getAmendmentBreakdown = (record) => {
     const amendments = (record.amendments || []).filter(a => a.amendmentNo !== 'Original LC');
     let totalAmendmentBankBill = 0;
     let totalAmendmentMarginBill = 0;
+    let totalAmendmentMarginPaid = 0;
     let totalAmendmentCombined = 0;
 
     const list = amendments.map((amnd, index) => {
-        const bankBill = parseFloat(amnd.amendmentBankBill || amnd.amendmentBill) || 0;
+        const isAmndBillActive = amnd.amendmentLcBillEnabled !== undefined
+            ? amnd.amendmentLcBillEnabled
+            : !!(amnd.amendmentCommission || amnd.amendmentSwiftCharge);
+
+        const bankBill = isAmndBillActive ? (parseFloat(amnd.amendmentBankBill || amnd.amendmentBill) || 0) : 0;
         const marginBill = parseFloat(amnd.amendmentMarginBill) || 0;
-        const totalBill = parseFloat(amnd.totalAmendmentBankBill || amnd.amendmentBill) || (bankBill + marginBill);
+        const marginPaid = parseFloat(amnd.amendmentMarginPaid) || 0;
+        const totalBill = isAmndBillActive
+            ? (parseFloat(amnd.totalAmendmentBankBill || amnd.amendmentBill) || ((marginBill + bankBill) - marginPaid))
+            : (marginBill - marginPaid);
 
         totalAmendmentBankBill += bankBill;
         totalAmendmentMarginBill += marginBill;
+        totalAmendmentMarginPaid += marginPaid;
         totalAmendmentCombined += totalBill;
 
-        const swiftCharge = parseFloat(amnd.amendmentSwiftCharge) || 0;
-        const vatOnSwift = parseFloat(amnd.amendmentVatOnSwift) || 0;
+        const swiftCharge = isAmndBillActive ? (parseFloat(amnd.amendmentSwiftCharge) || 0) : 0;
+        const vatOnSwift = isAmndBillActive ? (parseFloat(amnd.amendmentVatOnSwift) || 0) : 0;
         const vatOnSwiftAmt = swiftCharge * (vatOnSwift / 100);
 
-        const vatOnCommission = parseFloat(amnd.amendmentVatOnCommission) || 0;
+        const vatOnCommission = isAmndBillActive ? (parseFloat(amnd.amendmentVatOnCommission) || 0) : 0;
         const commissionTotal = Math.max(0, bankBill - swiftCharge - vatOnSwiftAmt);
         const commissionAmt = commissionTotal / (1 + vatOnCommission / 100);
         const vatOnCommissionAmt = commissionTotal - commissionAmt;
@@ -1798,8 +2358,9 @@ const getAmendmentBreakdown = (record) => {
             amendmentDate: amnd.amendmentDate,
             bankBill,
             marginBill,
+            marginPaid,
             totalBill,
-            commission: amnd.amendmentCommission || '0',
+            commission: isAmndBillActive ? (amnd.amendmentCommission || '0') : '0',
             commissionAmt,
             vatOnCommission,
             vatOnCommissionAmt,
@@ -1814,6 +2375,7 @@ const getAmendmentBreakdown = (record) => {
         list,
         totalAmendmentBankBill,
         totalAmendmentMarginBill,
+        totalAmendmentMarginPaid,
         totalAmendmentCombined
     };
 };
@@ -1870,9 +2432,11 @@ const LCManagement = ({ addNotification, currentUser }) => {
         amendmentSwiftCharge: '',
         amendmentVatOnSwift: '',
         amendmentMarginBill: '',
+        amendmentMarginPaid: '',
         amendmentBankBill: '',
         totalAmendmentBankBill: '',
-        amendmentBill: ''
+        amendmentBill: '',
+        amendmentLcBillEnabled: false
     });
 
     const canManage = ['admin', 'incharge', 'lc manager', 'border manager', 'data entry'].includes((currentUser?.role || '').toLowerCase());
@@ -1934,8 +2498,10 @@ const LCManagement = ({ addNotification, currentUser }) => {
         bankMpCharge: '',
         bankStampCharge: '',
         marginBill: '',
+        marginPaid: '',
         bankBill: '',
         totalBankBill: '',
+        lcBillEnabled: false,
     });
     const [gpRecords, setGpRecords] = useState([]);
     const [lcExpenses, setLcExpenses] = useState([]);
@@ -2227,7 +2793,14 @@ const LCManagement = ({ addNotification, currentUser }) => {
             setGpRecords(Array.isArray(gpRes.data) ? gpRes.data : []);
             setLcExpenses(Array.isArray(expenseRes.data) ? expenseRes.data : []);
 
-            setLcRecords(Array.isArray(lcRes.data) ? lcRes.data : []);
+            const freshLcRecords = Array.isArray(lcRes.data) ? lcRes.data : [];
+            setLcRecords(freshLcRecords);
+            // Sync the open modal's viewData to its fresh version so the LC Bill tab updates immediately
+            setViewData(prev => {
+                if (!prev) return prev;
+                const fresh = freshLcRecords.find(r => r._id === prev._id);
+                return fresh ? fresh : prev;
+            });
 
             const rawStock = Array.isArray(stockRes.data) ? stockRes.data : [];
             const decryptedStock = rawStock.map(item => {
@@ -2402,11 +2975,12 @@ const LCManagement = ({ addNotification, currentUser }) => {
                 }
             }
 
-            if (name === 'marginBill' || name === 'bankBill') {
+            if (name === 'marginBill' || name === 'bankBill' || name === 'marginPaid') {
                 const mb = parseFloat(name === 'marginBill' ? value : prev.marginBill) || 0;
                 const bb = parseFloat(name === 'bankBill' ? value : prev.bankBill) || 0;
-                const sum = mb + bb;
-                newState.totalBankBill = sum > 0 ? sum.toFixed(2) : '';
+                const mp = parseFloat(name === 'marginPaid' ? value : prev.marginPaid) || 0;
+                const total = (mb + bb) - mp;
+                newState.totalBankBill = total > 0 ? total.toFixed(2) : '';
             } else if (['quantity', 'rate', 'totalDollar', 'dollarRate', 'totalAmount', 'bankMargin', 'bankLcCommission', 'bankVatOnCommission', 'bankSwiftCharge', 'bankVatOnSwiftCharge', 'bankLcApplicationForm', 'bankMpCharge', 'bankStampCharge'].includes(name)) {
                 syncBankBills(newState);
             }
@@ -2509,8 +3083,12 @@ const LCManagement = ({ addNotification, currentUser }) => {
             bankMpCharge: record.bankMpCharge || '',
             bankStampCharge: record.bankStampCharge || '',
             marginBill: record.marginBill || '',
+            marginPaid: record.marginPaid || '',
             bankBill: record.bankBill || '',
             totalBankBill: record.totalBankBill || '',
+            lcBillEnabled: record.lcBillEnabled !== undefined 
+                ? record.lcBillEnabled 
+                : !!(record.bankLcCommission || record.bankSwiftCharge || record.bankLcApplicationForm || record.bankMpCharge || record.bankStampCharge),
         });
         setEditingId(record._id);
         setShowForm(true);
@@ -2546,9 +3124,20 @@ const LCManagement = ({ addNotification, currentUser }) => {
             amendmentSwiftCharge: milestone.amendmentSwiftCharge !== undefined ? milestone.amendmentSwiftCharge : undefined,
             amendmentVatOnSwift: milestone.amendmentVatOnSwift !== undefined ? milestone.amendmentVatOnSwift : undefined,
             amendmentMarginBill: milestone.amendmentMarginBill !== undefined ? milestone.amendmentMarginBill : '',
+            amendmentMarginPaid: milestone.amendmentMarginPaid !== undefined 
+                ? milestone.amendmentMarginPaid 
+                : (() => {
+                    const margin = milestone.amendmentMargin !== undefined ? (parseFloat(milestone.amendmentMargin) || 0) : (record.bankMargin !== undefined ? parseFloat(record.bankMargin) : 0);
+                    const mb = parseFloat(milestone.amendmentMarginBill) || 0;
+                    const mp = mb * (margin / 100);
+                    return mp > 0 ? mp.toFixed(2) : '';
+                })(),
             amendmentBankBill: milestone.amendmentBankBill !== undefined ? milestone.amendmentBankBill : '',
             totalAmendmentBankBill: milestone.totalAmendmentBankBill !== undefined ? milestone.totalAmendmentBankBill : (milestone.amendmentBill || ''),
-            amendmentBill: milestone.totalAmendmentBankBill !== undefined ? milestone.totalAmendmentBankBill : (milestone.amendmentBill || '')
+            amendmentBill: milestone.totalAmendmentBankBill !== undefined ? milestone.totalAmendmentBankBill : (milestone.amendmentBill || ''),
+            amendmentLcBillEnabled: milestone.amendmentLcBillEnabled !== undefined
+                ? milestone.amendmentLcBillEnabled
+                : !!(milestone.amendmentCommission || milestone.amendmentSwiftCharge)
         });
         setShowAmendmentForm(true);
         window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -2776,7 +3365,8 @@ const LCManagement = ({ addNotification, currentUser }) => {
             amendmentMarginBill: '',
             amendmentBankBill: '',
             totalAmendmentBankBill: '',
-            amendmentBill: ''
+            amendmentBill: '',
+            amendmentLcBillEnabled: false
         };
         syncAmendmentBills(initialFormState, lc, banksRaw);
         setAmendmentFormData(initialFormState);
@@ -2789,7 +3379,7 @@ const LCManagement = ({ addNotification, currentUser }) => {
         const { name, value } = e.target;
         setAmendmentFormData(prev => {
             const nextState = { ...prev, [name]: value };
-            if (name === 'amendmentMarginBill' || name === 'amendmentBankBill') {
+            if (name === 'amendmentMarginBill' || name === 'amendmentBankBill' || name === 'amendmentMarginPaid') {
                 syncAmendmentBills(nextState, selectedLcForAmendment, banksRaw, editingAmendmentNo, true);
             } else if (name !== 'totalAmendmentBankBill') {
                 syncAmendmentBills(nextState, selectedLcForAmendment, banksRaw, editingAmendmentNo, false);
@@ -3002,6 +3592,7 @@ const LCManagement = ({ addNotification, currentUser }) => {
                         amendmentSwiftCharge: amendmentFormData.amendmentSwiftCharge || '',
                         amendmentVatOnSwift: amendmentFormData.amendmentVatOnSwift || '',
                         amendmentMarginBill: amendmentFormData.amendmentMarginBill || '',
+                        amendmentMarginPaid: amendmentFormData.amendmentMarginPaid || '',
                         amendmentBankBill: amendmentFormData.amendmentBankBill || '',
                         totalAmendmentBankBill: amendmentFormData.totalAmendmentBankBill || '',
                         amendmentBill: amendmentFormData.totalAmendmentBankBill || ''
@@ -3034,6 +3625,7 @@ const LCManagement = ({ addNotification, currentUser }) => {
                     amendmentSwiftCharge: amendmentFormData.amendmentSwiftCharge || '',
                     amendmentVatOnSwift: amendmentFormData.amendmentVatOnSwift || '',
                     amendmentMarginBill: amendmentFormData.amendmentMarginBill || '',
+                    amendmentMarginPaid: amendmentFormData.amendmentMarginPaid || '',
                     amendmentBankBill: amendmentFormData.amendmentBankBill || '',
                     totalAmendmentBankBill: amendmentFormData.totalAmendmentBankBill || '',
                     amendmentBill: amendmentFormData.totalAmendmentBankBill || '',
@@ -3151,9 +3743,11 @@ const LCManagement = ({ addNotification, currentUser }) => {
                 amendmentSwiftCharge: '',
                 amendmentVatOnSwift: '',
                 amendmentMarginBill: '',
+                amendmentMarginPaid: '',
                 amendmentBankBill: '',
                 totalAmendmentBankBill: '',
-                amendmentBill: ''
+                amendmentBill: '',
+                amendmentLcBillEnabled: false
             });
             fetchInitialData();
         } catch (error) {
@@ -3209,8 +3803,10 @@ const LCManagement = ({ addNotification, currentUser }) => {
             bankMpCharge: '',
             bankStampCharge: '',
             marginBill: '',
+            marginPaid: '',
             bankBill: '',
             totalBankBill: '',
+            lcBillEnabled: false,
         });
         setEditingId(null);
         setShowForm(false);
@@ -3667,19 +4263,36 @@ const LCManagement = ({ addNotification, currentUser }) => {
                         </div>
 
                         <div className="space-y-1.5 text-left">
-                            <label className="text-sm font-semibold text-gray-600 ml-1">Bank Bill</label>
+                            <label className="text-sm font-semibold text-gray-600 ml-1">Margin Paid</label>
                             <div className="relative">
                                 <span className="absolute left-3 top-1/2 -translate-y-1/2 font-bold text-gray-400">৳</span>
                                 <input
                                     type="number"
-                                    name="bankBill"
-                                    value={formData.bankBill}
+                                    name="marginPaid"
+                                    value={formData.marginPaid}
                                     onChange={handleInputChange}
                                     placeholder="0.00"
                                     className="w-full px-4 py-2.5 pl-8 bg-white/50 border border-gray-200/60 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all font-medium"
                                 />
                             </div>
                         </div>
+
+                        {formData.lcBillEnabled !== false && (
+                            <div className="space-y-1.5 text-left">
+                                <label className="text-sm font-semibold text-gray-600 ml-1">Bank Bill</label>
+                                <div className="relative">
+                                    <span className="absolute left-3 top-1/2 -translate-y-1/2 font-bold text-gray-400">৳</span>
+                                    <input
+                                        type="number"
+                                        name="bankBill"
+                                        value={formData.bankBill}
+                                        onChange={handleInputChange}
+                                        placeholder="0.00"
+                                        className="w-full px-4 py-2.5 pl-8 bg-white/50 border border-gray-200/60 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all font-medium"
+                                    />
+                                </div>
+                            </div>
+                        )}
 
                         <div className="space-y-1.5 text-left">
                             <label className="text-sm font-semibold text-gray-600 ml-1">Total Bank Bill</label>
@@ -3840,9 +4453,51 @@ const LCManagement = ({ addNotification, currentUser }) => {
                             </div>
                         ))}
 
-                        <div className="col-span-full mb-2 mt-4">
-                            <div className="bg-blue-50/30 border-l-4 border-blue-500 px-4 py-2 rounded-r-xl">
+                        <div className="col-span-full mb-2 mt-4 flex items-center justify-between bg-blue-50/30 border-l-4 border-blue-500 px-4 py-2 rounded-r-xl">
+                            <div>
                                 <h3 className="text-[11px] font-bold text-blue-600 uppercase tracking-wider">Bank Details</h3>
+                            </div>
+                            <div className="flex items-center gap-2">
+                                <span className="text-xs font-bold text-gray-500 uppercase tracking-wider">LC Bill</span>
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        setFormData(prev => {
+                                            const nextVal = !prev.lcBillEnabled;
+                                            const newState = {
+                                                ...prev,
+                                                lcBillEnabled: nextVal,
+                                            };
+                                            if (!nextVal) {
+                                                newState.bankLcCommission = '';
+                                                newState.bankVatOnCommission = '';
+                                                newState.bankSwiftCharge = '';
+                                                newState.bankVatOnSwiftCharge = '';
+                                                newState.bankLcApplicationForm = '';
+                                                newState.bankMpCharge = '';
+                                                newState.bankStampCharge = '';
+                                            } else {
+                                                const selectedBank = banksRaw.find(b => (b.bankName || '').trim().toUpperCase() === (prev.bankName || '').trim().toUpperCase());
+                                                const selectedBranch = selectedBank?.branches?.find(br => br.branch === prev.bankBranch);
+                                                if (selectedBranch) {
+                                                    newState.bankLcCommission = selectedBranch.lcCommission || '';
+                                                    newState.bankVatOnCommission = selectedBranch.vatOnCommission || '';
+                                                    newState.bankSwiftCharge = selectedBranch.swiftCharge || '';
+                                                    newState.bankVatOnSwiftCharge = selectedBranch.vatOnSwiftCharge || '';
+                                                    newState.bankLcApplicationForm = selectedBranch.lcApplicationForm || '';
+                                                    newState.bankMpCharge = selectedBranch.mpCharge || '';
+                                                    newState.bankStampCharge = selectedBranch.stampCharge || '';
+                                                }
+                                            }
+                                            return syncBankBills(newState);
+                                        });
+                                    }}
+                                    className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${formData.lcBillEnabled !== false ? 'bg-blue-600' : 'bg-gray-200'}`}
+                                >
+                                    <span
+                                        className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${formData.lcBillEnabled !== false ? 'translate-x-5' : 'translate-x-0'}`}
+                                    />
+                                </button>
                             </div>
                         </div>
 
@@ -3956,117 +4611,121 @@ const LCManagement = ({ addNotification, currentUser }) => {
                                 </div>
                             </div>
 
-                            {/* LC Commission (%) */}
-                            <div className="space-y-1.5 text-left">
-                                <label className="text-sm font-semibold text-gray-600 ml-1">LC Commission</label>
-                                <div className="relative">
-                                    <input
-                                        type="number"
-                                        name="bankLcCommission"
-                                        value={formData.bankLcCommission}
-                                        onChange={handleInputChange}
-                                        placeholder="0.00"
-                                        className="w-full px-4 py-2.5 pr-8 bg-white/50 border border-gray-200/60 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all font-medium"
-                                    />
-                                    <span className="absolute right-4 top-1/2 -translate-y-1/2 font-bold text-gray-400">%</span>
-                                </div>
-                            </div>
+                            {formData.lcBillEnabled !== false && (
+                                <>
+                                    {/* LC Commission (%) */}
+                                    <div className="space-y-1.5 text-left">
+                                        <label className="text-sm font-semibold text-gray-600 ml-1">LC Commission</label>
+                                        <div className="relative">
+                                            <input
+                                                type="number"
+                                                name="bankLcCommission"
+                                                value={formData.bankLcCommission}
+                                                onChange={handleInputChange}
+                                                placeholder="0.00"
+                                                className="w-full px-4 py-2.5 pr-8 bg-white/50 border border-gray-200/60 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all font-medium"
+                                            />
+                                            <span className="absolute right-4 top-1/2 -translate-y-1/2 font-bold text-gray-400">%</span>
+                                        </div>
+                                    </div>
 
-                            {/* VAT on Commission (%) */}
-                            <div className="space-y-1.5 text-left">
-                                <label className="text-sm font-semibold text-gray-600 ml-1">VAT on Commission</label>
-                                <div className="relative">
-                                    <input
-                                        type="number"
-                                        name="bankVatOnCommission"
-                                        value={formData.bankVatOnCommission}
-                                        onChange={handleInputChange}
-                                        placeholder="0.00"
-                                        className="w-full px-4 py-2.5 pr-8 bg-white/50 border border-gray-200/60 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all font-medium"
-                                    />
-                                    <span className="absolute right-4 top-1/2 -translate-y-1/2 font-bold text-gray-400">%</span>
-                                </div>
-                            </div>
+                                    {/* VAT on Commission (%) */}
+                                    <div className="space-y-1.5 text-left">
+                                        <label className="text-sm font-semibold text-gray-600 ml-1">VAT on Commission</label>
+                                        <div className="relative">
+                                            <input
+                                                type="number"
+                                                name="bankVatOnCommission"
+                                                value={formData.bankVatOnCommission}
+                                                onChange={handleInputChange}
+                                                placeholder="0.00"
+                                                className="w-full px-4 py-2.5 pr-8 bg-white/50 border border-gray-200/60 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all font-medium"
+                                            />
+                                            <span className="absolute right-4 top-1/2 -translate-y-1/2 font-bold text-gray-400">%</span>
+                                        </div>
+                                    </div>
 
-                            {/* Swift Charge */}
-                            <div className="space-y-1.5 text-left">
-                                <label className="text-sm font-semibold text-gray-600 ml-1">Swift Charge</label>
-                                <div className="relative">
-                                    <span className="absolute left-3 top-1/2 -translate-y-1/2 font-bold text-gray-400">৳</span>
-                                    <input
-                                        type="number"
-                                        name="bankSwiftCharge"
-                                        value={formData.bankSwiftCharge}
-                                        onChange={handleInputChange}
-                                        placeholder="0"
-                                        className="w-full px-4 py-2.5 pl-8 bg-white/50 border border-gray-200/60 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all font-medium"
-                                    />
-                                </div>
-                            </div>
+                                    {/* Swift Charge */}
+                                    <div className="space-y-1.5 text-left">
+                                        <label className="text-sm font-semibold text-gray-600 ml-1">Swift Charge</label>
+                                        <div className="relative">
+                                            <span className="absolute left-3 top-1/2 -translate-y-1/2 font-bold text-gray-400">৳</span>
+                                            <input
+                                                type="number"
+                                                name="bankSwiftCharge"
+                                                value={formData.bankSwiftCharge}
+                                                onChange={handleInputChange}
+                                                placeholder="0"
+                                                className="w-full px-4 py-2.5 pl-8 bg-white/50 border border-gray-200/60 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all font-medium"
+                                            />
+                                        </div>
+                                    </div>
 
-                            {/* VAT on Swift Charge (%) */}
-                            <div className="space-y-1.5 text-left">
-                                <label className="text-sm font-semibold text-gray-600 ml-1">VAT on Swift Charge</label>
-                                <div className="relative">
-                                    <input
-                                        type="number"
-                                        name="bankVatOnSwiftCharge"
-                                        value={formData.bankVatOnSwiftCharge}
-                                        onChange={handleInputChange}
-                                        placeholder="0.00"
-                                        className="w-full px-4 py-2.5 pr-8 bg-white/50 border border-gray-200/60 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all font-medium"
-                                    />
-                                    <span className="absolute right-4 top-1/2 -translate-y-1/2 font-bold text-gray-400">%</span>
-                                </div>
-                            </div>
+                                    {/* VAT on Swift Charge (%) */}
+                                    <div className="space-y-1.5 text-left">
+                                        <label className="text-sm font-semibold text-gray-600 ml-1">VAT on Swift Charge</label>
+                                        <div className="relative">
+                                            <input
+                                                type="number"
+                                                name="bankVatOnSwiftCharge"
+                                                value={formData.bankVatOnSwiftCharge}
+                                                onChange={handleInputChange}
+                                                placeholder="0.00"
+                                                className="w-full px-4 py-2.5 pr-8 bg-white/50 border border-gray-200/60 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all font-medium"
+                                            />
+                                            <span className="absolute right-4 top-1/2 -translate-y-1/2 font-bold text-gray-400">%</span>
+                                        </div>
+                                    </div>
 
-                            {/* LC Application Form */}
-                            <div className="space-y-1.5 text-left">
-                                <label className="text-sm font-semibold text-gray-600 ml-1">LC Application Form</label>
-                                <div className="relative">
-                                    <span className="absolute left-3 top-1/2 -translate-y-1/2 font-bold text-gray-400">৳</span>
-                                    <input
-                                        type="number"
-                                        name="bankLcApplicationForm"
-                                        value={formData.bankLcApplicationForm}
-                                        onChange={handleInputChange}
-                                        placeholder="0"
-                                        className="w-full px-4 py-2.5 pl-8 bg-white/50 border border-gray-200/60 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all font-medium"
-                                    />
-                                </div>
-                            </div>
+                                    {/* LC Application Form */}
+                                    <div className="space-y-1.5 text-left">
+                                        <label className="text-sm font-semibold text-gray-600 ml-1">LC Application Form</label>
+                                        <div className="relative">
+                                            <span className="absolute left-3 top-1/2 -translate-y-1/2 font-bold text-gray-400">৳</span>
+                                            <input
+                                                type="number"
+                                                name="bankLcApplicationForm"
+                                                value={formData.bankLcApplicationForm}
+                                                onChange={handleInputChange}
+                                                placeholder="0"
+                                                className="w-full px-4 py-2.5 pl-8 bg-white/50 border border-gray-200/60 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all font-medium"
+                                            />
+                                        </div>
+                                    </div>
 
-                            {/* MP Charge */}
-                            <div className="space-y-1.5 text-left">
-                                <label className="text-sm font-semibold text-gray-600 ml-1">MP Charge</label>
-                                <div className="relative">
-                                    <span className="absolute left-3 top-1/2 -translate-y-1/2 font-bold text-gray-400">৳</span>
-                                    <input
-                                        type="number"
-                                        name="bankMpCharge"
-                                        value={formData.bankMpCharge}
-                                        onChange={handleInputChange}
-                                        placeholder="0"
-                                        className="w-full px-4 py-2.5 pl-8 bg-white/50 border border-gray-200/60 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all font-medium"
-                                    />
-                                </div>
-                            </div>
+                                    {/* MP Charge */}
+                                    <div className="space-y-1.5 text-left">
+                                        <label className="text-sm font-semibold text-gray-600 ml-1">MP Charge</label>
+                                        <div className="relative">
+                                            <span className="absolute left-3 top-1/2 -translate-y-1/2 font-bold text-gray-400">৳</span>
+                                            <input
+                                                type="number"
+                                                name="bankMpCharge"
+                                                value={formData.bankMpCharge}
+                                                onChange={handleInputChange}
+                                                placeholder="0"
+                                                className="w-full px-4 py-2.5 pl-8 bg-white/50 border border-gray-200/60 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all font-medium"
+                                            />
+                                        </div>
+                                    </div>
 
-                            {/* Stamp Charge */}
-                            <div className="space-y-1.5 text-left">
-                                <label className="text-sm font-semibold text-gray-600 ml-1">Stamp Charge</label>
-                                <div className="relative">
-                                    <span className="absolute left-3 top-1/2 -translate-y-1/2 font-bold text-gray-400">৳</span>
-                                    <input
-                                        type="number"
-                                        name="bankStampCharge"
-                                        value={formData.bankStampCharge}
-                                        onChange={handleInputChange}
-                                        placeholder="0"
-                                        className="w-full px-4 py-2.5 pl-8 bg-white/50 border border-gray-200/60 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all font-medium"
-                                    />
-                                </div>
-                            </div>
+                                    {/* Stamp Charge */}
+                                    <div className="space-y-1.5 text-left">
+                                        <label className="text-sm font-semibold text-gray-600 ml-1">Stamp Charge</label>
+                                        <div className="relative">
+                                            <span className="absolute left-3 top-1/2 -translate-y-1/2 font-bold text-gray-400">৳</span>
+                                            <input
+                                                type="number"
+                                                name="bankStampCharge"
+                                                value={formData.bankStampCharge}
+                                                onChange={handleInputChange}
+                                                placeholder="0"
+                                                className="w-full px-4 py-2.5 pl-8 bg-white/50 border border-gray-200/60 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all font-medium"
+                                            />
+                                        </div>
+                                    </div>
+                                </>
+                            )}
                         </div>
 
                         <div className="col-span-full mb-2 mt-4">
@@ -4365,9 +5024,11 @@ const LCManagement = ({ addNotification, currentUser }) => {
                                     amendmentSwiftCharge: '',
                                     amendmentVatOnSwift: '',
                                     amendmentMarginBill: '',
+                                    amendmentMarginPaid: '',
                                     amendmentBankBill: '',
                                     totalAmendmentBankBill: '',
-                                    amendmentBill: ''
+                                    amendmentBill: '',
+                                    amendmentLcBillEnabled: false
                                 });
                             }}
                             className="p-2 hover:bg-gray-100 rounded-xl transition-all group active:scale-95 shrink-0"
@@ -4692,120 +5353,240 @@ const LCManagement = ({ addNotification, currentUser }) => {
 
                                         {/* Amendment Bank Details & Bills */}
                                         <div className="col-span-full border-t border-dashed border-gray-200 pt-6">
-                                            <h4 className="text-xs font-black text-blue-600 uppercase tracking-widest text-left mb-4">Amendment Bank Details</h4>
-                                            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-6">
-                                                <div className="space-y-1.5 text-left">
-                                                    <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider whitespace-nowrap">Margin (%)</label>
-                                                    <input
-                                                        type="number"
-                                                        step="any"
-                                                        name="amendmentMargin"
-                                                        value={amendmentFormData.amendmentMargin || ''}
-                                                        onChange={handleAmendmentInputChange}
-                                                        placeholder="0.00"
-                                                        className="w-full px-4 py-2.5 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all font-medium text-sm"
-                                                    />
+                                            <div className="flex items-center justify-between mb-4 bg-blue-50/30 border-l-4 border-blue-500 px-4 py-2 rounded-r-xl">
+                                                <div>
+                                                    <h4 className="text-xs font-black text-blue-600 uppercase tracking-widest text-left">Amendment Bank Details</h4>
                                                 </div>
-                                                <div className="space-y-1.5 text-left">
-                                                    <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider whitespace-nowrap">Comm. on Amnd. (%)</label>
-                                                    <input
-                                                        type="number"
-                                                        step="any"
-                                                        name="amendmentCommission"
-                                                        value={amendmentFormData.amendmentCommission || ''}
-                                                        onChange={handleAmendmentInputChange}
-                                                        placeholder="0.00"
-                                                        className="w-full px-4 py-2.5 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all font-medium text-sm"
-                                                    />
+                                                <div className="flex items-center gap-2">
+                                                    <span className="text-xs font-bold text-gray-500 uppercase tracking-wider">Amendment Bill</span>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => {
+                                                            setAmendmentFormData(prev => {
+                                                                const nextVal = !prev.amendmentLcBillEnabled;
+                                                                const newState = {
+                                                                    ...prev,
+                                                                    amendmentLcBillEnabled: nextVal,
+                                                                };
+                                                                if (!nextVal) {
+                                                                    newState.amendmentCommission = '';
+                                                                    newState.amendmentVatOnCommission = '';
+                                                                    newState.amendmentSwiftCharge = '';
+                                                                    newState.amendmentVatOnSwift = '';
+                                                                    newState.amendmentBankBill = '';
+                                                                } else {
+                                                                    const selectedBank = banksRaw.find(b => (b.bankName || '').trim().toUpperCase() === (selectedLcForAmendment?.bankName || '').trim().toUpperCase());
+                                                                    const selectedBranch = selectedBank?.branches?.find(br => br.branch === selectedLcForAmendment?.bankBranch);
+                                                                    if (selectedBranch) {
+                                                                        newState.amendmentCommission = selectedBranch.amendmentCommission || '';
+                                                                        newState.amendmentVatOnCommission = selectedBranch.amendmentVatOnCommission || '';
+                                                                        newState.amendmentSwiftCharge = selectedBranch.amendmentSwiftCharge !== undefined && selectedBranch.amendmentSwiftCharge !== '' ? String(selectedBranch.amendmentSwiftCharge) : '';
+                                                                        newState.amendmentVatOnSwift = selectedBranch.amendmentVatOnSwift || '';
+                                                                    }
+                                                                }
+                                                                return syncAmendmentBills(newState, selectedLcForAmendment, banksRaw, editingAmendmentNo);
+                                                            });
+                                                        }}
+                                                        className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${amendmentFormData.amendmentLcBillEnabled !== false ? 'bg-blue-600' : 'bg-gray-200'}`}
+                                                    >
+                                                        <span
+                                                            className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${amendmentFormData.amendmentLcBillEnabled !== false ? 'translate-x-5' : 'translate-x-0'}`}
+                                                        />
+                                                    </button>
                                                 </div>
-                                                <div className="space-y-1.5 text-left">
-                                                    <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider whitespace-nowrap">VAT on Comm. (%)</label>
-                                                    <input
-                                                        type="number"
-                                                        step="any"
-                                                        name="amendmentVatOnCommission"
-                                                        value={amendmentFormData.amendmentVatOnCommission || ''}
-                                                        onChange={handleAmendmentInputChange}
-                                                        placeholder="0.00"
-                                                        className="w-full px-4 py-2.5 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all font-medium text-sm"
-                                                    />
-                                                </div>
-                                                <div className="space-y-1.5 text-left">
-                                                    <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider whitespace-nowrap">Swift Charge</label>
-                                                    <div className="relative">
-                                                        <span className="absolute left-3 top-1/2 -translate-y-1/2 font-bold text-gray-400 text-sm">৳</span>
+                                            </div>
+                                            {amendmentFormData.amendmentLcBillEnabled === false ? (
+                                                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-6">
+                                                    <div className="space-y-1.5 text-left">
+                                                        <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider whitespace-nowrap">Margin (%)</label>
                                                         <input
                                                             type="number"
                                                             step="any"
-                                                            name="amendmentSwiftCharge"
-                                                            value={amendmentFormData.amendmentSwiftCharge || ''}
+                                                            name="amendmentMargin"
+                                                            value={amendmentFormData.amendmentMargin || ''}
                                                             onChange={handleAmendmentInputChange}
                                                             placeholder="0.00"
-                                                            className="w-full px-4 py-2.5 pl-8 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all font-medium text-sm"
+                                                            className="w-full px-4 py-2.5 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all font-medium text-sm"
                                                         />
                                                     </div>
+                                                    <div className="space-y-1.5 text-left">
+                                                        <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Amendment Margin Bill</label>
+                                                        <div className="relative">
+                                                            <span className="absolute left-3 top-1/2 -translate-y-1/2 font-bold text-gray-400 text-sm">৳</span>
+                                                            <input
+                                                                type="number"
+                                                                step="any"
+                                                                name="amendmentMarginBill"
+                                                                value={amendmentFormData.amendmentMarginBill || ''}
+                                                                onChange={handleAmendmentInputChange}
+                                                                placeholder="0.00"
+                                                                className="w-full px-4 py-2.5 pl-8 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all font-medium text-sm font-semibold text-gray-800"
+                                                            />
+                                                        </div>
+                                                    </div>
+                                                    <div className="space-y-1.5 text-left">
+                                                        <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Amendment Margin Paid</label>
+                                                        <div className="relative">
+                                                            <span className="absolute left-3 top-1/2 -translate-y-1/2 font-bold text-gray-400 text-sm">৳</span>
+                                                            <input
+                                                                type="number"
+                                                                step="any"
+                                                                name="amendmentMarginPaid"
+                                                                value={amendmentFormData.amendmentMarginPaid || ''}
+                                                                onChange={handleAmendmentInputChange}
+                                                                placeholder="0.00"
+                                                                className="w-full px-4 py-2.5 pl-8 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all font-medium text-sm font-semibold text-gray-800"
+                                                            />
+                                                        </div>
+                                                    </div>
+                                                    <div className="space-y-1.5 text-left">
+                                                        <label className="text-[11px] font-bold text-indigo-500 uppercase tracking-wider font-extrabold">Total Amendment Bank Bill</label>
+                                                        <div className="relative">
+                                                            <span className="absolute left-3 top-1/2 -translate-y-1/2 font-bold text-indigo-400 text-sm">৳</span>
+                                                            <input
+                                                                type="number"
+                                                                step="any"
+                                                                name="totalAmendmentBankBill"
+                                                                value={amendmentFormData.totalAmendmentBankBill || ''}
+                                                                placeholder="0.00"
+                                                                className="w-full px-4 py-2.5 pl-8 bg-blue-50 border border-blue-100 rounded-xl outline-none transition-all font-black text-sm text-blue-700"
+                                                                readOnly
+                                                            />
+                                                        </div>
+                                                    </div>
                                                 </div>
-                                                <div className="space-y-1.5 text-left">
-                                                    <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider whitespace-nowrap">VAT on Swift (%)</label>
-                                                    <input
-                                                        type="number"
-                                                        step="any"
-                                                        name="amendmentVatOnSwift"
-                                                        value={amendmentFormData.amendmentVatOnSwift || ''}
-                                                        onChange={handleAmendmentInputChange}
-                                                        placeholder="0.00"
-                                                        className="w-full px-4 py-2.5 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all font-medium text-sm"
-                                                    />
-                                                </div>
-                                            </div>
+                                            ) : (
+                                                <>
+                                                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-6">
+                                                        <div className="space-y-1.5 text-left">
+                                                            <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider whitespace-nowrap">Margin (%)</label>
+                                                            <input
+                                                                type="number"
+                                                                step="any"
+                                                                name="amendmentMargin"
+                                                                value={amendmentFormData.amendmentMargin || ''}
+                                                                onChange={handleAmendmentInputChange}
+                                                                placeholder="0.00"
+                                                                className="w-full px-4 py-2.5 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all font-medium text-sm"
+                                                            />
+                                                        </div>
+                                                        <div className="space-y-1.5 text-left">
+                                                            <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider whitespace-nowrap">Comm. on Amnd. (%)</label>
+                                                            <input
+                                                                type="number"
+                                                                step="any"
+                                                                name="amendmentCommission"
+                                                                value={amendmentFormData.amendmentCommission || ''}
+                                                                onChange={handleAmendmentInputChange}
+                                                                placeholder="0.00"
+                                                                className="w-full px-4 py-2.5 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all font-medium text-sm"
+                                                            />
+                                                        </div>
+                                                        <div className="space-y-1.5 text-left">
+                                                            <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider whitespace-nowrap">VAT on Comm. (%)</label>
+                                                            <input
+                                                                type="number"
+                                                                step="any"
+                                                                name="amendmentVatOnCommission"
+                                                                value={amendmentFormData.amendmentVatOnCommission || ''}
+                                                                onChange={handleAmendmentInputChange}
+                                                                placeholder="0.00"
+                                                                className="w-full px-4 py-2.5 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all font-medium text-sm"
+                                                            />
+                                                        </div>
+                                                        <div className="space-y-1.5 text-left">
+                                                            <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider whitespace-nowrap">Swift Charge</label>
+                                                            <div className="relative">
+                                                                <span className="absolute left-3 top-1/2 -translate-y-1/2 font-bold text-gray-400 text-sm">৳</span>
+                                                                <input
+                                                                    type="number"
+                                                                    step="any"
+                                                                    name="amendmentSwiftCharge"
+                                                                    value={amendmentFormData.amendmentSwiftCharge || ''}
+                                                                    onChange={handleAmendmentInputChange}
+                                                                    placeholder="0.00"
+                                                                    className="w-full px-4 py-2.5 pl-8 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all font-medium text-sm"
+                                                                />
+                                                            </div>
+                                                        </div>
+                                                        <div className="space-y-1.5 text-left">
+                                                            <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider whitespace-nowrap">VAT on Swift (%)</label>
+                                                            <input
+                                                                type="number"
+                                                                step="any"
+                                                                name="amendmentVatOnSwift"
+                                                                value={amendmentFormData.amendmentVatOnSwift || ''}
+                                                                onChange={handleAmendmentInputChange}
+                                                                placeholder="0.00"
+                                                                className="w-full px-4 py-2.5 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all font-medium text-sm"
+                                                            />
+                                                        </div>
+                                                    </div>
 
-                                            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-6">
-                                                <div className="space-y-1.5 text-left">
-                                                    <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Amendment Margin Bill</label>
-                                                    <div className="relative">
-                                                        <span className="absolute left-3 top-1/2 -translate-y-1/2 font-bold text-gray-400 text-sm">৳</span>
-                                                        <input
-                                                            type="number"
-                                                            step="any"
-                                                            name="amendmentMarginBill"
-                                                            value={amendmentFormData.amendmentMarginBill || ''}
-                                                            onChange={handleAmendmentInputChange}
-                                                            placeholder="0.00"
-                                                            className="w-full px-4 py-2.5 pl-8 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all font-medium text-sm font-semibold text-gray-800"
-                                                        />
+                                                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-6 mt-6">
+                                                        <div className="space-y-1.5 text-left">
+                                                            <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Amendment Margin Bill</label>
+                                                            <div className="relative">
+                                                                <span className="absolute left-3 top-1/2 -translate-y-1/2 font-bold text-gray-400 text-sm">৳</span>
+                                                                <input
+                                                                    type="number"
+                                                                    step="any"
+                                                                    name="amendmentMarginBill"
+                                                                    value={amendmentFormData.amendmentMarginBill || ''}
+                                                                    onChange={handleAmendmentInputChange}
+                                                                    placeholder="0.00"
+                                                                    className="w-full px-4 py-2.5 pl-8 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all font-medium text-sm font-semibold text-gray-800"
+                                                                />
+                                                            </div>
+                                                        </div>
+                                                        <div className="space-y-1.5 text-left">
+                                                            <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Amendment Margin Paid</label>
+                                                            <div className="relative">
+                                                                <span className="absolute left-3 top-1/2 -translate-y-1/2 font-bold text-gray-400 text-sm">৳</span>
+                                                                <input
+                                                                    type="number"
+                                                                    step="any"
+                                                                    name="amendmentMarginPaid"
+                                                                    value={amendmentFormData.amendmentMarginPaid || ''}
+                                                                    onChange={handleAmendmentInputChange}
+                                                                    placeholder="0.00"
+                                                                    className="w-full px-4 py-2.5 pl-8 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all font-medium text-sm font-semibold text-gray-800"
+                                                                />
+                                                            </div>
+                                                        </div>
+                                                        <div className="space-y-1.5 text-left">
+                                                            <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Amendment Bank Bill</label>
+                                                            <div className="relative">
+                                                                <span className="absolute left-3 top-1/2 -translate-y-1/2 font-bold text-gray-400 text-sm">৳</span>
+                                                                <input
+                                                                    type="number"
+                                                                    step="any"
+                                                                    name="amendmentBankBill"
+                                                                    value={amendmentFormData.amendmentBankBill || ''}
+                                                                    onChange={handleAmendmentInputChange}
+                                                                    placeholder="0.00"
+                                                                    className="w-full px-4 py-2.5 pl-8 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all font-medium text-sm font-semibold text-gray-800"
+                                                                />
+                                                            </div>
+                                                        </div>
+                                                        <div className="space-y-1.5 text-left">
+                                                            <label className="text-[11px] font-bold text-indigo-500 uppercase tracking-wider font-extrabold">Total Amendment Bank Bill</label>
+                                                            <div className="relative">
+                                                                <span className="absolute left-3 top-1/2 -translate-y-1/2 font-bold text-indigo-400 text-sm">৳</span>
+                                                                <input
+                                                                    type="number"
+                                                                    step="any"
+                                                                    name="totalAmendmentBankBill"
+                                                                    value={amendmentFormData.totalAmendmentBankBill || ''}
+                                                                    placeholder="0.00"
+                                                                    className="w-full px-4 py-2.5 pl-8 bg-blue-50 border border-blue-100 rounded-xl outline-none transition-all font-black text-sm text-blue-700"
+                                                                    readOnly
+                                                                />
+                                                            </div>
+                                                        </div>
                                                     </div>
-                                                </div>
-                                                <div className="space-y-1.5 text-left">
-                                                    <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Amendment Bank Bill</label>
-                                                    <div className="relative">
-                                                        <span className="absolute left-3 top-1/2 -translate-y-1/2 font-bold text-gray-400 text-sm">৳</span>
-                                                        <input
-                                                            type="number"
-                                                            step="any"
-                                                            name="amendmentBankBill"
-                                                            value={amendmentFormData.amendmentBankBill || ''}
-                                                            onChange={handleAmendmentInputChange}
-                                                            placeholder="0.00"
-                                                            className="w-full px-4 py-2.5 pl-8 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all font-medium text-sm font-semibold text-gray-800"
-                                                        />
-                                                    </div>
-                                                </div>
-                                                <div className="space-y-1.5 text-left">
-                                                    <label className="text-[11px] font-bold text-indigo-500 uppercase tracking-wider font-extrabold">Total Amendment Bank Bill</label>
-                                                    <div className="relative">
-                                                        <span className="absolute left-3 top-1/2 -translate-y-1/2 font-bold text-indigo-400 text-sm">৳</span>
-                                                        <input
-                                                            type="number"
-                                                            step="any"
-                                                            name="totalAmendmentBankBill"
-                                                            value={amendmentFormData.totalAmendmentBankBill || ''}
-                                                            placeholder="0.00"
-                                                            className="w-full px-4 py-2.5 pl-8 bg-blue-50 border border-blue-100 rounded-xl outline-none transition-all font-black text-sm text-blue-700"
-                                                            readOnly
-                                                        />
-                                                    </div>
-                                                </div>
-                                            </div>
+                                                </>
+                                            )}
                                         </div>
 
                                         <div className="col-span-full space-y-1.5">
@@ -4848,9 +5629,11 @@ const LCManagement = ({ addNotification, currentUser }) => {
                                                     amendmentSwiftCharge: '',
                                                     amendmentVatOnSwift: '',
                                                     amendmentMarginBill: '',
+                                                    amendmentMarginPaid: '',
                                                     amendmentBankBill: '',
                                                     totalAmendmentBankBill: '',
-                                                    amendmentBill: ''
+                                                    amendmentBill: '',
+                                                    amendmentLcBillEnabled: false
                                                 });
                                             }}
                                             className="px-6 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-600 font-bold rounded-xl transition-all active:scale-95"
@@ -5261,66 +6044,95 @@ const LCManagement = ({ addNotification, currentUser }) => {
                                                                     )}
                                                                 </h4>
                                                                 <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-y-4 gap-x-6 text-left">
-                                                                    <div className="space-y-0.5">
-                                                                        <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">LC Commission</span>
-                                                                        <p className="text-sm font-black text-gray-800">
-                                                                            {record.bankLcCommission ? `${record.bankLcCommission}%` : '-'}
-                                                                        </p>
-                                                                    </div>
-                                                                    <div className="space-y-0.5">
-                                                                        <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">VAT on Commission</span>
-                                                                        <p className="text-sm font-black text-gray-800">
-                                                                            {record.bankVatOnCommission ? `${record.bankVatOnCommission}%` : '-'}
-                                                                        </p>
-                                                                    </div>
-                                                                    <div className="space-y-0.5">
-                                                                        <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">SWIFT Charge</span>
-                                                                        <p className="text-sm font-black text-gray-800">
-                                                                            {record.bankSwiftCharge !== undefined && record.bankSwiftCharge !== '' ? `৳${parseFloat(record.bankSwiftCharge).toLocaleString('en-IN')}` : '-'}
-                                                                        </p>
-                                                                    </div>
-                                                                    <div className="space-y-0.5">
-                                                                        <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">VAT on SWIFT Charge</span>
-                                                                        <p className="text-sm font-black text-gray-800">
-                                                                            {record.bankVatOnSwiftCharge ? `${record.bankVatOnSwiftCharge}%` : '-'}
-                                                                        </p>
-                                                                    </div>
-                                                                    <div className="space-y-0.5">
-                                                                        <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">LC Application Form</span>
-                                                                        <p className="text-sm font-black text-gray-800">
-                                                                            {record.bankLcApplicationForm !== undefined && record.bankLcApplicationForm !== '' ? `৳${parseFloat(record.bankLcApplicationForm).toLocaleString('en-IN')}` : '-'}
-                                                                        </p>
-                                                                    </div>
-                                                                    <div className="space-y-0.5">
-                                                                        <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">MP Charge</span>
-                                                                        <p className="text-sm font-black text-gray-800">
-                                                                            {record.bankMpCharge !== undefined && record.bankMpCharge !== '' ? `৳${parseFloat(record.bankMpCharge).toLocaleString('en-IN')}` : '-'}
-                                                                        </p>
-                                                                    </div>
-                                                                    <div className="space-y-0.5">
-                                                                        <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Stamp Charge</span>
-                                                                        <p className="text-sm font-black text-gray-800">
-                                                                            {record.bankStampCharge !== undefined && record.bankStampCharge !== '' ? `৳${parseFloat(record.bankStampCharge).toLocaleString('en-IN')}` : '-'}
-                                                                        </p>
-                                                                    </div>
-                                                                    <div className="space-y-0.5">
-                                                                        <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Margin</span>
-                                                                        <p className="text-sm font-black text-gray-800">
-                                                                            {record.bankMargin ? `${record.bankMargin}%` : '-'}
-                                                                        </p>
-                                                                    </div>
-                                                                    <div className="space-y-0.5">
-                                                                        <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Margin Bill</span>
-                                                                        <p className="text-sm font-black text-blue-600">
-                                                                            {record.marginBill ? `৳${parseFloat(record.marginBill).toLocaleString('en-IN', { minimumFractionDigits: 2 })}` : '-'}
-                                                                        </p>
-                                                                    </div>
-                                                                    <div className="space-y-0.5">
-                                                                        <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Bank Bill</span>
-                                                                        <p className="text-sm font-black text-rose-600">
-                                                                            {record.bankBill ? `৳${parseFloat(record.bankBill).toLocaleString('en-IN', { minimumFractionDigits: 2 })}` : '-'}
-                                                                        </p>
-                                                                    </div>
+                                                                    {(() => {
+                                                                        const isRecordLcBillActive = record.lcBillEnabled !== undefined 
+                                                                            ? record.lcBillEnabled 
+                                                                            : !!(record.bankLcCommission || record.bankSwiftCharge || record.bankLcApplicationForm || record.bankMpCharge || record.bankStampCharge);
+                                                                        return (
+                                                                            <>
+                                                                                {isRecordLcBillActive && (
+                                                                                    <>
+                                                                                        <div className="space-y-0.5">
+                                                                                            <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">LC Commission</span>
+                                                                                            <p className="text-sm font-black text-gray-800">
+                                                                                                {record.bankLcCommission ? `${record.bankLcCommission}%` : '-'}
+                                                                                            </p>
+                                                                                        </div>
+                                                                                        <div className="space-y-0.5">
+                                                                                            <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">VAT on Commission</span>
+                                                                                            <p className="text-sm font-black text-gray-800">
+                                                                                                {record.bankVatOnCommission ? `${record.bankVatOnCommission}%` : '-'}
+                                                                                            </p>
+                                                                                        </div>
+                                                                                        <div className="space-y-0.5">
+                                                                                            <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">SWIFT Charge</span>
+                                                                                            <p className="text-sm font-black text-gray-800">
+                                                                                                {record.bankSwiftCharge !== undefined && record.bankSwiftCharge !== '' ? `৳${parseFloat(record.bankSwiftCharge).toLocaleString('en-IN')}` : '-'}
+                                                                                            </p>
+                                                                                        </div>
+                                                                                        <div className="space-y-0.5">
+                                                                                            <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">VAT on SWIFT Charge</span>
+                                                                                            <p className="text-sm font-black text-gray-800">
+                                                                                                {record.bankVatOnSwiftCharge ? `${record.bankVatOnSwiftCharge}%` : '-'}
+                                                                                            </p>
+                                                                                        </div>
+                                                                                        <div className="space-y-0.5">
+                                                                                            <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">LC Application Form</span>
+                                                                                            <p className="text-sm font-black text-gray-800">
+                                                                                                {record.bankLcApplicationForm !== undefined && record.bankLcApplicationForm !== '' ? `৳${parseFloat(record.bankLcApplicationForm).toLocaleString('en-IN')}` : '-'}
+                                                                                            </p>
+                                                                                        </div>
+                                                                                        <div className="space-y-0.5">
+                                                                                            <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">MP Charge</span>
+                                                                                            <p className="text-sm font-black text-gray-800">
+                                                                                                {record.bankMpCharge !== undefined && record.bankMpCharge !== '' ? `৳${parseFloat(record.bankMpCharge).toLocaleString('en-IN')}` : '-'}
+                                                                                            </p>
+                                                                                        </div>
+                                                                                        <div className="space-y-0.5">
+                                                                                            <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Stamp Charge</span>
+                                                                                            <p className="text-sm font-black text-gray-800">
+                                                                                                {record.bankStampCharge !== undefined && record.bankStampCharge !== '' ? `৳${parseFloat(record.bankStampCharge).toLocaleString('en-IN')}` : '-'}
+                                                                                            </p>
+                                                                                        </div>
+                                                                                    </>
+                                                                                )}
+                                                                                <div className="space-y-0.5">
+                                                                                    <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Margin</span>
+                                                                                    <p className="text-sm font-black text-gray-800">
+                                                                                        {record.bankMargin ? `${record.bankMargin}%` : '-'}
+                                                                                    </p>
+                                                                                </div>
+                                                                                <div className="space-y-0.5">
+                                                                                    <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Margin Bill</span>
+                                                                                    <p className="text-sm font-black text-blue-600">
+                                                                                        {record.marginBill ? `৳${parseFloat(record.marginBill).toLocaleString('en-IN', { minimumFractionDigits: 2 })}` : '-'}
+                                                                                    </p>
+                                                                                </div>
+                                                                                <div className="space-y-0.5">
+                                                                                    <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Margin Paid</span>
+                                                                                    <p className="text-sm font-black text-blue-600">
+                                                                                        {record.marginPaid !== undefined && record.marginPaid !== '' 
+                                                                                            ? `৳${parseFloat(record.marginPaid).toLocaleString('en-IN', { minimumFractionDigits: 2 })}` 
+                                                                                            : (() => {
+                                                                                                const totalAmount = parseFloat(record.totalAmount) || 0;
+                                                                                                const margin = parseFloat(record.bankMargin) || 0;
+                                                                                                const mp = totalAmount * (margin / 100);
+                                                                                                return mp > 0 ? `৳${mp.toLocaleString('en-IN', { minimumFractionDigits: 2 })}` : '-';
+                                                                                            })()
+                                                                                        }
+                                                                                    </p>
+                                                                                </div>
+                                                                                {isRecordLcBillActive && (
+                                                                                    <div className="space-y-0.5">
+                                                                                        <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Bank Bill</span>
+                                                                                        <p className="text-sm font-black text-rose-600">
+                                                                                            {record.bankBill ? `৳${parseFloat(record.bankBill).toLocaleString('en-IN', { minimumFractionDigits: 2 })}` : '-'}
+                                                                                        </p>
+                                                                                    </div>
+                                                                                )}
+                                                                            </>
+                                                                        );
+                                                                    })()}
                                                                     <div className="space-y-0.5">
                                                                         <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Total Bank Bill</span>
                                                                         <p className="text-sm font-black text-blue-600 font-extrabold">
@@ -5340,12 +6152,16 @@ const LCManagement = ({ addNotification, currentUser }) => {
                                                                         {record.amendments
                                                                             .filter(amnd => amnd.amendmentNo !== 'Original LC')
                                                                             .map((amnd, index) => {
-                                                                                const swiftCharge = parseFloat(amnd.amendmentSwiftCharge) || 0;
-                                                                                const vatOnSwift = parseFloat(amnd.amendmentVatOnSwift) || 0;
+                                                                                const isAmndBillActive = amnd.amendmentLcBillEnabled !== undefined
+                                                                                    ? amnd.amendmentLcBillEnabled
+                                                                                    : !!(amnd.amendmentCommission || amnd.amendmentSwiftCharge);
+
+                                                                                const swiftCharge = isAmndBillActive ? (parseFloat(amnd.amendmentSwiftCharge) || 0) : 0;
+                                                                                const vatOnSwift = isAmndBillActive ? (parseFloat(amnd.amendmentVatOnSwift) || 0) : 0;
                                                                                 const vatOnSwiftAmt = swiftCharge * (vatOnSwift / 100);
 
-                                                                                const bankBill = parseFloat(amnd.amendmentBankBill || amnd.amendmentBill) || 0;
-                                                                                const vatOnCommission = parseFloat(amnd.amendmentVatOnCommission) || 0;
+                                                                                const bankBill = isAmndBillActive ? (parseFloat(amnd.amendmentBankBill || amnd.amendmentBill) || 0) : 0;
+                                                                                const vatOnCommission = isAmndBillActive ? (parseFloat(amnd.amendmentVatOnCommission) || 0) : 0;
                                                                                 const commissionTotal = Math.max(0, bankBill - swiftCharge - vatOnSwiftAmt);
                                                                                 const commissionAmt = commissionTotal / (1 + vatOnCommission / 100);
                                                                                 const vatOnCommissionAmt = commissionTotal - commissionAmt;
@@ -5362,29 +6178,29 @@ const LCManagement = ({ addNotification, currentUser }) => {
                                                                                                 </span>
                                                                                             )}
                                                                                         </div>
-                                                                                        <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-7 gap-4 text-left">
+                                                                                        <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-9 gap-4 text-left">
                                                                                             <div className="space-y-0.5">
-                                                                                                <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Commission ({amnd.amendmentCommission || 0}%)</span>
+                                                                                                <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Commission {isAmndBillActive ? `(${amnd.amendmentCommission || 0}%)` : ''}</span>
                                                                                                 <p className="text-sm font-black text-gray-800">
-                                                                                                    ৳{Math.round(commissionAmt).toLocaleString('en-IN')}
+                                                                                                    {isAmndBillActive ? `৳${Math.round(commissionAmt).toLocaleString('en-IN')}` : '-'}
                                                                                                 </p>
                                                                                             </div>
                                                                                             <div className="space-y-0.5">
-                                                                                                <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">VAT on Comm. ({amnd.amendmentVatOnCommission || 0}%)</span>
+                                                                                                <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">VAT on Comm. {isAmndBillActive ? `(${amnd.amendmentVatOnCommission || 0}%)` : ''}</span>
                                                                                                 <p className="text-sm font-black text-gray-800">
-                                                                                                    ৳{Math.round(vatOnCommissionAmt).toLocaleString('en-IN')}
+                                                                                                    {isAmndBillActive ? `৳${Math.round(vatOnCommissionAmt).toLocaleString('en-IN')}` : '-'}
                                                                                                 </p>
                                                                                             </div>
                                                                                             <div className="space-y-0.5">
                                                                                                 <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">SWIFT Charge</span>
                                                                                                 <p className="text-sm font-black text-gray-800">
-                                                                                                    {amnd.amendmentSwiftCharge !== undefined && amnd.amendmentSwiftCharge !== '' ? `৳${parseFloat(amnd.amendmentSwiftCharge).toLocaleString('en-IN')}` : '-'}
+                                                                                                    {isAmndBillActive && amnd.amendmentSwiftCharge !== undefined && amnd.amendmentSwiftCharge !== '' ? `৳${parseFloat(amnd.amendmentSwiftCharge).toLocaleString('en-IN')}` : '-'}
                                                                                                 </p>
                                                                                             </div>
                                                                                             <div className="space-y-0.5">
-                                                                                                <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">VAT on SWIFT ({amnd.amendmentVatOnSwift || 0}%)</span>
+                                                                                                <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">VAT on SWIFT {isAmndBillActive ? `(${amnd.amendmentVatOnSwift || 0}%)` : ''}</span>
                                                                                                 <p className="text-sm font-black text-gray-800">
-                                                                                                    ৳{Math.round(vatOnSwiftAmt).toLocaleString('en-IN')}
+                                                                                                    {isAmndBillActive ? `৳${Math.round(vatOnSwiftAmt).toLocaleString('en-IN')}` : '-'}
                                                                                                 </p>
                                                                                             </div>
                                                                                             <div className="space-y-0.5">
@@ -5394,13 +6210,33 @@ const LCManagement = ({ addNotification, currentUser }) => {
                                                                                                 </p>
                                                                                             </div>
                                                                                             <div className="space-y-0.5">
-                                                                                                <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Amendment Bill</span>
-                                                                                                <p className="text-sm font-extrabold text-rose-600">
-                                                                                                    {amnd.amendmentBankBill ? `৳${parseFloat(amnd.amendmentBankBill).toLocaleString('en-IN', { minimumFractionDigits: 2 })}` : '-'}
+                                                                                                <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Margin Bill</span>
+                                                                                                <p className="text-sm font-black text-blue-600">
+                                                                                                    {amnd.amendmentMarginBill ? `৳${parseFloat(amnd.amendmentMarginBill).toLocaleString('en-IN', { minimumFractionDigits: 2 })}` : '-'}
                                                                                                 </p>
                                                                                             </div>
                                                                                             <div className="space-y-0.5">
-                                                                                                <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Total Bill (+ Margin)</span>
+                                                                                                <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Margin Paid</span>
+                                                                                                <p className="text-sm font-black text-blue-600">
+                                                                                                    {amnd.amendmentMarginPaid !== undefined && amnd.amendmentMarginPaid !== '' 
+                                                                                                        ? `৳${parseFloat(amnd.amendmentMarginPaid).toLocaleString('en-IN', { minimumFractionDigits: 2 })}` 
+                                                                                                        : (() => {
+                                                                                                            const margin = amnd.amendmentMargin !== undefined ? (parseFloat(amnd.amendmentMargin) || 0) : (record.bankMargin !== undefined ? parseFloat(record.bankMargin) : 0);
+                                                                                                            const mb = parseFloat(amnd.amendmentMarginBill) || 0;
+                                                                                                            const mp = mb * (margin / 100);
+                                                                                                            return mp > 0 ? `৳${mp.toLocaleString('en-IN', { minimumFractionDigits: 2 })}` : '-';
+                                                                                                        })()
+                                                                                                    }
+                                                                                                </p>
+                                                                                            </div>
+                                                                                            <div className="space-y-0.5">
+                                                                                                <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Amendment Bill</span>
+                                                                                                <p className="text-sm font-extrabold text-rose-600">
+                                                                                                    {isAmndBillActive && amnd.amendmentBankBill ? `৳${parseFloat(amnd.amendmentBankBill).toLocaleString('en-IN', { minimumFractionDigits: 2 })}` : '-'}
+                                                                                                </p>
+                                                                                            </div>
+                                                                                            <div className="space-y-0.5">
+                                                                                                <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Total Bill</span>
                                                                                                 <p className="text-sm font-black text-blue-600">
                                                                                                     {(amnd.totalAmendmentBankBill || amnd.amendmentBill) ? `৳${parseFloat(amnd.totalAmendmentBankBill || amnd.amendmentBill).toLocaleString('en-IN', { minimumFractionDigits: 2 })}` : '-'}
                                                                                                 </p>
@@ -5442,6 +6278,7 @@ const LCManagement = ({ addNotification, currentUser }) => {
                     onEdit={handleEdit}
                     onEditAmendment={handleEditAmendment}
                     canManage={canManage}
+                    onRefresh={fetchInitialData}
                 />
             )}
 
