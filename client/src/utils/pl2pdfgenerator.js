@@ -13,7 +13,7 @@ const numberToWordsUSD = (amount) => {
         else { if (num >= 20) { s += tens[Math.floor(num / 10)] + ' '; num %= 10; } if (num > 0) { s += units[num] + ' '; } }
         return s;
     };
-    if (amount === 0) return 'US Dollar: Zero Only';
+    if (amount === 0) return 'US Dollar: Zero.';
     const parts = amount.toFixed(2).split('.');
     let dollar = parseInt(parts[0]), cents = parseInt(parts[1]);
     let words = 'US Dollar: ';
@@ -25,8 +25,10 @@ const numberToWordsUSD = (amount) => {
         if (dollar > 0) { tw += convertChunk(dollar); }
         words += tw;
     }
-    words += cents > 0 ? 'And Cents ' + convertChunk(cents) + 'Only' : 'Only';
-    return words.replace(/\s+/g, ' ').trim();
+    if (cents > 0) {
+        words += 'And Cents ' + convertChunk(cents);
+    }
+    return words.replace(/\s+/g, ' ').trim() + '.';
 };
 
 const fitFontSizeOneLine = (doc, text, maxWidth, maxSize = 9, minSize = 4.5, fontStyle = 'bold') => {
@@ -535,6 +537,8 @@ export const generatePL2PDF = async (record, piRecords = [], lcRecords = [], imp
     if (againstIndex !== -1) {
         cleanTerms = cleanTerms.substring(0, againstIndex + 7).trim();
     }
+    // Collapse soft newlines so "AGAINST" is not orphaned on its own line.
+    cleanTerms = cleanTerms.replace(/ ?\n/g, ' ').trim();
     const termsLines = doc.splitTextToSize(cleanTerms, rightColWidth - 5);
     const termsHeight = termsLines.length * 4;
     let row2Height = Math.max(55, 24 + termsHeight);
@@ -684,7 +688,11 @@ export const generatePL2PDF = async (record, piRecords = [], lcRecords = [], imp
     productsList.forEach((prod, pIdx) => {
         const hasFreight = prod.freight && parseFloat(prod.freight) > 0;
         const isLastProduct = pIdx === numProducts - 1;
-        const rowHeight = productRowHeight(numProducts, hasFreight);
+        const hasDoubleHsCode = !!(prod.hsCodeInd || pi?.productsList?.[pIdx]?.hsCodeInd);
+        let rowHeight = productRowHeight(numProducts, hasFreight);
+        if (rowHeight && hasDoubleHsCode) {
+            rowHeight += 5;
+        }
 
         firstRowIndexForProduct.push(tableBody.length);
 
@@ -786,7 +794,7 @@ export const generatePL2PDF = async (record, piRecords = [], lcRecords = [], imp
                 const imgProps = doc.getImageProperties(record.productsImage);
                 const imgWidth = descColWidth - 6;
                 const imgHeight = (imgProps.height * imgWidth) / imgProps.width;
-                descRowHeight = exactDescHeight - 8.5 + imgHeight + 3;
+                descRowHeight = exactDescHeight + imgHeight + 5;
             } catch (e) {
                 descRowHeight = exactDescHeight + 50;
             }
@@ -1025,6 +1033,17 @@ export const generatePL2PDF = async (record, piRecords = [], lcRecords = [], imp
         }
     });
     y = doc.lastAutoTable.finalY;
+
+    // Ensure all content fits on the page by checking remaining space for the footer
+    const footerMinSpace = 40; // minimum space needed for Amount Chargeable + Declaration + Signature
+    if (pageHeight - margin - y < footerMinSpace) {
+        doc.addPage();
+        // Redraw page border for the new page
+        doc.setDrawColor(0);
+        doc.setLineWidth(0.1);
+        doc.rect(margin, margin + 8, contentWidth, pageHeight - (2 * margin) - 8);
+        y = margin + 10;
+    }
 
     // Total Row
     let grandTotal = 0;

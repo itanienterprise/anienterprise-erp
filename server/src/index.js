@@ -389,11 +389,141 @@ apiRouter.delete('/api/ports/:id', async (req, res) => {
   }
 });
 
+const escapeRegExp = (string) => {
+  return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+};
+
+const updateModelPorts = async (Model, oldPortName, newPortName, oldPortCode, newPortCode) => {
+  const documents = await Model.find({});
+  for (const doc of documents) {
+    let rawDecrypted = decryptData(doc.data);
+    if (!rawDecrypted) continue;
+    
+    // Auto-fallback check if there is double encryption
+    let isDoubleEncrypted = false;
+    if (rawDecrypted && rawDecrypted.data && typeof rawDecrypted.data === 'string') {
+      try {
+        const secondary = decryptData(rawDecrypted.data);
+        if (secondary) {
+          rawDecrypted = secondary;
+          isDoubleEncrypted = true;
+        }
+      } catch (e) {}
+    }
+
+    let modified = false;
+    
+    const updateHelper = (obj) => {
+      if (obj === null || obj === undefined) return obj;
+      
+      if (typeof obj === 'string') {
+        let updatedStr = obj;
+        if (oldPortName && newPortName && oldPortName.trim().length >= 3) {
+          const regexName = new RegExp(escapeRegExp(oldPortName.trim()), 'gi');
+          if (regexName.test(updatedStr)) {
+            updatedStr = updatedStr.replace(regexName, newPortName.trim());
+            modified = true;
+          }
+        }
+        if (oldPortCode && newPortCode && oldPortCode.trim().length >= 2) {
+          const regexCode = new RegExp(escapeRegExp(oldPortCode.trim()), 'gi');
+          if (regexCode.test(updatedStr)) {
+            updatedStr = updatedStr.replace(regexCode, newPortCode.trim());
+            modified = true;
+          }
+        }
+        return updatedStr;
+      }
+      
+      if (Array.isArray(obj)) {
+        let arrayModified = false;
+        const mapped = obj.map(item => {
+          const originalStr = JSON.stringify(item);
+          const updatedItem = updateHelper(item);
+          if (JSON.stringify(updatedItem) !== originalStr) {
+            arrayModified = true;
+          }
+          return updatedItem;
+        });
+        if (arrayModified) modified = true;
+        return mapped;
+      }
+      
+      if (typeof obj === 'object') {
+        const updatedObj = {};
+        for (const key in obj) {
+          if (Object.prototype.hasOwnProperty.call(obj, key)) {
+            const originalValStr = JSON.stringify(obj[key]);
+            updatedObj[key] = updateHelper(obj[key]);
+            if (JSON.stringify(updatedObj[key]) !== originalValStr) {
+              modified = true;
+            }
+          }
+        }
+        return updatedObj;
+      }
+      
+      return obj;
+    };
+
+    const updatedData = updateHelper(rawDecrypted);
+    
+    if (modified) {
+      let encrypted;
+      if (isDoubleEncrypted) {
+        encrypted = encryptData(encryptData(updatedData));
+      } else {
+        encrypted = encryptData(updatedData);
+      }
+      doc.data = encrypted;
+      await doc.save();
+    }
+  }
+};
+
 apiRouter.put('/api/ports/:id', async (req, res) => {
   try {
+    const existingPortDoc = await Port.findById(req.params.id);
+    if (!existingPortDoc) return res.status(404).json({ message: 'Port not found' });
+
+    let oldPortName = '';
+    let oldPortCode = '';
+    try {
+      const oldPortData = decryptData(existingPortDoc.data);
+      if (oldPortData) {
+        oldPortName = oldPortData.name;
+        oldPortCode = oldPortData.code;
+      }
+    } catch (e) {
+      console.error('Error decrypting old port data during propagation check:', e);
+    }
+
     const encryptedData = encryptData(req.body);
     const updatedPort = await Port.findByIdAndUpdate(req.params.id, { data: encryptedData }, { returnDocument: 'after' });
     if (!updatedPort) return res.status(404).json({ message: 'Port not found' });
+
+    const newPortName = req.body.name;
+    const newPortCode = req.body.code;
+
+    const nameChanged = oldPortName && newPortName && oldPortName.trim() !== newPortName.trim();
+    const codeChanged = oldPortCode && newPortCode && oldPortCode.trim() !== newPortCode.trim();
+
+    if (nameChanged || codeChanged) {
+      const modelsToUpdate = [
+        PI, PackingList, LCManagement, Sale, TRSetup, Stock, 
+        Damage, Return, Insurance, CnF, CnFPayment, InsurancePayment, 
+        LCExpense, LCGatePass
+      ];
+      
+      for (const Model of modelsToUpdate) {
+        try {
+          await updateModelPorts(Model, oldPortName, newPortName, oldPortCode, newPortCode);
+        } catch (modelErr) {
+          console.error(`Error updating port reference in model ${Model.modelName}:`, modelErr);
+        }
+      }
+    }
+
     res.json({ ...req.body, _id: updatedPort._id, createdAt: updatedPort.createdAt });
   } catch (err) {
     res.status(400).json({ message: err.message });

@@ -1,7 +1,7 @@
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 
-// Helper function to convert number to words for BDT
+// Helper function to convert number to words for USD
 const numberToWordsUSD = (amount) => {
     const units = ['', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine'];
     const teens = ['Ten', 'Eleven', 'Twelve', 'Thirteen', 'Fourteen', 'Fifteen', 'Sixteen', 'Seventeen', 'Eighteen', 'Nineteen'];
@@ -27,34 +27,30 @@ const numberToWordsUSD = (amount) => {
         return chunkStr;
     };
 
-    if (amount === 0) return 'Zero Taka Only';
+    if (amount === 0) return 'Zero.';
 
     const parts = amount.toFixed(2).split('.');
-    let taka = parseInt(parts[0]);
-    let paisa = parseInt(parts[1]);
+    let dollar = parseInt(parts[0]);
+    let cents = parseInt(parts[1]);
 
     let words = '';
 
-    if (taka === 0) {
+    if (dollar === 0) {
         words = 'Zero ';
     } else {
         let tw = '';
-        if (taka >= 10000000) { tw += convertChunk(Math.floor(taka / 10000000)) + 'Crore '; taka %= 10000000; }
-        if (taka >= 100000) { tw += convertChunk(Math.floor(taka / 100000)) + 'Lakh '; taka %= 100000; }
-        if (taka >= 1000) { tw += convertChunk(Math.floor(taka / 1000)) + 'Thousand '; taka %= 1000; }
-        if (taka > 0) { tw += convertChunk(taka); }
+        if (dollar >= 10000000) { tw += convertChunk(Math.floor(dollar / 10000000)) + 'Crore '; dollar %= 10000000; }
+        if (dollar >= 100000) { tw += convertChunk(Math.floor(dollar / 100000)) + 'Lakh '; dollar %= 100000; }
+        if (dollar >= 1000) { tw += convertChunk(Math.floor(dollar / 1000)) + 'Thousand '; dollar %= 1000; }
+        if (dollar > 0) { tw += convertChunk(dollar); }
         words = tw;
     }
 
-    words += 'Taka ';
-
-    if (paisa > 0) {
-        words += 'And ' + convertChunk(paisa) + 'Paisa Only';
-    } else {
-        words += 'Only';
+    if (cents > 0) {
+        words += 'And Cents ' + convertChunk(cents);
     }
 
-    return words.replace(/\s+/g, ' ').trim();
+    return words.replace(/\s+/g, ' ').trim() + '.';
 };
 
 export const generatePIPDF = (record) => {
@@ -144,8 +140,25 @@ export const generatePIPDF = (record) => {
         exporterInfo = exporterInfo.trim() + `\n${expContactLine}`;
     }
 
-    const exporterLines = doc.splitTextToSize(exporterInfo.trim(), leftColWidth - 10);
-    doc.text(exporterLines, margin + leftColWidth / 2, y + 21, { align: 'center' });
+    // Render exporter address: each logical line (split by \n) is compressed
+    // via charSpace to fit in one column-width if needed.
+    const exporterColWidth = leftColWidth - 10;
+    const exporterRawLines = exporterInfo.trim().split('\n');
+    const exporterCenterX = margin + leftColWidth / 2;
+    let expLineY = y + 21;
+    const expLineH = 4;
+    exporterRawLines.forEach(rawLine => {
+        const trimmed = rawLine.trim();
+        if (!trimmed) { expLineY += expLineH; return; }
+        const w = doc.getTextWidth(trimmed);
+        if (w > exporterColWidth) {
+            const cs = (exporterColWidth - w) / (trimmed.length - 1);
+            doc.text(trimmed, exporterCenterX, expLineY, { align: 'center', charSpace: cs });
+        } else {
+            doc.text(trimmed, exporterCenterX, expLineY, { align: 'center' });
+        }
+        expLineY += expLineH;
+    });
 
     // PI Info Content
     const rawPiNumber = record.piNumber || '';
@@ -235,7 +248,29 @@ export const generatePIPDF = (record) => {
             })
             .join('\n');
     }
-    const termsRefLinesInRow2 = doc.splitTextToSize(termsText, rightColWidth - 5);
+    // Split at AGAINST so the delivery clause always occupies exactly one line
+    // (compressed via charSpace if needed) and the rest wraps normally below.
+    const termsTextFormatted = termsText.replace(/ ?\n(?!Packing:)/g, ' ');
+    const termsMaxWidth = rightColWidth - 5;
+    const againstIdxT = termsTextFormatted.toUpperCase().indexOf('AGAINST');
+    let deliveryClause = '';
+    let deliveryCharSpace = 0;
+    let restTermsLines = [];
+    let termsRefLinesInRow2;
+    if (againstIdxT !== -1) {
+        deliveryClause = termsTextFormatted.substring(0, againstIdxT + 7).trim();
+        const restText = termsTextFormatted.substring(againstIdxT + 7).trimStart();
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(9);
+        const dw = doc.getTextWidth(deliveryClause);
+        if (dw > termsMaxWidth) {
+            deliveryCharSpace = (termsMaxWidth - dw) / (deliveryClause.length - 1);
+        }
+        restTermsLines = restText ? doc.splitTextToSize(restText, termsMaxWidth) : [];
+        termsRefLinesInRow2 = [deliveryClause, ...restTermsLines];
+    } else {
+        termsRefLinesInRow2 = doc.splitTextToSize(termsTextFormatted, termsMaxWidth);
+    }
     const termsHeight = termsRefLinesInRow2.length * 4;
     const saftaHeight = showSafta ? 12 : 0;
     let row2Height = Math.max(55, 24 + termsHeight + saftaHeight);
@@ -364,7 +399,14 @@ export const generatePIPDF = (record) => {
     doc.setFontSize(8);
     doc.text("Terms of Delivery and Payment", midX + 2, y + 14);
     doc.setFontSize(9);
-    doc.text(termsRefLinesInRow2, midX + 2, y + 20);
+    if (deliveryClause) {
+        doc.text(deliveryClause, midX + 2, y + 20, { charSpace: deliveryCharSpace });
+        restTermsLines.forEach((line, idx) => {
+            doc.text(line, midX + 2, y + 20 + ((idx + 1) * 4));
+        });
+    } else {
+        doc.text(termsRefLinesInRow2, midX + 2, y + 20);
+    }
 
     if (showSafta) {
         const saftaY = y + 20 + termsHeight + 4;
@@ -696,19 +738,34 @@ export const generatePIPDF = (record) => {
     const totalY = y;
 
     const wordsVal = numberToWordsUSD(parseFloat(record.grandTotal || 0));
-    const fullWordsText = `Amount Chargeable in words: US Dollar: ${wordsVal}`;
+    const labelText = "Amount Chargeable in words: US Dollar: ";
     const maxWordWidth = pageWidth - margin - 70 - (margin + 2); // 190 - 70 - 2 = 118
-    const wrappedWords = doc.splitTextToSize(fullWordsText, maxWordWidth);
 
-    const rowHeight = wrappedWords.length > 1 ? 13 : 9;
-    doc.line(margin, totalY, pageWidth - margin, totalY);
-
-    // 1. Draw Amount in word on the LEFT
+    // Measure label (normal) and value (bold) at font size 8.5
     doc.setFont("helvetica", "normal");
     doc.setFontSize(8.5);
-    wrappedWords.forEach((lineText, lIdx) => {
-        doc.text(lineText, margin + 2, totalY + 5.5 + (lIdx * 4.5));
-    });
+    const labelWidth = doc.getTextWidth(labelText);
+
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(8.5);
+    const valueWidth = doc.getTextWidth(wordsVal);
+    const availableForValue = maxWordWidth - labelWidth;
+
+    // Compress value via charSpace to always fit on the same line as the label
+    const valueCharSpace = valueWidth > availableForValue
+        ? (availableForValue - valueWidth) / (wordsVal.length - 1)
+        : 0;
+
+    const rowHeight = 9;
+    doc.line(margin, totalY, pageWidth - margin, totalY);
+
+    // 1. Draw label (normal) then value (bold) on the same line
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(8.5);
+    doc.text(labelText, margin + 2, totalY + 5.5);
+
+    doc.setFont("helvetica", "bold");
+    doc.text(wordsVal, margin + 2 + labelWidth, totalY + 5.5, { charSpace: valueCharSpace });
 
     // 2. Draw TOTAL on the RIGHT
     doc.setFont("helvetica", "bold");

@@ -556,6 +556,7 @@ export const generateLCReceiveReportPDF = (reportData, filters, summary) => {
                 }
             ]],
             theme: 'plain',
+            showFoot: 'lastPage',
             styles: {
                 fontSize: 9.0,
                 cellPadding: 1.5,
@@ -2192,6 +2193,7 @@ export const generateProductHistoryPDF = (productName, category, activeTab, purc
                 body: unifiedBody,
                 foot: unifiedFoot,
                 theme: 'grid',
+                showFoot: 'lastPage',
                 styles: { fontSize: 9, cellPadding: 1, lineColor: [0, 0, 0], lineWidth: 0.1, font: 'helvetica', textColor: [0, 0, 0], minCellHeight: 0 },
                 headStyles: { fillColor: [245, 245, 245], textColor: [0, 0, 0], fontStyle: 'bold', halign: 'center' },
                 footStyles: { fillColor: [245, 245, 245], textColor: [0, 0, 0], fontStyle: 'bold', lineWidth: 0.1 },
@@ -2250,6 +2252,7 @@ export const generateProductHistoryPDF = (productName, category, activeTab, purc
                 body: purchaseBody,
                 foot: purchaseFoot,
                 theme: 'grid',
+                showFoot: 'lastPage',
                 styles: { fontSize: 8.5, cellPadding: 1, lineColor: [0, 0, 0], lineWidth: 0.1, font: 'helvetica', textColor: [0, 0, 0], minCellHeight: 0 },
                 headStyles: { fillColor: [245, 245, 245], textColor: [0, 0, 0], fontStyle: 'bold', halign: 'center' },
                 footStyles: { fillColor: [245, 245, 245], textColor: [0, 0, 0], fontStyle: 'bold', lineWidth: 0.1 },
@@ -2342,6 +2345,7 @@ export const generateProductHistoryPDF = (productName, category, activeTab, purc
                 body: saleBody,
                 foot: saleFoot,
                 theme: 'grid',
+                showFoot: 'lastPage',
                 styles: { fontSize: 9, cellPadding: 1, lineColor: [0, 0, 0], lineWidth: 0.1, font: 'helvetica', textColor: [0, 0, 0], minCellHeight: 0 },
                 headStyles: { fillColor: [245, 245, 245], textColor: [0, 0, 0], fontStyle: 'bold', halign: 'center' },
                 footStyles: { fillColor: [245, 245, 245], textColor: [0, 0, 0], fontStyle: 'bold', lineWidth: 0.1 },
@@ -2563,6 +2567,7 @@ export const generateSalesReportPDF = (reportData, filters, summary, saleType = 
             body: tableRows,
             foot: footRow,
             theme: 'grid',
+            showFoot: 'lastPage',
             styles: {
                 fontSize: 9,
                 cellPadding: 1,
@@ -3184,6 +3189,7 @@ export const generateCustomerHistoryPDF = (customer, historyData, summary, filte
                 body: tableRows,
                 foot: [foot],
                 theme: 'grid',
+                showFoot: 'lastPage',
                 styles: { fontSize: 8.5, cellPadding: 1.5, lineColor: [0, 0, 0], lineWidth: 0.1, textColor: [0, 0, 0], valign: 'middle' },
                 headStyles: { fillColor: [245, 245, 245], fontStyle: 'bold', halign: 'center' },
                 columnStyles: isParty ? {
@@ -3496,6 +3502,7 @@ export const generateCnFHistoryReportPDF = (reportData, agentInfo, filters) => {
                 { content: totalCommissionVal.toLocaleString('en-IN', { minimumFractionDigits: 2 }), styles: { halign: 'right', fontStyle: 'bold' } }
             ]],
             theme: 'plain',
+            showFoot: 'lastPage',
             styles: {
                 fontSize: 9.5,
                 cellPadding: 1.2,
@@ -3645,6 +3652,7 @@ export const generateCnFExpenseReportPDF = (reportData, agentInfo, filters) => {
                 { content: totalAmount.toLocaleString('en-IN', { minimumFractionDigits: 2 }), styles: { halign: 'right', fontStyle: 'bold' } }
             ]],
             theme: 'plain',
+            showFoot: 'lastPage',
             styles: {
                 fontSize: 9.5,
                 cellPadding: 2,
@@ -3917,6 +3925,7 @@ export const generateCnFPaymentReportPDF = (reportData, agentInfo, filters) => {
                 { content: totalDiscount.toLocaleString('en-IN', { minimumFractionDigits: 2 }), styles: { halign: 'right', fontStyle: 'bold' } }
             ]],
             theme: 'plain',
+            showFoot: 'lastPage',
             styles: {
                 fontSize: 9.5,
                 cellPadding: 2,
@@ -4072,6 +4081,7 @@ export const generateCnFAllReportPDF = (reportData, agentInfo, filters) => {
                 { content: lastBalance.toLocaleString('en-IN', { minimumFractionDigits: 2 }), styles: { halign: 'right', fontStyle: 'bold' } }
             ]],
             theme: 'plain',
+            showFoot: 'lastPage',
             styles: {
                 fontSize: 8,
                 cellPadding: 1.5,
