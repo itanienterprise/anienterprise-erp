@@ -125,7 +125,7 @@ function PI({
         marksNo: '',
         noKindPackage: '',
         descriptionGoods: DEFAULT_DESC_GOODS,
-        termsDeliveryPayment: 'CPT [PORT OF DISCHARGE], BANGLADESH, BY ROAD, BY TRUCK AGAINST 100% Irrevocable at Sight Letter of Credit valid for 90 days & Negotiable within 21 days of Shipment.\nPacking: Export Standard P.P/Gunny Bags.',
+        termsDeliveryPayment: 'CPT [PORT OF DISCHARGE], BANGLADESH, BY ROAD, BY TRUCK AGAINST \nIrrevocable at Sight Letter of Credit valid for 90 days & Negotiable within 21 days of Shipment.\nPacking: Export Standard P.P/Gunny Bags.',
         declaration: DEFAULT_DECLARATION,
         status: 'Active',
         certification: 'Value & Quantity, Country of Origin',
@@ -231,58 +231,231 @@ function PI({
     };
 
     // Compute IP Balance: IP Qty - actual consumption (stock receipts + border sales)
+    // Compute IP Balance using sequential group consumption per product:
+    // IPs with the same product share a pool of actual receipts/sales — fill first IP completely before next.
     const computeIpBalance = useMemo(() => {
         const balanceMap = {};
+
+        // Helper: match product names with local name and ipName support
+        const matchProduct = (nameA, nameB) => {
+            const cleanA = (nameA || '').toLowerCase().trim();
+            const cleanB = (nameB || '').toLowerCase().trim();
+            if (!cleanA || !cleanB) return false;
+            if (cleanA === cleanB) return true;
+
+            const prod = products.find(p => {
+                const pName = (p.name || '').toLowerCase().trim();
+                const pIpName = (p.ipName || '').toLowerCase().trim();
+                return (pName === cleanA && pIpName === cleanB) || (pName === cleanB && pIpName === cleanA);
+            });
+            return !!prod;
+        };
+
+        // Group IPs by product name
+        const ipsByProduct = {};
         ipRecords.forEach(ip => {
-            const ipNoClean = cleanLc(ip.ipNumber);
-            const relatedLcs = lcRecords.filter(lc => {
+            const productKey = (ip.productName || '').toLowerCase().trim();
+            if (!productKey) {
+                balanceMap[ip.ipNumber] = parseNum(ip.quantity) || 0;
+                return;
+            }
+            if (!ipsByProduct[productKey]) ipsByProduct[productKey] = [];
+            ipsByProduct[productKey].push(ip);
+        });
+
+        Object.entries(ipsByProduct).forEach(([productKey, ipsGroup]) => {
+            // Sort IPs ascending by numeric IP number: lowest consumed first
+            const sortedIps = [...ipsGroup].sort((a, b) => {
+                const aNum = parseFloat(cleanLc(a.ipNumber)) || 0;
+                const bNum = parseFloat(cleanLc(b.ipNumber)) || 0;
+                if (aNum !== bNum) return aNum - bNum;
+                return (a.ipNumber || '').localeCompare(b.ipNumber || '');
+            });
+
+            // Collect unique LCs linked to ANY IP in this group
+            const groupIpNumsClean = new Set(sortedIps.map(ip => cleanLc(ip.ipNumber)));
+            const seenLcIds = new Set();
+            const allGroupLcNums = new Set();
+            lcRecords.forEach(lc => {
                 const lcIps = Array.isArray(lc.ipNumbers) && lc.ipNumbers.length > 0
                     ? lc.ipNumbers.map(s => cleanLc(s)).filter(Boolean)
                     : (lc.ipNo || '').split(',').map(s => cleanLc(s.trim())).filter(Boolean);
-                return lcIps.includes(ipNoClean);
+                if (lcIps.some(lcIp => groupIpNumsClean.has(lcIp))) {
+                    const lcId = String(lc._id || lc.lcNo || JSON.stringify(lc));
+                    if (!seenLcIds.has(lcId)) {
+                        seenLcIds.add(lcId);
+                        if (lc.lcNo) allGroupLcNums.add(cleanLc(lc.lcNo));
+                    }
+                }
             });
-            const lcNumbers = relatedLcs.map(lc => cleanLc(lc.lcNo));
 
-            const ipReceiptsMap = {};
+            // Sum unique stock receipts for all group LCs matching the product name
+            const groupReceiptsMap = {};
             allStockRecords.forEach(s => {
                 const sLcClean = cleanLc(s.lcNo);
                 const status = (s.status || '').toLowerCase();
-                if (lcNumbers.includes(sLcClean) && (status === 'accepted' || status === 'in stock')) {
+                if (allGroupLcNums.has(sLcClean) && (status === 'accepted' || status === 'in stock')) {
                     const rawDate = s.date || s.receiveDate || s.createdAt || '';
                     const dateStr = typeof rawDate === 'string' && rawDate.includes('T') ? rawDate.split('T')[0] : rawDate;
                     const groupVal = s.totalLcQuantity || s.billOfEntry || s.totalLcTruck || s.truckNo || s.truck || 'single';
                     const key = `${sLcClean}_${dateStr}_${groupVal}`;
-                    if (!ipReceiptsMap[key]) {
-                        const itemSubtotal = (s.entries || []).reduce((iSum, item) => iSum + parseNum(item.inHouseQuantity || item.quantity), 0);
-                        ipReceiptsMap[key] = parseNum(s.totalLcQuantity) || itemSubtotal || parseNum(s.inHouseQuantity) || parseNum(s.quantity);
-                    } else {
-                        if (!s.totalLcQuantity) {
-                            ipReceiptsMap[key] += parseNum(s.inHouseQuantity) || parseNum(s.quantity);
+
+                    // Filter entries matching the product name
+                    let productQty = 0;
+                    if (s.entries && s.entries.length > 0) {
+                        productQty = s.entries
+                            .filter(item => matchProduct(item.productName, productKey))
+                            .reduce((iSum, item) => iSum + parseNum(item.inHouseQuantity || item.quantity), 0);
+                    } else if (matchProduct(s.productName, productKey)) {
+                        productQty = parseNum(s.inHouseQuantity) || parseNum(s.quantity);
+                    }
+
+                    if (productQty > 0) {
+                        if (!groupReceiptsMap[key]) {
+                            groupReceiptsMap[key] = productQty;
+                        } else {
+                            groupReceiptsMap[key] += productQty;
                         }
                     }
                 }
             });
-            let totalConsumption = Object.values(ipReceiptsMap).reduce((sum, qty) => sum + qty, 0);
+            let totalGroupConsumption = Object.values(groupReceiptsMap).reduce((sum, qty) => sum + qty, 0);
 
+            // Sum unique border sales for all group LCs matching the product name
             allSalesRecords.forEach(s => {
                 const sLcClean = cleanLc(s.lcNo);
                 const status = (s.status || '').toLowerCase();
                 const sTypeLow = (s.saleType || '').toLowerCase().trim();
                 const isBorder = sTypeLow.includes('border') || (s.invoiceNo || '').startsWith('BS') || (!s.saleType && !!(s.lcNo || s.port || s.importer));
-                if (lcNumbers.includes(sLcClean) && status === 'accepted' && isBorder) {
-                    const itemSubtotal = (s.items || []).reduce((iSum, item) => {
-                        const brandSubtotal = (item.brandEntries || []).reduce((bSum, b) => bSum + parseNum(b.quantity), 0);
-                        return iSum + (brandSubtotal || parseNum(item.quantity));
-                    }, 0);
-                    const qty = parseNum(s.currentTotalQty) || parseNum(s.totalQuantity) || parseNum(s.totalQty) || parseNum(s.qty) || parseNum(s.quantity) || parseNum(s.total) || itemSubtotal;
-                    totalConsumption += qty;
+                if (allGroupLcNums.has(sLcClean) && status === 'accepted' && isBorder) {
+                    let productSaleQty = 0;
+                    if (s.items && s.items.length > 0) {
+                        productSaleQty = s.items
+                            .filter(item => matchProduct(item.productName, productKey))
+                            .reduce((iSum, item) => {
+                                const brandSubtotal = (item.brandEntries || []).reduce((bSum, b) => bSum + parseNum(b.quantity), 0);
+                                return iSum + (brandSubtotal || parseNum(item.quantity));
+                            }, 0);
+                    } else if (matchProduct(s.productName, productKey)) {
+                        productSaleQty = parseNum(s.currentTotalQty) || parseNum(s.totalQuantity) || parseNum(s.totalQty) || parseNum(s.qty) || parseNum(s.quantity) || parseNum(s.total);
+                    }
+
+                    if (productSaleQty > 0) {
+                        totalGroupConsumption += productSaleQty;
+                    }
                 }
             });
 
-            balanceMap[ip.ipNumber] = (parseNum(ip.quantity) || 0) - totalConsumption;
+            // Distribute sequentially: fill first IP, then next...
+            let remainingConsumption = totalGroupConsumption;
+            sortedIps.forEach(ip => {
+                const ipQty = parseNum(ip.quantity) || 0;
+                const consumed = Math.min(remainingConsumption, ipQty);
+                balanceMap[ip.ipNumber] = ipQty - consumed;
+                remainingConsumption = Math.max(0, remainingConsumption - consumed);
+            });
         });
+
         return balanceMap;
-    }, [ipRecords, lcRecords, allStockRecords, allSalesRecords]);
+    }, [ipRecords, lcRecords, allStockRecords, allSalesRecords, products]);
+
+
+    // Compute LC REM (LC Remaining) using sequential IP consumption per product group:
+    // IPs with the same product name share a pool of LC consumption.
+    // LCs are deduplicated across the group, total LC qty summed, then consumed
+    // sequentially — first IP filled completely, then second, and so on.
+    const computeLcBalance = useMemo(() => {
+        const balanceMap = {};
+
+        // Helper: match product names with local name and ipName support
+        const matchProduct = (nameA, nameB) => {
+            const cleanA = (nameA || '').toLowerCase().trim();
+            const cleanB = (nameB || '').toLowerCase().trim();
+            if (!cleanA || !cleanB) return false;
+            if (cleanA === cleanB) return true;
+
+            const prod = products.find(p => {
+                const pName = (p.name || '').toLowerCase().trim();
+                const pIpName = (p.ipName || '').toLowerCase().trim();
+                return (pName === cleanA && pIpName === cleanB) || (pName === cleanB && pIpName === cleanA);
+            });
+            return !!prod;
+        };
+
+        // Helper: get LC quantity for a given product name (in Kg)
+        const getLcProductQtyInKg = (lc, productKey) => {
+            if (Array.isArray(lc.productsList) && lc.productsList.length > 0) {
+                const matched = lc.productsList.filter(p =>
+                    matchProduct(p.productName, productKey)
+                );
+                if (matched.length > 0) {
+                    return matched.reduce((sum, p) => sum + (parseNum(p.quantity) * 1000), 0);
+                }
+            }
+            if (matchProduct(lc.productName, productKey)) {
+                return parseNum(lc.quantity) * 1000;
+            }
+            return 0;
+        };
+
+        // Group IPs by product name
+        const ipsByProduct = {};
+        ipRecords.forEach(ip => {
+            const productKey = (ip.productName || '').toLowerCase().trim();
+            if (!productKey) {
+                // No product — independent balance = full quantity (no LC links expected)
+                balanceMap[ip.ipNumber] = parseNum(ip.quantity) || 0;
+                return;
+            }
+            if (!ipsByProduct[productKey]) ipsByProduct[productKey] = [];
+            ipsByProduct[productKey].push(ip);
+        });
+
+        Object.entries(ipsByProduct).forEach(([productKey, ipsGroup]) => {
+            // Sort IPs ascending by numeric IP number so first IP is consumed first
+            const sortedIps = [...ipsGroup].sort((a, b) => {
+                const aNum = parseFloat(cleanLc(a.ipNumber)) || 0;
+                const bNum = parseFloat(cleanLc(b.ipNumber)) || 0;
+                if (aNum !== bNum) return aNum - bNum;
+                return (a.ipNumber || '').localeCompare(b.ipNumber || '');
+            });
+
+            // Collect unique LCs linked to ANY IP in this product group
+            const groupIpNumsClean = new Set(sortedIps.map(ip => cleanLc(ip.ipNumber)));
+            const seenLcIds = new Set();
+            const allGroupLcs = [];
+            lcRecords.forEach(lc => {
+                const lcIps = Array.isArray(lc.ipNumbers) && lc.ipNumbers.length > 0
+                    ? lc.ipNumbers.map(s => cleanLc(s)).filter(Boolean)
+                    : (lc.ipNo || '').split(',').map(s => cleanLc(s.trim())).filter(Boolean);
+                if (lcIps.some(lcIp => groupIpNumsClean.has(lcIp))) {
+                    const lcId = String(lc._id || lc.lcNo || JSON.stringify(lc));
+                    if (!seenLcIds.has(lcId)) {
+                        seenLcIds.add(lcId);
+                        allGroupLcs.push(lc);
+                    }
+                }
+            });
+
+            // Total LC quantity consumed for this product across all group LCs
+            const totalLcQty = allGroupLcs.reduce(
+                (sum, lc) => sum + getLcProductQtyInKg(lc, productKey),
+                0
+            );
+
+            // Distribute sequentially: fill first IP, then next, then next...
+            let remainingLcQty = totalLcQty;
+            sortedIps.forEach(ip => {
+                const ipQty = parseNum(ip.quantity) || 0;
+                const consumed = Math.min(remainingLcQty, ipQty);
+                balanceMap[ip.ipNumber] = ipQty - consumed;
+                remainingLcQty = Math.max(0, remainingLcQty - consumed);
+            });
+        });
+
+        return balanceMap;
+    }, [ipRecords, lcRecords, products]);
+
 
     const calculatedGrandTotalQuantity = useMemo(() => {
         if (!formData.productsList || formData.productsList.length === 0) return 0;
@@ -601,7 +774,7 @@ function PI({
                         currentIpNumbers.push(value);
                         updated.ipNumbers = currentIpNumbers;
 
-                        const product = products.find(p => p.name === ip.productName);
+                        const product = products.find(p => (p.ipName || p.name) === ip.productName);
                         const hCode = product ? (product.hsCode || '') : '';
                         const hCodeInd = product ? (product.hsCodeInd || '') : '';
 
@@ -618,8 +791,15 @@ function PI({
                         };
 
                         const currentProducts = [...(prev.productsList || [])];
-                        // If only one empty product exists, replace it
-                        if (currentProducts.length === 1 && !currentProducts[0].productName) {
+                        // Skip adding product if same product name already exists
+                        const productAlreadyExists = currentProducts.some(p =>
+                            (p.productName || '').toLowerCase().trim() === (ip.productName || '').toLowerCase().trim()
+                        );
+                        if (productAlreadyExists) {
+                            // Don't add duplicate product row; keep existing list
+                            updated.productsList = currentProducts;
+                        } else if (currentProducts.length === 1 && !currentProducts[0].productName) {
+                            // Replace empty placeholder row
                             updated.productsList = [newProduct];
                         } else {
                             updated.productsList = [...currentProducts, newProduct];
@@ -685,7 +865,7 @@ function PI({
             }
 
             if (field === 'productName') {
-                const product = products.find(p => p.name === value);
+                const product = products.find(p => (p.ipName || p.name) === value);
                 if (product) {
                     updated.hsCode = product.hsCode || '';
                 }
@@ -731,8 +911,18 @@ function PI({
             e.preventDefault();
             if (highlightedIndex >= 0 && highlightedIndex < options.length) {
                 const selected = options[highlightedIndex];
-                const value = selected.name || selected;
-                handleDropdownSelect(field || dropdownId, value);
+                const value = selected.ipName || selected.name || selected;
+
+                if (dropdownId.startsWith('product_')) {
+                    const idx = parseInt(dropdownId.split('_')[1]);
+                    handleProductFieldChange(idx, 'productName', value);
+                    handleProductFieldChange(idx, 'hsCode', selected.hsCode || '');
+                    handleProductFieldChange(idx, 'hsCodeInd', selected.hsCodeInd || '');
+                    setActiveDropdown(null);
+                    setHighlightedIndex(-1);
+                } else {
+                    handleDropdownSelect(field || dropdownId, value);
+                }
             }
         } else if (e.key === 'Escape') {
             setActiveDropdown(null);
@@ -755,6 +945,54 @@ function PI({
             return;
         }
 
+        // Validate product quantities against TOTAL LC REM (sum across all IPs with same product)
+        const productsToValidate = formData.productsList || [];
+        const ipNumbersToValidate = formData.ipNumbers || [];
+        for (const item of productsToValidate) {
+            if (!item.productName || !item.quantity) continue;
+            const itemQty = parseFloat(item.quantity) || 0;
+            if (itemQty <= 0) continue;
+
+            // When EDITING: we only validate the increased quantity against LC REM
+            let oldQty = 0;
+            if (editingId) {
+                const origRecord = records.find(r => r._id === editingId);
+                if (origRecord) {
+                    const origList = getPiProductsList(origRecord);
+                    const origItem = origList.find(p =>
+                        (p.productName || '').toLowerCase().trim() === (item.productName || '').toLowerCase().trim()
+                    );
+                    oldQty = parseFloat(origItem?.quantity) || 0;
+                }
+            }
+            const increasedQty = Math.max(0, itemQty - oldQty);
+            if (increasedQty <= 0) continue; // Not increased — skip LC REM check
+
+            // Find ALL selected IPs that share the same product name
+            const matchingIpNums = ipNumbersToValidate.filter(num => {
+                const rec = ipRecords.find(r => r.ipNumber === num);
+                return rec && (rec.productName || '').toLowerCase().trim() === (item.productName || '').toLowerCase().trim();
+            });
+
+            if (matchingIpNums.length > 0) {
+                // Sum LC REM for all matching IPs
+                const totalLcRem = matchingIpNums.reduce((sum, num) => {
+                    const lcRem = computeLcBalance[num];
+                    return sum + (lcRem !== undefined ? lcRem : 0);
+                }, 0);
+
+                if (increasedQty > totalLcRem) {
+                    const ipList = matchingIpNums.join(', ');
+                    showToast(
+                        `⚠️ Warning: Product "${item.productName}" increased quantity (${increasedQty.toLocaleString()} Kg) exceeds combined LC REM (${totalLcRem.toLocaleString('en-US')} Kg) across IP(s): ${ipList}. Please reduce the quantity before saving.`,
+                        'error'
+                    );
+                    return;
+                }
+            }
+        }
+
+
         setIsSubmitting(true);
         setSubmitStatus(null);
 
@@ -763,6 +1001,36 @@ function PI({
             grandTotal: calculatedGrandTotal > 0 ? calculatedGrandTotal.toFixed(2) : '',
             grandTotalQuantity: calculatedGrandTotalQuantity > 0 ? calculatedGrandTotalQuantity.toFixed(2) : ''
         };
+
+        // Capture IP Balance + LC REM snapshots at the moment of FIRST creation.
+        // When editing, preserve existing snapshots and only add for newly added IPs.
+        if (!editingId) {
+            const ipSnapshots = {};
+            (formData.ipNumbers || []).forEach(ipNum => {
+                const bal = computeIpBalance[ipNum];
+                const rem = computeLcBalance[ipNum];
+                ipSnapshots[ipNum] = {
+                    ipBalance: bal !== undefined ? bal : null,
+                    lcRem: rem !== undefined ? rem : null
+                };
+            });
+            submissionData.ipSnapshots = ipSnapshots;
+        } else {
+            // Preserve original snapshots; add entries for any newly added IPs
+            const existingSnapshots = formData.ipSnapshots || {};
+            const mergedSnapshots = { ...existingSnapshots };
+            (formData.ipNumbers || []).forEach(ipNum => {
+                if (!(ipNum in mergedSnapshots)) {
+                    const bal = computeIpBalance[ipNum];
+                    const rem = computeLcBalance[ipNum];
+                    mergedSnapshots[ipNum] = {
+                        ipBalance: bal !== undefined ? bal : null,
+                        lcRem: rem !== undefined ? rem : null
+                    };
+                }
+            });
+            submissionData.ipSnapshots = mergedSnapshots;
+        }
 
         try {
             const url = editingId
@@ -929,7 +1197,8 @@ function PI({
             status: record.status || 'Active',
             invoiceStyle: record.invoiceStyle || 'Style 1 SAA',
             certification: record.certification || '',
-            packingType: record.packingType || ''
+            packingType: record.packingType || '',
+            ipSnapshots: record.ipSnapshots || {}
         });
         setEditingId(record._id);
         setShowForm(true);
@@ -972,7 +1241,7 @@ function PI({
         };
     };
 
-    const getPiProductsList = (pi) => {
+    function getPiProductsList(pi) {
         if (pi.productsList && pi.productsList.length > 0) {
             return pi.productsList.map(p => ({ ...p }));
         }
@@ -985,7 +1254,7 @@ function PI({
             freight: pi.freight || '',
             totalFreight: pi.totalFreight || ''
         }];
-    };
+    }
 
     const filteredPiRecordsForRevise = useMemo(() => {
         const q = (reviseSearchQuery || '').trim().toLowerCase();
@@ -1009,18 +1278,23 @@ function PI({
 
         return ipNumbers.map(ipNum => {
             const balance = computeIpBalance[ipNum];
+            const lcBalance = computeLcBalance[ipNum];
             const ipRec = ipRecords.find(r => r.ipNumber === ipNum);
             const expiryDate = ipRec?.closeDate ? formatDate(ipRec.closeDate) : 'N/A';
             const balanceKg = balance !== undefined ? balance : null;
+            const lcBalanceKg = lcBalance !== undefined ? lcBalance : null;
             return {
                 ipNumber: ipNum,
                 balance: balanceKg,
                 balanceDisplay: balanceKg !== null ? `${balanceKg.toLocaleString('en-US')} kg` : 'N/A',
+                lcBalance: lcBalanceKg,
+                lcBalanceDisplay: lcBalanceKg !== null ? `${lcBalanceKg.toLocaleString('en-US')} kg` : 'N/A',
                 expiryDisplay: expiryDate,
-                isLowBalance: balanceKg !== null && balanceKg < 50000
+                isLowBalance: balanceKg !== null && balanceKg < 50000,
+                isLowLcBalance: lcBalanceKg !== null && lcBalanceKg < 50000
             };
         });
-    }, [selectedPiForRevise, reviseFormData.ipNumbers, computeIpBalance, ipRecords]);
+    }, [selectedPiForRevise, reviseFormData.ipNumbers, computeIpBalance, computeLcBalance, ipRecords]);
 
     const resetReviseForm = () => {
         setShowReviseForm(false);
@@ -1167,7 +1441,7 @@ function PI({
                 );
 
                 if (!productExists) {
-                    const product = products.find(p => p.name === ip.productName);
+                    const product = products.find(p => (p.ipName || p.name) === ip.productName);
                     const hCode = product ? (product.hsCode || '') : '';
                     const hCodeInd = product ? (product.hsCodeInd || '') : '';
 
@@ -1223,6 +1497,51 @@ function PI({
             showToast('Revise Number and Date are required.', 'error');
             return;
         }
+
+        // Validate revision product quantities against TOTAL LC REM (sum across all IPs with same product)
+        const reviseProductsToValidate = reviseFormData.productsList || [];
+        const reviseIpNumbers = reviseFormData.ipNumbers || [];
+        for (const item of reviseProductsToValidate) {
+            if (!item.productName || !item.quantity) continue;
+            const itemQty = parseFloat(item.quantity) || 0;
+            if (itemQty <= 0) continue;
+
+            // Find original quantity in the selected PI for revision
+            let oldQty = 0;
+            if (selectedPiForRevise) {
+                const origList = getPiProductsList(selectedPiForRevise);
+                const origItem = origList.find(p =>
+                    (p.productName || '').toLowerCase().trim() === (item.productName || '').toLowerCase().trim()
+                );
+                oldQty = parseFloat(origItem?.quantity) || 0;
+            }
+            const increasedQty = Math.max(0, itemQty - oldQty);
+            if (increasedQty <= 0) continue; // Not increased — skip LC REM check
+
+            // Find ALL selected IPs that share the same product name
+            const matchingIpNums = reviseIpNumbers.filter(num => {
+                const rec = ipRecords.find(r => r.ipNumber === num);
+                return rec && (rec.productName || '').toLowerCase().trim() === (item.productName || '').toLowerCase().trim();
+            });
+
+            if (matchingIpNums.length > 0) {
+                // Sum LC REM for all matching IPs
+                const totalLcRem = matchingIpNums.reduce((sum, num) => {
+                    const lcRem = computeLcBalance[num];
+                    return sum + (lcRem !== undefined ? lcRem : 0);
+                }, 0);
+
+                if (increasedQty > totalLcRem) {
+                    const ipList = matchingIpNums.join(', ');
+                    showToast(
+                        `⚠️ Warning: Product "${item.productName}" increased quantity (${increasedQty.toLocaleString()} Kg) exceeds combined LC REM (${totalLcRem.toLocaleString('en-US')} Kg) across IP(s): ${ipList}. Please reduce the quantity before saving.`,
+                        'error'
+                    );
+                    return;
+                }
+            }
+        }
+
         setIsReviseSaving(true);
         try {
             const pi = selectedPiForRevise;
@@ -1520,7 +1839,10 @@ function PI({
                                                     <div className="flex-1 min-w-[120px]">
                                                         <label className="block text-[10px] font-bold text-gray-400 uppercase">IP Balance</label>
                                                         {(() => {
-                                                            const balance = computeIpBalance[ipNum];
+                                                            const snapshot = formData.ipSnapshots?.[ipNum];
+                                                            const balance = (snapshot && snapshot.ipBalance !== null && snapshot.ipBalance !== undefined)
+                                                                ? snapshot.ipBalance
+                                                                : computeIpBalance[ipNum];
                                                             const hasBalance = balance !== undefined;
                                                             const isLow = hasBalance && balance < 50000;
                                                             return (
@@ -1528,6 +1850,24 @@ function PI({
                                                                     isLow ? 'text-red-600' : 'text-emerald-600'
                                                                     }`}>
                                                                     {hasBalance ? balance.toLocaleString('en-US') + ' Kg' : '—'}
+                                                                </span>
+                                                            );
+                                                        })()}
+                                                    </div>
+                                                    <div className="flex-1 min-w-[120px]">
+                                                        <label className="block text-[10px] font-bold text-gray-400 uppercase">LC REM</label>
+                                                        {(() => {
+                                                            const snapshot = formData.ipSnapshots?.[ipNum];
+                                                            const lcBalance = (snapshot && snapshot.lcRem !== null && snapshot.lcRem !== undefined)
+                                                                ? snapshot.lcRem
+                                                                : computeLcBalance[ipNum];
+                                                            const hasLcBalance = lcBalance !== undefined;
+                                                            const isLow = hasLcBalance && lcBalance < 50000;
+                                                            return (
+                                                                <span className={`text-sm font-bold ${!hasLcBalance ? 'text-gray-400' :
+                                                                    isLow ? 'text-red-600' : 'text-emerald-600'
+                                                                    }`}>
+                                                                    {hasLcBalance ? lcBalance.toLocaleString('en-US') + ' Kg' : '—'}
                                                                 </span>
                                                             );
                                                         })()}
@@ -2191,7 +2531,7 @@ function PI({
                                                             setActiveDropdown(`product_${idx}`);
                                                             setHighlightedIndex(-1);
                                                         }}
-                                                        onKeyDown={(e) => handleDropdownKeyDown(e, `product_${idx}`, products.filter(p => !item.productName || p.name.toLowerCase().includes(item.productName.toLowerCase())), 'productName')}
+                                                        onKeyDown={(e) => handleDropdownKeyDown(e, `product_${idx}`, products.filter(p => !item.productName || p.name.toLowerCase().includes(item.productName.toLowerCase()) || (p.ipName || '').toLowerCase().includes(item.productName.toLowerCase())), 'productName')}
                                                         placeholder="Search Product..."
                                                         required
                                                         autoComplete="off"
@@ -2199,20 +2539,20 @@ function PI({
                                                     />
                                                     {activeDropdown === `product_${idx}` && (
                                                         <div className="absolute z-[60] w-full mt-1 bg-white border border-gray-100 rounded-xl shadow-xl max-h-48 overflow-y-auto">
-                                                            {products.filter(p => !item.productName || p.name.toLowerCase().includes(item.productName.toLowerCase())).map((p, pIdx) => (
+                                                            {products.filter(p => !item.productName || p.name.toLowerCase().includes(item.productName.toLowerCase()) || (p.ipName || '').toLowerCase().includes(item.productName.toLowerCase())).map((p, pIdx) => (
                                                                 <button
                                                                     key={p._id}
                                                                     type="button"
                                                                     onMouseDown={() => {
-                                                                        handleProductFieldChange(idx, 'productName', p.name);
+                                                                        handleProductFieldChange(idx, 'productName', p.ipName || p.name);
                                                                         handleProductFieldChange(idx, 'hsCode', p.hsCode || '');
                                                                         handleProductFieldChange(idx, 'hsCodeInd', p.hsCodeInd || '');
                                                                         setActiveDropdown(null);
                                                                     }}
                                                                     onMouseEnter={() => setHighlightedIndex(pIdx)}
-                                                                    className={`w-full px-4 py-2 text-left text-sm ${highlightedIndex === pIdx || item.productName === p.name ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-blue-50'}`}
+                                                                    className={`w-full px-4 py-2 text-left text-sm ${highlightedIndex === pIdx || item.productName === (p.ipName || p.name) ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-blue-50'}`}
                                                                 >
-                                                                    {p.name}
+                                                                    {p.ipName || p.name}
                                                                 </button>
                                                             ))}
                                                         </div>
@@ -3076,14 +3416,15 @@ function PI({
                                     {/* IP rows - one per IP number */}
                                     {selectedPiReviseIpInfo.length > 0 ? (
                                         <div className="space-y-3">
-                                            <div className="grid grid-cols-[1fr_1fr_1fr_auto] gap-4 items-center">
+                                            <div className="grid grid-cols-[1fr_1fr_1fr_1fr_auto] gap-4 items-center">
                                                 <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">IP</label>
                                                 <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">IP Balance</label>
+                                                <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">LC REM</label>
                                                 <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">IP Expiry Date</label>
                                                 <div className="w-8"></div>
                                             </div>
                                             {selectedPiReviseIpInfo.map((ipInfo, idx) => (
-                                                <div key={idx} className="grid grid-cols-[1fr_1fr_1fr_auto] gap-4 items-center">
+                                                <div key={idx} className="grid grid-cols-[1fr_1fr_1fr_1fr_auto] gap-4 items-center">
                                                     <div>
                                                         <input
                                                             type="text"
@@ -3098,6 +3439,15 @@ function PI({
                                                             readOnly
                                                             value={ipInfo.balanceDisplay}
                                                             className={`w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl outline-none font-bold text-sm ${ipInfo.isLowBalance ? 'text-red-600' : 'text-emerald-600'
+                                                                }`}
+                                                        />
+                                                    </div>
+                                                    <div>
+                                                        <input
+                                                            type="text"
+                                                            readOnly
+                                                            value={ipInfo.lcBalanceDisplay}
+                                                            className={`w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl outline-none font-bold text-sm ${ipInfo.isLowLcBalance ? 'text-red-600' : 'text-emerald-600'
                                                                 }`}
                                                         />
                                                     </div>
@@ -3123,13 +3473,17 @@ function PI({
                                             ))}
                                         </div>
                                     ) : (
-                                        <div className="grid grid-cols-3 gap-6">
+                                        <div className="grid grid-cols-4 gap-6">
                                             <div className="space-y-1.5">
                                                 <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">IP</label>
                                                 <input type="text" readOnly value="N/A" className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl outline-none text-gray-400 text-sm" />
                                             </div>
                                             <div className="space-y-1.5">
                                                 <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">IP Balance</label>
+                                                <input type="text" readOnly value="N/A" className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl outline-none text-gray-400 text-sm" />
+                                            </div>
+                                            <div className="space-y-1.5">
+                                                <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">LC REM</label>
                                                 <input type="text" readOnly value="N/A" className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl outline-none text-gray-400 text-sm" />
                                             </div>
                                             <div className="space-y-1.5">
@@ -3720,19 +4074,19 @@ function PI({
                                                                     : <span className="font-bold text-gray-800 block text-sm">N/A</span>
                                                                 }
                                                             </div>
-                                                         {activeRevision.certification && activeRevision.certification.split(',').map(s => s.trim().toLowerCase()).includes('packing') && (
-                                                             <div className="mt-3">
-                                                                 <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block mb-1">Packing Type</span>
-                                                                 <div className="space-y-1">
-                                                                     {activeRevision.packingType
-                                                                         ? activeRevision.packingType.split(',').map((pack, pIdx) => (
-                                                                             <span key={pIdx} className="font-bold text-gray-800 block text-sm">{pack.trim()}</span>
-                                                                         ))
-                                                                         : <span className="font-bold text-gray-800 block text-sm">N/A</span>
-                                                                     }
-                                                                 </div>
-                                                             </div>
-                                                         )}
+                                                            {activeRevision.certification && activeRevision.certification.split(',').map(s => s.trim().toLowerCase()).includes('packing') && (
+                                                                <div className="mt-3">
+                                                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block mb-1">Packing Type</span>
+                                                                    <div className="space-y-1">
+                                                                        {activeRevision.packingType
+                                                                            ? activeRevision.packingType.split(',').map((pack, pIdx) => (
+                                                                                <span key={pIdx} className="font-bold text-gray-800 block text-sm">{pack.trim()}</span>
+                                                                            ))
+                                                                            : <span className="font-bold text-gray-800 block text-sm">N/A</span>
+                                                                        }
+                                                                    </div>
+                                                                </div>
+                                                            )}
                                                         </div>
                                                     </div>
                                                 </div>

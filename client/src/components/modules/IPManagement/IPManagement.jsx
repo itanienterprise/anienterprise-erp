@@ -567,6 +567,8 @@ function IPManagement({
         productName: ''
     });
 
+    const activePorts = useMemo(() => (ports || []).filter(p => !p.isLoadingPort), [ports]);
+
     const ipImporterRef = useRef(null);
     const ipPortRef = useRef(null);
     const ipProductRef = useRef(null);
@@ -638,8 +640,201 @@ function IPManagement({
         return parseFloat(String(val).replace(/[^0-9.]/g, '')) || 0;
     };
 
-    // Calculate dynamic remaining quantity for each IP
+    // Calculate dynamic remaining quantity for each IP using sequential consumption.
+    // IPs with the same product share a pool of LC consumption — fill first IP completely, then next.
     const enrichedIpRecords = useMemo(() => {
+        // Helpers
+        const matchProduct = (nameA, nameB) => {
+            const cleanA = (nameA || '').toLowerCase().trim();
+            const cleanB = (nameB || '').toLowerCase().trim();
+            if (!cleanA || !cleanB) return false;
+            if (cleanA === cleanB) return true;
+            
+            const prod = products.find(p => {
+                const pName = (p.name || '').toLowerCase().trim();
+                const pIpName = (p.ipName || '').toLowerCase().trim();
+                return (pName === cleanA && pIpName === cleanB) || (pName === cleanB && pIpName === cleanA);
+            });
+            return !!prod;
+        };
+
+        const getLcProductQtyInKg = (lc, productKey) => {
+            if (Array.isArray(lc.productsList) && lc.productsList.length > 0) {
+                const matched = lc.productsList.filter(p =>
+                    matchProduct(p.productName, productKey)
+                );
+                if (matched.length > 0) {
+                    return matched.reduce((sum, p) => sum + (parseNum(p.quantity) * 1000), 0);
+                }
+            }
+            if (matchProduct(lc.productName, productKey)) {
+                return parseNum(lc.quantity) * 1000;
+            }
+            return 0;
+        };
+
+        // --- Step 1: Compute LC REM per IP using sequential group consumption ---
+        const lcRemMap = {}; // ipNumber -> LC REM value
+
+        // Group IPs by product name
+        const ipsByProduct = {};
+        ipRecords.forEach(ip => {
+            const productKey = (ip.productName || '').toLowerCase().trim();
+            if (!productKey) {
+                lcRemMap[ip.ipNumber] = parseNum(ip.quantity) || 0;
+                return;
+            }
+            if (!ipsByProduct[productKey]) ipsByProduct[productKey] = [];
+            ipsByProduct[productKey].push(ip);
+        });
+
+        Object.entries(ipsByProduct).forEach(([productKey, ipsGroup]) => {
+            // Sort IPs ascending by numeric IP number: lowest consumed first
+            const sortedIps = [...ipsGroup].sort((a, b) => {
+                const aNum = parseFloat(cleanLc(a.ipNumber)) || 0;
+                const bNum = parseFloat(cleanLc(b.ipNumber)) || 0;
+                if (aNum !== bNum) return aNum - bNum;
+                return (a.ipNumber || '').localeCompare(b.ipNumber || '');
+            });
+
+            // Collect unique LCs linked to ANY IP in this group
+            const groupIpNumsClean = new Set(sortedIps.map(ip => cleanLc(ip.ipNumber)));
+            const seenLcIds = new Set();
+            const allGroupLcs = [];
+            lcRecords.forEach(lc => {
+                const lcIps = Array.isArray(lc.ipNumbers) && lc.ipNumbers.length > 0
+                    ? lc.ipNumbers.map(s => cleanLc(s)).filter(Boolean)
+                    : (lc.ipNo || '').split(',').map(s => cleanLc(s.trim())).filter(Boolean);
+                if (lcIps.some(lcIp => groupIpNumsClean.has(lcIp))) {
+                    const lcId = String(lc._id || lc.lcNo || JSON.stringify(lc));
+                    if (!seenLcIds.has(lcId)) {
+                        seenLcIds.add(lcId);
+                        allGroupLcs.push(lc);
+                    }
+                }
+            });
+
+            // Total LC qty consumed for this product across all group LCs
+            const totalLcQty = allGroupLcs.reduce(
+                (sum, lc) => sum + getLcProductQtyInKg(lc, productKey),
+                0
+            );
+
+            // Distribute sequentially: fill first IP, then next...
+            let remainingLcQty = totalLcQty;
+            sortedIps.forEach(ip => {
+                const ipQty = parseNum(ip.quantity) || 0;
+                const consumed = Math.min(remainingLcQty, ipQty);
+                lcRemMap[ip.ipNumber] = ipQty - consumed;
+                remainingLcQty = Math.max(0, remainingLcQty - consumed);
+            });
+        });
+
+        // --- Step 1b: Compute IP Balance per IP using sequential group consumption ---
+        // IP Balance = IP Qty - actual receipts (LC Receive) - border sales, distributed sequentially.
+        const ipBalanceMap = {}; // ipNumber -> IP Balance value
+
+        Object.entries(ipsByProduct).forEach(([productKey, ipsGroup]) => {
+            // Sort IPs ascending by numeric IP number: lowest consumed first
+            const sortedIps = [...ipsGroup].sort((a, b) => {
+                const aNum = parseFloat(cleanLc(a.ipNumber)) || 0;
+                const bNum = parseFloat(cleanLc(b.ipNumber)) || 0;
+                if (aNum !== bNum) return aNum - bNum;
+                return (a.ipNumber || '').localeCompare(b.ipNumber || '');
+            });
+
+            // Collect unique LCs linked to any IP in this group
+            const groupIpNumsClean = new Set(sortedIps.map(ip => cleanLc(ip.ipNumber)));
+            const seenLcIds = new Set();
+            const allGroupLcNums = new Set();
+            lcRecords.forEach(lc => {
+                const lcIps = Array.isArray(lc.ipNumbers) && lc.ipNumbers.length > 0
+                    ? lc.ipNumbers.map(s => cleanLc(s)).filter(Boolean)
+                    : (lc.ipNo || '').split(',').map(s => cleanLc(s.trim())).filter(Boolean);
+                if (lcIps.some(lcIp => groupIpNumsClean.has(lcIp))) {
+                    const lcId = String(lc._id || lc.lcNo || JSON.stringify(lc));
+                    if (!seenLcIds.has(lcId)) {
+                        seenLcIds.add(lcId);
+                        if (lc.lcNo) allGroupLcNums.add(cleanLc(lc.lcNo));
+                    }
+                }
+            });
+
+            // Sum unique stock receipts for all group LCs matching the product name
+            const groupReceiptsMap = {};
+            allStockRecords.forEach(s => {
+                const sLcClean = cleanLc(s.lcNo);
+                const status = (s.status || '').toLowerCase();
+                if (allGroupLcNums.has(sLcClean) && (status === 'accepted' || status === 'in stock')) {
+                    const rawDate = s.date || s.receiveDate || s.createdAt || '';
+                    const dateStr = typeof rawDate === 'string' && rawDate.includes('T') ? rawDate.split('T')[0] : rawDate;
+                    const groupVal = s.totalLcQuantity || s.billOfEntry || s.totalLcTruck || s.truckNo || s.truck || 'single';
+                    const key = `${sLcClean}_${dateStr}_${groupVal}`;
+                    
+                    // Filter entries matching the product name
+                    let productQty = 0;
+                    if (s.entries && s.entries.length > 0) {
+                        productQty = s.entries
+                            .filter(item => matchProduct(item.productName, productKey))
+                            .reduce((iSum, item) => iSum + parseNum(item.inHouseQuantity || item.quantity), 0);
+                    } else if (matchProduct(s.productName, productKey)) {
+                        productQty = parseNum(s.inHouseQuantity) || parseNum(s.quantity);
+                    }
+
+                    if (productQty > 0) {
+                        if (!groupReceiptsMap[key]) {
+                            groupReceiptsMap[key] = productQty;
+                        } else {
+                            groupReceiptsMap[key] += productQty;
+                        }
+                    }
+                }
+            });
+            let totalGroupConsumption = Object.values(groupReceiptsMap).reduce((sum, qty) => sum + qty, 0);
+
+            // Sum unique border sales for all group LCs matching the product name
+            allSalesRecords.forEach(s => {
+                const sLcClean = cleanLc(s.lcNo);
+                const status = (s.status || '').toLowerCase();
+                const sTypeLow = (s.saleType || '').toLowerCase().trim();
+                const isBorder = sTypeLow.includes('border') || (s.invoiceNo || '').startsWith('BS') || (!s.saleType && !!(s.lcNo || s.port || s.importer));
+                if (allGroupLcNums.has(sLcClean) && status === 'accepted' && isBorder) {
+                    let productSaleQty = 0;
+                    if (s.items && s.items.length > 0) {
+                        productSaleQty = s.items
+                            .filter(item => matchProduct(item.productName, productKey))
+                            .reduce((iSum, item) => {
+                                const brandSubtotal = (item.brandEntries || []).reduce((bSum, b) => bSum + parseNum(b.quantity), 0);
+                                return iSum + (brandSubtotal || parseNum(item.quantity));
+                            }, 0);
+                    } else if (matchProduct(s.productName, productKey)) {
+                        productSaleQty = parseNum(s.currentTotalQty) || parseNum(s.totalQuantity) || parseNum(s.totalQty) || parseNum(s.qty) || parseNum(s.quantity) || parseNum(s.total);
+                    }
+
+                    if (productSaleQty > 0) {
+                        totalGroupConsumption += productSaleQty;
+                    }
+                }
+            });
+
+            // Distribute sequentially: fill first IP balance, then next...
+            let remainingConsumption = totalGroupConsumption;
+            sortedIps.forEach(ip => {
+                const ipQty = parseNum(ip.quantity) || 0;
+                const consumed = Math.min(remainingConsumption, ipQty);
+                ipBalanceMap[ip.ipNumber] = ipQty - consumed;
+                remainingConsumption = Math.max(0, remainingConsumption - consumed);
+            });
+        });
+
+        // For IPs with no product key, compute independently
+        ipRecords.forEach(ip => {
+            if (!(ip.ipNumber in ipBalanceMap)) {
+                ipBalanceMap[ip.ipNumber] = parseNum(ip.quantity) || 0;
+            }
+        });
+
+        // --- Step 2: Enrich each IP record with computed values ---
         return ipRecords.map(ip => {
             const ipNoClean = cleanLc(ip.ipNumber);
             const relatedLcs = lcRecords.filter(lc => {
@@ -648,73 +843,10 @@ function IPManagement({
                     : (lc.ipNo || '').split(',').map(s => cleanLc(s.trim())).filter(Boolean);
                 return lcIps.includes(ipNoClean);
             });
-            const lcNumbers = relatedLcs.map(lc => cleanLc(lc.lcNo));
 
-            // 1. LC Rem (kg) - Based on LC commitments
-            const getLcQtyForIpInKg = (lc, targetIp) => {
-                const targetProductName = (targetIp.productName || '').toLowerCase().trim();
-                if (Array.isArray(lc.productsList) && lc.productsList.length > 0) {
-                    const matchedProducts = lc.productsList.filter(p => 
-                        (p.productName || '').toLowerCase().trim() === targetProductName
-                    );
-                    if (matchedProducts.length > 0) {
-                        return matchedProducts.reduce((sum, p) => sum + (parseNum(p.quantity) * 1000), 0);
-                    }
-                }
-                if ((lc.productName || '').toLowerCase().trim() === targetProductName) {
-                    return parseNum(lc.quantity) * 1000;
-                }
-                return 0;
-            };
-
-            // 1. LC Rem (kg) - Based on LC commitments
-            const totalLcQtyInKg = relatedLcs.reduce((sum, lc) => sum + getLcQtyForIpInKg(lc, ip), 0);
-            const calculatedRemQty = (parseNum(ip.quantity) || 0) - totalLcQtyInKg;
-
-            // 2. IP Balance - Based on actual consumption (LC Receive + Border Sale)
-            let totalConsumption = 0;
-
-            // Related Receipts (Stock)
-            const ipReceiptsMap = {};
-            allStockRecords.forEach(s => {
-                const sLcClean = cleanLc(s.lcNo);
-                const status = (s.status || '').toLowerCase();
-                if (lcNumbers.includes(sLcClean) && (status === 'accepted' || status === 'in stock')) {
-                    const rawDate = s.date || s.receiveDate || s.createdAt || '';
-                    const dateStr = typeof rawDate === 'string' && rawDate.includes('T') ? rawDate.split('T')[0] : rawDate;
-                    const groupVal = s.totalLcQuantity || s.billOfEntry || s.totalLcTruck || s.truckNo || s.truck || 'single';
-                    const key = `${sLcClean}_${dateStr}_${groupVal}`;
-                    
-                    if (!ipReceiptsMap[key]) {
-                        const itemSubtotal = (s.entries || []).reduce((iSum, item) => iSum + parseNum(item.inHouseQuantity || item.quantity), 0);
-                        ipReceiptsMap[key] = parseNum(s.totalLcQuantity) || itemSubtotal || parseNum(s.inHouseQuantity) || parseNum(s.quantity);
-                    } else {
-                        if (!s.totalLcQuantity) {
-                            ipReceiptsMap[key] += parseNum(s.inHouseQuantity) || parseNum(s.quantity);
-                        }
-                    }
-                }
-            });
-            totalConsumption += Object.values(ipReceiptsMap).reduce((sum, qty) => sum + qty, 0);
-
-            // Related Border Sales
-            allSalesRecords.forEach(s => {
-                const sLcClean = cleanLc(s.lcNo);
-                const status = (s.status || '').toLowerCase();
-                const sTypeLow = (s.saleType || '').toLowerCase().trim();
-                const isBorder = sTypeLow.includes('border') || (s.invoiceNo || '').startsWith('BS') || (!s.saleType && !!(s.lcNo || s.port || s.importer));
-
-                if (lcNumbers.includes(sLcClean) && status === 'accepted' && isBorder) {
-                    const itemSubtotal = (s.items || []).reduce((iSum, item) => {
-                        const brandSubtotal = (item.brandEntries || []).reduce((bSum, b) => bSum + parseNum(b.quantity), 0);
-                        return iSum + (brandSubtotal || parseNum(item.quantity));
-                    }, 0);
-                    const qty = parseNum(s.currentTotalQty) || parseNum(s.totalQuantity) || parseNum(s.totalQty) || parseNum(s.qty) || parseNum(s.quantity) || parseNum(s.total) || itemSubtotal;
-                    totalConsumption += qty;
-                }
-            });
-
-            const calculatedIpBalance = (parseNum(ip.quantity) || 0) - totalConsumption;
+            // LC REM and IP Balance from sequential group calculations above
+            const calculatedRemQty = lcRemMap[ip.ipNumber] ?? (parseNum(ip.quantity) || 0);
+            const calculatedIpBalance = ipBalanceMap[ip.ipNumber] ?? (parseNum(ip.quantity) || 0);
 
             // Calculate automated status based on closeDate
             let computedStatus = "Active";
@@ -741,6 +873,8 @@ function IPManagement({
             };
         });
     }, [ipRecords, lcRecords, piRecords, allStockRecords, allSalesRecords]);
+
+
 
     useEffect(() => {
         if (!addNotification || !currentUser || enrichedIpRecords.length === 0) return;
@@ -852,15 +986,16 @@ function IPManagement({
             e.preventDefault();
             if (highlightedIndex >= 0 && highlightedIndex < options.length) {
                 const selected = options[highlightedIndex];
-                const value = selected.name || selected;
+                const value = selected.ipName || selected.name || selected;
 
                 if (dropdownId.startsWith('filter-')) {
                     const filterField = dropdownId.replace('filter-', '');
-                    setFilters(prev => ({ ...prev, [filterField]: value }));
+                    const actualField = filterField === 'product' ? 'productName' : filterField;
+                    setFilters(prev => ({ ...prev, [actualField]: value }));
                     setActiveDropdown(null);
                     setHighlightedIndex(-1);
                 } else if (dropdownId === 'ip-product') {
-                    // For product, value is just the name as per user request
+                    // For product, value is the ipName or name
                     setFormData(prev => ({ ...prev, productName: value }));
                     setActiveDropdown(null);
                     setHighlightedIndex(-1);
@@ -1235,7 +1370,7 @@ function IPManagement({
                                     value={filters.port}
                                     onChange={(e) => { setFilters(prev => ({ ...prev, port: e.target.value })); setActiveDropdown('filter-port'); setHighlightedIndex(-1); }}
                                     onFocus={() => { setActiveDropdown('filter-port'); setHighlightedIndex(-1); }}
-                                    onKeyDown={(e) => handleDropdownKeyDown(e, 'filter-port', ports.filter(p => !filters.port || ports.some(x => x.name === filters.port) || p.name.toLowerCase().includes(filters.port.toLowerCase())), 'filter-port')}
+                                    onKeyDown={(e) => handleDropdownKeyDown(e, 'filter-port', activePorts.filter(p => !filters.port || activePorts.some(x => x.name === filters.port) || p.name.toLowerCase().includes(filters.port.toLowerCase())), 'filter-port')}
                                     placeholder="Search Port..."
                                     autoComplete="off"
                                     className="w-full px-3 py-2 text-xs bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-all pr-8"
@@ -1251,8 +1386,8 @@ function IPManagement({
                             </div>
                             {activeDropdown === 'filter-port' && (
                                 <div className="absolute z-[60] w-full mt-1 bg-white border border-gray-100 rounded-xl shadow-xl max-h-40 overflow-y-auto py-1 animate-in zoom-in duration-200">
-                                    {ports.filter(p => !filters.port || ports.some(x => x.name === filters.port) || p.name.toLowerCase().includes(filters.port.toLowerCase())).length > 0 ? (
-                                        ports.filter(p => !filters.port || ports.some(x => x.name === filters.port) || p.name.toLowerCase().includes(filters.port.toLowerCase())).map((port, idx) => (
+                                    {activePorts.filter(p => !filters.port || activePorts.some(x => x.name === filters.port) || p.name.toLowerCase().includes(filters.port.toLowerCase())).length > 0 ? (
+                                        activePorts.filter(p => !filters.port || activePorts.some(x => x.name === filters.port) || p.name.toLowerCase().includes(filters.port.toLowerCase())).map((port, idx) => (
                                             <button
                                                 key={port._id}
                                                 type="button"
@@ -1271,15 +1406,15 @@ function IPManagement({
                         </div>
 
                         <div className="space-y-3 relative dropdown-container" ref={filterProductRef}>
-                            <label className="text-xs font-bold text-gray-500 uppercase tracking-wider block">Product</label>
+                            <label className="text-xs font-bold text-gray-500 uppercase tracking-wider block">IP Product</label>
                             <div className="relative">
                                 <input
                                     type="text"
                                     value={filters.productName}
                                     onChange={(e) => { setFilters(prev => ({ ...prev, productName: e.target.value })); setActiveDropdown('filter-product'); setHighlightedIndex(-1); }}
                                     onFocus={() => { setActiveDropdown('filter-product'); setHighlightedIndex(-1); }}
-                                    onKeyDown={(e) => handleDropdownKeyDown(e, 'filter-product', products.filter(p => !filters.productName || p.name.toLowerCase().includes(filters.productName.toLowerCase())), 'filter-product')}
-                                    placeholder="Search Product..."
+                                    onKeyDown={(e) => handleDropdownKeyDown(e, 'filter-product', products.filter(p => !filters.productName || p.name.toLowerCase().includes(filters.productName.toLowerCase()) || (p.ipName || '').toLowerCase().includes(filters.productName.toLowerCase())), 'filter-product')}
+                                    placeholder="Search IP Product..."
                                     autoComplete="off"
                                     className="w-full px-3 py-2 text-xs bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-all pr-8"
                                 />
@@ -1294,16 +1429,16 @@ function IPManagement({
                             </div>
                             {activeDropdown === 'filter-product' && (
                                 <div className="absolute z-[60] w-full mt-1 bg-white border border-gray-100 rounded-xl shadow-xl max-h-40 overflow-y-auto py-1 animate-in zoom-in duration-200">
-                                    {products.filter(p => !filters.productName || p.name.toLowerCase().includes(filters.productName.toLowerCase())).length > 0 ? (
-                                        products.filter(p => !filters.productName || p.name.toLowerCase().includes(filters.productName.toLowerCase())).map((p, idx) => (
+                                    {products.filter(p => !filters.productName || p.name.toLowerCase().includes(filters.productName.toLowerCase()) || (p.ipName || '').toLowerCase().includes(filters.productName.toLowerCase())).length > 0 ? (
+                                        products.filter(p => !filters.productName || p.name.toLowerCase().includes(filters.productName.toLowerCase()) || (p.ipName || '').toLowerCase().includes(filters.productName.toLowerCase())).map((p, idx) => (
                                             <button
                                                 key={p._id}
                                                 type="button"
-                                                onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); setFilters(prev => ({ ...prev, productName: p.name })); setActiveDropdown(null); }}
+                                                onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); setFilters(prev => ({ ...prev, productName: p.ipName || p.name })); setActiveDropdown(null); }}
                                                 onMouseEnter={() => setHighlightedIndex(idx)}
-                                                className={`w-full px-3 py-1.5 text-left text-[11px] transition-colors font-medium ${filters.productName === p.name ? 'bg-blue-50 text-blue-700' : highlightedIndex === idx ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-blue-50'}`}
+                                                className={`w-full px-3 py-1.5 text-left text-[11px] transition-colors font-medium ${filters.productName === (p.ipName || p.name) ? 'bg-blue-50 text-blue-700' : highlightedIndex === idx ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-blue-50'}`}
                                             >
-                                                {p.name}
+                                                {p.ipName || p.name}
                                             </button>
                                         ))
                                     ) : (
@@ -1439,7 +1574,7 @@ function IPManagement({
                         </div>
 
                         <div className="space-y-2 relative dropdown-container" ref={ipProductRef}>
-                            <label className="text-sm font-medium text-gray-700">Product Name</label>
+                            <label className="text-sm font-medium text-gray-700">IP Product Name</label>
                             <div className="relative">
                                 <input
                                     type="text"
@@ -1447,8 +1582,8 @@ function IPManagement({
                                     value={formData.productName}
                                     onChange={(e) => { handleInputChange(e); setActiveDropdown('ip-product'); setHighlightedIndex(-1); }}
                                     onFocus={() => { setActiveDropdown('ip-product'); setHighlightedIndex(-1); }}
-                                    onKeyDown={(e) => handleDropdownKeyDown(e, 'ip-product', products.filter(p => !formData.productName || products.some(x => x.name === formData.productName) || p.name.toLowerCase().includes(formData.productName.toLowerCase())), 'productName')}
-                                    placeholder="Search Product..."
+                                    onKeyDown={(e) => handleDropdownKeyDown(e, 'ip-product', products.filter(p => !formData.productName || products.some(x => (x.ipName || x.name) === formData.productName) || p.name.toLowerCase().includes(formData.productName.toLowerCase()) || (p.ipName || '').toLowerCase().includes(formData.productName.toLowerCase())), 'productName')}
+                                    placeholder="Search IP Product..."
                                     autoComplete="off"
                                     required
                                     className={`w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm pr-10 ${formData.productName ? 'placeholder:text-gray-900 placeholder:font-semibold' : 'placeholder:text-gray-400'}`}
@@ -1464,16 +1599,16 @@ function IPManagement({
                             </div>
                             {activeDropdown === 'ip-product' && (
                                 <div className="absolute z-[60] w-full mt-1 bg-white border border-gray-100 rounded-xl shadow-xl max-h-48 overflow-y-auto py-1 animate-in zoom-in duration-200">
-                                    {products.filter(p => !formData.productName || products.some(x => x.name === formData.productName) || p.name.toLowerCase().includes(formData.productName.toLowerCase())).length > 0 ? (
-                                        products.filter(p => !formData.productName || products.some(x => x.name === formData.productName) || p.name.toLowerCase().includes(formData.productName.toLowerCase())).map((p, idx) => (
+                                    {products.filter(p => !formData.productName || products.some(x => (x.ipName || x.name) === formData.productName) || p.name.toLowerCase().includes(formData.productName.toLowerCase()) || (p.ipName || '').toLowerCase().includes(formData.productName.toLowerCase())).length > 0 ? (
+                                        products.filter(p => !formData.productName || products.some(x => (x.ipName || x.name) === formData.productName) || p.name.toLowerCase().includes(formData.productName.toLowerCase()) || (p.ipName || '').toLowerCase().includes(formData.productName.toLowerCase())).map((p, idx) => (
                                             <button
                                                 key={p._id}
                                                 type="button"
-                                                onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); handleIpDropdownSelect('productName', p.name); }}
+                                                onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); handleIpDropdownSelect('productName', p.ipName || p.name); }}
                                                 onMouseEnter={() => setHighlightedIndex(idx)}
-                                                className={`w-full px-4 py-2 text-left text-sm transition-colors font-medium ${formData.productName === p.name ? 'bg-blue-50 text-blue-700' : highlightedIndex === idx ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-blue-50'}`}
+                                                className={`w-full px-4 py-2 text-left text-sm transition-colors font-medium ${formData.productName === (p.ipName || p.name) ? 'bg-blue-50 text-blue-700' : highlightedIndex === idx ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-blue-50'}`}
                                             >
-                                                {p.name}
+                                                {p.ipName || p.name}
                                             </button>
                                         ))
                                     ) : (
@@ -1529,7 +1664,7 @@ function IPManagement({
                                     value={formData.port}
                                     onChange={(e) => { handleInputChange(e); setActiveDropdown('ip-port'); setHighlightedIndex(-1); }}
                                     onFocus={() => { setActiveDropdown('ip-port'); setHighlightedIndex(-1); }}
-                                    onKeyDown={(e) => handleDropdownKeyDown(e, 'ip-port', ports.filter(p => !formData.port || ports.some(x => x.name === formData.port) || p.name.toLowerCase().includes(formData.port.toLowerCase())), 'port')}
+                                    onKeyDown={(e) => handleDropdownKeyDown(e, 'ip-port', activePorts.filter(p => !formData.port || activePorts.some(x => x.name === formData.port) || p.name.toLowerCase().includes(formData.port.toLowerCase())), 'port')}
                                     placeholder="Search Port..."
                                     autoComplete="off"
                                     required
@@ -1546,8 +1681,8 @@ function IPManagement({
                             </div>
                             {activeDropdown === 'ip-port' && (
                                 <div className="absolute z-[60] w-full mt-1 bg-white border border-gray-100 rounded-xl shadow-xl max-h-48 overflow-y-auto py-1 animate-in zoom-in duration-200">
-                                    {ports.filter(p => !formData.port || ports.some(x => x.name === formData.port) || p.name.toLowerCase().includes(formData.port.toLowerCase())).length > 0 ? (
-                                        ports.filter(p => !formData.port || ports.some(x => x.name === formData.port) || p.name.toLowerCase().includes(formData.port.toLowerCase())).map((port, idx) => (
+                                    {activePorts.filter(p => !formData.port || activePorts.some(x => x.name === formData.port) || p.name.toLowerCase().includes(formData.port.toLowerCase())).length > 0 ? (
+                                        activePorts.filter(p => !formData.port || activePorts.some(x => x.name === formData.port) || p.name.toLowerCase().includes(formData.port.toLowerCase())).map((port, idx) => (
                                             <button
                                                 key={port._id}
                                                 type="button"
@@ -1711,7 +1846,7 @@ function IPManagement({
                                                 <div className="flex items-center">Port <SortIcon config={sortConfig.ip} columnKey="port" /></div>
                                             </th>
                                             <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors" onClick={() => requestSort('productName')}>
-                                                <div className="flex items-center">Product <SortIcon config={sortConfig.ip} columnKey="productName" /></div>
+                                                <div className="flex items-center">IP Product Name <SortIcon config={sortConfig.ip} columnKey="productName" /></div>
                                             </th>
                                             <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors" onClick={() => requestSort('quantity')}>
                                                 <div className="flex items-center">Quantity (kg) <SortIcon config={sortConfig.ip} columnKey="quantity" /></div>
@@ -1892,7 +2027,7 @@ function IPManagement({
                                                                 <span className="text-sm font-bold text-gray-800 truncate">{record.ipParty}</span>
                                                             </div>
                                                             <div className="flex items-center">
-                                                                <span className="w-[100px] text-[11px] font-black text-gray-400 uppercase tracking-widest shrink-0">Product</span>
+                                                                <span className="w-[100px] text-[11px] font-black text-gray-400 uppercase tracking-widest shrink-0">IP Product</span>
                                                                 <span className="text-gray-400 font-bold mx-2">-</span>
                                                                 <span className="text-sm font-bold text-gray-900 truncate">{record.productName}</span>
                                                             </div>

@@ -8,6 +8,19 @@ import {
 import { formatDate, API_BASE_URL } from '../../../utils/helpers';
 import { decryptData } from '../../../utils/encryption';
 import CustomDatePicker from '../../shared/CustomDatePicker';
+
+const gridColsClassMap = {
+    1: 'md:grid-cols-1',
+    2: 'md:grid-cols-2',
+    3: 'md:grid-cols-3',
+    4: 'md:grid-cols-4',
+    5: 'md:grid-cols-5',
+    6: 'md:grid-cols-6',
+    7: 'md:grid-cols-7',
+    8: 'md:grid-cols-8',
+    9: 'md:grid-cols-9'
+};
+
 const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords = [], gpRecords = [], lcExpenses = [], piRecordsRaw = [], onEdit, onEditAmendment, canManage, onRefresh }) => {
     const [showConsumption, setShowConsumption] = useState(true);
     const [consumptionSearchQuery, setConsumptionSearchQuery] = useState('');
@@ -1360,16 +1373,25 @@ const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords
                                                 const diffAmount = diffDollar * dollarRate;
                                                 const sign = diffQty >= 0 ? '+' : '';
                                                 const isAmndBillActive = activeMilestone.amendmentLcBillEnabled !== undefined
-                                                    ? activeMilestone.amendmentLcBillEnabled
-                                                    : !!(activeMilestone.amendmentCommission || activeMilestone.amendmentSwiftCharge);
-                                                const activeMilestoneMarginPaid = activeMilestone.amendmentMarginPaid !== undefined 
-                                                    ? activeMilestone.amendmentMarginPaid 
-                                                    : (() => {
-                                                        const margin = activeMilestone.amendmentMargin !== undefined ? (parseFloat(activeMilestone.amendmentMargin) || 0) : (data.bankMargin !== undefined ? parseFloat(data.bankMargin) : 0);
-                                                        const mb = parseFloat(activeMilestone.amendmentMarginBill) || 0;
-                                                        const mp = mb * (margin / 100);
-                                                        return mp > 0 ? mp.toFixed(2) : '';
-                                                    })();
+                                                     ? activeMilestone.amendmentLcBillEnabled
+                                                     : !!(activeMilestone.amendmentCommission || activeMilestone.amendmentSwiftCharge);
+                                                 const activeMilestoneMarginPaid = activeMilestone.amendmentMarginPaid !== undefined 
+                                                     ? activeMilestone.amendmentMarginPaid 
+                                                     : (() => {
+                                                         const margin = activeMilestone.amendmentMargin !== undefined ? (parseFloat(activeMilestone.amendmentMargin) || 0) : (data.bankMargin !== undefined ? parseFloat(data.bankMargin) : 0);
+                                                         const mb = parseFloat(activeMilestone.amendmentMarginBill) || 0;
+                                                         const mp = mb * (margin / 100);
+                                                         return mp > 0 ? mp.toFixed(2) : '';
+                                                     })();
+
+                                                 const hasCommission1 = isAmndBillActive && activeMilestone.amendmentCommission && parseFloat(activeMilestone.amendmentCommission) > 0;
+                                                 const hasVatOnComm1 = isAmndBillActive && activeMilestone.amendmentVatOnCommission && parseFloat(activeMilestone.amendmentVatOnCommission) > 0;
+                                                 const hasSwiftCharge1 = isAmndBillActive && activeMilestone.amendmentSwiftCharge && parseFloat(activeMilestone.amendmentSwiftCharge) > 0;
+                                                 const hasVatOnSwift1 = isAmndBillActive && activeMilestone.amendmentVatOnSwift && parseFloat(activeMilestone.amendmentVatOnSwift) > 0;
+                                                 const hasBankBill1 = isAmndBillActive && activeMilestone.amendmentBankBill && parseFloat(activeMilestone.amendmentBankBill) > 0;
+
+                                                 const colsCount1 = 1 + (hasCommission1 ? 1 : 0) + (hasVatOnComm1 ? 1 : 0) + (hasSwiftCharge1 ? 1 : 0) + (hasVatOnSwift1 ? 1 : 0);
+                                                 const colsCount2 = 3 + (hasBankBill1 ? 1 : 0);
 
                                                 return (
                                                     <div className="space-y-4">
@@ -1420,43 +1442,47 @@ const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords
 
                                                         <div className="border-t border-blue-100/50 pt-3 text-left">
                                                             <span className="text-[10px] font-black text-indigo-600 uppercase tracking-widest block mb-2">Amendment Bank Bill Details</span>
-                                                            <div className="grid grid-cols-2 md:grid-cols-5 gap-x-8 gap-y-4 mb-3">
-                                                                <div>
-                                                                    <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider block mb-1">Margin</span>
-                                                                    <p className="text-xs font-bold text-gray-700">
-                                                                        {activeMilestone.amendmentMargin !== undefined && activeMilestone.amendmentMargin !== '' ? `${activeMilestone.amendmentMargin}%` : '-'}
-                                                                    </p>
-                                                                </div>
-                                                                {isAmndBillActive && (
-                                                                    <>
-                                                                        <div>
-                                                                            <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider block mb-1">Comm. on Amendment</span>
-                                                                            <p className="text-xs font-bold text-gray-700">
-                                                                                {activeMilestone.amendmentCommission !== undefined && activeMilestone.amendmentCommission !== '' ? `${activeMilestone.amendmentCommission}%` : '-'}
-                                                                            </p>
-                                                                        </div>
-                                                                        <div>
-                                                                            <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider block mb-1">VAT on Comm.</span>
-                                                                            <p className="text-xs font-bold text-gray-700">
-                                                                                {activeMilestone.amendmentVatOnCommission !== undefined && activeMilestone.amendmentVatOnCommission !== '' ? `${activeMilestone.amendmentVatOnCommission}%` : '-'}
-                                                                            </p>
-                                                                        </div>
-                                                                        <div>
-                                                                            <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider block mb-1">Swift Charge</span>
-                                                                            <p className="text-xs font-bold text-gray-700">
-                                                                                {activeMilestone.amendmentSwiftCharge !== undefined && activeMilestone.amendmentSwiftCharge !== '' ? `৳${parseFloat(activeMilestone.amendmentSwiftCharge).toLocaleString('en-IN')}` : '-'}
-                                                                            </p>
-                                                                        </div>
-                                                                        <div>
-                                                                            <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider block mb-1">VAT on Swift</span>
-                                                                            <p className="text-xs font-bold text-gray-700">
-                                                                                {activeMilestone.amendmentVatOnSwift !== undefined && activeMilestone.amendmentVatOnSwift !== '' ? `${activeMilestone.amendmentVatOnSwift}%` : '-'}
-                                                                            </p>
-                                                                        </div>
-                                                                    </>
-                                                                )}
-                                                            </div>
-                                                            <div className={`grid grid-cols-1 ${isAmndBillActive ? 'md:grid-cols-4' : 'md:grid-cols-3'} gap-x-8 gap-y-4 pt-3 border-t border-dashed border-blue-100/50`}>
+                                                            <div className={`grid grid-cols-2 ${gridColsClassMap[colsCount1] || 'md:grid-cols-5'} gap-x-8 gap-y-4 mb-3`}>
+                                                                 <div>
+                                                                     <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider block mb-1">Margin</span>
+                                                                     <p className="text-xs font-bold text-gray-700">
+                                                                         {activeMilestone.amendmentMargin !== undefined && activeMilestone.amendmentMargin !== '' ? `${activeMilestone.amendmentMargin}%` : '-'}
+                                                                     </p>
+                                                                 </div>
+                                                                 {hasCommission1 && (
+                                                                     <div>
+                                                                         <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider block mb-1">Comm. on Amendment</span>
+                                                                         <p className="text-xs font-bold text-gray-700">
+                                                                             {activeMilestone.amendmentCommission}%
+                                                                         </p>
+                                                                     </div>
+                                                                 )}
+                                                                 {hasVatOnComm1 && (
+                                                                     <div>
+                                                                         <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider block mb-1">VAT on Comm.</span>
+                                                                         <p className="text-xs font-bold text-gray-700">
+                                                                             {activeMilestone.amendmentVatOnCommission}%
+                                                                         </p>
+                                                                     </div>
+                                                                 )}
+                                                                 {hasSwiftCharge1 && (
+                                                                     <div>
+                                                                         <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider block mb-1">Swift Charge</span>
+                                                                         <p className="text-xs font-bold text-gray-700">
+                                                                             ৳{parseFloat(activeMilestone.amendmentSwiftCharge).toLocaleString('en-IN')}
+                                                                         </p>
+                                                                     </div>
+                                                                 )}
+                                                                 {hasVatOnSwift1 && (
+                                                                     <div>
+                                                                         <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider block mb-1">VAT on Swift</span>
+                                                                         <p className="text-xs font-bold text-gray-700">
+                                                                             {activeMilestone.amendmentVatOnSwift}%
+                                                                         </p>
+                                                                     </div>
+                                                                 )}
+                                                             </div>
+                                                            <div className={`grid grid-cols-1 ${gridColsClassMap[colsCount2] || 'md:grid-cols-4'} gap-x-8 gap-y-4 pt-3 border-t border-dashed border-blue-100/50`}>
                                                                 <div>
                                                                     <span className="text-[9px] font-bold text-blue-600 uppercase tracking-wider block mb-1">Amendment Margin Bill</span>
                                                                     <p className="text-sm font-black text-blue-800 font-semibold">
@@ -1469,7 +1495,7 @@ const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords
                                                                         ৳{activeMilestoneMarginPaid ? parseFloat(activeMilestoneMarginPaid).toLocaleString('en-IN', { minimumFractionDigits: 2 }) : '0.00'}
                                                                     </p>
                                                                 </div>
-                                                                {isAmndBillActive && (
+                                                                {hasBankBill1 && (
                                                                     <div>
                                                                         <span className="text-[9px] font-bold text-blue-600 uppercase tracking-wider block mb-1">Amendment Bank Bill</span>
                                                                         <p className="text-sm font-black text-blue-800 font-semibold">
@@ -3683,6 +3709,11 @@ const LCManagement = ({ addNotification, currentUser }) => {
                 grossPremium = gPrem > 0 ? gPrem.toFixed(2) : '';
             }
 
+            // Find updated IP numbers from the selected PI for amendment, or fall back to the LC's current IP numbers
+            const updatedIpNumbers = selectedPiForAmendment
+                ? getPiIpNumbers(selectedPiForAmendment)
+                : (lc.ipNumbers || []);
+
             // Update main LC record fields to match the latest state
             const updatedLcData = {
                 ...lc,
@@ -3701,6 +3732,8 @@ const LCManagement = ({ addNotification, currentUser }) => {
                 productName: latestState.productsList?.[0]?.productName || lc.productName || '',
                 hsCode: latestState.productsList?.[0]?.hsCode || lc.hsCode || '',
                 productsList: latestState.productsList || [],
+                ipNumbers: updatedIpNumbers,
+                ipNo: updatedIpNumbers[0] || '',
                 lcAmendment: latestState.amendmentNo === 'Original LC'
                     ? ''
                     : `${latestState.amendmentNo} DATE: ${formatDate(latestState.amendmentDate)}`,
@@ -6178,70 +6211,92 @@ const LCManagement = ({ addNotification, currentUser }) => {
                                                                                                 </span>
                                                                                             )}
                                                                                         </div>
-                                                                                        <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-9 gap-4 text-left">
-                                                                                            <div className="space-y-0.5">
-                                                                                                <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Commission {isAmndBillActive ? `(${amnd.amendmentCommission || 0}%)` : ''}</span>
-                                                                                                <p className="text-sm font-black text-gray-800">
-                                                                                                    {isAmndBillActive ? `৳${Math.round(commissionAmt).toLocaleString('en-IN')}` : '-'}
-                                                                                                </p>
-                                                                                            </div>
-                                                                                            <div className="space-y-0.5">
-                                                                                                <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">VAT on Comm. {isAmndBillActive ? `(${amnd.amendmentVatOnCommission || 0}%)` : ''}</span>
-                                                                                                <p className="text-sm font-black text-gray-800">
-                                                                                                    {isAmndBillActive ? `৳${Math.round(vatOnCommissionAmt).toLocaleString('en-IN')}` : '-'}
-                                                                                                </p>
-                                                                                            </div>
-                                                                                            <div className="space-y-0.5">
-                                                                                                <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">SWIFT Charge</span>
-                                                                                                <p className="text-sm font-black text-gray-800">
-                                                                                                    {isAmndBillActive && amnd.amendmentSwiftCharge !== undefined && amnd.amendmentSwiftCharge !== '' ? `৳${parseFloat(amnd.amendmentSwiftCharge).toLocaleString('en-IN')}` : '-'}
-                                                                                                </p>
-                                                                                            </div>
-                                                                                            <div className="space-y-0.5">
-                                                                                                <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">VAT on SWIFT {isAmndBillActive ? `(${amnd.amendmentVatOnSwift || 0}%)` : ''}</span>
-                                                                                                <p className="text-sm font-black text-gray-800">
-                                                                                                    {isAmndBillActive ? `৳${Math.round(vatOnSwiftAmt).toLocaleString('en-IN')}` : '-'}
-                                                                                                </p>
-                                                                                            </div>
-                                                                                            <div className="space-y-0.5">
-                                                                                                <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Margin</span>
-                                                                                                <p className="text-sm font-black text-gray-800">
-                                                                                                    {amnd.amendmentMargin !== undefined && amnd.amendmentMargin !== '' ? `${amnd.amendmentMargin}%` : (record.bankMargin ? `${record.bankMargin}%` : '-')}
-                                                                                                </p>
-                                                                                            </div>
-                                                                                            <div className="space-y-0.5">
-                                                                                                <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Margin Bill</span>
-                                                                                                <p className="text-sm font-black text-blue-600">
-                                                                                                    {amnd.amendmentMarginBill ? `৳${parseFloat(amnd.amendmentMarginBill).toLocaleString('en-IN', { minimumFractionDigits: 2 })}` : '-'}
-                                                                                                </p>
-                                                                                            </div>
-                                                                                            <div className="space-y-0.5">
-                                                                                                <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Margin Paid</span>
-                                                                                                <p className="text-sm font-black text-blue-600">
-                                                                                                    {amnd.amendmentMarginPaid !== undefined && amnd.amendmentMarginPaid !== '' 
-                                                                                                        ? `৳${parseFloat(amnd.amendmentMarginPaid).toLocaleString('en-IN', { minimumFractionDigits: 2 })}` 
-                                                                                                        : (() => {
-                                                                                                            const margin = amnd.amendmentMargin !== undefined ? (parseFloat(amnd.amendmentMargin) || 0) : (record.bankMargin !== undefined ? parseFloat(record.bankMargin) : 0);
-                                                                                                            const mb = parseFloat(amnd.amendmentMarginBill) || 0;
-                                                                                                            const mp = mb * (margin / 100);
-                                                                                                            return mp > 0 ? `৳${mp.toLocaleString('en-IN', { minimumFractionDigits: 2 })}` : '-';
-                                                                                                        })()
-                                                                                                    }
-                                                                                                </p>
-                                                                                            </div>
-                                                                                            <div className="space-y-0.5">
-                                                                                                <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Amendment Bill</span>
-                                                                                                <p className="text-sm font-extrabold text-rose-600">
-                                                                                                    {isAmndBillActive && amnd.amendmentBankBill ? `৳${parseFloat(amnd.amendmentBankBill).toLocaleString('en-IN', { minimumFractionDigits: 2 })}` : '-'}
-                                                                                                </p>
-                                                                                            </div>
-                                                                                            <div className="space-y-0.5">
-                                                                                                <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Total Bill</span>
-                                                                                                <p className="text-sm font-black text-blue-600">
-                                                                                                    {(amnd.totalAmendmentBankBill || amnd.amendmentBill) ? `৳${parseFloat(amnd.totalAmendmentBankBill || amnd.amendmentBill).toLocaleString('en-IN', { minimumFractionDigits: 2 })}` : '-'}
-                                                                                                </p>
-                                                                                            </div>
-                                                                                        </div>
+                                                                                        {(() => {
+                                                                                             const hasCommission = isAmndBillActive && amnd.amendmentCommission && parseFloat(amnd.amendmentCommission) > 0;
+                                                                                             const hasVatOnComm = isAmndBillActive && amnd.amendmentVatOnCommission && parseFloat(amnd.amendmentVatOnCommission) > 0;
+                                                                                             const hasSwiftCharge = isAmndBillActive && amnd.amendmentSwiftCharge && parseFloat(amnd.amendmentSwiftCharge) > 0;
+                                                                                             const hasVatOnSwift = isAmndBillActive && amnd.amendmentVatOnSwift && parseFloat(amnd.amendmentVatOnSwift) > 0;
+                                                                                             const hasBankBill = isAmndBillActive && amnd.amendmentBankBill && parseFloat(amnd.amendmentBankBill) > 0;
+
+                                                                                             const colsCount = 4 + (hasCommission ? 1 : 0) + (hasVatOnComm ? 1 : 0) + (hasSwiftCharge ? 1 : 0) + (hasVatOnSwift ? 1 : 0) + (hasBankBill ? 1 : 0);
+
+                                                                                             return (
+                                                                                                 <div className={`grid grid-cols-2 sm:grid-cols-3 ${gridColsClassMap[colsCount] || 'md:grid-cols-9'} gap-4 text-left`}>
+                                                                                                     {hasCommission && (
+                                                                                                         <div className="space-y-0.5">
+                                                                                                             <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Commission ({amnd.amendmentCommission || 0}%)</span>
+                                                                                                             <p className="text-sm font-black text-gray-800">
+                                                                                                                 ৳{Math.round(commissionAmt).toLocaleString('en-IN')}
+                                                                                                             </p>
+                                                                                                         </div>
+                                                                                                     )}
+                                                                                                     {hasVatOnComm && (
+                                                                                                         <div className="space-y-0.5">
+                                                                                                             <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">VAT on Comm. ({amnd.amendmentVatOnCommission || 0}%)</span>
+                                                                                                             <p className="text-sm font-black text-gray-800">
+                                                                                                                 ৳{Math.round(vatOnCommissionAmt).toLocaleString('en-IN')}
+                                                                                                             </p>
+                                                                                                         </div>
+                                                                                                     )}
+                                                                                                     {hasSwiftCharge && (
+                                                                                                         <div className="space-y-0.5">
+                                                                                                             <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">SWIFT Charge</span>
+                                                                                                             <p className="text-sm font-black text-gray-800">
+                                                                                                                 ৳{parseFloat(amnd.amendmentSwiftCharge).toLocaleString('en-IN')}
+                                                                                                             </p>
+                                                                                                         </div>
+                                                                                                     )}
+                                                                                                     {hasVatOnSwift && (
+                                                                                                         <div className="space-y-0.5">
+                                                                                                             <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">VAT on SWIFT ({amnd.amendmentVatOnSwift || 0}%)</span>
+                                                                                                             <p className="text-sm font-black text-gray-800">
+                                                                                                                 ৳{Math.round(vatOnSwiftAmt).toLocaleString('en-IN')}
+                                                                                                             </p>
+                                                                                                         </div>
+                                                                                                     )}
+                                                                                                     <div className="space-y-0.5">
+                                                                                                         <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Margin</span>
+                                                                                                         <p className="text-sm font-black text-gray-800">
+                                                                                                             {amnd.amendmentMargin !== undefined && amnd.amendmentMargin !== '' ? `${amnd.amendmentMargin}%` : (record.bankMargin ? `${record.bankMargin}%` : '-')}
+                                                                                                         </p>
+                                                                                                     </div>
+                                                                                                     <div className="space-y-0.5">
+                                                                                                         <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Margin Bill</span>
+                                                                                                         <p className="text-sm font-black text-blue-600">
+                                                                                                             {amnd.amendmentMarginBill ? `৳${parseFloat(amnd.amendmentMarginBill).toLocaleString('en-IN', { minimumFractionDigits: 2 })}` : '-'}
+                                                                                                         </p>
+                                                                                                     </div>
+                                                                                                     <div className="space-y-0.5">
+                                                                                                         <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Margin Paid</span>
+                                                                                                         <p className="text-sm font-black text-blue-600">
+                                                                                                             {amnd.amendmentMarginPaid !== undefined && amnd.amendmentMarginPaid !== '' 
+                                                                                                                 ? `৳${parseFloat(amnd.amendmentMarginPaid).toLocaleString('en-IN', { minimumFractionDigits: 2 })}` 
+                                                                                                                 : (() => {
+                                                                                                                     const margin = amnd.amendmentMargin !== undefined ? (parseFloat(amnd.amendmentMargin) || 0) : (record.bankMargin !== undefined ? parseFloat(record.bankMargin) : 0);
+                                                                                                                     const mb = parseFloat(amnd.amendmentMarginBill) || 0;
+                                                                                                                     const mp = mb * (margin / 100);
+                                                                                                                     return mp > 0 ? `৳${mp.toLocaleString('en-IN', { minimumFractionDigits: 2 })}` : '-';
+                                                                                                                 })()
+                                                                                                             }
+                                                                                                         </p>
+                                                                                                     </div>
+                                                                                                     {hasBankBill && (
+                                                                                                         <div className="space-y-0.5">
+                                                                                                             <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Amendment Bill</span>
+                                                                                                             <p className="text-sm font-extrabold text-rose-600">
+                                                                                                                 {isAmndBillActive && amnd.amendmentBankBill ? `৳${parseFloat(amnd.amendmentBankBill).toLocaleString('en-IN', { minimumFractionDigits: 2 })}` : '-'}
+                                                                                                             </p>
+                                                                                                         </div>
+                                                                                                     )}
+                                                                                                     <div className="space-y-0.5">
+                                                                                                         <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Total Bill</span>
+                                                                                                         <p className="text-sm font-black text-blue-600">
+                                                                                                             {(amnd.totalAmendmentBankBill || amnd.amendmentBill) ? `৳${parseFloat(amnd.totalAmendmentBankBill || amnd.amendmentBill).toLocaleString('en-IN', { minimumFractionDigits: 2 })}` : '-'}
+                                                                                                         </p>
+                                                                                                     </div>
+                                                                                                 </div>
+                                                                                             );
+                                                                                         })()}
                                                                                     </div>
                                                                                 );
                                                                             })}

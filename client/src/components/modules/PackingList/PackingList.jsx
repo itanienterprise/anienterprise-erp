@@ -334,7 +334,8 @@ function PackingList({
             otherReferences: rawPi.otherReferences || '',
             buyerName: rawPi.buyerName || '',
             selectedRevisionNo: revisionNo,
-            productsList: mappedProducts
+            productsList: mappedProducts,
+            productsImage: ''
         }));
         setPiSearchQuery('');
         setActiveDropdown(null);

@@ -994,6 +994,17 @@ function LCReceive({
         );
     };
 
+    // Resolve an IP product name (ipName) to the regular product name in the database.
+    // Falls back to the original name if no match is found.
+    const resolveProductName = (ipOrRegularName) => {
+        if (!ipOrRegularName) return ipOrRegularName;
+        const found = (products || []).find(p =>
+            (p.name || '').toLowerCase() === ipOrRegularName.toLowerCase() ||
+            (p.ipName || '').toLowerCase() === ipOrRegularName.toLowerCase()
+        );
+        return found ? found.name : ipOrRegularName;
+    };
+
     const handleStockDropdownSelect = (field, value) => {
         setStockFormData(prev => {
             const newData = { ...prev, [field]: value };
@@ -1007,7 +1018,7 @@ function LCReceive({
 
                     // Also auto-fill first product if empty
                     const activeProds = getLcActiveProducts(selectedLc);
-                    const firstProdName = activeProds[0]?.productName || selectedLc.productName;
+                    const firstProdName = resolveProductName(activeProds[0]?.productName || selectedLc.productName);
                     if (firstProdName && prev.productEntries.length === 1 && !prev.productEntries[0].productName) {
                         const updatedProducts = [...prev.productEntries];
                         updatedProducts[0] = {
@@ -1355,7 +1366,7 @@ function LCReceive({
 
             const formProductEntries = Object.keys(entriesByProduct).map(key => {
                 const prodEntries = entriesByProduct[key];
-                const pName = prodEntries[0]?.productName || '';
+                const pName = resolveProductName(prodEntries[0]?.productName || '');
 
                 // It is multi-brand if there are multiple entries.
                 // If there's only 1 entry, it is SINGLE mode if the brand is empty, a hyphen, OR exactly matches the product name.
@@ -1439,7 +1450,7 @@ function LCReceive({
                 originalIds: record.allIds || [record._id],
                 productEntries: [{
                     isMultiBrand: false,
-                    productName: record.productName,
+                    productName: resolveProductName(record.productName),
                     truckNo: record.truckNo,
                     brandEntries: [{
                         _id: record._id,
@@ -1538,12 +1549,18 @@ function LCReceive({
                     const lcProductNames = activeLcProducts.map(p => (p.productName || '').trim());
                     const lcProductNamesLower = lcProductNames.map(name => name.toLowerCase());
                     
-                    // Filter existing products
-                    const matchedProducts = products.filter(p => lcProductNamesLower.includes(p.name.toLowerCase()));
+                    // Match by regular product name OR by IP product name (ipName)
+                    const matchedProducts = products.filter(p => 
+                        lcProductNamesLower.includes((p.name || '').toLowerCase()) ||
+                        lcProductNamesLower.includes((p.ipName || '').toLowerCase())
+                    );
                     
-                    // Identify any LC product name that is not in the database products list
+                    // Only create temp entries for LC product names not found in DB by either name or ipName
                     const missingProducts = lcProductNames.filter(name => 
-                        name && !matchedProducts.some(p => p.name.toLowerCase() === name.toLowerCase())
+                        name && !matchedProducts.some(p => 
+                            (p.name || '').toLowerCase() === name.toLowerCase() ||
+                            (p.ipName || '').toLowerCase() === name.toLowerCase()
+                        )
                     ).map(name => ({
                         _id: `temp-${name}`,
                         name: name,
@@ -1558,8 +1575,13 @@ function LCReceive({
         }
 
         if (!input) return availableProducts;
-        return availableProducts.filter(p => p.name.toLowerCase().includes(input.toLowerCase()));
+        // Match by regular name OR ipName so typing either shows the product
+        return availableProducts.filter(p =>
+            (p.name || '').toLowerCase().includes(input.toLowerCase()) ||
+            (p.ipName || '').toLowerCase().includes(input.toLowerCase())
+        );
     };
+
 
     const getFilteredBrands = (input, productName) => {
         // No product selected → no brands to show
