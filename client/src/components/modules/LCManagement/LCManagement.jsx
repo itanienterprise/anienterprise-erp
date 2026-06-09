@@ -2997,6 +2997,7 @@ const LCManagement = ({ addNotification, currentUser }) => {
         bankBill: '',
         totalBankBill: '',
         lcBillEnabled: false,
+        amendments: [],
     });
     const [gpRecords, setGpRecords] = useState([]);
     const [lcExpenses, setLcExpenses] = useState([]);
@@ -3585,6 +3586,7 @@ const LCManagement = ({ addNotification, currentUser }) => {
             lcBillEnabled: record.lcBillEnabled !== undefined
                 ? record.lcBillEnabled
                 : !!(record.bankLcCommission || record.bankSwiftCharge || record.bankLcApplicationForm || record.bankMpCharge || record.bankStampCharge),
+            amendments: record.amendments || [],
         });
         setEditingId(record._id);
         setShowForm(true);
@@ -4310,6 +4312,7 @@ const LCManagement = ({ addNotification, currentUser }) => {
             bankBill: '',
             totalBankBill: '',
             lcBillEnabled: false,
+            amendments: [],
         });
         setEditingId(null);
         setShowForm(false);
