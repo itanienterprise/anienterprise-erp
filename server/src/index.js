@@ -643,7 +643,10 @@ apiRouter.put('/api/ports/:id', async (req, res) => {
     let oldPortName = '';
     let oldPortCode = '';
     try {
-      const oldPortData = decryptData(existingPortDoc.data);
+      let oldPortData = decryptData(existingPortDoc.data);
+      if (oldPortData && oldPortData.data && typeof oldPortData.data === 'string' && !oldPortData.name) {
+        try { oldPortData = decryptData(oldPortData.data); } catch (e) { }
+      }
       if (oldPortData) {
         oldPortName = oldPortData.name;
         oldPortCode = oldPortData.code;
