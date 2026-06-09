@@ -5,7 +5,6 @@ import axios from '../../../utils/api';
 
 function TRSetup({ onDeleteConfirm, currentUser }) {
     const canManage = ['admin', 'incharge', 'lc manager', 'border manager', 'data entry'].includes((currentUser?.role || '').toLowerCase());
-    const isAdmin = currentUser?.username === 'admin' || String(currentUser?.role || '').toLowerCase() === 'admin';
 
     const [records, setRecords] = useState([]);
     const [showForm, setShowForm] = useState(false);
@@ -167,13 +166,15 @@ function TRSetup({ onDeleteConfirm, currentUser }) {
                     </div>
 
                     <div className="w-full md:w-1/4 flex justify-end z-10">
-                        <button
-                            type="button"
-                            onClick={() => { setShowForm(true); resetForm(); }}
-                            className="w-full md:w-auto px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-xl shadow-lg shadow-blue-500/30 transition-all transform hover:scale-105 flex items-center justify-center whitespace-nowrap"
-                        >
-                            <span className="mr-1.5 font-bold text-lg leading-none">+</span> Add New
-                        </button>
+                        {canManage && (
+                            <button
+                                type="button"
+                                onClick={() => { setShowForm(true); resetForm(); }}
+                                className="w-full md:w-auto px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-xl shadow-lg shadow-blue-500/30 transition-all transform hover:scale-105 flex items-center justify-center whitespace-nowrap"
+                            >
+                                <span className="mr-1.5 font-bold text-lg leading-none">+</span> Add New
+                            </button>
+                        )}
                     </div>
                 </div>
             )}
@@ -312,6 +313,7 @@ function TRSetup({ onDeleteConfirm, currentUser }) {
                                         <p className="text-xs text-gray-400 mt-1">
                                             {record.createdAt ? formatDate(record.createdAt) : ''}
                                         </p>
+                                        {canManage && (
                                             <div className="flex gap-2 mt-4">
                                                 <button
                                                     type="button"
@@ -321,17 +323,16 @@ function TRSetup({ onDeleteConfirm, currentUser }) {
                                                     <EditIcon className="w-4 h-4" />
                                                     Edit
                                                 </button>
-                                                {isAdmin && (
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => handleDelete(record._id)}
-                                                        className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 text-sm font-medium text-red-600 bg-red-50 hover:bg-red-100 rounded-lg transition-colors"
-                                                    >
-                                                        <TrashIcon className="w-4 h-4" />
-                                                        Delete
-                                                    </button>
-                                                )}
+                                                <button
+                                                    type="button"
+                                                    onClick={() => handleDelete(record._id)}
+                                                    className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 text-sm font-medium text-red-600 bg-red-50 hover:bg-red-100 rounded-lg transition-colors"
+                                                >
+                                                    <TrashIcon className="w-4 h-4" />
+                                                    Delete
+                                                </button>
                                             </div>
+                                        )}
                                     </div>
                                 </div>
                             ))}
