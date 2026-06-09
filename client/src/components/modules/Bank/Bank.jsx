@@ -1393,7 +1393,7 @@ const Bank = ({ onDeleteConfirm }) => {
                                     {showHistoryFilterPanel && (
                                         <div
                                             ref={historyFilterPanelRef}
-                                            className="absolute right-0 top-12 w-[calc(100vw-2rem)] sm:w-[320px] bg-white rounded-2xl shadow-2xl border border-gray-100 p-5 md:p-6 z-[3100] animate-in fade-in zoom-in-95 duration-200 max-h-[70vh] overflow-y-auto"
+                                            className="absolute right-0 top-12 w-[calc(100vw-2rem)] sm:w-[320px] bg-white rounded-2xl shadow-2xl border border-gray-100 p-5 md:p-6 z-[3100] animate-in fade-in zoom-in-95 duration-200 overflow-visible"
                                         >
                                             <div className="flex items-center justify-between mb-6">
                                                 <h4 className="text-lg font-bold text-gray-800">Filter History</h4>
