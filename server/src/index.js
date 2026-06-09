@@ -297,7 +297,7 @@ apiRouter.delete('/api/cnfs/:id', adminOnly, async (req, res) => {
   }
 });
 
-apiRouter.put('/api/cnfs/:id', adminOnly, async (req, res) => {
+apiRouter.put('/api/cnfs/:id', async (req, res) => {
   try {
     const encryptedData = encryptData(req.body);
     const updatedCnF = await CnF.findByIdAndUpdate(req.params.id, { data: encryptedData }, { returnDocument: 'after' });

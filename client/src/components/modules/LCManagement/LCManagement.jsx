@@ -878,46 +878,45 @@ const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords
                         <div className="animate-in fade-in slide-in-from-bottom-2 duration-300">
                             {/* Summary Cards */}
                             {activeTab === 'bill' ? (
-                                <div className="grid grid-cols-2 gap-3 md:gap-4 mb-8">
+                                <div className="grid grid-cols-2 md:grid-cols-3 gap-3 md:gap-4 mb-8">
                                     <div 
-                                        className="col-span-2 bg-white p-4 md:p-5 rounded-2xl border border-gray-100 shadow-sm transition-all hover:shadow-md hover:border-blue-100 group text-center flex flex-col items-center justify-center"
-                                        style={{ gridColumn: 'span 2 / span 2' }}
+                                        className="col-span-full md:col-span-1 bg-white p-4 md:p-5 rounded-2xl border border-gray-100 shadow-sm transition-all hover:shadow-md hover:border-blue-100 group text-center md:text-left flex flex-col items-center md:items-start justify-center md:justify-start"
                                     >
-                                        <div className="flex items-center justify-center gap-2 md:gap-3 mb-2 md:mb-3">
+                                        <div className="flex items-center justify-center md:justify-start gap-2 md:gap-3 mb-2 md:mb-3">
                                             <div className="p-1.5 md:p-2 bg-blue-50 text-blue-600 rounded-lg md:rounded-xl group-hover:bg-blue-600 group-hover:text-white transition-colors shrink-0">
                                                 <DollarSignIcon className="w-4 h-4 md:w-5 md:h-5" />
                                             </div>
                                             <span className="text-[10px] md:text-[11px] font-bold text-gray-400 uppercase tracking-wider">Total Bills</span>
                                         </div>
-                                        <div className="flex items-baseline justify-center gap-0.5 md:gap-1">
+                                        <div className="flex items-baseline justify-center md:justify-start gap-0.5 md:gap-1">
                                             <span className="text-lg md:text-2xl font-black text-blue-600">
                                                 ৳{filteredBills.reduce((sum, b) => sum + b.totalBill, 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                                             </span>
                                         </div>
                                     </div>
 
-                                    <div className="bg-white p-4 md:p-5 rounded-2xl border border-gray-100 shadow-sm transition-all hover:shadow-md hover:border-emerald-100 group text-center flex flex-col items-center justify-center">
-                                        <div className="flex items-center justify-center gap-2 md:gap-3 mb-2 md:mb-3">
+                                    <div className="bg-white p-4 md:p-5 rounded-2xl border border-gray-100 shadow-sm transition-all hover:shadow-md hover:border-emerald-100 group text-center md:text-left flex flex-col items-center md:items-start justify-center md:justify-start">
+                                        <div className="flex items-center justify-center md:justify-start gap-2 md:gap-3 mb-2 md:mb-3">
                                             <div className="p-1.5 md:p-2 bg-emerald-50 text-emerald-600 rounded-lg md:rounded-xl group-hover:bg-emerald-600 group-hover:text-white transition-colors shrink-0">
                                                 <DollarSignIcon className="w-4 h-4 md:w-5 md:h-5" />
                                             </div>
                                             <span className="text-[10px] md:text-[11px] font-bold text-gray-400 uppercase tracking-wider">Total Paid</span>
                                         </div>
-                                        <div className="flex items-baseline justify-center gap-0.5 md:gap-1">
+                                        <div className="flex items-baseline justify-center md:justify-start gap-0.5 md:gap-1">
                                             <span className="text-lg md:text-2xl font-black text-emerald-600">
                                                 ৳{filteredBills.reduce((sum, b) => sum + (b.paidBill || 0), 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                                             </span>
                                         </div>
                                     </div>
 
-                                    <div className="bg-white p-4 md:p-5 rounded-2xl border border-gray-100 shadow-sm transition-all hover:shadow-md hover:border-rose-100 group text-center flex flex-col items-center justify-center">
-                                        <div className="flex items-center justify-center gap-2 md:gap-3 mb-2 md:mb-3">
+                                    <div className="bg-white p-4 md:p-5 rounded-2xl border border-gray-100 shadow-sm transition-all hover:shadow-md hover:border-rose-100 group text-center md:text-left flex flex-col items-center md:items-start justify-center md:justify-start">
+                                        <div className="flex items-center justify-center md:justify-start gap-2 md:gap-3 mb-2 md:mb-3">
                                             <div className="p-1.5 md:p-2 bg-rose-50 text-rose-600 rounded-lg md:rounded-xl group-hover:bg-rose-600 group-hover:text-white transition-colors shrink-0">
                                                 <DollarSignIcon className="w-4 h-4 md:w-5 md:h-5" />
                                             </div>
                                             <span className="text-[10px] md:text-[11px] font-bold text-gray-400 uppercase tracking-wider">Total Balance</span>
                                         </div>
-                                        <div className="flex items-baseline justify-center gap-0.5 md:gap-1">
+                                        <div className="flex items-baseline justify-center md:justify-start gap-0.5 md:gap-1">
                                             <span className="text-lg md:text-2xl font-black text-rose-600">
                                                 {(() => {
                                                     const bal = filteredBills.reduce((sum, b) => sum + (b.billBalance || 0), 0);
