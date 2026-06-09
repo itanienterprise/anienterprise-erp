@@ -194,3 +194,77 @@ input[type="number"] {
         border-color: #000 !important;
     }
 }
+
+/* ============================================================
+   Touch-device gradient fallbacks (BB Passport / touch-only)
+   These rules ONLY apply when JS adds .touch-device to <html>
+   Desktop is completely unaffected.
+   ============================================================ */
+
+/* Step 1: Disable CSS-variable-dependent gradient backgrounds */
+.touch-device .bg-gradient-to-r,
+.touch-device .bg-gradient-to-br,
+.touch-device .bg-gradient-to-b,
+.touch-device .bg-gradient-to-tr,
+.touch-device .bg-gradient-to-l,
+.touch-device .bg-gradient-to-bl {
+    background-image: none !important;
+}
+
+/* Step 2: Apply solid fallback colors based on from-* class */
+
+/* Blue / Indigo buttons (most common — primary actions) */
+.touch-device .from-blue-600,
+.touch-device .from-blue-500 {
+    background-color: #2563eb !important;
+}
+.touch-device .from-indigo-600,
+.touch-device .from-indigo-500 {
+    background-color: #4f46e5 !important;
+}
+
+/* Red / Rose buttons (destructive actions) */
+.touch-device .from-red-600,
+.touch-device .from-red-500 {
+    background-color: #dc2626 !important;
+}
+.touch-device .from-rose-600,
+.touch-device .from-rose-500 {
+    background-color: #e11d48 !important;
+}
+
+/* Green / Emerald buttons (success actions) */
+.touch-device .from-emerald-600,
+.touch-device .from-emerald-500 {
+    background-color: #059669 !important;
+}
+.touch-device .from-green-600,
+.touch-device .from-green-500 {
+    background-color: #16a34a !important;
+}
+
+/* Amber / Yellow buttons (warning actions) */
+.touch-device .from-amber-600,
+.touch-device .from-amber-500 {
+    background-color: #d97706 !important;
+}
+.touch-device .from-yellow-600,
+.touch-device .from-yellow-500 {
+    background-color: #ca8a04 !important;
+}
+
+/* Purple / Violet buttons */
+.touch-device .from-purple-600,
+.touch-device .from-purple-500 {
+    background-color: #7c3aed !important;
+}
+.touch-device .from-violet-600,
+.touch-device .from-violet-500 {
+    background-color: #7c3aed !important;
+}
+
+/* Light / subtle gradient backgrounds (headers, table footers) — use white */
+.touch-device .from-blue-50,
+.touch-device .from-gray-50 {
+    background-color: #f8fafc !important;
+}
