@@ -519,11 +519,9 @@ const Importer = ({
                                                 <td className="importer-table-cell">
                                                     <div className="importer-table-actions">
                                                         <button onClick={(e) => { e.stopPropagation(); setViewData(importer); }} className="importer-action-btn hover:bg-gray-100 text-gray-400 hover:text-gray-600"><EyeIcon className="w-5 h-5" /></button>
+                                                        <button onClick={(e) => { e.stopPropagation(); handleEdit(importer); }} className="importer-action-btn importer-action-edit"><EditIcon className="w-5 h-5" /></button>
                                                         {isAdmin && (
-                                                            <>
-                                                                <button onClick={(e) => { e.stopPropagation(); handleEdit(importer); }} className="importer-action-btn importer-action-edit"><EditIcon className="w-5 h-5" /></button>
-                                                                <button onClick={(e) => { e.stopPropagation(); handleDelete(importer._id); }} className="importer-action-btn importer-action-delete"><TrashIcon className="w-5 h-5" /></button>
-                                                            </>
+                                                            <button onClick={(e) => { e.stopPropagation(); handleDelete(importer._id); }} className="importer-action-btn importer-action-delete"><TrashIcon className="w-5 h-5" /></button>
                                                         )}
                                                     </div>
                                                 </td>
@@ -603,12 +601,14 @@ const Importer = ({
                                             >
                                                 <EditIcon className="w-4 h-4" /> Edit
                                             </button>
-                                            <button
-                                                onClick={(e) => { e.stopPropagation(); handleDelete(importer._id); }}
-                                                className="flex items-center justify-center gap-1.5 py-2 px-3 bg-red-50 text-red-600 rounded-lg text-xs font-bold hover:bg-red-100 transition-colors"
-                                            >
-                                                <TrashIcon className="w-4 h-4" />
-                                            </button>
+                                            {isAdmin && (
+                                                <button
+                                                    onClick={(e) => { e.stopPropagation(); handleDelete(importer._id); }}
+                                                    className="flex items-center justify-center gap-1.5 py-2 px-3 bg-red-50 text-red-600 rounded-lg text-xs font-bold hover:bg-red-100 transition-colors"
+                                                >
+                                                    <TrashIcon className="w-4 h-4" />
+                                                </button>
+                                            )}
                                         </div>
                                     </div>
                                 ))}

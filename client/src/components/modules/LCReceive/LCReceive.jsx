@@ -3513,9 +3513,11 @@ function LCReceive({
 
                                                             {entry.entries[0]?.status === 'Requested' ? (
                                                                 <>
-                                                                    <button onClick={(e) => { e.stopPropagation(); handleEditInternal('stock', entry); }} className="text-gray-400 hover:text-blue-600 transition-colors" title="Edit">
-                                                                        <EditIcon className="w-5 h-5" />
-                                                                    </button>
+                                                                    {(canEditDelete || (currentUser && entry.entries[0]?.requestedByUsername === currentUser.username)) && (
+                                                                        <button onClick={(e) => { e.stopPropagation(); handleEditInternal('stock', entry); }} className="text-gray-400 hover:text-blue-600 transition-colors" title="Edit">
+                                                                            <EditIcon className="w-5 h-5" />
+                                                                        </button>
+                                                                    )}
                                                                     {canApprove && (
                                                                         <>
                                                                             <button
@@ -3663,13 +3665,15 @@ function LCReceive({
 
                                                             {entry.entries[0]?.status === 'Requested' ? (
                                                                 <>
-                                                                    <button
-                                                                        onClick={(e) => { e.stopPropagation(); handleEditInternal('stock', entry); }}
-                                                                        className="p-2 text-blue-600 bg-blue-50/50 rounded-lg transition-colors hover:bg-blue-100"
-                                                                        title="Edit"
-                                                                    >
-                                                                        <EditIcon className="w-4 h-4" />
-                                                                    </button>
+                                                                    {(canEditDelete || (currentUser && entry.entries[0]?.requestedByUsername === currentUser.username)) && (
+                                                                        <button
+                                                                            onClick={(e) => { e.stopPropagation(); handleEditInternal('stock', entry); }}
+                                                                            className="p-2 text-blue-600 bg-blue-50/50 rounded-lg transition-colors hover:bg-blue-100"
+                                                                            title="Edit"
+                                                                        >
+                                                                            <EditIcon className="w-4 h-4" />
+                                                                        </button>
+                                                                    )}
                                                                     {canApprove && (
                                                                         <>
                                                                             <button

@@ -27,6 +27,7 @@ const Bank = ({ onDeleteConfirm }) => {
     // LC Bill History modal state
     const [lcBillHistoryBank, setLcBillHistoryBank] = useState(null); // bank name being viewed
     const [lcBillHistoryRows, setLcBillHistoryRows] = useState([]);
+    const [historySortConfig, setHistorySortConfig] = useState({ key: 'date', direction: 'asc' });
     const [lcBillHistoryLoading, setLcBillHistoryLoading] = useState(false);
     const [historySearchQuery, setHistorySearchQuery] = useState('');
     const [historyFilters, setHistoryFilters] = useState({
@@ -152,6 +153,7 @@ const Bank = ({ onDeleteConfirm }) => {
             lcNo: '',
             importer: ''
         });
+        setHistorySortConfig({ key: 'date', direction: 'asc' });
         setShowHistoryFilterPanel(false);
         setHistoryFilterSearchInputs({
             billTypeSearch: '',
@@ -194,6 +196,22 @@ const Bank = ({ onDeleteConfirm }) => {
                     .filter(e => e.lcNo === lc.lcNo && e.expenseHead === 'Margin Bill' && e.type !== 'bill')
                     .reduce((s, e) => s + (parseFloat(e.amount) || 0), 0);
 
+                // Get all registered custom bills for this LC from expenses
+                const customBills = expenses.filter(e => e.lcNo === lc.lcNo && e.type === 'bill');
+                // Sort custom bills by date ascending
+                customBills.sort((a, b) => new Date(a.date) - new Date(b.date));
+
+                // Pre-calculate how much of marginExpPaid is consumed by custom Margin Bill bills
+                let remainingMarginPaid = marginExpPaid;
+                customBills
+                    .filter(b => b.expenseHead === 'Margin Bill')
+                    .forEach(bill => {
+                        const billAmt = parseFloat(bill.amount) || 0;
+                        const paid = Math.min(remainingMarginPaid, billAmt);
+                        remainingMarginPaid -= paid;
+                    });
+                const openingMarginExpPaid = remainingMarginPaid;
+
                 // --- Original LC row ---
                 const origMarginBill = parseFloat(lc.marginBill) || parseFloat(lc.totalAmount) || 0;
                 const origMarginPaid = parseFloat(lc.marginPaid) || (origMarginBill * ((parseFloat(lc.bankMargin) || 0) / 100));
@@ -210,7 +228,7 @@ const Bank = ({ onDeleteConfirm }) => {
                     importer: lc.importer || '-',
                     billType: 'Opening LC',
                     marginBill: origMarginBill,
-                    marginPaid: origMarginPaid + marginExpPaid,
+                    marginPaid: origMarginPaid + openingMarginExpPaid,
                     bankBill: origBankBill,
                     bankPaid: origBankPaid
                 });
@@ -236,10 +254,50 @@ const Bank = ({ onDeleteConfirm }) => {
                         bankPaid: amndBankPaid
                     });
                 });
+
+                // --- Custom bills from LC Management ---
+                // Collect payments of other heads (except Margin Bill and Bank Charges which are handled residuals/FIFO)
+                const paymentsByHead = {};
+                expenses
+                    .filter(e => e.lcNo === lc.lcNo && e.type !== 'bill' && e.expenseHead !== 'Bank Charges' && e.expenseHead !== 'Margin Bill')
+                    .forEach(e => {
+                        const head = e.expenseHead || 'Other';
+                        paymentsByHead[head] = (paymentsByHead[head] || 0) + (parseFloat(e.amount) || 0);
+                    });
+
+                const remainingPaymentsByHead = {
+                    ...paymentsByHead,
+                    'Bank Charges': remBankPaid,
+                    'Margin Bill': marginExpPaid
+                };
+
+                customBills.forEach(bill => {
+                    const head = bill.expenseHead || 'Other';
+                    const billAmt = parseFloat(bill.amount) || 0;
+                    const remainingPaid = remainingPaymentsByHead[head] || 0;
+                    const paid = Math.min(remainingPaid, billAmt);
+
+                    if (remainingPaymentsByHead[head] !== undefined) {
+                        remainingPaymentsByHead[head] -= paid;
+                    }
+
+                    const isMargin = head === 'Margin Bill';
+
+                    rows.push({
+                        date: bill.date,
+                        lcNo: lc.lcNo,
+                        importer: lc.importer || '-',
+                        billType: bill.expenseHead || 'Other Bill',
+                        marginBill: isMargin ? billAmt : 0,
+                        marginPaid: isMargin ? paid : 0,
+                        bankBill: isMargin ? 0 : billAmt,
+                        bankPaid: isMargin ? 0 : paid
+                    });
+                });
             });
 
-            // Sort by date descending
-            rows.sort((a, b) => new Date(b.date) - new Date(a.date));
+            // Sort by date ascending
+            rows.sort((a, b) => new Date(a.date) - new Date(b.date));
             setLcBillHistoryRows(rows);
         } catch (err) {
             console.error('Error loading LC bill history:', err);
@@ -248,8 +306,16 @@ const Bank = ({ onDeleteConfirm }) => {
         }
     };
 
+    const requestSort = (key) => {
+        let direction = 'asc';
+        if (historySortConfig.key === key && historySortConfig.direction === 'asc') {
+            direction = 'desc';
+        }
+        setHistorySortConfig({ key, direction });
+    };
+
     const filteredLcBillHistoryRows = useMemo(() => {
-        return lcBillHistoryRows.filter(row => {
+        const filtered = lcBillHistoryRows.filter(row => {
             // Search Query Filter
             if (historySearchQuery) {
                 const query = historySearchQuery.toLowerCase().trim();
@@ -300,7 +366,35 @@ const Bank = ({ onDeleteConfirm }) => {
 
             return true;
         });
-    }, [lcBillHistoryRows, historySearchQuery, historyFilters]);
+
+        if (historySortConfig.key) {
+            filtered.sort((a, b) => {
+                let aVal = a[historySortConfig.key];
+                let bVal = b[historySortConfig.key];
+
+                if (historySortConfig.key === 'date') {
+                    const aDate = new Date(aVal);
+                    const bDate = new Date(bVal);
+                    return historySortConfig.direction === 'asc' ? aDate - bDate : bDate - aDate;
+                }
+
+                if (historySortConfig.key === 'marginPaid' || historySortConfig.key === 'bankPaid') {
+                    const aNum = parseFloat(aVal) || 0;
+                    const bNum = parseFloat(bVal) || 0;
+                    return historySortConfig.direction === 'asc' ? aNum - bNum : bNum - aNum;
+                }
+
+                // Default string comparison
+                aVal = (aVal || '').toString().toLowerCase();
+                bVal = (bVal || '').toString().toLowerCase();
+                if (aVal < bVal) return historySortConfig.direction === 'asc' ? -1 : 1;
+                if (aVal > bVal) return historySortConfig.direction === 'asc' ? 1 : -1;
+                return 0;
+            });
+        }
+
+        return filtered;
+    }, [lcBillHistoryRows, historySearchQuery, historyFilters, historySortConfig]);
 
     const uniqueLcNos = useMemo(() => {
         const set = new Set(lcBillHistoryRows.map(r => r.lcNo).filter(Boolean));
@@ -1299,7 +1393,7 @@ const Bank = ({ onDeleteConfirm }) => {
                                     {showHistoryFilterPanel && (
                                         <div
                                             ref={historyFilterPanelRef}
-                                            className="absolute right-0 top-12 w-[calc(100vw-2rem)] sm:w-[320px] bg-white rounded-2xl shadow-2xl border border-gray-100 p-5 md:p-6 z-[3100] animate-in fade-in zoom-in-95 duration-200 max-h-[70vh] overflow-y-auto"
+                                            className="absolute right-0 top-12 w-[calc(100vw-2rem)] sm:w-[320px] bg-white rounded-2xl shadow-2xl border border-gray-100 p-5 md:p-6 z-[3100] animate-in fade-in zoom-in-95 duration-200 overflow-visible"
                                         >
                                             <div className="flex items-center justify-between mb-6">
                                                 <h4 className="text-lg font-bold text-gray-800">Filter History</h4>
@@ -1568,13 +1662,85 @@ const Bank = ({ onDeleteConfirm }) => {
                                     <div className="overflow-x-auto">
                                     <table className="w-full text-left border-collapse min-w-[640px]">
                                         <thead>
-                                            <tr className="bg-gray-50/50 border-b border-gray-100">
-                                                <th className="px-5 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest whitespace-nowrap">Date</th>
-                                                <th className="px-5 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest whitespace-nowrap">LC No</th>
-                                                <th className="px-5 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">Importer</th>
-                                                <th className="px-5 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest whitespace-nowrap">Bill Type</th>
-                                                <th className="px-5 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest text-right whitespace-nowrap">Margin Paid</th>
-                                                <th className="px-5 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest text-right whitespace-nowrap">Bank Paid</th>
+                                            <tr className="bg-gray-50/50 border-b border-gray-100 select-none">
+                                                <th 
+                                                    onClick={() => requestSort('date')}
+                                                    className="px-5 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest whitespace-nowrap cursor-pointer hover:bg-gray-100/50 transition-colors"
+                                                >
+                                                    <div className="flex items-center gap-1">
+                                                        Date
+                                                        {historySortConfig.key === 'date' && (
+                                                            historySortConfig.direction === 'asc' 
+                                                                ? <ChevronUpIcon className="w-3.5 h-3.5 text-blue-500" />
+                                                                : <ChevronDownIcon className="w-3.5 h-3.5 text-blue-500" />
+                                                        )}
+                                                    </div>
+                                                </th>
+                                                <th 
+                                                    onClick={() => requestSort('lcNo')}
+                                                    className="px-5 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest whitespace-nowrap cursor-pointer hover:bg-gray-100/50 transition-colors"
+                                                >
+                                                    <div className="flex items-center gap-1">
+                                                        LC No
+                                                        {historySortConfig.key === 'lcNo' && (
+                                                            historySortConfig.direction === 'asc' 
+                                                                ? <ChevronUpIcon className="w-3.5 h-3.5 text-blue-500" />
+                                                                : <ChevronDownIcon className="w-3.5 h-3.5 text-blue-500" />
+                                                        )}
+                                                    </div>
+                                                </th>
+                                                <th 
+                                                    onClick={() => requestSort('importer')}
+                                                    className="px-5 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest cursor-pointer hover:bg-gray-100/50 transition-colors"
+                                                >
+                                                    <div className="flex items-center gap-1">
+                                                        Importer
+                                                        {historySortConfig.key === 'importer' && (
+                                                            historySortConfig.direction === 'asc' 
+                                                                ? <ChevronUpIcon className="w-3.5 h-3.5 text-blue-500" />
+                                                                : <ChevronDownIcon className="w-3.5 h-3.5 text-blue-500" />
+                                                        )}
+                                                    </div>
+                                                </th>
+                                                <th 
+                                                    onClick={() => requestSort('billType')}
+                                                    className="px-5 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest whitespace-nowrap cursor-pointer hover:bg-gray-100/50 transition-colors"
+                                                >
+                                                    <div className="flex items-center gap-1">
+                                                        Bill Type
+                                                        {historySortConfig.key === 'billType' && (
+                                                            historySortConfig.direction === 'asc' 
+                                                                ? <ChevronUpIcon className="w-3.5 h-3.5 text-blue-500" />
+                                                                : <ChevronDownIcon className="w-3.5 h-3.5 text-blue-500" />
+                                                        )}
+                                                    </div>
+                                                </th>
+                                                <th 
+                                                    onClick={() => requestSort('marginPaid')}
+                                                    className="px-5 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest text-right whitespace-nowrap cursor-pointer hover:bg-gray-100/50 transition-colors"
+                                                >
+                                                    <div className="flex items-center justify-end gap-1">
+                                                        Margin Paid
+                                                        {historySortConfig.key === 'marginPaid' && (
+                                                            historySortConfig.direction === 'asc' 
+                                                                ? <ChevronUpIcon className="w-3.5 h-3.5 text-blue-500" />
+                                                                : <ChevronDownIcon className="w-3.5 h-3.5 text-blue-500" />
+                                                        )}
+                                                    </div>
+                                                </th>
+                                                <th 
+                                                    onClick={() => requestSort('bankPaid')}
+                                                    className="px-5 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest text-right whitespace-nowrap cursor-pointer hover:bg-gray-100/50 transition-colors"
+                                                >
+                                                    <div className="flex items-center justify-end gap-1">
+                                                        Bank Paid
+                                                        {historySortConfig.key === 'bankPaid' && (
+                                                            historySortConfig.direction === 'asc' 
+                                                                ? <ChevronUpIcon className="w-3.5 h-3.5 text-blue-500" />
+                                                                : <ChevronDownIcon className="w-3.5 h-3.5 text-blue-500" />
+                                                        )}
+                                                    </div>
+                                                </th>
                                             </tr>
                                         </thead>
                                         <tbody className="divide-y divide-gray-50 font-medium">

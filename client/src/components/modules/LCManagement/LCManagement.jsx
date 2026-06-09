@@ -25,6 +25,7 @@ const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords
     const [showConsumption, setShowConsumption] = useState(true);
     const [consumptionSearchQuery, setConsumptionSearchQuery] = useState('');
     const [activeTab, setActiveTab] = useState('history');
+    const [expandedSubRowKey, setExpandedSubRowKey] = useState(null);
     const [activeMilestoneIndex, setActiveMilestoneIndex] = useState(0);
     const [insurancePayments, setInsurancePayments] = useState([]);
     const [cnfPayments, setCnfPayments] = useState([]);
@@ -694,11 +695,11 @@ const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords
     });
 
     return (
-        <div className="fixed inset-0 z-[2000] flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-[2000] flex items-center justify-center p-0 md:p-4">
             <div className="absolute inset-0 bg-gray-900/60 backdrop-blur-sm" onClick={onClose}></div>
-            <div className="relative bg-white border border-gray-100 rounded-2xl shadow-2xl w-full max-w-7xl overflow-hidden animate-in zoom-in duration-300">
-                {/* Header */}
-                <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 bg-gray-50/50">
+            <div className="relative bg-white border border-gray-100 md:rounded-2xl rounded-none shadow-2xl w-full h-full md:h-auto md:max-w-7xl max-h-screen md:max-h-[90vh] flex flex-col overflow-hidden animate-in zoom-in duration-300">
+                {/* Desktop Header */}
+                <div className="hidden md:flex items-center justify-between px-6 py-4 border-b border-gray-100 bg-gray-50/50">
                     {/* Left: LC Info */}
                     <div className="flex items-center gap-3 min-w-0 shrink-0">
                         <div className="p-2 rounded-lg bg-blue-50 text-blue-600">
@@ -742,7 +743,7 @@ const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords
                                 {['history', 'gp', 'bill', 'expense'].map(tab => (
                                     <button
                                         key={tab}
-                                        onClick={() => { setActiveTab(tab); setConsumptionSearchQuery(''); }}
+                                        onClick={() => { setActiveTab(tab); setConsumptionSearchQuery(''); setExpandedSubRowKey(null); }}
                                         className={`px-5 py-1.5 rounded-full text-xs font-bold transition-all whitespace-nowrap border ${activeTab === tab
                                             ? 'bg-blue-600 text-white border-blue-600 shadow-sm'
                                             : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50'
@@ -782,382 +783,850 @@ const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords
                     </div>
                 </div>
 
+                {/* Mobile Header */}
+                <div className="md:hidden flex flex-col gap-3 px-4 py-4 border-b border-gray-100 bg-gray-50/50">
+                    {/* Top Row: Title, LC Info and Actions */}
+                    <div className="flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-2.5 min-w-0">
+                            <div className="min-w-0">
+                                <h3 className="text-sm font-black text-gray-900 truncate">
+                                    {showConsumption ? 'LC Consumption History' : 'LC Record Details'}
+                                </h3>
+                                <p className="text-[10px] text-gray-500 font-bold uppercase tracking-wider">
+                                    LC NO: <span className="text-xs font-black text-blue-600">{data.lcNo}</span>
+                                </p>
+                            </div>
+                        </div>
+                        <div className="flex items-center gap-1.5 shrink-0">
+                            {showConsumption && activeTab === 'bill' && (
+                                <button
+                                    onClick={() => setShowAddBillModal(true)}
+                                    className="h-7 flex items-center justify-center gap-1 px-2.5 rounded-lg text-[10px] font-bold bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-sm transition-all transform active:scale-95 shrink-0 leading-none"
+                                >
+                                    <PlusIcon className="w-3.5 h-3.5" />
+                                    <span>Add</span>
+                                </button>
+                            )}
+                            <button
+                                onClick={() => setShowConsumption(!showConsumption)}
+                                className={`h-7 flex items-center justify-center gap-1 px-2.5 rounded-lg text-[10px] font-bold transition-all border leading-none ${showConsumption
+                                    ? 'bg-blue-50 text-blue-600 border-blue-100'
+                                    : 'bg-gray-50 text-gray-600 border-gray-100 hover:bg-white'
+                                    }`}
+                            >
+                                <LCManagerIcon className="w-3.5 h-3.5" />
+                                {showConsumption ? 'Details' : 'History'}
+                            </button>
+                            <button
+                                onClick={onClose}
+                                className="h-7 w-7 flex items-center justify-center text-gray-400 hover:text-gray-600 rounded-full hover:bg-gray-100 transition-all shrink-0"
+                            >
+                                <XIcon className="w-4 h-4" />
+                            </button>
+                        </div>
+                    </div>
+
+                    {/* Search Bar Row (only in consumption view) */}
+                    {showConsumption && (
+                        <div className="relative group w-full">
+                            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                                <SearchIcon className="h-3.5 w-3.5 text-gray-400 group-focus-within:text-blue-500 transition-colors" />
+                            </div>
+                            <input
+                                type="text"
+                                placeholder="Search consumption history..."
+                                autoComplete="off"
+                                className="block w-full pl-9 pr-8 py-1.5 bg-white border border-gray-200 rounded-xl text-[12px] placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all outline-none"
+                                value={consumptionSearchQuery}
+                                onChange={(e) => setConsumptionSearchQuery(e.target.value)}
+                            />
+                            {consumptionSearchQuery && (
+                                <button
+                                    onClick={() => setConsumptionSearchQuery('')}
+                                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors"
+                                >
+                                    <XIcon className="w-3 h-3" />
+                                </button>
+                            )}
+                        </div>
+                    )}
+
+                    {/* Tabs Row (only in consumption view) */}
+                    {showConsumption && (
+                        <div className="flex items-center justify-between gap-3 w-full">
+                            <div className="flex items-center justify-center gap-1.5 overflow-x-auto no-scrollbar py-0.5 -mx-1 px-1 flex-1">
+                                {['history', 'gp', 'bill', 'expense'].map(tab => (
+                                    <button
+                                        key={tab}
+                                        onClick={() => { setActiveTab(tab); setConsumptionSearchQuery(''); setExpandedSubRowKey(null); }}
+                                        className={`px-3 py-1 rounded-full text-[11px] font-bold transition-all whitespace-nowrap border shrink-0 ${activeTab === tab
+                                            ? 'bg-blue-600 text-white border-blue-600 shadow-sm'
+                                            : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'
+                                            }`}
+                                    >
+                                        {tab === 'history' ? 'LC History' : tab === 'gp' ? 'G.P List' : tab === 'bill' ? 'LC Bill' : 'Expense'}
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+                </div>
+
                 {/* Content */}
-                <div className="overflow-y-auto max-h-[80vh] p-8 custom-scrollbar">
+                <div className="flex-1 overflow-y-auto p-4 md:p-8 custom-scrollbar">
                     {showConsumption ? (
                         <div className="animate-in fade-in slide-in-from-bottom-2 duration-300">
                             {/* Summary Cards */}
-                            <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
-                                <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm transition-all hover:shadow-md hover:border-blue-100 group">
-                                    <div className="flex items-center gap-3 mb-3">
-                                        <div className="p-2 bg-blue-50 text-blue-600 rounded-xl group-hover:bg-blue-600 group-hover:text-white transition-colors">
-                                            <LCManagerIcon className="w-5 h-5" />
+                            {activeTab === 'bill' ? (
+                                <div className="grid grid-cols-2 md:grid-cols-3 gap-3 md:gap-4 mb-8">
+                                    <div 
+                                        className="col-span-full md:col-span-1 bg-white p-4 md:p-5 rounded-2xl border border-gray-100 shadow-sm transition-all hover:shadow-md hover:border-blue-100 group text-center md:text-left flex flex-col items-center md:items-start justify-center md:justify-start"
+                                    >
+                                        <div className="flex items-center justify-center md:justify-start gap-2 md:gap-3 mb-2 md:mb-3">
+                                            <div className="p-1.5 md:p-2 bg-blue-50 text-blue-600 rounded-lg md:rounded-xl group-hover:bg-blue-600 group-hover:text-white transition-colors shrink-0">
+                                                <DollarSignIcon className="w-4 h-4 md:w-5 md:h-5" />
+                                            </div>
+                                            <span className="text-[10px] md:text-[11px] font-bold text-gray-400 uppercase tracking-wider">Total Bills</span>
                                         </div>
-                                        <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">LC Quantity</span>
+                                        <div className="flex items-baseline justify-center md:justify-start gap-0.5 md:gap-1">
+                                            <span className="text-lg md:text-2xl font-black text-blue-600">
+                                                ৳{filteredBills.reduce((sum, b) => sum + b.totalBill, 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                                            </span>
+                                        </div>
                                     </div>
-                                    <div className="flex items-baseline gap-1">
-                                        <span className="text-2xl font-black text-gray-900">{totalLcQtyKg.toLocaleString('en-US')}</span>
-                                        <span className="text-xs font-bold text-gray-400">Kg</span>
-                                    </div>
-                                </div>
 
-                                <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm transition-all hover:shadow-md hover:border-indigo-100 group">
-                                    <div className="flex items-center gap-3 mb-3">
-                                        <div className="p-2 bg-indigo-50 text-indigo-600 rounded-xl group-hover:bg-indigo-600 group-hover:text-white transition-colors">
-                                            <GlobeIcon className="w-5 h-5" />
+                                    <div className="bg-white p-4 md:p-5 rounded-2xl border border-gray-100 shadow-sm transition-all hover:shadow-md hover:border-emerald-100 group text-center md:text-left flex flex-col items-center md:items-start justify-center md:justify-start">
+                                        <div className="flex items-center justify-center md:justify-start gap-2 md:gap-3 mb-2 md:mb-3">
+                                            <div className="p-1.5 md:p-2 bg-emerald-50 text-emerald-600 rounded-lg md:rounded-xl group-hover:bg-emerald-600 group-hover:text-white transition-colors shrink-0">
+                                                <DollarSignIcon className="w-4 h-4 md:w-5 md:h-5" />
+                                            </div>
+                                            <span className="text-[10px] md:text-[11px] font-bold text-gray-400 uppercase tracking-wider">Total Paid</span>
                                         </div>
-                                        <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Total Consumption</span>
+                                        <div className="flex items-baseline justify-center md:justify-start gap-0.5 md:gap-1">
+                                            <span className="text-lg md:text-2xl font-black text-emerald-600">
+                                                ৳{filteredBills.reduce((sum, b) => sum + (b.paidBill || 0), 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                                            </span>
+                                        </div>
                                     </div>
-                                    <div className="flex items-baseline gap-1">
-                                        <span className="text-2xl font-black text-gray-900">{consumedQtyKg.toLocaleString('en-US')}</span>
-                                        <span className="text-xs font-bold text-gray-400">Kg</span>
-                                    </div>
-                                </div>
 
-                                <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm transition-all hover:shadow-md hover:border-emerald-100 group">
-                                    <div className="flex items-center gap-3 mb-3">
-                                        <div className="p-2 bg-emerald-50 text-emerald-600 rounded-xl group-hover:bg-emerald-600 group-hover:text-white transition-colors">
-                                            <ShieldIcon className="w-5 h-5" />
+                                    <div className="bg-white p-4 md:p-5 rounded-2xl border border-gray-100 shadow-sm transition-all hover:shadow-md hover:border-rose-100 group text-center md:text-left flex flex-col items-center md:items-start justify-center md:justify-start">
+                                        <div className="flex items-center justify-center md:justify-start gap-2 md:gap-3 mb-2 md:mb-3">
+                                            <div className="p-1.5 md:p-2 bg-rose-50 text-rose-600 rounded-lg md:rounded-xl group-hover:bg-rose-600 group-hover:text-white transition-colors shrink-0">
+                                                <DollarSignIcon className="w-4 h-4 md:w-5 md:h-5" />
+                                            </div>
+                                            <span className="text-[10px] md:text-[11px] font-bold text-gray-400 uppercase tracking-wider">Total Balance</span>
                                         </div>
-                                        <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Rem. Quantity</span>
-                                    </div>
-                                    <div className="flex items-baseline gap-1">
-                                        <span className={`text-2xl font-black ${remQtyKg <= 0 ? 'text-emerald-600' : 'text-blue-600'}`}>
-                                            {remQtyKg.toLocaleString('en-US')}
-                                        </span>
-                                        <span className="text-xs font-bold text-gray-400">Kg</span>
+                                        <div className="flex items-baseline justify-center md:justify-start gap-0.5 md:gap-1">
+                                            <span className="text-lg md:text-2xl font-black text-rose-600">
+                                                {(() => {
+                                                    const bal = filteredBills.reduce((sum, b) => sum + (b.billBalance || 0), 0);
+                                                    return bal < 0
+                                                        ? `-৳${Math.abs(bal).toLocaleString('en-IN', { minimumFractionDigits: 2 })}`
+                                                        : `৳${bal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`;
+                                                })()}
+                                            </span>
+                                        </div>
                                     </div>
                                 </div>
+                            ) : (
+                                <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4 mb-8">
+                                    <div className="bg-white p-4 md:p-5 rounded-2xl border border-gray-100 shadow-sm transition-all hover:shadow-md hover:border-blue-100 group text-left">
+                                        <div className="flex items-center gap-2 md:gap-3 mb-2 md:mb-3">
+                                            <div className="p-1.5 md:p-2 bg-blue-50 text-blue-600 rounded-lg md:rounded-xl group-hover:bg-blue-600 group-hover:text-white transition-colors shrink-0">
+                                                <LCManagerIcon className="w-4 h-4 md:w-5 md:h-5" />
+                                            </div>
+                                            <span className="text-[10px] md:text-[11px] font-bold text-gray-400 uppercase tracking-wider">LC Quantity</span>
+                                        </div>
+                                        <div className="flex items-baseline gap-0.5 md:gap-1">
+                                            <span className="text-lg md:text-2xl font-black text-gray-900">{totalLcQtyKg.toLocaleString('en-US')}</span>
+                                            <span className="text-[10px] md:text-xs font-bold text-gray-400">Kg</span>
+                                        </div>
+                                    </div>
 
-                                <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm transition-all hover:shadow-md hover:border-gray-200 group">
-                                    <div className="flex items-center gap-3 mb-3">
-                                        <div className="p-2 bg-gray-50 text-gray-600 rounded-xl group-hover:bg-gray-800 group-hover:text-white transition-colors">
-                                            <BuildingIcon className="w-5 h-5" />
+                                    <div className="bg-white p-4 md:p-5 rounded-2xl border border-gray-100 shadow-sm transition-all hover:shadow-md hover:border-indigo-100 group text-left">
+                                        <div className="flex items-center gap-2 md:gap-3 mb-2 md:mb-3">
+                                            <div className="p-1.5 md:p-2 bg-indigo-50 text-indigo-600 rounded-lg md:rounded-xl group-hover:bg-indigo-600 group-hover:text-white transition-colors shrink-0">
+                                                <GlobeIcon className="w-4 h-4 md:w-5 md:h-5" />
+                                            </div>
+                                            <span className="text-[10px] md:text-[11px] font-bold text-gray-400 uppercase tracking-wider">Total Consumption</span>
                                         </div>
-                                        <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Total Truck</span>
+                                        <div className="flex items-baseline gap-0.5 md:gap-1">
+                                            <span className="text-lg md:text-2xl font-black text-gray-900">{consumedQtyKg.toLocaleString('en-US')}</span>
+                                            <span className="text-[10px] md:text-xs font-bold text-gray-400">Kg</span>
+                                        </div>
                                     </div>
-                                    <div className="flex items-baseline gap-1">
-                                        <span className="text-2xl font-black text-gray-900">{truckCount}</span>
-                                        <span className="text-xs font-bold text-gray-400">Units</span>
+
+                                    <div className="bg-white p-4 md:p-5 rounded-2xl border border-gray-100 shadow-sm transition-all hover:shadow-md hover:border-emerald-100 group text-left">
+                                        <div className="flex items-center gap-2 md:gap-3 mb-2 md:mb-3">
+                                            <div className="p-1.5 md:p-2 bg-emerald-50 text-emerald-600 rounded-lg md:rounded-xl group-hover:bg-emerald-600 group-hover:text-white transition-colors shrink-0">
+                                                <ShieldIcon className="w-4 h-4 md:w-5 md:h-5" />
+                                            </div>
+                                            <span className="text-[10px] md:text-[11px] font-bold text-gray-400 uppercase tracking-wider">Rem. Quantity</span>
+                                        </div>
+                                        <div className="flex items-baseline gap-0.5 md:gap-1">
+                                            <span className={`text-lg md:text-2xl font-black ${remQtyKg <= 0 ? 'text-emerald-600' : 'text-blue-600'}`}>
+                                                {remQtyKg.toLocaleString('en-US')}
+                                            </span>
+                                            <span className="text-[10px] md:text-xs font-bold text-gray-400">Kg</span>
+                                        </div>
+                                    </div>
+
+                                    <div className="bg-white p-4 md:p-5 rounded-2xl border border-gray-100 shadow-sm transition-all hover:shadow-md hover:border-gray-200 group text-left">
+                                        <div className="flex items-center gap-2 md:gap-3 mb-2 md:mb-3">
+                                            <div className="p-1.5 md:p-2 bg-gray-50 text-gray-600 rounded-lg md:rounded-xl group-hover:bg-gray-800 group-hover:text-white transition-colors shrink-0">
+                                                <BuildingIcon className="w-4 h-4 md:w-5 md:h-5" />
+                                            </div>
+                                            <span className="text-[10px] md:text-[11px] font-bold text-gray-400 uppercase tracking-wider">Total Truck</span>
+                                        </div>
+                                        <div className="flex items-baseline gap-0.5 md:gap-1">
+                                            <span className="text-lg md:text-2xl font-black text-gray-900">{truckCount}</span>
+                                            <span className="text-[10px] md:text-xs font-bold text-gray-400">Units</span>
+                                        </div>
                                     </div>
                                 </div>
-                            </div>
+                            )}
 
                             {/* Consumption History Table or GP List */}
                             {activeTab === 'history' ? (
-                                <div className="overflow-hidden border border-gray-100 rounded-2xl shadow-sm">
-                                    <table className="w-full text-left border-collapse">
-                                        <thead>
-                                            <tr className="bg-gray-50/50 border-b border-gray-100">
-                                                <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Date</th>
-                                                <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Importer</th>
-                                                <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Exporter</th>
-                                                <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Product</th>
-                                                <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Truck</th>
-                                                <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-right">Quantity</th>
-                                                <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-center">Source</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody className="divide-y divide-gray-50">
-                                            {filteredConsumptionHistory.length > 0 ? (
-                                                filteredConsumptionHistory.map((item, idx) => (
-                                                    <tr key={idx} className="hover:bg-gray-50/50 transition-colors group">
-                                                        <td className="px-6 py-4 text-sm font-medium text-gray-600 whitespace-nowrap">{formatDate(item.date)}</td>
-                                                        <td className="px-6 py-4 text-sm font-medium text-gray-800 uppercase">{item.importer || '-'}</td>
-                                                        <td className="px-6 py-4 text-sm font-medium text-gray-800 uppercase">{item.exporter || '-'}</td>
-                                                        <td className="px-6 py-4 text-sm font-medium text-gray-900">{item.product || '-'}</td>
-                                                        <td className="px-6 py-4 text-sm font-medium text-blue-600 uppercase whitespace-nowrap">{item.truck || '-'}</td>
-                                                        <td className="px-6 py-4 text-sm font-medium text-right text-gray-900 whitespace-nowrap">
-                                                            {parseNum(item.quantity).toLocaleString('en-US')} <span className="text-[10px] text-gray-400 font-normal">Kg</span>
-                                                        </td>
-                                                        <td className="px-6 py-4 text-center">
-                                                            <span className={`px-3 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider border ${item.source === 'LC Receive'
-                                                                ? 'bg-blue-50 text-blue-600 border-blue-100/50'
-                                                                : 'bg-indigo-50 text-indigo-600 border-indigo-100/50'
-                                                                }`}>
-                                                                {item.source}
-                                                            </span>
-                                                        </td>
-                                                    </tr>
-                                                ))
-                                            ) : (
-                                                <tr>
-                                                    <td colSpan="7" className="px-6 py-12 text-center text-gray-400 font-bold">
-                                                        {consumptionSearchQuery ? 'No results match your search.' : 'No consumption history found for this LC.'}
-                                                    </td>
+                                <>
+                                    {/* Desktop View */}
+                                    <div className="hidden md:block overflow-x-auto border border-gray-100 rounded-2xl shadow-sm">
+                                        <table className="w-full text-left border-collapse min-w-[750px] md:min-w-0">
+                                            <thead>
+                                                <tr className="bg-gray-50/50 border-b border-gray-100">
+                                                    <th className="px-3 md:px-6 py-3 md:py-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Date</th>
+                                                    <th className="px-3 md:px-6 py-3 md:py-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Importer</th>
+                                                    <th className="px-3 md:px-6 py-3 md:py-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Exporter</th>
+                                                    <th className="px-3 md:px-6 py-3 md:py-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Product</th>
+                                                    <th className="px-3 md:px-6 py-3 md:py-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Truck</th>
+                                                    <th className="px-3 md:px-6 py-3 md:py-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-right">Quantity</th>
+                                                    <th className="px-3 md:px-6 py-3 md:py-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-center">Source</th>
                                                 </tr>
-                                            )}
-                                        </tbody>
-                                        <tfoot className="bg-gray-50/30">
-                                            <tr>
-                                                <td colSpan="5" className="px-6 py-4 text-right text-xs font-medium text-gray-400 uppercase tracking-wider">Total Consumption:</td>
-                                                <td className="px-6 py-4 text-sm font-medium text-right text-blue-600">
-                                                    {filteredConsumptionHistory.reduce((sum, item) => sum + parseNum(item.quantity), 0).toLocaleString('en-US')} <span className="text-[10px] font-normal">Kg</span>
-                                                </td>
-                                                <td></td>
-                                            </tr>
-                                        </tfoot>
-                                    </table>
-                                </div>
-                            ) : activeTab === 'gp' ? (
-                                /* G.P List Table */
-                                <div className="overflow-hidden border border-gray-100 rounded-2xl shadow-sm">
-                                    <table className="w-full text-left border-collapse">
-                                        <thead>
-                                            <tr className="bg-gray-50/50 border-b border-gray-100">
-                                                <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Date</th>
-                                                <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Party Name</th>
-                                                <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Sold To</th>
-                                                <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Product</th>
-                                                <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-right">GP Qty (Kg)</th>
-                                                <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-right">GP Value</th>
-                                                <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-center">Status</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody className="divide-y divide-gray-50">
-                                            {filteredGpRecords.length > 0 ? (
-                                                filteredGpRecords.map((gp, idx) => (
-                                                    <tr key={gp._id || idx} className="hover:bg-gray-50/50 transition-colors group">
-                                                        <td className="px-6 py-4 text-sm font-medium text-gray-600 whitespace-nowrap">{formatDate(gp.gpDate)}</td>
-                                                        <td className="px-6 py-4 text-sm font-medium text-gray-800 uppercase">{gp.partyName || '-'}</td>
-                                                        <td className="px-6 py-4 text-sm font-medium text-gray-800 uppercase">{gp.party || '-'}</td>
-                                                        <td className="px-6 py-4 text-sm font-medium text-gray-900">{gp.productName || '-'}</td>
-                                                        <td className="px-6 py-4 text-sm font-medium text-right text-gray-900 whitespace-nowrap">
-                                                            {parseNum(gp.gpQuantity).toLocaleString('en-US')} <span className="text-[10px] text-gray-400 font-normal">Kg</span>
-                                                        </td>
-                                                        <td className="px-6 py-4 text-sm font-medium text-right text-gray-900 whitespace-nowrap">
-                                                            ৳{parseNum(gp.gpValue).toLocaleString('en-IN')}
-                                                        </td>
-                                                        <td className="px-6 py-4 text-center">
-                                                            <span className={`px-3 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider border ${gp.status === 'Active'
-                                                                ? 'bg-blue-50 text-blue-600 border-blue-100/50'
-                                                                : 'bg-gray-100 text-gray-500 border-gray-200/50'
-                                                                }`}>
-                                                                {gp.status || 'Active'}
-                                                            </span>
-                                                        </td>
-                                                    </tr>
-                                                ))
-                                            ) : (
-                                                <tr>
-                                                    <td colSpan="7" className="px-6 py-12 text-center text-gray-400 font-bold">
-                                                        {consumptionSearchQuery ? 'No G.P records match your search.' : 'No Gate Pass records found for this LC.'}
-                                                    </td>
-                                                </tr>
-                                            )}
-                                        </tbody>
-                                        <tfoot className="bg-gray-50/30">
-                                            <tr>
-                                                <td colSpan="4" className="px-6 py-4 text-right text-xs font-medium text-gray-400 uppercase tracking-wider">Total GP Qty:</td>
-                                                <td className="px-6 py-4 text-sm font-medium text-right text-blue-600">
-                                                    {filteredGpRecords.reduce((sum, gp) => sum + parseNum(gp.gpQuantity), 0).toLocaleString('en-US')} <span className="text-[10px] font-normal">Kg</span>
-                                                </td>
-                                                <td className="px-6 py-4 text-sm font-medium text-right text-blue-600">
-                                                    ৳{filteredGpRecords.reduce((sum, gp) => sum + parseNum(gp.gpValue), 0).toLocaleString('en-IN')}
-                                                </td>
-                                                <td></td>
-                                            </tr>
-                                        </tfoot>
-                                    </table>
-                                </div>
-                            ) : activeTab === 'bill' ? (
-                                /* LC Bill Details Table */
-                                <div className="overflow-hidden border border-gray-100 rounded-2xl shadow-sm">
-                                    <table className="w-full text-left border-collapse">
-                                        <thead>
-                                            <tr className="bg-gray-50/50 border-b border-gray-100">
-                                                <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Date</th>
-                                                <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Bill Head</th>
-                                                <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Name</th>
-                                                <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-right">Total Bill</th>
-                                                <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-right">Paid Bill</th>
-                                                <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-right">Bill Balance</th>
-                                                <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-center">Status</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody className="divide-y divide-gray-50 font-medium">
-                                            {filteredBills.length > 0 ? (
-                                                filteredBills.map((bill, idx) => (
-                                                    <tr key={idx} className="hover:bg-gray-50/50 transition-colors group">
-                                                        <td className="px-6 py-4 text-sm text-gray-600 whitespace-nowrap">
-                                                            {formatDate(bill.date)}
-                                                        </td>
-                                                        <td className="px-6 py-4 text-sm font-bold text-blue-600">
-                                                            {bill.billHead}
-                                                        </td>
-                                                        <td className="px-6 py-4 text-sm text-gray-800 uppercase">
-                                                            {bill.name || '-'}
-                                                        </td>
-                                                        <td className="px-6 py-4 text-sm font-black text-right text-gray-900 whitespace-nowrap">
-                                                            ৳{bill.totalBill.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-                                                        </td>
-                                                        <td className="px-6 py-4 text-sm font-black text-right text-emerald-600 whitespace-nowrap">
-                                                            ৳{(bill.paidBill || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-                                                        </td>
-                                                        <td className="px-6 py-4 text-sm font-black text-right text-rose-600 whitespace-nowrap">
-                                                            {bill.billBalance < 0
-                                                                ? `-৳${Math.abs(bill.billBalance).toLocaleString('en-IN', { minimumFractionDigits: 2 })}`
-                                                                : `৳${(bill.billBalance || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}`
-                                                            }
-                                                        </td>
-                                                        <td className="px-6 py-4 text-center">
-                                                            <span className={`px-3 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider border ${bill.status === 'Paid'
-                                                                    ? 'bg-emerald-50 text-emerald-600 border-emerald-100/50'
-                                                                    : bill.status === 'Partial Paid'
-                                                                        ? 'bg-amber-50 text-amber-600 border-amber-100/50'
-                                                                        : 'bg-rose-50 text-rose-600 border-rose-100/50'
-                                                                }`}>
-                                                                {bill.status}
-                                                            </span>
-                                                        </td>
-                                                    </tr>
-                                                ))
-                                            ) : (
-                                                <tr>
-                                                    <td colSpan="7" className="px-6 py-12 text-center text-gray-400 font-bold">
-                                                        {consumptionSearchQuery ? 'No bills match your search.' : 'No bills found for this LC.'}
-                                                    </td>
-                                                </tr>
-                                            )}
-                                        </tbody>
-                                        <tfoot className="bg-gray-50/30">
-                                            <tr>
-                                                <td colSpan="3" className="px-6 py-4 text-right text-xs font-medium text-gray-400 uppercase tracking-wider">Total Bills:</td>
-                                                <td className="px-6 py-4 text-sm font-black text-right text-blue-600">
-                                                    ৳{filteredBills.reduce((sum, b) => sum + b.totalBill, 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-                                                </td>
-                                                <td className="px-6 py-4 text-sm font-black text-right text-emerald-600">
-                                                    ৳{filteredBills.reduce((sum, b) => sum + (b.paidBill || 0), 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-                                                </td>
-                                                <td className="px-6 py-4 text-sm font-black text-right text-rose-600">
-                                                    {(() => {
-                                                        const bal = filteredBills.reduce((sum, b) => sum + (b.billBalance || 0), 0);
-                                                        return bal < 0
-                                                            ? `-৳${Math.abs(bal).toLocaleString('en-IN', { minimumFractionDigits: 2 })}`
-                                                            : `৳${bal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`;
-                                                    })()}
-                                                </td>
-                                                <td></td>
-                                            </tr>
-                                        </tfoot>
-                                    </table>
-                                </div>
-                            ) : (
-                                /* Expense Table */
-                                <div className="overflow-hidden border border-gray-100 rounded-2xl shadow-sm">
-                                    <table className="w-full text-left border-collapse">
-                                        <thead>
-                                            <tr className="bg-gray-50/50 border-b border-gray-100">
-                                                <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Date</th>
-                                                <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Expense Head</th>
-                                                <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Name</th>
-                                                <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-right">Amount</th>
-                                                <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Remarks</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody className="divide-y divide-gray-50">
-                                            {(() => {
-                                                const filtered = [...lcExpenses.filter(exp => exp.lcNo === data.lcNo && exp.type !== 'bill')];
-
-                                                // Check if original Margin is Paid
-                                                const marginPaidAmt = parseFloat(data.marginPaid) || (() => {
-                                                    const total = parseFloat(data.totalAmount) || 0;
-                                                    const margin = parseFloat(data.bankMargin) || 0;
-                                                    return total * (margin / 100);
-                                                })();
-                                                if (marginPaidAmt > 0) {
-                                                    filtered.unshift({
-                                                        _id: 'margin-paid-virtual',
-                                                        date: data.openingDate || data.createdAt,
-                                                        expenseHead: `Margin Paid (${data.bankMargin || 0}%)`,
-                                                        bankName: data.bankName || 'Bank',
-                                                        amount: marginPaidAmt,
-                                                        remarks: 'Paid Margin'
-                                                    });
-                                                }
-
-                                                // Check if amendment Margin is Paid
-                                                if (data.amendments && data.amendments.length > 0) {
-                                                    data.amendments.forEach((amnd, idx) => {
-                                                        if (amnd.amendmentNo === 'Original LC') return;
-                                                        const margin = amnd.amendmentMargin !== undefined ? (parseFloat(amnd.amendmentMargin) || 0) : (data.bankMargin !== undefined ? parseFloat(data.bankMargin) : 0);
-                                                        const amndMarginPaid = parseFloat(amnd.amendmentMarginPaid) || (() => {
-                                                            const amndMarginBill = parseFloat(amnd.amendmentMarginBill) || 0;
-                                                            return amndMarginBill * (margin / 100);
-                                                        })();
-                                                        if (amndMarginPaid > 0) {
-                                                            filtered.push({
-                                                                _id: `amnd-margin-paid-virtual-${idx}`,
-                                                                date: amnd.amendmentDate || data.openingDate,
-                                                                expenseHead: `Margin Paid (${margin}%) (${amnd.amendmentNo || `Amend #${idx + 1}`})`,
-                                                                bankName: data.bankName || 'Bank',
-                                                                amount: amndMarginPaid,
-                                                                remarks: `Paid Margin for ${amnd.amendmentNo || `Amend #${idx + 1}`}`
-                                                            });
-                                                        }
-                                                    });
-                                                }
-
-                                                return filtered.length > 0 ? (
-                                                    filtered.map((exp, idx) => (
-                                                        <tr key={exp._id || idx} className="hover:bg-gray-50/50 transition-colors group">
-                                                            <td className="px-6 py-4 text-sm font-medium text-gray-600 whitespace-nowrap">{formatDate(exp.date)}</td>
-                                                            <td className="px-6 py-4 text-sm font-medium text-gray-900">{exp.expenseHead || '-'}</td>
-                                                            <td className="px-6 py-4 text-sm font-medium text-gray-800">
-                                                                {exp.cnfAgent || exp.bankName || exp.insuranceCo || exp.insuranceName || exp.name || '-'}
+                                            </thead>
+                                            <tbody className="divide-y divide-gray-50">
+                                                {filteredConsumptionHistory.length > 0 ? (
+                                                    filteredConsumptionHistory.map((item, idx) => (
+                                                        <tr key={idx} className="hover:bg-gray-50/50 transition-colors group">
+                                                            <td className="px-3 md:px-6 py-3 md:py-4 text-sm font-medium text-gray-600 whitespace-nowrap">{formatDate(item.date)}</td>
+                                                            <td className="px-3 md:px-6 py-3 md:py-4 text-sm font-medium text-gray-800 uppercase">{item.importer || '-'}</td>
+                                                            <td className="px-3 md:px-6 py-3 md:py-4 text-sm font-medium text-gray-800 uppercase">{item.exporter || '-'}</td>
+                                                            <td className="px-3 md:px-6 py-3 md:py-4 text-sm font-medium text-gray-900">{item.product || '-'}</td>
+                                                            <td className="px-3 md:px-6 py-3 md:py-4 text-sm font-medium text-blue-600 uppercase whitespace-nowrap">{item.truck || '-'}</td>
+                                                            <td className="px-3 md:px-6 py-3 md:py-4 text-sm font-medium text-right text-gray-900 whitespace-nowrap">
+                                                                {parseNum(item.quantity).toLocaleString('en-US')} <span className="text-[10px] text-gray-400 font-normal">Kg</span>
                                                             </td>
-                                                            <td className="px-6 py-4 text-sm font-bold text-right text-rose-600 whitespace-nowrap">৳{parseNum(exp.amount).toLocaleString('en-IN')}</td>
-                                                            <td className="px-6 py-4 text-sm text-gray-500 truncate max-w-[200px]">{exp.remarks || '-'}</td>
+                                                            <td className="px-3 md:px-6 py-3 md:py-4 text-center">
+                                                                <span className={`px-2.5 py-0.5 rounded-lg text-[10px] font-bold uppercase tracking-wider border ${item.source === 'LC Receive'
+                                                                    ? 'bg-blue-50 text-blue-600 border-blue-100/50'
+                                                                    : 'bg-indigo-50 text-indigo-600 border-indigo-100/50'
+                                                                    }`}>
+                                                                    {item.source}
+                                                                </span>
+                                                            </td>
                                                         </tr>
                                                     ))
                                                 ) : (
                                                     <tr>
-                                                        <td colSpan="5" className="px-6 py-12 text-center text-gray-400 font-bold">
-                                                            No expense records found for this LC.
+                                                        <td colSpan="7" className="px-6 py-12 text-center text-gray-400 font-bold">
+                                                            {consumptionSearchQuery ? 'No results match your search.' : 'No consumption history found for this LC.'}
                                                         </td>
                                                     </tr>
-                                                );
-                                            })()}
-                                        </tbody>
-                                        <tfoot className="bg-gray-50/30">
-                                            <tr>
-                                                <td colSpan="3" className="px-6 py-4 text-right text-xs font-medium text-gray-400 uppercase tracking-wider">Total Expense:</td>
-                                                <td className="px-6 py-4 text-sm font-bold text-right text-rose-600">
-                                                    {(() => {
-                                                        const filtered = [...lcExpenses.filter(exp => exp.lcNo === data.lcNo && exp.type !== 'bill')];
-                                                        const marginPaidAmt = parseFloat(data.marginPaid) || (() => {
-                                                            const total = parseFloat(data.totalAmount) || 0;
-                                                            const margin = parseFloat(data.bankMargin) || 0;
-                                                            return total * (margin / 100);
-                                                        })();
-                                                        let total = filtered.reduce((sum, exp) => sum + parseNum(exp.amount), 0);
-                                                        if (marginPaidAmt > 0) total += marginPaidAmt;
-                                                        if (data.amendments && data.amendments.length > 0) {
-                                                            data.amendments.forEach((amnd) => {
-                                                                if (amnd.amendmentNo === 'Original LC') return;
-                                                                const margin = amnd.amendmentMargin !== undefined ? (parseFloat(amnd.amendmentMargin) || 0) : (data.bankMargin !== undefined ? parseFloat(data.bankMargin) : 0);
-                                                                const amndMarginPaid = parseFloat(amnd.amendmentMarginPaid) || (() => {
-                                                                    const amndMarginBill = parseFloat(amnd.amendmentMarginBill) || 0;
-                                                                    return amndMarginBill * (margin / 100);
-                                                                })();
-                                                                if (amndMarginPaid > 0) total += amndMarginPaid;
-                                                            });
-                                                        }
-                                                        return `৳${total.toLocaleString('en-IN')}`;
-                                                    })()}
-                                                </td>
-                                                <td></td>
-                                            </tr>
-                                        </tfoot>
-                                    </table>
-                                </div>
+                                                )}
+                                            </tbody>
+                                            <tfoot className="bg-gray-50/30">
+                                                <tr>
+                                                    <td colSpan="5" className="px-3 md:px-6 py-3 md:py-4 text-right text-xs font-medium text-gray-400 uppercase tracking-wider">Total Consumption:</td>
+                                                    <td className="px-3 md:px-6 py-3 md:py-4 text-sm font-medium text-right text-blue-600">
+                                                        {filteredConsumptionHistory.reduce((sum, item) => sum + parseNum(item.quantity), 0).toLocaleString('en-US')} <span className="text-[10px] font-normal">Kg</span>
+                                                    </td>
+                                                    <td></td>
+                                                </tr>
+                                            </tfoot>
+                                        </table>
+                                    </div>
+                                    {/* Mobile View */}
+                                    <div className="md:hidden">
+                                        {filteredConsumptionHistory.length > 0 ? (
+                                            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden divide-y divide-gray-100">
+                                                {filteredConsumptionHistory.map((item, idx) => {
+                                                    const key = `history_${idx}`;
+                                                    const isExpanded = expandedSubRowKey === key;
+                                                    return (
+                                                        <div key={idx} className="transition-all hover:bg-gray-50/35">
+                                                            {/* Collapsed View Header */}
+                                                            <div
+                                                                onClick={() => setExpandedSubRowKey(isExpanded ? null : key)}
+                                                                className="flex items-center justify-between gap-3 p-4 cursor-pointer select-none"
+                                                            >
+                                                                <div className={`p-2 rounded-xl shrink-0 ${item.source === 'LC Receive'
+                                                                        ? 'bg-emerald-50 text-emerald-600'
+                                                                        : 'bg-indigo-50 text-indigo-600'
+                                                                    }`}>
+                                                                    {item.source === 'LC Receive' ? (
+                                                                        <BuildingIcon className="w-4 h-4" />
+                                                                    ) : (
+                                                                        <GlobeIcon className="w-4 h-4" />
+                                                                    )}
+                                                                </div>
+                                                                <div className="flex-1 min-w-0 text-left">
+                                                                    <p className="text-xs font-bold text-gray-900 truncate">{item.product || '-'}</p>
+                                                                    <p className="text-[10px] text-gray-400 font-semibold font-mono mt-0.5">{formatDate(item.date)}</p>
+                                                                </div>
+                                                                <div className="text-right shrink-0">
+                                                                    <p className="text-xs font-black text-gray-900">{parseNum(item.quantity).toLocaleString('en-US')} kg</p>
+                                                                    <span className={`inline-block text-[8px] font-extrabold uppercase px-1.5 py-0.5 rounded mt-1 border ${item.source === 'LC Receive'
+                                                                            ? 'bg-emerald-50/50 text-emerald-700 border-emerald-100/30'
+                                                                            : 'bg-indigo-50/50 text-indigo-700 border-indigo-100/30'
+                                                                        }`}>
+                                                                        {item.source}
+                                                                    </span>
+                                                                </div>
+                                                                <div className="shrink-0 text-gray-400 pl-1">
+                                                                    {isExpanded ? <ChevronUpIcon className="w-4 h-4" /> : <ChevronDownIcon className="w-4 h-4" />}
+                                                                </div>
+                                                            </div>
+
+                                                            {/* Expanded Details */}
+                                                            {isExpanded && (
+                                                                <div className="px-4 pb-4 pt-1 space-y-2 bg-gray-50/30 border-t border-gray-100/50 text-xs text-left animate-in slide-in-from-top-1 duration-200">
+                                                                    <div className="grid grid-cols-[125px_8px_1fr] gap-y-1.5 pt-2 text-xs items-baseline">
+                                                                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Importer</span>
+                                                                        <span className="text-gray-400 font-bold text-[10px]">:</span>
+                                                                        <span className="font-bold text-gray-900 uppercase truncate text-[11px]" title={item.importer}>{item.importer || '-'}</span>
+
+                                                                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Exporter</span>
+                                                                        <span className="text-gray-400 font-bold text-[10px]">:</span>
+                                                                        <span className="font-bold text-gray-900 uppercase truncate text-[11px]" title={item.exporter}>{item.exporter || '-'}</span>
+
+                                                                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Truck No</span>
+                                                                        <span className="text-gray-400 font-bold text-[10px]">:</span>
+                                                                        <span className="font-bold text-blue-600 uppercase truncate text-[11px]">{item.truck || '-'}</span>
+
+                                                                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Source</span>
+                                                                        <span className="text-gray-400 font-bold text-[10px]">:</span>
+                                                                        <span className="font-semibold text-gray-700 truncate text-[11px]">{item.source || '-'}</span>
+                                                                    </div>
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    );
+                                                })}
+                                            </div>
+                                        ) : (
+                                            <div className="p-8 text-center text-gray-400 font-bold bg-white border border-gray-100 rounded-2xl shadow-sm">
+                                                {consumptionSearchQuery ? 'No results match your search.' : 'No consumption history found for this LC.'}
+                                            </div>
+                                        )}
+
+                                    </div>
+                                </>
+                            ) : activeTab === 'gp' ? (
+                                <>
+                                    {/* Desktop View */}
+                                    <div className="hidden md:block overflow-x-auto border border-gray-100 rounded-2xl shadow-sm">
+                                        <table className="w-full text-left border-collapse min-w-[700px] md:min-w-0">
+                                            <thead>
+                                                <tr className="bg-gray-50/50 border-b border-gray-100">
+                                                    <th className="px-3 md:px-6 py-3 md:py-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Date</th>
+                                                    <th className="px-3 md:px-6 py-3 md:py-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Party Name</th>
+                                                    <th className="px-3 md:px-6 py-3 md:py-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Sold To</th>
+                                                    <th className="px-3 md:px-6 py-3 md:py-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Product</th>
+                                                    <th className="px-3 md:px-6 py-3 md:py-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-right">GP Qty (Kg)</th>
+                                                    <th className="px-3 md:px-6 py-3 md:py-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-right">GP Value</th>
+                                                    <th className="px-3 md:px-6 py-3 md:py-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-center">Status</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody className="divide-y divide-gray-50">
+                                                {filteredGpRecords.length > 0 ? (
+                                                    filteredGpRecords.map((gp, idx) => (
+                                                        <tr key={gp._id || idx} className="hover:bg-gray-50/50 transition-colors group">
+                                                            <td className="px-3 md:px-6 py-3 md:py-4 text-sm font-medium text-gray-600 whitespace-nowrap">{formatDate(gp.gpDate)}</td>
+                                                            <td className="px-3 md:px-6 py-3 md:py-4 text-sm font-medium text-gray-800 uppercase">{gp.partyName || '-'}</td>
+                                                            <td className="px-3 md:px-6 py-3 md:py-4 text-sm font-medium text-gray-800 uppercase">{gp.party || '-'}</td>
+                                                            <td className="px-3 md:px-6 py-3 md:py-4 text-sm font-medium text-gray-900">{gp.productName || '-'}</td>
+                                                            <td className="px-3 md:px-6 py-3 md:py-4 text-sm font-medium text-right text-gray-900 whitespace-nowrap">
+                                                                {parseNum(gp.gpQuantity).toLocaleString('en-US')} <span className="text-[10px] text-gray-400 font-normal">Kg</span>
+                                                            </td>
+                                                            <td className="px-3 md:px-6 py-3 md:py-4 text-sm font-medium text-right text-gray-900 whitespace-nowrap">
+                                                                ৳{parseNum(gp.gpValue).toLocaleString('en-IN')}
+                                                            </td>
+                                                            <td className="px-3 md:px-6 py-3 md:py-4 text-center">
+                                                                <span className={`px-2.5 py-0.5 rounded-lg text-[10px] font-bold uppercase tracking-wider border ${gp.status === 'Active'
+                                                                    ? 'bg-blue-50 text-blue-600 border-blue-100/50'
+                                                                    : 'bg-gray-100 text-gray-500 border-gray-200/50'
+                                                                    }`}>
+                                                                    {gp.status || 'Active'}
+                                                                </span>
+                                                            </td>
+                                                        </tr>
+                                                    ))
+                                                ) : (
+                                                    <tr>
+                                                        <td colSpan="7" className="px-3 md:px-6 py-12 text-center text-gray-400 font-bold">
+                                                            {consumptionSearchQuery ? 'No G.P records match your search.' : 'No Gate Pass records found for this LC.'}
+                                                        </td>
+                                                    </tr>
+                                                )}
+                                            </tbody>
+                                            <tfoot className="bg-gray-50/30">
+                                                <tr>
+                                                    <td colSpan="4" className="px-3 md:px-6 py-3 md:py-4 text-right text-xs font-medium text-gray-400 uppercase tracking-wider">Total GP Qty:</td>
+                                                    <td className="px-3 md:px-6 py-3 md:py-4 text-sm font-medium text-right text-blue-600">
+                                                        {filteredGpRecords.reduce((sum, gp) => sum + parseNum(gp.gpQuantity), 0).toLocaleString('en-US')} <span className="text-[10px] font-normal">Kg</span>
+                                                    </td>
+                                                    <td className="px-3 md:px-6 py-3 md:py-4 text-sm font-medium text-right text-blue-600">
+                                                        ৳{filteredGpRecords.reduce((sum, gp) => sum + parseNum(gp.gpValue), 0).toLocaleString('en-IN')}
+                                                    </td>
+                                                    <td></td>
+                                                </tr>
+                                            </tfoot>
+                                        </table>
+                                    </div>
+                                    {/* Mobile View */}
+                                    <div className="md:hidden">
+                                        {filteredGpRecords.length > 0 ? (
+                                            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden divide-y divide-gray-100">
+                                                {filteredGpRecords.map((gp, idx) => {
+                                                    const key = `gp_${idx}`;
+                                                    const isExpanded = expandedSubRowKey === key;
+                                                    return (
+                                                        <div key={gp._id || idx} className="transition-all hover:bg-gray-50/35">
+                                                            {/* Collapsed View Header */}
+                                                            <div
+                                                                onClick={() => setExpandedSubRowKey(isExpanded ? null : key)}
+                                                                className="flex items-center justify-between gap-3 p-4 cursor-pointer select-none"
+                                                            >
+                                                                <div className="p-2 rounded-xl shrink-0 bg-indigo-50 text-indigo-600">
+                                                                    <FileTextIcon className="w-4 h-4" />
+                                                                </div>
+                                                                <div className="flex-1 min-w-0 text-left">
+                                                                    <p className="text-xs font-bold text-gray-900 truncate">{gp.productName || '-'}</p>
+                                                                    <p className="text-[10px] text-gray-400 font-semibold font-mono mt-0.5">{formatDate(gp.gpDate)}</p>
+                                                                </div>
+                                                                <div className="text-right shrink-0">
+                                                                    <p className="text-xs font-black text-gray-900">{parseNum(gp.gpQuantity).toLocaleString('en-US')} kg</p>
+                                                                    <p className="text-[10px] text-gray-500 font-bold mt-0.5">৳{parseNum(gp.gpValue).toLocaleString('en-IN')}</p>
+                                                                </div>
+                                                                <div className="shrink-0 text-gray-400 pl-1">
+                                                                    {isExpanded ? <ChevronUpIcon className="w-4 h-4" /> : <ChevronDownIcon className="w-4 h-4" />}
+                                                                </div>
+                                                            </div>
+
+                                                            {/* Expanded Details */}
+                                                            {isExpanded && (
+                                                                <div className="px-4 pb-4 pt-1 space-y-2 bg-gray-50/30 border-t border-gray-100/50 text-xs text-left animate-in slide-in-from-top-1 duration-200">
+                                                                    <div className="grid grid-cols-[125px_8px_1fr] gap-y-1.5 pt-2 text-xs items-baseline">
+                                                                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Party Name</span>
+                                                                        <span className="text-gray-400 font-bold text-[10px]">:</span>
+                                                                        <span className="font-bold text-gray-900 uppercase truncate text-[11px]" title={gp.partyName}>{gp.partyName || '-'}</span>
+
+                                                                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Sold To</span>
+                                                                        <span className="text-gray-400 font-bold text-[10px]">:</span>
+                                                                        <span className="font-bold text-gray-900 uppercase truncate text-[11px]" title={gp.party}>{gp.party || '-'}</span>
+
+                                                                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">GP Value</span>
+                                                                        <span className="text-gray-400 font-bold text-[10px]">:</span>
+                                                                        <span className="font-black text-gray-900 truncate text-[11px]">৳{parseNum(gp.gpValue).toLocaleString('en-IN')}</span>
+
+                                                                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Status</span>
+                                                                        <span className="text-gray-400 font-bold text-[10px]">:</span>
+                                                                        <div className="flex items-center">
+                                                                            <span className={`inline-block text-[8px] font-extrabold uppercase px-1.5 py-0.5 rounded border shrink-0 ${gp.status === 'Active'
+                                                                                    ? 'bg-emerald-50/50 text-emerald-700 border-emerald-100/30'
+                                                                                    : 'bg-gray-50 text-gray-500 border-gray-200/30'
+                                                                                }`}>
+                                                                                {gp.status || 'Active'}
+                                                                            </span>
+                                                                        </div>
+                                                                    </div>
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    );
+                                                })}
+                                            </div>
+                                        ) : (
+                                            <div className="p-8 text-center text-gray-400 font-bold bg-white border border-gray-100 rounded-2xl shadow-sm">
+                                                {consumptionSearchQuery ? 'No G.P records match your search.' : 'No Gate Pass records found for this LC.'}
+                                            </div>
+                                        )}
+
+                                    </div>
+                                </>
+                            ) : activeTab === 'bill' ? (
+                                <>
+                                    {/* Desktop View */}
+                                    <div className="hidden md:block overflow-x-auto border border-gray-100 rounded-2xl shadow-sm">
+                                        <table className="w-full text-left border-collapse min-w-[750px] md:min-w-0">
+                                            <thead>
+                                                <tr className="bg-gray-50/50 border-b border-gray-100">
+                                                    <th className="px-3 md:px-6 py-3 md:py-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Date</th>
+                                                    <th className="px-3 md:px-6 py-3 md:py-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Bill Head</th>
+                                                    <th className="px-3 md:px-6 py-3 md:py-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Name</th>
+                                                    <th className="px-3 md:px-6 py-3 md:py-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-right">Total Bill</th>
+                                                    <th className="px-3 md:px-6 py-3 md:py-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-right">Paid Bill</th>
+                                                    <th className="px-3 md:px-6 py-3 md:py-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-right">Bill Balance</th>
+                                                    <th className="px-3 md:px-6 py-3 md:py-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-center">Status</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody className="divide-y divide-gray-50 font-medium">
+                                                {filteredBills.length > 0 ? (
+                                                    filteredBills.map((bill, idx) => (
+                                                        <tr key={idx} className="hover:bg-gray-50/50 transition-colors group">
+                                                            <td className="px-3 md:px-6 py-3 md:py-4 text-sm text-gray-600 whitespace-nowrap">
+                                                                {formatDate(bill.date)}
+                                                            </td>
+                                                            <td className="px-3 md:px-6 py-3 md:py-4 text-sm font-bold text-blue-600">
+                                                                {bill.billHead}
+                                                            </td>
+                                                            <td className="px-3 md:px-6 py-3 md:py-4 text-sm text-gray-800 uppercase">
+                                                                {bill.name || '-'}
+                                                            </td>
+                                                            <td className="px-3 md:px-6 py-3 md:py-4 text-sm font-black text-right text-gray-900 whitespace-nowrap">
+                                                                ৳{bill.totalBill.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                                                            </td>
+                                                            <td className="px-3 md:px-6 py-3 md:py-4 text-sm font-black text-right text-emerald-600 whitespace-nowrap">
+                                                                ৳{(bill.paidBill || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                                                            </td>
+                                                            <td className="px-3 md:px-6 py-3 md:py-4 text-sm font-black text-right text-rose-600 whitespace-nowrap">
+                                                                {bill.billBalance < 0
+                                                                    ? `-৳${Math.abs(bill.billBalance).toLocaleString('en-IN', { minimumFractionDigits: 2 })}`
+                                                                    : `৳${(bill.billBalance || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}`
+                                                                }
+                                                            </td>
+                                                            <td className="px-3 md:px-6 py-3 md:py-4 text-center">
+                                                                <span className={`px-2.5 py-0.5 rounded-lg text-[10px] font-bold uppercase tracking-wider border ${bill.status === 'Paid'
+                                                                    ? 'bg-emerald-50 text-emerald-600 border-emerald-100/50'
+                                                                    : bill.status === 'Partial Paid'
+                                                                        ? 'bg-amber-50 text-amber-600 border-amber-100/50'
+                                                                        : 'bg-rose-50 text-rose-600 border-rose-100/50'
+                                                                    }`}>
+                                                                    {bill.status}
+                                                                </span>
+                                                            </td>
+                                                        </tr>
+                                                    ))
+                                                ) : (
+                                                    <tr>
+                                                        <td colSpan="7" className="px-3 md:px-6 py-12 text-center text-gray-400 font-bold">
+                                                            {consumptionSearchQuery ? 'No bills match your search.' : 'No bills found for this LC.'}
+                                                        </td>
+                                                    </tr>
+                                                )}
+                                            </tbody>
+                                            <tfoot className="bg-gray-50/30">
+                                                <tr>
+                                                    <td colSpan="3" className="px-3 md:px-6 py-3 md:py-4 text-right text-xs font-medium text-gray-400 uppercase tracking-wider">Total Bills:</td>
+                                                    <td className="px-3 md:px-6 py-3 md:py-4 text-sm font-black text-right text-blue-600">
+                                                        ৳{filteredBills.reduce((sum, b) => sum + b.totalBill, 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                                                    </td>
+                                                    <td className="px-3 md:px-6 py-3 md:py-4 text-sm font-black text-right text-emerald-600">
+                                                        ৳{filteredBills.reduce((sum, b) => sum + (b.paidBill || 0), 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                                                    </td>
+                                                    <td className="px-3 md:px-6 py-3 md:py-4 text-sm font-black text-right text-rose-600">
+                                                        {(() => {
+                                                            const bal = filteredBills.reduce((sum, b) => sum + (b.billBalance || 0), 0);
+                                                            return bal < 0
+                                                                ? `-৳${Math.abs(bal).toLocaleString('en-IN', { minimumFractionDigits: 2 })}`
+                                                                : `৳${bal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`;
+                                                        })()}
+                                                    </td>
+                                                    <td></td>
+                                                </tr>
+                                            </tfoot>
+                                        </table>
+                                    </div>
+                                    {/* Mobile View */}
+                                    <div className="md:hidden">
+                                        {filteredBills.length > 0 ? (
+                                            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden divide-y divide-gray-100">
+                                                {filteredBills.map((bill, idx) => {
+                                                    const key = `bill_${idx}`;
+                                                    const isExpanded = expandedSubRowKey === key;
+                                                    return (
+                                                        <div key={idx} className="transition-all hover:bg-gray-50/35">
+                                                            {/* Collapsed View Header */}
+                                                            <div
+                                                                onClick={() => setExpandedSubRowKey(isExpanded ? null : key)}
+                                                                className="flex items-center justify-between gap-3 p-4 cursor-pointer select-none"
+                                                            >
+                                                                <div className="p-2 rounded-xl shrink-0 bg-blue-50 text-blue-600">
+                                                                    <DollarSignIcon className="w-4 h-4" />
+                                                                </div>
+                                                                <div className="flex-1 min-w-0 text-left">
+                                                                    <p className="text-xs font-bold text-blue-600 truncate">{bill.billHead || '-'}</p>
+                                                                    <p className="text-[10px] text-gray-400 font-semibold font-mono mt-0.5">{formatDate(bill.date)}</p>
+                                                                </div>
+                                                                <div className="text-right shrink-0">
+                                                                    <p className="text-xs font-black text-gray-900">৳{bill.totalBill.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</p>
+                                                                    <span className={`inline-block text-[8px] font-extrabold uppercase px-1.5 py-0.5 rounded mt-1 border ${bill.status === 'Paid'
+                                                                            ? 'bg-emerald-50/50 text-emerald-700 border-emerald-100/30'
+                                                                            : bill.status === 'Partial Paid'
+                                                                                ? 'bg-amber-50/50 text-amber-700 border-amber-100/30'
+                                                                                : 'bg-rose-50/50 text-rose-700 border-rose-100/30'
+                                                                        }`}>
+                                                                        {bill.status}
+                                                                    </span>
+                                                                </div>
+                                                                <div className="shrink-0 text-gray-400 pl-1">
+                                                                    {isExpanded ? <ChevronUpIcon className="w-4 h-4" /> : <ChevronDownIcon className="w-4 h-4" />}
+                                                                </div>
+                                                            </div>
+
+                                                            {/* Expanded Content */}
+                                                            {isExpanded && (
+                                                                <div className="px-4 pb-4 pt-1 space-y-2 bg-gray-50/30 border-t border-gray-100/50 text-xs text-left animate-in slide-in-from-top-1 duration-200">
+                                                                    <div className="grid grid-cols-[125px_8px_1fr] gap-y-1.5 pt-2 text-xs items-baseline">
+                                                                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Name</span>
+                                                                        <span className="text-gray-400 font-bold text-[10px]">:</span>
+                                                                        <span className="font-bold text-gray-900 uppercase truncate text-[11px]" title={bill.name}>{bill.name || '-'}</span>
+
+                                                                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Paid Amount</span>
+                                                                        <span className="text-gray-400 font-bold text-[10px]">:</span>
+                                                                        <span className="font-bold text-emerald-600 truncate text-[11px]">৳{(bill.paidBill || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+
+                                                                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Bill Balance</span>
+                                                                        <span className="text-gray-400 font-bold text-[10px]">:</span>
+                                                                        <span className="font-bold text-rose-600 truncate text-[11px]">
+                                                                            {bill.billBalance < 0
+                                                                                ? `-৳${Math.abs(bill.billBalance).toLocaleString('en-IN', { minimumFractionDigits: 2 })}`
+                                                                                : `৳${(bill.billBalance || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}`
+                                                                            }
+                                                                        </span>
+                                                                    </div>
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    );
+                                                })}
+                                            </div>
+                                        ) : (
+                                            <div className="p-8 text-center text-gray-400 font-bold bg-white border border-gray-100 rounded-2xl shadow-sm">
+                                                {consumptionSearchQuery ? 'No bills match your search.' : 'No bills found for this LC.'}
+                                            </div>
+                                        )}
+
+
+                                    </div>
+                                </>
+                            ) : (
+                                <>
+                                    {/* Desktop View */}
+                                    <div className="hidden md:block overflow-x-auto border border-gray-100 rounded-2xl shadow-sm">
+                                        <table className="w-full text-left border-collapse min-w-[650px] md:min-w-0">
+                                            <thead>
+                                                <tr className="bg-gray-50/50 border-b border-gray-100">
+                                                    <th className="px-3 md:px-6 py-3 md:py-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Date</th>
+                                                    <th className="px-3 md:px-6 py-3 md:py-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Expense Head</th>
+                                                    <th className="px-3 md:px-6 py-3 md:py-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Name</th>
+                                                    <th className="px-3 md:px-6 py-3 md:py-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-right">Amount</th>
+                                                    <th className="px-3 md:px-6 py-3 md:py-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Remarks</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody className="divide-y divide-gray-50">
+                                                {(() => {
+                                                    const filtered = [...lcExpenses.filter(exp => exp.lcNo === data.lcNo && exp.type !== 'bill')];
+
+                                                    // Check if original Margin is Paid
+                                                    const marginPaidAmt = parseFloat(data.marginPaid) || (() => {
+                                                        const total = parseFloat(data.totalAmount) || 0;
+                                                        const margin = parseFloat(data.bankMargin) || 0;
+                                                        return total * (margin / 100);
+                                                    })();
+                                                    if (marginPaidAmt > 0) {
+                                                        filtered.unshift({
+                                                            _id: 'margin-paid-virtual',
+                                                            date: data.openingDate || data.createdAt,
+                                                            expenseHead: `Margin Paid (${data.bankMargin || 0}%)`,
+                                                            bankName: data.bankName || 'Bank',
+                                                            amount: marginPaidAmt,
+                                                            remarks: 'Paid Margin'
+                                                        });
+                                                    }
+
+                                                    // Check if amendment Margin is Paid
+                                                    if (data.amendments && data.amendments.length > 0) {
+                                                        data.amendments.forEach((amnd, idx) => {
+                                                            if (amnd.amendmentNo === 'Original LC') return;
+                                                            const margin = amnd.amendmentMargin !== undefined ? (parseFloat(amnd.amendmentMargin) || 0) : (data.bankMargin !== undefined ? parseFloat(data.bankMargin) : 0);
+                                                            const amndMarginPaid = parseFloat(amnd.amendmentMarginPaid) || (() => {
+                                                                const amndMarginBill = parseFloat(amnd.amendmentMarginBill) || 0;
+                                                                return amndMarginBill * (margin / 100);
+                                                            })();
+                                                            if (amndMarginPaid > 0) {
+                                                                filtered.push({
+                                                                    _id: `amnd-margin-paid-virtual-${idx}`,
+                                                                    date: amnd.amendmentDate || data.openingDate,
+                                                                    expenseHead: `Margin Paid (${margin}%) (${amnd.amendmentNo || `Amend #${idx + 1}`})`,
+                                                                    bankName: data.bankName || 'Bank',
+                                                                    amount: amndMarginPaid,
+                                                                    remarks: `Paid Margin for ${amnd.amendmentNo || `Amend #${idx + 1}`}`
+                                                                });
+                                                            }
+                                                        });
+                                                    }
+
+                                                    return filtered.length > 0 ? (
+                                                        filtered.map((exp, idx) => (
+                                                            <tr key={exp._id || idx} className="hover:bg-gray-50/50 transition-colors group">
+                                                                <td className="px-3 md:px-6 py-3 md:py-4 text-sm font-medium text-gray-600 whitespace-nowrap">{formatDate(exp.date)}</td>
+                                                                <td className="px-3 md:px-6 py-3 md:py-4 text-sm font-medium text-gray-900">{exp.expenseHead || '-'}</td>
+                                                                <td className="px-3 md:px-6 py-3 md:py-4 text-sm font-medium text-gray-800">
+                                                                    {exp.cnfAgent || exp.bankName || exp.insuranceCo || exp.insuranceName || exp.name || '-'}
+                                                                </td>
+                                                                <td className="px-3 md:px-6 py-3 md:py-4 text-sm font-bold text-right text-rose-600 whitespace-nowrap">৳{parseNum(exp.amount).toLocaleString('en-IN')}</td>
+                                                                <td className="px-3 md:px-6 py-3 md:py-4 text-sm text-gray-500 truncate max-w-[200px]">{exp.remarks || '-'}</td>
+                                                            </tr>
+                                                        ))
+                                                    ) : (
+                                                        <tr>
+                                                            <td colSpan="5" className="px-3 md:px-6 py-12 text-center text-gray-400 font-bold">
+                                                                No expense records found for this LC.
+                                                            </td>
+                                                        </tr>
+                                                    );
+                                                })()}
+                                            </tbody>
+                                            <tfoot className="bg-gray-50/30">
+                                                <tr>
+                                                    <td colSpan="3" className="px-3 md:px-6 py-3 md:py-4 text-right text-xs font-medium text-gray-400 uppercase tracking-wider">Total Expense:</td>
+                                                    <td className="px-3 md:px-6 py-3 md:py-4 text-sm font-bold text-right text-rose-600">
+                                                        {(() => {
+                                                            const filtered = [...lcExpenses.filter(exp => exp.lcNo === data.lcNo && exp.type !== 'bill')];
+                                                            const marginPaidAmt = parseFloat(data.marginPaid) || (() => {
+                                                                const total = parseFloat(data.totalAmount) || 0;
+                                                                const margin = parseFloat(data.bankMargin) || 0;
+                                                                return total * (margin / 100);
+                                                            })();
+                                                            let total = filtered.reduce((sum, exp) => sum + parseNum(exp.amount), 0);
+                                                            if (marginPaidAmt > 0) total += marginPaidAmt;
+                                                            if (data.amendments && data.amendments.length > 0) {
+                                                                data.amendments.forEach((amnd) => {
+                                                                    if (amnd.amendmentNo === 'Original LC') return;
+                                                                    const margin = amnd.amendmentMargin !== undefined ? (parseFloat(amnd.amendmentMargin) || 0) : (data.bankMargin !== undefined ? parseFloat(data.bankMargin) : 0);
+                                                                    const amndMarginPaid = parseFloat(amnd.amendmentMarginPaid) || (() => {
+                                                                        const amndMarginBill = parseFloat(amnd.amendmentMarginBill) || 0;
+                                                                        return amndMarginBill * (margin / 100);
+                                                                    })();
+                                                                    if (amndMarginPaid > 0) total += amndMarginPaid;
+                                                                });
+                                                            }
+                                                            return `৳${total.toLocaleString('en-IN')}`;
+                                                        })()}
+                                                    </td>
+                                                    <td></td>
+                                                </tr>
+                                            </tfoot>
+                                        </table>
+                                    </div>
+                                    {/* Mobile View */}
+                                    <div className="md:hidden">
+                                        {(() => {
+                                            const filtered = [...lcExpenses.filter(exp => exp.lcNo === data.lcNo && exp.type !== 'bill')];
+
+                                            // Check if original Margin is Paid
+                                            const marginPaidAmt = parseFloat(data.marginPaid) || (() => {
+                                                const total = parseFloat(data.totalAmount) || 0;
+                                                const margin = parseFloat(data.bankMargin) || 0;
+                                                return total * (margin / 100);
+                                            })();
+                                            if (marginPaidAmt > 0) {
+                                                filtered.unshift({
+                                                    _id: 'margin-paid-virtual',
+                                                    date: data.openingDate || data.createdAt,
+                                                    expenseHead: `Margin Paid (${data.bankMargin || 0}%)`,
+                                                    bankName: data.bankName || 'Bank',
+                                                    amount: marginPaidAmt,
+                                                    remarks: 'Paid Margin'
+                                                });
+                                            }
+
+                                            // Check if amendment Margin is Paid
+                                            if (data.amendments && data.amendments.length > 0) {
+                                                data.amendments.forEach((amnd, idx) => {
+                                                    if (amnd.amendmentNo === 'Original LC') return;
+                                                    const margin = amnd.amendmentMargin !== undefined ? (parseFloat(amnd.amendmentMargin) || 0) : (data.bankMargin !== undefined ? parseFloat(data.bankMargin) : 0);
+                                                    const amndMarginPaid = parseFloat(amnd.amendmentMarginPaid) || (() => {
+                                                        const amndMarginBill = parseFloat(amnd.amendmentMarginBill) || 0;
+                                                        return amndMarginBill * (margin / 100);
+                                                    })();
+                                                    if (amndMarginPaid > 0) {
+                                                        filtered.push({
+                                                            _id: `amnd-margin-paid-virtual-${idx}`,
+                                                            date: amnd.amendmentDate || data.openingDate,
+                                                            expenseHead: `Margin Paid (${margin}%) (${amnd.amendmentNo || `Amend #${idx + 1}`})`,
+                                                            bankName: data.bankName || 'Bank',
+                                                            amount: amndMarginPaid,
+                                                            remarks: `Paid Margin for ${amnd.amendmentNo || `Amend #${idx + 1}`}`
+                                                        });
+                                                    }
+                                                });
+                                            }
+
+                                            return filtered.length > 0 ? (
+                                                <>
+                                                    <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden divide-y divide-gray-100">
+                                                        {filtered.map((exp, idx) => {
+                                                            const key = `expense_${idx}`;
+                                                            const isExpanded = expandedSubRowKey === key;
+                                                            return (
+                                                                <div key={exp._id || idx} className="transition-all hover:bg-gray-50/35">
+                                                                    {/* Collapsed View Header */}
+                                                                    <div
+                                                                        onClick={() => setExpandedSubRowKey(isExpanded ? null : key)}
+                                                                        className="flex items-center justify-between gap-3 p-4 cursor-pointer select-none"
+                                                                    >
+                                                                        <div className="p-2 rounded-xl shrink-0 bg-rose-50 text-rose-600">
+                                                                            <BuildingIcon className="w-4 h-4" />
+                                                                        </div>
+                                                                        <div className="flex-1 min-w-0 text-left">
+                                                                            <p className="text-xs font-bold text-gray-900 truncate">{exp.expenseHead || '-'}</p>
+                                                                            <p className="text-[10px] text-gray-400 font-semibold font-mono mt-0.5">{formatDate(exp.date)}</p>
+                                                                        </div>
+                                                                        <div className="text-right shrink-0">
+                                                                            <p className="text-xs font-black text-rose-600">৳{parseNum(exp.amount).toLocaleString('en-IN')}</p>
+                                                                        </div>
+                                                                        <div className="shrink-0 text-gray-400 pl-1">
+                                                                            {isExpanded ? <ChevronUpIcon className="w-4 h-4" /> : <ChevronDownIcon className="w-4 h-4" />}
+                                                                        </div>
+                                                                    </div>
+
+                                                                    {/* Expanded Details */}
+                                                                    {isExpanded && (
+                                                                        <div className="px-4 pb-4 pt-1 space-y-2 bg-gray-50/30 border-t border-gray-100/50 text-xs text-left animate-in slide-in-from-top-1 duration-200">
+                                                                            <div className="grid grid-cols-[125px_8px_1fr] gap-y-1.5 pt-2 text-xs items-baseline">
+                                                                                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Beneficiary Name</span>
+                                                                                <span className="text-gray-400 font-bold text-[10px]">:</span>
+                                                                                <span className="font-bold text-gray-900 uppercase truncate text-[11px]">
+                                                                                    {exp.cnfAgent || exp.bankName || exp.insuranceCo || exp.insuranceName || exp.name || '-'}
+                                                                                </span>
+
+                                                                                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Remarks</span>
+                                                                                <span className="text-gray-400 font-bold text-[10px]">:</span>
+                                                                                <span className="font-semibold text-gray-700 truncate text-[11px]" title={exp.remarks}>{exp.remarks || '-'}</span>
+                                                                            </div>
+                                                                        </div>
+                                                                    )}
+                                                                </div>
+                                                            );
+                                                        })}
+                                                    </div>
+
+                                                </>
+                                            ) : (
+                                                <div className="p-8 text-center text-gray-400 font-bold bg-white border border-gray-100 rounded-2xl shadow-sm">
+                                                    No expense records found for this LC.
+                                                </div>
+                                            );
+                                        })()}
+                                    </div>
+                                </>
                             )}
                         </div>
                     ) : (
-                        <div className="flex gap-8">
-                            {/* Left Timeline Sidebar - Only if there are amendments */}
+                        <div className="flex flex-col md:flex-row gap-6 md:gap-8">
                             {timeline.length > 1 && (
-                                <div className="w-60 border-r border-gray-100 pr-6 overflow-y-auto max-h-[70vh] flex-shrink-0 text-left custom-scrollbar">
+                                <div className="w-full md:w-60 border-b md:border-b-0 md:border-r border-gray-100 pb-6 md:pb-0 pr-0 md:pr-6 overflow-y-auto max-h-[40vh] md:max-h-[70vh] flex-shrink-0 text-left custom-scrollbar">
                                     <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-6">Amendment Timeline</h4>
                                     <div className="relative border-l border-gray-200 pl-6 ml-3 space-y-6">
                                         {timeline.map((rev, idx) => {
@@ -1265,7 +1734,7 @@ const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords
                                             <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Importer</span>
                                             <p className="text-sm font-bold text-gray-800 truncate" title={data.importerName}>{data.importerName}</p>
                                         </div>
-                                        <div className="col-span-4 grid grid-cols-3 gap-6">
+                                        <div className="col-span-2 md:col-span-4 grid grid-cols-1 sm:grid-cols-3 gap-4 md:gap-6">
                                             <div className="space-y-1">
                                                 <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Exporter</span>
                                                 <p className="text-sm font-bold text-gray-800 truncate" title={data.exporterName}>{data.exporterName}</p>
@@ -1307,26 +1776,26 @@ const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords
                                     </div>
                                     <div className="space-y-4">
                                         <div className="overflow-x-auto rounded-xl border border-gray-100 bg-gray-50/50">
-                                            <table className="w-full text-left border-collapse">
+                                            <table className="w-full text-left border-collapse min-w-[650px] md:min-w-0">
                                                 <thead>
                                                     <tr className="bg-gray-100/50 border-b border-gray-200/60">
-                                                        <th className="px-4 py-2.5 text-[10px] font-bold text-gray-400 uppercase tracking-wider">Product Name</th>
-                                                        <th className="px-4 py-2.5 text-[10px] font-bold text-gray-400 uppercase tracking-wider">HS Code</th>
-                                                        <th className="px-4 py-2.5 text-[10px] font-bold text-gray-400 uppercase tracking-wider text-right">Quantity (Ton)</th>
-                                                        <th className="px-4 py-2.5 text-[10px] font-bold text-gray-400 uppercase tracking-wider text-right">Rate (/Ton)</th>
-                                                        <th className="px-4 py-2.5 text-[10px] font-bold text-gray-400 uppercase tracking-wider text-right">Freight (/Ton)</th>
-                                                        <th className="px-4 py-2.5 text-[10px] font-bold text-gray-400 uppercase tracking-wider text-right">Total Dollar</th>
+                                                        <th className="px-2.5 md:px-4 py-2 md:py-2.5 text-[10px] font-bold text-gray-400 uppercase tracking-wider">Product Name</th>
+                                                        <th className="px-2.5 md:px-4 py-2 md:py-2.5 text-[10px] font-bold text-gray-400 uppercase tracking-wider">HS Code</th>
+                                                        <th className="px-2.5 md:px-4 py-2 md:py-2.5 text-[10px] font-bold text-gray-400 uppercase tracking-wider text-right">Quantity (Ton)</th>
+                                                        <th className="px-2.5 md:px-4 py-2 md:py-2.5 text-[10px] font-bold text-gray-400 uppercase tracking-wider text-right">Rate (/Ton)</th>
+                                                        <th className="px-2.5 md:px-4 py-2 md:py-2.5 text-[10px] font-bold text-gray-400 uppercase tracking-wider text-right">Freight (/Ton)</th>
+                                                        <th className="px-2.5 md:px-4 py-2 md:py-2.5 text-[10px] font-bold text-gray-400 uppercase tracking-wider text-right">Total Dollar</th>
                                                     </tr>
                                                 </thead>
                                                 <tbody className="divide-y divide-gray-100">
                                                     {activeProducts.map((item, idx) => (
                                                         <tr key={idx} className="hover:bg-white/40 transition-colors">
-                                                            <td className="px-4 py-3 text-sm font-bold text-gray-900">{item.productName || '-'}</td>
-                                                            <td className="px-4 py-3 text-sm text-gray-600 font-medium">{item.hsCode || '-'}</td>
-                                                            <td className="px-4 py-3 text-sm text-right text-gray-900 font-black">{parseFloat(item.quantity || 0).toLocaleString('en-US')} <span className="text-[10px] text-gray-400 font-normal">Ton</span></td>
-                                                            <td className="px-4 py-3 text-sm text-right text-gray-700 font-semibold">${parseFloat(item.rate || 0).toLocaleString('en-US')}</td>
-                                                            <td className="px-4 py-3 text-sm text-right text-gray-700 font-semibold">${parseFloat(item.freight || 0).toLocaleString('en-US')}</td>
-                                                            <td className="px-4 py-3 text-sm text-right text-blue-600 font-black">${parseFloat(item.totalDollar || 0).toLocaleString('en-US')}</td>
+                                                            <td className="px-2.5 md:px-4 py-2 md:py-3 text-sm font-bold text-gray-900">{item.productName || '-'}</td>
+                                                            <td className="px-2.5 md:px-4 py-2 md:py-3 text-sm text-gray-600 font-medium">{item.hsCode || '-'}</td>
+                                                            <td className="px-2.5 md:px-4 py-2 md:py-3 text-sm text-right text-gray-900 font-black">{parseFloat(item.quantity || 0).toLocaleString('en-US')} <span className="text-[10px] text-gray-400 font-normal">Ton</span></td>
+                                                            <td className="px-2.5 md:px-4 py-2 md:py-3 text-sm text-right text-gray-700 font-semibold">${parseFloat(item.rate || 0).toLocaleString('en-US')}</td>
+                                                            <td className="px-2.5 md:px-4 py-2 md:py-3 text-sm text-right text-gray-700 font-semibold">${parseFloat(item.freight || 0).toLocaleString('en-US')}</td>
+                                                            <td className="px-2.5 md:px-4 py-2 md:py-3 text-sm text-right text-blue-600 font-black">${parseFloat(item.totalDollar || 0).toLocaleString('en-US')}</td>
                                                         </tr>
                                                     ))}
                                                 </tbody>
@@ -1373,25 +1842,25 @@ const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords
                                                 const diffAmount = diffDollar * dollarRate;
                                                 const sign = diffQty >= 0 ? '+' : '';
                                                 const isAmndBillActive = activeMilestone.amendmentLcBillEnabled !== undefined
-                                                     ? activeMilestone.amendmentLcBillEnabled
-                                                     : !!(activeMilestone.amendmentCommission || activeMilestone.amendmentSwiftCharge);
-                                                 const activeMilestoneMarginPaid = activeMilestone.amendmentMarginPaid !== undefined 
-                                                     ? activeMilestone.amendmentMarginPaid 
-                                                     : (() => {
-                                                         const margin = activeMilestone.amendmentMargin !== undefined ? (parseFloat(activeMilestone.amendmentMargin) || 0) : (data.bankMargin !== undefined ? parseFloat(data.bankMargin) : 0);
-                                                         const mb = parseFloat(activeMilestone.amendmentMarginBill) || 0;
-                                                         const mp = mb * (margin / 100);
-                                                         return mp > 0 ? mp.toFixed(2) : '';
-                                                     })();
+                                                    ? activeMilestone.amendmentLcBillEnabled
+                                                    : !!(activeMilestone.amendmentCommission || activeMilestone.amendmentSwiftCharge);
+                                                const activeMilestoneMarginPaid = activeMilestone.amendmentMarginPaid !== undefined
+                                                    ? activeMilestone.amendmentMarginPaid
+                                                    : (() => {
+                                                        const margin = activeMilestone.amendmentMargin !== undefined ? (parseFloat(activeMilestone.amendmentMargin) || 0) : (data.bankMargin !== undefined ? parseFloat(data.bankMargin) : 0);
+                                                        const mb = parseFloat(activeMilestone.amendmentMarginBill) || 0;
+                                                        const mp = mb * (margin / 100);
+                                                        return mp > 0 ? mp.toFixed(2) : '';
+                                                    })();
 
-                                                 const hasCommission1 = isAmndBillActive && activeMilestone.amendmentCommission && parseFloat(activeMilestone.amendmentCommission) > 0;
-                                                 const hasVatOnComm1 = isAmndBillActive && activeMilestone.amendmentVatOnCommission && parseFloat(activeMilestone.amendmentVatOnCommission) > 0;
-                                                 const hasSwiftCharge1 = isAmndBillActive && activeMilestone.amendmentSwiftCharge && parseFloat(activeMilestone.amendmentSwiftCharge) > 0;
-                                                 const hasVatOnSwift1 = isAmndBillActive && activeMilestone.amendmentVatOnSwift && parseFloat(activeMilestone.amendmentVatOnSwift) > 0;
-                                                 const hasBankBill1 = isAmndBillActive && activeMilestone.amendmentBankBill && parseFloat(activeMilestone.amendmentBankBill) > 0;
+                                                const hasCommission1 = isAmndBillActive && activeMilestone.amendmentCommission && parseFloat(activeMilestone.amendmentCommission) > 0;
+                                                const hasVatOnComm1 = isAmndBillActive && activeMilestone.amendmentVatOnCommission && parseFloat(activeMilestone.amendmentVatOnCommission) > 0;
+                                                const hasSwiftCharge1 = isAmndBillActive && activeMilestone.amendmentSwiftCharge && parseFloat(activeMilestone.amendmentSwiftCharge) > 0;
+                                                const hasVatOnSwift1 = isAmndBillActive && activeMilestone.amendmentVatOnSwift && parseFloat(activeMilestone.amendmentVatOnSwift) > 0;
+                                                const hasBankBill1 = isAmndBillActive && activeMilestone.amendmentBankBill && parseFloat(activeMilestone.amendmentBankBill) > 0;
 
-                                                 const colsCount1 = 1 + (hasCommission1 ? 1 : 0) + (hasVatOnComm1 ? 1 : 0) + (hasSwiftCharge1 ? 1 : 0) + (hasVatOnSwift1 ? 1 : 0);
-                                                 const colsCount2 = 3 + (hasBankBill1 ? 1 : 0);
+                                                const colsCount1 = 1 + (hasCommission1 ? 1 : 0) + (hasVatOnComm1 ? 1 : 0) + (hasSwiftCharge1 ? 1 : 0) + (hasVatOnSwift1 ? 1 : 0);
+                                                const colsCount2 = 3 + (hasBankBill1 ? 1 : 0);
 
                                                 return (
                                                     <div className="space-y-4">
@@ -1443,45 +1912,45 @@ const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords
                                                         <div className="border-t border-blue-100/50 pt-3 text-left">
                                                             <span className="text-[10px] font-black text-indigo-600 uppercase tracking-widest block mb-2">Amendment Bank Bill Details</span>
                                                             <div className={`grid grid-cols-2 ${gridColsClassMap[colsCount1] || 'md:grid-cols-5'} gap-x-8 gap-y-4 mb-3`}>
-                                                                 <div>
-                                                                     <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider block mb-1">Margin</span>
-                                                                     <p className="text-xs font-bold text-gray-700">
-                                                                         {activeMilestone.amendmentMargin !== undefined && activeMilestone.amendmentMargin !== '' ? `${activeMilestone.amendmentMargin}%` : '-'}
-                                                                     </p>
-                                                                 </div>
-                                                                 {hasCommission1 && (
-                                                                     <div>
-                                                                         <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider block mb-1">Comm. on Amendment</span>
-                                                                         <p className="text-xs font-bold text-gray-700">
-                                                                             {activeMilestone.amendmentCommission}%
-                                                                         </p>
-                                                                     </div>
-                                                                 )}
-                                                                 {hasVatOnComm1 && (
-                                                                     <div>
-                                                                         <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider block mb-1">VAT on Comm.</span>
-                                                                         <p className="text-xs font-bold text-gray-700">
-                                                                             {activeMilestone.amendmentVatOnCommission}%
-                                                                         </p>
-                                                                     </div>
-                                                                 )}
-                                                                 {hasSwiftCharge1 && (
-                                                                     <div>
-                                                                         <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider block mb-1">Swift Charge</span>
-                                                                         <p className="text-xs font-bold text-gray-700">
-                                                                             ৳{parseFloat(activeMilestone.amendmentSwiftCharge).toLocaleString('en-IN')}
-                                                                         </p>
-                                                                     </div>
-                                                                 )}
-                                                                 {hasVatOnSwift1 && (
-                                                                     <div>
-                                                                         <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider block mb-1">VAT on Swift</span>
-                                                                         <p className="text-xs font-bold text-gray-700">
-                                                                             {activeMilestone.amendmentVatOnSwift}%
-                                                                         </p>
-                                                                     </div>
-                                                                 )}
-                                                             </div>
+                                                                <div>
+                                                                    <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider block mb-1">Margin</span>
+                                                                    <p className="text-xs font-bold text-gray-700">
+                                                                        {activeMilestone.amendmentMargin !== undefined && activeMilestone.amendmentMargin !== '' ? `${activeMilestone.amendmentMargin}%` : '-'}
+                                                                    </p>
+                                                                </div>
+                                                                {hasCommission1 && (
+                                                                    <div>
+                                                                        <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider block mb-1">Comm. on Amendment</span>
+                                                                        <p className="text-xs font-bold text-gray-700">
+                                                                            {activeMilestone.amendmentCommission}%
+                                                                        </p>
+                                                                    </div>
+                                                                )}
+                                                                {hasVatOnComm1 && (
+                                                                    <div>
+                                                                        <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider block mb-1">VAT on Comm.</span>
+                                                                        <p className="text-xs font-bold text-gray-700">
+                                                                            {activeMilestone.amendmentVatOnCommission}%
+                                                                        </p>
+                                                                    </div>
+                                                                )}
+                                                                {hasSwiftCharge1 && (
+                                                                    <div>
+                                                                        <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider block mb-1">Swift Charge</span>
+                                                                        <p className="text-xs font-bold text-gray-700">
+                                                                            ৳{parseFloat(activeMilestone.amendmentSwiftCharge).toLocaleString('en-IN')}
+                                                                        </p>
+                                                                    </div>
+                                                                )}
+                                                                {hasVatOnSwift1 && (
+                                                                    <div>
+                                                                        <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider block mb-1">VAT on Swift</span>
+                                                                        <p className="text-xs font-bold text-gray-700">
+                                                                            {activeMilestone.amendmentVatOnSwift}%
+                                                                        </p>
+                                                                    </div>
+                                                                )}
+                                                            </div>
                                                             <div className={`grid grid-cols-1 ${gridColsClassMap[colsCount2] || 'md:grid-cols-4'} gap-x-8 gap-y-4 pt-3 border-t border-dashed border-blue-100/50`}>
                                                                 <div>
                                                                     <span className="text-[9px] font-bold text-blue-600 uppercase tracking-wider block mb-1">Amendment Margin Bill</span>
@@ -1702,187 +2171,187 @@ const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords
                     )}
                 </div>
 
-            {/* Add Bill Form Modal Overlay */}
-            {showAddBillModal && (
-                <div className="fixed inset-0 z-[2100] flex items-center justify-center p-4">
-                    <div className="absolute inset-0 bg-gray-900/60 backdrop-blur-sm" onClick={() => setShowAddBillModal(false)}></div>
-                    <div className="relative bg-white border border-gray-100 rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden animate-in zoom-in duration-300">
-                        {/* Header */}
-                        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 bg-gray-50/50">
-                            <div>
-                                <h3 className="text-lg font-bold text-gray-900">Add New Bill</h3>
-                                <p className="text-xs text-blue-500 font-bold uppercase tracking-widest mt-0.5">LC NO: {data.lcNo}</p>
-                            </div>
-                            <button onClick={() => setShowAddBillModal(false)} className="p-2 text-gray-400 hover:text-gray-600 rounded-full hover:bg-white transition-all">
-                                <XIcon className="w-5 h-5" />
-                            </button>
-                        </div>
-                        {/* Form */}
-                        <form onSubmit={handleSaveBill} className="p-6 space-y-4">
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <div className="space-y-1.5 text-left">
-                                    <CustomDatePicker
-                                        label="Date"
-                                        value={billFormData.date}
-                                        onChange={(e) => setBillFormData(prev => ({ ...prev, date: e.target.value }))}
-                                        compact={true}
-                                        required
-                                    />
+                {/* Add Bill Form Modal Overlay */}
+                {showAddBillModal && (
+                    <div className="fixed inset-0 z-[2100] flex items-center justify-center p-4">
+                        <div className="absolute inset-0 bg-gray-900/60 backdrop-blur-sm" onClick={() => setShowAddBillModal(false)}></div>
+                        <div className="relative bg-white border border-gray-100 rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden animate-in zoom-in duration-300">
+                            {/* Header */}
+                            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 bg-gray-50/50">
+                                <div>
+                                    <h3 className="text-lg font-bold text-gray-900">Add New Bill</h3>
+                                    <p className="text-xs text-blue-500 font-bold uppercase tracking-widest mt-0.5">LC NO: {data.lcNo}</p>
                                 </div>
-                                <div className="space-y-1.5 text-left relative" ref={billHeadRef}>
-                                    <label className="text-sm font-semibold text-gray-600 ml-1">Bill Head <span className="text-red-500">*</span></label>
-                                    <div className="relative">
-                                        <input
-                                            type="text"
-                                            value={billHeadQuery || billFormData.expenseHead}
-                                            onChange={(e) => {
-                                                setBillHeadQuery(e.target.value);
-                                                setBillFormData(prev => ({ ...prev, expenseHead: '', cnfAgent: '' }));
-                                                setBillHeadDropdownOpen(true);
-                                                setBillHeadHighlight(-1);
-                                            }}
-                                            onFocus={() => { setBillHeadDropdownOpen(true); setBillHeadHighlight(-1); }}
-                                            onKeyDown={(e) => {
-                                                const filtered = expenseHeads.filter(h => !billHeadQuery || h.toLowerCase().includes(billHeadQuery.toLowerCase()));
-                                                if (e.key === 'ArrowDown') {
-                                                    e.preventDefault();
-                                                    setBillHeadHighlight(prev => Math.min(prev + 1, filtered.length - 1));
-                                                } else if (e.key === 'ArrowUp') {
-                                                    e.preventDefault();
-                                                    setBillHeadHighlight(prev => Math.max(prev - 1, 0));
-                                                } else if (e.key === 'Enter') {
-                                                    e.preventDefault();
-                                                    if (billHeadHighlight >= 0 && billHeadHighlight < filtered.length) {
-                                                        setBillFormData(prev => ({ ...prev, expenseHead: filtered[billHeadHighlight], cnfAgent: '' }));
-                                                        setBillHeadQuery('');
+                                <button onClick={() => setShowAddBillModal(false)} className="p-2 text-gray-400 hover:text-gray-600 rounded-full hover:bg-white transition-all">
+                                    <XIcon className="w-5 h-5" />
+                                </button>
+                            </div>
+                            {/* Form */}
+                            <form onSubmit={handleSaveBill} className="p-6 space-y-4">
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <div className="space-y-1.5 text-left">
+                                        <CustomDatePicker
+                                            label="Date"
+                                            value={billFormData.date}
+                                            onChange={(e) => setBillFormData(prev => ({ ...prev, date: e.target.value }))}
+                                            compact={true}
+                                            required
+                                        />
+                                    </div>
+                                    <div className="space-y-1.5 text-left relative" ref={billHeadRef}>
+                                        <label className="text-sm font-semibold text-gray-600 ml-1">Bill Head <span className="text-red-500">*</span></label>
+                                        <div className="relative">
+                                            <input
+                                                type="text"
+                                                value={billHeadQuery || billFormData.expenseHead}
+                                                onChange={(e) => {
+                                                    setBillHeadQuery(e.target.value);
+                                                    setBillFormData(prev => ({ ...prev, expenseHead: '', cnfAgent: '' }));
+                                                    setBillHeadDropdownOpen(true);
+                                                    setBillHeadHighlight(-1);
+                                                }}
+                                                onFocus={() => { setBillHeadDropdownOpen(true); setBillHeadHighlight(-1); }}
+                                                onKeyDown={(e) => {
+                                                    const filtered = expenseHeads.filter(h => !billHeadQuery || h.toLowerCase().includes(billHeadQuery.toLowerCase()));
+                                                    if (e.key === 'ArrowDown') {
+                                                        e.preventDefault();
+                                                        setBillHeadHighlight(prev => Math.min(prev + 1, filtered.length - 1));
+                                                    } else if (e.key === 'ArrowUp') {
+                                                        e.preventDefault();
+                                                        setBillHeadHighlight(prev => Math.max(prev - 1, 0));
+                                                    } else if (e.key === 'Enter') {
+                                                        e.preventDefault();
+                                                        if (billHeadHighlight >= 0 && billHeadHighlight < filtered.length) {
+                                                            setBillFormData(prev => ({ ...prev, expenseHead: filtered[billHeadHighlight], cnfAgent: '' }));
+                                                            setBillHeadQuery('');
+                                                            setBillHeadDropdownOpen(false);
+                                                        }
+                                                    } else if (e.key === 'Escape') {
                                                         setBillHeadDropdownOpen(false);
                                                     }
-                                                } else if (e.key === 'Escape') {
-                                                    setBillHeadDropdownOpen(false);
-                                                }
-                                            }}
-                                            className="w-full px-4 py-2.5 bg-white/50 border border-gray-200/60 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all font-medium pr-10"
-                                            placeholder="Search Bill Head"
-                                            autoComplete="nope"
-                                            required={!billFormData.expenseHead}
-                                        />
-                                        <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1.5">
-                                            {(billFormData.expenseHead || billHeadQuery) && (
-                                                <button type="button" onClick={() => { setBillFormData(prev => ({ ...prev, expenseHead: '', cnfAgent: '' })); setBillHeadQuery(''); setBillHeadDropdownOpen(false); }} className="text-gray-400 hover:text-gray-600">
-                                                    <XIcon className="w-4 h-4" />
-                                                </button>
-                                            )}
-                                            <SearchIcon className="w-4 h-4 text-gray-300" />
+                                                }}
+                                                className="w-full px-4 py-2.5 bg-white/50 border border-gray-200/60 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all font-medium pr-10"
+                                                placeholder="Search Bill Head"
+                                                autoComplete="nope"
+                                                required={!billFormData.expenseHead}
+                                            />
+                                            <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1.5">
+                                                {(billFormData.expenseHead || billHeadQuery) && (
+                                                    <button type="button" onClick={() => { setBillFormData(prev => ({ ...prev, expenseHead: '', cnfAgent: '' })); setBillHeadQuery(''); setBillHeadDropdownOpen(false); }} className="text-gray-400 hover:text-gray-600">
+                                                        <XIcon className="w-4 h-4" />
+                                                    </button>
+                                                )}
+                                                <SearchIcon className="w-4 h-4 text-gray-300" />
+                                            </div>
                                         </div>
+                                        {billHeadDropdownOpen && (
+                                            <div className="absolute z-[100] w-full mt-1 bg-white border border-gray-100 rounded-xl shadow-xl max-h-60 overflow-y-auto py-1">
+                                                {expenseHeads.filter(h => !billHeadQuery || h.toLowerCase().includes(billHeadQuery.toLowerCase())).map((head, idx) => (
+                                                    <button
+                                                        key={head}
+                                                        type="button"
+                                                        onMouseDown={(e) => {
+                                                            e.preventDefault();
+                                                            setBillFormData(prev => ({ ...prev, expenseHead: head, cnfAgent: '' }));
+                                                            setBillHeadQuery('');
+                                                            setBillHeadDropdownOpen(false);
+                                                        }}
+                                                        onMouseEnter={() => setBillHeadHighlight(idx)}
+                                                        className={`w-full px-4 py-2.5 text-left text-sm transition-colors flex items-center justify-between ${billHeadHighlight === idx ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-blue-50'}`}
+                                                    >
+                                                        <span className="font-medium">{head}</span>
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        )}
                                     </div>
-                                    {billHeadDropdownOpen && (
-                                        <div className="absolute z-[100] w-full mt-1 bg-white border border-gray-100 rounded-xl shadow-xl max-h-60 overflow-y-auto py-1">
-                                            {expenseHeads.filter(h => !billHeadQuery || h.toLowerCase().includes(billHeadQuery.toLowerCase())).map((head, idx) => (
-                                                <button
-                                                    key={head}
-                                                    type="button"
-                                                    onMouseDown={(e) => {
-                                                        e.preventDefault();
-                                                        setBillFormData(prev => ({ ...prev, expenseHead: head, cnfAgent: '' }));
-                                                        setBillHeadQuery('');
-                                                        setBillHeadDropdownOpen(false);
-                                                    }}
-                                                    onMouseEnter={() => setBillHeadHighlight(idx)}
-                                                    className={`w-full px-4 py-2.5 text-left text-sm transition-colors flex items-center justify-between ${billHeadHighlight === idx ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-blue-50'}`}
-                                                >
-                                                    <span className="font-medium">{head}</span>
-                                                </button>
-                                            ))}
-                                        </div>
-                                    )}
+
                                 </div>
 
-                            </div>
+                                {/* Conditional Bank Name */}
+                                {(billFormData.expenseHead === 'Bank Charges' || billFormData.expenseHead === 'Margin Bill') && (
+                                    <div className="space-y-1.5 text-left">
+                                        <label className="text-sm font-semibold text-gray-600 ml-1">Bank Name</label>
+                                        <input
+                                            type="text"
+                                            value={billFormData.bankName}
+                                            readOnly
+                                            className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-xl outline-none text-gray-500 font-semibold cursor-not-allowed"
+                                        />
+                                    </div>
+                                )}
 
-                            {/* Conditional Bank Name */}
-                            {(billFormData.expenseHead === 'Bank Charges' || billFormData.expenseHead === 'Margin Bill') && (
+                                {/* Conditional C&F Agent */}
+                                {billFormData.expenseHead === 'C&F Commission' && (
+                                    <div className="space-y-1.5 text-left">
+                                        <label className="text-sm font-semibold text-gray-600 ml-1">C&F Agent *</label>
+                                        <div className="relative">
+                                            <select
+                                                value={billFormData.cnfAgent}
+                                                onChange={(e) => setBillFormData(prev => ({ ...prev, cnfAgent: e.target.value }))}
+                                                className="w-full px-4 py-2 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all font-medium appearance-none pr-10 cursor-pointer"
+                                                required
+                                            >
+                                                <option value="">Select C&F Agent</option>
+                                                {bdCnfs.map(cnf => (
+                                                    <option key={cnf} value={cnf}>{cnf}</option>
+                                                ))}
+                                            </select>
+                                            <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
+                                                <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path>
+                                                </svg>
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
+
+
                                 <div className="space-y-1.5 text-left">
-                                    <label className="text-sm font-semibold text-gray-600 ml-1">Bank Name</label>
+                                    <label className="text-sm font-semibold text-gray-600 ml-1">Amount (৳) *</label>
                                     <input
-                                        type="text"
-                                        value={billFormData.bankName}
-                                        readOnly
-                                        className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-xl outline-none text-gray-500 font-semibold cursor-not-allowed"
+                                        type="number"
+                                        value={billFormData.amount}
+                                        onChange={(e) => setBillFormData(prev => ({ ...prev, amount: e.target.value }))}
+                                        required
+                                        min="0"
+                                        step="0.01"
+                                        placeholder="0.00"
+                                        className="w-full px-4 py-2 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all font-bold"
                                     />
                                 </div>
-                            )}
 
-                            {/* Conditional C&F Agent */}
-                            {billFormData.expenseHead === 'C&F Commission' && (
                                 <div className="space-y-1.5 text-left">
-                                    <label className="text-sm font-semibold text-gray-600 ml-1">C&F Agent *</label>
-                                    <div className="relative">
-                                        <select
-                                            value={billFormData.cnfAgent}
-                                            onChange={(e) => setBillFormData(prev => ({ ...prev, cnfAgent: e.target.value }))}
-                                            className="w-full px-4 py-2 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all font-medium appearance-none pr-10 cursor-pointer"
-                                            required
-                                        >
-                                            <option value="">Select C&F Agent</option>
-                                            {bdCnfs.map(cnf => (
-                                                <option key={cnf} value={cnf}>{cnf}</option>
-                                            ))}
-                                        </select>
-                                        <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
-                                            <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path>
-                                            </svg>
-                                        </div>
-                                    </div>
+                                    <label className="text-sm font-semibold text-gray-600 ml-1">Remarks</label>
+                                    <textarea
+                                        value={billFormData.remarks}
+                                        onChange={(e) => setBillFormData(prev => ({ ...prev, remarks: e.target.value }))}
+                                        placeholder="Optional details..."
+                                        rows="2"
+                                        className="w-full px-4 py-2 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all font-medium"
+                                    />
                                 </div>
-                            )}
 
-
-                            <div className="space-y-1.5 text-left">
-                                <label className="text-sm font-semibold text-gray-600 ml-1">Amount (৳) *</label>
-                                <input
-                                    type="number"
-                                    value={billFormData.amount}
-                                    onChange={(e) => setBillFormData(prev => ({ ...prev, amount: e.target.value }))}
-                                    required
-                                    min="0"
-                                    step="0.01"
-                                    placeholder="0.00"
-                                    className="w-full px-4 py-2 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all font-bold"
-                                />
-                            </div>
-
-                            <div className="space-y-1.5 text-left">
-                                <label className="text-sm font-semibold text-gray-600 ml-1">Remarks</label>
-                                <textarea
-                                    value={billFormData.remarks}
-                                    onChange={(e) => setBillFormData(prev => ({ ...prev, remarks: e.target.value }))}
-                                    placeholder="Optional details..."
-                                    rows="2"
-                                    className="w-full px-4 py-2 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all font-medium"
-                                />
-                            </div>
-
-                            <div className="flex justify-end gap-3 pt-4 border-t border-gray-100">
-                                <button
-                                    type="button"
-                                    onClick={() => setShowAddBillModal(false)}
-                                    className="px-5 py-2 bg-gray-50 hover:bg-gray-100 text-gray-700 font-bold rounded-xl transition-all text-sm"
-                                >
-                                    Cancel
-                                </button>
-                                <button
-                                    type="submit"
-                                    disabled={isSavingBill}
-                                    className="px-6 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold rounded-xl transition-all text-sm"
-                                >
-                                    {isSavingBill ? 'Saving...' : 'Save Bill'}
-                                </button>
-                            </div>
-                        </form>
+                                <div className="flex justify-end gap-3 pt-4 border-t border-gray-100">
+                                    <button
+                                        type="button"
+                                        onClick={() => setShowAddBillModal(false)}
+                                        className="px-5 py-2 bg-gray-50 hover:bg-gray-100 text-gray-700 font-bold rounded-xl transition-all text-sm"
+                                    >
+                                        Cancel
+                                    </button>
+                                    <button
+                                        type="submit"
+                                        disabled={isSavingBill}
+                                        className="px-6 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold rounded-xl transition-all text-sm"
+                                    >
+                                        {isSavingBill ? 'Saving...' : 'Save Bill'}
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
                     </div>
-                </div>
-            )}
+                )}
             </div>
         </div>
     );
@@ -2121,8 +2590,8 @@ const calculateBankBills = (state) => {
     const marginBill = totalAmount; // Margin bill is = total lc value
     const marginPaid = totalAmount * (margin / 100); // margin paid is the value is Margin %
 
-    const isLcBillActive = state.lcBillEnabled !== undefined 
-        ? state.lcBillEnabled 
+    const isLcBillActive = state.lcBillEnabled !== undefined
+        ? state.lcBillEnabled
         : !!(state.bankLcCommission || state.bankSwiftCharge || state.bankLcApplicationForm || state.bankMpCharge || state.bankStampCharge);
 
     let bankBill = 0;
@@ -2532,6 +3001,7 @@ const LCManagement = ({ addNotification, currentUser }) => {
     const [gpRecords, setGpRecords] = useState([]);
     const [lcExpenses, setLcExpenses] = useState([]);
     const [expandedLcKey, setExpandedLcKey] = useState(null);
+    const [expandedCardKey, setExpandedCardKey] = useState(null);
 
     const informativeQuantities = useMemo(() => {
         const selectedPi = piRecordsRaw.find(pi => pi.piNumber === formData.piNo);
@@ -3112,8 +3582,8 @@ const LCManagement = ({ addNotification, currentUser }) => {
             marginPaid: record.marginPaid || '',
             bankBill: record.bankBill || '',
             totalBankBill: record.totalBankBill || '',
-            lcBillEnabled: record.lcBillEnabled !== undefined 
-                ? record.lcBillEnabled 
+            lcBillEnabled: record.lcBillEnabled !== undefined
+                ? record.lcBillEnabled
                 : !!(record.bankLcCommission || record.bankSwiftCharge || record.bankLcApplicationForm || record.bankMpCharge || record.bankStampCharge),
         });
         setEditingId(record._id);
@@ -3150,8 +3620,8 @@ const LCManagement = ({ addNotification, currentUser }) => {
             amendmentSwiftCharge: milestone.amendmentSwiftCharge !== undefined ? milestone.amendmentSwiftCharge : undefined,
             amendmentVatOnSwift: milestone.amendmentVatOnSwift !== undefined ? milestone.amendmentVatOnSwift : undefined,
             amendmentMarginBill: milestone.amendmentMarginBill !== undefined ? milestone.amendmentMarginBill : '',
-            amendmentMarginPaid: milestone.amendmentMarginPaid !== undefined 
-                ? milestone.amendmentMarginPaid 
+            amendmentMarginPaid: milestone.amendmentMarginPaid !== undefined
+                ? milestone.amendmentMarginPaid
                 : (() => {
                     const margin = milestone.amendmentMargin !== undefined ? (parseFloat(milestone.amendmentMargin) || 0) : (record.bankMargin !== undefined ? parseFloat(record.bankMargin) : 0);
                     const mb = parseFloat(milestone.amendmentMarginBill) || 0;
@@ -5858,468 +6328,972 @@ const LCManagement = ({ addNotification, currentUser }) => {
             )}
 
             {!showForm && !showAmendmentForm && (
-                <div className="overflow-x-auto bg-white/50 backdrop-blur-xl border border-white/40 rounded-2xl shadow-xl">
-                    <table className="w-full text-left border-collapse">
-                        <thead>
-                            <tr className="bg-gray-50/50 border-b border-gray-100">
-                                <th className="px-3 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-nowrap">Date</th>
-                                <th className="px-3 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-nowrap">Expire Date</th>
-                                <th className="px-3 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-nowrap">LC No</th>
-                                <th className="px-3 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-nowrap">Importer</th>
-                                <th className="px-3 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-nowrap">Exporter</th>
-                                <th className="px-3 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-nowrap">Bank</th>
-                                <th className="px-3 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-nowrap">Port</th>
-                                <th className="px-3 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-nowrap">Product</th>
-                                <th className="px-3 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-right text-nowrap">Quantity (Kg)</th>
-                                <th className="px-3 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-right text-nowrap">Total Value (৳)</th>
-                                <th className="px-3 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-right text-nowrap">LC Balance</th>
-                                <th className="px-3 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-right text-nowrap">Rem G.P</th>
-                                <th className="px-3 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-right text-nowrap">Expense</th>
-                                <th className="px-3 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-center text-nowrap">Action</th>
-                            </tr>
-                        </thead>
-                        <tbody className="divide-y divide-gray-50">
-                            {isLoading ? (
-                                <tr>
-                                    <td colSpan="14" className="px-6 py-12 text-center text-sm text-gray-500">
-                                        <div className="flex flex-col items-center gap-2">
-                                            <div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
-                                            <span className="font-medium text-gray-400">Loading records...</span>
-                                        </div>
-                                    </td>
+                <>
+                    {/* Desktop View */}
+                    <div className="hidden md:block overflow-x-auto bg-white/50 backdrop-blur-xl border border-white/40 rounded-2xl shadow-xl">
+                        <table className="w-full text-left border-collapse">
+                            <thead>
+                                <tr className="bg-gray-50/50 border-b border-gray-100">
+                                    <th className="px-3 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-nowrap">Date</th>
+                                    <th className="px-3 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-nowrap">Expire Date</th>
+                                    <th className="px-3 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-nowrap">LC No</th>
+                                    <th className="px-3 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-nowrap">Importer</th>
+                                    <th className="px-3 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-nowrap">Exporter</th>
+                                    <th className="px-3 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-nowrap">Bank</th>
+                                    <th className="px-3 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-nowrap">Port</th>
+                                    <th className="px-3 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-nowrap">Product</th>
+                                    <th className="px-3 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-right text-nowrap">Quantity (Kg)</th>
+                                    <th className="px-3 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-right text-nowrap">Total Value (৳)</th>
+                                    <th className="px-3 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-right text-nowrap">LC Balance</th>
+                                    <th className="px-3 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-right text-nowrap">Rem G.P</th>
+                                    <th className="px-3 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-right text-nowrap">Expense</th>
+                                    <th className="px-3 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-center text-nowrap">Action</th>
                                 </tr>
-                            ) : filteredRecords.length > 0 ? (
-                                filteredRecords.map((record) => {
-                                    // Helper for sanitized numeric parsing
-                                    const parseNum = (val) => {
-                                        if (val === null || val === undefined) return 0;
-                                        return parseFloat(String(val).replace(/[^0-9.]/g, '')) || 0;
-                                    };
+                            </thead>
+                            <tbody className="divide-y divide-gray-50">
+                                {isLoading ? (
+                                    <tr>
+                                        <td colSpan="14" className="px-6 py-12 text-center text-sm text-gray-500">
+                                            <div className="flex flex-col items-center gap-2">
+                                                <div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+                                                <span className="font-medium text-gray-400">Loading records...</span>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                ) : filteredRecords.length > 0 ? (
+                                    filteredRecords.map((record) => {
+                                        // Helper for sanitized numeric parsing
+                                        const parseNum = (val) => {
+                                            if (val === null || val === undefined) return 0;
+                                            return parseFloat(String(val).replace(/[^0-9.]/g, '')) || 0;
+                                        };
 
-                                    // Failsafe LC Matching: Compare only the numeric digits
-                                    const cleanLc = (val) => String(val || '').replace(/\D/g, '');
+                                        // Failsafe LC Matching: Compare only the numeric digits
+                                        const cleanLc = (val) => String(val || '').replace(/\D/g, '');
 
-                                    // Dynamic fallback for Port if empty in LC record
-                                    const linkedPi = record.piNo ? piRecordsRaw.find(p => p.piNumber === record.piNo) : null;
-                                    const displayPort = record.port || (linkedPi && (linkedPi.port || linkedPi.portOfDischarge || linkedPi.portOfLoading)) || '-';
+                                        // Dynamic fallback for Port if empty in LC record
+                                        const linkedPi = record.piNo ? piRecordsRaw.find(p => p.piNumber === record.piNo) : null;
+                                        const displayPort = record.port || (linkedPi && (linkedPi.port || linkedPi.portOfDischarge || linkedPi.portOfLoading)) || '-';
 
-                                    const displayProducts = record.productsList && record.productsList.length > 0
-                                        ? record.productsList.map(p => p.productName).filter(Boolean).join(', ')
-                                        : record.productName || '-';
+                                        const displayProducts = record.productsList && record.productsList.length > 0
+                                            ? record.productsList.map(p => p.productName).filter(Boolean).join(', ')
+                                            : record.productName || '-';
 
-                                    // Unit conversion for display (Data is in Tons, Table shows Kg)
-                                    const totalQtyTons = record.productsList && record.productsList.length > 0
-                                        ? record.productsList.reduce((sum, p) => sum + (parseFloat(p.quantity) || 0), 0)
-                                        : (parseFloat(record.quantity) || 0);
-                                    const qtyKg = totalQtyTons * 1000;
+                                        // Unit conversion for display (Data is in Tons, Table shows Kg)
+                                        const totalQtyTons = record.productsList && record.productsList.length > 0
+                                            ? record.productsList.reduce((sum, p) => sum + (parseFloat(p.quantity) || 0), 0)
+                                            : (parseFloat(record.quantity) || 0);
+                                        const qtyKg = totalQtyTons * 1000;
 
-                                    // Calculate Remaining Quantities
-                                    // Received: From allStockRecords where lcNo matches and status is NOT requested/rejected
-                                    const lcNoClean = cleanLc(record.lcNo);
+                                        // Calculate Remaining Quantities
+                                        // Received: From allStockRecords where lcNo matches and status is NOT requested/rejected
+                                        const lcNoClean = cleanLc(record.lcNo);
 
-                                    const receiptsMapForBalance = {};
-                                    allStockRecords
-                                        .filter(s => {
-                                            const recordLcNoClean = cleanLc(s.lcNo);
-                                            const status = (s.status || '').toLowerCase();
-                                            return recordLcNoClean === lcNoClean && (status === 'accepted' || status === 'in stock');
-                                        })
-                                        .forEach(s => {
-                                            const rawDate = s.date || s.receiveDate || s.createdAt || '';
-                                            const dateStr = typeof rawDate === 'string' && rawDate.includes('T') ? rawDate.split('T')[0] : rawDate;
-                                            const groupVal = s.totalLcQuantity || s.billOfEntry || s.totalLcTruck || s.truckNo || s.truck || 'single';
-                                            const key = `${dateStr}_${groupVal}`;
+                                        const receiptsMapForBalance = {};
+                                        allStockRecords
+                                            .filter(s => {
+                                                const recordLcNoClean = cleanLc(s.lcNo);
+                                                const status = (s.status || '').toLowerCase();
+                                                return recordLcNoClean === lcNoClean && (status === 'accepted' || status === 'in stock');
+                                            })
+                                            .forEach(s => {
+                                                const rawDate = s.date || s.receiveDate || s.createdAt || '';
+                                                const dateStr = typeof rawDate === 'string' && rawDate.includes('T') ? rawDate.split('T')[0] : rawDate;
+                                                const groupVal = s.totalLcQuantity || s.billOfEntry || s.totalLcTruck || s.truckNo || s.truck || 'single';
+                                                const key = `${dateStr}_${groupVal}`;
 
-                                            if (!receiptsMapForBalance[key]) {
-                                                const itemSubtotal = (s.entries || []).reduce((iSum, item) => iSum + parseNum(item.inHouseQuantity || item.quantity), 0);
-                                                receiptsMapForBalance[key] = parseNum(s.totalLcQuantity) || itemSubtotal || parseNum(s.inHouseQuantity) || parseNum(s.quantity);
-                                            } else {
-                                                if (!s.totalLcQuantity) {
-                                                    receiptsMapForBalance[key] += parseNum(s.inHouseQuantity) || parseNum(s.quantity);
+                                                if (!receiptsMapForBalance[key]) {
+                                                    const itemSubtotal = (s.entries || []).reduce((iSum, item) => iSum + parseNum(item.inHouseQuantity || item.quantity), 0);
+                                                    receiptsMapForBalance[key] = parseNum(s.totalLcQuantity) || itemSubtotal || parseNum(s.inHouseQuantity) || parseNum(s.quantity);
+                                                } else {
+                                                    if (!s.totalLcQuantity) {
+                                                        receiptsMapForBalance[key] += parseNum(s.inHouseQuantity) || parseNum(s.quantity);
+                                                    }
                                                 }
-                                            }
-                                        });
-                                    const receivedQtyKg = Object.values(receiptsMapForBalance).reduce((sum, qty) => sum + qty, 0);
+                                            });
+                                        const receivedQtyKg = Object.values(receiptsMapForBalance).reduce((sum, qty) => sum + qty, 0);
 
-                                    // Border Sale: From allSalesRecords where lcNo matches and is a Border Sale
-                                    const borderSaleQtyKg = allSalesRecords
-                                        .filter(s => {
-                                            const recordLcNoClean = cleanLc(s.lcNo);
+                                        // Border Sale: From allSalesRecords where lcNo matches and is a Border Sale
+                                        const borderSaleQtyKg = allSalesRecords
+                                            .filter(s => {
+                                                const recordLcNoClean = cleanLc(s.lcNo);
 
-                                            // Adopt robust Border Sale detection
-                                            const sTypeLow = (s.saleType || '').toLowerCase().trim();
-                                            // Permissive: Catch by BS prefix OR explicit sale type OR presence of matching LC + port details
-                                            const isBorder = sTypeLow.includes('border') ||
-                                                (s.invoiceNo || '').startsWith('BS') ||
-                                                (!s.saleType && !!(s.lcNo || s.port || s.importer)) ||
-                                                (recordLcNoClean === lcNoClean && !!(s.port || s.importer));
+                                                // Adopt robust Border Sale detection
+                                                const sTypeLow = (s.saleType || '').toLowerCase().trim();
+                                                // Permissive: Catch by BS prefix OR explicit sale type OR presence of matching LC + port details
+                                                const isBorder = sTypeLow.includes('border') ||
+                                                    (s.invoiceNo || '').startsWith('BS') ||
+                                                    (!s.saleType && !!(s.lcNo || s.port || s.importer)) ||
+                                                    (recordLcNoClean === lcNoClean && !!(s.port || s.importer));
 
-                                            const status = (s.status || '').toLowerCase();
-                                            return recordLcNoClean === lcNoClean && status === 'accepted' && isBorder;
-                                        })
-                                        .reduce((sum, s) => {
-                                            const itemSubtotal = (s.items || []).reduce((iSum, item) => {
-                                                const brandSubtotal = (item.brandEntries || []).reduce((bSum, b) => bSum + parseNum(b.quantity), 0);
-                                                return iSum + (brandSubtotal || parseNum(item.quantity));
+                                                const status = (s.status || '').toLowerCase();
+                                                return recordLcNoClean === lcNoClean && status === 'accepted' && isBorder;
+                                            })
+                                            .reduce((sum, s) => {
+                                                const itemSubtotal = (s.items || []).reduce((iSum, item) => {
+                                                    const brandSubtotal = (item.brandEntries || []).reduce((bSum, b) => bSum + parseNum(b.quantity), 0);
+                                                    return iSum + (brandSubtotal || parseNum(item.quantity));
+                                                }, 0);
+                                                const qty = parseNum(s.currentTotalQty) || parseNum(s.totalQuantity) || parseNum(s.totalQty) || parseNum(s.qty) || parseNum(s.quantity) || parseNum(s.total) || itemSubtotal;
+                                                return sum + qty;
                                             }, 0);
-                                            const qty = parseNum(s.currentTotalQty) || parseNum(s.totalQuantity) || parseNum(s.totalQty) || parseNum(s.qty) || parseNum(s.quantity) || parseNum(s.total) || itemSubtotal;
-                                            return sum + qty;
-                                        }, 0);
 
-                                    const combinedRemKg = qtyKg - (receivedQtyKg + borderSaleQtyKg);
+                                        const combinedRemKg = qtyKg - (receivedQtyKg + borderSaleQtyKg);
 
-                                    // Calculate Rem G.P
-                                    const totalGpQtyKg = gpRecords
-                                        .filter(gp => String(gp.lcNumber || '').replace(/\D/g, '') === lcNoClean)
-                                        .reduce((sum, gp) => sum + (parseFloat(gp.gpQuantity) || 0), 0);
-                                    const remGpKg = Math.max(0, qtyKg - totalGpQtyKg);
+                                        // Calculate Rem G.P
+                                        const totalGpQtyKg = gpRecords
+                                            .filter(gp => String(gp.lcNumber || '').replace(/\D/g, '') === lcNoClean)
+                                            .reduce((sum, gp) => sum + (parseFloat(gp.gpQuantity) || 0), 0);
+                                        const remGpKg = Math.max(0, qtyKg - totalGpQtyKg);
 
-                                    return (
-                                        <React.Fragment key={record._id}>
-                                            <tr className="hover:bg-gray-50/50 transition-colors border-b border-gray-50 group">
-                                                <td className="px-3 py-4 text-sm font-medium text-gray-600 whitespace-nowrap">{formatDate(record.openingDate)}</td>
-                                                <td className="px-3 py-4 text-sm font-medium text-gray-900 whitespace-nowrap">{formatDate(record.expiryDate)}</td>
-                                                <td className="px-3 py-4 text-sm font-bold text-gray-900 whitespace-nowrap">
-                                                    <div className="flex flex-col">
-                                                        <span>{record.lcNo}</span>
-                                                        {record.amendments?.length > 0 && (
-                                                            <span className="self-start mt-0.5 px-1.5 py-0.5 bg-blue-50 text-blue-600 border border-blue-200/50 rounded text-[9px] font-extrabold uppercase tracking-wide">
-                                                                {record.lcAmendment?.split(' ')[0] || 'Amended'}
-                                                            </span>
-                                                        )}
-                                                    </div>
-                                                </td>
-                                                <td className="px-3 py-4 text-sm font-medium text-gray-700 whitespace-nowrap truncate max-w-[120px]" title={record.importerName}>{record.importerName}</td>
-                                                <td className="px-3 py-4 text-sm text-gray-600 whitespace-nowrap truncate max-w-[120px]" title={record.exporterName}>{record.exporterName}</td>
-                                                <td className="px-3 py-4 text-sm text-gray-600 font-medium whitespace-nowrap truncate max-w-[120px]" title={record.bankName}>{record.bankName}</td>
-                                                <td className="px-3 py-4 text-sm text-gray-600 whitespace-nowrap truncate max-w-[80px]" title={displayPort}>{displayPort}</td>
-                                                <td className="px-3 py-4 text-sm font-bold text-gray-900 whitespace-nowrap truncate max-w-[120px]" title={displayProducts}>{displayProducts}</td>
-                                                <td className="px-3 py-4 text-sm text-right text-gray-600 whitespace-nowrap">
-                                                    <span className="font-bold text-gray-900">{qtyKg.toLocaleString('en-US')}</span> <span className="text-[10px] text-gray-400 font-normal">Kg</span>
-                                                </td>
-                                                <td className="px-3 py-4 text-sm text-right font-black text-gray-900 whitespace-nowrap">৳{parseFloat(record.totalAmount || 0).toLocaleString('en-IN')}</td>
-                                                <td className="px-3 py-4 text-sm text-right whitespace-nowrap">
-                                                    <span className={`font-black ${combinedRemKg <= 0 ? 'text-emerald-600' : 'text-blue-600'}`}>
-                                                        {combinedRemKg.toLocaleString('en-IN')} <span className="text-[10px] text-gray-400 font-medium whitespace-nowrap">Kg</span>
-                                                    </span>
-                                                </td>
-                                                <td className="px-3 py-4 text-sm text-right whitespace-nowrap">
-                                                    <span className={`font-black ${remGpKg <= 0 ? 'text-emerald-600' : 'text-indigo-600'}`}>
-                                                        {remGpKg.toLocaleString('en-US')} <span className="text-[10px] text-gray-400 font-medium whitespace-nowrap">Kg</span>
-                                                    </span>
-                                                </td>
-                                                <td className="px-3 py-4 text-sm text-right whitespace-nowrap">
-                                                    {(() => {
-                                                        const totalExpense = lcExpenses
-                                                            .filter(exp => exp.lcNo === record.lcNo)
-                                                            .reduce((sum, exp) => sum + (parseFloat(exp.amount) || 0), 0);
-                                                        return (
-                                                            <span className={`font-black ${totalExpense > 0 ? 'text-rose-600' : 'text-gray-400'}`}>
-                                                                {totalExpense > 0 ? `৳${totalExpense.toLocaleString('en-IN')}` : '—'}
-                                                            </span>
-                                                        );
-                                                    })()}
-                                                </td>
-                                                <td className="px-3 py-4 text-center">
-                                                    <div className="flex items-center justify-center gap-4">
-                                                        <button
-                                                            onClick={() => setExpandedLcKey(prev => prev === record._id ? null : record._id)}
-                                                            className={`p-1.5 rounded-lg transition-all ${expandedLcKey === record._id ? 'bg-blue-50 text-blue-600' : 'text-gray-400 hover:bg-gray-100 hover:text-gray-600'}`}
-                                                            title="View Charges"
-                                                        >
-                                                            {expandedLcKey === record._id ? (
-                                                                <ChevronUpIcon className="w-4 h-4" />
-                                                            ) : (
-                                                                <ChevronDownIcon className="w-4 h-4" />
+                                        return (
+                                            <React.Fragment key={record._id}>
+                                                <tr className="hover:bg-gray-50/50 transition-colors border-b border-gray-50 group">
+                                                    <td className="px-3 py-4 text-sm font-medium text-gray-600 whitespace-nowrap">{formatDate(record.openingDate)}</td>
+                                                    <td className="px-3 py-4 text-sm font-medium text-gray-900 whitespace-nowrap">{formatDate(record.expiryDate)}</td>
+                                                    <td className="px-3 py-4 text-sm font-bold text-gray-900 whitespace-nowrap">
+                                                        <div className="flex flex-col">
+                                                            <span>{record.lcNo}</span>
+                                                            {record.amendments?.length > 0 && (
+                                                                <span className="self-start mt-0.5 px-1.5 py-0.5 bg-blue-50 text-blue-600 border border-blue-200/50 rounded text-[9px] font-extrabold uppercase tracking-wide">
+                                                                    {record.lcAmendment?.split(' ')[0] || 'Amended'}
+                                                                </span>
                                                             )}
-                                                        </button>
-                                                        <button
-                                                            onClick={() => setViewData(record)}
-                                                            className="text-gray-400 hover:text-blue-600 transition-colors"
-                                                            title="View Details"
-                                                        >
-                                                            <EyeIcon className="w-5 h-5" />
-                                                        </button>
-                                                        {canManage && (
-                                                            <>
-                                                                <button
-                                                                    onClick={() => handleEdit(record)}
-                                                                    className="text-gray-400 hover:text-blue-600 transition-colors"
-                                                                    title="Edit Record"
-                                                                >
-                                                                    <EditIcon className="w-5 h-5" />
-                                                                </button>
-                                                                <button
-                                                                    onClick={() => handleDelete(record._id)}
-                                                                    className="text-gray-400 hover:text-red-600 transition-colors"
-                                                                    title="Delete Record"
-                                                                >
-                                                                    <TrashIcon className="w-5 h-5" />
-                                                                </button>
-                                                            </>
-                                                        )}
-                                                    </div>
-                                                </td>
-                                            </tr>
-                                            {/* Expandable Sub-row containing Charges Breakdown */}
-                                            {expandedLcKey === record._id && (
-                                                <tr className="bg-gray-50/40">
-                                                    <td colSpan="14" className="px-6 py-4 border-b border-gray-100">
-                                                        <div className="flex flex-col gap-6 bg-white p-5 rounded-2xl border border-gray-100 shadow-inner animate-in fade-in duration-300">
-                                                            {/* New LC Bill Charges */}
-                                                            <div className="space-y-3">
-                                                                <h4 className="text-sm font-black text-blue-600 uppercase tracking-widest border-b border-blue-50 pb-2 flex items-center justify-between">
-                                                                    <span>New LC Bill Charges</span>
-                                                                    {record.bankName && (
-                                                                        <span className="text-xs text-gray-400 font-bold normal-case">
-                                                                            {record.bankName} {record.bankBranch ? `(${record.bankBranch})` : ''}
-                                                                        </span>
-                                                                    )}
-                                                                </h4>
-                                                                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-y-4 gap-x-6 text-left">
-                                                                    {(() => {
-                                                                        const isRecordLcBillActive = record.lcBillEnabled !== undefined 
-                                                                            ? record.lcBillEnabled 
-                                                                            : !!(record.bankLcCommission || record.bankSwiftCharge || record.bankLcApplicationForm || record.bankMpCharge || record.bankStampCharge);
-                                                                        return (
-                                                                            <>
-                                                                                {isRecordLcBillActive && (
-                                                                                    <>
-                                                                                        <div className="space-y-0.5">
-                                                                                            <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">LC Commission</span>
-                                                                                            <p className="text-sm font-black text-gray-800">
-                                                                                                {record.bankLcCommission ? `${record.bankLcCommission}%` : '-'}
-                                                                                            </p>
-                                                                                        </div>
-                                                                                        <div className="space-y-0.5">
-                                                                                            <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">VAT on Commission</span>
-                                                                                            <p className="text-sm font-black text-gray-800">
-                                                                                                {record.bankVatOnCommission ? `${record.bankVatOnCommission}%` : '-'}
-                                                                                            </p>
-                                                                                        </div>
-                                                                                        <div className="space-y-0.5">
-                                                                                            <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">SWIFT Charge</span>
-                                                                                            <p className="text-sm font-black text-gray-800">
-                                                                                                {record.bankSwiftCharge !== undefined && record.bankSwiftCharge !== '' ? `৳${parseFloat(record.bankSwiftCharge).toLocaleString('en-IN')}` : '-'}
-                                                                                            </p>
-                                                                                        </div>
-                                                                                        <div className="space-y-0.5">
-                                                                                            <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">VAT on SWIFT Charge</span>
-                                                                                            <p className="text-sm font-black text-gray-800">
-                                                                                                {record.bankVatOnSwiftCharge ? `${record.bankVatOnSwiftCharge}%` : '-'}
-                                                                                            </p>
-                                                                                        </div>
-                                                                                        <div className="space-y-0.5">
-                                                                                            <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">LC Application Form</span>
-                                                                                            <p className="text-sm font-black text-gray-800">
-                                                                                                {record.bankLcApplicationForm !== undefined && record.bankLcApplicationForm !== '' ? `৳${parseFloat(record.bankLcApplicationForm).toLocaleString('en-IN')}` : '-'}
-                                                                                            </p>
-                                                                                        </div>
-                                                                                        <div className="space-y-0.5">
-                                                                                            <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">MP Charge</span>
-                                                                                            <p className="text-sm font-black text-gray-800">
-                                                                                                {record.bankMpCharge !== undefined && record.bankMpCharge !== '' ? `৳${parseFloat(record.bankMpCharge).toLocaleString('en-IN')}` : '-'}
-                                                                                            </p>
-                                                                                        </div>
-                                                                                        <div className="space-y-0.5">
-                                                                                            <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Stamp Charge</span>
-                                                                                            <p className="text-sm font-black text-gray-800">
-                                                                                                {record.bankStampCharge !== undefined && record.bankStampCharge !== '' ? `৳${parseFloat(record.bankStampCharge).toLocaleString('en-IN')}` : '-'}
-                                                                                            </p>
-                                                                                        </div>
-                                                                                    </>
-                                                                                )}
-                                                                                <div className="space-y-0.5">
-                                                                                    <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Margin</span>
-                                                                                    <p className="text-sm font-black text-gray-800">
-                                                                                        {record.bankMargin ? `${record.bankMargin}%` : '-'}
-                                                                                    </p>
-                                                                                </div>
-                                                                                <div className="space-y-0.5">
-                                                                                    <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Margin Bill</span>
-                                                                                    <p className="text-sm font-black text-blue-600">
-                                                                                        {record.marginBill ? `৳${parseFloat(record.marginBill).toLocaleString('en-IN', { minimumFractionDigits: 2 })}` : '-'}
-                                                                                    </p>
-                                                                                </div>
-                                                                                <div className="space-y-0.5">
-                                                                                    <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Margin Paid</span>
-                                                                                    <p className="text-sm font-black text-blue-600">
-                                                                                        {record.marginPaid !== undefined && record.marginPaid !== '' 
-                                                                                            ? `৳${parseFloat(record.marginPaid).toLocaleString('en-IN', { minimumFractionDigits: 2 })}` 
-                                                                                            : (() => {
-                                                                                                const totalAmount = parseFloat(record.totalAmount) || 0;
-                                                                                                const margin = parseFloat(record.bankMargin) || 0;
-                                                                                                const mp = totalAmount * (margin / 100);
-                                                                                                return mp > 0 ? `৳${mp.toLocaleString('en-IN', { minimumFractionDigits: 2 })}` : '-';
-                                                                                            })()
-                                                                                        }
-                                                                                    </p>
-                                                                                </div>
-                                                                                {isRecordLcBillActive && (
-                                                                                    <div className="space-y-0.5">
-                                                                                        <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Bank Bill</span>
-                                                                                        <p className="text-sm font-black text-rose-600">
-                                                                                            {record.bankBill ? `৳${parseFloat(record.bankBill).toLocaleString('en-IN', { minimumFractionDigits: 2 })}` : '-'}
-                                                                                        </p>
-                                                                                    </div>
-                                                                                )}
-                                                                            </>
-                                                                        );
-                                                                    })()}
-                                                                    <div className="space-y-0.5">
-                                                                        <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Total Bank Bill</span>
-                                                                        <p className="text-sm font-black text-blue-600 font-extrabold">
-                                                                            {record.totalBankBill ? `৳${parseFloat(record.totalBankBill).toLocaleString('en-IN', { minimumFractionDigits: 2 })}` : '-'}
-                                                                        </p>
-                                                                    </div>
-                                                                </div>
-                                                            </div>
-
-                                                            {/* Amendment Bill Charges */}
-                                                            {record.amendments && record.amendments.filter(amnd => amnd.amendmentNo !== 'Original LC').length > 0 && (
-                                                                <div className="space-y-3">
-                                                                    <h4 className="text-sm font-black text-indigo-600 uppercase tracking-widest border-b border-indigo-50 pb-2 flex items-center justify-between">
-                                                                        <span>Amendment Bill Charges</span>
-                                                                    </h4>
-                                                                    <div className="space-y-4 max-h-[300px] overflow-y-auto custom-scrollbar pr-2">
-                                                                        {record.amendments
-                                                                            .filter(amnd => amnd.amendmentNo !== 'Original LC')
-                                                                            .map((amnd, index) => {
-                                                                                const isAmndBillActive = amnd.amendmentLcBillEnabled !== undefined
-                                                                                    ? amnd.amendmentLcBillEnabled
-                                                                                    : !!(amnd.amendmentCommission || amnd.amendmentSwiftCharge);
-
-                                                                                const swiftCharge = isAmndBillActive ? (parseFloat(amnd.amendmentSwiftCharge) || 0) : 0;
-                                                                                const vatOnSwift = isAmndBillActive ? (parseFloat(amnd.amendmentVatOnSwift) || 0) : 0;
-                                                                                const vatOnSwiftAmt = swiftCharge * (vatOnSwift / 100);
-
-                                                                                const bankBill = isAmndBillActive ? (parseFloat(amnd.amendmentBankBill || amnd.amendmentBill) || 0) : 0;
-                                                                                const vatOnCommission = isAmndBillActive ? (parseFloat(amnd.amendmentVatOnCommission) || 0) : 0;
-                                                                                const commissionTotal = Math.max(0, bankBill - swiftCharge - vatOnSwiftAmt);
-                                                                                const commissionAmt = commissionTotal / (1 + vatOnCommission / 100);
-                                                                                const vatOnCommissionAmt = commissionTotal - commissionAmt;
-
-                                                                                return (
-                                                                                    <div key={index} className="p-3 bg-gray-50/50 border border-gray-100 rounded-xl space-y-2">
-                                                                                        <div className="flex justify-between items-center border-b border-gray-200/50 pb-1">
-                                                                                            <span className="text-sm font-black text-indigo-600 uppercase tracking-wider">
-                                                                                                {amnd.amendmentNo || `Amendment-${String(index + 1).padStart(2, '0')}`}
-                                                                                            </span>
-                                                                                            {amnd.amendmentDate && (
-                                                                                                <span className="text-sm font-semibold text-gray-500 font-mono">
-                                                                                                    {formatDate(amnd.amendmentDate)}
-                                                                                                </span>
-                                                                                            )}
-                                                                                        </div>
-                                                                                        {(() => {
-                                                                                             const hasCommission = isAmndBillActive && amnd.amendmentCommission && parseFloat(amnd.amendmentCommission) > 0;
-                                                                                             const hasVatOnComm = isAmndBillActive && amnd.amendmentVatOnCommission && parseFloat(amnd.amendmentVatOnCommission) > 0;
-                                                                                             const hasSwiftCharge = isAmndBillActive && amnd.amendmentSwiftCharge && parseFloat(amnd.amendmentSwiftCharge) > 0;
-                                                                                             const hasVatOnSwift = isAmndBillActive && amnd.amendmentVatOnSwift && parseFloat(amnd.amendmentVatOnSwift) > 0;
-                                                                                             const hasBankBill = isAmndBillActive && amnd.amendmentBankBill && parseFloat(amnd.amendmentBankBill) > 0;
-
-                                                                                             const colsCount = 4 + (hasCommission ? 1 : 0) + (hasVatOnComm ? 1 : 0) + (hasSwiftCharge ? 1 : 0) + (hasVatOnSwift ? 1 : 0) + (hasBankBill ? 1 : 0);
-
-                                                                                             return (
-                                                                                                 <div className={`grid grid-cols-2 sm:grid-cols-3 ${gridColsClassMap[colsCount] || 'md:grid-cols-9'} gap-4 text-left`}>
-                                                                                                     {hasCommission && (
-                                                                                                         <div className="space-y-0.5">
-                                                                                                             <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Commission ({amnd.amendmentCommission || 0}%)</span>
-                                                                                                             <p className="text-sm font-black text-gray-800">
-                                                                                                                 ৳{Math.round(commissionAmt).toLocaleString('en-IN')}
-                                                                                                             </p>
-                                                                                                         </div>
-                                                                                                     )}
-                                                                                                     {hasVatOnComm && (
-                                                                                                         <div className="space-y-0.5">
-                                                                                                             <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">VAT on Comm. ({amnd.amendmentVatOnCommission || 0}%)</span>
-                                                                                                             <p className="text-sm font-black text-gray-800">
-                                                                                                                 ৳{Math.round(vatOnCommissionAmt).toLocaleString('en-IN')}
-                                                                                                             </p>
-                                                                                                         </div>
-                                                                                                     )}
-                                                                                                     {hasSwiftCharge && (
-                                                                                                         <div className="space-y-0.5">
-                                                                                                             <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">SWIFT Charge</span>
-                                                                                                             <p className="text-sm font-black text-gray-800">
-                                                                                                                 ৳{parseFloat(amnd.amendmentSwiftCharge).toLocaleString('en-IN')}
-                                                                                                             </p>
-                                                                                                         </div>
-                                                                                                     )}
-                                                                                                     {hasVatOnSwift && (
-                                                                                                         <div className="space-y-0.5">
-                                                                                                             <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">VAT on SWIFT ({amnd.amendmentVatOnSwift || 0}%)</span>
-                                                                                                             <p className="text-sm font-black text-gray-800">
-                                                                                                                 ৳{Math.round(vatOnSwiftAmt).toLocaleString('en-IN')}
-                                                                                                             </p>
-                                                                                                         </div>
-                                                                                                     )}
-                                                                                                     <div className="space-y-0.5">
-                                                                                                         <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Margin</span>
-                                                                                                         <p className="text-sm font-black text-gray-800">
-                                                                                                             {amnd.amendmentMargin !== undefined && amnd.amendmentMargin !== '' ? `${amnd.amendmentMargin}%` : (record.bankMargin ? `${record.bankMargin}%` : '-')}
-                                                                                                         </p>
-                                                                                                     </div>
-                                                                                                     <div className="space-y-0.5">
-                                                                                                         <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Margin Bill</span>
-                                                                                                         <p className="text-sm font-black text-blue-600">
-                                                                                                             {amnd.amendmentMarginBill ? `৳${parseFloat(amnd.amendmentMarginBill).toLocaleString('en-IN', { minimumFractionDigits: 2 })}` : '-'}
-                                                                                                         </p>
-                                                                                                     </div>
-                                                                                                     <div className="space-y-0.5">
-                                                                                                         <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Margin Paid</span>
-                                                                                                         <p className="text-sm font-black text-blue-600">
-                                                                                                             {amnd.amendmentMarginPaid !== undefined && amnd.amendmentMarginPaid !== '' 
-                                                                                                                 ? `৳${parseFloat(amnd.amendmentMarginPaid).toLocaleString('en-IN', { minimumFractionDigits: 2 })}` 
-                                                                                                                 : (() => {
-                                                                                                                     const margin = amnd.amendmentMargin !== undefined ? (parseFloat(amnd.amendmentMargin) || 0) : (record.bankMargin !== undefined ? parseFloat(record.bankMargin) : 0);
-                                                                                                                     const mb = parseFloat(amnd.amendmentMarginBill) || 0;
-                                                                                                                     const mp = mb * (margin / 100);
-                                                                                                                     return mp > 0 ? `৳${mp.toLocaleString('en-IN', { minimumFractionDigits: 2 })}` : '-';
-                                                                                                                 })()
-                                                                                                             }
-                                                                                                         </p>
-                                                                                                     </div>
-                                                                                                     {hasBankBill && (
-                                                                                                         <div className="space-y-0.5">
-                                                                                                             <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Amendment Bill</span>
-                                                                                                             <p className="text-sm font-extrabold text-rose-600">
-                                                                                                                 {isAmndBillActive && amnd.amendmentBankBill ? `৳${parseFloat(amnd.amendmentBankBill).toLocaleString('en-IN', { minimumFractionDigits: 2 })}` : '-'}
-                                                                                                             </p>
-                                                                                                         </div>
-                                                                                                     )}
-                                                                                                     <div className="space-y-0.5">
-                                                                                                         <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Total Bill</span>
-                                                                                                         <p className="text-sm font-black text-blue-600">
-                                                                                                             {(amnd.totalAmendmentBankBill || amnd.amendmentBill) ? `৳${parseFloat(amnd.totalAmendmentBankBill || amnd.amendmentBill).toLocaleString('en-IN', { minimumFractionDigits: 2 })}` : '-'}
-                                                                                                         </p>
-                                                                                                     </div>
-                                                                                                 </div>
-                                                                                             );
-                                                                                         })()}
-                                                                                    </div>
-                                                                                );
-                                                                            })}
-                                                                    </div>
-                                                                </div>
+                                                        </div>
+                                                    </td>
+                                                    <td className="px-3 py-4 text-sm font-medium text-gray-700 whitespace-nowrap truncate max-w-[120px]" title={record.importerName}>{record.importerName}</td>
+                                                    <td className="px-3 py-4 text-sm text-gray-600 whitespace-nowrap truncate max-w-[120px]" title={record.exporterName}>{record.exporterName}</td>
+                                                    <td className="px-3 py-4 text-sm text-gray-600 font-medium whitespace-nowrap truncate max-w-[120px]" title={record.bankName}>{record.bankName}</td>
+                                                    <td className="px-3 py-4 text-sm text-gray-600 whitespace-nowrap truncate max-w-[80px]" title={displayPort}>{displayPort}</td>
+                                                    <td className="px-3 py-4 text-sm font-bold text-gray-900 whitespace-nowrap truncate max-w-[120px]" title={displayProducts}>{displayProducts}</td>
+                                                    <td className="px-3 py-4 text-sm text-right text-gray-600 whitespace-nowrap">
+                                                        <span className="font-bold text-gray-900">{qtyKg.toLocaleString('en-US')}</span> <span className="text-[10px] text-gray-400 font-normal">Kg</span>
+                                                    </td>
+                                                    <td className="px-3 py-4 text-sm text-right font-black text-gray-900 whitespace-nowrap">৳{parseFloat(record.totalAmount || 0).toLocaleString('en-IN')}</td>
+                                                    <td className="px-3 py-4 text-sm text-right whitespace-nowrap">
+                                                        <span className={`font-black ${combinedRemKg <= 0 ? 'text-emerald-600' : 'text-blue-600'}`}>
+                                                            {combinedRemKg.toLocaleString('en-IN')} <span className="text-[10px] text-gray-400 font-medium whitespace-nowrap">Kg</span>
+                                                        </span>
+                                                    </td>
+                                                    <td className="px-3 py-4 text-sm text-right whitespace-nowrap">
+                                                        <span className={`font-black ${remGpKg <= 0 ? 'text-emerald-600' : 'text-indigo-600'}`}>
+                                                            {remGpKg.toLocaleString('en-US')} <span className="text-[10px] text-gray-400 font-medium whitespace-nowrap">Kg</span>
+                                                        </span>
+                                                    </td>
+                                                    <td className="px-3 py-4 text-sm text-right whitespace-nowrap">
+                                                        {(() => {
+                                                            const totalExpense = lcExpenses
+                                                                .filter(exp => exp.lcNo === record.lcNo)
+                                                                .reduce((sum, exp) => sum + (parseFloat(exp.amount) || 0), 0);
+                                                            return (
+                                                                <span className={`font-black ${totalExpense > 0 ? 'text-rose-600' : 'text-gray-400'}`}>
+                                                                    {totalExpense > 0 ? `৳${totalExpense.toLocaleString('en-IN')}` : '—'}
+                                                                </span>
+                                                            );
+                                                        })()}
+                                                    </td>
+                                                    <td className="px-3 py-4 text-center">
+                                                        <div className="flex items-center justify-center gap-4">
+                                                            <button
+                                                                onClick={() => setExpandedLcKey(prev => prev === record._id ? null : record._id)}
+                                                                className={`p-1.5 rounded-lg transition-all ${expandedLcKey === record._id ? 'bg-blue-50 text-blue-600' : 'text-gray-400 hover:bg-gray-100 hover:text-gray-600'}`}
+                                                                title="View Charges"
+                                                            >
+                                                                {expandedLcKey === record._id ? (
+                                                                    <ChevronUpIcon className="w-4 h-4" />
+                                                                ) : (
+                                                                    <ChevronDownIcon className="w-4 h-4" />
+                                                                )}
+                                                            </button>
+                                                            <button
+                                                                onClick={() => setViewData(record)}
+                                                                className="text-gray-400 hover:text-blue-600 transition-colors"
+                                                                title="View Details"
+                                                            >
+                                                                <EyeIcon className="w-5 h-5" />
+                                                            </button>
+                                                            {canManage && (
+                                                                <>
+                                                                    <button
+                                                                        onClick={() => handleEdit(record)}
+                                                                        className="text-gray-400 hover:text-blue-600 transition-colors"
+                                                                        title="Edit Record"
+                                                                    >
+                                                                        <EditIcon className="w-5 h-5" />
+                                                                    </button>
+                                                                    <button
+                                                                        onClick={() => handleDelete(record._id)}
+                                                                        className="text-gray-400 hover:text-red-600 transition-colors"
+                                                                        title="Delete Record"
+                                                                    >
+                                                                        <TrashIcon className="w-5 h-5" />
+                                                                    </button>
+                                                                </>
                                                             )}
                                                         </div>
                                                     </td>
                                                 </tr>
-                                            )}
-                                        </React.Fragment>
-                                    );
-                                })
-                            ) : (
-                                <tr>
-                                    <td colSpan="14" className="px-6 py-12 text-center text-gray-400 font-medium whitespace-nowrap italic">
-                                        No LC records found
-                                    </td>
-                                </tr>
-                            )}
-                        </tbody>
-                    </table>
-                </div>
+                                                {/* Expandable Sub-row containing Charges Breakdown */}
+                                                {expandedLcKey === record._id && (
+                                                    <tr className="bg-gray-50/40">
+                                                        <td colSpan="14" className="px-6 py-4 border-b border-gray-100">
+                                                            <div className="flex flex-col gap-6 bg-white p-5 rounded-2xl border border-gray-100 shadow-inner animate-in fade-in duration-300">
+                                                                {/* New LC Bill Charges */}
+                                                                <div className="space-y-3">
+                                                                    <h4 className="text-sm font-black text-blue-600 uppercase tracking-widest border-b border-blue-50 pb-2 flex items-center justify-between">
+                                                                        <span>New LC Bill Charges</span>
+                                                                        {record.bankName && (
+                                                                            <span className="text-xs text-gray-400 font-bold normal-case">
+                                                                                {record.bankName} {record.bankBranch ? `(${record.bankBranch})` : ''}
+                                                                            </span>
+                                                                        )}
+                                                                    </h4>
+                                                                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-y-4 gap-x-6 text-left">
+                                                                        {(() => {
+                                                                            const isRecordLcBillActive = record.lcBillEnabled !== undefined
+                                                                                ? record.lcBillEnabled
+                                                                                : !!(record.bankLcCommission || record.bankSwiftCharge || record.bankLcApplicationForm || record.bankMpCharge || record.bankStampCharge);
+                                                                            return (
+                                                                                <>
+                                                                                    {isRecordLcBillActive && (
+                                                                                        <>
+                                                                                            <div className="space-y-0.5">
+                                                                                                <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">LC Commission</span>
+                                                                                                <p className="text-sm font-black text-gray-800">
+                                                                                                    {record.bankLcCommission ? `${record.bankLcCommission}%` : '-'}
+                                                                                                </p>
+                                                                                            </div>
+                                                                                            <div className="space-y-0.5">
+                                                                                                <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">VAT on Commission</span>
+                                                                                                <p className="text-sm font-black text-gray-800">
+                                                                                                    {record.bankVatOnCommission ? `${record.bankVatOnCommission}%` : '-'}
+                                                                                                </p>
+                                                                                            </div>
+                                                                                            <div className="space-y-0.5">
+                                                                                                <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">SWIFT Charge</span>
+                                                                                                <p className="text-sm font-black text-gray-800">
+                                                                                                    {record.bankSwiftCharge !== undefined && record.bankSwiftCharge !== '' ? `৳${parseFloat(record.bankSwiftCharge).toLocaleString('en-IN')}` : '-'}
+                                                                                                </p>
+                                                                                            </div>
+                                                                                            <div className="space-y-0.5">
+                                                                                                <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">VAT on SWIFT Charge</span>
+                                                                                                <p className="text-sm font-black text-gray-800">
+                                                                                                    {record.bankVatOnSwiftCharge ? `${record.bankVatOnSwiftCharge}%` : '-'}
+                                                                                                </p>
+                                                                                            </div>
+                                                                                            <div className="space-y-0.5">
+                                                                                                <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">LC Application Form</span>
+                                                                                                <p className="text-sm font-black text-gray-800">
+                                                                                                    {record.bankLcApplicationForm !== undefined && record.bankLcApplicationForm !== '' ? `৳${parseFloat(record.bankLcApplicationForm).toLocaleString('en-IN')}` : '-'}
+                                                                                                </p>
+                                                                                            </div>
+                                                                                            <div className="space-y-0.5">
+                                                                                                <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">MP Charge</span>
+                                                                                                <p className="text-sm font-black text-gray-800">
+                                                                                                    {record.bankMpCharge !== undefined && record.bankMpCharge !== '' ? `৳${parseFloat(record.bankMpCharge).toLocaleString('en-IN')}` : '-'}
+                                                                                                </p>
+                                                                                            </div>
+                                                                                            <div className="space-y-0.5">
+                                                                                                <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Stamp Charge</span>
+                                                                                                <p className="text-sm font-black text-gray-800">
+                                                                                                    {record.bankStampCharge !== undefined && record.bankStampCharge !== '' ? `৳${parseFloat(record.bankStampCharge).toLocaleString('en-IN')}` : '-'}
+                                                                                                </p>
+                                                                                            </div>
+                                                                                        </>
+                                                                                    )}
+                                                                                    <div className="space-y-0.5">
+                                                                                        <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Margin</span>
+                                                                                        <p className="text-sm font-black text-gray-800">
+                                                                                            {record.bankMargin ? `${record.bankMargin}%` : '-'}
+                                                                                        </p>
+                                                                                    </div>
+                                                                                    <div className="space-y-0.5">
+                                                                                        <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Margin Bill</span>
+                                                                                        <p className="text-sm font-black text-blue-600">
+                                                                                            {record.marginBill ? `৳${parseFloat(record.marginBill).toLocaleString('en-IN', { minimumFractionDigits: 2 })}` : '-'}
+                                                                                        </p>
+                                                                                    </div>
+                                                                                    <div className="space-y-0.5">
+                                                                                        <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Margin Paid</span>
+                                                                                        <p className="text-sm font-black text-blue-600">
+                                                                                            {record.marginPaid !== undefined && record.marginPaid !== ''
+                                                                                                ? `৳${parseFloat(record.marginPaid).toLocaleString('en-IN', { minimumFractionDigits: 2 })}`
+                                                                                                : (() => {
+                                                                                                    const totalAmount = parseFloat(record.totalAmount) || 0;
+                                                                                                    const margin = parseFloat(record.bankMargin) || 0;
+                                                                                                    const mp = totalAmount * (margin / 100);
+                                                                                                    return mp > 0 ? `৳${mp.toLocaleString('en-IN', { minimumFractionDigits: 2 })}` : '-';
+                                                                                                })()
+                                                                                            }
+                                                                                        </p>
+                                                                                    </div>
+                                                                                    {isRecordLcBillActive && (
+                                                                                        <div className="space-y-0.5">
+                                                                                            <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Bank Bill</span>
+                                                                                            <p className="text-sm font-black text-rose-600">
+                                                                                                {record.bankBill ? `৳${parseFloat(record.bankBill).toLocaleString('en-IN', { minimumFractionDigits: 2 })}` : '-'}
+                                                                                            </p>
+                                                                                        </div>
+                                                                                    )}
+                                                                                </>
+                                                                            );
+                                                                        })()}
+                                                                        <div className="space-y-0.5">
+                                                                            <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Total Bank Bill</span>
+                                                                            <p className="text-sm font-black text-blue-600 font-extrabold">
+                                                                                {record.totalBankBill ? `৳${parseFloat(record.totalBankBill).toLocaleString('en-IN', { minimumFractionDigits: 2 })}` : '-'}
+                                                                            </p>
+                                                                        </div>
+                                                                    </div>
+                                                                </div>
+
+                                                                {/* Amendment Bill Charges */}
+                                                                {record.amendments && record.amendments.filter(amnd => amnd.amendmentNo !== 'Original LC').length > 0 && (
+                                                                    <div className="space-y-3">
+                                                                        <h4 className="text-sm font-black text-indigo-600 uppercase tracking-widest border-b border-indigo-50 pb-2 flex items-center justify-between">
+                                                                            <span>Amendment Bill Charges</span>
+                                                                        </h4>
+                                                                        <div className="space-y-4 max-h-[300px] overflow-y-auto custom-scrollbar pr-2">
+                                                                            {record.amendments
+                                                                                .filter(amnd => amnd.amendmentNo !== 'Original LC')
+                                                                                .map((amnd, index) => {
+                                                                                    const isAmndBillActive = amnd.amendmentLcBillEnabled !== undefined
+                                                                                        ? amnd.amendmentLcBillEnabled
+                                                                                        : !!(amnd.amendmentCommission || amnd.amendmentSwiftCharge);
+
+                                                                                    const swiftCharge = isAmndBillActive ? (parseFloat(amnd.amendmentSwiftCharge) || 0) : 0;
+                                                                                    const vatOnSwift = isAmndBillActive ? (parseFloat(amnd.amendmentVatOnSwift) || 0) : 0;
+                                                                                    const vatOnSwiftAmt = swiftCharge * (vatOnSwift / 100);
+
+                                                                                    const bankBill = isAmndBillActive ? (parseFloat(amnd.amendmentBankBill || amnd.amendmentBill) || 0) : 0;
+                                                                                    const vatOnCommission = isAmndBillActive ? (parseFloat(amnd.amendmentVatOnCommission) || 0) : 0;
+                                                                                    const commissionTotal = Math.max(0, bankBill - swiftCharge - vatOnSwiftAmt);
+                                                                                    const commissionAmt = commissionTotal / (1 + vatOnCommission / 100);
+                                                                                    const vatOnCommissionAmt = commissionTotal - commissionAmt;
+
+                                                                                    return (
+                                                                                        <div key={index} className="p-3 bg-gray-50/50 border border-gray-100 rounded-xl space-y-2">
+                                                                                            <div className="flex justify-between items-center border-b border-gray-200/50 pb-1">
+                                                                                                <span className="text-sm font-black text-indigo-600 uppercase tracking-wider">
+                                                                                                    {amnd.amendmentNo || `Amendment-${String(index + 1).padStart(2, '0')}`}
+                                                                                                </span>
+                                                                                                {amnd.amendmentDate && (
+                                                                                                    <span className="text-sm font-semibold text-gray-500 font-mono">
+                                                                                                        {formatDate(amnd.amendmentDate)}
+                                                                                                    </span>
+                                                                                                )}
+                                                                                            </div>
+                                                                                            {(() => {
+                                                                                                const hasCommission = isAmndBillActive && amnd.amendmentCommission && parseFloat(amnd.amendmentCommission) > 0;
+                                                                                                const hasVatOnComm = isAmndBillActive && amnd.amendmentVatOnCommission && parseFloat(amnd.amendmentVatOnCommission) > 0;
+                                                                                                const hasSwiftCharge = isAmndBillActive && amnd.amendmentSwiftCharge && parseFloat(amnd.amendmentSwiftCharge) > 0;
+                                                                                                const hasVatOnSwift = isAmndBillActive && amnd.amendmentVatOnSwift && parseFloat(amnd.amendmentVatOnSwift) > 0;
+                                                                                                const hasBankBill = isAmndBillActive && amnd.amendmentBankBill && parseFloat(amnd.amendmentBankBill) > 0;
+
+                                                                                                const colsCount = 4 + (hasCommission ? 1 : 0) + (hasVatOnComm ? 1 : 0) + (hasSwiftCharge ? 1 : 0) + (hasVatOnSwift ? 1 : 0) + (hasBankBill ? 1 : 0);
+
+                                                                                                return (
+                                                                                                    <div className={`grid grid-cols-2 sm:grid-cols-3 ${gridColsClassMap[colsCount] || 'md:grid-cols-9'} gap-4 text-left`}>
+                                                                                                        {hasCommission && (
+                                                                                                            <div className="space-y-0.5">
+                                                                                                                <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Commission ({amnd.amendmentCommission || 0}%)</span>
+                                                                                                                <p className="text-sm font-black text-gray-800">
+                                                                                                                    ৳{Math.round(commissionAmt).toLocaleString('en-IN')}
+                                                                                                                </p>
+                                                                                                            </div>
+                                                                                                        )}
+                                                                                                        {hasVatOnComm && (
+                                                                                                            <div className="space-y-0.5">
+                                                                                                                <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">VAT on Comm. ({amnd.amendmentVatOnCommission || 0}%)</span>
+                                                                                                                <p className="text-sm font-black text-gray-800">
+                                                                                                                    ৳{Math.round(vatOnCommissionAmt).toLocaleString('en-IN')}
+                                                                                                                </p>
+                                                                                                            </div>
+                                                                                                        )}
+                                                                                                        {hasSwiftCharge && (
+                                                                                                            <div className="space-y-0.5">
+                                                                                                                <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">SWIFT Charge</span>
+                                                                                                                <p className="text-sm font-black text-gray-800">
+                                                                                                                    ৳{parseFloat(amnd.amendmentSwiftCharge).toLocaleString('en-IN')}
+                                                                                                                </p>
+                                                                                                            </div>
+                                                                                                        )}
+                                                                                                        {hasVatOnSwift && (
+                                                                                                            <div className="space-y-0.5">
+                                                                                                                <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">VAT on SWIFT ({amnd.amendmentVatOnSwift || 0}%)</span>
+                                                                                                                <p className="text-sm font-black text-gray-800">
+                                                                                                                    ৳{Math.round(vatOnSwiftAmt).toLocaleString('en-IN')}
+                                                                                                                </p>
+                                                                                                            </div>
+                                                                                                        )}
+                                                                                                        <div className="space-y-0.5">
+                                                                                                            <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Margin</span>
+                                                                                                            <p className="text-sm font-black text-gray-800">
+                                                                                                                {amnd.amendmentMargin !== undefined && amnd.amendmentMargin !== '' ? `${amnd.amendmentMargin}%` : (record.bankMargin ? `${record.bankMargin}%` : '-')}
+                                                                                                            </p>
+                                                                                                        </div>
+                                                                                                        <div className="space-y-0.5">
+                                                                                                            <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Margin Bill</span>
+                                                                                                            <p className="text-sm font-black text-blue-600">
+                                                                                                                {amnd.amendmentMarginBill ? `৳${parseFloat(amnd.amendmentMarginBill).toLocaleString('en-IN', { minimumFractionDigits: 2 })}` : '-'}
+                                                                                                            </p>
+                                                                                                        </div>
+                                                                                                        <div className="space-y-0.5">
+                                                                                                            <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Margin Paid</span>
+                                                                                                            <p className="text-sm font-black text-blue-600">
+                                                                                                                {amnd.amendmentMarginPaid !== undefined && amnd.amendmentMarginPaid !== ''
+                                                                                                                    ? `৳${parseFloat(amnd.amendmentMarginPaid).toLocaleString('en-IN', { minimumFractionDigits: 2 })}`
+                                                                                                                    : (() => {
+                                                                                                                        const margin = amnd.amendmentMargin !== undefined ? (parseFloat(amnd.amendmentMargin) || 0) : (record.bankMargin !== undefined ? parseFloat(record.bankMargin) : 0);
+                                                                                                                        const mb = parseFloat(amnd.amendmentMarginBill) || 0;
+                                                                                                                        const mp = mb * (margin / 100);
+                                                                                                                        return mp > 0 ? `৳${mp.toLocaleString('en-IN', { minimumFractionDigits: 2 })}` : '-';
+                                                                                                                    })()
+                                                                                                                }
+                                                                                                            </p>
+                                                                                                        </div>
+                                                                                                        {hasBankBill && (
+                                                                                                            <div className="space-y-0.5">
+                                                                                                                <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Amendment Bill</span>
+                                                                                                                <p className="text-sm font-extrabold text-rose-600">
+                                                                                                                    {isAmndBillActive && amnd.amendmentBankBill ? `৳${parseFloat(amnd.amendmentBankBill).toLocaleString('en-IN', { minimumFractionDigits: 2 })}` : '-'}
+                                                                                                                </p>
+                                                                                                            </div>
+                                                                                                        )}
+                                                                                                        <div className="space-y-0.5">
+                                                                                                            <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Total Bill</span>
+                                                                                                            <p className="text-sm font-black text-blue-600">
+                                                                                                                {(amnd.totalAmendmentBankBill || amnd.amendmentBill) ? `৳${parseFloat(amnd.totalAmendmentBankBill || amnd.amendmentBill).toLocaleString('en-IN', { minimumFractionDigits: 2 })}` : '-'}
+                                                                                                            </p>
+                                                                                                        </div>
+                                                                                                    </div>
+                                                                                                );
+                                                                                            })()}
+                                                                                        </div>
+                                                                                    );
+                                                                                })}
+                                                                        </div>
+                                                                    </div>
+                                                                )}
+                                                            </div>
+                                                        </td>
+                                                    </tr>
+                                                )}
+                                            </React.Fragment>
+                                        );
+                                    })
+                                ) : (
+                                    <tr>
+                                        <td colSpan="14" className="px-6 py-12 text-center text-gray-400 font-medium whitespace-nowrap italic">
+                                            No LC records found
+                                        </td>
+                                    </tr>
+                                )}
+                            </tbody>
+                        </table>
+                    </div>
+
+                    {/* Mobile View */}
+                    <div className="md:hidden space-y-4">
+                        {isLoading ? (
+                            Array(3).fill(0).map((_, i) => (
+                                <div key={i} className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm animate-pulse space-y-4">
+                                    <div className="flex justify-between items-center">
+                                        <div className="h-4 bg-gray-200 rounded w-1/3"></div>
+                                        <div className="h-3 bg-gray-100 rounded w-1/4"></div>
+                                    </div>
+                                    <div className="space-y-2">
+                                        <div className="h-3 bg-gray-100 rounded w-3/4"></div>
+                                        <div className="h-3 bg-gray-100 rounded w-1/2"></div>
+                                    </div>
+                                    <div className="grid grid-cols-2 gap-3">
+                                        <div className="h-10 bg-gray-50 rounded-xl"></div>
+                                        <div className="h-10 bg-gray-50 rounded-xl"></div>
+                                    </div>
+                                </div>
+                            ))
+                        ) : filteredRecords.length > 0 ? (
+                            filteredRecords.map((record) => {
+                                // Helper for sanitized numeric parsing
+                                const parseNum = (val) => {
+                                    if (val === null || val === undefined) return 0;
+                                    return parseFloat(String(val).replace(/[^0-9.]/g, '')) || 0;
+                                };
+
+                                // Failsafe LC Matching: Compare only the numeric digits
+                                const cleanLc = (val) => String(val || '').replace(/\D/g, '');
+
+                                // Dynamic fallback for Port if empty in LC record
+                                const linkedPi = record.piNo ? piRecordsRaw.find(p => p.piNumber === record.piNo) : null;
+                                const displayPort = record.port || (linkedPi && (linkedPi.port || linkedPi.portOfDischarge || linkedPi.portOfLoading)) || '-';
+
+                                const displayProducts = record.productsList && record.productsList.length > 0
+                                    ? record.productsList.map(p => p.productName).filter(Boolean).join(', ')
+                                    : record.productName || '-';
+
+                                // Unit conversion for display (Data is in Tons, Table shows Kg)
+                                const totalQtyTons = record.productsList && record.productsList.length > 0
+                                    ? record.productsList.reduce((sum, p) => sum + (parseFloat(p.quantity) || 0), 0)
+                                    : (parseFloat(record.quantity) || 0);
+                                const qtyKg = totalQtyTons * 1000;
+
+                                // Calculate Remaining Quantities
+                                // Received: From allStockRecords where lcNo matches and status is NOT requested/rejected
+                                const lcNoClean = cleanLc(record.lcNo);
+
+                                const receiptsMapForBalance = {};
+                                allStockRecords
+                                    .filter(s => {
+                                        const recordLcNoClean = cleanLc(s.lcNo);
+                                        const status = (s.status || '').toLowerCase();
+                                        return recordLcNoClean === lcNoClean && (status === 'accepted' || status === 'in stock');
+                                    })
+                                    .forEach(s => {
+                                        const rawDate = s.date || s.receiveDate || s.createdAt || '';
+                                        const dateStr = typeof rawDate === 'string' && rawDate.includes('T') ? rawDate.split('T')[0] : rawDate;
+                                        const groupVal = s.totalLcQuantity || s.billOfEntry || s.totalLcTruck || s.truckNo || s.truck || 'single';
+                                        const key = `${dateStr}_${groupVal}`;
+
+                                        if (!receiptsMapForBalance[key]) {
+                                            const itemSubtotal = (s.entries || []).reduce((iSum, item) => iSum + parseNum(item.inHouseQuantity || item.quantity), 0);
+                                            receiptsMapForBalance[key] = parseNum(s.totalLcQuantity) || itemSubtotal || parseNum(s.inHouseQuantity) || parseNum(s.quantity);
+                                        } else {
+                                            if (!s.totalLcQuantity) {
+                                                receiptsMapForBalance[key] += parseNum(s.inHouseQuantity) || parseNum(s.quantity);
+                                            }
+                                        }
+                                    });
+                                const receivedQtyKg = Object.values(receiptsMapForBalance).reduce((sum, qty) => sum + qty, 0);
+
+                                // Border Sale: From allSalesRecords where lcNo matches and is a Border Sale
+                                const borderSaleQtyKg = allSalesRecords
+                                    .filter(s => {
+                                        const recordLcNoClean = cleanLc(s.lcNo);
+
+                                        // Adopt robust Border Sale detection
+                                        const sTypeLow = (s.saleType || '').toLowerCase().trim();
+                                        // Permissive: Catch by BS prefix OR explicit sale type OR presence of matching LC + port details
+                                        const isBorder = sTypeLow.includes('border') ||
+                                            (s.invoiceNo || '').startsWith('BS') ||
+                                            (!s.saleType && !!(s.lcNo || s.port || s.importer)) ||
+                                            (recordLcNoClean === lcNoClean && !!(s.port || s.importer));
+
+                                        const status = (s.status || '').toLowerCase();
+                                        return recordLcNoClean === lcNoClean && status === 'accepted' && isBorder;
+                                    })
+                                    .reduce((sum, s) => {
+                                        const itemSubtotal = (s.items || []).reduce((iSum, item) => {
+                                            const brandSubtotal = (item.brandEntries || []).reduce((bSum, b) => bSum + parseNum(b.quantity), 0);
+                                            return iSum + (brandSubtotal || parseNum(item.quantity));
+                                        }, 0);
+                                        const qty = parseNum(s.currentTotalQty) || parseNum(s.totalQuantity) || parseNum(s.totalQty) || parseNum(s.qty) || parseNum(s.quantity) || parseNum(s.total) || itemSubtotal;
+                                        return sum + qty;
+                                    }, 0);
+
+                                const combinedRemKg = qtyKg - (receivedQtyKg + borderSaleQtyKg);
+
+                                // Calculate Rem G.P
+                                const totalGpQtyKg = gpRecords
+                                    .filter(gp => String(gp.lcNumber || '').replace(/\D/g, '') === lcNoClean)
+                                    .reduce((sum, gp) => sum + (parseFloat(gp.gpQuantity) || 0), 0);
+                                const remGpKg = Math.max(0, qtyKg - totalGpQtyKg);
+
+                                const totalExpense = lcExpenses
+                                    .filter(exp => exp.lcNo === record.lcNo)
+                                    .reduce((sum, exp) => sum + (parseFloat(exp.amount) || 0), 0);
+
+                                const isCardExpanded = expandedCardKey === record._id;
+                                const isExpanded = expandedLcKey === record._id;
+
+                                return (
+                                    <div
+                                        key={record._id}
+                                        className={`bg-white rounded-2xl border ${isCardExpanded ? 'border-blue-100 ring-4 ring-blue-500/5 shadow-lg' : 'border-gray-100 shadow-sm'} p-5 transition-all duration-300 overflow-hidden text-left`}
+                                    >
+                                        {/* Collapsed View: Redesigned Premium Card Header */}
+                                        <div
+                                            onClick={() => setExpandedCardKey(isCardExpanded ? null : record._id)}
+                                            className="flex items-center justify-between gap-4 cursor-pointer select-none py-1"
+                                        >
+                                            <div className="flex items-center gap-3 flex-1 min-w-0">
+                                                {/* Main Info Column */}
+                                                <div className="flex-1 min-w-0">
+                                                    <div className="flex items-center gap-2">
+                                                        <span className="text-sm font-black text-gray-955 font-sans tracking-tight">{record.lcNo}</span>
+                                                        {record.amendments?.length > 0 && (
+                                                            <span className="px-1.5 py-0.5 bg-blue-50 text-blue-600 border border-blue-150/40 rounded text-[9px] font-extrabold uppercase tracking-wide">
+                                                                {record.lcAmendment?.split(' ')[0] || 'Amended'}
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                    <p className="text-xs font-semibold text-gray-500 truncate mt-0.5" title={displayProducts}>
+                                                        {displayProducts}
+                                                    </p>
+                                                </div>
+                                                {/* Date Info Column */}
+                                                <div className="text-right shrink-0">
+                                                    <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider block">Date</span>
+                                                    <span className="text-xs font-bold text-gray-800 font-mono mt-0.5 block">{formatDate(record.openingDate)}</span>
+                                                </div>
+                                            </div>
+                                            <div className={`shrink-0 flex items-center justify-center p-1.5 rounded-lg border transition-all ${isCardExpanded ? 'bg-blue-50 text-blue-600 border-blue-100' : 'bg-gray-50 text-gray-400 border-gray-100 hover:text-gray-600'}`}>
+                                                {isCardExpanded ? (
+                                                    <ChevronUpIcon className="w-4 h-4" />
+                                                ) : (
+                                                    <ChevronDownIcon className="w-4 h-4" />
+                                                )}
+                                            </div>
+                                        </div>
+                                        {isCardExpanded && (
+                                            <div className="mt-4 pt-4 border-t border-gray-100 space-y-4 animate-in slide-in-from-top-2 duration-300">
+                                                {/* Card Details: Premium aligned grid */}
+                                                <div className="grid grid-cols-[125px_8px_1fr] gap-y-1.5 bg-gray-50/50 p-4 rounded-2xl border border-gray-100/80 text-xs items-baseline text-left">
+                                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">LC NO</span>
+                                                    <span className="text-gray-400 font-bold text-[10px]">:</span>
+                                                    <div className="flex items-center gap-1.5 flex-wrap">
+                                                        <span className="font-black text-gray-950 font-sans text-[11px]">{record.lcNo}</span>
+                                                        {record.amendments?.length > 0 && (
+                                                            <span className="px-1.5 py-0.5 bg-blue-50 text-blue-600 border border-blue-200/50 rounded text-[9px] font-extrabold uppercase tracking-wide leading-none">
+                                                                {record.lcAmendment?.split(' ')[0] || 'Amended'}
+                                                            </span>
+                                                        )}
+                                                    </div>
+
+                                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Opening Date</span>
+                                                    <span className="text-gray-400 font-bold text-[10px]">:</span>
+                                                    <span className="font-semibold text-gray-850 font-mono text-[11px]">{formatDate(record.openingDate)}</span>
+
+                                                    <span className="text-[10px] font-bold text-gray-400 tracking-wider">Expiry Date</span>
+                                                    <span className="text-gray-400 font-bold text-[10px]">:</span>
+                                                    <span className="font-semibold text-gray-850 font-mono text-[11px]">{formatDate(record.expiryDate)}</span>
+
+                                                    {/* Divider */}
+                                                    <div className="col-span-3 h-[1px] bg-gray-200/60 my-1"></div>
+
+                                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Importer</span>
+                                                    <span className="text-gray-400 font-bold text-[10px]">:</span>
+                                                    <span className="font-bold text-gray-850 break-words text-[11px]">{record.importerName}</span>
+
+                                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Exporter</span>
+                                                    <span className="text-gray-400 font-bold text-[10px]">:</span>
+                                                    <span className="font-semibold text-gray-850 break-words text-[11px]">{record.exporterName}</span>
+
+                                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Bank</span>
+                                                    <span className="text-gray-400 font-bold text-[10px]">:</span>
+                                                    <span className="font-semibold text-gray-850 break-words text-[11px]">{record.bankName}</span>
+
+                                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Port</span>
+                                                    <span className="text-gray-400 font-bold text-[10px]">:</span>
+                                                    <span className="font-semibold text-gray-850 break-words text-[11px]">{displayPort}</span>
+
+                                                    {/* Divider */}
+                                                    <div className="col-span-3 h-[1px] bg-gray-200/60 my-1"></div>
+
+                                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Product</span>
+                                                    <span className="text-gray-400 font-bold text-[10px]">:</span>
+                                                    <span className="font-bold text-gray-900 break-words text-[11px]">{displayProducts}</span>
+
+                                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Quantity</span>
+                                                    <span className="text-gray-400 font-bold text-[10px]">:</span>
+                                                    <div className="text-[11px]">
+                                                        <span className="font-bold text-gray-900">{qtyKg.toLocaleString('en-US')}</span> <span className="text-[10px] text-gray-400 font-normal ml-0.5">Kg</span>
+                                                    </div>
+
+                                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Total Value</span>
+                                                    <span className="text-gray-400 font-bold text-[10px]">:</span>
+                                                    <span className="font-black text-gray-955 text-[11px]">৳{parseFloat(record.totalAmount || 0).toLocaleString('en-IN')}</span>
+
+                                                    {/* Divider */}
+                                                    <div className="col-span-3 h-[1px] bg-gray-200/60 my-1"></div>
+
+                                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">LC Balance</span>
+                                                    <span className="text-gray-400 font-bold text-[10px]">:</span>
+                                                    <span className={`font-black text-[11px] ${combinedRemKg <= 0 ? 'text-emerald-600' : 'text-blue-600'}`}>
+                                                        {combinedRemKg.toLocaleString('en-IN')} <span className="text-[10px] text-gray-400 font-medium ml-0.5">Kg</span>
+                                                    </span>
+
+                                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Rem G.P</span>
+                                                    <span className="text-gray-400 font-bold text-[10px]">:</span>
+                                                    <span className={`font-black text-[11px] ${remGpKg <= 0 ? 'text-emerald-600' : 'text-indigo-600'}`}>
+                                                        {remGpKg.toLocaleString('en-US')} <span className="text-[10px] text-gray-400 font-medium ml-0.5">Kg</span>
+                                                    </span>
+
+                                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Expense</span>
+                                                    <span className="text-gray-400 font-bold text-[10px]">:</span>
+                                                    <span className={`font-black text-[11px] ${totalExpense > 0 ? 'text-rose-600' : 'text-gray-400'}`}>
+                                                        {totalExpense > 0 ? `৳${totalExpense.toLocaleString('en-IN')}` : '—'}
+                                                    </span>
+                                                </div>
+
+                                                {/* Expanded details (LC Bill and Amendment Bill Charges) */}
+                                                {isExpanded && (
+                                                    <div className="mt-4 border-t border-gray-100 pt-4 space-y-4 animate-in slide-in-from-top-2 duration-300">
+                                                        {/* New LC Bill Charges */}
+                                                        <div className="space-y-2">
+                                                            <h4 className="text-xs font-black text-blue-600 uppercase tracking-widest border-b border-blue-50 pb-1.5 flex items-center justify-between">
+                                                                <span>New LC Bill Charges</span>
+                                                            </h4>
+                                                            <div className="grid grid-cols-2 gap-y-3 gap-x-4 text-left">
+                                                                {(() => {
+                                                                    const isRecordLcBillActive = record.lcBillEnabled !== undefined
+                                                                        ? record.lcBillEnabled
+                                                                        : !!(record.bankLcCommission || record.bankSwiftCharge || record.bankLcApplicationForm || record.bankMpCharge || record.bankStampCharge);
+                                                                    return (
+                                                                        <>
+                                                                            {isRecordLcBillActive && (
+                                                                                <>
+                                                                                    <div>
+                                                                                        <span className="text-[10px] font-bold text-gray-400 uppercase block">LC Commission</span>
+                                                                                        <p className="text-xs font-black text-gray-800">{record.bankLcCommission ? `${record.bankLcCommission}%` : '-'}</p>
+                                                                                    </div>
+                                                                                    <div>
+                                                                                        <span className="text-[10px] font-bold text-gray-400 uppercase block">VAT on Comm.</span>
+                                                                                        <p className="text-xs font-black text-gray-800">{record.bankVatOnCommission ? `${record.bankVatOnCommission}%` : '-'}</p>
+                                                                                    </div>
+                                                                                    <div>
+                                                                                        <span className="text-[10px] font-bold text-gray-400 uppercase block">SWIFT Charge</span>
+                                                                                        <p className="text-xs font-black text-gray-800">
+                                                                                            {record.bankSwiftCharge !== undefined && record.bankSwiftCharge !== '' ? `৳${parseFloat(record.bankSwiftCharge).toLocaleString('en-IN')}` : '-'}
+                                                                                        </p>
+                                                                                    </div>
+                                                                                    <div>
+                                                                                        <span className="text-[10px] font-bold text-gray-400 uppercase block">VAT on SWIFT</span>
+                                                                                        <p className="text-xs font-black text-gray-800">{record.bankVatOnSwiftCharge ? `${record.bankVatOnSwiftCharge}%` : '-'}</p>
+                                                                                    </div>
+                                                                                    <div>
+                                                                                        <span className="text-[10px] font-bold text-gray-400 uppercase block">LC App Form</span>
+                                                                                        <p className="text-xs font-black text-gray-850">
+                                                                                            {record.bankLcApplicationForm !== undefined && record.bankLcApplicationForm !== '' ? `৳${parseFloat(record.bankLcApplicationForm).toLocaleString('en-IN')}` : '-'}
+                                                                                        </p>
+                                                                                    </div>
+                                                                                    <div>
+                                                                                        <span className="text-[10px] font-bold text-gray-400 uppercase block">MP Charge</span>
+                                                                                        <p className="text-xs font-black text-gray-800">
+                                                                                            {record.bankMpCharge !== undefined && record.bankMpCharge !== '' ? `৳${parseFloat(record.bankMpCharge).toLocaleString('en-IN')}` : '-'}
+                                                                                        </p>
+                                                                                    </div>
+                                                                                    <div>
+                                                                                        <span className="text-[10px] font-bold text-gray-400 uppercase block">Stamp Charge</span>
+                                                                                        <p className="text-xs font-black text-gray-800">
+                                                                                            {record.bankStampCharge !== undefined && record.bankStampCharge !== '' ? `৳${parseFloat(record.bankStampCharge).toLocaleString('en-IN')}` : '-'}
+                                                                                        </p>
+                                                                                    </div>
+                                                                                </>
+                                                                            )}
+                                                                            <div>
+                                                                                <span className="text-[10px] font-bold text-gray-400 uppercase block">Margin</span>
+                                                                                <p className="text-xs font-black text-gray-800">{record.bankMargin ? `${record.bankMargin}%` : '-'}</p>
+                                                                            </div>
+                                                                            <div>
+                                                                                <span className="text-[10px] font-bold text-gray-400 uppercase block">Margin Bill</span>
+                                                                                <p className="text-xs font-black text-blue-600">
+                                                                                    {record.marginBill ? `৳${parseFloat(record.marginBill).toLocaleString('en-IN', { minimumFractionDigits: 2 })}` : '-'}
+                                                                                </p>
+                                                                            </div>
+                                                                            <div>
+                                                                                <span className="text-[10px] font-bold text-gray-400 uppercase block">Margin Paid</span>
+                                                                                <p className="text-xs font-black text-blue-600">
+                                                                                    {record.marginPaid !== undefined && record.marginPaid !== ''
+                                                                                        ? `৳${parseFloat(record.marginPaid).toLocaleString('en-IN', { minimumFractionDigits: 2 })}`
+                                                                                        : (() => {
+                                                                                            const totalAmount = parseFloat(record.totalAmount) || 0;
+                                                                                            const margin = parseFloat(record.bankMargin) || 0;
+                                                                                            const mp = totalAmount * (margin / 100);
+                                                                                            return mp > 0 ? `৳${mp.toLocaleString('en-IN', { minimumFractionDigits: 2 })}` : '-';
+                                                                                        })()
+                                                                                    }
+                                                                                </p>
+                                                                            </div>
+                                                                            {isRecordLcBillActive && (
+                                                                                <div>
+                                                                                    <span className="text-[10px] font-bold text-gray-400 uppercase block">Bank Bill</span>
+                                                                                    <p className="text-xs font-black text-rose-600">
+                                                                                        {record.bankBill ? `৳${parseFloat(record.bankBill).toLocaleString('en-IN', { minimumFractionDigits: 2 })}` : '-'}
+                                                                                    </p>
+                                                                                </div>
+                                                                            )}
+                                                                            <div>
+                                                                                <span className="text-[10px] font-bold text-gray-400 uppercase block">Total Bank Bill</span>
+                                                                                <p className="text-xs font-black text-blue-600">
+                                                                                    {record.totalBankBill ? `৳${parseFloat(record.totalBankBill).toLocaleString('en-IN', { minimumFractionDigits: 2 })}` : '-'}
+                                                                                </p>
+                                                                            </div>
+                                                                        </>
+                                                                    );
+                                                                })()}
+                                                            </div>
+                                                        </div>
+
+                                                        {/* Amendment Bill Charges */}
+                                                        {record.amendments && record.amendments.filter(amnd => amnd.amendmentNo !== 'Original LC').length > 0 && (
+                                                            <div className="space-y-2">
+                                                                <h4 className="text-xs font-black text-indigo-600 uppercase tracking-widest border-b border-indigo-50 pb-1.5">
+                                                                    <span>Amendment Bill Charges</span>
+                                                                </h4>
+                                                                <div className="space-y-3">
+                                                                    {record.amendments
+                                                                        .filter(amnd => amnd.amendmentNo !== 'Original LC')
+                                                                        .map((amnd, index) => {
+                                                                            const isAmndBillActive = amnd.amendmentLcBillEnabled !== undefined
+                                                                                ? amnd.amendmentLcBillEnabled
+                                                                                : !!(amnd.amendmentCommission || amnd.amendmentSwiftCharge);
+
+                                                                            const swiftCharge = isAmndBillActive ? (parseFloat(amnd.amendmentSwiftCharge) || 0) : 0;
+                                                                            const vatOnSwift = isAmndBillActive ? (parseFloat(amnd.amendmentVatOnSwift) || 0) : 0;
+                                                                            const vatOnSwiftAmt = swiftCharge * (vatOnSwift / 100);
+
+                                                                            const bankBill = isAmndBillActive ? (parseFloat(amnd.amendmentBankBill || amnd.amendmentBill) || 0) : 0;
+                                                                            const vatOnCommission = isAmndBillActive ? (parseFloat(amnd.amendmentVatOnCommission) || 0) : 0;
+                                                                            const commissionTotal = Math.max(0, bankBill - swiftCharge - vatOnSwiftAmt);
+                                                                            const commissionAmt = commissionTotal / (1 + vatOnCommission / 100);
+                                                                            const vatOnCommissionAmt = commissionTotal - commissionAmt;
+
+                                                                            return (
+                                                                                <div key={index} className="p-3 bg-gray-50/50 border border-gray-100 rounded-xl space-y-2 text-xs">
+                                                                                    <div className="flex justify-between items-center border-b border-gray-200/50 pb-1">
+                                                                                        <span className="font-black text-indigo-600 uppercase">
+                                                                                            {amnd.amendmentNo || `Amendment-${String(index + 1).padStart(2, '0')}`}
+                                                                                        </span>
+                                                                                        {amnd.amendmentDate && (
+                                                                                            <span className="font-semibold text-gray-500 font-mono">
+                                                                                                {formatDate(amnd.amendmentDate)}
+                                                                                            </span>
+                                                                                        )}
+                                                                                    </div>
+                                                                                    <div className="grid grid-cols-2 gap-y-2.5 gap-x-4">
+                                                                                        {isAmndBillActive && amnd.amendmentCommission && parseFloat(amnd.amendmentCommission) > 0 && (
+                                                                                            <div>
+                                                                                                <span className="text-[10px] font-bold text-gray-400 uppercase block">Commission ({amnd.amendmentCommission || 0}%)</span>
+                                                                                                <p className="text-xs font-black text-gray-800">৳{Math.round(commissionAmt).toLocaleString('en-IN')}</p>
+                                                                                            </div>
+                                                                                        )}
+                                                                                        {isAmndBillActive && amnd.amendmentVatOnCommission && parseFloat(amnd.amendmentVatOnCommission) > 0 && (
+                                                                                            <div>
+                                                                                                <span className="text-[10px] font-bold text-gray-400 uppercase block">VAT on Comm. ({amnd.amendmentVatOnCommission || 0}%)</span>
+                                                                                                <p className="text-xs font-black text-gray-800">৳{Math.round(vatOnCommissionAmt).toLocaleString('en-IN')}</p>
+                                                                                            </div>
+                                                                                        )}
+                                                                                        {isAmndBillActive && amnd.amendmentSwiftCharge && parseFloat(amnd.amendmentSwiftCharge) > 0 && (
+                                                                                            <div>
+                                                                                                <span className="text-[10px] font-bold text-gray-400 uppercase block">SWIFT Charge</span>
+                                                                                                <p className="text-xs font-black text-gray-800">৳{parseFloat(amnd.amendmentSwiftCharge).toLocaleString('en-IN')}</p>
+                                                                                            </div>
+                                                                                        )}
+                                                                                        {isAmndBillActive && amnd.amendmentVatOnSwift && parseFloat(amnd.amendmentVatOnSwift) > 0 && (
+                                                                                            <div>
+                                                                                                <span className="text-[10px] font-bold text-gray-400 uppercase block">VAT on SWIFT ({amnd.amendmentVatOnSwift || 0}%)</span>
+                                                                                                <p className="text-xs font-black text-gray-800">৳{Math.round(vatOnSwiftAmt).toLocaleString('en-IN')}</p>
+                                                                                            </div>
+                                                                                        )}
+                                                                                        <div>
+                                                                                            <span className="text-[10px] font-bold text-gray-400 uppercase block">Margin</span>
+                                                                                            <p className="text-xs font-black text-gray-800">
+                                                                                                {amnd.amendmentMargin !== undefined && amnd.amendmentMargin !== '' ? `${amnd.amendmentMargin}%` : (record.bankMargin ? `${record.bankMargin}%` : '-')}
+                                                                                            </p>
+                                                                                        </div>
+                                                                                        <div>
+                                                                                            <span className="text-[10px] font-bold text-gray-400 uppercase block">Margin Bill</span>
+                                                                                            <p className="text-xs font-black text-blue-600">
+                                                                                                {amnd.amendmentMarginBill ? `৳${parseFloat(amnd.amendmentMarginBill).toLocaleString('en-IN', { minimumFractionDigits: 2 })}` : '-'}
+                                                                                            </p>
+                                                                                        </div>
+                                                                                        <div>
+                                                                                            <span className="text-[10px] font-bold text-gray-400 uppercase block">Margin Paid</span>
+                                                                                            <p className="text-xs font-black text-blue-600">
+                                                                                                {amnd.amendmentMarginPaid !== undefined && amnd.amendmentMarginPaid !== ''
+                                                                                                    ? `৳${parseFloat(amnd.amendmentMarginPaid).toLocaleString('en-IN', { minimumFractionDigits: 2 })}`
+                                                                                                    : (() => {
+                                                                                                        const margin = amnd.amendmentMargin !== undefined ? (parseFloat(amnd.amendmentMargin) || 0) : (record.bankMargin !== undefined ? parseFloat(record.bankMargin) : 0);
+                                                                                                        const mb = parseFloat(amnd.amendmentMarginBill) || 0;
+                                                                                                        const mp = mb * (margin / 100);
+                                                                                                        return mp > 0 ? `৳${mp.toLocaleString('en-IN', { minimumFractionDigits: 2 })}` : '-';
+                                                                                                    })()
+                                                                                                }
+                                                                                            </p>
+                                                                                        </div>
+                                                                                        {isAmndBillActive && amnd.amendmentBankBill && parseFloat(amnd.amendmentBankBill) > 0 && (
+                                                                                            <div>
+                                                                                                <span className="text-[10px] font-bold text-gray-400 uppercase block">Amendment Bill</span>
+                                                                                                <p className="text-xs font-black text-rose-600">৳{parseFloat(amnd.amendmentBankBill).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</p>
+                                                                                            </div>
+                                                                                        )}
+                                                                                        <div>
+                                                                                            <span className="text-[10px] font-bold text-gray-400 uppercase block">Total Bill</span>
+                                                                                            <p className="text-xs font-black text-blue-600">
+                                                                                                {(amnd.totalAmendmentBankBill || amnd.amendmentBill) ? `৳${parseFloat(amnd.totalAmendmentBankBill || amnd.amendmentBill).toLocaleString('en-IN', { minimumFractionDigits: 2 })}` : '-'}
+                                                                                            </p>
+                                                                                        </div>
+                                                                                    </div>
+                                                                                </div>
+                                                                            );
+                                                                        })}
+                                                                </div>
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                )}
+
+                                                {/* Card Footer: Action buttons and Collapse trigger */}
+                                                <div className="flex items-center justify-between border-t border-gray-100 pt-3 mt-3">
+                                                    <button
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            setExpandedLcKey(prev => prev === record._id ? null : record._id);
+                                                        }}
+                                                        className="flex items-center gap-1.5 text-xs font-bold text-blue-600 hover:text-blue-700 transition-colors"
+                                                    >
+                                                        {isExpanded ? (
+                                                            <>
+                                                                <ChevronUpIcon className="w-4 h-4" />
+                                                                Hide Charges
+                                                            </>
+                                                        ) : (
+                                                            <>
+                                                                <ChevronDownIcon className="w-4 h-4" />
+                                                                Show Charges
+                                                            </>
+                                                        )}
+                                                    </button>
+                                                    <div className="flex items-center gap-2">
+                                                        <button
+                                                            onClick={(e) => { e.stopPropagation(); setViewData(record); }}
+                                                            className="p-2 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition-all"
+                                                            title="View Details"
+                                                        >
+                                                            <EyeIcon className="w-4.5 h-4.5" />
+                                                        </button>
+                                                        {canManage && (
+                                                            <>
+                                                                <button
+                                                                    onClick={(e) => { e.stopPropagation(); handleEdit(record); }}
+                                                                    className="p-2 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition-all"
+                                                                    title="Edit Record"
+                                                                >
+                                                                    <EditIcon className="w-4.5 h-4.5" />
+                                                                </button>
+                                                                <button
+                                                                    onClick={(e) => { e.stopPropagation(); handleDelete(record._id); }}
+                                                                    className="p-2 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-xl transition-all"
+                                                                    title="Delete Record"
+                                                                >
+                                                                    <TrashIcon className="w-4.5 h-4.5" />
+                                                                </button>
+                                                            </>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+                                );
+                            })
+                        ) : (
+                            <div className="p-8 text-center text-gray-400 font-medium italic bg-white/50 border border-gray-100 rounded-2xl shadow-sm">
+                                No LC records found
+                            </div>
+                        )}
+                    </div>
+                </>
             )}
             {viewData && (
                 <ViewDetailsModal
