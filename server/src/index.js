@@ -203,7 +203,7 @@ apiRouter.delete('/api/importers/:id', adminOnly, async (req, res) => {
 });
 
 // Update Importer
-apiRouter.put('/api/importers/:id', adminOnly, async (req, res) => {
+apiRouter.put('/api/importers/:id', async (req, res) => {
   try {
     const encryptedData = encryptData(req.body);
     const updatedImporter = await Importer.findByIdAndUpdate(req.params.id, { data: encryptedData }, { returnDocument: 'after' });
@@ -251,7 +251,7 @@ apiRouter.delete('/api/exporters/:id', adminOnly, async (req, res) => {
 });
 
 // Update Exporter
-apiRouter.put('/api/exporters/:id', adminOnly, async (req, res) => {
+apiRouter.put('/api/exporters/:id', async (req, res) => {
   try {
     const encryptedData = encryptData(req.body);
     const updatedExporter = await Exporter.findByIdAndUpdate(req.params.id, { data: encryptedData }, { returnDocument: 'after' });
