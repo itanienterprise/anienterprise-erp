@@ -3953,7 +3953,9 @@ const SaleManagement = ({
                                                         {sale.status === 'Requested' ? (
                                                             <>
                                                                 <button onClick={(e) => { e.stopPropagation(); setViewData(sale); }} className="text-gray-400 hover:text-blue-600 transition-colors" title="View Details"><EyeIcon className="w-5 h-5" /></button>
-                                                                <button onClick={(e) => { e.stopPropagation(); handleEdit(sale); }} className="text-gray-400 hover:text-blue-600 transition-colors" title="Edit"><EditIcon className="w-5 h-5" /></button>
+                                                                {(isFullAdmin || (currentUser && sale.requestedByUsername === currentUser.username)) && (
+                                                                    <button onClick={(e) => { e.stopPropagation(); handleEdit(sale); }} className="text-gray-400 hover:text-blue-600 transition-colors" title="Edit"><EditIcon className="w-5 h-5" /></button>
+                                                                )}
                                                                 {canApprove && (
                                                                     <>
                                                                         <button onClick={(e) => { e.stopPropagation(); handleStatusUpdate(sale, 'accepted'); }} className="text-gray-400 hover:text-emerald-600 transition-colors" title="Accept"><CheckIcon className="w-5 h-5" /></button>
@@ -4091,7 +4093,7 @@ const SaleManagement = ({
                                                     {sale.status === 'Requested' ? (
                                                         <>
                                                             <button onClick={(e) => { e.stopPropagation(); setViewData(sale); }} className="text-gray-400 hover:text-blue-600 transition-colors" title="View Details"><EyeIcon className="w-5 h-5" /></button>
-                                                            {(isFullAdmin || canUserEditSale(sale)) && (
+                                                            {(isFullAdmin || (currentUser && sale.requestedByUsername === currentUser.username)) && (
                                                                 <button onClick={(e) => { e.stopPropagation(); handleEdit(sale); }} className="text-gray-400 hover:text-blue-600 transition-colors" title="Edit"><EditIcon className="w-5 h-5" /></button>
                                                             )}
                                                             {canApprove && (
@@ -4208,7 +4210,7 @@ const SaleManagement = ({
                                                     {sale.status === 'Requested' ? (
                                                         <>
                                                             <button onClick={(e) => { e.stopPropagation(); setViewData(sale); }} className="p-2 text-blue-600 bg-blue-50/50 rounded-lg transition-colors hover:bg-blue-100" title="View Details"><EyeIcon className="w-4 h-4" /></button>
-                                                            {(isFullAdmin || canUserEditSale(sale)) && (
+                                                            {(isFullAdmin || (currentUser && sale.requestedByUsername === currentUser.username)) && (
                                                                 <button onClick={(e) => { e.stopPropagation(); handleEdit(sale); }} className="p-2 text-blue-600 bg-blue-50/50 rounded-lg transition-colors hover:bg-blue-100" title="Edit"><EditIcon className="w-4 h-4" /></button>
                                                             )}
                                                             {canApprove && (
