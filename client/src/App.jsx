@@ -318,10 +318,17 @@ function App() {
   }, []);
 
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  // Detect legacy browsers (BlackBerry 10) that don't support modern CSS
   // Detect touch-only devices (e.g. BB Passport) — works with any browser (Firefox, Chrome, native)
   // Desktop has a fine pointer (mouse); touch-only devices have a coarse pointer (finger)
   const isTouchOnlyDevice = typeof window !== 'undefined' && window.matchMedia('(pointer: coarse)').matches;
+
+  // Add .touch-device class to <html> for CSS gradient fallbacks on BB Passport
+  useEffect(() => {
+    if (isTouchOnlyDevice) {
+      document.documentElement.classList.add('touch-device');
+    }
+    return () => { document.documentElement.classList.remove('touch-device'); };
+  }, [isTouchOnlyDevice]);
 
   // Lock body scroll when mobile sidebar is open
   useEffect(() => {
