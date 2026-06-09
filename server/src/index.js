@@ -205,9 +205,39 @@ apiRouter.delete('/api/importers/:id', adminOnly, async (req, res) => {
 // Update Importer
 apiRouter.put('/api/importers/:id', async (req, res) => {
   try {
+    const existingDoc = await Importer.findById(req.params.id);
+    if (!existingDoc) return res.status(404).json({ message: 'Importer not found' });
+
+    let oldName = '';
+    try {
+      const oldData = decryptData(existingDoc.data);
+      if (oldData) {
+        oldName = oldData.name;
+      }
+    } catch (e) {
+      console.error('Error decrypting old importer data during propagation check:', e);
+    }
+
     const encryptedData = encryptData(req.body);
     const updatedImporter = await Importer.findByIdAndUpdate(req.params.id, { data: encryptedData }, { returnDocument: 'after' });
     if (!updatedImporter) return res.status(404).json({ message: 'Importer not found' });
+
+    const newName = req.body.name;
+    if (oldName && newName && oldName.trim().toLowerCase() !== newName.trim().toLowerCase()) {
+      const modelsToUpdate = [
+        PI, PackingList, LCManagement, Sale, TRSetup, Stock, 
+        Damage, Return, Insurance, CnF, CnFPayment, InsurancePayment, 
+        LCExpense, LCGatePass
+      ];
+      for (const Model of modelsToUpdate) {
+        try {
+          await updateModelExporterOrImporter(Model, oldName, newName, ['importer', 'importerName', 'partyName']);
+        } catch (modelErr) {
+          console.error(`Error updating importer reference in model ${Model.modelName}:`, modelErr);
+        }
+      }
+    }
+
     res.json({ ...req.body, _id: updatedImporter._id, createdAt: updatedImporter.createdAt });
   } catch (err) {
     res.status(400).json({ message: err.message });
@@ -253,9 +283,39 @@ apiRouter.delete('/api/exporters/:id', adminOnly, async (req, res) => {
 // Update Exporter
 apiRouter.put('/api/exporters/:id', async (req, res) => {
   try {
+    const existingDoc = await Exporter.findById(req.params.id);
+    if (!existingDoc) return res.status(404).json({ message: 'Exporter not found' });
+
+    let oldName = '';
+    try {
+      const oldData = decryptData(existingDoc.data);
+      if (oldData) {
+        oldName = oldData.name;
+      }
+    } catch (e) {
+      console.error('Error decrypting old exporter data during propagation check:', e);
+    }
+
     const encryptedData = encryptData(req.body);
     const updatedExporter = await Exporter.findByIdAndUpdate(req.params.id, { data: encryptedData }, { returnDocument: 'after' });
     if (!updatedExporter) return res.status(404).json({ message: 'Exporter not found' });
+
+    const newName = req.body.name;
+    if (oldName && newName && oldName.trim().toLowerCase() !== newName.trim().toLowerCase()) {
+      const modelsToUpdate = [
+        PI, PackingList, LCManagement, Sale, TRSetup, Stock, 
+        Damage, Return, Insurance, CnF, CnFPayment, InsurancePayment, 
+        LCExpense, LCGatePass
+      ];
+      for (const Model of modelsToUpdate) {
+        try {
+          await updateModelExporterOrImporter(Model, oldName, newName, ['exporter', 'exporterName']);
+        } catch (modelErr) {
+          console.error(`Error updating exporter reference in model ${Model.modelName}:`, modelErr);
+        }
+      }
+    }
+
     res.json({ ...req.body, _id: updatedExporter._id, createdAt: updatedExporter.createdAt });
   } catch (err) {
     res.status(400).json({ message: err.message });
@@ -455,6 +515,100 @@ const updateModelPorts = async (Model, oldPortName, newPortName, oldPortCode, ne
           if (Object.prototype.hasOwnProperty.call(obj, key)) {
             const originalValStr = JSON.stringify(obj[key]);
             updatedObj[key] = updateHelper(obj[key]);
+            if (JSON.stringify(updatedObj[key]) !== originalValStr) {
+              modified = true;
+            }
+          }
+        }
+        return updatedObj;
+      }
+      
+      return obj;
+    };
+
+    const updatedData = updateHelper(rawDecrypted);
+    
+    if (modified) {
+      let encrypted;
+      if (isDoubleEncrypted) {
+        encrypted = encryptData(encryptData(updatedData));
+      } else {
+        encrypted = encryptData(updatedData);
+      }
+      doc.data = encrypted;
+      await doc.save();
+    }
+  }
+};
+
+const updateModelExporterOrImporter = async (Model, oldName, newName, keysToTarget) => {
+  if (!oldName || !newName || oldName.trim().toLowerCase() === newName.trim().toLowerCase()) return;
+  const documents = await Model.find({});
+  for (const doc of documents) {
+    let rawDecrypted = decryptData(doc.data);
+    if (!rawDecrypted) continue;
+    
+    // Auto-fallback check if there is double encryption
+    let isDoubleEncrypted = false;
+    if (rawDecrypted && rawDecrypted.data && typeof rawDecrypted.data === 'string') {
+      try {
+        const secondary = decryptData(rawDecrypted.data);
+        if (secondary) {
+          rawDecrypted = secondary;
+          isDoubleEncrypted = true;
+        }
+      } catch (e) {}
+    }
+
+    let modified = false;
+    const oldNameTrimmed = oldName.trim();
+    const newNameTrimmed = newName.trim();
+    
+    const updateHelper = (obj, currentKey = null) => {
+      if (obj === null || obj === undefined) return obj;
+      
+      if (typeof obj === 'string') {
+        let isTarget = false;
+        if (currentKey && keysToTarget.map(k => k.toLowerCase()).includes(currentKey.toLowerCase())) {
+          isTarget = true;
+        }
+        
+        if (oldNameTrimmed.length >= 3) {
+          const regex = new RegExp(escapeRegExp(oldNameTrimmed), 'gi');
+          if (regex.test(obj)) {
+            modified = true;
+            return obj.replace(regex, newNameTrimmed);
+          }
+        }
+        
+        if (isTarget && obj.trim().toLowerCase() === oldNameTrimmed.toLowerCase()) {
+          modified = true;
+          return newNameTrimmed;
+        }
+        
+        return obj;
+      }
+      
+      if (Array.isArray(obj)) {
+        let arrayModified = false;
+        const mapped = obj.map(item => {
+          const originalStr = JSON.stringify(item);
+          const updatedItem = updateHelper(item, currentKey);
+          if (JSON.stringify(updatedItem) !== originalStr) {
+            arrayModified = true;
+          }
+          return updatedItem;
+        });
+        if (arrayModified) modified = true;
+        return mapped;
+      }
+      
+      if (typeof obj === 'object') {
+        const updatedObj = {};
+        for (const key in obj) {
+          if (Object.prototype.hasOwnProperty.call(obj, key)) {
+            const originalValStr = JSON.stringify(obj[key]);
+            updatedObj[key] = updateHelper(obj[key], key);
             if (JSON.stringify(updatedObj[key]) !== originalValStr) {
               modified = true;
             }
