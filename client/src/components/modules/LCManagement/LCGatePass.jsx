@@ -48,6 +48,7 @@ const LCGatePass = ({ currentUser, addNotification }) => {
     const partyRef = useRef(null);
 
     const canManage = ['admin', 'incharge', 'lc manager', 'data entry'].includes((currentUser?.role || '').toLowerCase());
+    const isAdmin = currentUser?.username === 'admin' || String(currentUser?.role || '').toLowerCase() === 'admin';
 
     const fetchRecords = async () => {
         setIsLoading(true);
@@ -246,7 +247,7 @@ const LCGatePass = ({ currentUser, addNotification }) => {
                     <div className="hidden md:block md:flex-1"></div>
                 )}
 
-                {!showForm && canManage && (
+                {!showForm && (
                     <div className="w-full md:w-1/4 flex justify-end gap-3 z-50">
                         <button
                             onClick={() => setShowForm(true)}
@@ -385,8 +386,6 @@ const LCGatePass = ({ currentUser, addNotification }) => {
                                     </td>
                                     <td className="px-6 py-4">
                                         <div className="flex items-center justify-center gap-4">
-                                            {canManage && (
-                                                <>
                                                     <button 
                                                         onClick={() => handleEdit(record)}
                                                         className="text-gray-400 hover:text-blue-600 transition-colors"
@@ -394,15 +393,15 @@ const LCGatePass = ({ currentUser, addNotification }) => {
                                                     >
                                                         <EditIcon className="w-5 h-5" />
                                                     </button>
-                                                    <button 
-                                                        onClick={() => handleDelete(record._id)}
-                                                        className="text-gray-400 hover:text-red-600 transition-colors"
-                                                        title="Delete Gate Pass"
-                                                    >
-                                                        <TrashIcon className="w-5 h-5" />
-                                                    </button>
-                                                </>
-                                            )}
+                                                    {isAdmin && (
+                                                        <button 
+                                                            onClick={() => handleDelete(record._id)}
+                                                            className="text-gray-400 hover:text-red-600 transition-colors"
+                                                            title="Delete Gate Pass"
+                                                        >
+                                                            <TrashIcon className="w-5 h-5" />
+                                                        </button>
+                                                    )}
                                         </div>
                                     </td>
                                 </tr>

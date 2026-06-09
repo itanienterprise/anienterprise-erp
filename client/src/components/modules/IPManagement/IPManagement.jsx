@@ -541,6 +541,7 @@ function IPManagement({
 
     // Authorization check for administrative actions
     const canManage = ['admin', 'incharge', 'lc manager', 'border manager', 'data entry'].includes((currentUser?.role || '').toLowerCase());
+    const isAdmin = currentUser?.username === 'admin' || String(currentUser?.role || '').toLowerCase() === 'admin';
 
     const [formData, setFormData] = useState({
         openingDate: '',
@@ -1259,14 +1260,12 @@ function IPManagement({
                         >
                             <FunnelIcon className="w-4 h-4 sm:mr-2" /> <span className="hidden sm:inline">{showFilters ? 'Hide Filters' : 'Filter'}</span>
                         </button>
-                        {canManage && (
-                            <button
-                                onClick={() => setShowIpForm(!showIpForm)}
-                                className="flex-1 md:flex-none px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-xl shadow-lg shadow-blue-500/30 transition-all transform hover:scale-105 flex items-center justify-center whitespace-nowrap"
-                            >
-                                <span className="mr-1.5 font-bold text-lg leading-none">+</span> New IP
-                            </button>
-                        )}
+                        <button
+                            onClick={() => setShowIpForm(!showIpForm)}
+                            className="flex-1 md:flex-none px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-xl shadow-lg shadow-blue-500/30 transition-all transform hover:scale-105 flex items-center justify-center whitespace-nowrap"
+                        >
+                            <span className="mr-1.5 font-bold text-lg leading-none">+</span> New IP
+                        </button>
                     </div>
                 </div>
             )}
@@ -1933,16 +1932,16 @@ function IPManagement({
                                                         >
                                                             <PDFIcon className="w-5 h-5" />
                                                         </button>
-                                                        {canManage && (
-                                                            <>
-                                                                <button onClick={(e) => { e.stopPropagation(); handleEdit(record); }} className="text-gray-400 hover:text-blue-600 transition-colors" title="Edit Record">
-                                                                    <EditIcon className="w-5 h-5" />
-                                                                </button>
+                                                        <>
+                                                            <button onClick={(e) => { e.stopPropagation(); handleEdit(record); }} className="text-gray-400 hover:text-blue-600 transition-colors" title="Edit Record">
+                                                                <EditIcon className="w-5 h-5" />
+                                                            </button>
+                                                            {isAdmin && (
                                                                 <button onClick={(e) => { e.stopPropagation(); handleDelete(record._id); }} className="text-gray-400 hover:text-red-600 transition-colors" title="Delete Record">
                                                                     <TrashIcon className="w-5 h-5" />
                                                                 </button>
-                                                            </>
-                                                        )}
+                                                            )}
+                                                        </>
                                                     </div>
                                                 </td>
                                             </tr>
@@ -2076,16 +2075,14 @@ function IPManagement({
                                                                 >
                                                                     <PDFIcon className="w-3.5 h-3.5" /> PDF
                                                                 </button>
-                                                                {canManage && (
-                                                                    <button
-                                                                        onClick={(e) => { e.stopPropagation(); handleEdit(record); }}
-                                                                        className="flex-1 flex items-center justify-center gap-1.5 py-3 bg-emerald-50 text-emerald-700 rounded-xl text-[10px] font-black uppercase tracking-widest active:scale-95 transition-all"
-                                                                    >
-                                                                        <EditIcon className="w-3.5 h-3.5" /> Edit
-                                                                    </button>
-                                                                )}
+                                                                <button
+                                                                    onClick={(e) => { e.stopPropagation(); handleEdit(record); }}
+                                                                    className="flex-1 flex items-center justify-center gap-1.5 py-3 bg-emerald-50 text-emerald-700 rounded-xl text-[10px] font-black uppercase tracking-widest active:scale-95 transition-all"
+                                                                >
+                                                                    <EditIcon className="w-3.5 h-3.5" /> Edit
+                                                                </button>
                                                             </div>
-                                                            {canManage && (
+                                                            {isAdmin && (
                                                                 <button
                                                                     onClick={(e) => { e.stopPropagation(); handleDelete(record._id); }}
                                                                     className="w-full flex items-center justify-center gap-1.5 py-3 bg-red-50 text-red-600 rounded-xl text-[10px] font-black uppercase tracking-widest active:scale-95 transition-all"

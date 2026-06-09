@@ -55,6 +55,7 @@ function PackingList({
     currentUser
 }) {
     const canManage = ['admin', 'incharge', 'lc manager', 'border manager', 'data entry'].includes((currentUser?.role || '').toLowerCase());
+    const isAdmin = currentUser?.username === 'admin' || String(currentUser?.role || '').toLowerCase() === 'admin';
 
     const [showForm, setShowForm] = useState(false);
     const [records, setRecords] = useState([]);
@@ -736,14 +737,12 @@ function PackingList({
                     </div>
 
                     <div className="w-full md:w-1/4 flex justify-end z-10 gap-2 sm:gap-3">
-                        {canManage && (
-                            <button
-                                onClick={() => { setShowForm(true); resetForm(); }}
-                                className="flex-1 md:flex-none px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-xl shadow-lg shadow-blue-500/30 transition-all transform hover:scale-105 flex items-center justify-center whitespace-nowrap"
-                            >
-                                <span className="mr-1.5 font-bold text-lg leading-none">+</span> Add New
-                            </button>
-                        )}
+                        <button
+                            onClick={() => { setShowForm(true); resetForm(); }}
+                            className="flex-1 md:flex-none px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-xl shadow-lg shadow-blue-500/30 transition-all transform hover:scale-105 flex items-center justify-center whitespace-nowrap"
+                        >
+                            <span className="mr-1.5 font-bold text-lg leading-none">+</span> Add New
+                        </button>
                     </div>
                 </div>
             )}
@@ -1694,23 +1693,21 @@ function PackingList({
                                                     >
                                                         <PDFIcon className="w-4 h-4" />
                                                     </button>
-                                                    {canManage && (
-                                                        <>
-                                                            <button
-                                                                onClick={() => handleEditClick(rec)}
-                                                                title="Edit"
-                                                                className="p-1.5 text-amber-600 hover:bg-amber-50 border border-transparent hover:border-amber-200 rounded-lg transition-all"
-                                                            >
-                                                                <EditIcon className="w-4 h-4" />
-                                                            </button>
-                                                            <button
-                                                                onClick={() => handleDeleteClick(rec._id)}
-                                                                title="Delete"
-                                                                className="p-1.5 text-red-600 hover:bg-red-50 border border-transparent hover:border-red-200 rounded-lg transition-all"
-                                                            >
-                                                                <TrashIcon className="w-4 h-4" />
-                                                            </button>
-                                                        </>
+                                                    <button
+                                                        onClick={() => handleEditClick(rec)}
+                                                        title="Edit"
+                                                        className="p-1.5 text-amber-600 hover:bg-amber-50 border border-transparent hover:border-amber-200 rounded-lg transition-all"
+                                                    >
+                                                        <EditIcon className="w-4 h-4" />
+                                                    </button>
+                                                    {isAdmin && (
+                                                        <button
+                                                            onClick={() => handleDeleteClick(rec._id)}
+                                                            title="Delete"
+                                                            className="p-1.5 text-red-600 hover:bg-red-50 border border-transparent hover:border-red-200 rounded-lg transition-all"
+                                                        >
+                                                            <TrashIcon className="w-4 h-4" />
+                                                        </button>
                                                     )}
                                                 </td>
                                             </tr>
@@ -1788,21 +1785,19 @@ function PackingList({
                                                     >
                                                         <PDFIcon className="w-4 h-4" />
                                                     </button>
-                                                    {canManage && (
-                                                        <>
-                                                            <button
-                                                                onClick={() => handleEditClick(rec)}
-                                                                className="p-2 text-amber-600 bg-amber-50 border border-amber-100 rounded-lg"
-                                                            >
-                                                                <EditIcon className="w-4 h-4" />
-                                                            </button>
-                                                            <button
-                                                                onClick={() => handleDeleteClick(rec._id)}
-                                                                className="p-2 text-red-600 bg-red-50 border border-red-100 rounded-lg"
-                                                            >
-                                                                <TrashIcon className="w-4 h-4" />
-                                                            </button>
-                                                        </>
+                                                    <button
+                                                        onClick={() => handleEditClick(rec)}
+                                                        className="p-2 text-amber-600 bg-amber-50 border border-amber-100 rounded-lg"
+                                                    >
+                                                        <EditIcon className="w-4 h-4" />
+                                                    </button>
+                                                    {isAdmin && (
+                                                        <button
+                                                            onClick={() => handleDeleteClick(rec._id)}
+                                                            className="p-2 text-red-600 bg-red-50 border border-red-100 rounded-lg"
+                                                        >
+                                                            <TrashIcon className="w-4 h-4" />
+                                                        </button>
                                                     )}
                                                 </div>
                                             </div>

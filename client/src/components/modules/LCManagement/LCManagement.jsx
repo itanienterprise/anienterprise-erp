@@ -878,9 +878,9 @@ const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords
                         <div className="animate-in fade-in slide-in-from-bottom-2 duration-300">
                             {/* Summary Cards */}
                             {activeTab === 'bill' ? (
-                                <div className="grid grid-cols-2 md:grid-cols-3 gap-3 md:gap-4 mb-8">
+                                <div className="flex flex-wrap gap-3 md:gap-4 mb-8">
                                     <div 
-                                        className="col-span-full md:col-span-1 bg-white p-4 md:p-5 rounded-2xl border border-gray-100 shadow-sm transition-all hover:shadow-md hover:border-blue-100 group text-center md:text-left flex flex-col items-center md:items-start justify-center md:justify-start"
+                                        className="w-full md:flex-1 bg-white p-4 md:p-5 rounded-2xl border border-gray-100 shadow-sm transition-all hover:shadow-md hover:border-blue-100 group text-center md:text-left flex flex-col items-center md:items-start justify-center md:justify-start"
                                     >
                                         <div className="flex items-center justify-center md:justify-start gap-2 md:gap-3 mb-2 md:mb-3">
                                             <div className="p-1.5 md:p-2 bg-blue-50 text-blue-600 rounded-lg md:rounded-xl group-hover:bg-blue-600 group-hover:text-white transition-colors shrink-0">
@@ -895,7 +895,7 @@ const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords
                                         </div>
                                     </div>
 
-                                    <div className="bg-white p-4 md:p-5 rounded-2xl border border-gray-100 shadow-sm transition-all hover:shadow-md hover:border-emerald-100 group text-center md:text-left flex flex-col items-center md:items-start justify-center md:justify-start">
+                                    <div className="w-[calc(50%-6px)] md:w-auto md:flex-1 bg-white p-4 md:p-5 rounded-2xl border border-gray-100 shadow-sm transition-all hover:shadow-md hover:border-emerald-100 group text-center md:text-left flex flex-col items-center md:items-start justify-center md:justify-start">
                                         <div className="flex items-center justify-center md:justify-start gap-2 md:gap-3 mb-2 md:mb-3">
                                             <div className="p-1.5 md:p-2 bg-emerald-50 text-emerald-600 rounded-lg md:rounded-xl group-hover:bg-emerald-600 group-hover:text-white transition-colors shrink-0">
                                                 <DollarSignIcon className="w-4 h-4 md:w-5 md:h-5" />
@@ -909,7 +909,7 @@ const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords
                                         </div>
                                     </div>
 
-                                    <div className="bg-white p-4 md:p-5 rounded-2xl border border-gray-100 shadow-sm transition-all hover:shadow-md hover:border-rose-100 group text-center md:text-left flex flex-col items-center md:items-start justify-center md:justify-start">
+                                    <div className="w-[calc(50%-6px)] md:w-auto md:flex-1 bg-white p-4 md:p-5 rounded-2xl border border-gray-100 shadow-sm transition-all hover:shadow-md hover:border-rose-100 group text-center md:text-left flex flex-col items-center md:items-start justify-center md:justify-start">
                                         <div className="flex items-center justify-center md:justify-start gap-2 md:gap-3 mb-2 md:mb-3">
                                             <div className="p-1.5 md:p-2 bg-rose-50 text-rose-600 rounded-lg md:rounded-xl group-hover:bg-rose-600 group-hover:text-white transition-colors shrink-0">
                                                 <DollarSignIcon className="w-4 h-4 md:w-5 md:h-5" />
@@ -2147,7 +2147,7 @@ const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords
                                 )}
 
                                 {/* Edit Button */}
-                                {canManage && (onEdit || onEditAmendment) && (
+                                {(onEdit || onEditAmendment) && (
                                     <div className="flex justify-end gap-3 pt-6 border-t border-gray-100">
                                         <button
                                             type="button"
@@ -2935,6 +2935,7 @@ const LCManagement = ({ addNotification, currentUser }) => {
     });
 
     const canManage = ['admin', 'incharge', 'lc manager', 'border manager', 'data entry'].includes((currentUser?.role || '').toLowerCase());
+    const isAdmin = currentUser?.username === 'admin' || String(currentUser?.role || '').toLowerCase() === 'admin';
 
     const piRef = useRef(null);
     const bankRef = useRef(null);
@@ -4364,7 +4365,7 @@ const LCManagement = ({ addNotification, currentUser }) => {
                     <div className="hidden md:block md:flex-1"></div>
                 )}
 
-                {!showForm && !showAmendmentForm && canManage && (
+                {!showForm && !showAmendmentForm && (
                     <div className="w-full md:w-auto flex flex-row justify-end gap-3 z-50">
                         <button
                             onClick={() => setShowAmendmentForm(true)}
@@ -6512,15 +6513,15 @@ const LCManagement = ({ addNotification, currentUser }) => {
                                                             >
                                                                 <EyeIcon className="w-5 h-5" />
                                                             </button>
-                                                            {canManage && (
-                                                                <>
-                                                                    <button
-                                                                        onClick={() => handleEdit(record)}
-                                                                        className="text-gray-400 hover:text-blue-600 transition-colors"
-                                                                        title="Edit Record"
-                                                                    >
-                                                                        <EditIcon className="w-5 h-5" />
-                                                                    </button>
+                                                            <>
+                                                                <button
+                                                                    onClick={() => handleEdit(record)}
+                                                                    className="text-gray-400 hover:text-blue-600 transition-colors"
+                                                                    title="Edit Record"
+                                                                >
+                                                                    <EditIcon className="w-5 h-5" />
+                                                                </button>
+                                                                {isAdmin && (
                                                                     <button
                                                                         onClick={() => handleDelete(record._id)}
                                                                         className="text-gray-400 hover:text-red-600 transition-colors"
@@ -6528,8 +6529,8 @@ const LCManagement = ({ addNotification, currentUser }) => {
                                                                     >
                                                                         <TrashIcon className="w-5 h-5" />
                                                                     </button>
-                                                                </>
-                                                            )}
+                                                                )}
+                                                            </>
                                                         </div>
                                                     </td>
                                                 </tr>
@@ -7262,24 +7263,24 @@ const LCManagement = ({ addNotification, currentUser }) => {
                                                         >
                                                             <EyeIcon className="w-4.5 h-4.5" />
                                                         </button>
-                                                        {canManage && (
-                                                            <>
-                                                                <button
-                                                                    onClick={(e) => { e.stopPropagation(); handleEdit(record); }}
-                                                                    className="p-2 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition-all"
-                                                                    title="Edit Record"
-                                                                >
-                                                                    <EditIcon className="w-4.5 h-4.5" />
-                                                                </button>
-                                                                <button
-                                                                    onClick={(e) => { e.stopPropagation(); handleDelete(record._id); }}
-                                                                    className="p-2 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-xl transition-all"
-                                                                    title="Delete Record"
-                                                                >
-                                                                    <TrashIcon className="w-4.5 h-4.5" />
-                                                                </button>
-                                                            </>
-                                                        )}
+                                                        <>
+                                                             <button
+                                                                 onClick={(e) => { e.stopPropagation(); handleEdit(record); }}
+                                                                 className="p-2 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition-all"
+                                                                 title="Edit Record"
+                                                             >
+                                                                 <EditIcon className="w-4.5 h-4.5" />
+                                                             </button>
+                                                             {isAdmin && (
+                                                                 <button
+                                                                     onClick={(e) => { e.stopPropagation(); handleDelete(record._id); }}
+                                                                     className="p-2 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-xl transition-all"
+                                                                     title="Delete Record"
+                                                                 >
+                                                                     <TrashIcon className="w-4.5 h-4.5" />
+                                                                 </button>
+                                                             )}
+                                                         </>
                                                     </div>
                                                 </div>
                                             </div>

@@ -26,6 +26,7 @@ function PI({
 
     // Authorization check for administrative actions
     const canManage = ['admin', 'incharge', 'lc manager', 'border manager', 'data entry'].includes((currentUser?.role || '').toLowerCase());
+    const isAdmin = currentUser?.username === 'admin' || String(currentUser?.role || '').toLowerCase() === 'admin';
 
     const [showForm, setShowForm] = useState(false);
     const [records, setRecords] = useState([]);
@@ -1738,7 +1739,7 @@ function PI({
                     <div className="hidden md:block md:flex-1"></div>
                 )}
 
-                {!showForm && !showReviseForm && canManage && (
+                {!showForm && !showReviseForm && (
                     <div className="w-full md:w-auto flex flex-row justify-end gap-2 sm:gap-3 z-10">
                         <button
                             onClick={() => setShowReviseForm(true)}
@@ -3715,7 +3716,7 @@ function PI({
                                                             >
                                                                 <PDFIcon className="w-5 h-5" />
                                                             </button>
-                                                            {canManage && (
+                                                            {isAdmin && (
                                                                 <button
                                                                     onClick={() => handleDelete(record._id)}
                                                                     className="p-2 text-gray-400 hover:text-red-600 transition-all active:scale-90"
@@ -3874,7 +3875,7 @@ function PI({
                                                     >
                                                         <PDFIcon className="w-3.5 h-3.5" /> PDF
                                                     </button>
-                                                    {canManage && (
+                                                    {isAdmin && (
                                                         <button
                                                             onClick={(e) => { e.stopPropagation(); handleDelete(record._id); }}
                                                             className="flex-1 flex items-center justify-center gap-1.5 py-3 bg-red-50 text-red-600 rounded-xl font-black text-[10px] uppercase tracking-widest active:scale-95 transition-all"
@@ -4219,45 +4220,43 @@ function PI({
                                                         <PDFIcon className="w-4 h-4 text-white" />
                                                         <span>Print PI PDF</span>
                                                     </button>
-                                                    {canManage && (
-                                                        <button
-                                                            type="button"
-                                                            onClick={() => {
-                                                                setViewHistoryRecord(null);
-                                                                if (activeRevision.reviseNo === 'Original PI') {
-                                                                    handleEdit(viewHistoryRecord);
-                                                                } else {
-                                                                    setSelectedRevisePiId(viewHistoryRecord._id);
-                                                                    setReviseSearchQuery(viewHistoryRecord.piNumber || '');
-                                                                    setReviseIpSearch('');
-                                                                    setActiveDropdown(null);
-                                                                    setHighlightedIndex(-1);
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => {
+                                                            setViewHistoryRecord(null);
+                                                            if (activeRevision.reviseNo === 'Original PI') {
+                                                                handleEdit(viewHistoryRecord);
+                                                            } else {
+                                                                setSelectedRevisePiId(viewHistoryRecord._id);
+                                                                setReviseSearchQuery(viewHistoryRecord.piNumber || '');
+                                                                setReviseIpSearch('');
+                                                                setActiveDropdown(null);
+                                                                setHighlightedIndex(-1);
 
-                                                                    // Pre-fill reviseFormData with the specific activeRevision values
-                                                                    setReviseFormData({
-                                                                        reviseNo: activeRevision.reviseNo,
-                                                                        reviseDate: activeRevision.reviseDate ? activeRevision.reviseDate.split('T')[0] : new Date().toISOString().split('T')[0],
-                                                                        validityDate: activeRevision.validityDate && activeRevision.validityDate !== 'N/A (Historical)' ? activeRevision.validityDate.split('T')[0] : '',
-                                                                        placeOfReceipt: activeRevision.placeOfReceipt && activeRevision.placeOfReceipt !== 'N/A (Historical)' ? activeRevision.placeOfReceipt : '',
-                                                                        portOfLoading: activeRevision.portOfLoading && activeRevision.portOfLoading !== 'N/A (Historical)' ? activeRevision.portOfLoading : '',
-                                                                        portOfDischarge: activeRevision.portOfDischarge && activeRevision.portOfDischarge !== 'N/A (Historical)' ? activeRevision.portOfDischarge : '',
-                                                                        certification: activeRevision.certification && activeRevision.certification !== 'N/A (Historical)' ? activeRevision.certification : '',
-                                                                        packingType: activeRevision.packingType && activeRevision.packingType !== 'N/A (Historical)' ? activeRevision.packingType : '',
-                                                                        productsList: activeRevision.productsList || [],
-                                                                        grandTotal: activeRevision.grandTotal !== 'N/A' ? activeRevision.grandTotal : 0,
-                                                                        grandTotalQuantity: activeRevision.grandTotalQuantity !== 'N/A' ? activeRevision.grandTotalQuantity : 0,
-                                                                        remarks: activeRevision.remarks && activeRevision.remarks !== 'Historical original values were not captured prior to first revision.' ? activeRevision.remarks : '',
-                                                                        ipNumbers: activeRevision.ipNumbers || []
-                                                                    });
-                                                                    setShowReviseForm(true);
-                                                                }
-                                                            }}
-                                                            className="px-6 py-3 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold text-sm rounded-xl transition-all transform hover:scale-105 active:scale-95 flex items-center justify-center gap-2"
-                                                        >
-                                                            <EditIcon className="w-4 h-4 text-gray-500" />
-                                                            <span>Edit PI</span>
-                                                        </button>
-                                                    )}
+                                                                // Pre-fill reviseFormData with the specific activeRevision values
+                                                                setReviseFormData({
+                                                                    reviseNo: activeRevision.reviseNo,
+                                                                    reviseDate: activeRevision.reviseDate ? activeRevision.reviseDate.split('T')[0] : new Date().toISOString().split('T')[0],
+                                                                    validityDate: activeRevision.validityDate && activeRevision.validityDate !== 'N/A (Historical)' ? activeRevision.validityDate.split('T')[0] : '',
+                                                                    placeOfReceipt: activeRevision.placeOfReceipt && activeRevision.placeOfReceipt !== 'N/A (Historical)' ? activeRevision.placeOfReceipt : '',
+                                                                    portOfLoading: activeRevision.portOfLoading && activeRevision.portOfLoading !== 'N/A (Historical)' ? activeRevision.portOfLoading : '',
+                                                                    portOfDischarge: activeRevision.portOfDischarge && activeRevision.portOfDischarge !== 'N/A (Historical)' ? activeRevision.portOfDischarge : '',
+                                                                    certification: activeRevision.certification && activeRevision.certification !== 'N/A (Historical)' ? activeRevision.certification : '',
+                                                                    packingType: activeRevision.packingType && activeRevision.packingType !== 'N/A (Historical)' ? activeRevision.packingType : '',
+                                                                    productsList: activeRevision.productsList || [],
+                                                                    grandTotal: activeRevision.grandTotal !== 'N/A' ? activeRevision.grandTotal : 0,
+                                                                    grandTotalQuantity: activeRevision.grandTotalQuantity !== 'N/A' ? activeRevision.grandTotalQuantity : 0,
+                                                                    remarks: activeRevision.remarks && activeRevision.remarks !== 'Historical original values were not captured prior to first revision.' ? activeRevision.remarks : '',
+                                                                    ipNumbers: activeRevision.ipNumbers || []
+                                                                });
+                                                                setShowReviseForm(true);
+                                                            }
+                                                        }}
+                                                        className="px-6 py-3 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold text-sm rounded-xl transition-all transform hover:scale-105 active:scale-95 flex items-center justify-center gap-2"
+                                                    >
+                                                        <EditIcon className="w-4 h-4 text-gray-500" />
+                                                        <span>Edit PI</span>
+                                                    </button>
                                                 </div>
                                             </div>
                                         </>
