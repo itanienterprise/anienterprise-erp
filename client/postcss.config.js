@@ -18,7 +18,7 @@ export default {
       stage: 1,
       features: {
         'custom-properties': {
-          preserve: true,
+          preserve: false,
         },
         'cascade-layers': false, // Disable cascade layers transpilation (avoid :not(#\#) specificity hacks)
       },
