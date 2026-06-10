@@ -33,7 +33,7 @@ const StockHistoryModal = ({
     const [showHistoryFilterPanel, setShowHistoryFilterPanel] = useState(false);
     const [historyFilters, setHistoryFilters] = useState({ startDate: '', endDate: '', lcNo: '', port: '', brand: '' });
     const [historyTab, setHistoryTab] = useState('purchase'); // 'purchase' or 'sale'
-    const [sortConfig, setSortConfig] = useState({ key: 'date', direction: 'desc' });
+    const [sortConfig, setSortConfig] = useState({ key: 'date', direction: 'asc' });
     const [filterDropdownOpen, setFilterDropdownOpen] = useState({ lcNo: false, port: false, brand: false });
     const initialFilterDropdownState = { lcNo: false, port: false, brand: false };
 
@@ -753,11 +753,21 @@ const StockHistoryModal = ({
                                                     <th onClick={() => requestSort('customerName')} className="px-3 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-50 transition-colors">
                                                         <div className="flex items-center">Customer <SortIcon config={sortConfig} columnKey="customerName" /></div>
                                                     </th>
-                                                    <th className="px-3 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Brand</th>
-                                                    <th className="px-3 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">BAG</th>
-                                                    <th className="px-3 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Quantity</th>
-                                                    <th className="px-3 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Price</th>
-                                                    <th className="px-3 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Total</th>
+                                                    <th onClick={() => requestSort('itemBrand')} className="px-3 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-50 transition-colors">
+                                                        <div className="flex items-center">Brand <SortIcon config={sortConfig} columnKey="itemBrand" /></div>
+                                                    </th>
+                                                    <th onClick={() => requestSort('itemPacket')} className="px-3 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-50 transition-colors">
+                                                        <div className="flex items-center">BAG <SortIcon config={sortConfig} columnKey="itemPacket" /></div>
+                                                    </th>
+                                                    <th onClick={() => requestSort('itemQty')} className="px-3 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-50 transition-colors">
+                                                        <div className="flex items-center">Quantity <SortIcon config={sortConfig} columnKey="itemQty" /></div>
+                                                    </th>
+                                                    <th onClick={() => requestSort('itemPrice')} className="px-3 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-50 transition-colors">
+                                                        <div className="flex items-center">Price <SortIcon config={sortConfig} columnKey="itemPrice" /></div>
+                                                    </th>
+                                                    <th onClick={() => requestSort('itemTotal')} className="px-3 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-50 transition-colors">
+                                                        <div className="flex items-center">Total <SortIcon config={sortConfig} columnKey="itemTotal" /></div>
+                                                    </th>
                                                 </tr>
                                             </thead>
                                             <tbody className="divide-y divide-gray-100">
