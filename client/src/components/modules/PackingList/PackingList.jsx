@@ -750,8 +750,6 @@ function PackingList({
 
             {showForm && (
                 <div className="pl-form relative rounded-2xl bg-white/60 backdrop-blur-xl border border-white/50 shadow-2xl p-8 transition-all duration-300">
-                    <div className="absolute -top-20 -right-20 w-64 h-64 bg-blue-400/20 rounded-full blur-3xl pointer-events-none"></div>
-                    <div className="absolute -bottom-20 -left-20 w-64 h-64 bg-purple-400/20 rounded-full blur-3xl pointer-events-none"></div>
 
                     <div className="flex items-center justify-between mb-6 border-b border-gray-200/50 pb-4 relative z-10">
                         <h3 className="text-xl font-semibold text-gray-800">{editingId ? 'Edit Packing List' : 'New Packing List Creation'}</h3>

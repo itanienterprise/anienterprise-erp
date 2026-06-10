@@ -4389,8 +4389,6 @@ const LCManagement = ({ addNotification, currentUser }) => {
 
             {showForm && (
                 <div className="lc-form-container relative bg-white/60 backdrop-blur-xl border border-white/40 rounded-2xl shadow-2xl p-5 md:p-8 pb-10">
-                    <div className="absolute -top-24 -right-24 w-64 h-64 bg-blue-500/10 rounded-full blur-3xl text-sm"></div>
-                    <div className="absolute -bottom-24 -left-24 w-64 h-64 bg-indigo-500/10 rounded-full blur-3xl delay-1000"></div>
 
                     <div className="flex items-center justify-between mb-6 md:mb-8 relative z-10">
                         <h3 className="text-lg md:text-xl font-semibold text-gray-800">
@@ -5454,8 +5452,6 @@ const LCManagement = ({ addNotification, currentUser }) => {
 
             {showAmendmentForm && (
                 <div className="lc-form-container relative bg-white/60 backdrop-blur-xl border border-white/40 rounded-2xl shadow-2xl p-5 md:p-8 pb-10">
-                    <div className="absolute -top-24 -right-24 w-64 h-64 bg-blue-500/10 rounded-full blur-3xl text-sm"></div>
-                    <div className="absolute -bottom-24 -left-24 w-64 h-64 bg-indigo-500/10 rounded-full blur-3xl delay-1000"></div>
 
                     <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6 md:mb-8 relative z-30 border-b border-gray-200/40 pb-4">
                         {/* Title */}
