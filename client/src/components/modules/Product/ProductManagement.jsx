@@ -11,6 +11,7 @@ const ProductManagement = ({
     stockRecords,
     warehouseData,
     salesRecords,
+    damages,
     setShowProductHistoryReport,
     setProductHistoryReportData
 }) => {
@@ -556,6 +557,7 @@ const ProductManagement = ({
                     stockRecords={stockRecords}
                     salesRecords={salesRecords}
                     warehouseData={warehouseData}
+                    damages={damages}
                     setShowProductHistoryReport={setShowProductHistoryReport}
                     setProductHistoryReportData={setProductHistoryReportData}
                 />
