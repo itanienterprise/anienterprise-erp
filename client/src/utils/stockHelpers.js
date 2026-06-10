@@ -164,7 +164,8 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
         if (stockSearchQuery) {
             const q = stockSearchQuery.toLowerCase();
             return (item.brand || '').toLowerCase().includes(q) ||
-                (item.productName || item.product || '').toLowerCase().includes(q);
+                (item.productName || item.product || '').toLowerCase().includes(q) ||
+                (item.lcNo || '').toLowerCase().includes(q);
         }
         return true;
     });
@@ -209,8 +210,13 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
                 inHousePacket: 0, inHouseQuantity: 0,
                 packetSize: safeParse(item.packetSize),
                 _salesResolved: false,
-                _damagesResolved: false
+                _damagesResolved: false,
+                lcNos: item.lcNo ? [item.lcNo] : []
             };
+        } else {
+            if (item.lcNo && !acc[key].brands[subKey].lcNos.includes(item.lcNo)) {
+                acc[key].brands[subKey].lcNos.push(item.lcNo);
+            }
         }
 
         const brandObj = acc[key].brands[subKey];
@@ -395,8 +401,14 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
                         damagePacket: 0, damageQuantity: 0,
                         inHousePacket: 0, inHouseQuantity: 0, packetSize: safeParse(be.packetSize),
                         _salesResolved: false,
-                        _damagesResolved: false
+                        _damagesResolved: false,
+                        lcNos: (sale.lcNo || be.lcNo || si.lcNo) ? [sale.lcNo || be.lcNo || si.lcNo] : []
                     };
+                } else {
+                    const saleLC = sale.lcNo || be.lcNo || si.lcNo;
+                    if (saleLC && !group.brands[subKey].lcNos.includes(saleLC)) {
+                        group.brands[subKey].lcNos.push(saleLC);
+                    }
                 }
                 const brandObj = group.brands[subKey];
 
