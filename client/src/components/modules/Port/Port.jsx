@@ -192,8 +192,6 @@ const Port = ({
 
             {showForm && (
                 <div className="relative overflow-hidden bg-white/60 backdrop-blur-xl border border-white/40 rounded-2xl shadow-2xl p-5 md:p-8 animate-in fade-in slide-in-from-top-4 duration-500">
-                    <div className="absolute -top-24 -right-24 w-64 h-64 bg-blue-500/10 rounded-full blur-3xl animate-pulse"></div>
-                    <div className="absolute -bottom-24 -left-24 w-64 h-64 bg-indigo-500/10 rounded-full blur-3xl animate-pulse delay-1000"></div>
 
                     <div className="flex items-center justify-between mb-6 md:mb-8 relative z-10">
                         <div className="flex items-center space-x-3">

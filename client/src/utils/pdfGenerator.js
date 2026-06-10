@@ -2012,7 +2012,7 @@ export const generateSaleInvoicePDF = async (sale, allCustomers = []) => {
 };
 
 
-export const generateProductHistoryPDF = (productName, category, activeTab, purchaseData, saleData, summary, filters) => {
+export const generateProductHistoryPDF = (productName, category, activeTab, purchaseData, saleData, summary, filters, damageData = []) => {
     try {
         const doc = new jsPDF();
         const pageWidth = doc.internal.pageSize.width;
@@ -2096,18 +2096,37 @@ export const generateProductHistoryPDF = (productName, category, activeTab, purc
 
         if (activeTab === 'total') {
             // --- Unified History Table ---
+            // Group purchases by Date/LC/Truck to match UI grouping
             const aggregatedPurchase = Object.values(sortedPurchaseData.reduce((acc, p) => {
                 const key = `${p.date}_${p.lcNo}_${p.itemTruck || p.truckNo || ''}`;
-                if (!acc[key]) acc[key] = { ...p, type: 'purchase', itemQty: 0, itemInHouseQty: 0, itemShortageQty: 0, brandsProcessed: new Set() };
-                acc[key].itemQty += parseFloat(p.itemQty) || 0;
-
-                const brandKey = (p.itemBrand || '').trim().toLowerCase();
-                if (!acc[key].brandsProcessed.has(brandKey)) {
-                    acc[key].itemInHouseQty += parseFloat(p.itemInHouseQty) || 0;
-                    acc[key].brandsProcessed.add(brandKey);
+                if (!acc[key]) {
+                    acc[key] = { 
+                        ...p, 
+                        type: 'purchase', 
+                        itemQty: 0, 
+                        itemInHouseQty: 0, 
+                        itemShortageQty: 0, 
+                        brands: {} 
+                    };
                 }
-
+                
+                acc[key].itemQty += parseFloat(p.itemQty) || 0;
                 acc[key].itemShortageQty += parseFloat(p.itemShortageQty) || 0;
+                
+                const bKey = (p.itemBrand || '').trim().toLowerCase();
+                if (!acc[key].brands[bKey]) {
+                    acc[key].brands[bKey] = {
+                        qty: parseFloat(p.itemInHouseQty) || 0,
+                        stockTableQty: parseFloat(p.inHouseQuantity) || 0
+                    };
+                    acc[key].itemInHouseQty += acc[key].brands[bKey].qty;
+                } else {
+                    const additionalStock = parseFloat(p.inHouseQuantity) || 0;
+                    acc[key].brands[bKey].qty += additionalStock;
+                    acc[key].brands[bKey].stockTableQty += additionalStock;
+                    acc[key].itemInHouseQty += additionalStock;
+                }
+                
                 return acc;
             }, {}));
 
@@ -2118,19 +2137,33 @@ export const generateProductHistoryPDF = (productName, category, activeTab, purc
                 return acc;
             }, {}));
 
-            let currentBalance = 0;
-            const processedLCTruckBrands = new Set();
+            const sortedDamageData = [...(damageData || [])].sort((a, b) => new Date(a.date) - new Date(b.date));
+            const aggregatedDamage = Object.values(sortedDamageData.reduce((acc, d) => {
+                const key = `${d.date}_damage_${d.brand || '-'}`;
+                if (!acc[key]) acc[key] = { ...d, type: 'damage', itemQty: 0 };
+                acc[key].itemQty += parseFloat(d.itemQty || d.quantity) || 0;
+                return acc;
+            }, {}));
 
-            const unifiedData = [...aggregatedPurchase, ...aggregatedSale]
+            let currentBalance = 0;
+            const addedWhPortion = new Set();
+
+            const unifiedData = [...aggregatedPurchase, ...aggregatedSale, ...aggregatedDamage]
                 .sort((a, b) => new Date(a.date) - new Date(b.date))
                 .map(item => {
                     if (item.type === 'purchase') {
-                        const lcKey = `${(item.lcNo || '').trim()}_${(item.itemTruck || item.truckNo || '').trim()}_${(item.itemBrand || '').trim()}`;
-                        if (!processedLCTruckBrands.has(lcKey)) {
-                            currentBalance += item.itemInHouseQty;
-                            processedLCTruckBrands.add(lcKey);
-                        }
-                    } else {
+                        Object.entries(item.brands || {}).forEach(([bKey, bData]) => {
+                            const truckKey = `${(item.lcNo || '').trim()}_${(item.itemTruck || item.truckNo || '').trim()}_${bKey}`;
+                            currentBalance += bData.stockTableQty;
+                            if (!addedWhPortion.has(truckKey)) {
+                                const whPortion = bData.qty - bData.stockTableQty;
+                                currentBalance += Math.max(0, whPortion);
+                                addedWhPortion.add(truckKey);
+                            }
+                        });
+                    } else if (item.type === 'sale') {
+                        currentBalance -= item.itemQty;
+                    } else if (item.type === 'damage') {
                         currentBalance -= item.itemQty;
                     }
                     return { ...item, runningInHouse: currentBalance };
@@ -2167,7 +2200,11 @@ export const generateProductHistoryPDF = (productName, category, activeTab, purc
                 qty: acc.qty + (parseFloat(sale.itemQty) || 0)
             }), { qty: 0 });
 
-            const unifiedHead = [['Date', 'LC No', 'Exporter', 'Invoice', 'Party', 'Purchase', 'Sale', 'InHouse', 'Short']];
+            const damageTotals = sortedDamageData.reduce((acc, d) => ({
+                qty: acc.qty + (parseFloat(d.itemQty || d.quantity) || 0)
+            }), { qty: 0 });
+
+            const unifiedHead = [['Date', 'LC No', 'Exporter', 'Invoice', 'Party', 'Purchase', 'Sale', 'InHouse', 'Short', 'Damage']];
             const unifiedBody = unifiedData.map(item => [
                 formatDate(item.date),
                 item.lcNo || '-',
@@ -2177,14 +2214,16 @@ export const generateProductHistoryPDF = (productName, category, activeTab, purc
                 item.type === 'purchase' ? `${Math.round(item.itemQty).toLocaleString('en-US')} kg` : '-',
                 item.type === 'sale' ? `${Math.round(item.itemQty).toLocaleString('en-US')} kg` : '-',
                 `${Math.round(item.runningInHouse).toLocaleString('en-US')} kg`,
-                item.type === 'purchase' ? `${Math.round(item.itemShortageQty || 0).toLocaleString('en-US')} kg` : '-'
+                item.type === 'purchase' ? `${Math.round(item.itemShortageQty || 0).toLocaleString('en-US')} kg` : '-',
+                item.type === 'damage' ? `${Math.round(item.itemQty).toLocaleString('en-US')} kg` : '-'
             ]);
             const unifiedFoot = [[
                 { content: 'TOTAL HISTORY', colSpan: 5, styles: { halign: 'right', fontStyle: 'bold' } },
                 { content: `${Math.round(purchaseTotals.qty).toLocaleString('en-US')} kg`, styles: { halign: 'right', fontStyle: 'bold' } },
                 { content: `${Math.round(saleTotals.qty).toLocaleString('en-US')} kg`, styles: { halign: 'right', fontStyle: 'bold', textColor: [0, 0, 0] } },
                 { content: `${Math.round(unifiedData[unifiedData.length - 1]?.runningInHouse || 0).toLocaleString('en-US')} kg`, styles: { halign: 'right', fontStyle: 'bold', textColor: [0, 0, 0] } },
-                { content: `${Math.round(purchaseTotals.shortage).toLocaleString('en-IN')} kg`, styles: { halign: 'right', fontStyle: 'bold', textColor: [0, 0, 0] } }
+                { content: `${Math.round(purchaseTotals.shortage).toLocaleString('en-IN')} kg`, styles: { halign: 'right', fontStyle: 'bold', textColor: [0, 0, 0] } },
+                { content: `${Math.round(damageTotals.qty).toLocaleString('en-US')} kg`, styles: { halign: 'right', fontStyle: 'bold', textColor: [0, 0, 0] } }
             ]];
 
             autoTable(doc, {
@@ -2198,15 +2237,16 @@ export const generateProductHistoryPDF = (productName, category, activeTab, purc
                 headStyles: { fillColor: [245, 245, 245], textColor: [0, 0, 0], fontStyle: 'bold', halign: 'center' },
                 footStyles: { fillColor: [245, 245, 245], textColor: [0, 0, 0], fontStyle: 'bold', lineWidth: 0.1 },
                 columnStyles: {
-                    0: { cellWidth: 20, halign: 'center' }, // Date
-                    1: { cellWidth: 24, halign: 'center' }, // LC No
-                    2: { cellWidth: 26, halign: 'left' },   // Exporter (Increased)
-                    3: { cellWidth: 18, halign: 'center' }, // Invoice
-                    4: { cellWidth: 34, halign: 'left' },   // Party (Increased)
-                    5: { cellWidth: 21, halign: 'right' },  // Purchase
-                    6: { cellWidth: 21, halign: 'right' },  // Sale
-                    7: { cellWidth: 21, halign: 'right' },  // InHouse
-                    8: { cellWidth: 13, halign: 'right' }   // Short
+                    0: { cellWidth: 18, halign: 'center' }, // Date
+                    1: { cellWidth: 22, halign: 'center' }, // LC No
+                    2: { cellWidth: 24, halign: 'left' },   // Exporter
+                    3: { cellWidth: 16, halign: 'center' }, // Invoice
+                    4: { cellWidth: 30, halign: 'left' },   // Party
+                    5: { cellWidth: 19, halign: 'right' },  // Purchase
+                    6: { cellWidth: 19, halign: 'right' },  // Sale
+                    7: { cellWidth: 19, halign: 'right' },  // InHouse
+                    8: { cellWidth: 13, halign: 'right' },  // Short
+                    9: { cellWidth: 16, halign: 'right' }   // Damage
                 },
                 margin: { left: margin, right: margin }
             });

@@ -2204,8 +2204,6 @@ function LCReceive({
             {
                 showStockForm && (
                     <div className="relative overflow-hidden rounded-2xl bg-white/60 backdrop-blur-xl border border-white/50 shadow-2xl p-4 md:p-8 transition-all duration-300">
-                        <div className="absolute -top-24 -right-24 w-64 h-64 bg-blue-400/10 rounded-full blur-3xl pointer-events-none"></div>
-                        <div className="absolute -bottom-24 -left-24 w-64 h-64 bg-indigo-400/10 rounded-full blur-3xl pointer-events-none"></div>
 
                         <div className="flex items-center justify-between mb-6 border-b border-gray-200/50 pb-4 relative z-10">
                             <h3 className="text-xl font-semibold text-gray-800">{editingId ? 'Edit LC Receive' : 'New LC Receive'}</h3>

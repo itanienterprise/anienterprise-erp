@@ -2206,13 +2206,11 @@ const StockManagement = ({
                 </>
             )}
 
-            {/* Add Stock to Warehouse Form Card */}
-            {showAddWarehouseStockForm && (
-                <div className="warehouse-form-container border-blue-100 mb-6">
-                    <div className="warehouse-form-bg-orb bg-blue-400/20 left-1/4 top-1/4"></div>
-                    <div className="warehouse-form-bg-orb bg-indigo-400/20 right-1/4 bottom-1/4"></div>
-
-                    <div className="warehouse-form-header">
+             {/* Add Stock to Warehouse Form Card */}
+             {showAddWarehouseStockForm && (
+                 <div className="warehouse-form-container border-blue-100 mb-6">
+ 
+                     <div className="warehouse-form-header">
                         <div>
                             <h3 className="warehouse-form-title">Transfer Product to Warehouse</h3>
                             <p className="text-[12px] md:text-sm text-gray-500">Record a new stock transfer or direct entry to warehouse</p>

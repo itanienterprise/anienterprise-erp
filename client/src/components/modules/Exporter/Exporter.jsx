@@ -301,8 +301,6 @@ const Exporter = ({
 
             {showForm && (
                 <div className="exporter-form-container">
-                    <div className="exporter-form-bg-orb exporter-form-bg-orb-1"></div>
-                    <div className="exporter-form-bg-orb exporter-form-bg-orb-2"></div>
                     <div className="exporter-form-header">
                         <h3 className="exporter-form-title">{editingId ? 'Edit Exporter' : 'New Exporter Registration'}</h3>
                         <button onClick={() => { setShowForm(false); resetForm(); }} className="exporter-form-close">

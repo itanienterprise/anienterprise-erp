@@ -506,8 +506,11 @@ function PI({
                 }
             }
 
-            if (name === 'portOfDischarge' && updated.termsDeliveryPayment) {
-                updated.termsDeliveryPayment = updated.termsDeliveryPayment.replace(/CPT\s+([^,]+),/i, `CPT ${value.toUpperCase()},`);
+            if (name === 'portOfDischarge') {
+                updated.port = value;
+                if (updated.termsDeliveryPayment) {
+                    updated.termsDeliveryPayment = updated.termsDeliveryPayment.replace(/CPT\s+([^,]+),/i, `CPT ${value.toUpperCase()},`);
+                }
             }
 
             return updated;
@@ -881,8 +884,11 @@ function PI({
                 }
             }
 
-            if (field === 'portOfDischarge' && updated.termsDeliveryPayment) {
-                updated.termsDeliveryPayment = updated.termsDeliveryPayment.replace(/CPT\s+([^,]+),/i, `CPT ${value.toUpperCase()},`);
+            if (field === 'portOfDischarge') {
+                updated.port = value;
+                if (updated.termsDeliveryPayment) {
+                    updated.termsDeliveryPayment = updated.termsDeliveryPayment.replace(/CPT\s+([^,]+),/i, `CPT ${value.toUpperCase()},`);
+                }
             }
 
             if (field === 'countryFinalDest') {
@@ -1759,8 +1765,6 @@ function PI({
 
             {showForm && (
                 <div className="pi-form relative rounded-2xl bg-white/60 backdrop-blur-xl border border-white/50 shadow-2xl p-8 transition-all duration-300">
-                    <div className="absolute -top-20 -right-20 w-64 h-64 bg-blue-400/20 rounded-full blur-3xl pointer-events-none"></div>
-                    <div className="absolute -bottom-20 -left-20 w-64 h-64 bg-purple-400/20 rounded-full blur-3xl pointer-events-none"></div>
 
                     <div className="flex items-center justify-between mb-6 border-b border-gray-200/50 pb-4 relative z-10">
                         <h3 className="text-xl font-semibold text-gray-800">{editingId ? 'Edit PI Record' : 'New PI Creation'}</h3>
@@ -2982,8 +2986,6 @@ function PI({
 
             {showReviseForm && (
                 <div className="pi-form relative rounded-2xl bg-white/60 backdrop-blur-xl border border-white/50 shadow-2xl p-5 md:p-8 transition-all duration-300">
-                    <div className="absolute -top-20 -right-20 w-64 h-64 bg-blue-400/20 rounded-full blur-3xl pointer-events-none"></div>
-                    <div className="absolute -bottom-20 -left-20 w-64 h-64 bg-purple-400/20 rounded-full blur-3xl pointer-events-none"></div>
 
                     <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6 md:mb-8 relative z-30 border-b border-gray-200/40 pb-4">
                         <div className="flex items-center gap-2 shrink-0">
