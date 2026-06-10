@@ -215,7 +215,8 @@ const ProductHistoryReport = ({
                 totalShortageQty,
                 totalAmount: totalSaleAmount
             },
-            modalFilters
+            modalFilters,
+            damageHistory
         );
     };
 
@@ -461,9 +462,9 @@ const ProductHistoryReport = ({
                                                 <th className="border-r border-gray-900 px-2 py-1 text-[11px] font-bold text-gray-900 uppercase tracking-wider w-[16%] whitespace-nowrap">Party</th>
                                                 <th className="border-r border-gray-900 px-2 py-1 text-right text-[11px] font-bold text-gray-900 uppercase tracking-wider w-[10%] whitespace-nowrap">Purchase Qty</th>
                                                 <th className="border-r border-gray-900 px-2 py-1 text-right text-[11px] font-bold text-gray-900 uppercase tracking-wider w-[10%] whitespace-nowrap">Sale Qty</th>
-                                                <th className="border-r border-gray-900 px-2 py-1 text-right text-[11px] font-bold text-gray-900 uppercase tracking-wider w-[10%] whitespace-nowrap">Damage Qty</th>
                                                 <th className="border-r border-gray-900 px-2 py-1 text-right text-[11px] font-bold text-gray-900 uppercase tracking-wider w-[10%] whitespace-nowrap">InHouse Qty</th>
-                                                <th className="px-2 py-1 text-right text-[11px] font-bold text-gray-900 uppercase tracking-wider w-[10%] whitespace-nowrap">Short</th>
+                                                <th className="border-r border-gray-900 px-2 py-1 text-right text-[11px] font-bold text-gray-900 uppercase tracking-wider w-[10%] whitespace-nowrap">Short</th>
+                                                <th className="px-2 py-1 text-right text-[11px] font-bold text-gray-900 uppercase tracking-wider w-[10%] whitespace-nowrap">Damage Qty</th>
                                             </tr>
                                         </thead>
                                         <tbody className="divide-y divide-gray-900">
@@ -476,9 +477,9 @@ const ProductHistoryReport = ({
                                                     <td className="border-r border-gray-900 px-2 py-1 text-[12px] text-gray-900 font-medium whitespace-nowrap">{item.type === 'purchase' ? '-' : (item.companyName || '-')}</td>
                                                     <td className="border-r border-gray-900 px-2 py-1 text-[12px] text-right text-gray-900 font-bold">{item.type === 'purchase' ? `${Math.round(item.itemQty).toLocaleString('en-US')} kg` : '-'}</td>
                                                     <td className="border-r border-gray-900 px-2 py-1 text-[12px] text-right text-blue-600 font-bold">{item.type === 'sale' ? `${Math.round(item.itemQty).toLocaleString('en-US')} kg` : '-'}</td>
-                                                    <td className="border-r border-gray-900 px-2 py-1 text-[12px] text-right text-red-600 font-bold">{item.type === 'damage' ? `${Math.round(item.itemQty).toLocaleString('en-US')} kg` : '-'}</td>
                                                     <td className="border-r border-gray-900 px-2 py-1 text-[12px] text-right text-blue-700 font-black">{Math.round(item.runningInHouse).toLocaleString('en-US')} kg</td>
-                                                    <td className="px-2 py-1 text-[12px] text-right text-rose-600 font-bold">{item.type === 'purchase' ? `${Math.round(item.itemShortageQty || 0).toLocaleString('en-US')} kg` : '-'}</td>
+                                                    <td className="border-r border-gray-900 px-2 py-1 text-[12px] text-right text-rose-600 font-bold">{item.type === 'purchase' ? `${Math.round(item.itemShortageQty || 0).toLocaleString('en-US')} kg` : '-'}</td>
+                                                    <td className="px-2 py-1 text-[12px] text-right text-red-600 font-bold">{item.type === 'damage' ? `${Math.round(item.itemQty).toLocaleString('en-US')} kg` : '-'}</td>
                                                 </tr>
                                             ))}
                                         </tbody>
@@ -491,14 +492,14 @@ const ProductHistoryReport = ({
                                                 <td className="px-2 py-1.5 text-[12px] text-right border-r border-gray-900 text-blue-600">
                                                     {Math.round(saleHistory.reduce((sum, s) => sum + (parseFloat(s.itemQty) || 0), 0)).toLocaleString('en-US')} kg
                                                 </td>
-                                                <td className="px-2 py-1.5 text-[12px] text-right border-r border-gray-900 text-red-600">
-                                                    {Math.round(damageHistory.reduce((sum, d) => sum + (parseFloat(d.itemQty || d.quantity) || 0), 0)).toLocaleString('en-US')} kg
-                                                </td>
                                                 <td className="px-2 py-1.5 text-[12px] text-right border-r border-gray-900 text-blue-700">
                                                     {Math.round(unifiedHistory[unifiedHistory.length - 1]?.runningInHouse || 0).toLocaleString('en-US')} kg
                                                 </td>
-                                                <td className="px-2 py-1.5 text-[12px] text-right text-rose-600">
+                                                <td className="px-2 py-1.5 text-[12px] text-right border-r border-gray-900 text-rose-600">
                                                     {Math.round(purchaseHistory.reduce((sum, i) => sum + (parseFloat(i.itemShortageQty) || 0), 0)).toLocaleString('en-US')} kg
+                                                </td>
+                                                <td className="px-2 py-1.5 text-[12px] text-right text-red-600">
+                                                    {Math.round(damageHistory.reduce((sum, d) => sum + (parseFloat(d.itemQty || d.quantity) || 0), 0)).toLocaleString('en-US')} kg
                                                 </td>
                                             </tr>
                                         </tfoot>
@@ -532,9 +533,9 @@ const ProductHistoryReport = ({
                                         <div className="grid grid-cols-2 gap-x-3 gap-y-1">
                                             <div className="text-gray-700 uppercase">Total Purchase</div><div className="text-right">{Math.round(purchaseHistory.reduce((sum, i) => sum + (parseFloat(i.itemQty) || 0), 0)).toLocaleString('en-US')} kg</div>
                                             <div className="text-blue-600 uppercase">Total Sale</div><div className="text-blue-600 text-right">{Math.round(saleHistory.reduce((sum, s) => sum + (parseFloat(s.itemQty) || 0), 0)).toLocaleString('en-US')} kg</div>
-                                            <div className="text-red-600 uppercase">Total Damage</div><div className="text-red-600 text-right">{Math.round(damageHistory.reduce((sum, d) => sum + (parseFloat(d.itemQty || d.quantity) || 0), 0)).toLocaleString('en-US')} kg</div>
                                             <div className="text-blue-700 uppercase">InHouse</div><div className="text-blue-700 text-right">{Math.round(unifiedHistory[unifiedHistory.length - 1]?.runningInHouse || 0).toLocaleString('en-US')} kg</div>
                                             <div className="text-rose-600 uppercase">Shortage</div><div className="text-rose-600 text-right">{Math.round(purchaseHistory.reduce((sum, i) => sum + (parseFloat(i.itemShortageQty) || 0), 0)).toLocaleString('en-US')} kg</div>
+                                            <div className="text-red-600 uppercase">Total Damage</div><div className="text-red-600 text-right">{Math.round(damageHistory.reduce((sum, d) => sum + (parseFloat(d.itemQty || d.quantity) || 0), 0)).toLocaleString('en-US')} kg</div>
                                         </div>
                                     </div>
                                 </div>
