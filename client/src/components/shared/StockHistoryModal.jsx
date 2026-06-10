@@ -25,6 +25,7 @@ const StockHistoryModal = ({
     stockRecords,
     salesRecords,
     warehouseData,
+    damages,
     setShowProductHistoryReport,
     setProductHistoryReportData
 }) => {
@@ -313,12 +314,28 @@ const StockHistoryModal = ({
             });
         });
 
+        const productName = (viewRecord.productName || viewRecord.name || '').trim().toLowerCase();
+        
+        // Filter Damage History
+        const damageFlattened = (damages || []).filter(d => {
+            const pMatch = (d.productName || '').trim().toLowerCase() === productName;
+            const bMatch = !historyFilters.brand || (d.brand || '').trim().toLowerCase() === historyFilters.brand.toLowerCase();
+            return pMatch && bMatch;
+        }).map(d => ({
+            ...d,
+            itemBrand: d.brand,
+            itemQty: d.quantity,
+            itemPacket: d.packet,
+            type: 'damage'
+        }));
+
         setProductHistoryReportData({
             productName: viewRecord.productName || viewRecord.name,
             category: viewRecord.category,
             filters: historyFilters,
             purchaseHistory: purchaseFlattened,
-            saleHistory: activeSaleHistory
+            saleHistory: activeSaleHistory,
+            damageHistory: damageFlattened
         });
         setShowProductHistoryReport(true);
     };

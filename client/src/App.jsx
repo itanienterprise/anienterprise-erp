@@ -1473,6 +1473,7 @@ function App() {
             stockRecords={stockRecords}
             warehouseData={warehouseData}
             salesRecords={salesRecords}
+            damages={damages}
             setShowProductHistoryReport={setShowProductHistoryReport}
             setProductHistoryReportData={setProductHistoryReportData}
           />
