@@ -189,21 +189,31 @@ export const generatePI2PDF = (record) => {
     // then wrap the rest (L/C clause, Packing) normally below it.
     const termsMaxWidth2 = rightColWidth - 5;
     const againstIdx2 = termsTextFormatted.toUpperCase().indexOf('AGAINST');
-    let deliveryClause2 = '';
+    let deliveryLines2 = [];
     let deliveryCharSpace2 = 0;
     let restTermsLines2 = [];
     let termsLines;
     if (againstIdx2 !== -1) {
-        deliveryClause2 = termsTextFormatted.substring(0, againstIdx2 + 7).trim();
+        const deliveryClause2 = termsTextFormatted.substring(0, againstIdx2 + 7).trim();
         const restText2 = termsTextFormatted.substring(againstIdx2 + 7).trimStart();
         doc.setFont('helvetica', 'normal');
         doc.setFontSize(9);
         const dw2 = doc.getTextWidth(deliveryClause2);
         if (dw2 > termsMaxWidth2) {
-            deliveryCharSpace2 = (termsMaxWidth2 - dw2) / (deliveryClause2.length - 1);
+            const neededCs = (termsMaxWidth2 - dw2) / (deliveryClause2.length - 1);
+            if (neededCs < -0.02) {
+                deliveryLines2 = doc.splitTextToSize(deliveryClause2, termsMaxWidth2);
+                deliveryCharSpace2 = 0;
+            } else {
+                deliveryLines2 = [deliveryClause2];
+                deliveryCharSpace2 = neededCs;
+            }
+        } else {
+            deliveryLines2 = [deliveryClause2];
+            deliveryCharSpace2 = 0;
         }
         restTermsLines2 = restText2 ? doc.splitTextToSize(restText2, termsMaxWidth2) : [];
-        termsLines = [deliveryClause2, ...restTermsLines2];
+        termsLines = [...deliveryLines2, ...restTermsLines2];
     } else {
         termsLines = doc.splitTextToSize(termsTextFormatted, termsMaxWidth2);
     }
@@ -311,13 +321,22 @@ export const generatePI2PDF = (record) => {
     doc.text("Terms of Delivery and Payment", midX + 2, y + countrySectionHeight + 4);
     doc.setFont("helvetica", "normal");
     doc.setFontSize(9);
-    if (deliveryClause2) {
-        doc.text(deliveryClause2, midX + 2, y + countrySectionHeight + 10, { charSpace: deliveryCharSpace2 });
-        restTermsLines2.forEach((line, idx) => {
-            doc.text(line, midX + 2, y + countrySectionHeight + 10 + ((idx + 1) * 4));
+    let currentY = y + countrySectionHeight + 10;
+    if (againstIdx2 !== -1) {
+        deliveryLines2.forEach((line) => {
+            const cs = deliveryLines2.length === 1 ? deliveryCharSpace2 : 0;
+            doc.text(line, midX + 2, currentY, { charSpace: cs });
+            currentY += 4;
+        });
+        restTermsLines2.forEach((line) => {
+            doc.text(line, midX + 2, currentY);
+            currentY += 4;
         });
     } else {
-        doc.text(termsLines, midX + 2, y + countrySectionHeight + 10);
+        termsLines.forEach((line) => {
+            doc.text(line, midX + 2, currentY);
+            currentY += 4;
+        });
     }
 
     if (showSafta) {

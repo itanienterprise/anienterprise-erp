@@ -89,7 +89,7 @@ const StockManagement = ({
     const [isSelectionMode, setIsSelectionMode] = useState(false);
     const [sortConfig, setSortConfig] = useState({
         stock: { key: 'date', direction: 'desc' },
-        history: { key: 'date', direction: 'desc' }
+        history: { key: 'date', direction: 'asc' }
     });
 
     // Long Press Logic
@@ -3456,24 +3456,48 @@ const StockManagement = ({
                                                     <table className="w-full text-left min-w-[800px]">
                                                         <thead>
                                                             <tr className="bg-gray-50/50 border-b border-gray-100">
-                                                                <th className="px-3 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider">Date</th>
-                                                                <th className="px-3 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider">Invoice No</th>
-                                                                <th className="px-3 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider">Company Name</th>
-                                                                <th className="px-3 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider">{isFruitHistory ? "Customer Name" : "Brand"}</th>
-                                                                <th className={`px-3 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider ${!isFruitHistory ? 'text-right' : ''}`}>{isFruitHistory ? "Phone" : "BAG"}</th>
-                                                                <th className="px-3 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider text-right">Quantity</th>
-                                                                {isFruitHistory && <th className="px-3 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider text-right">Truck</th>}
-                                                                <th className="px-3 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider text-right">Price</th>
-                                                                <th className="px-3 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider text-right">Total</th>
+                                                                <th onClick={() => requestSort('history', 'date')} className="px-3 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-50 transition-colors">
+                                                                    <div className="flex items-center">Date <SortIcon config={sortConfig.history} columnKey="date" /></div>
+                                                                </th>
+                                                                <th onClick={() => requestSort('history', 'lcNo')} className="px-3 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-50 transition-colors">
+                                                                    <div className="flex items-center">LC No <SortIcon config={sortConfig.history} columnKey="lcNo" /></div>
+                                                                </th>
+                                                                <th onClick={() => requestSort('history', 'invoiceNo')} className="px-3 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-50 transition-colors">
+                                                                    <div className="flex items-center">Invoice No <SortIcon config={sortConfig.history} columnKey="invoiceNo" /></div>
+                                                                </th>
+                                                                <th onClick={() => requestSort('history', 'companyName')} className="px-3 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-50 transition-colors">
+                                                                    <div className="flex items-center">Company Name <SortIcon config={sortConfig.history} columnKey="companyName" /></div>
+                                                                </th>
+                                                                <th onClick={() => requestSort('history', isFruitHistory ? "customerName" : "itemBrand")} className="px-3 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-50 transition-colors">
+                                                                    <div className="flex items-center">{isFruitHistory ? "Customer Name" : "Brand"} <SortIcon config={sortConfig.history} columnKey={isFruitHistory ? "customerName" : "itemBrand"} /></div>
+                                                                </th>
+                                                                <th onClick={() => requestSort('history', isFruitHistory ? "contact" : "itemPacket")} className={`px-3 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-50 transition-colors ${!isFruitHistory ? 'text-right' : ''}`}>
+                                                                    <div className={`flex items-center ${!isFruitHistory ? 'justify-end' : ''}`}>{isFruitHistory ? "Phone" : "BAG"} <SortIcon config={sortConfig.history} columnKey={isFruitHistory ? "contact" : "itemPacket"} /></div>
+                                                                </th>
+                                                                <th onClick={() => requestSort('history', 'itemQty')} className="px-3 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-50 transition-colors text-right">
+                                                                    <div className="flex items-center justify-end">Quantity <SortIcon config={sortConfig.history} columnKey="itemQty" /></div>
+                                                                </th>
+                                                                {isFruitHistory && (
+                                                                    <th onClick={() => requestSort('history', 'itemTruck')} className="px-3 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-50 transition-colors text-right">
+                                                                        <div className="flex items-center justify-end">Truck <SortIcon config={sortConfig.history} columnKey="itemTruck" /></div>
+                                                                    </th>
+                                                                )}
+                                                                <th onClick={() => requestSort('history', 'itemPrice')} className="px-3 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-50 transition-colors text-right">
+                                                                    <div className="flex items-center justify-end">Price <SortIcon config={sortConfig.history} columnKey="itemPrice" /></div>
+                                                                </th>
+                                                                <th onClick={() => requestSort('history', 'itemTotal')} className="px-3 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-50 transition-colors text-right">
+                                                                    <div className="flex items-center justify-end">Total <SortIcon config={sortConfig.history} columnKey="itemTotal" /></div>
+                                                                </th>
                                                             </tr>
                                                         </thead>
                                                         <tbody className="divide-y divide-gray-50">
                                                             {flattenedSaleHistory.length === 0 ? (
-                                                                <tr><td colSpan={isFruitHistory ? "9" : "8"} className="px-6 py-20 text-center text-gray-400 font-medium">No sale history found for this product</td></tr>
+                                                                <tr><td colSpan={isFruitHistory ? "10" : "9"} className="px-6 py-20 text-center text-gray-400 font-medium">No sale history found for this product</td></tr>
                                                             ) : (
                                                                 flattenedSaleHistory.map((sale, sIdx) => (
                                                                     <tr key={sIdx} className="hover:bg-blue-50/20 transition-all group border-b border-gray-50">
                                                                         <td className="px-3 py-3 text-sm text-gray-600">{formatDate(sale.date)}</td>
+                                                                        <td className="px-3 py-3 text-sm text-gray-600 font-semibold">{sale.lcNo ? sale.lcNo.slice(-4) : '-'}</td>
                                                                         <td className="px-3 py-3 text-sm font-bold text-gray-900">{sale.invoiceNo}</td>
                                                                         <td className="px-3 py-3 text-sm font-bold text-gray-800 truncate max-w-[150px]" title={sale.companyName}>{sale.companyName}</td>
                                                                         {isFruitHistory ? (
@@ -3572,6 +3596,10 @@ const StockManagement = ({
                                                                                 <div className="text-right">
                                                                                     <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-0.5">{isFruitHistory ? "Phone" : "BAG"}</div>
                                                                                     <div className="text-sm font-bold text-gray-900 truncate">{isFruitHistory ? (sale.contact || '-') : `${sale.itemPacket.toLocaleString('en-US')} BAG`}</div>
+                                                                                </div>
+                                                                                <div className="col-span-2 border-t border-gray-100 pt-2 mt-1">
+                                                                                    <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-0.5">LC No</div>
+                                                                                    <div className="text-sm font-bold text-gray-800">{sale.lcNo || '-'}</div>
                                                                                 </div>
                                                                             </div>
 

@@ -549,9 +549,7 @@ const SaleManagement = ({
         fetchImportersList();
         fetchPortsList();
         fetchCnfsList();
-        if (saleType === 'Border') {
-            fetchLCRecords();
-        }
+        fetchLCRecords();
     }, [saleType]); // Refetch if saleType changes
 
     const fetchLCRecords = async () => {
@@ -2108,8 +2106,11 @@ const SaleManagement = ({
                 if (!matches) return false;
             } else {
                 const inv = (sale.invoiceNo || '').toLowerCase();
+                const lcNo = (sale.lcNo || '').toLowerCase();
+                const challanNo = (sale.challanNo || '').toLowerCase();
+                const truckNo = (sale.truckNo || '').toLowerCase();
                 const cname = (sale.companyName || sale.customerName || '').toLowerCase();
-                if (!inv.includes(q) && !cname.includes(q)) return false;
+                if (!inv.includes(q) && !lcNo.includes(q) && !challanNo.includes(q) && !truckNo.includes(q) && !cname.includes(q)) return false;
             }
         }
         // Date range
@@ -2648,7 +2649,7 @@ const SaleManagement = ({
                         autoComplete="off"
                         className="grid grid-cols-1 md:grid-cols-2 gap-6 relative z-10"
                     >
-                        <div className={`grid grid-cols-1 ${saleType === 'Border' ? 'md:grid-cols-5' : 'md:grid-cols-7'} gap-4 col-span-2`}>
+                        <div className={`grid grid-cols-1 ${saleType === 'Border' ? 'md:grid-cols-5' : 'md:grid-cols-8'} gap-4 col-span-2`}>
                             <CustomDatePicker
                                 label="Date"
                                 name="date"
@@ -2660,6 +2661,66 @@ const SaleManagement = ({
 
                             {saleType !== 'Border' && (
                                 <>
+                                    <div className="sale-mgmt-input-group relative lc-dropdown-container">
+                                        <label className="sale-mgmt-label">LC No</label>
+                                        <div className="relative">
+                                            <input
+                                                type="text"
+                                                name="lcNo"
+                                                placeholder={formData.lcNo || "Search LC..."}
+                                                value={activeDropdown === 'lcNo' ? lcSearch : formData.lcNo}
+                                                readOnly={isFieldReadOnly(originalData?.lcNo)}
+                                                onChange={(e) => {
+                                                    if (isFieldReadOnly(originalData?.lcNo)) return;
+                                                    setLcSearch(e.target.value);
+                                                    setActiveDropdown('lcNo');
+                                                    setHighlightedIndex(-1);
+                                                    handleInputChange(e);
+                                                }}
+                                                autoComplete="off"
+                                                onFocus={() => {
+                                                    if (isFieldReadOnly(originalData?.lcNo)) return;
+                                                    setLcSearch(formData.lcNo || '');
+                                                    setActiveDropdown('lcNo');
+                                                    setHighlightedIndex(-1);
+                                                }}
+                                                onKeyDown={(e) => !isFieldReadOnly(originalData?.lcNo) && handleDropdownKeyDown(e, 'lcNo', getFilteredLCs(), handleLcSelect)}
+                                                className={`sale-mgmt-input pr-14 ${formData.lcNo ? 'placeholder:text-gray-900 placeholder:font-semibold' : 'placeholder:text-gray-400'} ${isFieldReadOnly(originalData?.lcNo) ? 'bg-gray-50' : ''}`}
+                                            />
+                                            <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-2">
+                                                {formData.lcNo && (
+                                                    <button type="button" onClick={() => handleLcSelect(null)} className="text-gray-400 hover:text-red-500">
+                                                        <XIcon className="w-4 h-4" />
+                                                    </button>
+                                                )}
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setActiveDropdown(activeDropdown === 'lcNo' ? null : 'lcNo')}
+                                                    className="text-gray-300 hover:text-blue-500 transition-colors"
+                                                >
+                                                    <ChevronDownIcon className={`w-4 h-4 transition-transform duration-200 ${activeDropdown === 'lcNo' ? 'rotate-180' : ''}`} />
+                                                </button>
+                                            </div>
+                                        </div>
+                                        {activeDropdown === 'lcNo' && getFilteredLCs().length > 0 && (
+                                            <div className="absolute z-[60] w-full mt-1 bg-white border border-gray-100 rounded-xl shadow-xl max-h-48 overflow-y-auto py-1">
+                                                {getFilteredLCs().map((lc, idx) => (
+                                                    <button
+                                                        key={lc._id || `lc-${idx}`}
+                                                        type="button"
+                                                        onClick={() => handleLcSelect(lc)}
+                                                        onMouseEnter={() => setHighlightedIndex(idx)}
+                                                        className={`w-full px-4 py-2 text-left text-sm transition-colors font-medium ${formData.lcNo === lc.lcNo ? 'bg-blue-50 text-blue-700' : highlightedIndex === idx ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-blue-50'}`}
+                                                    >
+                                                        <div className="flex flex-col">
+                                                            <span className="font-bold">{lc.lcNo}</span>
+                                                            <span className="text-[10px] text-gray-500">{lc.importerName} | {lc.productName}</span>
+                                                        </div>
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        )}
+                                    </div>
                                     <div className="sale-mgmt-input-group">
                                         <label className="sale-mgmt-label">Challan- No</label>
                                         <input
@@ -3820,6 +3881,9 @@ const SaleManagement = ({
                                         <th className="sale-mgmt-th cursor-pointer group" onClick={() => handleSort('date')}>
                                             <div className="flex items-center">Date {renderSortIcon('date')}</div>
                                         </th>
+                                        <th className="sale-mgmt-th cursor-pointer group" onClick={() => handleSort('lcNo')}>
+                                            <div className="flex items-center">LC No {renderSortIcon('lcNo')}</div>
+                                        </th>
                                         <th className="sale-mgmt-th text-center cursor-pointer group" onClick={() => handleSort('invoiceNo')}>
                                             <div className="flex items-center justify-center">Invoice {renderSortIcon('invoiceNo')}</div>
                                         </th>
@@ -3854,9 +3918,9 @@ const SaleManagement = ({
                             </thead>
                             <tbody className="divide-y divide-gray-50">
                                 {isLoading ? (
-                                    <tr><td colSpan={saleType === 'Border' ? "15" : "14"} className="px-3 py-20 text-center text-gray-400 font-medium">Loading sales records...</td></tr>
+                                    <tr><td colSpan="15" className="px-3 py-20 text-center text-gray-400 font-medium">Loading sales records...</td></tr>
                                 ) : getFilteredData().length === 0 ? (
-                                    <tr><td colSpan={saleType === 'Border' ? "15" : "14"} className="px-3 py-20 text-center text-gray-400 font-medium">No sales records found</td></tr>
+                                    <tr><td colSpan="15" className="px-3 py-20 text-center text-gray-400 font-medium">No sales records found</td></tr>
                                 ) : getFilteredData().map((sale, index) => {
                                     const isExpanded = expandedRows.includes(sale._id);
                                     const isMultiple = (sale.items && sale.items.length > 0)
@@ -3987,6 +4051,9 @@ const SaleManagement = ({
                                             <td className="px-3 py-4 whitespace-nowrap">
                                                 <div className="text-[13px] font-medium text-gray-600">{formatDate(sale.date)}</div>
                                             </td>
+                                            <td className="px-3 py-4 whitespace-nowrap">
+                                                <div className="text-[13px] font-semibold text-gray-800">{sale.lcNo ? sale.lcNo.slice(-4) : '-'}</div>
+                                            </td>
                                             <td className="px-3 py-4 whitespace-nowrap text-center">
                                                 <div className="text-[13px] font-semibold text-gray-800">{sale.invoiceNo || '-'}</div>
                                             </td>
@@ -4022,6 +4089,7 @@ const SaleManagement = ({
                                                     </div>
                                                 )}
                                             </td>
+
                                             <td className="px-3 py-4 whitespace-nowrap">
                                                 <div className="text-[13px] font-semibold text-gray-800">{sale.challanNo || '-'}</div>
                                             </td>

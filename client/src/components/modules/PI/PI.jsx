@@ -129,7 +129,10 @@ function PI({
         declaration: DEFAULT_DECLARATION,
         status: 'Active',
         certification: 'Value & Quantity, Country of Origin',
-        packingType: ''
+        packingType: '',
+        revisions: [],
+        piRevision: '',
+        remarks: ''
     });
 
     const ipNumberRef = useRef(null);
@@ -1132,7 +1135,10 @@ function PI({
             status: 'Active',
             invoiceStyle: 'Style 1 SAA',
             certification: 'Value & Quantity, Country of Origin',
-            packingType: ''
+            packingType: '',
+            revisions: [],
+            piRevision: '',
+            remarks: ''
         });
         setEditingId(null);
         setSubmitStatus(null);
@@ -1204,7 +1210,10 @@ function PI({
             invoiceStyle: record.invoiceStyle || 'Style 1 SAA',
             certification: record.certification || '',
             packingType: record.packingType || '',
-            ipSnapshots: record.ipSnapshots || {}
+            ipSnapshots: record.ipSnapshots || {},
+            revisions: record.revisions || [],
+            piRevision: record.piRevision || '',
+            remarks: record.remarks || ''
         });
         setEditingId(record._id);
         setShowForm(true);

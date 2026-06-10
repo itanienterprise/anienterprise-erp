@@ -805,6 +805,9 @@ const SalesReport = ({
                                     <tr className="bg-gray-50 border-b border-gray-900">
                                         <th className={`border-r border-gray-900 ${saleType === 'Border' ? 'px-0.5' : 'px-1'} py-1.5 text-center ${saleType === 'Border' ? 'text-[12px]' : 'text-[11px]'} font-bold text-gray-900 uppercase w-[4%]`}>SL</th>
                                         <th className={`border-r border-gray-900 ${saleType === 'Border' ? 'px-0.5' : 'px-1'} py-1.5 text-center ${saleType === 'Border' ? 'text-[12px]' : 'text-[11px]'} font-bold text-gray-900 uppercase w-[7%]`}>Date</th>
+                                        {saleType !== 'Border' && (
+                                            <th className="border-r border-gray-900 px-1 py-1.5 text-center text-[11px] font-bold text-gray-900 uppercase w-[7%]">LC No</th>
+                                        )}
                                         <th className={`border-r border-gray-900 ${saleType === 'Border' ? 'px-0.5' : 'px-1'} py-1.5 text-center ${saleType === 'Border' ? 'text-[12px]' : 'text-[11px]'} font-bold text-gray-900 uppercase w-[12%]`}>{saleType === 'Border' ? 'LC No' : 'Invoice'}</th>
                                         {saleType === 'Border' ? (
                                             <>
@@ -885,6 +888,9 @@ const SalesReport = ({
                                                                 <>
                                                                     <td rowSpan={flatItems.length} className={`border-r border-gray-900 ${saleType === 'Border' ? 'px-0.5' : 'px-1'} py-1 ${saleType === 'Border' ? 'text-[12px]' : 'text-[12px]'} text-gray-900 text-center`}>{sl++}</td>
                                                                     <td rowSpan={flatItems.length} className={`border-r border-gray-900 ${saleType === 'Border' ? 'px-0.5' : 'px-1'} py-1 ${saleType === 'Border' ? 'text-[12px]' : 'text-[12px]'} text-gray-900 text-center`}>{formatDate(sale.date)}</td>
+                                                                    {saleType !== 'Border' && (
+                                                                        <td rowSpan={flatItems.length} className="border-r border-gray-900 px-1 py-1 text-[12px] text-gray-900 text-center">{sale.lcNo ? sale.lcNo.slice(-4) : '-'}</td>
+                                                                    )}
                                                                     <td rowSpan={flatItems.length} className={`border-r border-gray-900 ${saleType === 'Border' ? 'px-0.5' : 'px-1'} py-1 ${saleType === 'Border' ? 'text-[12px]' : 'text-[12px]'} font-bold text-gray-900 text-center`}>{saleType === 'Border' ? (sale.lcNo || '-') : sale.invoiceNo}</td>
                                                                     {saleType === 'Border' ? (
                                                                         <>
