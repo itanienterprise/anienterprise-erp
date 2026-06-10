@@ -1871,7 +1871,7 @@ const StockManagement = ({
                             </div>
                             <input
                                 type="text"
-                                placeholder="Search by Product or Brand..."
+                                placeholder="Search by LC No, Product or Brand..."
                                 value={stockSearchQuery}
                                 onChange={(e) => setStockSearchQuery(e.target.value)}
                                 className="block w-full pl-10 pr-4 py-2 bg-white/50 border border-gray-200 rounded-xl text-[13px] placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 focus:bg-white transition-all outline-none"
@@ -2936,7 +2936,7 @@ const StockManagement = ({
                                         </div>
                                         <input
                                             type="text"
-                                            placeholder={historyTab === 'purchase' ? "Search by Product or Brand..." : "Search by LC No, Invoice, Company, Customer, Phone or Brand..."}
+                                            placeholder={historyTab === 'purchase' ? "Search by LC No, Brand, Port or Truck..." : "Search by LC No, Invoice, Company, Customer, Phone or Brand..."}
                                             value={historySearchQuery}
                                             onChange={(e) => setHistorySearchQuery(e.target.value)}
                                             className="block w-full pl-10 pr-4 py-2 bg-gray-50/50 border border-gray-200 rounded-xl text-[13px] placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 focus:bg-white transition-all outline-none"
