@@ -1770,10 +1770,40 @@ export const generateSaleInvoicePDF = async (sale, allCustomers = []) => {
         drawDottedLine(margin + labelWidth, y + 1, pageWidth - margin);
 
         y += 12;
-        // Line 4: Contact No (Full Width)
+        // Line 4: Contact No & LC No
         doc.setFont('helvetica', 'bold');
         doc.text("Contact No", margin, y);
-        doc.line(margin + labelWidth, y + 1, pageWidth - margin, y + 1);
+        doc.text(":", margin + labelWidth - 5, y);
+        doc.setFont('helvetica', 'normal');
+        doc.text(sale.contact || "-", margin + labelWidth, y);
+        drawDottedLine(margin + labelWidth, y + 1, rightColStart - 5);
+
+        if (sale.lcNo) {
+            doc.setFont('helvetica', 'bold');
+            doc.text("LC No :", rightColStart, y);
+            doc.setFont('helvetica', 'normal');
+            doc.text(sale.lcNo, rightColStart + 28, y);
+            drawDottedLine(rightColStart + 28, y + 1, pageWidth - margin);
+        }
+
+        if (!isBorderSale && (sale.challanNo || sale.truckNo)) {
+            y += 12;
+            if (sale.challanNo) {
+                doc.setFont('helvetica', 'bold');
+                doc.text("Challan No", margin, y);
+                doc.text(":", margin + labelWidth - 5, y);
+                doc.setFont('helvetica', 'normal');
+                doc.text(sale.challanNo, margin + labelWidth, y);
+                drawDottedLine(margin + labelWidth, y + 1, rightColStart - 5);
+            }
+            if (sale.truckNo) {
+                doc.setFont('helvetica', 'bold');
+                doc.text("Truck No :", rightColStart, y);
+                doc.setFont('helvetica', 'normal');
+                doc.text(sale.truckNo, rightColStart + 28, y);
+                drawDottedLine(rightColStart + 28, y + 1, pageWidth - margin);
+            }
+        }
 
         y += 14;
 
@@ -2100,19 +2130,19 @@ export const generateProductHistoryPDF = (productName, category, activeTab, purc
             const aggregatedPurchase = Object.values(sortedPurchaseData.reduce((acc, p) => {
                 const key = `${p.date}_${p.lcNo}_${p.itemTruck || p.truckNo || ''}`;
                 if (!acc[key]) {
-                    acc[key] = { 
-                        ...p, 
-                        type: 'purchase', 
-                        itemQty: 0, 
-                        itemInHouseQty: 0, 
-                        itemShortageQty: 0, 
-                        brands: {} 
+                    acc[key] = {
+                        ...p,
+                        type: 'purchase',
+                        itemQty: 0,
+                        itemInHouseQty: 0,
+                        itemShortageQty: 0,
+                        brands: {}
                     };
                 }
-                
+
                 acc[key].itemQty += parseFloat(p.itemQty) || 0;
                 acc[key].itemShortageQty += parseFloat(p.itemShortageQty) || 0;
-                
+
                 const bKey = (p.itemBrand || '').trim().toLowerCase();
                 if (!acc[key].brands[bKey]) {
                     acc[key].brands[bKey] = {
@@ -2126,7 +2156,7 @@ export const generateProductHistoryPDF = (productName, category, activeTab, purc
                     acc[key].brands[bKey].stockTableQty += additionalStock;
                     acc[key].itemInHouseQty += additionalStock;
                 }
-                
+
                 return acc;
             }, {}));
 
@@ -2524,6 +2554,9 @@ export const generateSalesReportPDF = (reportData, filters, summary, saleType = 
                 if (idx === 0) {
                     row.push({ content: (slNum++).toString(), rowSpan: flatItems.length, styles: { halign: 'center' } });
                     row.push({ content: formatDate(sale.date), rowSpan: flatItems.length, styles: { halign: 'center' } });
+                    if (saleType !== 'Border') {
+                        row.push({ content: (sale.lcNo ? sale.lcNo.slice(-4) : '-'), rowSpan: flatItems.length, styles: { halign: 'center' } });
+                    }
                     row.push({ content: (saleType === 'Border' ? (sale.lcNo || '-') : (sale.invoiceNo || '-')), rowSpan: flatItems.length, styles: { halign: 'center' } });
 
                     if (saleType === 'Border') {
@@ -2585,10 +2618,10 @@ export const generateSalesReportPDF = (reportData, filters, summary, saleType = 
 
         const headRow = saleType === 'Border'
             ? [['SL', 'Date', 'LC No', 'Importer', 'Port', 'IND C&F', 'BD C&F', 'Party Name', 'Product', 'Qty', 'Truck', 'Price', 'Total']]
-            : [['SL', 'Date', 'Invoice', 'Company', 'Product', 'Brand', 'Challan No', 'Truck No', 'Qty', 'Price', 'Total', 'Truck Fare', 'Balance']];
+            : [['SL', 'Date', 'LC No', 'Invoice', 'Company', 'Product', 'Brand', 'Challan No', 'Truck No', 'Qty', 'Price', 'Total', 'Truck Fare', 'Balance']];
 
         const footRow = [[
-            { content: 'GRAND TOTAL', colSpan: saleType === 'Border' ? 9 : 8, styles: { halign: 'right', fontStyle: 'bold' } },
+            { content: 'GRAND TOTAL', colSpan: 9, styles: { halign: 'right', fontStyle: 'bold' } },
             { content: saleType === 'Border' ? '-' : summary.totalQty.toLocaleString('en-US'), styles: { halign: 'right', fontStyle: 'bold' } },
             { content: saleType === 'Border' ? totalTrucks.toLocaleString('en-US') : '', styles: { halign: 'center', fontStyle: 'bold' } },
             ...(saleType === 'Border' ? [
@@ -2634,28 +2667,29 @@ export const generateSalesReportPDF = (reportData, filters, summary, saleType = 
                 4: { cellWidth: 18, noWrap: true },        // Port
                 5: { cellWidth: 26, noWrap: true },        // IND C&F
                 6: { cellWidth: 26, noWrap: true },        // BD C&F
-                7: { cellWidth: 36, noWrap: true },        // Party Name
+                7: { cellWidth: 38, noWrap: true },        // Party Name
                 8: { cellWidth: 18, overflow: 'linebreak' }, // Product (Reduced)
                 9: { cellWidth: 22, halign: 'right' },     // Qty
                 10: { cellWidth: 12, halign: 'center' },   // Truck
                 11: { cellWidth: 18, halign: 'right' },    // Price (Reduced)
                 12: { cellWidth: 24, halign: 'right' }     // Total
             } : {
-                0: { cellWidth: 9, halign: 'center' },     // SL
-                1: { cellWidth: 20, halign: 'center' },    // Date
-                2: { cellWidth: 16, halign: 'center' },    // Invoice (Reduced)
-                3: { cellWidth: 35 },                       // Company
-                4: { cellWidth: 22, overflow: 'linebreak' }, // Product
-                5: { cellWidth: 30, noWrap: false, overflow: 'linebreak' }, // Brand
-                6: { cellWidth: 19, overflow: 'linebreak' }, // Challan No
-                7: { cellWidth: 20, overflow: 'linebreak' }, // Truck No
-                8: { cellWidth: 18, halign: 'right' },     // Qty
-                9: { cellWidth: 15, halign: 'right' },     // Price
-                10: { cellWidth: 26, halign: 'right' },    // Total
-                11: { cellWidth: 22, halign: 'right' },    // Truck Fare (Reduced)
-                12: { cellWidth: 30, halign: 'right' }     // Balance
+                0: { cellWidth: 8, halign: 'center' },     // SL
+                1: { cellWidth: 18, halign: 'center' },    // Date
+                2: { cellWidth: 15, halign: 'center' },    // LC No
+                3: { cellWidth: 17, halign: 'center' },    // Invoice
+                4: { cellWidth: 34 },                       // Company
+                5: { cellWidth: 24, overflow: 'linebreak' }, // Product
+                6: { cellWidth: 30, noWrap: false, overflow: 'linebreak' }, // Brand
+                7: { cellWidth: 18, overflow: 'linebreak' }, // Challan No
+                8: { cellWidth: 20, overflow: 'linebreak' }, // Truck No
+                9: { cellWidth: 17, halign: 'right' },     // Qty
+                10: { cellWidth: 14, halign: 'right' },    // Price
+                11: { cellWidth: 24, halign: 'right' },    // Total
+                12: { cellWidth: 20, halign: 'right' },    // Truck Fare
+                13: { cellWidth: 28, halign: 'right' }     // Balance
             },
-            margin: { left: saleType === 'Border' ? (pageWidth - 277) / 2 : (pageWidth - 277) / 2, right: margin }
+            margin: { left: margin, right: margin }
         });
 
         // --- Signatures ---
