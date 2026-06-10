@@ -352,10 +352,11 @@ const StockManagement = ({
                 const matchesCompany = (sale.companyName || '').toLowerCase().includes(searchLower);
                 const matchesCustomer = (sale.customerName || '').toLowerCase().includes(searchLower);
                 const matchesPhone = (sale.contact || '').toLowerCase().includes(searchLower);
+                const matchesLC = (sale.lcNo || '').toLowerCase().includes(searchLower);
                 const matchesItemBrand = (sale.items || [])
                     .filter(item => (item.productName || '').trim().toLowerCase() === productName)
                     .some(item => (item.brandEntries || []).some(entry => (entry.brand || '').toLowerCase().includes(searchLower)));
-                return matchesInvoice || matchesCompany || matchesCustomer || matchesPhone || matchesItemBrand;
+                return matchesInvoice || matchesCompany || matchesCustomer || matchesPhone || matchesItemBrand || matchesLC;
             }
             return true;
         });
@@ -372,7 +373,8 @@ const StockManagement = ({
                         const matchesEnv = (sale.invoiceNo || '').toLowerCase().includes(searchLower) ||
                             (sale.companyName || '').toLowerCase().includes(searchLower) ||
                             (sale.customerName || '').toLowerCase().includes(searchLower) ||
-                            (sale.contact || '').toLowerCase().includes(searchLower);
+                            (sale.contact || '').toLowerCase().includes(searchLower) ||
+                            (sale.lcNo || '').toLowerCase().includes(searchLower);
                         const matchesBrand = (entry.brand || '').toLowerCase().includes(searchLower);
                         if (!matchesEnv && !matchesBrand) return;
                     }
@@ -2934,7 +2936,7 @@ const StockManagement = ({
                                         </div>
                                         <input
                                             type="text"
-                                            placeholder={historyTab === 'purchase' ? "Search by Product or Brand..." : "Search by Invoice, Company, Customer, Phone or Brand..."}
+                                            placeholder={historyTab === 'purchase' ? "Search by Product or Brand..." : "Search by LC No, Invoice, Company, Customer, Phone or Brand..."}
                                             value={historySearchQuery}
                                             onChange={(e) => setHistorySearchQuery(e.target.value)}
                                             className="block w-full pl-10 pr-4 py-2 bg-gray-50/50 border border-gray-200 rounded-xl text-[13px] placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 focus:bg-white transition-all outline-none"
