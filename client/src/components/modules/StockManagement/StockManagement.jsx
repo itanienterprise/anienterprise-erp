@@ -3457,6 +3457,7 @@ const StockManagement = ({
                                                         <thead>
                                                             <tr className="bg-gray-50/50 border-b border-gray-100">
                                                                 <th className="px-3 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider">Date</th>
+                                                                <th className="px-3 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider">LC No</th>
                                                                 <th className="px-3 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider">Invoice No</th>
                                                                 <th className="px-3 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider">Company Name</th>
                                                                 <th className="px-3 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider">{isFruitHistory ? "Customer Name" : "Brand"}</th>
@@ -3469,11 +3470,12 @@ const StockManagement = ({
                                                         </thead>
                                                         <tbody className="divide-y divide-gray-50">
                                                             {flattenedSaleHistory.length === 0 ? (
-                                                                <tr><td colSpan={isFruitHistory ? "9" : "8"} className="px-6 py-20 text-center text-gray-400 font-medium">No sale history found for this product</td></tr>
+                                                                <tr><td colSpan={isFruitHistory ? "10" : "9"} className="px-6 py-20 text-center text-gray-400 font-medium">No sale history found for this product</td></tr>
                                                             ) : (
                                                                 flattenedSaleHistory.map((sale, sIdx) => (
                                                                     <tr key={sIdx} className="hover:bg-blue-50/20 transition-all group border-b border-gray-50">
                                                                         <td className="px-3 py-3 text-sm text-gray-600">{formatDate(sale.date)}</td>
+                                                                        <td className="px-3 py-3 text-sm text-gray-600 font-semibold">{sale.lcNo ? sale.lcNo.slice(-4) : '-'}</td>
                                                                         <td className="px-3 py-3 text-sm font-bold text-gray-900">{sale.invoiceNo}</td>
                                                                         <td className="px-3 py-3 text-sm font-bold text-gray-800 truncate max-w-[150px]" title={sale.companyName}>{sale.companyName}</td>
                                                                         {isFruitHistory ? (
@@ -3572,6 +3574,10 @@ const StockManagement = ({
                                                                                 <div className="text-right">
                                                                                     <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-0.5">{isFruitHistory ? "Phone" : "BAG"}</div>
                                                                                     <div className="text-sm font-bold text-gray-900 truncate">{isFruitHistory ? (sale.contact || '-') : `${sale.itemPacket.toLocaleString('en-US')} BAG`}</div>
+                                                                                </div>
+                                                                                <div className="col-span-2 border-t border-gray-100 pt-2 mt-1">
+                                                                                    <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-0.5">LC No</div>
+                                                                                    <div className="text-sm font-bold text-gray-800">{sale.lcNo || '-'}</div>
                                                                                 </div>
                                                                             </div>
 

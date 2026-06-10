@@ -640,6 +640,7 @@ const ProductHistoryReport = ({
                                                 <thead>
                                                     <tr className="bg-gray-50 border-b border-gray-900">
                                                         <th className="border-r border-gray-900 px-2 py-1 text-left text-[11px] font-bold text-gray-900 uppercase tracking-wider w-[10%] whitespace-nowrap">Date</th>
+                                                        <th className="border-r border-gray-900 px-2 py-1 text-left text-[11px] font-bold text-gray-900 uppercase tracking-wider w-[10%] whitespace-nowrap">LC No</th>
                                                         <th className="border-r border-gray-900 px-2 py-1 text-left text-[11px] font-bold text-gray-900 uppercase tracking-wider w-[10%] whitespace-nowrap">Invoice</th>
                                                         <th className="border-r border-gray-900 px-2 py-1 text-left text-[11px] font-bold text-gray-900 uppercase tracking-wider w-[15%] whitespace-nowrap">Company</th>
                                                         <th className="border-r border-gray-900 px-2 py-1 text-left text-[11px] font-bold text-gray-900 uppercase tracking-wider w-[13%] whitespace-nowrap">Customer</th>
@@ -654,6 +655,7 @@ const ProductHistoryReport = ({
                                                     {saleHistory.map((sale, idx) => (
                                                         <tr key={idx} className="border-b border-gray-900 last:border-0 hover:bg-gray-50 transition-colors">
                                                             <td className="border-r border-gray-900 px-2 py-1 text-[12px] text-gray-900 whitespace-nowrap">{formatDate(sale.date)}</td>
+                                                            <td className="border-r border-gray-900 px-2 py-1 text-[12px] font-semibold text-gray-900">{sale.lcNo ? sale.lcNo.slice(-4) : '-'}</td>
                                                             <td className="border-r border-gray-900 px-2 py-1 text-[12px] font-bold text-gray-900">{sale.invoiceNo}</td>
                                                             <td className="border-r border-gray-900 px-2 py-1 text-[12px] text-gray-900 font-medium">{sale.companyName || '-'}</td>
                                                             <td className="border-r border-gray-900 px-2 py-1 text-[12px] text-gray-900">{sale.customerName || '-'}</td>
@@ -667,7 +669,7 @@ const ProductHistoryReport = ({
                                                 </tbody>
                                                 <tfoot>
                                                     <tr className="bg-gray-100 border-t-2 border-gray-900 font-black">
-                                                        <td colSpan="5" className="px-2 py-1.5 text-[12px] text-right uppercase border-r border-gray-900">Total Sale</td>
+                                                        <td colSpan="6" className="px-2 py-1.5 text-[12px] text-right uppercase border-r border-gray-900">Total Sale</td>
                                                         <td className="px-2 py-1.5 text-[12px] text-right border-r border-gray-900">
                                                             {saleHistory.reduce((sum, s) => sum + s.itemQty, 0).toLocaleString('en-US')} kg
                                                         </td>
@@ -684,6 +686,7 @@ const ProductHistoryReport = ({
                                                 <thead>
                                                     <tr className="bg-gray-50 border-b border-gray-900">
                                                         <th className="border-r border-gray-900 px-2 py-1 text-left text-[11px] font-bold text-gray-900 uppercase tracking-wider w-[12%] whitespace-nowrap">Date</th>
+                                                        <th className="border-r border-gray-900 px-2 py-1 text-left text-[11px] font-bold text-gray-900 uppercase tracking-wider w-[12%] whitespace-nowrap">LC No</th>
                                                         <th className="border-r border-gray-900 px-2 py-1 text-left text-[11px] font-bold text-gray-900 uppercase tracking-wider w-[12%] whitespace-nowrap">Invoice</th>
                                                         <th className="border-r border-gray-900 px-2 py-1 text-left text-[11px] font-bold text-gray-900 uppercase tracking-wider w-[12%] whitespace-nowrap">Company</th>
                                                         <th className="border-r border-gray-900 px-2 py-1 text-left text-[11px] font-bold text-gray-900 uppercase tracking-wider w-[12%] whitespace-nowrap">Brand</th>
@@ -697,6 +700,7 @@ const ProductHistoryReport = ({
                                                     {saleHistory.map((sale, idx) => (
                                                         <tr key={idx} className="border-b border-gray-900 last:border-0 hover:bg-gray-50 transition-colors">
                                                             <td className="border-r border-gray-900 px-2 py-1 text-[12px] text-gray-900 whitespace-nowrap">{formatDate(sale.date)}</td>
+                                                            <td className="border-r border-gray-900 px-2 py-1 text-[12px] font-semibold text-gray-900">{sale.lcNo ? sale.lcNo.slice(-4) : '-'}</td>
                                                             <td className="border-r border-gray-900 px-2 py-1 text-[12px] font-bold text-gray-900">{sale.invoiceNo}</td>
                                                             <td className="border-r border-gray-900 px-2 py-1 text-[12px] text-gray-900 font-medium">{sale.companyName || '-'}</td>
                                                             <td className="border-r border-gray-900 px-2 py-1 text-[12px] text-gray-900 whitespace-nowrap">{sale.itemBrand}</td>
@@ -709,7 +713,7 @@ const ProductHistoryReport = ({
                                                 </tbody>
                                                 <tfoot>
                                                     <tr className="bg-gray-100 border-t-2 border-gray-900 font-black">
-                                                        <td colSpan="5" className="px-2 py-1.5 text-[12px] text-right uppercase border-r border-gray-900">Total Sale</td>
+                                                        <td colSpan="6" className="px-2 py-1.5 text-[12px] text-right uppercase border-r border-gray-900">Total Sale</td>
                                                         <td className="px-2 py-1.5 text-[12px] text-right border-r border-gray-900">
                                                             {saleHistory.reduce((sum, s) => sum + s.itemQty, 0).toLocaleString('en-US')} kg
                                                         </td>
@@ -732,6 +736,7 @@ const ProductHistoryReport = ({
                                                 <span className="text-gray-600 font-medium">{formatDate(sale.date)}</span>
                                             </div>
                                             <div className="grid grid-cols-2 gap-x-3 gap-y-1">
+                                                <div className="text-gray-500">LC No</div><div className="font-bold text-gray-900 text-right">{sale.lcNo || '-'}</div>
                                                 <div className="text-gray-500">Company</div><div className="font-bold text-gray-900 text-right truncate">{sale.companyName || '-'}</div>
                                                 {isFruitCategory ? (<>
                                                     <div className="text-gray-500">Customer</div><div className="font-medium text-gray-800 text-right">{sale.customerName || '-'}</div>

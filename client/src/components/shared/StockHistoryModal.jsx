@@ -741,6 +741,9 @@ const StockHistoryModal = ({
                                                     <th onClick={() => requestSort('date')} className="px-3 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-50 transition-colors">
                                                         <div className="flex items-center">Date <SortIcon config={sortConfig} columnKey="date" /></div>
                                                     </th>
+                                                    <th onClick={() => requestSort('lcNo')} className="px-3 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-50 transition-colors">
+                                                        <div className="flex items-center">LC No <SortIcon config={sortConfig} columnKey="lcNo" /></div>
+                                                    </th>
                                                     <th onClick={() => requestSort('invoiceNo')} className="px-3 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-50 transition-colors">
                                                         <div className="flex items-center">Invoice <SortIcon config={sortConfig} columnKey="invoiceNo" /></div>
                                                     </th>
@@ -759,11 +762,12 @@ const StockHistoryModal = ({
                                             </thead>
                                             <tbody className="divide-y divide-gray-100">
                                                 {history.length === 0 ? (
-                                                    <tr><td colSpan="9" className="px-6 py-12 text-center text-gray-400 font-medium italic">No sale records found</td></tr>
+                                                    <tr><td colSpan="10" className="px-6 py-12 text-center text-gray-400 font-medium italic">No sale records found</td></tr>
                                                 ) : (
                                                     history.map((item, idx) => (
                                                         <tr key={item._id || idx} className="hover:bg-gray-50/30 transition-colors border-b border-gray-50">
                                                             <td className="px-3 py-3 whitespace-nowrap text-sm text-gray-600">{formatDate(item.date)}</td>
+                                                            <td className="px-3 py-3 whitespace-nowrap text-sm text-gray-600 font-semibold">{item.lcNo ? item.lcNo.slice(-4) : '-'}</td>
                                                             <td className="px-3 py-3 whitespace-nowrap text-sm text-blue-600 font-bold">{item.invoiceNo}</td>
                                                             <td className="px-3 py-3 whitespace-nowrap text-sm text-gray-900 font-semibold truncate max-w-[150px]" title={item.companyName}>{item.companyName}</td>
                                                             <td className="px-3 py-3 whitespace-nowrap text-sm text-gray-600 truncate max-w-[120px]" title={item.customerName}>{item.customerName}</td>
@@ -778,7 +782,7 @@ const StockHistoryModal = ({
                                             </tbody>
                                         </table>
                                     </div>
-
+ 
                                     {/* Mobile Card View (simplified) */}
                                     <div className="md:hidden space-y-4">
                                         {history.length === 0 ? (
@@ -804,6 +808,7 @@ const StockHistoryModal = ({
                                                                 <div className="grid grid-cols-2 gap-4">
                                                                     <div><span className="text-[10px] font-bold text-gray-400 uppercase block">Customer</span><span className="text-xs font-medium text-gray-700">{item.customerName}</span></div>
                                                                     <div><span className="text-[10px] font-bold text-gray-400 uppercase block">Brand</span><span className="text-xs font-medium text-gray-700">{item.itemBrand}</span></div>
+                                                                    <div><span className="text-[10px] font-bold text-gray-400 uppercase block">LC No</span><span className="text-xs font-medium text-gray-700">{item.lcNo || '-'}</span></div>
                                                                 </div>
                                                                 <div className="flex justify-between items-center bg-gray-50 p-2 rounded-xl">
                                                                     <div className="text-xs text-gray-500">Qty: {Math.round(item.itemQty)} {item.unit}</div>

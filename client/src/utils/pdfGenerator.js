@@ -2350,9 +2350,10 @@ export const generateProductHistoryPDF = (productName, category, activeTab, purc
             let saleHead, saleBody, saleFoot, saleColumnStyles;
 
             if (isFruitCategory) {
-                saleHead = [['Date', 'Invoice', 'Company', 'Customer', 'Phone', 'Qty', 'Truck', 'Price', 'Total Price']];
+                saleHead = [['Date', 'LC No', 'Invoice', 'Company', 'Customer', 'Phone', 'Qty', 'Truck', 'Price', 'Total Price']];
                 saleBody = sortedSaleData.map(sale => [
                     formatDate(sale.date),
+                    sale.lcNo ? sale.lcNo.slice(-4) : '-',
                     sale.invoiceNo || '-',
                     sale.companyName || '-',
                     sale.customerName || '-',
@@ -2363,26 +2364,28 @@ export const generateProductHistoryPDF = (productName, category, activeTab, purc
                     `TK ${sale.itemTotal.toLocaleString('en-IN')}`
                 ]);
                 saleFoot = [[
-                    { content: 'TOTAL SALE', colSpan: 5, styles: { halign: 'right', fontStyle: 'bold' } },
+                    { content: 'TOTAL SALE', colSpan: 6, styles: { halign: 'right', fontStyle: 'bold' } },
                     { content: `${Math.round(saleTotals.qty).toLocaleString('en-US')} kg`, styles: { halign: 'right', fontStyle: 'bold' } },
                     { content: '-', colSpan: 2, styles: { halign: 'right' } },
                     { content: `TK ${Math.round(saleTotals.amount).toLocaleString('en-IN')}`, styles: { halign: 'right', fontStyle: 'bold', textColor: [0, 0, 0] } }
                 ]];
                 saleColumnStyles = {
-                    0: { cellWidth: 20, halign: 'center' }, // Date (increased from 16)
-                    1: { cellWidth: 16, halign: 'center' }, // Invoice
-                    2: { cellWidth: 25, halign: 'left' },   // Company (slightly reduced from 26)
-                    3: { cellWidth: 25, halign: 'left' },   // Customer (slightly reduced from 26)
-                    4: { cellWidth: 22, halign: 'left' },   // Phone (reduced from 24)
-                    5: { cellWidth: 24, halign: 'right' },  // Qty (increased from 20)
-                    6: { cellWidth: 12, halign: 'center' }, // Truck (reduced from 16)
-                    7: { cellWidth: 20, halign: 'right' },  // Price (reduced from 22)
-                    8: { cellWidth: 26, halign: 'right' }   // Total Price (reduced from 30)
+                    0: { cellWidth: 16, halign: 'center' }, // Date
+                    1: { cellWidth: 16, halign: 'center' }, // LC No
+                    2: { cellWidth: 14, halign: 'center' }, // Invoice
+                    3: { cellWidth: 22, halign: 'left' },   // Company
+                    4: { cellWidth: 22, halign: 'left' },   // Customer
+                    5: { cellWidth: 20, halign: 'left' },   // Phone
+                    6: { cellWidth: 20, halign: 'right' },  // Qty
+                    7: { cellWidth: 12, halign: 'center' }, // Truck
+                    8: { cellWidth: 20, halign: 'right' },  // Price
+                    9: { cellWidth: 34, halign: 'right' }   // Total Price
                 };
             } else {
-                saleHead = [['Date', 'Invoice', 'Company', 'Brand', 'Bag', 'Qty', 'Price', 'Total Price']];
+                saleHead = [['Date', 'LC No', 'Invoice', 'Company', 'Brand', 'Bag', 'Qty', 'Price', 'Total Price']];
                 saleBody = sortedSaleData.map(sale => [
                     formatDate(sale.date),
+                    sale.lcNo ? sale.lcNo.slice(-4) : '-',
                     sale.invoiceNo || '-',
                     sale.companyName || '-',
                     sale.itemBrand || '-',
@@ -2392,20 +2395,21 @@ export const generateProductHistoryPDF = (productName, category, activeTab, purc
                     `TK ${sale.itemTotal.toLocaleString('en-IN')}`
                 ]);
                 saleFoot = [[
-                    { content: 'TOTAL SALE', colSpan: 5, styles: { halign: 'right', fontStyle: 'bold' } },
+                    { content: 'TOTAL SALE', colSpan: 6, styles: { halign: 'right', fontStyle: 'bold' } },
                     { content: `${Math.round(saleTotals.qty).toLocaleString('en-US')} kg`, styles: { halign: 'right', fontStyle: 'bold' } },
                     { content: '-', styles: { halign: 'right' } },
                     { content: `TK ${Math.round(saleTotals.amount).toLocaleString('en-IN')}`, styles: { halign: 'right', fontStyle: 'bold', textColor: [0, 0, 0] } }
                 ]];
                 saleColumnStyles = {
-                    0: { cellWidth: 20, halign: 'center' }, // Date
-                    1: { cellWidth: 16, halign: 'center' }, // Invoice
-                    2: { cellWidth: 36, halign: 'left' },   // Company (Increased)
-                    3: { cellWidth: 34, halign: 'left' },   // Brand
-                    4: { cellWidth: 18, halign: 'right' },  // Packet
-                    5: { cellWidth: 20, halign: 'right' },  // Qty
-                    6: { cellWidth: 22, halign: 'right' },  // Price
-                    7: { cellWidth: 30, halign: 'right' }   // Total Price
+                    0: { cellWidth: 18, halign: 'center' }, // Date
+                    1: { cellWidth: 16, halign: 'center' }, // LC No
+                    2: { cellWidth: 14, halign: 'center' }, // Invoice
+                    3: { cellWidth: 30, halign: 'left' },   // Company
+                    4: { cellWidth: 28, halign: 'left' },   // Brand
+                    5: { cellWidth: 16, halign: 'right' },  // Packet
+                    6: { cellWidth: 18, halign: 'right' },  // Qty
+                    7: { cellWidth: 22, halign: 'right' },  // Price
+                    8: { cellWidth: 34, halign: 'right' }   // Total Price
                 };
             }
 
