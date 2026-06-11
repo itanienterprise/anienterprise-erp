@@ -254,7 +254,7 @@ const SaleManagement = ({
                             id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
                             date: saleData.date,
                             invoiceNo: saleData.invoiceNo,
-                            lcNo: saleData.lcNo || '',
+                            lcNo: product.lcNo || saleData.lcNo || '',
                             product: product.productName || '',
                             brand: entry.brand || '',
                             quantity: entry.quantity || 0,
@@ -504,6 +504,7 @@ const SaleManagement = ({
         items: [{
             productId: '',
             productName: '',
+            lcNo: '',
             brandEntries: [{
                 brand: '',
                 brandName: '',
@@ -954,6 +955,7 @@ const SaleManagement = ({
             items: [...prev.items, {
                 productId: '',
                 productName: '',
+                lcNo: '',
                 brandEntries: [{
                     brand: '',
                     brandName: '',
@@ -1039,6 +1041,12 @@ const SaleManagement = ({
         setFormData(prev => {
             const newItems = [...prev.items];
             const product = { ...newItems[productIdx] };
+
+            if (entryIdx === null || entryIdx === undefined) {
+                newItems[productIdx] = { ...product, [name]: value };
+                return { ...prev, items: newItems };
+            }
+
             const brandEntries = [...product.brandEntries];
             const entry = { ...brandEntries[entryIdx], [name]: value };
 
@@ -1335,6 +1343,7 @@ const SaleManagement = ({
             items: [{
                 productId: '',
                 productName: '',
+                lcNo: '',
                 brandEntries: [{
                     brand: '',
                     brandName: '',
@@ -1397,6 +1406,7 @@ const SaleManagement = ({
             initialItems = [{
                 productId: sale.productId,
                 productName: sale.productName,
+                lcNo: sale.lcNo || '',
                 brandEntries: [{
                     brand: sale.brand,
                     inhouseQty: sale.inhouseQty,
@@ -1412,11 +1422,18 @@ const SaleManagement = ({
         } else {
             // Check if items are flat or nested
             initialItems = initialItems.map(item => {
-                if (item.brandEntries) return item;
+                const itemLcNo = item.lcNo || sale.lcNo || '';
+                if (item.brandEntries) {
+                    return {
+                        ...item,
+                        lcNo: itemLcNo
+                    };
+                }
                 // Migrate previous flat multi-item to nested brand entries
                 return {
                     productId: item.productId,
                     productName: item.productName,
+                    lcNo: itemLcNo,
                     brandEntries: [{
                         brand: item.brand,
                         inhouseQty: item.inhouseQty,
@@ -1491,7 +1508,8 @@ const SaleManagement = ({
 
                     const itemsMatch = (s.items || []).some(item => {
                         const pName = (item.productName || item.product || '').toLowerCase();
-                        return pName.includes(query) || (item.brandEntries || []).some(e =>
+                        const itemLc = (item.lcNo || '').toLowerCase();
+                        return pName.includes(query) || itemLc.includes(query) || (item.brandEntries || []).some(e =>
                             String(e.quantity || '').includes(query) || String(e.truck || '').includes(query) ||
                             String(e.unitPrice || '').includes(query) || String(e.totalAmount || '').includes(query)
                         );
@@ -1515,6 +1533,7 @@ const SaleManagement = ({
                 if (s.items && Array.isArray(s.items)) {
                     return s.items.some(item =>
                         item.productName?.toLowerCase().includes(query) ||
+                        item.lcNo?.toLowerCase().includes(query) ||
                         item.brand?.toLowerCase().includes(query)
                     );
                 }
@@ -1777,38 +1796,43 @@ const SaleManagement = ({
     };
 
     const handleLcSelect = (lc) => {
+        if (activeItemIndex === null) return;
         if (!lc) {
-            setFormData(prev => ({
-                ...prev,
-                lcNo: ''
-            }));
+            setFormData(prev => {
+                const newItems = [...prev.items];
+                newItems[activeItemIndex] = {
+                    ...newItems[activeItemIndex],
+                    lcNo: ''
+                };
+                return { ...prev, items: newItems };
+            });
             setLcSearch('');
         } else {
             setFormData(prev => {
-                const newData = {
-                    ...prev,
-                    lcNo: lc.lcNo
-                };
+                const newItems = [...prev.items];
+                const item = { ...newItems[activeItemIndex], lcNo: lc.lcNo };
 
                 // Auto-fill associated fields if they are empty
+                const newData = {
+                    ...prev,
+                    items: newItems
+                };
                 if (!newData.importer && lc.importerName) newData.importer = lc.importerName;
                 if (!newData.exporter && lc.exporterName) newData.exporter = lc.exporterName;
                 if (!newData.port && lc.port) newData.port = lc.port;
 
-                // If items array is empty or has only one empty item, populate the first item's product
-                if (newData.items.length === 1 && !newData.items[0].productId && lc.productName) {
+                // Populate the active item's product
+                if (!item.productId && lc.productName) {
                     const productObj = products.find(p => p.name === lc.productName);
                     if (productObj) {
-                        newData.items[0] = {
-                            ...newData.items[0],
-                            productId: productObj._id,
-                            productName: productObj.name
-                        };
+                        item.productId = productObj._id;
+                        item.productName = productObj.name;
                     } else {
-                        newData.items[0].productName = lc.productName;
+                        item.productName = lc.productName;
                     }
                 }
 
+                newItems[activeItemIndex] = item;
                 return newData;
             });
             setLcSearch('');
@@ -2649,7 +2673,7 @@ const SaleManagement = ({
                         autoComplete="off"
                         className="grid grid-cols-1 md:grid-cols-2 gap-6 relative z-10"
                     >
-                        <div className={`grid grid-cols-1 ${saleType === 'Border' ? 'md:grid-cols-5' : 'md:grid-cols-8'} gap-4 col-span-2`}>
+                        <div className={`grid grid-cols-1 ${saleType === 'Border' ? 'md:grid-cols-6' : 'md:grid-cols-3'} gap-4 col-span-2`}>
                             <CustomDatePicker
                                 label="Date"
                                 name="date"
@@ -2661,66 +2685,6 @@ const SaleManagement = ({
 
                             {saleType !== 'Border' && (
                                 <>
-                                    <div className="sale-mgmt-input-group relative lc-dropdown-container">
-                                        <label className="sale-mgmt-label">LC No</label>
-                                        <div className="relative">
-                                            <input
-                                                type="text"
-                                                name="lcNo"
-                                                placeholder={formData.lcNo || "Search LC..."}
-                                                value={activeDropdown === 'lcNo' ? lcSearch : formData.lcNo}
-                                                readOnly={isFieldReadOnly(originalData?.lcNo)}
-                                                onChange={(e) => {
-                                                    if (isFieldReadOnly(originalData?.lcNo)) return;
-                                                    setLcSearch(e.target.value);
-                                                    setActiveDropdown('lcNo');
-                                                    setHighlightedIndex(-1);
-                                                    handleInputChange(e);
-                                                }}
-                                                autoComplete="off"
-                                                onFocus={() => {
-                                                    if (isFieldReadOnly(originalData?.lcNo)) return;
-                                                    setLcSearch(formData.lcNo || '');
-                                                    setActiveDropdown('lcNo');
-                                                    setHighlightedIndex(-1);
-                                                }}
-                                                onKeyDown={(e) => !isFieldReadOnly(originalData?.lcNo) && handleDropdownKeyDown(e, 'lcNo', getFilteredLCs(), handleLcSelect)}
-                                                className={`sale-mgmt-input pr-14 ${formData.lcNo ? 'placeholder:text-gray-900 placeholder:font-semibold' : 'placeholder:text-gray-400'} ${isFieldReadOnly(originalData?.lcNo) ? 'bg-gray-50' : ''}`}
-                                            />
-                                            <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-2">
-                                                {formData.lcNo && (
-                                                    <button type="button" onClick={() => handleLcSelect(null)} className="text-gray-400 hover:text-red-500">
-                                                        <XIcon className="w-4 h-4" />
-                                                    </button>
-                                                )}
-                                                <button
-                                                    type="button"
-                                                    onClick={() => setActiveDropdown(activeDropdown === 'lcNo' ? null : 'lcNo')}
-                                                    className="text-gray-300 hover:text-blue-500 transition-colors"
-                                                >
-                                                    <ChevronDownIcon className={`w-4 h-4 transition-transform duration-200 ${activeDropdown === 'lcNo' ? 'rotate-180' : ''}`} />
-                                                </button>
-                                            </div>
-                                        </div>
-                                        {activeDropdown === 'lcNo' && getFilteredLCs().length > 0 && (
-                                            <div className="absolute z-[60] w-full mt-1 bg-white border border-gray-100 rounded-xl shadow-xl max-h-48 overflow-y-auto py-1">
-                                                {getFilteredLCs().map((lc, idx) => (
-                                                    <button
-                                                        key={lc._id || `lc-${idx}`}
-                                                        type="button"
-                                                        onClick={() => handleLcSelect(lc)}
-                                                        onMouseEnter={() => setHighlightedIndex(idx)}
-                                                        className={`w-full px-4 py-2 text-left text-sm transition-colors font-medium ${formData.lcNo === lc.lcNo ? 'bg-blue-50 text-blue-700' : highlightedIndex === idx ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-blue-50'}`}
-                                                    >
-                                                        <div className="flex flex-col">
-                                                            <span className="font-bold">{lc.lcNo}</span>
-                                                            <span className="text-[10px] text-gray-500">{lc.importerName} | {lc.productName}</span>
-                                                        </div>
-                                                    </button>
-                                                ))}
-                                            </div>
-                                        )}
-                                    </div>
                                     <div className="sale-mgmt-input-group">
                                         <label className="sale-mgmt-label">Challan- No</label>
                                         <input
@@ -2752,69 +2716,6 @@ const SaleManagement = ({
                                 <label className="sale-mgmt-label">Invoice No</label>
                                 <input autoComplete="off" type="text" name="invoiceNo" value={formData.invoiceNo} readOnly placeholder="Auto-generated" className="sale-mgmt-input sale-mgmt-input-readonly cursor-default" />
                             </div>
-
-                            {saleType === 'Border' && (
-                                <div className="sale-mgmt-input-group relative lc-dropdown-container">
-                                    <label className="sale-mgmt-label">LC No</label>
-                                    <div className="relative">
-                                        <input
-                                            type="text"
-                                            name="lcNo"
-                                            placeholder={formData.lcNo || "Search LC..."}
-                                            value={activeDropdown === 'lcNo' ? lcSearch : formData.lcNo}
-                                            readOnly={isFieldReadOnly(originalData?.lcNo)}
-                                            onChange={(e) => {
-                                                if (isFieldReadOnly(originalData?.lcNo)) return;
-                                                setLcSearch(e.target.value);
-                                                setActiveDropdown('lcNo');
-                                                setHighlightedIndex(-1);
-                                                handleInputChange(e);
-                                            }}
-                                            autoComplete="off"
-                                            onFocus={() => {
-                                                if (isFieldReadOnly(originalData?.lcNo)) return;
-                                                setLcSearch(formData.lcNo || '');
-                                                setActiveDropdown('lcNo');
-                                                setHighlightedIndex(-1);
-                                            }}
-                                            onKeyDown={(e) => !isFieldReadOnly(originalData?.lcNo) && handleDropdownKeyDown(e, 'lcNo', getFilteredLCs(), handleLcSelect)}
-                                            className={`sale-mgmt-input pr-14 ${formData.lcNo ? 'placeholder:text-gray-900 placeholder:font-semibold' : 'placeholder:text-gray-400'} ${isFieldReadOnly(originalData?.lcNo) ? 'bg-gray-50' : ''}`}
-                                        />
-                                        <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-2">
-                                            {formData.lcNo && (
-                                                <button type="button" onClick={() => handleLcSelect(null)} className="text-gray-400 hover:text-red-500">
-                                                    <XIcon className="w-4 h-4" />
-                                                </button>
-                                            )}
-                                            <button
-                                                type="button"
-                                                onClick={() => setActiveDropdown(activeDropdown === 'lcNo' ? null : 'lcNo')}
-                                                className="text-gray-300 hover:text-blue-500 transition-colors"
-                                            >
-                                                <ChevronDownIcon className={`w-4 h-4 transition-transform duration-200 ${activeDropdown === 'lcNo' ? 'rotate-180' : ''}`} />
-                                            </button>
-                                        </div>
-                                    </div>
-                                    {activeDropdown === 'lcNo' && getFilteredLCs().length > 0 && (
-                                        <div className="absolute z-[60] w-full mt-1 bg-white border border-gray-100 rounded-xl shadow-xl max-h-48 overflow-y-auto py-1">
-                                            {getFilteredLCs().map((lc, idx) => (
-                                                <button
-                                                    key={lc._id || `lc-${idx}`}
-                                                    type="button"
-                                                    onClick={() => handleLcSelect(lc)}
-                                                    onMouseEnter={() => setHighlightedIndex(idx)}
-                                                    className={`w-full px-4 py-2 text-left text-sm transition-colors font-medium ${formData.lcNo === lc.lcNo ? 'bg-blue-50 text-blue-700' : highlightedIndex === idx ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-blue-50'}`}
-                                                >
-                                                    <div className="flex flex-col">
-                                                        <span className="font-bold">{lc.lcNo}</span>
-                                                        <span className="text-[10px] text-gray-500">{lc.importerName} | {lc.productName}</span>
-                                                    </div>
-                                                </button>
-                                            ))}
-                                        </div>
-                                    )}
-                                </div>
-                            )}
 
                             {/* Border Field: Importer */}
                             {saleType === 'Border' && (
@@ -3313,9 +3214,83 @@ const SaleManagement = ({
                                             </button>
                                         )}
 
-                                        <div className={`${saleType === 'Border' ? 'flex flex-row items-center gap-4' : 'space-y-6'}`}>
+                                        <div className={`${saleType === 'Border' ? 'flex flex-row items-center gap-4' : 'flex flex-col md:flex-row md:items-center gap-4 mb-6'}`}>
+                                            {/* LC No Selection */}
+                                            <div className={`space-y-1.5 relative px-4 lc-dropdown-container ${saleType === 'Border' ? 'flex-1' : 'flex-1 md:max-w-md'}`}>
+                                                <label className="sale-mgmt-item-label">LC No</label>
+                                                <div className="relative">
+                                                    <input
+                                                        type="text"
+                                                        name="lcNo"
+                                                        placeholder={item.lcNo || "Search LC..."}
+                                                        value={activeDropdown === 'lcNo' && activeItemIndex === index ? lcSearch : (item.lcNo || '')}
+                                                        readOnly={isFieldReadOnly(originalData?.items?.[index]?.lcNo)}
+                                                        onChange={(e) => {
+                                                            if (isFieldReadOnly(originalData?.items?.[index]?.lcNo)) return;
+                                                            setLcSearch(e.target.value);
+                                                            setActiveDropdown('lcNo');
+                                                            setActiveItemIndex(index);
+                                                            setHighlightedIndex(-1);
+                                                            handleItemInputChange(index, null, { target: { name: 'lcNo', value: e.target.value } });
+                                                        }}
+                                                        autoComplete="off"
+                                                        onFocus={() => {
+                                                            if (isFieldReadOnly(originalData?.items?.[index]?.lcNo)) return;
+                                                            setLcSearch(item.lcNo || '');
+                                                            setActiveDropdown('lcNo');
+                                                            setActiveItemIndex(index);
+                                                            setHighlightedIndex(-1);
+                                                        }}
+                                                        onKeyDown={(e) => !isFieldReadOnly(originalData?.items?.[index]?.lcNo) && handleDropdownKeyDown(e, 'lcNo', getFilteredLCs(), handleLcSelect)}
+                                                        className={`sale-mgmt-input pr-14 ${item.lcNo ? 'placeholder:text-gray-900 placeholder:font-semibold' : 'placeholder:text-gray-400'} ${isFieldReadOnly(originalData?.items?.[index]?.lcNo) ? 'bg-gray-50' : ''}`}
+                                                    />
+                                                    <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-2">
+                                                        {item.lcNo && (
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => {
+                                                                    setActiveItemIndex(index);
+                                                                    handleLcSelect(null);
+                                                                }}
+                                                                className="text-gray-400 hover:text-red-500"
+                                                            >
+                                                                <XIcon className="w-4 h-4" />
+                                                            </button>
+                                                        )}
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => {
+                                                                setActiveDropdown(activeDropdown === 'lcNo' && activeItemIndex === index ? null : 'lcNo');
+                                                                setActiveItemIndex(index);
+                                                            }}
+                                                            className="text-gray-300 hover:text-blue-500 transition-colors"
+                                                        >
+                                                            <ChevronDownIcon className={`w-4 h-4 transition-transform duration-200 ${activeDropdown === 'lcNo' && activeItemIndex === index ? 'rotate-180' : ''}`} />
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                                {activeDropdown === 'lcNo' && activeItemIndex === index && getFilteredLCs().length > 0 && (
+                                                    <div className="absolute z-[60] w-full mt-1 bg-white border border-gray-100 rounded-xl shadow-xl max-h-48 overflow-y-auto py-1">
+                                                        {getFilteredLCs().map((lc, idx) => (
+                                                            <button
+                                                                key={lc._id || `lc-${idx}`}
+                                                                type="button"
+                                                                onClick={() => handleLcSelect(lc)}
+                                                                onMouseEnter={() => setHighlightedIndex(idx)}
+                                                                className={`w-full px-4 py-2 text-left text-sm transition-colors font-medium ${item.lcNo === lc.lcNo ? 'bg-blue-50 text-blue-700' : highlightedIndex === idx ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-blue-50'}`}
+                                                            >
+                                                                <div className="flex flex-col">
+                                                                    <span className="font-bold">{lc.lcNo}</span>
+                                                                    <span className="text-[10px] text-gray-500">{lc.importerName} | {lc.productName}</span>
+                                                                </div>
+                                                            </button>
+                                                        ))}
+                                                    </div>
+                                                )}
+                                            </div>
+
                                             {/* Product Selection */}
-                                            <div className={`space-y-1.5 relative px-4 product-dropdown-container ${saleType === 'Border' ? 'flex-1' : 'max-w-sm'}`}>
+                                            <div className={`space-y-1.5 relative px-4 product-dropdown-container ${saleType === 'Border' ? 'flex-1' : 'flex-1 md:max-w-md'}`}>
                                                 <label className="sale-mgmt-item-label">Product</label>
                                                 <div className="relative">
                                                     <input
@@ -4360,6 +4335,10 @@ const SaleManagement = ({
 
                                                         return (
                                                             <div key={idx} className="bg-white/50 border border-gray-100/80 rounded-xl p-3.5 space-y-2.5 shadow-sm">
+                                                                <div className="flex items-center justify-between text-sm py-1 border-b border-gray-50/50">
+                                                                    <span className="font-bold text-gray-400 uppercase text-[11px] tracking-wider">LC No :</span>
+                                                                    <span className="font-black text-gray-900 text-[13px]">{it.lcNo || sale.lcNo || '-'}</span>
+                                                                </div>
                                                                 <div className="flex items-center justify-between text-sm py-1 border-b border-gray-50/50">
                                                                     <span className="font-bold text-gray-400 uppercase text-[11px] tracking-wider">Product :</span>
                                                                     <span className="font-black text-gray-900 text-[13px]">{it.productName || '-'}</span>
