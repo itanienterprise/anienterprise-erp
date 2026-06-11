@@ -293,6 +293,7 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
                 const dWh = (damage.warehouse || '').trim().toLowerCase();
 
                 if (dProdName === keyLower && dBrand === normBrand) {
+                    if (stockFilters.lcNo && (damage.lcNo || '').trim() !== stockFilters.lcNo) return;
                     if (isWhFilter) {
                         const filterWH = stockFilters.warehouse.toLowerCase();
                         // Skip damage if it has no warehouse or warehouse doesn't match the filter
@@ -422,6 +423,7 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
                         const dBrand = (damage.brand || 'No Brand').trim().toLowerCase();
                         const dWh = (damage.warehouse || '').trim().toLowerCase();
                         if (dProdName === sProdName.toLowerCase() && dBrand === normBrand) {
+                            if (stockFilters.lcNo && (damage.lcNo || '').trim() !== stockFilters.lcNo) return;
                             if (isWhFilter) {
                                 const filterWH = stockFilters.warehouse.toLowerCase();
                                 // Skip damage if it has no warehouse or warehouse doesn't match the filter

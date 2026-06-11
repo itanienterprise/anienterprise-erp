@@ -2121,6 +2121,13 @@ export const generateProductHistoryPDF = (productName, category, activeTab, purc
             doc.setFont('helvetica', 'normal');
             doc.text(filters.party, margin + 25, yPos);
         }
+        if (filters.lcNo) {
+            yPos += 7;
+            doc.setFont('helvetica', 'bold');
+            doc.text("LC No:", margin, yPos);
+            doc.setFont('helvetica', 'normal');
+            doc.text(filters.lcNo, margin + 25, yPos);
+        }
 
         let currentY = yPos + 10;
 
