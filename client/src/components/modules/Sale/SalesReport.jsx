@@ -966,22 +966,50 @@ const SalesReport = ({
                                     const isExpanded = expandedRows.includes(sale._id);
                                     const items = sale.items || [];
                                     const flatItems = items.flatMap(item =>
-                                        (item.brandEntries || []).map(entry => ({
-                                            productName: item.productName || item.product || '-',
-                                            brand: entry.brandName || entry.brand || '-',
-                                            quantity: sale.saleType === 'Border' ? (entry.truck || 0) : (entry.quantity || 0),
-                                            price: entry.unitPrice || 0,
-                                            total: entry.totalAmount || 0
-                                        }))
+                                        (item.brandEntries || []).map(entry => {
+                                            const activeUom = sale.saleType === 'Border' ? (entry.uom || item.uom || sale.uom || 'Truck') : 'QTY';
+                                            const isBorder = sale.saleType === 'Border';
+                                            const displayQty = isBorder
+                                                ? (activeUom === 'QTY' ? (entry.quantity || 0) : (entry.truck || sale.truck || 0))
+                                                : (entry.quantity || 0);
+                                            const displayPrice = entry.unitPrice || 0;
+                                            const itemTotal = isBorder
+                                                ? (activeUom === 'QTY'
+                                                    ? (parseFloat(entry.quantity || 0) * parseFloat(displayPrice))
+                                                    : (parseFloat(entry.truck || sale.truck || 0) * parseFloat(displayPrice)))
+                                                : (parseFloat(entry.quantity || 0) * parseFloat(displayPrice));
+
+                                            return {
+                                                productName: item.productName || item.product || '-',
+                                                brand: entry.brandName || entry.brand || '-',
+                                                uom: activeUom,
+                                                quantity: displayQty,
+                                                price: displayPrice,
+                                                total: itemTotal
+                                            };
+                                        })
                                     );
 
                                     if (flatItems.length === 0) {
+                                        const activeUom = sale.saleType === 'Border' ? (sale.uom || 'Truck') : 'QTY';
+                                        const isBorder = sale.saleType === 'Border';
+                                        const displayQty = isBorder
+                                            ? (activeUom === 'QTY' ? (sale.quantity || 0) : (sale.truck || 0))
+                                            : (sale.quantity || 0);
+                                        const displayPrice = sale.unitPrice || 0;
+                                        const itemTotal = isBorder
+                                            ? (activeUom === 'QTY'
+                                                ? (parseFloat(sale.quantity || 0) * parseFloat(displayPrice))
+                                                : (parseFloat(sale.truck || 0) * parseFloat(displayPrice)))
+                                            : (parseFloat(sale.quantity || 0) * parseFloat(displayPrice));
+
                                         flatItems.push({
                                             productName: sale.productName || '-',
                                             brand: sale.brand || '-',
-                                            quantity: sale.quantity || 0,
-                                            price: 0,
-                                            total: sale.totalAmount || 0
+                                            uom: activeUom,
+                                            quantity: displayQty,
+                                            price: displayPrice,
+                                            total: itemTotal
                                         });
                                     }
 
@@ -1026,31 +1054,34 @@ const SalesReport = ({
                                                             <div className="text-sm font-bold text-gray-800">{sale.companyName || '-'}</div>
                                                         </div>
 
-                                                        <div className="bg-gray-50/50 rounded-xl p-3 space-y-2">
+                                                        <div className="bg-gray-50/50 rounded-xl p-3 space-y-3">
                                                             <div className="text-[10px] font-bold text-gray-600 uppercase">Products & Quantities</div>
-                                                            <div className="grid grid-cols-12 gap-1 px-1 pb-1 border-b border-gray-100 mb-1 mt-2">
-                                                                <div className="col-span-4 text-[9px] font-bold text-gray-400 uppercase">Brand</div>
-                                                                <div className="col-span-2 text-[9px] font-bold text-gray-400 uppercase text-right">Qty</div>
-                                                                <div className="col-span-3 text-[9px] font-bold text-gray-400 uppercase text-right">Price</div>
-                                                                <div className="col-span-3 text-[9px] font-bold text-gray-400 uppercase text-right">Total</div>
-                                                            </div>
-                                                            <div className="space-y-3 mt-2">
+                                                            <div className="space-y-3">
                                                                 {flatItems.map((item, idx) => (
-                                                                    <div key={idx} className="border-b border-gray-100 last:border-0 pb-2 last:pb-0">
-                                                                        <div className="text-[12px] font-black text-gray-800 mb-0.5">{item.productName}</div>
-                                                                        <div className="grid grid-cols-12 gap-1 items-center">
-                                                                            <div className="col-span-4 min-w-0">
-                                                                                <span className="text-[11px] font-medium text-gray-500 italic truncate block">{item.brand}</span>
-                                                                            </div>
-                                                                            <div className="col-span-2 text-right">
-                                                                                <div className="text-[10px] font-bold text-gray-900">{parseFloat(item.quantity).toLocaleString('en-US')}</div>
-                                                                            </div>
-                                                                            <div className="col-span-3 text-right">
-                                                                                <div className="text-[11px] font-medium text-blue-600">৳{parseFloat(item.price).toLocaleString('en-IN')}</div>
-                                                                            </div>
-                                                                            <div className="col-span-3 text-right">
-                                                                                <div className="text-[11px] font-black text-gray-900 text-truncate">৳{parseFloat(item.total).toLocaleString('en-IN')}</div>
-                                                                            </div>
+                                                                    <div key={idx} className="bg-white border border-gray-100 rounded-xl p-3.5 space-y-2.5 shadow-sm">
+                                                                        <div className="flex items-center justify-between text-sm py-1 border-b border-gray-50/50">
+                                                                            <span className="font-bold text-gray-400 uppercase text-[11px] tracking-wider">Product :</span>
+                                                                            <span className="font-black text-gray-900 text-[13px]">{item.productName || '-'}</span>
+                                                                        </div>
+                                                                        <div className="flex items-center justify-between text-sm py-1 border-b border-gray-50/50">
+                                                                            <span className="font-bold text-gray-400 uppercase text-[11px] tracking-wider">Brand :</span>
+                                                                            <span className="font-semibold text-gray-700 text-[13px]">{item.brand || '-'}</span>
+                                                                        </div>
+                                                                        <div className="flex items-center justify-between text-sm py-1 border-b border-gray-50/50">
+                                                                            <span className="font-bold text-gray-400 uppercase text-[11px] tracking-wider">UOM :</span>
+                                                                            <span className="font-bold text-blue-600 bg-blue-50/50 px-2.5 py-0.5 rounded text-[11px]">{item.uom}</span>
+                                                                        </div>
+                                                                        <div className="flex items-center justify-between text-sm py-1 border-b border-gray-50/50">
+                                                                            <span className="font-bold text-gray-400 uppercase text-[11px] tracking-wider">Qty :</span>
+                                                                            <span className="font-black text-gray-900 text-[13px]">{parseFloat(item.quantity).toLocaleString('en-US')}</span>
+                                                                        </div>
+                                                                        <div className="flex items-center justify-between text-sm py-1 border-b border-gray-50/50">
+                                                                            <span className="font-bold text-gray-400 uppercase text-[11px] tracking-wider">Rate :</span>
+                                                                            <span className="font-semibold text-gray-800 text-[13px]">৳{parseFloat(item.price).toLocaleString('en-IN')}</span>
+                                                                        </div>
+                                                                        <div className="flex items-center justify-between text-sm pt-1.5">
+                                                                            <span className="font-bold text-gray-400 uppercase text-[11px] tracking-wider">Total :</span>
+                                                                            <span className="font-black text-emerald-600 text-[15px]">৳{parseFloat(item.total).toLocaleString('en-IN')}</span>
                                                                         </div>
                                                                     </div>
                                                                 ))}
@@ -1058,22 +1089,22 @@ const SalesReport = ({
                                                         </div>
 
                                                         {/* Money Summary */}
-                                                        <div className="grid grid-cols-2 gap-2 mt-4">
-                                                            <div className="text-center p-2 rounded-lg border bg-blue-50/40 border-blue-100/50">
-                                                                <div className="text-[10px] font-bold text-blue-600 uppercase tracking-widest mb-1">Total Amount</div>
-                                                                <div className="text-[13px] font-black text-gray-900">৳{parseFloat(sale.totalAmount).toLocaleString('en-IN')}</div>
+                                                        <div className="space-y-2 mt-4">
+                                                            <div className="flex items-center justify-between px-3.5 py-3 rounded-lg border bg-blue-50/40 border-blue-100/50">
+                                                                <span className="text-[12px] font-black text-blue-600 uppercase tracking-widest">Total Amount :</span>
+                                                                <span className="text-[16px] font-black text-gray-900">৳{parseFloat(sale.totalAmount).toLocaleString('en-IN')}</span>
                                                             </div>
-                                                            <div className="text-center p-2 rounded-lg border bg-red-50/40 border-red-100/50">
-                                                                <div className="text-[10px] font-bold text-red-600 uppercase tracking-widest mb-1">Discount</div>
-                                                                <div className="text-[13px] font-black text-red-600">৳{parseFloat(sale.discount || 0).toLocaleString('en-IN')}</div>
+                                                            <div className="flex items-center justify-between px-3.5 py-3 rounded-lg border bg-red-50/40 border-red-100/50">
+                                                                <span className="text-[12px] font-black text-red-600 uppercase tracking-widest">Discount :</span>
+                                                                <span className="text-[16px] font-black text-red-600">৳{parseFloat(sale.discount || 0).toLocaleString('en-IN')}</span>
                                                             </div>
-                                                            <div className="text-center p-2 rounded-lg border bg-emerald-50/40 border-emerald-100/50">
-                                                                <div className="text-[10px] font-bold text-emerald-600 uppercase tracking-widest mb-1">Truck Fare</div>
-                                                                <div className="text-[13px] font-black text-emerald-700">৳{parseFloat(sale.paidAmount || 0).toLocaleString('en-IN')}</div>
+                                                            <div className="flex items-center justify-between px-3.5 py-3 rounded-lg border bg-emerald-50/40 border-emerald-100/50">
+                                                                <span className="text-[12px] font-black text-emerald-600 uppercase tracking-widest">Truck Fare :</span>
+                                                                <span className="text-[16px] font-black text-emerald-700">৳{parseFloat(sale.paidAmount || 0).toLocaleString('en-IN')}</span>
                                                             </div>
-                                                            <div className="text-center p-2 rounded-lg border bg-orange-50/40 border-orange-100/50">
-                                                                <div className="text-[10px] font-bold text-orange-600 uppercase tracking-widest mb-1">Balance</div>
-                                                                <div className="text-[13px] font-black text-orange-700">৳{(parseFloat(sale.totalAmount || 0) - parseFloat(sale.paidAmount || 0)).toLocaleString('en-IN')}</div>
+                                                            <div className="flex items-center justify-between px-3.5 py-3 rounded-lg border bg-orange-50/40 border-orange-100/50">
+                                                                <span className="text-[12px] font-black text-orange-600 uppercase tracking-widest">Balance :</span>
+                                                                <span className="text-[16px] font-black text-orange-700">৳{(parseFloat(sale.totalAmount || 0) - parseFloat(sale.paidAmount || 0)).toLocaleString('en-IN')}</span>
                                                             </div>
                                                         </div>
                                                     </div>
