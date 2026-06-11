@@ -2505,7 +2505,6 @@ export const generateSalesReportPDF = (reportData, filters, summary, saleType = 
         // --- Table ---
         const tableRows = [];
         let slNum = 1;
-
         const sortedReportData = [...reportData].sort((a, b) => new Date(a.date) - new Date(b.date));
         sortedReportData.forEach((sale) => {
             // Create flattened list of all entries across all items
@@ -2521,6 +2520,7 @@ export const generateSalesReportPDF = (reportData, filters, summary, saleType = 
                     truck: entry.truck || sale.truck || '-',
                     price: entry.unitPrice || 0,
                     total: entry.totalAmount || 0,
+                    lcNo: item.lcNo || sale.lcNo || '-',
                     isFirstInProduct: subIdx === 0,
                     productSpan: entries.length
                 }));
@@ -2546,10 +2546,20 @@ export const generateSalesReportPDF = (reportData, filters, summary, saleType = 
                 if (idx === 0) {
                     row.push({ content: (slNum++).toString(), rowSpan: flatItems.length, styles: { halign: 'center' } });
                     row.push({ content: formatDate(sale.date), rowSpan: flatItems.length, styles: { halign: 'center' } });
+                }
+
+                if (item.isFirstInProduct) {
                     if (saleType !== 'Border') {
-                        row.push({ content: (sale.lcNo ? sale.lcNo.slice(-4) : '-'), rowSpan: flatItems.length, styles: { halign: 'center' } });
+                        row.push({ content: (item.lcNo && item.lcNo !== '-' ? item.lcNo.slice(-4) : '-'), rowSpan: item.productSpan, styles: { halign: 'center' } });
+                    } else {
+                        row.push({ content: (item.lcNo || '-'), rowSpan: item.productSpan, styles: { halign: 'center' } });
                     }
-                    row.push({ content: (saleType === 'Border' ? (sale.lcNo || '-') : (sale.invoiceNo || '-')), rowSpan: flatItems.length, styles: { halign: 'center' } });
+                }
+
+                if (idx === 0) {
+                    if (saleType !== 'Border') {
+                        row.push({ content: (sale.invoiceNo || '-'), rowSpan: flatItems.length, styles: { halign: 'center' } });
+                    }
 
                     if (saleType === 'Border') {
                         row.push({ content: (sale.importer || '-'), rowSpan: flatItems.length });

@@ -863,7 +863,7 @@ const SalesReport = ({
                                                         truck: entry.truck || sale.truck || '-',
                                                         price: entry.unitPrice || 0,
                                                         total: entry.totalAmount || 0,
-                                                        lcNo: sale.lcNo || '-',
+                                                        lcNo: item.lcNo || sale.lcNo || '-',
                                                         isFirstInProduct: subIdx === 0,
                                                         productSpan: entries.length
                                                     }));
@@ -877,6 +877,7 @@ const SalesReport = ({
                                                         quantity: sale.quantity || 0,
                                                         price: 0,
                                                         total: sale.totalAmount || 0,
+                                                        lcNo: sale.lcNo || '-',
                                                         isFirstInProduct: true,
                                                         productSpan: 1
                                                     });
@@ -888,10 +889,26 @@ const SalesReport = ({
                                                                 <>
                                                                     <td rowSpan={flatItems.length} className={`border-r border-gray-900 ${saleType === 'Border' ? 'px-0.5' : 'px-1'} py-1 ${saleType === 'Border' ? 'text-[12px]' : 'text-[12px]'} text-gray-900 text-center`}>{sl++}</td>
                                                                     <td rowSpan={flatItems.length} className={`border-r border-gray-900 ${saleType === 'Border' ? 'px-0.5' : 'px-1'} py-1 ${saleType === 'Border' ? 'text-[12px]' : 'text-[12px]'} text-gray-900 text-center`}>{formatDate(sale.date)}</td>
-                                                                    {saleType !== 'Border' && (
-                                                                        <td rowSpan={flatItems.length} className="border-r border-gray-900 px-1 py-1 text-[12px] text-gray-900 text-center">{sale.lcNo ? sale.lcNo.slice(-4) : '-'}</td>
+                                                                </>
+                                                            )}
+                                                            {item.isFirstInProduct && (
+                                                                <>
+                                                                    {saleType !== 'Border' ? (
+                                                                        <td rowSpan={item.productSpan} className="border-r border-gray-900 px-1 py-1 text-[12px] text-gray-900 text-center">
+                                                                            {item.lcNo && item.lcNo !== '-' ? item.lcNo.slice(-4) : '-'}
+                                                                        </td>
+                                                                    ) : (
+                                                                        <td rowSpan={item.productSpan} className="border-r border-gray-900 px-0.5 py-1 text-[12px] font-bold text-gray-900 text-center">
+                                                                            {item.lcNo || '-'}
+                                                                        </td>
                                                                     )}
-                                                                    <td rowSpan={flatItems.length} className={`border-r border-gray-900 ${saleType === 'Border' ? 'px-0.5' : 'px-1'} py-1 ${saleType === 'Border' ? 'text-[12px]' : 'text-[12px]'} font-bold text-gray-900 text-center`}>{saleType === 'Border' ? (sale.lcNo || '-') : sale.invoiceNo}</td>
+                                                                </>
+                                                            )}
+                                                            {idx === 0 && (
+                                                                <>
+                                                                    {saleType !== 'Border' && (
+                                                                        <td rowSpan={flatItems.length} className="border-r border-gray-900 px-1 py-1 text-[12px] font-bold text-gray-900 text-center">{sale.invoiceNo}</td>
+                                                                    )}
                                                                     {saleType === 'Border' ? (
                                                                         <>
                                                                             <td rowSpan={flatItems.length} className="border-r border-gray-900 px-0.5 py-1 text-[12px] text-gray-900 text-left whitespace-nowrap">{sale.importer || '-'}</td>
@@ -905,9 +922,9 @@ const SalesReport = ({
                                                                     )}
                                                                 </>
                                                             )}
-                                                        {item.isFirstInProduct && (
-                                                            <td rowSpan={item.productSpan} className={`border-r border-gray-900 ${saleType === 'Border' ? 'px-0.5' : 'px-2'} py-1 ${saleType === 'Border' ? 'text-[12px]' : 'text-[12px]'} text-gray-900 truncate`}>{item.productName}</td>
-                                                        )}
+                                                            {item.isFirstInProduct && (
+                                                                <td rowSpan={item.productSpan} className={`border-r border-gray-900 ${saleType === 'Border' ? 'px-0.5' : 'px-2'} py-1 ${saleType === 'Border' ? 'text-[12px]' : 'text-[12px]'} text-gray-900 truncate`}>{item.productName}</td>
+                                                            )}
                                                         {saleType !== 'Border' && (
                                                             <td className="border-r border-gray-900 px-2 py-1 text-[12px] text-gray-900 truncate">{item.brand}</td>
                                                         )}
@@ -985,7 +1002,8 @@ const SalesReport = ({
                                                 uom: activeUom,
                                                 quantity: displayQty,
                                                 price: displayPrice,
-                                                total: itemTotal
+                                                total: itemTotal,
+                                                lcNo: item.lcNo || sale.lcNo || '-'
                                             };
                                         })
                                     );
@@ -1009,7 +1027,8 @@ const SalesReport = ({
                                             uom: activeUom,
                                             quantity: displayQty,
                                             price: displayPrice,
-                                            total: itemTotal
+                                            total: itemTotal,
+                                            lcNo: sale.lcNo || '-'
                                         });
                                     }
 
@@ -1059,6 +1078,10 @@ const SalesReport = ({
                                                             <div className="space-y-3">
                                                                 {flatItems.map((item, idx) => (
                                                                     <div key={idx} className="bg-white border border-gray-100 rounded-xl p-3.5 space-y-2.5 shadow-sm">
+                                                                        <div className="flex items-center justify-between text-sm py-1 border-b border-gray-50/50">
+                                                                            <span className="font-bold text-gray-400 uppercase text-[11px] tracking-wider">LC No :</span>
+                                                                            <span className="font-black text-gray-900 text-[13px]">{item.lcNo || '-'}</span>
+                                                                        </div>
                                                                         <div className="flex items-center justify-between text-sm py-1 border-b border-gray-50/50">
                                                                             <span className="font-bold text-gray-400 uppercase text-[11px] tracking-wider">Product :</span>
                                                                             <span className="font-black text-gray-900 text-[13px]">{item.productName || '-'}</span>
