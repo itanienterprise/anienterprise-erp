@@ -2206,30 +2206,11 @@ export const generateProductHistoryPDF = (productName, category, activeTab, purc
                     return { ...item, runningInHouse: currentBalance };
                 });
 
-            // deduplicate In House Quantity calculation using the robust (StockTable + WhPortionOnce) logic
-            let totalInHouseQty = 0;
-            const truckBrandsSeen = new Set();
-
-            sortedPurchaseData.forEach(item => {
-                const bKey = (item.itemBrand || '').trim().toLowerCase();
-                const truckKey = `${(item.lcNo || '').trim()}_${(item.itemTruck || item.truckNo || '').trim()}_${bKey}`;
-
-                // 1. Always add the raw stock table remainder for this specific entry
-                totalInHouseQty += parseFloat(item.inHouseQuantity) || 0;
-
-                // 2. Add the shared warehouse portion ONLY once per truck/brand combination
-                if (!truckBrandsSeen.has(truckKey)) {
-                    const fullQty = parseFloat(item.itemInHouseQty) || 0;
-                    const stockQty = parseFloat(item.inHouseQuantity) || 0;
-                    const whPortion = Math.max(0, fullQty - stockQty);
-                    totalInHouseQty += whPortion;
-                    truckBrandsSeen.add(truckKey);
-                }
-            });
+            const totalInHouseQty = summary.totalInHouseQty || 0;
 
             const purchaseTotals = sortedPurchaseData.reduce((acc, item) => ({
                 qty: acc.qty + (parseFloat(item.itemQty) || 0),
-                inHouse: totalInHouseQty, // Use the pre-calculated unique total
+                inHouse: totalInHouseQty,
                 shortage: acc.shortage + (parseFloat(item.itemShortageQty) || 0)
             }), { qty: 0, inHouse: 0, shortage: 0 });
 

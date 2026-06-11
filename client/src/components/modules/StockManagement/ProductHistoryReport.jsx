@@ -197,24 +197,12 @@ const ProductHistoryReport = ({
         const totalPurchaseQty = purchaseHistory.reduce((sum, item) => sum + (parseFloat(item.itemQty) || 0), 0);
         
         // Accurate total in-house calculation for header
-        const uniqueTruckBrands = new Set();
         let totalInHouseQty = 0;
-        
-        purchaseHistory.forEach(item => {
-            const bKey = (item.itemBrand || '').trim().toLowerCase();
-            const truckKey = `${(item.lcNo || '').trim()}_${(item.itemTruck || item.truckNo || '').trim()}_${bKey}`;
-            
-            // Always add the raw stock table remainder
-            totalInHouseQty += parseFloat(item.inHouseQuantity) || 0;
-            
-            // Add warehouse portion only once
-            if (!uniqueTruckBrands.has(truckKey)) {
-                const fullQty = parseFloat(item.itemInHouseQty) || 0;
-                const stockQty = parseFloat(item.inHouseQuantity) || 0;
-                totalInHouseQty += Math.max(0, fullQty - stockQty);
-                uniqueTruckBrands.add(truckKey);
-            }
-        });
+        if (activeTab === 'total') {
+            totalInHouseQty = Math.round(unifiedHistory[unifiedHistory.length - 1]?.runningInHouse || 0);
+        } else {
+            totalInHouseQty = Math.round(purchaseHistory.reduce((sum, item) => sum + (parseFloat(item.itemInHouseQty) || 0), 0));
+        }
         
         const totalShortageQty = purchaseHistory.reduce((sum, item) => sum + (parseFloat(item.itemShortageQty) || 0), 0);
         const totalSaleAmount = saleHistory.reduce((sum, s) => sum + (parseFloat(s.itemTotal) || 0), 0);
@@ -835,16 +823,10 @@ const ProductHistoryReport = ({
                                         <div className="border-t border-gray-300 pt-1 mt-1 flex justify-between text-sm md:text-base font-black">
                                             <span className="text-blue-600 uppercase">InHouse:</span>
                                             <span className="text-blue-700">
-                                                {(() => {
-                                                    const uniqueInHouse = new Map();
-                                                    purchaseHistory.forEach(item => {
-                                                        const key = `${(item.lcNo || '').trim()}_${(item.itemTruck || item.truckNo || '').trim()}_${(item.itemBrand || '').trim()}`;
-                                                        if (!uniqueInHouse.has(key)) {
-                                                            uniqueInHouse.set(key, parseFloat(item.itemInHouseQty) || 0);
-                                                        }
-                                                    });
-                                                    return Array.from(uniqueInHouse.values()).reduce((sum, val) => sum + val, 0).toLocaleString('en-US');
-                                                })()} kg
+                                                {activeTab === 'total'
+                                                    ? Math.round(unifiedHistory[unifiedHistory.length - 1]?.runningInHouse || 0).toLocaleString('en-US')
+                                                    : Math.round(purchaseHistory.reduce((sum, item) => sum + (parseFloat(item.itemInHouseQty) || 0), 0)).toLocaleString('en-US')
+                                                } kg
                                             </span>
                                         </div>
                                     </div>
