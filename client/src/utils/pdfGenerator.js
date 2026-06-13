@@ -2502,7 +2502,7 @@ export const generateSalesReportPDF = (reportData, filters, summary, saleType = 
         const dateStr = formatDate(new Date().toISOString().split('T')[0]);
         doc.text(`Printed on: ${dateStr}`, pageWidth - margin, 55, { align: 'right' });
 
-        // --- Table ---
+        // --- Table --- 
         const tableRows = [];
         let slNum = 1;
         const sortedReportData = [...reportData].sort((a, b) => new Date(a.date) - new Date(b.date));
