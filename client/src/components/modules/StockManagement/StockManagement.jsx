@@ -2733,17 +2733,17 @@ const StockManagement = ({
                                         >
                                             <div className="flex flex-col gap-1.5 flex-1 min-w-0 pr-4">
                                                 <h3 className="text-xl font-black text-gray-900 leading-tight truncate">{group.productName}</h3>
-                                                {group.totalInHouseQuantity !== 0 && (
+                                                {group.inHouseQuantity !== 0 && (
                                                     <div className="flex items-center">
-                                                        <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-[13px] font-bold border whitespace-nowrap ${group.totalInHouseQuantity > 0 ? 'bg-emerald-50 border-emerald-100 text-gray-900' : 'bg-blue-50 border-blue-100 text-blue-700'}`}>
+                                                        <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-[13px] font-bold border whitespace-nowrap ${group.inHouseQuantity > 0 ? 'bg-emerald-50 border-emerald-100 text-gray-900' : 'bg-blue-50 border-blue-100 text-blue-700'}`}>
                                                             {Math.round(group.inHousePacket).toLocaleString('en-US')} BAG • {Math.round(group.inHouseQuantity).toLocaleString('en-US')} {group.unit}
                                                         </span>
                                                     </div>
                                                 )}
                                             </div>
                                             <div className="shrink-0">
-                                                <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider ${group.totalInHouseQuantity > 0 ? 'bg-emerald-100 text-emerald-700' : group.totalInHouseQuantity < 0 ? 'bg-blue-100 text-blue-700' : 'bg-red-100 text-red-700'}`}>
-                                                    {group.totalInHouseQuantity > 0 ? 'In Stock' : group.totalInHouseQuantity < 0 ? 'Pre-Sold' : 'Out of Stock'}
+                                                <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider ${group.inHouseQuantity > 0 ? 'bg-emerald-100 text-emerald-700' : group.inHouseQuantity < 0 ? 'bg-blue-100 text-blue-700' : 'bg-red-100 text-red-700'}`}>
+                                                    {group.inHouseQuantity > 0 ? 'In Stock' : group.inHouseQuantity < 0 ? 'Pre-Sold' : 'Out of Stock'}
                                                 </span>
                                             </div>
                                         </div>
@@ -2770,8 +2770,8 @@ const StockManagement = ({
                                                                         )}
                                                                     </div>
                                                                     <div className="shrink-0">
-                                                                        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider ${brand.totalInHouseQuantity > 0 ? 'bg-emerald-100 text-emerald-700' : brand.totalInHouseQuantity < 0 ? 'bg-blue-100 text-blue-700' : 'bg-red-100 text-red-700'}`}>
-                                                                            {brand.totalInHouseQuantity > 0 ? 'In Stock' : brand.totalInHouseQuantity < 0 ? 'Pre-Sold' : 'Out of Stock'}
+                                                                        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider ${brand.inHouseQuantity > 0 ? 'bg-emerald-100 text-emerald-700' : brand.inHouseQuantity < 0 ? 'bg-blue-100 text-blue-700' : 'bg-red-100 text-red-700'}`}>
+                                                                            {brand.inHouseQuantity > 0 ? 'In Stock' : brand.inHouseQuantity < 0 ? 'Pre-Sold' : 'Out of Stock'}
                                                                         </span>
                                                                     </div>
                                                                 </div>
