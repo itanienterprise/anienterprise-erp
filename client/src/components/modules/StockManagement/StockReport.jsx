@@ -328,16 +328,9 @@ const StockReport = ({
                                                     <>
                                                         <td className="border-r border-gray-900 px-2 py-1.5 text-[13px] text-right font-bold text-gray-900 align-top whitespace-nowrap">
                                                             {(() => {
-                                                                let totalWhole = 0;
-                                                                let totalRemainder = 0;
-                                                                brands.forEach(ent => {
-                                                                    const qty = parseFloat(ent.totalInHouseQuantity) || 0;
-                                                                    if (qty <= 0) return;
-                                                                    const { whole, remainder } = calculatePktRemainder(qty, ent.packetSize);
-                                                                    totalWhole += whole;
-                                                                    totalRemainder += remainder;
-                                                                });
-                                                                return `${totalWhole}${totalRemainder !== 0 ? ` - ${Math.abs(totalRemainder)} kg` : ''}`;
+                                                                const pktSize = item.packetSize || brands[0]?.packetSize || 30;
+                                                                const { whole, remainder } = calculatePktRemainder(item.totalInHouseQuantity, pktSize);
+                                                                return `${whole}${remainder !== 0 ? ` - ${Math.abs(remainder)} kg` : ''}`;
                                                             })()}
                                                         </td>
                                                         <td className="border-r border-gray-900 px-2 py-1.5 text-[13px] text-right font-black text-gray-900 align-top whitespace-nowrap">
@@ -353,16 +346,9 @@ const StockReport = ({
                                                 ) : null}
                                                 <td className="border-r border-gray-900 px-2 py-1.5 text-[13px] text-right font-bold text-gray-900 align-top whitespace-nowrap">
                                                     {(() => {
-                                                        let totalWhole = 0;
-                                                        let totalRemainder = 0;
-                                                        brands.forEach(ent => {
-                                                            const qty = parseFloat(ent.inHouseQuantity) || 0;
-                                                            if (qty <= 0) return;
-                                                            const { whole, remainder } = calculatePktRemainder(qty, ent.packetSize || 30);
-                                                            totalWhole += whole;
-                                                            totalRemainder += remainder;
-                                                        });
-                                                        return `${totalWhole}${totalRemainder !== 0 ? ` - ${Math.abs(totalRemainder)} kg` : ''}`;
+                                                        const pktSize = item.packetSize || brands[0]?.packetSize || 30;
+                                                        const { whole, remainder } = calculatePktRemainder(item.inHouseQuantity, pktSize);
+                                                        return `${whole}${remainder !== 0 ? ` - ${Math.abs(remainder)} kg` : ''}`;
                                                     })()}
                                                 </td>
                                                 <td className="px-2 py-1.5 text-[13px] text-right font-black text-blue-800 align-top whitespace-nowrap">
@@ -880,8 +866,8 @@ const StockReport = ({
                                         <div className="text-[10px] sm:text-[11px] font-bold text-blue-500 uppercase tracking-wider mb-2 truncate">Current Inhouse</div>
                                         <div className="text-sm sm:text-base font-bold text-gray-700 whitespace-nowrap truncate">
                                             BAG: {(() => {
-                                                const totalWhole = filteredRecords.reduce((accWhole, item) => accWhole + item.brandList.reduce((sum, ent) => sum + calculatePktRemainder(Math.max(0, ent.inHouseQuantity || 0), ent.packetSize).whole, 0), 0);
-                                                const totalRem = filteredRecords.reduce((accRem, item) => accRem + item.brandList.reduce((sum, ent) => sum + calculatePktRemainder(Math.max(0, ent.inHouseQuantity || 0), ent.packetSize).remainder, 0), 0);
+                                                const totalWhole = filteredRecords.reduce((accWhole, item) => accWhole + item.brandList.reduce((sum, ent) => sum + calculatePktRemainder(ent.inHouseQuantity, ent.packetSize).whole, 0), 0);
+                                                const totalRem = filteredRecords.reduce((accRem, item) => accRem + item.brandList.reduce((sum, ent) => sum + calculatePktRemainder(ent.inHouseQuantity, ent.packetSize).remainder, 0), 0);
                                                 return `${totalWhole}${totalRem !== 0 ? ` - ${Math.abs(totalRem)} kg` : ''}`;
                                             })()}
                                         </div>

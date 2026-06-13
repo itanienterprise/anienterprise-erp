@@ -43,7 +43,6 @@ const SaleManagement = ({
     const [importersList, setImportersList] = useState([]);
     const [portsList, setPortsList] = useState([]);
     const [cnfsList, setCnfsList] = useState([]);
-    const [damages, setDamages] = useState([]);
     const [isLoading, setIsLoading] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
     const [editingId, setEditingId] = useState(null);
@@ -391,7 +390,6 @@ const SaleManagement = ({
                 try { fetchCustomers(); } catch (e) { console.error('fetchCustomers error', e); }
                 try { fetchWarehouses(); } catch (e) { console.error('fetchWarehouses error', e); }
                 try { fetchStockRecords(); } catch (e) { console.error('fetchStockRecords error', e); }
-                try { fetchDamages(); } catch (e) { console.error('fetchDamages error', e); }
                 if (refreshPendingIndicators) refreshPendingIndicators();
                 console.log(`[handleStatusUpdate] Update successfully finished!`);
             } else {
@@ -549,7 +547,6 @@ const SaleManagement = ({
         fetchProducts();
         fetchWarehouses();
         fetchStockRecords();
-        fetchDamages();
         fetchImportersList();
         fetchPortsList();
         fetchCnfsList();
@@ -672,15 +669,6 @@ const SaleManagement = ({
         }
     };
 
-    const fetchDamages = async () => {
-        try {
-            const response = await axios.get(`${API_BASE_URL}/api/damages`);
-            setDamages(Array.isArray(response.data) ? response.data : []);
-        } catch (error) {
-            console.error('Error fetching damages:', error);
-        }
-    };
-
     const fetchImportersList = async () => {
         try {
             const response = await axios.get(`${API_BASE_URL}/api/importers`);
@@ -724,11 +712,12 @@ const SaleManagement = ({
                 const newBrandEntries = item.brandEntries.map(entry => {
                     let updatedEntry = { ...entry };
 
-                    // 1. Calculate Total Inhouse Quantity for the selected product and brand (Global Stock of the company)
+                    // 1. Calculate Total Inhouse Quantity for the selected product and brand
+                    // The user requested: "Inhouse quantity and warehouse quantity will show seleted product seledted brand"
                     let totalInhouseQty = 0;
 
                     if (item.productName && entry.brand) {
-                        // Add stock from all primary imports matching product and brand
+                        // Add stock from main store matching product and brand
                         stockRecords.forEach(record => {
                             const recName = (record.productName || record.product || '').toLowerCase().trim();
                             const targetName = (item.productName || '').toLowerCase().trim();
@@ -742,9 +731,8 @@ const SaleManagement = ({
                             }
                         });
 
-                        // Add stock from warehouse records matching product and brand
+                        // Add stock from all warehouses for this product and brand
                         warehouses.forEach(w => {
-                            if ((w.location || '').trim().toLowerCase() === 'returned stock') return;
                             const wProd = (w.productName || w.product || '').toLowerCase().trim();
                             const targetProd = (item.productName || '').toLowerCase().trim();
                             const wBrand = (w.brand || '').toLowerCase().trim();
@@ -755,7 +743,7 @@ const SaleManagement = ({
                             }
                         });
 
-                        // Subtract all sales to get REMAINING stock
+                        // Subtract ALL matching sales to get REMAINING stock
                         allSalesRecords.forEach(s => {
                             const sStatus = (s.status || '').toLowerCase();
                             if (sStatus !== 'accepted' && sStatus !== 'pending') return;
@@ -769,6 +757,7 @@ const SaleManagement = ({
                                             const tBrandName = (entry.brand || '').toLowerCase().trim();
                                             const tProdNameMatched = (item.productName || '').toLowerCase().trim();
 
+                                            // Regular brand match OR (Sale brand is empty/hyphen AND stock brand matches product name)
                                             if (sBrandName === tBrandName || ((sBrandName === '' || sBrandName === '-') && tBrandName === tProdNameMatched)) {
                                                 totalInhouseQty -= parseFloat(be.quantity) || 0;
                                             }
@@ -777,19 +766,6 @@ const SaleManagement = ({
                                 });
                             }
                         });
-
-                        // Subtract all damages
-                        damages.forEach(d => {
-                            const dProd = (d.productName || d.product || '').toLowerCase().trim();
-                            const targetProd = (item.productName || '').toLowerCase().trim();
-                            const dBrand = (d.brand || '').toLowerCase().trim();
-                            const targetBrand = (entry.brand || '').toLowerCase().trim();
-
-                            if (dProd === targetProd && dBrand === targetBrand) {
-                                totalInhouseQty -= parseFloat(d.quantity) || 0;
-                            }
-                        });
-
                         totalInhouseQty = Math.max(0, totalInhouseQty);
                     } else if (item.productName && !entry.brand) {
                         // Fallback: just product if no brand is selected yet
@@ -803,7 +779,6 @@ const SaleManagement = ({
                         });
 
                         warehouses.forEach(w => {
-                            if ((w.location || '').trim().toLowerCase() === 'returned stock') return;
                             const wProd = (w.productName || w.product || '').toLowerCase().trim();
                             const targetProd = (item.productName || '').toLowerCase().trim();
                             if (wProd === targetProd) {
@@ -811,7 +786,7 @@ const SaleManagement = ({
                             }
                         });
 
-                        // Subtract all sales for this product
+                        // Subtract ALL sales for this product
                         allSalesRecords.forEach(s => {
                             const sStatus = (s.status || '').toLowerCase();
                             if (sStatus !== 'accepted' && sStatus !== 'pending') return;
@@ -827,16 +802,6 @@ const SaleManagement = ({
                                 });
                             }
                         });
-
-                        // Subtract all damages
-                        damages.forEach(d => {
-                            const dProd = (d.productName || d.product || '').toLowerCase().trim();
-                            const targetProd = (item.productName || '').toLowerCase().trim();
-                            if (dProd === targetProd) {
-                                totalInhouseQty -= parseFloat(d.quantity) || 0;
-                            }
-                        });
-
                         totalInhouseQty = Math.max(0, totalInhouseQty);
                     }
 
@@ -846,10 +811,10 @@ const SaleManagement = ({
                     }
 
                     // 2. Calculate Warehouse Stock for the selected product + brand + warehouse
+                    // The user requested: "warehouse stock will show the selected product's selected warehouse quantity"
                     if (entry.warehouseName && entry.brand) {
                         let totalWhQty = 0;
                         warehouses.forEach(w => {
-                            if ((w.location || '').trim().toLowerCase() === 'returned stock') return;
                             const wName = (w.whName || w.warehouse || '').toLowerCase().trim();
                             const targetWh = (entry.warehouseName || '').toLowerCase().trim();
                             const wProd = (w.productName || w.product || '').toLowerCase().trim();
@@ -903,21 +868,6 @@ const SaleManagement = ({
                                 });
                             }
                         });
-
-                        // Subtract matching damages for this specific warehouse
-                        damages.forEach(d => {
-                            const dProd = (d.productName || d.product || '').toLowerCase().trim();
-                            const targetProd = (item.productName || '').toLowerCase().trim();
-                            const dBrand = (d.brand || '').toLowerCase().trim();
-                            const targetBrand = (entry.brand || '').toLowerCase().trim();
-                            const dWh = (d.warehouse || d.whName || '').toLowerCase().trim();
-                            const targetWh = (entry.warehouseName || '').toLowerCase().trim();
-
-                            if (dWh === targetWh && dProd === targetProd && dBrand === targetBrand) {
-                                totalWhQty -= parseFloat(d.quantity) || 0;
-                            }
-                        });
-
                         totalWhQty = Math.max(0, totalWhQty);
 
                         if (updatedEntry.warehouseQty !== totalWhQty.toString()) {
@@ -928,7 +878,6 @@ const SaleManagement = ({
                         // Fallback for single-entry products: no brand selected, calculate product-level warehouse stock
                         let totalWhQty = 0;
                         warehouses.forEach(w => {
-                            if ((w.location || '').trim().toLowerCase() === 'returned stock') return;
                             const wName = (w.whName || w.warehouse || '').toLowerCase().trim();
                             const targetWh = (entry.warehouseName || '').toLowerCase().trim();
                             const wProd = (w.productName || w.product || '').toLowerCase().trim();
@@ -973,19 +922,6 @@ const SaleManagement = ({
                                 });
                             }
                         });
-
-                        // Subtract matching damages for this warehouse
-                        damages.forEach(d => {
-                            const dProd = (d.productName || d.product || '').toLowerCase().trim();
-                            const targetProd = (item.productName || '').toLowerCase().trim();
-                            const dWh = (d.warehouse || d.whName || '').toLowerCase().trim();
-                            const targetWh = (entry.warehouseName || '').toLowerCase().trim();
-
-                            if (dWh === targetWh && dProd === targetProd) {
-                                totalWhQty -= parseFloat(d.quantity) || 0;
-                            }
-                        });
-
                         totalWhQty = Math.max(0, totalWhQty);
 
                         if (updatedEntry.warehouseQty !== totalWhQty.toString()) {
@@ -1011,7 +947,7 @@ const SaleManagement = ({
 
             return hasChanges ? { ...prev, items: newItems } : prev;
         });
-    }, [formData.items.map(i => i.productId).join(','), formData.items.map(i => i.brandEntries.map(e => `${e.brand}-${e.warehouseName}`).join(',')).join('|'), stockRecords, warehouses, allSalesRecords, damages]);
+    }, [formData.items.map(i => i.productId).join(','), formData.items.map(i => i.brandEntries.map(e => `${e.brand}-${e.warehouseName}`).join(',')).join('|'), stockRecords, warehouses, allSalesRecords]);
 
     const addProductItem = () => {
         setFormData(prev => ({
