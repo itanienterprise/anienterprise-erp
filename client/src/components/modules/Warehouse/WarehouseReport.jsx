@@ -692,11 +692,16 @@ const WarehouseReport = ({
                                                                 <td className="border-r border-gray-900 px-2 py-1 text-[13px] font-bold text-gray-900 text-right uppercase tracking-wider bg-gray-50/30 italic">Sub Total</td>
                                                                 <td className="border-r border-gray-900 px-2 py-1 text-right text-[13px] font-black text-gray-900 text-emerald-700">
                                                                     {(() => {
-                                                                        const totalQty = pGroup.brands.reduce((sum, b) => sum + Math.max(0, parseFloat(b.inhouseQty) || 0), 0);
-                                                                        // Use first brand's size for subtotal rollover (standard for same-product groups)
-                                                                        const pktSize = pGroup.brands[0]?.packetSize || 0;
-                                                                        const { whole, remainder } = calculatePktRemainder(totalQty, pktSize);
-                                                                        return `${whole.toLocaleString('en-US')}${remainder > 0 ? ` - ${remainder.toLocaleString('en-US')} kg` : ''}`;
+                                                                        let totalWhole = 0;
+                                                                        let totalRemainder = 0;
+                                                                        pGroup.brands.forEach(b => {
+                                                                            const qty = parseFloat(b.inhouseQty) || 0;
+                                                                            if (qty <= 0) return;
+                                                                            const { whole, remainder } = calculatePktRemainder(qty, b.packetSize || 30);
+                                                                            totalWhole += whole;
+                                                                            totalRemainder += remainder;
+                                                                        });
+                                                                        return `${totalWhole.toLocaleString('en-US')}${totalRemainder > 0 ? ` - ${totalRemainder.toLocaleString('en-US')} kg` : ''}`;
                                                                     })()}
                                                                 </td>
                                                                 <td className="border-r border-gray-900 px-2 py-1 text-right text-[13px] font-black text-gray-900">
@@ -704,10 +709,16 @@ const WarehouseReport = ({
                                                                 </td>
                                                                 <td className="px-2 py-1 text-right text-[13px] font-black text-gray-900 text-blue-700">
                                                                     {(() => {
-                                                                        const totalQty = pGroup.brands.reduce((sum, b) => sum + Math.max(0, parseFloat(b.whQty) || 0), 0);
-                                                                        const pktSize = pGroup.brands[0]?.packetSize || 0;
-                                                                        const { whole, remainder } = calculatePktRemainder(totalQty, pktSize);
-                                                                        return `${whole.toLocaleString('en-US')}${remainder > 0 ? ` - ${remainder.toLocaleString('en-US')} kg` : ''}`;
+                                                                        let totalWhole = 0;
+                                                                        let totalRemainder = 0;
+                                                                        pGroup.brands.forEach(b => {
+                                                                            const qty = parseFloat(b.whQty) || 0;
+                                                                            if (qty <= 0) return;
+                                                                            const { whole, remainder } = calculatePktRemainder(qty, b.packetSize || 30);
+                                                                            totalWhole += whole;
+                                                                            totalRemainder += remainder;
+                                                                        });
+                                                                        return `${totalWhole.toLocaleString('en-US')}${totalRemainder > 0 ? ` - ${totalRemainder.toLocaleString('en-US')} kg` : ''}`;
                                                                     })()}
                                                                 </td>
                                                                 <td className="border-r border-gray-900 px-2 py-1 text-right text-[13px] font-black text-gray-900">

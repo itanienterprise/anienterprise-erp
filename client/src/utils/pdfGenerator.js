@@ -989,20 +989,39 @@ export const generateStockReportPDF = (stockData, filters, reportType = 'short',
 
                         if (reportType === 'detailed') {
                             const qTotalIHQty = brands.reduce((s, e) => s + (parseFloat(e.totalInHouseQuantity) || 0), 0);
-                            const qPktSize = parseFloat(brands[0]?.packetSize) || 0;
-                            const { whole: tW, remainder: tR } = calculatePktRemainderLocal(qTotalIHQty, qPktSize);
+                            let tW = 0, tR = 0;
+                            brands.forEach(ent => {
+                                const qty = parseFloat(ent.totalInHouseQuantity) || 0;
+                                if (qty <= 0) return;
+                                const pkt = calculatePktRemainderLocal(qty, ent.packetSize);
+                                tW += pkt.whole;
+                                tR += pkt.remainder;
+                            });
                             qualSubRow.push({ content: `${tW}${tR !== 0 ? ` - ${Math.abs(tR)} kg` : ''}`, styles: { fontStyle: 'bold', halign: 'right', fillColor: [245, 245, 250] } });
                             qualSubRow.push({ content: Math.round(qTotalIHQty).toLocaleString('en-US'), styles: { fontStyle: 'bold', halign: 'right', fillColor: [245, 245, 250] } });
 
                             const qSaleQty = brands.reduce((s, e) => s + (parseFloat(e.saleQuantity) || 0), 0);
-                            const { whole: sW, remainder: sR } = calculatePktRemainderLocal(qSaleQty, qPktSize);
+                            let sW = 0, sR = 0;
+                            brands.forEach(ent => {
+                                const qty = parseFloat(ent.saleQuantity) || 0;
+                                if (qty <= 0) return;
+                                const pkt = calculatePktRemainderLocal(qty, ent.packetSize);
+                                sW += pkt.whole;
+                                sR += pkt.remainder;
+                            });
                             qualSubRow.push({ content: `${sW}${sR !== 0 ? ` - ${Math.abs(sR)} kg` : ''}`, styles: { fontStyle: 'bold', halign: 'right', fillColor: [245, 245, 250] } });
                             qualSubRow.push({ content: Math.round(qSaleQty).toLocaleString('en-US'), styles: { fontStyle: 'bold', halign: 'right', fillColor: [245, 245, 250] } });
                         }
 
                         const qCloseQty = brands.reduce((s, e) => s + (parseFloat(e.inHouseQuantity) || 0), 0);
-                        const qPktSize2 = parseFloat(brands[0]?.packetSize) || 0;
-                        const { whole: rW2, remainder: rR2 } = calculatePktRemainderLocal(qCloseQty, qPktSize2);
+                        let rW2 = 0, rR2 = 0;
+                        brands.forEach(ent => {
+                            const qty = parseFloat(ent.inHouseQuantity) || 0;
+                            if (qty <= 0) return;
+                            const pkt = calculatePktRemainderLocal(qty, ent.packetSize || 30);
+                            rW2 += pkt.whole;
+                            rR2 += pkt.remainder;
+                        });
                         qualSubRow.push({ content: `${rW2}${rR2 !== 0 ? ` - ${Math.abs(rR2)} kg` : ''}`, styles: { fontStyle: 'bold', halign: 'right', fillColor: [245, 245, 250] } });
                         qualSubRow.push({ content: Math.round(qCloseQty).toLocaleString('en-US'), styles: { fontStyle: 'bold', halign: 'right', fillColor: [245, 245, 250] } });
 
@@ -1023,18 +1042,37 @@ export const generateStockReportPDF = (stockData, filters, reportType = 'short',
                     });
 
                     if (reportType === 'detailed') {
-                        const tSize = item.brandList[0]?.packetSize || 0;
-                        const { whole: tW, remainder: tR } = calculatePktRemainderLocal(item.totalInHouseQuantity, tSize);
+                        let tW = 0, tR = 0;
+                        item.brandList.forEach(ent => {
+                            const qty = parseFloat(ent.totalInHouseQuantity) || 0;
+                            if (qty <= 0) return;
+                            const pkt = calculatePktRemainderLocal(qty, ent.packetSize);
+                            tW += pkt.whole;
+                            tR += pkt.remainder;
+                        });
                         subRow.push({ content: `${tW}${tR !== 0 ? ` - ${Math.abs(tR)} kg` : ''}`, styles: { fontStyle: 'bold', halign: 'right', fillColor: [248, 248, 248] } });
                         subRow.push({ content: Math.round(item.totalInHouseQuantity).toLocaleString('en-US'), styles: { fontStyle: 'bold', halign: 'right', fillColor: [248, 248, 248] } });
 
-                        const { whole: sW, remainder: sR } = calculatePktRemainderLocal(item.saleQuantity, tSize);
+                        let sW = 0, sR = 0;
+                        item.brandList.forEach(ent => {
+                            const qty = parseFloat(ent.saleQuantity) || 0;
+                            if (qty <= 0) return;
+                            const pkt = calculatePktRemainderLocal(qty, ent.packetSize);
+                            sW += pkt.whole;
+                            sR += pkt.remainder;
+                        });
                         subRow.push({ content: `${sW}${sR !== 0 ? ` - ${Math.abs(sR)} kg` : ''}`, styles: { fontStyle: 'bold', halign: 'right', fillColor: [248, 248, 248] } });
                         subRow.push({ content: Math.round(item.saleQuantity).toLocaleString('en-US'), styles: { fontStyle: 'bold', halign: 'right', fillColor: [248, 248, 248] } });
                     }
 
-                    const tSize = item.brandList[0]?.packetSize || 0;
-                    const { whole: rW, remainder: rR } = calculatePktRemainderLocal(item.inHouseQuantity, tSize);
+                    let rW = 0, rR = 0;
+                    item.brandList.forEach(ent => {
+                        const qty = parseFloat(ent.inHouseQuantity) || 0;
+                        if (qty <= 0) return;
+                        const pkt = calculatePktRemainderLocal(qty, ent.packetSize || 30);
+                        rW += pkt.whole;
+                        rR += pkt.remainder;
+                    });
                     subRow.push({ content: `${rW}${rR !== 0 ? ` - ${Math.abs(rR)} kg` : ''}`, styles: { fontStyle: 'bold', halign: 'right', fillColor: [248, 248, 248] } });
                     subRow.push({ content: Math.round(item.inHouseQuantity).toLocaleString('en-US'), styles: { fontStyle: 'bold', halign: 'right', fillColor: [248, 248, 248] } });
 
