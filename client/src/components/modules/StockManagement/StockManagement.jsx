@@ -2873,16 +2873,9 @@ const StockManagement = ({
                                                         {/* Total Opening */}
                                                         <div className="text-sm text-blue-900 font-black text-center">
                                                             {(() => {
-                                                                let totalWhole = 0;
-                                                                let totalRemainder = 0;
-                                                                group.brandList.forEach(b => {
-                                                                    const qty = parseFloat(b.openingQuantity) || 0;
-                                                                    if (qty <= 0) return;
-                                                                    const { whole, remainder } = calculatePktRemainder(qty, b.packetSize);
-                                                                    totalWhole += whole;
-                                                                    totalRemainder += remainder;
-                                                                });
-                                                                return `${totalWhole.toLocaleString('en-US')} - ${Math.abs(totalRemainder).toLocaleString('en-US')} kg`;
+                                                                const pktSize = group.brandList?.[0]?.packetSize || 0;
+                                                                const { whole, remainder } = calculatePktRemainder(group.openingQuantity, pktSize);
+                                                                return `${whole.toLocaleString('en-US')} - ${Math.abs(remainder).toLocaleString('en-US')} kg`;
                                                             })()}
                                                         </div>
                                                         <div className="text-sm text-blue-900 font-black text-center">
@@ -2891,16 +2884,9 @@ const StockManagement = ({
                                                         {/* Total Sale */}
                                                         <div className="text-sm text-orange-900 font-black text-center">
                                                             {(() => {
-                                                                let totalWhole = 0;
-                                                                let totalRemainder = 0;
-                                                                group.brandList.forEach(b => {
-                                                                    const qty = parseFloat(b.saleQuantity) || 0;
-                                                                    if (qty <= 0) return;
-                                                                    const { whole, remainder } = calculatePktRemainder(qty, b.packetSize);
-                                                                    totalWhole += whole;
-                                                                    totalRemainder += remainder;
-                                                                });
-                                                                return `${totalWhole.toLocaleString('en-US')} - ${Math.abs(totalRemainder).toLocaleString('en-US')} kg`;
+                                                                const pktSize = group.brandList?.[0]?.packetSize || 0;
+                                                                const { whole, remainder } = calculatePktRemainder(group.saleQuantity, pktSize);
+                                                                return `${whole.toLocaleString('en-US')} - ${Math.abs(remainder).toLocaleString('en-US')} kg`;
                                                             })()}
                                                         </div>
                                                         <div className="text-sm text-orange-900 font-black text-center">
@@ -2909,16 +2895,9 @@ const StockManagement = ({
                                                         {/* Total Closing */}
                                                         <div className="text-sm text-green-900 font-black text-center underline decoration-green-200">
                                                             {(() => {
-                                                                let totalWhole = 0;
-                                                                let totalRemainder = 0;
-                                                                group.brandList.forEach(b => {
-                                                                    const qty = parseFloat(b.inHouseQuantity) || 0;
-                                                                    if (qty <= 0) return;
-                                                                    const { whole, remainder } = calculatePktRemainder(qty, b.packetSize);
-                                                                    totalWhole += whole;
-                                                                    totalRemainder += remainder;
-                                                                });
-                                                                return `${totalWhole.toLocaleString('en-US')} - ${Math.abs(totalRemainder).toLocaleString('en-US')} kg`;
+                                                                const pktSize = group.brandList?.[0]?.packetSize || 0;
+                                                                const { whole, remainder = 0 } = calculatePktRemainder(group.inHouseQuantity, pktSize);
+                                                                return `${whole.toLocaleString('en-US')} - ${Math.abs(remainder).toLocaleString('en-US')} kg`;
                                                             })()}
                                                         </div>
                                                         <div className="text-sm text-green-900 font-black text-center underline decoration-green-200">
