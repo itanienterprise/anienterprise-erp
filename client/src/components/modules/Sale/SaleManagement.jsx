@@ -2715,7 +2715,7 @@ const SaleManagement = ({
                         autoComplete="off"
                         className="grid grid-cols-1 md:grid-cols-2 gap-6 relative z-10"
                     >
-                        <div className={`grid grid-cols-1 ${saleType === 'Border' ? 'md:grid-cols-5' : 'md:grid-cols-3'} gap-4 col-span-2`}>
+                        <div className={`grid grid-cols-1 gap-4 col-span-2 ${saleType === 'Border' ? 'md:grid-cols-5' : 'md:grid-cols-3'}`}>
                             <CustomDatePicker
                                 label="Date"
                                 name="date"
@@ -3126,6 +3126,11 @@ const SaleManagement = ({
                                 </div>
                             )}
 
+                        </div>
+
+                        {/* Second row: Company Name, Customer, Contact, Address */}
+                        <div className={`grid grid-cols-1 gap-4 col-span-2 ${saleType === 'Border' ? 'md:grid-cols-2' : 'md:grid-cols-4'}`}>
+
                             {/* Company Name Select */}
                             <div className="sale-mgmt-input-group relative company-dropdown-container">
                                 <label className="sale-mgmt-label">Company Name</label>
@@ -3200,7 +3205,10 @@ const SaleManagement = ({
                                 </div>
                             )}
 
-                            {/* Border Field: Commissions Row */}
+                        </div>
+
+                        {/* Dummy spacer div to maintain col-span-2 for Border commissions row */}
+                        {/* Border Field: Commissions Row */}
                             {saleType === 'Border' && (
                                 <div className="col-span-full grid grid-cols-1 md:grid-cols-2 gap-6 p-4 bg-blue-50/30 rounded-2xl border border-blue-100/50 mb-2">
                                     {/* Indian C&F Commission */}
@@ -3285,7 +3293,6 @@ const SaleManagement = ({
                                     </div>
                                 </div>
                             )}
-                        </div>
 
                         <div className="col-span-2 space-y-6">
                             <div className="flex items-center justify-between">
