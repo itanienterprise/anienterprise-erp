@@ -37,7 +37,7 @@ const Exporter = ({
         address: '',
         contactPerson: '',
         email: '',
-        phone: '+880',
+        phone: '',
         bin: '',
         tin: '',
         irc: '',
@@ -151,13 +151,7 @@ const Exporter = ({
     };
 
     const handleInputChange = (e) => {
-        const { name } = e.target;
-        let { value } = e.target;
-        if (name === 'phone') {
-            if (!value.startsWith('+880')) value = '+880' + value.replace(/^\+880?/, '');
-            if (value.length <= 14) setFormData(prev => ({ ...prev, [name]: value }));
-            return;
-        }
+        const { name, value } = e.target;
         setFormData(prev => ({ ...prev, [name]: value }));
     };
 
@@ -190,10 +184,6 @@ const Exporter = ({
 
     const handleSubmit = async (e) => {
         e.preventDefault();
-        if (formData.phone.length !== 14) {
-            alert('Phone number must be exactly 14 characters long (e.g., +8801700000000)');
-            return;
-        }
         setIsSubmitting(true);
         setSubmitStatus(null);
         try {
@@ -214,7 +204,7 @@ const Exporter = ({
     };
 
     const resetForm = () => {
-        setFormData({ name: '', address: '', contactPerson: '', email: '', phone: '+880', bin: '', tin: '', irc: '', status: 'Active', signature: '' });
+        setFormData({ name: '', address: '', contactPerson: '', email: '', phone: '', bin: '', tin: '', irc: '', status: 'Active', signature: '' });
         setEditingId(null);
         setSubmitStatus(null);
     };
@@ -225,7 +215,7 @@ const Exporter = ({
             address: exporter.address || '',
             contactPerson: exporter.contactPerson || '',
             email: exporter.email || '',
-            phone: exporter.phone || '+880',
+            phone: exporter.phone || '',
             bin: exporter.bin || '',
             tin: exporter.tin || '',
             irc: exporter.irc || '',
@@ -354,11 +344,11 @@ const Exporter = ({
                         </div>
                         <div className="exporter-form-field">
                             <label className="exporter-form-label">Email</label>
-                            <input type="email" name="email" value={formData.email} onChange={handleInputChange} required placeholder="email@example.com" className="exporter-form-input" />
+                            <input type="email" name="email" value={formData.email} onChange={handleInputChange} placeholder="email@example.com" className="exporter-form-input" />
                         </div>
                         <div className="exporter-form-field">
                             <label className="exporter-form-label">Phone</label>
-                            <input type="tel" name="phone" value={formData.phone} onChange={handleInputChange} required placeholder="+880..." className="exporter-form-input" />
+                            <input type="tel" name="phone" value={formData.phone} onChange={handleInputChange} placeholder="Phone number" className="exporter-form-input" />
                         </div>
                         <div className="exporter-form-field">
                             <label className="exporter-form-label">Status</label>
