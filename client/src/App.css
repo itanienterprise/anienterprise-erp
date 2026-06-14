@@ -11,8 +11,8 @@
 
 body {
     font-family: 'Inter', sans-serif;
-    background-color: var(--color-gray-50);
-    color: var(--color-gray-900);
+    background-color: var(--color-gray-50, #f9fafb);
+    color: var(--color-gray-900, #111827);
 }
 
 /* Hide spin buttons for all number inputs globally */
@@ -29,16 +29,79 @@ input[type="number"] {
 
 /* Hide scrollbar utility */
 .hide-scrollbar {
-    -ms-overflow-style: none; /* IE and Edge */
-    scrollbar-width: none; /* Firefox */
+    -ms-overflow-style: none;
+    scrollbar-width: none;
 }
 .hide-scrollbar::-webkit-scrollbar {
-    display: none; /* Chrome, Safari and Opera */
+    display: none;
 }
+
+/* =====================================================
+   BlackBerry Passport (BB10) / Old WebKit Compatibility
+   IMPORTANT: Do NOT redeclare Tailwind utility classes here
+   as it breaks responsive variants (md:hidden, md:flex, etc.)
+   Only add -webkit- prefixes via @layer or @supports blocks.
+   ===================================================== */
+
+/* Add -webkit- scrolling touch to overflow-y-auto elements */
+.overflow-y-auto {
+    -webkit-overflow-scrolling: touch;
+}
+
+/* backdrop-filter fallback for BB10 */
+@supports not (backdrop-filter: blur(1px)) {
+    .backdrop-blur-sm,
+    .backdrop-blur,
+    .backdrop-blur-md,
+    .backdrop-blur-lg {
+        background-color: rgba(255, 255, 255, 0.97) !important;
+    }
+}
+
+/* CSS Grid fallback — use flex for browsers without grid support */
+@supports not (display: grid) {
+    .grid {
+        display: -webkit-box !important;
+        display: -webkit-flex !important;
+        display: flex !important;
+        -webkit-flex-wrap: wrap !important;
+        flex-wrap: wrap !important;
+    }
+    .col-span-2 { width: 100% !important; }
+}
+
+/* Add -webkit- prefixes for transitions on specific elements
+   (BB10 WebKit needs these; Tailwind v4 may not include them) */
+* {
+    -webkit-box-sizing: border-box;
+    box-sizing: border-box;
+}
+
+/* WebKit prefix for user-select (Tailwind v4 may not include) */
+.select-none {
+    -webkit-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
+    user-select: none;
+}
+
+/* appearance for inputs */
+.appearance-none {
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    appearance: none;
+}
+
+/* -webkit- box-shadow for older WebKit */
+.shadow-sm  { -webkit-box-shadow: 0 1px 2px 0 rgba(0,0,0,.05); }
+.shadow     { -webkit-box-shadow: 0 1px 3px 0 rgba(0,0,0,.1); }
+.shadow-md  { -webkit-box-shadow: 0 4px 6px -1px rgba(0,0,0,.1); }
+.shadow-lg  { -webkit-box-shadow: 0 10px 15px -3px rgba(0,0,0,.1); }
+.shadow-xl  { -webkit-box-shadow: 0 20px 25px -5px rgba(0,0,0,.1); }
+.shadow-2xl { -webkit-box-shadow: 0 25px 50px -12px rgba(0,0,0,.25); }
 
 @media print {
 
-    /* From index.css */
     aside,
     header,
     nav,
@@ -83,14 +146,11 @@ input[type="number"] {
         height: auto !important;
     }
 
-    /* Force background colors to print if needed */
     * {
         -webkit-print-color-adjust: exact !important;
         print-color-adjust: exact !important;
     }
 
-    /* From App.jsx <style> tag */
-    /* 1. Global Hiding */
     aside,
     header,
     nav,
@@ -102,7 +162,6 @@ input[type="number"] {
         display: none !important;
     }
 
-    /* 2. Reset layout constraints for root elements */
     html,
     body,
     #root,
@@ -116,13 +175,11 @@ input[type="number"] {
         padding: 0 !important;
     }
 
-    /* 3. Hide the main app layout when a report is open */
     .is-printing-report>aside,
     .is-printing-report>div.flex-1 {
         display: none !important;
     }
 
-    /* 4. Prepare the modal for printing */
     .fixed.inset-0 {
         position: static !important;
         display: block !important;
@@ -133,7 +190,6 @@ input[type="number"] {
         z-index: auto !important;
     }
 
-    /* 5. Clean up modal-specific styling */
     .rounded-3xl,
     .rounded-2xl,
     .shadow-2xl,
@@ -152,7 +208,6 @@ input[type="number"] {
         max-height: none !important;
     }
 
-    /* 6. Document flow and margins */
     .flex-1.overflow-y-auto {
         overflow: visible !important;
         padding: 0 !important;
@@ -166,19 +221,16 @@ input[type="number"] {
         padding: 20px !important;
     }
 
-    /* Ensure table takes full width and has black borders for clarity */
     table {
         width: 100% !important;
         border-collapse: collapse !important;
         table-layout: fixed !important;
-        /* Force fixed layout to control widths */
     }
 
     th,
     td {
         border: 1px solid #000 !important;
         font-size: 14px !important;
-        /* Matches user requested table font size */
         padding: 4px 2px !important;
     }
 
@@ -186,7 +238,6 @@ input[type="number"] {
         white-space: nowrap !important;
     }
 
-    /* Ensure internal dividers are visible in print */
     .border-gray-100,
     .border-gray-200,
     .border-gray-300,

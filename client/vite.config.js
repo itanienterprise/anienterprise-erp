@@ -10,7 +10,9 @@ export default defineConfig(({ mode }) => ({
     react(),
     tailwindcss(),
     legacy({
-      targets: ['defaults', 'not IE 11', 'chrome 30'],
+      targets: ['defaults', 'not IE 11', 'chrome 30', 'safari 9', 'ios_saf 9'],
+      renderLegacyChunks: true,
+      modernPolyfills: true,
     }),
     // TEMPORARILY DISABLED: The javascript-obfuscator is causing Docker to run out of memory (ResourceExhausted).
     // If you need obfuscation in production, you must allocate more memory (e.g., 8GB) to your Docker Desktop VM.

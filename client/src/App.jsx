@@ -1642,7 +1642,7 @@ function App() {
         />
       )}
       {/* Sidebar */}
-      <aside className={`fixed inset-y-0 left-0 z-[1100] w-56 bg-white text-gray-900 border-r border-gray-200 transform transition-transform duration-300 ease-in-out ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'} md:relative md:translate-x-0 flex flex-col ${(showLcReport || showStockReport || showProductHistoryReport || showSalesReport) ? 'print:hidden' : ''}`}>
+      <aside className={`fixed inset-y-0 left-0 z-[1100] w-56 bg-white text-gray-900 border-r border-gray-200 transform transition-transform duration-300 ease-in-out overflow-x-hidden ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'} md:relative md:translate-x-0 flex flex-col ${(showLcReport || showStockReport || showProductHistoryReport || showSalesReport) ? 'print:hidden' : ''}`}>
         <div className="p-4 border-b border-gray-200 bg-gray-50/50">
           <div className="flex items-center">
             <button
@@ -1672,7 +1672,7 @@ function App() {
             </div>
           </div>
         </div>
-        <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto hide-scrollbar">
+        <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto overflow-x-hidden hide-scrollbar">
           <button onClick={() => { setCurrentView('dashboard'); setSidebarOpen(false); }} className={`w-full flex items-center px-4 py-2.5 rounded-lg transition-all ${currentView === 'dashboard' ? 'bg-blue-50 text-blue-600 shadow-sm' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'}`}>
             <HomeIcon className="w-5 h-5 mr-3" />
             <span className="font-medium text-sm">Dashboard</span>
