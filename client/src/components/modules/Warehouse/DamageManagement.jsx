@@ -4,7 +4,7 @@ import { API_BASE_URL } from '../../../utils/helpers';
 import axios from '../../../utils/api';
 import CustomDatePicker from '../../shared/CustomDatePicker';
 
-const DamageManagement = ({ currentUser, products, warehouseData, salesRecords, damages, fetchDamages, addNotification }) => {
+const DamageManagement = ({ currentUser, products, warehouseData, salesRecords, stockRecords, damages, fetchDamages, fetchStockRecords, addNotification }) => {
     const [showForm, setShowForm] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [submitStatus, setSubmitStatus] = useState(null);
@@ -16,6 +16,7 @@ const DamageManagement = ({ currentUser, products, warehouseData, salesRecords, 
         date: new Date().toISOString().split('T')[0],
         productName: '',
         brand: '',
+        lcNo: '',
         warehouse: '',
         price: '',
         quantity: '',
@@ -25,15 +26,18 @@ const DamageManagement = ({ currentUser, products, warehouseData, salesRecords, 
 
     useEffect(() => {
         if (fetchDamages) fetchDamages();
+        if (fetchStockRecords) fetchStockRecords();
     }, []);
 
-    const [activeDropdown, setActiveDropdown] = useState(null); // 'product', 'brand', 'warehouse', 'reason'
+    const [activeDropdown, setActiveDropdown] = useState(null); // 'product', 'brand', 'lcNo', 'warehouse', 'reason'
     const [productSearch, setProductSearch] = useState('');
     const [brandSearch, setBrandSearch] = useState('');
+    const [lcSearch, setLcSearch] = useState('');
     const [warehouseSearch, setWarehouseSearch] = useState('');
 
     const productRef = useRef(null);
     const brandRef = useRef(null);
+    const lcRef = useRef(null);
     const warehouseRef = useRef(null);
     const reasonRef = useRef(null);
 
@@ -41,6 +45,7 @@ const DamageManagement = ({ currentUser, products, warehouseData, salesRecords, 
         const handleClickOutside = (event) => {
             if (activeDropdown === 'product' && productRef.current && !productRef.current.contains(event.target)) setActiveDropdown(null);
             if (activeDropdown === 'brand' && brandRef.current && !brandRef.current.contains(event.target)) setActiveDropdown(null);
+            if (activeDropdown === 'lcNo' && lcRef.current && !lcRef.current.contains(event.target)) setActiveDropdown(null);
             if (activeDropdown === 'warehouse' && warehouseRef.current && !warehouseRef.current.contains(event.target)) setActiveDropdown(null);
             if (activeDropdown === 'reason' && reasonRef.current && !reasonRef.current.contains(event.target)) setActiveDropdown(null);
         };
@@ -48,11 +53,42 @@ const DamageManagement = ({ currentUser, products, warehouseData, salesRecords, 
         return () => document.removeEventListener('mousedown', handleClickOutside);
     }, [activeDropdown]);
 
+    const uniqueLcNos = useMemo(() => {
+        if (!stockRecords) return [];
+        return [...new Set(stockRecords.map(s => s.lcNo).filter(Boolean))].sort();
+    }, [stockRecords]);
+
+    const filteredProducts = useMemo(() => {
+        if (!formData.lcNo) return [];
+        const targetLc = formData.lcNo.trim().toLowerCase();
+        const matchingStocks = stockRecords?.filter(s => (s.lcNo || '').trim().toLowerCase() === targetLc) || [];
+        const productNames = new Set(matchingStocks.map(s => s.productName || s.product).filter(Boolean));
+        if (productNames.size > 0) {
+            return products?.filter(p => productNames.has(p.name)) || [];
+        }
+        return products || [];
+    }, [formData.lcNo, products, stockRecords]);
+
     const selectedProductBrands = useMemo(() => {
-        if (!formData.productName) return [];
+        if (!formData.productName || !formData.lcNo) return [];
+        const targetProd = formData.productName.trim().toLowerCase();
+        const targetLc = formData.lcNo.trim().toLowerCase();
+        
+        const matches = stockRecords?.filter(s => {
+            const prod = (s.productName || s.product || '').trim().toLowerCase();
+            const lc = (s.lcNo || '').trim().toLowerCase();
+            return prod === targetProd && lc === targetLc;
+        }) || [];
+        
+        const uniqueBrands = [...new Set(matches.map(s => s.brand).filter(Boolean))];
+        if (uniqueBrands.length > 0) {
+            return uniqueBrands.map(brand => ({ brand }));
+        }
+        
         const product = products?.find(p => p.name === formData.productName);
         return product?.brands || [];
-    }, [formData.productName, products]);
+    }, [formData.productName, formData.lcNo, products, stockRecords]);
+
 
     const currentStock = useMemo(() => {
         if (!formData.productName || !formData.warehouse) return null; // Return null to indicate missing selection
@@ -60,6 +96,7 @@ const DamageManagement = ({ currentUser, products, warehouseData, salesRecords, 
         const targetWH = formData.warehouse.trim().toLowerCase();
         const targetProd = formData.productName.trim().toLowerCase();
         const targetBrand = (formData.brand || '').trim().toLowerCase();
+        const targetLc = (formData.lcNo || '').trim().toLowerCase();
 
         // Standardize "General / In Stock" name matching
         const isGeneralWH = targetWH === 'general / in stock' || targetWH === '';
@@ -69,6 +106,7 @@ const DamageManagement = ({ currentUser, products, warehouseData, salesRecords, 
             const wh = (w.whName || w.warehouse || w.name || '').trim().toLowerCase();
             const prod = (w.productName || w.product || '').trim().toLowerCase();
             const brand = (w.brand || w.quality || '').trim().toLowerCase();
+            const lc = (w.lcNo || '').trim().toLowerCase();
 
             const whMatch = wh === targetWH || (isGeneralWH && (wh === '' || wh === 'general / in stock'));
             const prodMatch = prod === targetProd;
@@ -76,13 +114,16 @@ const DamageManagement = ({ currentUser, products, warehouseData, salesRecords, 
             // Fixed brand match: if targetBrand is empty, sum ALL brands.
             // If targetBrand is specified, match it exactly, OR match '-' if item has no brand.
             const brandMatch = !targetBrand || brand === targetBrand || (brand === '-' && targetBrand === '');
+            
+            // LC match
+            const lcMatch = !targetLc || lc === targetLc;
 
-            return whMatch && prodMatch && brandMatch;
+            return whMatch && prodMatch && brandMatch && lcMatch;
         });
 
         let physicalStock = matches?.reduce((sum, m) => sum + (parseFloat(m.whQty) || 0), 0) || 0;
 
-        // 2. Subtract sales matching this specific warehouse + product + brand
+        // 2. Subtract sales matching this specific warehouse + product + brand + lcNo
         let totalSales = 0;
         salesRecords?.forEach(sale => {
             const sStatus = (sale.status || '').toLowerCase();
@@ -97,11 +138,13 @@ const DamageManagement = ({ currentUser, products, warehouseData, salesRecords, 
                         saleItem.brandEntries.forEach(entry => {
                             const whName = (entry.warehouseName || '').trim().toLowerCase();
                             const brandName = (entry.brand || entry.quality || '').trim().toLowerCase();
+                            const lcName = (entry.lcNo || saleItem.lcNo || sale.lcNo || '').trim().toLowerCase();
 
                             const whMatch = whName === targetWH || (isGeneralWH && (whName === '' || whName === 'general / in stock'));
                             if (whMatch) {
                                 const brandMatch = !targetBrand || brandName === targetBrand || (brandName === '-' && targetBrand === '') || (brandName === '' && targetBrand === '');
-                                if (brandMatch) {
+                                const lcMatch = !targetLc || lcName === targetLc;
+                                if (brandMatch && lcMatch) {
                                     totalSales += parseFloat(entry.originalQuantity || entry.quantity) || 0;
                                 }
                             }
@@ -111,7 +154,7 @@ const DamageManagement = ({ currentUser, products, warehouseData, salesRecords, 
             }
         });
 
-        // 3. Subtract other damages for this specific warehouse + product + brand
+        // 3. Subtract other damages for this specific warehouse + product + brand + lcNo
         let totalDamages = 0;
         damages?.forEach(d => {
             // Skip the current record being edited to avoid double subtraction
@@ -120,18 +163,20 @@ const DamageManagement = ({ currentUser, products, warehouseData, salesRecords, 
             const dWH = (d.warehouse || '').trim().toLowerCase();
             const dProd = (d.productName || '').trim().toLowerCase();
             const dBrand = (d.brand || '').trim().toLowerCase();
+            const dLc = (d.lcNo || '').trim().toLowerCase();
 
             const whMatch = dWH === targetWH || (isGeneralWH && (dWH === '' || dWH === 'general / in stock'));
             if (whMatch && dProd === targetProd) {
                 const brandMatch = !targetBrand || dBrand === targetBrand || (dBrand === '-' && targetBrand === '') || (dBrand === '' && targetBrand === '');
-                if (brandMatch) {
+                const lcMatch = !targetLc || dLc === targetLc;
+                if (brandMatch && lcMatch) {
                     totalDamages += parseFloat(d.quantity) || 0;
                 }
             }
         });
 
         return Math.max(0, physicalStock - totalSales - totalDamages);
-    }, [formData.productName, formData.brand, formData.warehouse, warehouseData, salesRecords, damages, editingId]);
+    }, [formData.productName, formData.brand, formData.lcNo, formData.warehouse, warehouseData, salesRecords, damages, editingId]);
 
     const handleInputChange = (e) => {
         const { name, value } = e.target;
@@ -175,6 +220,7 @@ const DamageManagement = ({ currentUser, products, warehouseData, salesRecords, 
             date: new Date().toISOString().split('T')[0],
             productName: '',
             brand: '',
+            lcNo: '',
             warehouse: '',
             price: '',
             quantity: '',
@@ -190,6 +236,7 @@ const DamageManagement = ({ currentUser, products, warehouseData, salesRecords, 
             date: damage.date ? new Date(damage.date).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
             productName: damage.productName || '',
             brand: damage.brand || '',
+            lcNo: damage.lcNo || '',
             warehouse: damage.warehouse || '',
             price: damage.price || '',
             quantity: damage.quantity || '',
@@ -222,7 +269,8 @@ const DamageManagement = ({ currentUser, products, warehouseData, salesRecords, 
         let filtered = damages.filter(d =>
             (d.productName || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
             (d.warehouse || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
-            (d.reason || '').toLowerCase().includes(searchQuery.toLowerCase())
+            (d.reason || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+            (d.lcNo || '').toLowerCase().includes(searchQuery.toLowerCase())
         );
         return filtered;
     }, [damages, searchQuery]);
@@ -292,22 +340,101 @@ const DamageManagement = ({ currentUser, products, warehouseData, salesRecords, 
                         </div>
 
                         <div className="space-y-2">
+                            <label className="text-xs font-bold text-gray-600 uppercase tracking-wider">LC No</label>
+                            <div className="relative" ref={lcRef}>
+                                <div className="relative group">
+                                    <input
+                                        type="text"
+                                        placeholder="Search LC No..."
+                                        className="w-full pl-4 pr-16 py-2.5 bg-white border border-gray-200 rounded-xl text-sm shadow-sm hover:border-gray-300 transition-all focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 outline-none font-medium placeholder:text-gray-400"
+                                        value={activeDropdown === 'lcNo' ? lcSearch : formData.lcNo}
+                                        onChange={(e) => {
+                                            setLcSearch(e.target.value);
+                                            setFormData({ ...formData, lcNo: e.target.value });
+                                            setActiveDropdown('lcNo');
+                                        }}
+                                        onFocus={() => {
+                                            setLcSearch(formData.lcNo || '');
+                                            setActiveDropdown('lcNo');
+                                        }}
+                                        autoComplete="off"
+                                    />
+                                    <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-2">
+                                        {formData.lcNo && (
+                                            <button
+                                                type="button"
+                                                onClick={() => {
+                                                    setFormData({ ...formData, lcNo: '', productName: '', brand: '' });
+                                                    setProductSearch('');
+                                                    setBrandSearch('');
+                                                    setLcSearch('');
+                                                }}
+                                                className="p-1 hover:bg-gray-100 rounded-md text-gray-400 hover:text-red-500 transition-colors"
+                                            >
+                                                <XIcon className="w-3.5 h-3.5" />
+                                            </button>
+                                        )}
+                                        <button
+                                            type="button"
+                                            onClick={() => setActiveDropdown(activeDropdown === 'lcNo' ? null : 'lcNo')}
+                                            className="text-gray-400 hover:text-blue-500 transition-colors"
+                                        >
+                                            <ChevronDownIcon className={`w-4 h-4 transition-transform duration-200 ${activeDropdown === 'lcNo' ? 'rotate-180 text-blue-500' : ''}`} />
+                                        </button>
+                                    </div>
+                                </div>
+
+                                {activeDropdown === 'lcNo' && (
+                                    <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-100 rounded-xl shadow-xl z-[110] max-h-60 flex flex-col animate-in fade-in slide-in-from-top-2 duration-200 overflow-hidden">
+                                        <div className="overflow-y-auto py-1">
+                                            {uniqueLcNos.filter(lc => (lc || '').toLowerCase().includes(lcSearch.toLowerCase())).map((lc, idx) => (
+                                                <button
+                                                    key={idx}
+                                                    type="button"
+                                                    onClick={() => {
+                                                        setFormData({ ...formData, lcNo: lc, productName: '', brand: '' });
+                                                        setProductSearch('');
+                                                        setBrandSearch('');
+                                                        setLcSearch(lc);
+                                                        setActiveDropdown(null);
+                                                    }}
+                                                    className="w-full px-4 py-2.5 text-left text-sm hover:bg-blue-50 transition-colors flex items-center justify-between"
+                                                >
+                                                    <span className={formData.lcNo === lc ? 'text-blue-600 font-bold' : 'text-gray-700 font-medium'}>
+                                                        {lc}
+                                                    </span>
+                                                    {formData.lcNo === lc && <CheckIcon className="w-4 h-4 text-blue-600" />}
+                                                </button>
+                                            ))}
+                                            {uniqueLcNos.filter(lc => (lc || '').toLowerCase().includes(lcSearch.toLowerCase())).length === 0 && (
+                                                <div className="px-4 py-3 text-xs text-gray-400 text-center italic">No LC numbers found</div>
+                                            )}
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+
+                        <div className="space-y-2">
                             <label className="text-xs font-bold text-gray-600 uppercase tracking-wider">Product Name</label>
                             <div className="relative" ref={productRef}>
                                 <div className="relative group">
                                     <input
                                         type="text"
-                                        placeholder="Search products..."
-                                        className="w-full pl-4 pr-16 py-2.5 bg-white border border-gray-200 rounded-xl text-sm shadow-sm hover:border-gray-300 transition-all focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 outline-none font-medium placeholder:text-gray-400"
+                                        placeholder={!formData.lcNo ? "Select LC No first" : "Search products..."}
+                                        className={`w-full pl-4 pr-16 py-2.5 bg-white border border-gray-200 rounded-xl text-sm shadow-sm transition-all outline-none font-medium ${!formData.lcNo ? 'bg-gray-50/50 cursor-not-allowed opacity-60' : 'hover:border-gray-300 focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500'}`}
                                         value={activeDropdown === 'product' ? productSearch : formData.productName}
                                         onChange={(e) => {
+                                            if (!formData.lcNo) return;
                                             setProductSearch(e.target.value);
                                             setActiveDropdown('product');
                                         }}
                                         onFocus={() => {
+                                            if (!formData.lcNo) return;
                                             setProductSearch(formData.productName || '');
                                             setActiveDropdown('product');
                                         }}
+                                        disabled={!formData.lcNo}
                                         autoComplete="off"
                                     />
                                     <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-2">
@@ -317,6 +444,7 @@ const DamageManagement = ({ currentUser, products, warehouseData, salesRecords, 
                                                 onClick={() => {
                                                     setFormData({ ...formData, productName: '', brand: '' });
                                                     setProductSearch('');
+                                                    setBrandSearch('');
                                                 }}
                                                 className="p-1 hover:bg-gray-100 rounded-md text-gray-400 hover:text-red-500 transition-colors"
                                             >
@@ -325,24 +453,26 @@ const DamageManagement = ({ currentUser, products, warehouseData, salesRecords, 
                                         )}
                                         <button
                                             type="button"
-                                            onClick={() => setActiveDropdown(activeDropdown === 'product' ? null : 'product')}
+                                            onClick={() => formData.lcNo && setActiveDropdown(activeDropdown === 'product' ? null : 'product')}
                                             className="text-gray-400 hover:text-blue-500 transition-colors"
+                                            disabled={!formData.lcNo}
                                         >
                                             <ChevronDownIcon className={`w-4 h-4 transition-transform duration-200 ${activeDropdown === 'product' ? 'rotate-180 text-blue-500' : ''}`} />
                                         </button>
                                     </div>
                                 </div>
 
-                                {activeDropdown === 'product' && (
+                                {activeDropdown === 'product' && formData.lcNo && (
                                     <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-100 rounded-xl shadow-xl z-[110] max-h-60 flex flex-col animate-in fade-in slide-in-from-top-2 duration-200 overflow-hidden">
                                         <div className="overflow-y-auto py-1">
-                                            {products?.filter(p => (p.name || '').toLowerCase().includes(productSearch.toLowerCase())).map((p, idx) => (
+                                            {filteredProducts?.filter(p => (p.name || '').toLowerCase().includes(productSearch.toLowerCase())).map((p, idx) => (
                                                 <button
                                                     key={idx}
                                                     type="button"
                                                     onClick={() => {
                                                         setFormData({ ...formData, productName: p.name, brand: '' });
                                                         setProductSearch(p.name);
+                                                        setBrandSearch('');
                                                         setActiveDropdown(null);
                                                     }}
                                                     className="w-full px-4 py-2.5 text-left text-sm hover:bg-blue-50 transition-colors flex items-center justify-between"
@@ -353,7 +483,7 @@ const DamageManagement = ({ currentUser, products, warehouseData, salesRecords, 
                                                     {formData.productName === p.name && <CheckIcon className="w-4 h-4 text-blue-600" />}
                                                 </button>
                                             ))}
-                                            {products?.filter(p => (p.name || '').toLowerCase().includes(productSearch.toLowerCase())).length === 0 && (
+                                            {filteredProducts?.filter(p => (p.name || '').toLowerCase().includes(productSearch.toLowerCase())).length === 0 && (
                                                 <div className="px-4 py-3 text-xs text-gray-400 text-center italic">No products found</div>
                                             )}
                                         </div>
@@ -588,7 +718,9 @@ const DamageManagement = ({ currentUser, products, warehouseData, salesRecords, 
                             </div>
                         </div>
 
-                        <div className="space-y-2 lg:col-span-1">
+
+
+                        <div className="space-y-2 lg:col-span-2">
                             <label className="text-xs font-bold text-gray-600 uppercase tracking-wider">Remarks</label>
                             <input
                                 type="text"
@@ -619,6 +751,7 @@ const DamageManagement = ({ currentUser, products, warehouseData, salesRecords, 
                                     <th className="px-6 py-4 text-[11px] font-bold text-gray-400 uppercase tracking-wider border-b border-gray-100">Date</th>
                                     <th className="px-6 py-4 text-[11px] font-bold text-gray-400 uppercase tracking-wider border-b border-gray-100">Product</th>
                                     <th className="px-6 py-4 text-[11px] font-bold text-gray-400 uppercase tracking-wider border-b border-gray-100">Brand</th>
+                                    <th className="px-6 py-4 text-[11px] font-bold text-gray-400 uppercase tracking-wider border-b border-gray-100">LC No</th>
                                     <th className="px-6 py-4 text-[11px] font-bold text-gray-400 uppercase tracking-wider border-b border-gray-100">Warehouse</th>
                                     <th className="px-6 py-4 text-[11px] font-bold text-gray-400 uppercase tracking-wider border-b border-gray-100 text-right">Quantity</th>
                                     <th className="px-6 py-4 text-[11px] font-bold text-gray-400 uppercase tracking-wider border-b border-gray-100 text-right">Rate</th>
@@ -629,13 +762,14 @@ const DamageManagement = ({ currentUser, products, warehouseData, salesRecords, 
                             </thead>
                             <tbody className="divide-y divide-gray-50">
                                 {isLoading ? (
-                                    Array(3).fill(0).map((_, i) => <tr key={i}><td colSpan="9" className="px-6 py-4 animate-pulse bg-gray-50"></td></tr>)
+                                    Array(3).fill(0).map((_, i) => <tr key={i}><td colSpan="10" className="px-6 py-4 animate-pulse bg-gray-50"></td></tr>)
                                 ) : displayDamages.length > 0 ? (
                                     displayDamages.map((item) => (
                                         <tr key={item._id} className="hover:bg-blue-50/30 transition-colors">
                                             <td className="px-6 py-4 text-[13px] font-medium text-gray-500 whitespace-nowrap">{formatDate(item.date)}</td>
                                             <td className="px-6 py-4 text-[13px] font-bold text-gray-900">{item.productName}</td>
                                             <td className="px-6 py-4 text-[13px] font-semibold text-gray-600">{item.brand || '-'}</td>
+                                            <td className="px-6 py-4 text-[13px] font-bold text-gray-900">{item.lcNo || '-'}</td>
                                             <td className="px-6 py-4 text-[13px] font-medium text-gray-600">{item.warehouse}</td>
                                             <td className="px-6 py-4 text-[13px] font-black text-red-600 text-right">{item.quantity}</td>
                                             <td className="px-6 py-4 text-[13px] font-bold text-gray-800 text-right">{item.price ? `৳ ${item.price.toLocaleString('en-IN')}` : '-'}</td>
@@ -655,7 +789,7 @@ const DamageManagement = ({ currentUser, products, warehouseData, salesRecords, 
                                     ))
                                 ) : (
                                     <tr>
-                                        <td colSpan="9" className="px-6 py-12 text-center text-gray-400 font-medium text-sm">No damage records found.</td>
+                                        <td colSpan="10" className="px-6 py-12 text-center text-gray-400 font-medium text-sm">No damage records found.</td>
                                     </tr>
                                 )}
                             </tbody>

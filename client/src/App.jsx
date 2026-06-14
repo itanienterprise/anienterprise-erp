@@ -615,6 +615,7 @@ function App() {
       fetchProducts();
       fetchSales(); // Fetch sales data
       fetchDamages();
+      fetchStockRecords(); // Fetch stock records for LC No dropdown
     } else if (currentView === 'stock-section' || currentView === 'lc-entry-section' || currentView === 'general-sale-section' || currentView === 'border-sale-section') {
       fetchStockRecords();
       fetchWarehouses(); // Fetch warehouse data
@@ -1504,8 +1505,10 @@ function App() {
             products={products} 
             warehouseData={warehouseData} 
             salesRecords={salesRecords}
+            stockRecords={stockRecords}
             damages={damages}
             fetchDamages={fetchDamages}
+            fetchStockRecords={fetchStockRecords}
             addNotification={addNotification} 
             refreshPendingIndicators={fetchPendingEntries}
           />

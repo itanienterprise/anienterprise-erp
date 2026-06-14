@@ -596,13 +596,41 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
         };
     }).filter(Boolean);
 
+    // Calculate cumulative damage quantity matching active filters up to endDate
+    let cumulativeDamageQty = 0;
+    if (Array.isArray(damages)) {
+        damages.forEach(damage => {
+            const dDate = (damage.date || damage.createdAt || '').split('T')[0];
+            if (endDate && dDate > endDate) return;
+
+            const dProdName = (damage.productName || damage.product || '').trim().toLowerCase();
+            const dBrand = (damage.brand || 'No Brand').trim().toLowerCase();
+            const dWh = (damage.warehouse || '').trim().toLowerCase();
+
+            if (stockFilters.productName && dProdName !== stockFilters.productName.toLowerCase()) return;
+            if (stockFilters.brand && dBrand !== stockFilters.brand.toLowerCase()) return;
+            if (isWhFilter) {
+                const filterWH = stockFilters.warehouse.toLowerCase();
+                if (!dWh || (dWh !== filterWH && !dWh.includes(filterWH) && !filterWH.includes(dWh))) return;
+            }
+            if (stockFilters.lcNo && (damage.lcNo || '').trim() !== stockFilters.lcNo) return;
+            if (stockSearchQuery) {
+                const q = stockSearchQuery.toLowerCase();
+                const match = dProdName.includes(q) || dBrand.includes(q) || (damage.lcNo || '').toLowerCase().includes(q);
+                if (!match) return;
+            }
+
+            cumulativeDamageQty += safeParse(damage.quantity);
+        });
+    }
+
     return {
         displayRecords: filteredDisplayRecords,
         totalQuantity: tOpeningQty,
         totalSaleQty: tSaleQty,
         totalInHouseQty: tInHouseQty,
         totalShortage: tShortageQty,
-        totalDamageQty: tDamageQty,
+        totalDamageQty: cumulativeDamageQty,
         totalOpeningPktWhole: tOpeningPkt.whole,
         totalOpeningPktRemainder: tOpeningPkt.remainder,
         totalArrivalPktWhole: 0,
