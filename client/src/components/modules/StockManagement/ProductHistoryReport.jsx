@@ -10,11 +10,12 @@ const ProductHistoryReport = ({
 }) => {
     const [activeTab, setActiveTab] = useState('total');
     const [showFilterPanel, setShowFilterPanel] = useState(false);
-    const [modalFilters, setModalFilters] = useState({ startDate: '', endDate: '', party: '', brand: '' });
-    const [dropdownOpen, setDropdownOpen] = useState({ party: false, brand: false });
-    const [dropdownSearch, setDropdownSearch] = useState({ party: '', brand: '' });
+    const [modalFilters, setModalFilters] = useState({ startDate: '', endDate: '', party: '', brand: '', lcNo: '' });
+    const [dropdownOpen, setDropdownOpen] = useState({ party: false, brand: false, lcNo: false });
+    const [dropdownSearch, setDropdownSearch] = useState({ party: '', brand: '', lcNo: '' });
     const partyDropdownRef = useRef(null);
     const brandDropdownRef = useRef(null);
+    const lcNoDropdownRef = useRef(null);
     const filterPanelRef = useRef(null);
     const filterButtonRef = useRef(null);
 
@@ -33,6 +34,11 @@ const ProductHistoryReport = ({
                 setDropdownOpen(d => ({ ...d, brand: false }));
                 setDropdownSearch(s => ({ ...s, brand: '' }));
             }
+            // Check if click is outside lcNo dropdown
+            if (lcNoDropdownRef.current && !lcNoDropdownRef.current.contains(e.target)) {
+                setDropdownOpen(d => ({ ...d, lcNo: false }));
+                setDropdownSearch(s => ({ ...s, lcNo: '' }));
+            }
             // Check if click is outside main filter panel AND not on the toggle button
             if (showFilterPanel &&
                 filterPanelRef.current && !filterPanelRef.current.contains(e.target) &&
@@ -50,7 +56,9 @@ const ProductHistoryReport = ({
                 ...prev,
                 startDate: reportData.filters.startDate || '',
                 endDate: reportData.filters.endDate || '',
-                brand: reportData.filters.brand || ''
+                brand: reportData.filters.brand || '',
+                party: reportData.filters.party || '',
+                lcNo: reportData.filters.lcNo || ''
             }));
         }
     }, [reportData]);
@@ -75,11 +83,17 @@ const ProductHistoryReport = ({
         ...(rawSaleHistory || []).map(s => s.itemBrand),
         ...(rawDamageHistory || []).map(d => d.brand)
     ].filter(Boolean))].sort();
+    const lcOptions = [...new Set([
+        ...(rawPurchaseHistory || []).map(p => p.lcNo),
+        ...(rawSaleHistory || []).map(s => s.lcNo),
+        ...(rawDamageHistory || []).map(d => d.lcNo)
+    ].filter(Boolean))].sort();
 
     const purchaseHistory = (rawPurchaseHistory || []).filter(p => {
         if (modalFilters.startDate && p.date < modalFilters.startDate) return false;
         if (modalFilters.endDate && p.date > modalFilters.endDate) return false;
         if (modalFilters.brand && (p.itemBrand || '').toLowerCase() !== modalFilters.brand.toLowerCase()) return false;
+        if (modalFilters.lcNo && (p.lcNo || '').trim() !== modalFilters.lcNo) return false;
         return true;
     });
     const saleHistory = (rawSaleHistory || []).filter(s => {
@@ -87,12 +101,14 @@ const ProductHistoryReport = ({
         if (modalFilters.endDate && s.date > modalFilters.endDate) return false;
         if (modalFilters.party && (s.companyName || '') !== modalFilters.party) return false;
         if (modalFilters.brand && (s.itemBrand || '').toLowerCase() !== modalFilters.brand.toLowerCase()) return false;
+        if (modalFilters.lcNo && (s.lcNo || '').trim() !== modalFilters.lcNo) return false;
         return true;
     });
     const damageHistory = (rawDamageHistory || []).filter(d => {
         if (modalFilters.startDate && d.date < modalFilters.startDate) return false;
         if (modalFilters.endDate && d.date > modalFilters.endDate) return false;
         if (modalFilters.brand && (d.brand || '').toLowerCase() !== modalFilters.brand.toLowerCase()) return false;
+        if (modalFilters.lcNo && (d.lcNo || '').trim() !== modalFilters.lcNo) return false;
         return true;
     });
 
@@ -181,24 +197,12 @@ const ProductHistoryReport = ({
         const totalPurchaseQty = purchaseHistory.reduce((sum, item) => sum + (parseFloat(item.itemQty) || 0), 0);
         
         // Accurate total in-house calculation for header
-        const uniqueTruckBrands = new Set();
         let totalInHouseQty = 0;
-        
-        purchaseHistory.forEach(item => {
-            const bKey = (item.itemBrand || '').trim().toLowerCase();
-            const truckKey = `${(item.lcNo || '').trim()}_${(item.itemTruck || item.truckNo || '').trim()}_${bKey}`;
-            
-            // Always add the raw stock table remainder
-            totalInHouseQty += parseFloat(item.inHouseQuantity) || 0;
-            
-            // Add warehouse portion only once
-            if (!uniqueTruckBrands.has(truckKey)) {
-                const fullQty = parseFloat(item.itemInHouseQty) || 0;
-                const stockQty = parseFloat(item.inHouseQuantity) || 0;
-                totalInHouseQty += Math.max(0, fullQty - stockQty);
-                uniqueTruckBrands.add(truckKey);
-            }
-        });
+        if (activeTab === 'total') {
+            totalInHouseQty = Math.round(unifiedHistory[unifiedHistory.length - 1]?.runningInHouse || 0);
+        } else {
+            totalInHouseQty = Math.round(purchaseHistory.reduce((sum, item) => sum + (parseFloat(item.itemInHouseQty) || 0), 0));
+        }
         
         const totalShortageQty = purchaseHistory.reduce((sum, item) => sum + (parseFloat(item.itemShortageQty) || 0), 0);
         const totalSaleAmount = saleHistory.reduce((sum, s) => sum + (parseFloat(s.itemTotal) || 0), 0);
@@ -215,7 +219,8 @@ const ProductHistoryReport = ({
                 totalShortageQty,
                 totalAmount: totalSaleAmount
             },
-            modalFilters
+            modalFilters,
+            damageHistory
         );
     };
 
@@ -262,8 +267,8 @@ const ProductHistoryReport = ({
                                             <h4 className="font-bold text-gray-900">Advanced Filters</h4>
                                             <button
                                                 onClick={() => {
-                                                    setModalFilters({ startDate: '', endDate: '', party: '', brand: '' });
-                                                    setDropdownOpen({ party: false, brand: false });
+                                                    setModalFilters({ startDate: '', endDate: '', party: '', brand: '', lcNo: '' });
+                                                    setDropdownOpen({ party: false, brand: false, lcNo: false });
                                                 }}
                                                 className="text-[11px] font-bold text-blue-600 hover:text-blue-700 uppercase tracking-wider"
                                             >
@@ -304,7 +309,7 @@ const ProductHistoryReport = ({
                                                             type="text"
                                                             value={dropdownOpen.party ? dropdownSearch.party : modalFilters.party}
                                                             onFocus={() => {
-                                                                setDropdownOpen({ party: true, brand: false });
+                                                                setDropdownOpen({ party: true, brand: false, lcNo: false });
                                                                 setDropdownSearch(s => ({ ...s, party: '' }));
                                                             }}
                                                             onChange={e => setDropdownSearch(s => ({ ...s, party: e.target.value }))}
@@ -314,9 +319,9 @@ const ProductHistoryReport = ({
                                                         <ChevronDownIcon className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
                                                         {dropdownOpen.party && (
                                                             <div className="absolute z-[120] mt-1 w-full bg-white border border-gray-100 rounded-xl shadow-xl max-h-48 overflow-y-auto py-1">
-                                                                <button type="button" onClick={() => { setModalFilters({ ...modalFilters, party: '' }); setDropdownOpen({ party: false, brand: false }); setDropdownSearch(s => ({ ...s, party: '' })); }} className="w-full px-4 py-2 text-left text-sm text-gray-500 hover:bg-gray-50 font-medium border-b border-gray-50">All Parties</button>
+                                                                <button type="button" onClick={() => { setModalFilters({ ...modalFilters, party: '' }); setDropdownOpen({ party: false, brand: false, lcNo: false }); setDropdownSearch(s => ({ ...s, party: '' })); }} className="w-full px-4 py-2 text-left text-sm text-gray-500 hover:bg-gray-50 font-medium border-b border-gray-50">All Parties</button>
                                                                 {partyOptions.filter(p => p.toLowerCase().includes(dropdownSearch.party.toLowerCase())).map(p => (
-                                                                    <button key={p} type="button" onClick={() => { setModalFilters({ ...modalFilters, party: p }); setDropdownOpen({ party: false, brand: false }); setDropdownSearch(s => ({ ...s, party: '' })); }} className={`w-full px-4 py-2 text-left text-sm hover:bg-blue-50 transition-colors ${modalFilters.party === p ? 'bg-blue-50 text-blue-600 font-medium' : 'text-gray-600'}`}>{p}</button>
+                                                                    <button key={p} type="button" onClick={() => { setModalFilters({ ...modalFilters, party: p }); setDropdownOpen({ party: false, brand: false, lcNo: false }); setDropdownSearch(s => ({ ...s, party: '' })); }} className={`w-full px-4 py-2 text-left text-sm hover:bg-blue-50 transition-colors ${modalFilters.party === p ? 'bg-blue-50 text-blue-600 font-medium' : 'text-gray-600'}`}>{p}</button>
                                                                 ))}
                                                                 {partyOptions.filter(p => p.toLowerCase().includes(dropdownSearch.party.toLowerCase())).length === 0 && (
                                                                     <p className="px-4 py-3 text-sm text-gray-400 italic">No results found</p>
@@ -334,7 +339,7 @@ const ProductHistoryReport = ({
                                                             type="text"
                                                             value={dropdownOpen.brand ? dropdownSearch.brand : modalFilters.brand}
                                                             onFocus={() => {
-                                                                setDropdownOpen({ party: false, brand: true });
+                                                                setDropdownOpen({ party: false, brand: true, lcNo: false });
                                                                 setDropdownSearch(s => ({ ...s, brand: '' }));
                                                             }}
                                                             onChange={e => setDropdownSearch(s => ({ ...s, brand: e.target.value }))}
@@ -344,11 +349,43 @@ const ProductHistoryReport = ({
                                                         <ChevronDownIcon className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
                                                         {dropdownOpen.brand && (
                                                             <div className="absolute z-[120] mt-1 w-full bg-white border border-gray-100 rounded-xl shadow-xl max-h-48 overflow-y-auto py-1">
-                                                                <button type="button" onClick={() => { setModalFilters({ ...modalFilters, brand: '' }); setDropdownOpen({ party: false, brand: false }); setDropdownSearch(s => ({ ...s, brand: '' })); }} className="w-full px-4 py-2 text-left text-sm text-gray-500 hover:bg-gray-50 font-medium border-b border-gray-50">All Brands</button>
+                                                                <button type="button" onClick={() => { setModalFilters({ ...modalFilters, brand: '' }); setDropdownOpen({ party: false, brand: false, lcNo: false }); setDropdownSearch(s => ({ ...s, brand: '' })); }} className="w-full px-4 py-2 text-left text-sm text-gray-500 hover:bg-gray-50 font-medium border-b border-gray-50">All Brands</button>
                                                                 {brandOptions.filter(b => b.toLowerCase().includes(dropdownSearch.brand.toLowerCase())).map(b => (
-                                                                    <button key={b} type="button" onClick={() => { setModalFilters({ ...modalFilters, brand: b }); setDropdownOpen({ party: false, brand: false }); setDropdownSearch(s => ({ ...s, brand: '' })); }} className={`w-full px-4 py-2 text-left text-sm hover:bg-blue-50 transition-colors ${modalFilters.brand === b ? 'bg-blue-50 text-blue-600 font-medium' : 'text-gray-600'}`}>{b}</button>
+                                                                    <button key={b} type="button" onClick={() => { setModalFilters({ ...modalFilters, brand: b }); setDropdownOpen({ party: false, brand: false, lcNo: false }); setDropdownSearch(s => ({ ...s, brand: '' })); }} className={`w-full px-4 py-2 text-left text-sm hover:bg-blue-50 transition-colors ${modalFilters.brand === b ? 'bg-blue-50 text-blue-600 font-medium' : 'text-gray-600'}`}>{b}</button>
                                                                 ))}
                                                                 {brandOptions.filter(b => b.toLowerCase().includes(dropdownSearch.brand.toLowerCase())).length === 0 && (
+                                                                    <p className="px-4 py-3 text-sm text-gray-400 italic">No results found</p>
+                                                                )}
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            {/* LC No Dropdown */}
+                                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                                <div ref={lcNoDropdownRef} className="space-y-1.5 relative">
+                                                    <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider pl-1">LC No</label>
+                                                    <div className="relative">
+                                                        <input
+                                                            type="text"
+                                                            value={dropdownOpen.lcNo ? dropdownSearch.lcNo : modalFilters.lcNo}
+                                                            onFocus={() => {
+                                                                setDropdownOpen({ party: false, brand: false, lcNo: true });
+                                                                setDropdownSearch(s => ({ ...s, lcNo: '' }));
+                                                            }}
+                                                            onChange={e => setDropdownSearch(s => ({ ...s, lcNo: e.target.value }))}
+                                                            placeholder={modalFilters.lcNo || 'Search LC No...'}
+                                                            className={`w-full px-4 py-2 bg-white border border-gray-100 rounded-xl text-sm focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all shadow-sm ${modalFilters.lcNo && !dropdownOpen.lcNo ? 'text-gray-900 font-medium' : 'text-gray-500'}`}
+                                                        />
+                                                        <ChevronDownIcon className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+                                                        {dropdownOpen.lcNo && (
+                                                            <div className="absolute z-[120] mt-1 w-full bg-white border border-gray-100 rounded-xl shadow-xl max-h-48 overflow-y-auto py-1">
+                                                                <button type="button" onClick={() => { setModalFilters({ ...modalFilters, lcNo: '' }); setDropdownOpen({ party: false, brand: false, lcNo: false }); setDropdownSearch(s => ({ ...s, lcNo: '' })); }} className="w-full px-4 py-2 text-left text-sm text-gray-500 hover:bg-gray-50 font-medium border-b border-gray-50">All LCs</button>
+                                                                {lcOptions.filter(lc => lc.toLowerCase().includes(dropdownSearch.lcNo.toLowerCase())).map(lc => (
+                                                                    <button key={lc} type="button" onClick={() => { setModalFilters({ ...modalFilters, lcNo: lc }); setDropdownOpen({ party: false, brand: false, lcNo: false }); setDropdownSearch(s => ({ ...s, lcNo: '' })); }} className={`w-full px-4 py-2 text-left text-sm hover:bg-blue-50 transition-colors ${modalFilters.lcNo === lc ? 'bg-blue-50 text-blue-600 font-medium' : 'text-gray-600'}`}>{lc}</button>
+                                                                ))}
+                                                                {lcOptions.filter(lc => lc.toLowerCase().includes(dropdownSearch.lcNo.toLowerCase())).length === 0 && (
                                                                     <p className="px-4 py-3 text-sm text-gray-400 italic">No results found</p>
                                                                 )}
                                                             </div>
@@ -442,6 +479,7 @@ const ProductHistoryReport = ({
                                 <div className="flex"><span className="font-bold text-gray-900 w-24 md:w-28 shrink-0">Date Range:</span> <span className="truncate">{formatDate(modalFilters.startDate) || 'Start'} to {formatDate(modalFilters.endDate) || 'Present'}</span></div>
                                 {modalFilters.party && <div className="flex"><span className="font-bold text-gray-900 w-24 md:w-28">Party:</span> <span className="truncate">{modalFilters.party}</span></div>}
                                 {modalFilters.brand && <div className="flex"><span className="font-bold text-gray-900 w-24 md:w-28">Brand:</span> <span className="truncate">{modalFilters.brand}</span></div>}
+                                {modalFilters.lcNo && <div className="flex"><span className="font-bold text-gray-900 w-24 md:w-28">LC No:</span> <span className="truncate">{modalFilters.lcNo}</span></div>}
                             </div>
                             <div className="font-bold text-[10px] md:text-sm whitespace-nowrap"><span className="text-gray-900">Printed:</span> <span className="text-gray-900">{formatDate(new Date())}</span></div>
                         </div>
@@ -461,9 +499,9 @@ const ProductHistoryReport = ({
                                                 <th className="border-r border-gray-900 px-2 py-1 text-[11px] font-bold text-gray-900 uppercase tracking-wider w-[16%] whitespace-nowrap">Party</th>
                                                 <th className="border-r border-gray-900 px-2 py-1 text-right text-[11px] font-bold text-gray-900 uppercase tracking-wider w-[10%] whitespace-nowrap">Purchase Qty</th>
                                                 <th className="border-r border-gray-900 px-2 py-1 text-right text-[11px] font-bold text-gray-900 uppercase tracking-wider w-[10%] whitespace-nowrap">Sale Qty</th>
-                                                <th className="border-r border-gray-900 px-2 py-1 text-right text-[11px] font-bold text-gray-900 uppercase tracking-wider w-[10%] whitespace-nowrap">Damage Qty</th>
                                                 <th className="border-r border-gray-900 px-2 py-1 text-right text-[11px] font-bold text-gray-900 uppercase tracking-wider w-[10%] whitespace-nowrap">InHouse Qty</th>
-                                                <th className="px-2 py-1 text-right text-[11px] font-bold text-gray-900 uppercase tracking-wider w-[10%] whitespace-nowrap">Short</th>
+                                                <th className="border-r border-gray-900 px-2 py-1 text-right text-[11px] font-bold text-gray-900 uppercase tracking-wider w-[10%] whitespace-nowrap">Short</th>
+                                                <th className="px-2 py-1 text-right text-[11px] font-bold text-gray-900 uppercase tracking-wider w-[10%] whitespace-nowrap">Damage Qty</th>
                                             </tr>
                                         </thead>
                                         <tbody className="divide-y divide-gray-900">
@@ -476,9 +514,9 @@ const ProductHistoryReport = ({
                                                     <td className="border-r border-gray-900 px-2 py-1 text-[12px] text-gray-900 font-medium whitespace-nowrap">{item.type === 'purchase' ? '-' : (item.companyName || '-')}</td>
                                                     <td className="border-r border-gray-900 px-2 py-1 text-[12px] text-right text-gray-900 font-bold">{item.type === 'purchase' ? `${Math.round(item.itemQty).toLocaleString('en-US')} kg` : '-'}</td>
                                                     <td className="border-r border-gray-900 px-2 py-1 text-[12px] text-right text-blue-600 font-bold">{item.type === 'sale' ? `${Math.round(item.itemQty).toLocaleString('en-US')} kg` : '-'}</td>
-                                                    <td className="border-r border-gray-900 px-2 py-1 text-[12px] text-right text-red-600 font-bold">{item.type === 'damage' ? `${Math.round(item.itemQty).toLocaleString('en-US')} kg` : '-'}</td>
                                                     <td className="border-r border-gray-900 px-2 py-1 text-[12px] text-right text-blue-700 font-black">{Math.round(item.runningInHouse).toLocaleString('en-US')} kg</td>
-                                                    <td className="px-2 py-1 text-[12px] text-right text-rose-600 font-bold">{item.type === 'purchase' ? `${Math.round(item.itemShortageQty || 0).toLocaleString('en-US')} kg` : '-'}</td>
+                                                    <td className="border-r border-gray-900 px-2 py-1 text-[12px] text-right text-rose-600 font-bold">{item.type === 'purchase' ? `${Math.round(item.itemShortageQty || 0).toLocaleString('en-US')} kg` : '-'}</td>
+                                                    <td className="px-2 py-1 text-[12px] text-right text-red-600 font-bold">{item.type === 'damage' ? `${Math.round(item.itemQty).toLocaleString('en-US')} kg` : '-'}</td>
                                                 </tr>
                                             ))}
                                         </tbody>
@@ -491,14 +529,14 @@ const ProductHistoryReport = ({
                                                 <td className="px-2 py-1.5 text-[12px] text-right border-r border-gray-900 text-blue-600">
                                                     {Math.round(saleHistory.reduce((sum, s) => sum + (parseFloat(s.itemQty) || 0), 0)).toLocaleString('en-US')} kg
                                                 </td>
-                                                <td className="px-2 py-1.5 text-[12px] text-right border-r border-gray-900 text-red-600">
-                                                    {Math.round(damageHistory.reduce((sum, d) => sum + (parseFloat(d.itemQty || d.quantity) || 0), 0)).toLocaleString('en-US')} kg
-                                                </td>
                                                 <td className="px-2 py-1.5 text-[12px] text-right border-r border-gray-900 text-blue-700">
                                                     {Math.round(unifiedHistory[unifiedHistory.length - 1]?.runningInHouse || 0).toLocaleString('en-US')} kg
                                                 </td>
-                                                <td className="px-2 py-1.5 text-[12px] text-right text-rose-600">
+                                                <td className="px-2 py-1.5 text-[12px] text-right border-r border-gray-900 text-rose-600">
                                                     {Math.round(purchaseHistory.reduce((sum, i) => sum + (parseFloat(i.itemShortageQty) || 0), 0)).toLocaleString('en-US')} kg
+                                                </td>
+                                                <td className="px-2 py-1.5 text-[12px] text-right text-red-600">
+                                                    {Math.round(damageHistory.reduce((sum, d) => sum + (parseFloat(d.itemQty || d.quantity) || 0), 0)).toLocaleString('en-US')} kg
                                                 </td>
                                             </tr>
                                         </tfoot>
@@ -532,9 +570,9 @@ const ProductHistoryReport = ({
                                         <div className="grid grid-cols-2 gap-x-3 gap-y-1">
                                             <div className="text-gray-700 uppercase">Total Purchase</div><div className="text-right">{Math.round(purchaseHistory.reduce((sum, i) => sum + (parseFloat(i.itemQty) || 0), 0)).toLocaleString('en-US')} kg</div>
                                             <div className="text-blue-600 uppercase">Total Sale</div><div className="text-blue-600 text-right">{Math.round(saleHistory.reduce((sum, s) => sum + (parseFloat(s.itemQty) || 0), 0)).toLocaleString('en-US')} kg</div>
-                                            <div className="text-red-600 uppercase">Total Damage</div><div className="text-red-600 text-right">{Math.round(damageHistory.reduce((sum, d) => sum + (parseFloat(d.itemQty || d.quantity) || 0), 0)).toLocaleString('en-US')} kg</div>
                                             <div className="text-blue-700 uppercase">InHouse</div><div className="text-blue-700 text-right">{Math.round(unifiedHistory[unifiedHistory.length - 1]?.runningInHouse || 0).toLocaleString('en-US')} kg</div>
                                             <div className="text-rose-600 uppercase">Shortage</div><div className="text-rose-600 text-right">{Math.round(purchaseHistory.reduce((sum, i) => sum + (parseFloat(i.itemShortageQty) || 0), 0)).toLocaleString('en-US')} kg</div>
+                                            <div className="text-red-600 uppercase">Total Damage</div><div className="text-red-600 text-right">{Math.round(damageHistory.reduce((sum, d) => sum + (parseFloat(d.itemQty || d.quantity) || 0), 0)).toLocaleString('en-US')} kg</div>
                                         </div>
                                     </div>
                                 </div>
@@ -654,7 +692,7 @@ const ProductHistoryReport = ({
                                                     {saleHistory.map((sale, idx) => (
                                                         <tr key={idx} className="border-b border-gray-900 last:border-0 hover:bg-gray-50 transition-colors">
                                                             <td className="border-r border-gray-900 px-2 py-1 text-[12px] text-gray-900 whitespace-nowrap">{formatDate(sale.date)}</td>
-                                                            <td className="border-r border-gray-900 px-2 py-1 text-[12px] font-bold text-gray-900 text-center">{sale.lcNo || '-'}</td>
+                                                            <td className="border-r border-gray-900 px-2 py-1 text-[12px] font-semibold text-gray-900">{sale.lcNo ? sale.lcNo.slice(-4) : '-'}</td>
                                                             <td className="border-r border-gray-900 px-2 py-1 text-[12px] font-bold text-gray-900">{sale.invoiceNo}</td>
                                                             <td className="border-r border-gray-900 px-2 py-1 text-[12px] text-gray-900 font-medium">{sale.companyName || '-'}</td>
                                                             <td className="border-r border-gray-900 px-2 py-1 text-[12px] text-gray-900">{sale.customerName || '-'}</td>
@@ -699,7 +737,7 @@ const ProductHistoryReport = ({
                                                     {saleHistory.map((sale, idx) => (
                                                         <tr key={idx} className="border-b border-gray-900 last:border-0 hover:bg-gray-50 transition-colors">
                                                             <td className="border-r border-gray-900 px-2 py-1 text-[12px] text-gray-900 whitespace-nowrap">{formatDate(sale.date)}</td>
-                                                            <td className="border-r border-gray-900 px-2 py-1 text-[12px] font-bold text-gray-900 text-center">{sale.lcNo || '-'}</td>
+                                                            <td className="border-r border-gray-900 px-2 py-1 text-[12px] font-semibold text-gray-900">{sale.lcNo ? sale.lcNo.slice(-4) : '-'}</td>
                                                             <td className="border-r border-gray-900 px-2 py-1 text-[12px] font-bold text-gray-900">{sale.invoiceNo}</td>
                                                             <td className="border-r border-gray-900 px-2 py-1 text-[12px] text-gray-900 font-medium">{sale.companyName || '-'}</td>
                                                             <td className="border-r border-gray-900 px-2 py-1 text-[12px] text-gray-900 whitespace-nowrap">{sale.itemBrand}</td>
@@ -735,7 +773,7 @@ const ProductHistoryReport = ({
                                                 <span className="text-gray-600 font-medium">{formatDate(sale.date)}</span>
                                             </div>
                                             <div className="grid grid-cols-2 gap-x-3 gap-y-1">
-                                                <div className="text-gray-500">LC No</div><div className="font-bold text-blue-600 text-right">{sale.lcNo || '-'}</div>
+                                                <div className="text-gray-500">LC No</div><div className="font-bold text-gray-900 text-right">{sale.lcNo || '-'}</div>
                                                 <div className="text-gray-500">Company</div><div className="font-bold text-gray-900 text-right truncate">{sale.companyName || '-'}</div>
                                                 {isFruitCategory ? (<>
                                                     <div className="text-gray-500">Customer</div><div className="font-medium text-gray-800 text-right">{sale.customerName || '-'}</div>
@@ -785,16 +823,10 @@ const ProductHistoryReport = ({
                                         <div className="border-t border-gray-300 pt-1 mt-1 flex justify-between text-sm md:text-base font-black">
                                             <span className="text-blue-600 uppercase">InHouse:</span>
                                             <span className="text-blue-700">
-                                                {(() => {
-                                                    const uniqueInHouse = new Map();
-                                                    purchaseHistory.forEach(item => {
-                                                        const key = `${(item.lcNo || '').trim()}_${(item.itemTruck || item.truckNo || '').trim()}_${(item.itemBrand || '').trim()}`;
-                                                        if (!uniqueInHouse.has(key)) {
-                                                            uniqueInHouse.set(key, parseFloat(item.itemInHouseQty) || 0);
-                                                        }
-                                                    });
-                                                    return Array.from(uniqueInHouse.values()).reduce((sum, val) => sum + val, 0).toLocaleString('en-US');
-                                                })()} kg
+                                                {activeTab === 'total'
+                                                    ? Math.round(unifiedHistory[unifiedHistory.length - 1]?.runningInHouse || 0).toLocaleString('en-US')
+                                                    : Math.round(purchaseHistory.reduce((sum, item) => sum + (parseFloat(item.itemInHouseQty) || 0), 0)).toLocaleString('en-US')
+                                                } kg
                                             </span>
                                         </div>
                                     </div>
