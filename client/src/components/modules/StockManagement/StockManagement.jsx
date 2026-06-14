@@ -3459,6 +3459,7 @@ const StockManagement = ({
                                                         <thead>
                                                             <tr className="bg-gray-50/50 border-b border-gray-100">
                                                                 <th className="px-3 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider">Date</th>
+                                                                <th className="px-3 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider">LC No</th>
                                                                 <th className="px-3 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider">Invoice No</th>
                                                                 <th className="px-3 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider">Company Name</th>
                                                                 <th className="px-3 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider">{isFruitHistory ? "Customer Name" : "Brand"}</th>
@@ -3471,11 +3472,12 @@ const StockManagement = ({
                                                         </thead>
                                                         <tbody className="divide-y divide-gray-50">
                                                             {flattenedSaleHistory.length === 0 ? (
-                                                                <tr><td colSpan={isFruitHistory ? "9" : "8"} className="px-6 py-20 text-center text-gray-400 font-medium">No sale history found for this product</td></tr>
+                                                                <tr><td colSpan={isFruitHistory ? "10" : "9"} className="px-6 py-20 text-center text-gray-400 font-medium">No sale history found for this product</td></tr>
                                                             ) : (
                                                                 flattenedSaleHistory.map((sale, sIdx) => (
                                                                     <tr key={sIdx} className="hover:bg-blue-50/20 transition-all group border-b border-gray-50">
                                                                         <td className="px-3 py-3 text-sm text-gray-600">{formatDate(sale.date)}</td>
+                                                                        <td className="px-3 py-3 text-sm font-semibold text-gray-800">{sale.lcNo || '-'}</td>
                                                                         <td className="px-3 py-3 text-sm font-bold text-gray-900">{sale.invoiceNo}</td>
                                                                         <td className="px-3 py-3 text-sm font-bold text-gray-800 truncate max-w-[150px]" title={sale.companyName}>{sale.companyName}</td>
                                                                         {isFruitHistory ? (
@@ -3535,8 +3537,12 @@ const StockManagement = ({
                                                                                 <span className="text-sm font-bold text-gray-900 truncate">{formatDate(sale.date)}</span>
                                                                             </div>
                                                                             <div className="flex flex-col items-center flex-1">
-                                                                                <span className="text-[10px] font-black text-blue-400 uppercase tracking-widest">Invoice</span>
-                                                                                <span className="text-sm font-bold text-blue-600 truncate">{sale.invoiceNo}</span>
+                                                                                <span className="text-[10px] font-black text-blue-400 uppercase tracking-widest">LC No</span>
+                                                                                <span className="text-sm font-bold text-blue-600 truncate">{sale.lcNo || '-'}</span>
+                                                                            </div>
+                                                                            <div className="flex flex-col items-center flex-1">
+                                                                                <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Invoice</span>
+                                                                                <span className="text-sm font-bold text-gray-900 truncate">{sale.invoiceNo}</span>
                                                                             </div>
                                                                             {!isExpanded && (
                                                                                 <div className="flex flex-col min-w-0 flex-1">
