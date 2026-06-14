@@ -12,22 +12,21 @@ const numberToWordsUSD = (amount) => {
         else { if (num >= 20) { s += tens[Math.floor(num / 10)] + ' '; num %= 10; } if (num > 0) { s += units[num] + ' '; } }
         return s;
     };
-    if (amount === 0) return 'Zero.';
+    if (amount === 0) return 'Zero Taka Only';
     const parts = amount.toFixed(2).split('.');
-    let dollar = parseInt(parts[0]), cents = parseInt(parts[1]);
+    let taka = parseInt(parts[0]), paisa = parseInt(parts[1]);
     let words = '';
-    if (dollar === 0) { words = 'Zero '; } else {
+    if (taka === 0) { words = 'Zero '; } else {
         let tw = '';
-        if (dollar >= 10000000) { tw += convertChunk(Math.floor(dollar / 10000000)) + 'Crore '; dollar %= 10000000; }
-        if (dollar >= 100000) { tw += convertChunk(Math.floor(dollar / 100000)) + 'Lakh '; dollar %= 100000; }
-        if (dollar >= 1000) { tw += convertChunk(Math.floor(dollar / 1000)) + 'Thousand '; dollar %= 1000; }
-        if (dollar > 0) { tw += convertChunk(dollar); }
+        if (taka >= 10000000) { tw += convertChunk(Math.floor(taka / 10000000)) + 'Crore '; taka %= 10000000; }
+        if (taka >= 100000) { tw += convertChunk(Math.floor(taka / 100000)) + 'Lakh '; taka %= 100000; }
+        if (taka >= 1000) { tw += convertChunk(Math.floor(taka / 1000)) + 'Thousand '; taka %= 1000; }
+        if (taka > 0) { tw += convertChunk(taka); }
         words = tw;
     }
-    if (cents > 0) {
-        words += 'And Cents ' + convertChunk(cents);
-    }
-    return words.replace(/\s+/g, ' ').trim() + '.';
+    words += 'Taka ';
+    words += paisa > 0 ? 'And ' + convertChunk(paisa) + 'Paisa Only' : 'Only';
+    return words.replace(/\s+/g, ' ').trim();
 };
 
 export const generatePI2PDF = (record) => {
@@ -97,32 +96,8 @@ export const generatePI2PDF = (record) => {
     doc.setFontSize(9);
     doc.setFont("helvetica", "normal");
     let exporterInfo = record.exporterAddress || '';
-    const exporterPhone = record.exporterContact || '';
-    const exporterEmail = record.exporterEmail || '';
-    const expContactParts = [];
-    if (exporterPhone) expContactParts.push(`Phone: ${exporterPhone}`);
-    if (exporterEmail) expContactParts.push(`Email: ${exporterEmail}`);
-    const expContactLine = expContactParts.join(', ');
-    if (expContactLine) {
-        exporterInfo = exporterInfo.trim() + `\n${expContactLine}`;
-    }
-    // Render exporter address: compress each logical line via charSpace to fit on one line.
-    const exporterColWidth = leftColWidth - 10;
-    const exporterCenterX = margin + leftColWidth / 2;
-    let expLineY = y + 17;
-    const expLineH = 4;
-    exporterInfo.trim().split('\n').forEach(rawLine => {
-        const trimmed = rawLine.trim();
-        if (!trimmed) { expLineY += expLineH; return; }
-        const w = doc.getTextWidth(trimmed);
-        if (w > exporterColWidth) {
-            const cs = (exporterColWidth - w) / (trimmed.length - 1);
-            doc.text(trimmed, exporterCenterX, expLineY, { align: 'center', charSpace: cs });
-        } else {
-            doc.text(trimmed, exporterCenterX, expLineY, { align: 'center' });
-        }
-        expLineY += expLineH;
-    });
+    if (record.exporterEmail) exporterInfo += `\nEmail: ${record.exporterEmail}`;
+    doc.text(doc.splitTextToSize(exporterInfo, leftColWidth - 10), margin + leftColWidth / 2, y + 17, { align: 'center' });
 
     // Right: PI Info - Buyer's Order No/Proforma Invoice No.& Date
     doc.setFont("helvetica", "bold");
@@ -156,70 +131,17 @@ export const generatePI2PDF = (record) => {
     // Row 2: Importer vs Country/Terms
     y += row1Height;
     const showSafta = record.certification && record.certification.toLowerCase().includes('safta');
-    const showCountryOfOrigin = true;
-    // Reuse selectedCerts defined at function top
-    const otherCerts = selectedCerts.filter(c => {
-        const lower = c.toLowerCase();
-        return !lower.includes('country of origin') &&
-            !lower.includes('safta') &&
-            !lower.includes('packing') &&
-            !(lower.includes('value') && lower.includes('quantity'));
-    });
-    const countrySectionHeight = otherCerts.length > 0 ? (showCountryOfOrigin ? 18 : 10) : 10;
 
     let termsText = record.termsDeliveryPayment || '';
     if (!showPacking) {
         termsText = termsText.split('\n')
             .filter(line => !line.trim().toLowerCase().startsWith('packing:'))
             .join('\n');
-    } else if (record.packingType) {
-        const formattedPacking = record.packingType.split(',').map(s => s.trim()).join(' / ');
-        termsText = termsText.split('\n')
-            .map(line => {
-                if (line.trim().toLowerCase().startsWith('packing:')) {
-                    return `Packing: ${formattedPacking}`;
-                }
-                return line;
-            })
-            .join('\n');
     }
-    // Collapse soft newlines so words like "AGAINST" are not orphaned on their own line.
-    const termsTextFormatted = termsText.replace(/ ?\n(?!Packing:)/gi, ' ');
-    // Split at AGAINST: compress that first line onto one line via charSpace,
-    // then wrap the rest (L/C clause, Packing) normally below it.
-    const termsMaxWidth2 = rightColWidth - 5;
-    const againstIdx2 = termsTextFormatted.toUpperCase().indexOf('AGAINST');
-    let deliveryLines2 = [];
-    let deliveryCharSpace2 = 0;
-    let restTermsLines2 = [];
-    let termsLines;
-    if (againstIdx2 !== -1) {
-        const deliveryClause2 = termsTextFormatted.substring(0, againstIdx2 + 7).trim();
-        const restText2 = termsTextFormatted.substring(againstIdx2 + 7).trimStart();
-        doc.setFont('helvetica', 'normal');
-        doc.setFontSize(9);
-        const dw2 = doc.getTextWidth(deliveryClause2);
-        if (dw2 > termsMaxWidth2) {
-            const neededCs = (termsMaxWidth2 - dw2) / (deliveryClause2.length - 1);
-            if (neededCs < -0.02) {
-                deliveryLines2 = doc.splitTextToSize(deliveryClause2, termsMaxWidth2);
-                deliveryCharSpace2 = 0;
-            } else {
-                deliveryLines2 = [deliveryClause2];
-                deliveryCharSpace2 = neededCs;
-            }
-        } else {
-            deliveryLines2 = [deliveryClause2];
-            deliveryCharSpace2 = 0;
-        }
-        restTermsLines2 = restText2 ? doc.splitTextToSize(restText2, termsMaxWidth2) : [];
-        termsLines = [...deliveryLines2, ...restTermsLines2];
-    } else {
-        termsLines = doc.splitTextToSize(termsTextFormatted, termsMaxWidth2);
-    }
+    const termsLines = doc.splitTextToSize(termsText, rightColWidth - 5);
     const termsHeight = termsLines.length * 4;
     const saftaHeight = showSafta ? 12 : 0;
-    let row2Height = Math.max(61, countrySectionHeight + 14 + termsHeight + saftaHeight);
+    let row2Height = Math.max(61, 24 + termsHeight + saftaHeight);
     doc.rect(margin, y, leftColWidth, row2Height);
     doc.rect(midX, y, rightColWidth, row2Height);
 
@@ -237,15 +159,7 @@ export const generatePI2PDF = (record) => {
     doc.setFontSize(9);
     doc.setFont("helvetica", "normal");
     let impInfo = record.partyAddress || '';
-    const phone = record.partyContact || '';
-    const email = record.partyEmail || '';
-    const contactParts = [];
-    if (phone) contactParts.push(`Phone: ${phone}`);
-    if (email) contactParts.push(`Email: ${email}`);
-    const contactLine = contactParts.join(', ');
-    if (contactLine) {
-        impInfo = impInfo.trim() + `\n${contactLine}`;
-    }
+
     doc.text(doc.splitTextToSize(impInfo.trim(), leftColWidth - 10), margin + leftColWidth / 2, y + 17, { align: 'center' });
 
     // Shipping rows (left)
@@ -277,6 +191,15 @@ export const generatePI2PDF = (record) => {
 
     // Right: Country of Origin / Final Destination
     const subW = rightColWidth / 2;
+    const showCountryOfOrigin = true;
+    // Reuse selectedCerts defined at function top
+    const otherCerts = selectedCerts.filter(c => {
+        const lower = c.toLowerCase();
+        return !lower.includes('country of origin') &&
+            !lower.includes('safta') &&
+            !lower.includes('packing') &&
+            !(lower.includes('value') && lower.includes('quantity'));
+    });
 
     if (showCountryOfOrigin) {
         doc.setFont("helvetica", "normal");
@@ -287,17 +210,9 @@ export const generatePI2PDF = (record) => {
         doc.text(record.countryOrigin || 'INDIA', midX + 2, y + 7);
     }
 
-    // Country of Final Destination
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(9);
-    doc.text("Country of Final Destination", midX + subW + 2, y + 3);
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(9);
-    doc.text(record.countryFinalDest || 'BANGLADESH', midX + subW + 2, y + 7);
-
     if (otherCerts.length > 0) {
-        const certLabelY = showCountryOfOrigin ? 13 : 3;
-        const certValY = showCountryOfOrigin ? 16.5 : 7;
+        const certLabelY = showCountryOfOrigin ? 10 : 3;
+        const certValY = showCountryOfOrigin ? 13.5 : 7;
         doc.setFont("helvetica", "normal");
         doc.setFontSize(9);
         doc.text("Certification", midX + 2, y + certLabelY);
@@ -306,41 +221,26 @@ export const generatePI2PDF = (record) => {
         doc.text(otherCerts.join(', '), midX + 2, y + certValY);
     }
 
-    // Draw vertical divider between Country cells
     doc.line(midX + subW, y, midX + subW, y + 10);
-    // Draw horizontal line below Country cells
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(9);
+    doc.text("Country of Final Destination", midX + subW + 2, y + 3);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(9);
+    doc.text(record.countryFinalDest || 'BANGLADESH', midX + subW + 2, y + 7);
+
     doc.line(midX, y + 10, pageWidth - margin, y + 10);
-    // Draw horizontal line below Certification cells if they exist
-    if (otherCerts.length > 0) {
-        doc.line(midX, y + countrySectionHeight, pageWidth - margin, y + countrySectionHeight);
-    }
 
     // Terms of Delivery and Payment
     doc.setFont("helvetica", "bold");
     doc.setFontSize(10.5);
-    doc.text("Terms of Delivery and Payment", midX + 2, y + countrySectionHeight + 4);
+    doc.text("Terms of Delivery and Payment", midX + 2, y + 14);
     doc.setFont("helvetica", "normal");
     doc.setFontSize(9);
-    let currentY = y + countrySectionHeight + 10;
-    if (againstIdx2 !== -1) {
-        deliveryLines2.forEach((line) => {
-            const cs = deliveryLines2.length === 1 ? deliveryCharSpace2 : 0;
-            doc.text(line, midX + 2, currentY, { charSpace: cs });
-            currentY += 4;
-        });
-        restTermsLines2.forEach((line) => {
-            doc.text(line, midX + 2, currentY);
-            currentY += 4;
-        });
-    } else {
-        termsLines.forEach((line) => {
-            doc.text(line, midX + 2, currentY);
-            currentY += 4;
-        });
-    }
+    doc.text(termsLines, midX + 2, y + 20);
 
     if (showSafta) {
-        const saftaY = y + countrySectionHeight + 10 + termsHeight + 4;
+        const saftaY = y + 20 + termsHeight + 4;
         doc.setFont("helvetica", "bold");
         doc.setFontSize(9);
         doc.text("THE CERTIFICATE OF ORIGIN UNDER SAFTA", midX + rightColWidth / 2, saftaY, { align: 'center' });
@@ -371,11 +271,7 @@ export const generatePI2PDF = (record) => {
         descParts.push(`COUNTRY OF ORIGIN ${(record.countryOrigin || 'INDIA').toUpperCase()}`);
     }
     if (showPacking) {
-        if (record.packingType) {
-            descParts.push(`EXPORT STANDARD PACKING: ${record.packingType.split(',').map(s => s.trim().toUpperCase()).join(' / ')}`);
-        } else {
-            descParts.push('EXPORT STANDARD PACKING');
-        }
+        descParts.push('EXPORT STANDARD PACKING');
     }
     if (record.indianBank) {
         descParts.push(`ADVISING BANK MUST BE THROUGH: ${record.indianBank}`);
@@ -407,12 +303,7 @@ export const generatePI2PDF = (record) => {
         }
     }
 
-    // Extra newlines for spacing: more for single-product (signature overlay), small gap for multi-product
-    if (numProductsList === 1) {
-        descParts.push("\n\n\n\n");
-    } else {
-        descParts.push("\n\n");
-    }
+    descParts.push("\n\n\n\n");
     const extraDescText = descParts.join("\n");
 
     const tableBody = [];
@@ -439,15 +330,13 @@ export const generatePI2PDF = (record) => {
     productsList.forEach((prod, pIdx) => {
         const hasFreight = prod.freight && parseFloat(prod.freight) > 0;
         const isLastProduct = pIdx === numProducts - 1;
-        let rowHeight = productRowHeight(numProducts, hasFreight);
-        if (rowHeight && prod.hsCodeInd) {
-            rowHeight += 3; // Add extra height for the IND HS code line to prevent it touching the bottom border
-        }
+        const rowHeight = productRowHeight(numProducts, hasFreight);
 
         firstRowIndexForProduct.push(tableBody.length);
 
         let requiredNewlines = 1;
         if (prod.hsCodeInd) requiredNewlines += 1;
+        if (showSafta && isLastProduct && !hasFreight) requiredNewlines += 2.5;
         if (numProducts === 1) {
             requiredNewlines += 1;
         } else {
@@ -489,36 +378,45 @@ export const generatePI2PDF = (record) => {
                 content: ' ',
                 styles: {
                     ...numericCellStyle,
-                    halign: 'right'
+                    halign: numProducts > 1 ? 'center' : 'right'
                 }
             }
         ]);
 
-
+        if (showSafta && isLastProduct && hasFreight) {
+            tableBody.push([
+                {
+                    content: "THE CERTIFICATE OF ORIGIN UNDER SAFTA\n(South Asian Free Trade Area)",
+                    colSpan: 1,
+                    styles: {
+                        halign: 'center',
+                        valign: 'middle',
+                        fontStyle: 'bold',
+                        fontSize: 9,
+                        cellPadding: { top: 3, bottom: 3 }
+                    }
+                },
+                { content: '', styles: { halign: 'center' } },
+                { content: '', styles: { halign: 'center' } },
+                { content: '', styles: { halign: 'center' } }
+            ]);
+            saftaRowIndex = tableBody.length - 1;
+        }
     });
 
-    if (numProducts > 1) {
-        const descCellStyle = {
-            halign: 'left',
-            fontStyle: 'normal',
-            fontSize: 9,
-            cellPadding: { top: 4, left: 2, right: 2, bottom: 6 },
-            valign: 'top',
-            minCellHeight: 22
-        };
+    // Add description parts at the bottom of the table (only for multi-product)
+    if (productsList.length > 1) {
         tableBody.push([
             {
-                content: extraDescText.trim(),
-                rowSpan: 1,
-                styles: descCellStyle
+                content: extraDescText,
+                colSpan: 1,
+                styles: { halign: 'left', fontStyle: 'normal', fontSize: 9, cellPadding: { top: 2, left: 2, right: 2, bottom: 2 } }
             },
-            { content: ' ', styles: { valign: 'top' } },
-            { content: ' ', styles: { valign: 'top' } },
-            { content: ' ', styles: { valign: 'top' } }
+            { content: '', styles: { halign: 'center' } },
+            { content: '', styles: { halign: 'center' } },
+            { content: '', styles: { halign: 'center' } }
         ]);
     }
-
-
 
     autoTable(doc, {
         startY: y,
@@ -547,7 +445,7 @@ export const generatePI2PDF = (record) => {
             0: { cellWidth: 'auto' },
             1: { cellWidth: 25, halign: 'center' },
             2: { cellWidth: 26, halign: 'center' },
-            3: { cellWidth: 25, halign: 'right' },
+            3: { cellWidth: 25, halign: numProducts > 1 ? 'center' : 'right' },
         },
         didDrawCell: (data) => {
             const drawNumericText = (text, x, y, fontSize, align) => {
@@ -563,7 +461,7 @@ export const generatePI2PDF = (record) => {
                 const qtyVal = prod.quantity ? parseFloat(prod.quantity).toLocaleString('en-US') : '0';
                 const rateVal = prod.rate ? parseFloat(prod.rate).toFixed(3) : '0.000';
                 const amtVal = prod.amount ? parseFloat(prod.amount).toLocaleString('en-IN', { minimumFractionDigits: 2 }) : '0.00';
-                const align = colIndex === 3 ? 'right' : 'center';
+                const align = colIndex === 3 && numProducts === 1 ? 'right' : 'center';
                 const textX = align === 'right' ? cellX + cellWidth - 2 : cellX + cellWidth / 2;
                 const { value: valueFS, label: labelFS, freight: freightFS } = numericFonts;
 
@@ -636,7 +534,7 @@ export const generatePI2PDF = (record) => {
                 // Add underline under product name
                 const pWidth = doc.getTextWidth(pName);
                 doc.setLineWidth(0.3);
-                doc.line(centerX - pWidth / 2, drawY + 3, centerX + pWidth / 2, drawY + 3);
+                doc.line(centerX - pWidth / 2, drawY + 1.5, centerX + pWidth / 2, drawY + 1.5);
                 doc.setLineWidth(0.1);
 
                 drawY += nameGap;
@@ -654,7 +552,20 @@ export const generatePI2PDF = (record) => {
                     doc.text(hsCodeLine, centerX, drawY, { align: 'center' });
                 }
                 const hasFreight = prod.freight && parseFloat(prod.freight) > 0;
+                if (showSafta && pIdx === productsList.length - 1 && !hasFreight) {
+                    drawY += 1.5;
+                    doc.setDrawColor(0, 0, 0);
+                    doc.setLineWidth(0.1);
+                    doc.line(cellX, drawY, cellX + cellWidth, drawY);
 
+                    drawY += 5;
+                    doc.setFont("helvetica", "bold");
+                    doc.setFontSize(9);
+                    doc.text("THE CERTIFICATE OF ORIGIN UNDER SAFTA", centerX, drawY, { align: 'center' });
+                    drawY += 4.5;
+                    doc.text("(South Asian Free Trade Area)", centerX, drawY, { align: 'center' });
+                    drawY += 5.5;
+                }
 
                 doc.setFont("helvetica", "normal");
                 doc.setFontSize(8.5);
@@ -687,15 +598,26 @@ export const generatePI2PDF = (record) => {
                 doc.line(data.cell.x + data.cell.width, data.cell.y - 1, data.cell.x + data.cell.width, data.cell.y + data.cell.height);
             }
 
-
+            // Remove horizontal border between SAFTA row and description row (all columns)
+            if (data.section === 'body' && saftaRowIndex >= 0 && (data.row.index === saftaRowIndex || data.row.index === saftaRowIndex + 1)) {
+                const borderY = data.row.index === saftaRowIndex ? data.cell.y + data.cell.height : data.cell.y;
+                doc.setDrawColor(255, 255, 255);
+                doc.setLineWidth(1.5);
+                doc.line(data.cell.x + 0.5, borderY, data.cell.x + data.cell.width - 0.5, borderY);
+                doc.setDrawColor(0, 0, 0);
+                doc.setLineWidth(0.1);
+                // Redraw vertical borders
+                doc.line(data.cell.x, borderY - 1, data.cell.x, borderY + 1);
+                doc.line(data.cell.x + data.cell.width, borderY - 1, data.cell.x + data.cell.width, borderY + 1);
+            }
         },
         didDrawPage: (data) => {
             y = data.cursor.y;
         }
     });
-    y = doc.lastAutoTable.finalY;
 
-    // Description is now drawn inside the table body as a row
+    // --- Buyer signature/stamp area (inside the table, at bottom of description) ---
+    // Removed signature drawing from here as requested to avoid overlapping text.
 
     const boxBottom = margin + 10 + (pageHeight - (2 * margin) - 10);
     const amountColX = pageWidth - margin - 25;
@@ -703,33 +625,18 @@ export const generatePI2PDF = (record) => {
 
     doc.line(margin, totalY, pageWidth - margin, totalY);
 
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(9);
     const amountLabel = "Amount Chargeable (In Word's) USD ";
     const wordsVal = numberToWordsUSD(parseFloat(record.grandTotal || 0));
     const wordsWrapWidth = amountColX - margin - 4;
-
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(9);
-    const labelWidth = doc.getTextWidth(amountLabel);
+    const wrappedWords = doc.splitTextToSize(`${amountLabel}${wordsVal}`, wordsWrapWidth);
+    const amountRowHeight = Math.max(10, 5 + wrappedWords.length * 4);
 
     doc.setFont("helvetica", "bold");
-    doc.setFontSize(9);
-    const valueWidth = doc.getTextWidth(wordsVal);
-    const availableForValue = wordsWrapWidth - labelWidth;
-
-    // Compress value via charSpace to always fit on the same line as the label
-    const valueCharSpace = valueWidth > availableForValue
-        ? (availableForValue - valueWidth) / (wordsVal.length - 1)
-        : 0;
-
-    const amountRowHeight = 10;
-
-    // Draw label (normal) then value (bold) on the same line
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(9);
-    doc.text(amountLabel, margin + 2, totalY + 5);
-
-    doc.setFont("helvetica", "bold");
-    doc.text(wordsVal, margin + 2 + labelWidth, totalY + 5, { charSpace: valueCharSpace });
+    wrappedWords.forEach((line, idx) => {
+        doc.text(line, margin + 2, totalY + 5 + (idx * 4));
+    });
 
     doc.setFont("helvetica", "bold");
     doc.setFontSize(10);
@@ -766,7 +673,7 @@ export const generatePI2PDF = (record) => {
         }
     }
 
-    const sigLineY = Math.max(declBlockBottom + 18, sigTop + 36);
+    const sigLineY = Math.max(declBlockBottom + 3, sigTop + 21);
     doc.line(sigImageX, sigLineY, sigImageX + sigImageWidth, sigLineY);
     doc.setFont("helvetica", "normal");
     doc.setFontSize(8.5);

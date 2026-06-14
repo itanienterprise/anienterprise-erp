@@ -254,7 +254,7 @@ const SaleManagement = ({
                             id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
                             date: saleData.date,
                             invoiceNo: saleData.invoiceNo,
-                            lcNo: product.lcNo || saleData.lcNo || '',
+                            lcNo: saleData.lcNo || '',
                             product: product.productName || '',
                             brand: entry.brand || '',
                             quantity: entry.quantity || 0,
@@ -488,8 +488,6 @@ const SaleManagement = ({
     const [formData, setFormData] = useState({
         date: '',
         invoiceNo: '',
-        challanNo: '',
-        truckNo: '',
         customerId: '',
         companyName: '',
         customerName: '',
@@ -504,7 +502,6 @@ const SaleManagement = ({
         items: [{
             productId: '',
             productName: '',
-            lcNo: '',
             brandEntries: [{
                 brand: '',
                 brandName: '',
@@ -550,7 +547,9 @@ const SaleManagement = ({
         fetchImportersList();
         fetchPortsList();
         fetchCnfsList();
-        fetchLCRecords();
+        if (saleType === 'Border') {
+            fetchLCRecords();
+        }
     }, [saleType]); // Refetch if saleType changes
 
     const fetchLCRecords = async () => {
@@ -955,7 +954,6 @@ const SaleManagement = ({
             items: [...prev.items, {
                 productId: '',
                 productName: '',
-                lcNo: '',
                 brandEntries: [{
                     brand: '',
                     brandName: '',
@@ -1041,12 +1039,6 @@ const SaleManagement = ({
         setFormData(prev => {
             const newItems = [...prev.items];
             const product = { ...newItems[productIdx] };
-
-            if (entryIdx === null || entryIdx === undefined) {
-                newItems[productIdx] = { ...product, [name]: value };
-                return { ...prev, items: newItems };
-            }
-
             const brandEntries = [...product.brandEntries];
             const entry = { ...brandEntries[entryIdx], [name]: value };
 
@@ -1327,8 +1319,6 @@ const SaleManagement = ({
         setFormData({
             date: '',
             invoiceNo: '',
-            challanNo: '',
-            truckNo: '',
             customerId: '',
             companyName: '',
             customerName: '',
@@ -1343,7 +1333,6 @@ const SaleManagement = ({
             items: [{
                 productId: '',
                 productName: '',
-                lcNo: '',
                 brandEntries: [{
                     brand: '',
                     brandName: '',
@@ -1406,7 +1395,6 @@ const SaleManagement = ({
             initialItems = [{
                 productId: sale.productId,
                 productName: sale.productName,
-                lcNo: sale.lcNo || '',
                 brandEntries: [{
                     brand: sale.brand,
                     inhouseQty: sale.inhouseQty,
@@ -1422,18 +1410,11 @@ const SaleManagement = ({
         } else {
             // Check if items are flat or nested
             initialItems = initialItems.map(item => {
-                const itemLcNo = item.lcNo || sale.lcNo || '';
-                if (item.brandEntries) {
-                    return {
-                        ...item,
-                        lcNo: itemLcNo
-                    };
-                }
+                if (item.brandEntries) return item;
                 // Migrate previous flat multi-item to nested brand entries
                 return {
                     productId: item.productId,
                     productName: item.productName,
-                    lcNo: itemLcNo,
                     brandEntries: [{
                         brand: item.brand,
                         inhouseQty: item.inhouseQty,
@@ -1508,8 +1489,7 @@ const SaleManagement = ({
 
                     const itemsMatch = (s.items || []).some(item => {
                         const pName = (item.productName || item.product || '').toLowerCase();
-                        const itemLc = (item.lcNo || '').toLowerCase();
-                        return pName.includes(query) || itemLc.includes(query) || (item.brandEntries || []).some(e =>
+                        return pName.includes(query) || (item.brandEntries || []).some(e =>
                             String(e.quantity || '').includes(query) || String(e.truck || '').includes(query) ||
                             String(e.unitPrice || '').includes(query) || String(e.totalAmount || '').includes(query)
                         );
@@ -1533,7 +1513,6 @@ const SaleManagement = ({
                 if (s.items && Array.isArray(s.items)) {
                     return s.items.some(item =>
                         item.productName?.toLowerCase().includes(query) ||
-                        item.lcNo?.toLowerCase().includes(query) ||
                         item.brand?.toLowerCase().includes(query)
                     );
                 }
@@ -1796,43 +1775,38 @@ const SaleManagement = ({
     };
 
     const handleLcSelect = (lc) => {
-        if (activeItemIndex === null) return;
         if (!lc) {
-            setFormData(prev => {
-                const newItems = [...prev.items];
-                newItems[activeItemIndex] = {
-                    ...newItems[activeItemIndex],
-                    lcNo: ''
-                };
-                return { ...prev, items: newItems };
-            });
+            setFormData(prev => ({
+                ...prev,
+                lcNo: ''
+            }));
             setLcSearch('');
         } else {
             setFormData(prev => {
-                const newItems = [...prev.items];
-                const item = { ...newItems[activeItemIndex], lcNo: lc.lcNo };
-
-                // Auto-fill associated fields if they are empty
                 const newData = {
                     ...prev,
-                    items: newItems
+                    lcNo: lc.lcNo
                 };
+
+                // Auto-fill associated fields if they are empty
                 if (!newData.importer && lc.importerName) newData.importer = lc.importerName;
                 if (!newData.exporter && lc.exporterName) newData.exporter = lc.exporterName;
                 if (!newData.port && lc.port) newData.port = lc.port;
 
-                // Populate the active item's product
-                if (!item.productId && lc.productName) {
+                // If items array is empty or has only one empty item, populate the first item's product
+                if (newData.items.length === 1 && !newData.items[0].productId && lc.productName) {
                     const productObj = products.find(p => p.name === lc.productName);
                     if (productObj) {
-                        item.productId = productObj._id;
-                        item.productName = productObj.name;
+                        newData.items[0] = {
+                            ...newData.items[0],
+                            productId: productObj._id,
+                            productName: productObj.name
+                        };
                     } else {
-                        item.productName = lc.productName;
+                        newData.items[0].productName = lc.productName;
                     }
                 }
 
-                newItems[activeItemIndex] = item;
                 return newData;
             });
             setLcSearch('');
@@ -2075,7 +2049,7 @@ const SaleManagement = ({
                                 <div className="text-xl font-black text-emerald-500 group-hover:scale-[1.02] transition-transform origin-left">৳{parseFloat(viewData.paidAmount || 0).toLocaleString('en-IN')}</div>
                             </div>
                             <div className="p-5 bg-[#1a368b] rounded-2xl border border-blue-900 shadow-xl shadow-blue-500/10 group overflow-hidden relative">
-
+                                <div className="absolute top-0 right-0 w-32 h-32 bg-blue-500/20 rounded-full -mr-16 -mt-16 blur-3xl"></div>
                                 <div className="text-[9px] font-black text-blue-200 uppercase tracking-widest mb-1.5 relative z-10">Grand Total Invoice</div>
                                 <div className="text-2xl font-black text-white relative z-10 group-hover:scale-[1.02] transition-transform origin-left tracking-tight">৳{parseFloat(viewData.totalAmount || 0).toLocaleString('en-IN')}</div>
                             </div>
@@ -2130,11 +2104,8 @@ const SaleManagement = ({
                 if (!matches) return false;
             } else {
                 const inv = (sale.invoiceNo || '').toLowerCase();
-                const lcNo = (sale.lcNo || '').toLowerCase();
-                const challanNo = (sale.challanNo || '').toLowerCase();
-                const truckNo = (sale.truckNo || '').toLowerCase();
                 const cname = (sale.companyName || sale.customerName || '').toLowerCase();
-                if (!inv.includes(q) && !lcNo.includes(q) && !challanNo.includes(q) && !truckNo.includes(q) && !cname.includes(q)) return false;
+                if (!inv.includes(q) && !cname.includes(q)) return false;
             }
         }
         // Date range
@@ -2655,6 +2626,8 @@ const SaleManagement = ({
 
             {showForm && (
                 <div className="sale-mgmt-form-container">
+                    <div className="absolute -top-24 -right-24 w-64 h-64 bg-blue-400/10 rounded-full blur-3xl pointer-events-none"></div>
+                    <div className="absolute -bottom-24 -left-24 w-64 h-64 bg-indigo-400/10 rounded-full blur-3xl pointer-events-none"></div>
 
                     <div className="sale-mgmt-form-header">
                         <h3 className="sale-mgmt-form-title">{editingId ? 'Edit Sale' : (saleType === 'Border' ? 'New Gate Pass Entry' : 'New Sale Entry')}</h3>
@@ -2673,7 +2646,7 @@ const SaleManagement = ({
                         autoComplete="off"
                         className="grid grid-cols-1 md:grid-cols-2 gap-6 relative z-10"
                     >
-                        <div className={`grid grid-cols-1 ${saleType === 'Border' ? 'md:grid-cols-6' : 'md:grid-cols-3'} gap-4 col-span-2`}>
+                        <div className={`grid grid-cols-1 ${saleType === 'Border' ? 'md:grid-cols-5' : 'md:grid-cols-6'} gap-4 col-span-2`}>
                             <CustomDatePicker
                                 label="Date"
                                 name="date"
@@ -2682,40 +2655,73 @@ const SaleManagement = ({
                                 compact={true}
                                 readOnly={isFieldReadOnly(originalData?.date)}
                             />
-
-                            {saleType !== 'Border' && (
-                                <>
-                                    <div className="sale-mgmt-input-group">
-                                        <label className="sale-mgmt-label">Challan- No</label>
-                                        <input
-                                            autoComplete="off"
-                                            type="text"
-                                            name="challanNo"
-                                            value={formData.challanNo || ''}
-                                            onChange={handleInputChange}
-                                            placeholder="Challan No"
-                                            className="sale-mgmt-input"
-                                        />
-                                    </div>
-                                    <div className="sale-mgmt-input-group">
-                                        <label className="sale-mgmt-label">Truck No</label>
-                                        <input
-                                            autoComplete="off"
-                                            type="text"
-                                            name="truckNo"
-                                            value={formData.truckNo || ''}
-                                            onChange={handleInputChange}
-                                            placeholder="Truck No"
-                                            className="sale-mgmt-input"
-                                        />
-                                    </div>
-                                </>
-                            )}
-
-                            <div className="sale-mgmt-input-group" style={{ display: 'none' }}>
+                            <div className="sale-mgmt-input-group">
                                 <label className="sale-mgmt-label">Invoice No</label>
                                 <input autoComplete="off" type="text" name="invoiceNo" value={formData.invoiceNo} readOnly placeholder="Auto-generated" className="sale-mgmt-input sale-mgmt-input-readonly cursor-default" />
                             </div>
+
+                            {saleType === 'Border' && (
+                                <div className="sale-mgmt-input-group relative lc-dropdown-container">
+                                    <label className="sale-mgmt-label">LC No</label>
+                                    <div className="relative">
+                                        <input
+                                            type="text"
+                                            name="lcNo"
+                                            placeholder={formData.lcNo || "Search LC..."}
+                                            value={activeDropdown === 'lcNo' ? lcSearch : formData.lcNo}
+                                            readOnly={isFieldReadOnly(originalData?.lcNo)}
+                                            onChange={(e) => {
+                                                if (isFieldReadOnly(originalData?.lcNo)) return;
+                                                setLcSearch(e.target.value);
+                                                setActiveDropdown('lcNo');
+                                                setHighlightedIndex(-1);
+                                                handleInputChange(e);
+                                            }}
+                                            autoComplete="off"
+                                            onFocus={() => {
+                                                if (isFieldReadOnly(originalData?.lcNo)) return;
+                                                setLcSearch(formData.lcNo || '');
+                                                setActiveDropdown('lcNo');
+                                                setHighlightedIndex(-1);
+                                            }}
+                                            onKeyDown={(e) => !isFieldReadOnly(originalData?.lcNo) && handleDropdownKeyDown(e, 'lcNo', getFilteredLCs(), handleLcSelect)}
+                                            className={`sale-mgmt-input pr-14 ${formData.lcNo ? 'placeholder:text-gray-900 placeholder:font-semibold' : 'placeholder:text-gray-400'} ${isFieldReadOnly(originalData?.lcNo) ? 'bg-gray-50' : ''}`}
+                                        />
+                                        <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-2">
+                                            {formData.lcNo && (
+                                                <button type="button" onClick={() => handleLcSelect(null)} className="text-gray-400 hover:text-red-500">
+                                                    <XIcon className="w-4 h-4" />
+                                                </button>
+                                            )}
+                                            <button
+                                                type="button"
+                                                onClick={() => setActiveDropdown(activeDropdown === 'lcNo' ? null : 'lcNo')}
+                                                className="text-gray-300 hover:text-blue-500 transition-colors"
+                                            >
+                                                <ChevronDownIcon className={`w-4 h-4 transition-transform duration-200 ${activeDropdown === 'lcNo' ? 'rotate-180' : ''}`} />
+                                            </button>
+                                        </div>
+                                    </div>
+                                    {activeDropdown === 'lcNo' && getFilteredLCs().length > 0 && (
+                                        <div className="absolute z-[60] w-full mt-1 bg-white border border-gray-100 rounded-xl shadow-xl max-h-48 overflow-y-auto py-1">
+                                            {getFilteredLCs().map((lc, idx) => (
+                                                <button
+                                                    key={lc._id || `lc-${idx}`}
+                                                    type="button"
+                                                    onClick={() => handleLcSelect(lc)}
+                                                    onMouseEnter={() => setHighlightedIndex(idx)}
+                                                    className={`w-full px-4 py-2 text-left text-sm transition-colors font-medium ${formData.lcNo === lc.lcNo ? 'bg-blue-50 text-blue-700' : highlightedIndex === idx ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-blue-50'}`}
+                                                >
+                                                    <div className="flex flex-col">
+                                                        <span className="font-bold">{lc.lcNo}</span>
+                                                        <span className="text-[10px] text-gray-500">{lc.importerName} | {lc.productName}</span>
+                                                    </div>
+                                                </button>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
+                            )}
 
                             {/* Border Field: Importer */}
                             {saleType === 'Border' && (
@@ -3214,83 +3220,9 @@ const SaleManagement = ({
                                             </button>
                                         )}
 
-                                        <div className={`${saleType === 'Border' ? 'flex flex-row items-center gap-4' : 'flex flex-col md:flex-row md:items-center gap-4 mb-6'}`}>
-                                            {/* LC No Selection */}
-                                            <div className={`space-y-1.5 relative px-4 lc-dropdown-container ${saleType === 'Border' ? 'flex-1' : 'flex-1 md:max-w-md'}`}>
-                                                <label className="sale-mgmt-item-label">LC No</label>
-                                                <div className="relative">
-                                                    <input
-                                                        type="text"
-                                                        name="lcNo"
-                                                        placeholder={item.lcNo || "Search LC..."}
-                                                        value={activeDropdown === 'lcNo' && activeItemIndex === index ? lcSearch : (item.lcNo || '')}
-                                                        readOnly={isFieldReadOnly(originalData?.items?.[index]?.lcNo)}
-                                                        onChange={(e) => {
-                                                            if (isFieldReadOnly(originalData?.items?.[index]?.lcNo)) return;
-                                                            setLcSearch(e.target.value);
-                                                            setActiveDropdown('lcNo');
-                                                            setActiveItemIndex(index);
-                                                            setHighlightedIndex(-1);
-                                                            handleItemInputChange(index, null, { target: { name: 'lcNo', value: e.target.value } });
-                                                        }}
-                                                        autoComplete="off"
-                                                        onFocus={() => {
-                                                            if (isFieldReadOnly(originalData?.items?.[index]?.lcNo)) return;
-                                                            setLcSearch(item.lcNo || '');
-                                                            setActiveDropdown('lcNo');
-                                                            setActiveItemIndex(index);
-                                                            setHighlightedIndex(-1);
-                                                        }}
-                                                        onKeyDown={(e) => !isFieldReadOnly(originalData?.items?.[index]?.lcNo) && handleDropdownKeyDown(e, 'lcNo', getFilteredLCs(), handleLcSelect)}
-                                                        className={`sale-mgmt-input pr-14 ${item.lcNo ? 'placeholder:text-gray-900 placeholder:font-semibold' : 'placeholder:text-gray-400'} ${isFieldReadOnly(originalData?.items?.[index]?.lcNo) ? 'bg-gray-50' : ''}`}
-                                                    />
-                                                    <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-2">
-                                                        {item.lcNo && (
-                                                            <button
-                                                                type="button"
-                                                                onClick={() => {
-                                                                    setActiveItemIndex(index);
-                                                                    handleLcSelect(null);
-                                                                }}
-                                                                className="text-gray-400 hover:text-red-500"
-                                                            >
-                                                                <XIcon className="w-4 h-4" />
-                                                            </button>
-                                                        )}
-                                                        <button
-                                                            type="button"
-                                                            onClick={() => {
-                                                                setActiveDropdown(activeDropdown === 'lcNo' && activeItemIndex === index ? null : 'lcNo');
-                                                                setActiveItemIndex(index);
-                                                            }}
-                                                            className="text-gray-300 hover:text-blue-500 transition-colors"
-                                                        >
-                                                            <ChevronDownIcon className={`w-4 h-4 transition-transform duration-200 ${activeDropdown === 'lcNo' && activeItemIndex === index ? 'rotate-180' : ''}`} />
-                                                        </button>
-                                                    </div>
-                                                </div>
-                                                {activeDropdown === 'lcNo' && activeItemIndex === index && getFilteredLCs().length > 0 && (
-                                                    <div className="absolute z-[60] w-full mt-1 bg-white border border-gray-100 rounded-xl shadow-xl max-h-48 overflow-y-auto py-1">
-                                                        {getFilteredLCs().map((lc, idx) => (
-                                                            <button
-                                                                key={lc._id || `lc-${idx}`}
-                                                                type="button"
-                                                                onClick={() => handleLcSelect(lc)}
-                                                                onMouseEnter={() => setHighlightedIndex(idx)}
-                                                                className={`w-full px-4 py-2 text-left text-sm transition-colors font-medium ${item.lcNo === lc.lcNo ? 'bg-blue-50 text-blue-700' : highlightedIndex === idx ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-blue-50'}`}
-                                                            >
-                                                                <div className="flex flex-col">
-                                                                    <span className="font-bold">{lc.lcNo}</span>
-                                                                    <span className="text-[10px] text-gray-500">{lc.importerName} | {lc.productName}</span>
-                                                                </div>
-                                                            </button>
-                                                        ))}
-                                                    </div>
-                                                )}
-                                            </div>
-
+                                        <div className={`${saleType === 'Border' ? 'flex flex-row items-center gap-4' : 'space-y-6'}`}>
                                             {/* Product Selection */}
-                                            <div className={`space-y-1.5 relative px-4 product-dropdown-container ${saleType === 'Border' ? 'flex-1' : 'flex-1 md:max-w-md'}`}>
+                                            <div className={`space-y-1.5 relative px-4 product-dropdown-container ${saleType === 'Border' ? 'flex-1' : 'max-w-sm'}`}>
                                                 <label className="sale-mgmt-item-label">Product</label>
                                                 <div className="relative">
                                                     <input
@@ -3856,9 +3788,6 @@ const SaleManagement = ({
                                         <th className="sale-mgmt-th cursor-pointer group" onClick={() => handleSort('date')}>
                                             <div className="flex items-center">Date {renderSortIcon('date')}</div>
                                         </th>
-                                        <th className="sale-mgmt-th cursor-pointer group" onClick={() => handleSort('lcNo')}>
-                                            <div className="flex items-center">LC No {renderSortIcon('lcNo')}</div>
-                                        </th>
                                         <th className="sale-mgmt-th text-center cursor-pointer group" onClick={() => handleSort('invoiceNo')}>
                                             <div className="flex items-center justify-center">Invoice {renderSortIcon('invoiceNo')}</div>
                                         </th>
@@ -3870,14 +3799,11 @@ const SaleManagement = ({
                                         </th>
                                         <th className="sale-mgmt-th">Product</th>
                                         <th className="sale-mgmt-th">Brand</th>
-                                        <th className="sale-mgmt-th cursor-pointer group" onClick={() => handleSort('challanNo')}>
-                                            <div className="flex items-center">Challan No {renderSortIcon('challanNo')}</div>
-                                        </th>
-                                        <th className="sale-mgmt-th cursor-pointer group w-[100px] max-w-[100px] whitespace-normal" onClick={() => handleSort('truckNo')}>
-                                            <div className="flex items-center">Truck No {renderSortIcon('truckNo')}</div>
-                                        </th>
                                         <th className="sale-mgmt-th text-center font-bold">Quantity</th>
                                         <th className="sale-mgmt-th text-center font-bold">Rate</th>
+                                        <th className="sale-mgmt-th text-center cursor-pointer group" onClick={() => handleSort('discount')}>
+                                            <div className="flex items-center justify-center">Discount {renderSortIcon('discount')}</div>
+                                        </th>
                                         <th className="sale-mgmt-th text-center cursor-pointer group" onClick={() => handleSort('totalAmount')}>
                                             <div className="flex items-center justify-center">Total {renderSortIcon('totalAmount')}</div>
                                         </th>
@@ -3893,9 +3819,9 @@ const SaleManagement = ({
                             </thead>
                             <tbody className="divide-y divide-gray-50">
                                 {isLoading ? (
-                                    <tr><td colSpan="15" className="px-3 py-20 text-center text-gray-400 font-medium">Loading sales records...</td></tr>
+                                    <tr><td colSpan={saleType === 'Border' ? "15" : "12"} className="px-3 py-20 text-center text-gray-400 font-medium">Loading sales records...</td></tr>
                                 ) : getFilteredData().length === 0 ? (
-                                    <tr><td colSpan="15" className="px-3 py-20 text-center text-gray-400 font-medium">No sales records found</td></tr>
+                                    <tr><td colSpan={saleType === 'Border' ? "15" : "12"} className="px-3 py-20 text-center text-gray-400 font-medium">No sales records found</td></tr>
                                 ) : getFilteredData().map((sale, index) => {
                                     const isExpanded = expandedRows.includes(sale._id);
                                     const isMultiple = (sale.items && sale.items.length > 0)
@@ -3990,9 +3916,7 @@ const SaleManagement = ({
                                                         {sale.status === 'Requested' ? (
                                                             <>
                                                                 <button onClick={(e) => { e.stopPropagation(); setViewData(sale); }} className="text-gray-400 hover:text-blue-600 transition-colors" title="View Details"><EyeIcon className="w-5 h-5" /></button>
-                                                                {(isFullAdmin || (currentUser && sale.requestedByUsername === currentUser.username)) && (
-                                                                    <button onClick={(e) => { e.stopPropagation(); handleEdit(sale); }} className="text-gray-400 hover:text-blue-600 transition-colors" title="Edit"><EditIcon className="w-5 h-5" /></button>
-                                                                )}
+                                                                <button onClick={(e) => { e.stopPropagation(); handleEdit(sale); }} className="text-gray-400 hover:text-blue-600 transition-colors" title="Edit"><EditIcon className="w-5 h-5" /></button>
                                                                 {canApprove && (
                                                                     <>
                                                                         <button onClick={(e) => { e.stopPropagation(); handleStatusUpdate(sale, 'accepted'); }} className="text-gray-400 hover:text-emerald-600 transition-colors" title="Accept"><CheckIcon className="w-5 h-5" /></button>
@@ -4025,9 +3949,6 @@ const SaleManagement = ({
                                         >
                                             <td className="px-3 py-4 whitespace-nowrap">
                                                 <div className="text-[13px] font-medium text-gray-600">{formatDate(sale.date)}</div>
-                                            </td>
-                                            <td className="px-3 py-4 whitespace-nowrap">
-                                                <div className="text-[13px] font-semibold text-gray-800">{sale.lcNo ? sale.lcNo.slice(-4) : '-'}</div>
                                             </td>
                                             <td className="px-3 py-4 whitespace-nowrap text-center">
                                                 <div className="text-[13px] font-semibold text-gray-800">{sale.invoiceNo || '-'}</div>
@@ -4064,13 +3985,6 @@ const SaleManagement = ({
                                                     </div>
                                                 )}
                                             </td>
-
-                                            <td className="px-3 py-4 whitespace-nowrap">
-                                                <div className="text-[13px] font-semibold text-gray-800">{sale.challanNo || '-'}</div>
-                                            </td>
-                                            <td className="px-3 py-4 whitespace-normal break-words w-[100px] max-w-[100px]">
-                                                <div className="text-[13px] font-semibold text-gray-800">{sale.truckNo || '-'}</div>
-                                            </td>
                                             <td className="px-3 py-4 whitespace-nowrap text-center">
                                                 {isMultiple && !isExpanded ? (
                                                     <div className="inline-block px-3 py-1 bg-blue-50 text-blue-700 rounded-lg border border-blue-100/50 text-[13px] font-black">
@@ -4098,6 +4012,11 @@ const SaleManagement = ({
                                                         ))}
                                                     </div>
                                                 )}
+                                            </td>
+                                            <td className="px-3 py-4 whitespace-nowrap text-center">
+                                                <div className="text-[13px] font-bold text-red-600">
+                                                    {parseFloat(sale.discount || 0) > 0 ? `-৳ ${parseFloat(sale.discount).toLocaleString('en-IN')}` : '-'}
+                                                </div>
                                             </td>
                                             <td className="px-3 py-4 whitespace-nowrap text-center">
                                                 <div className="text-[13px] font-black text-gray-900">
@@ -4134,7 +4053,7 @@ const SaleManagement = ({
                                                     {sale.status === 'Requested' ? (
                                                         <>
                                                             <button onClick={(e) => { e.stopPropagation(); setViewData(sale); }} className="text-gray-400 hover:text-blue-600 transition-colors" title="View Details"><EyeIcon className="w-5 h-5" /></button>
-                                                            {(isFullAdmin || (currentUser && sale.requestedByUsername === currentUser.username)) && (
+                                                            {(isFullAdmin || canUserEditSale(sale)) && (
                                                                 <button onClick={(e) => { e.stopPropagation(); handleEdit(sale); }} className="text-gray-400 hover:text-blue-600 transition-colors" title="Edit"><EditIcon className="w-5 h-5" /></button>
                                                             )}
                                                             {canApprove && (
@@ -4179,16 +4098,14 @@ const SaleManagement = ({
                             const items = sale.items && sale.items.length > 0
                                 ? sale.items.flatMap(item =>
                                     (item.brandEntries || []).length > 0
-                                        ? item.brandEntries.map(be => ({ ...be, productName: item.productName, uom: be.uom || item.uom || sale.uom || 'Truck' }))
-                                        : [{ ...item, productName: item.productName, uom: item.uom || sale.uom || 'Truck' }]
+                                        ? item.brandEntries.map(be => ({ ...be, productName: item.productName }))
+                                        : [{ ...item, productName: item.productName }]
                                 )
                                 : [{
                                     productName: sale.productName,
                                     brand: sale.brand,
                                     quantity: sale.quantity,
-                                    unitPrice: sale.unitPrice,
-                                    truck: sale.truck,
-                                    uom: sale.uom || 'Truck'
+                                    unitPrice: sale.unitPrice
                                 }];
 
                             return (
@@ -4253,7 +4170,7 @@ const SaleManagement = ({
                                                     {sale.status === 'Requested' ? (
                                                         <>
                                                             <button onClick={(e) => { e.stopPropagation(); setViewData(sale); }} className="p-2 text-blue-600 bg-blue-50/50 rounded-lg transition-colors hover:bg-blue-100" title="View Details"><EyeIcon className="w-4 h-4" /></button>
-                                                            {(isFullAdmin || (currentUser && sale.requestedByUsername === currentUser.username)) && (
+                                                            {(isFullAdmin || canUserEditSale(sale)) && (
                                                                 <button onClick={(e) => { e.stopPropagation(); handleEdit(sale); }} className="p-2 text-blue-600 bg-blue-50/50 rounded-lg transition-colors hover:bg-blue-100" title="Edit"><EditIcon className="w-4 h-4" /></button>
                                                             )}
                                                             {canApprove && (
@@ -4320,72 +4237,52 @@ const SaleManagement = ({
                                                         </button>
                                                     )}
                                                 </div>
-                                                <div className="space-y-3 mt-3">
-                                                    {items.map((it, idx) => {
-                                                        const activeUom = sale.saleType === 'Border' ? (it.uom || sale.uom || 'Truck') : 'QTY';
-                                                        const isBorder = sale.saleType === 'Border';
-                                                        const displayQty = isBorder
-                                                            ? (activeUom === 'QTY' ? (it.quantity || 0) : (it.truck || sale.truck || 0))
-                                                            : (it.quantity || 0);
-                                                        const itemTotal = isBorder
-                                                            ? (activeUom === 'QTY'
-                                                                ? (parseFloat(it.quantity || 0) * parseFloat(it.unitPrice || 0))
-                                                                : (parseFloat(it.truck || sale.truck || 0) * parseFloat(it.unitPrice || 0)))
-                                                            : (parseFloat(it.quantity || 0) * parseFloat(it.unitPrice || 0));
-
-                                                        return (
-                                                            <div key={idx} className="bg-white/50 border border-gray-100/80 rounded-xl p-3.5 space-y-2.5 shadow-sm">
-                                                                <div className="flex items-center justify-between text-sm py-1 border-b border-gray-50/50">
-                                                                    <span className="font-bold text-gray-400 uppercase text-[11px] tracking-wider">LC No :</span>
-                                                                    <span className="font-black text-gray-900 text-[13px]">{it.lcNo || sale.lcNo || '-'}</span>
+                                                <div className="grid grid-cols-12 gap-1 px-1 pb-1 border-b border-gray-100 mb-1 mt-2">
+                                                    <div className="col-span-3 text-[9px] font-bold text-gray-400 uppercase">Brand</div>
+                                                    <div className="col-span-3 text-[9px] font-bold text-gray-400 uppercase text-right">Qty</div>
+                                                    <div className="col-span-3 text-[9px] font-bold text-gray-400 uppercase text-right">Price</div>
+                                                    <div className="col-span-3 text-[9px] font-bold text-gray-400 uppercase text-right">Total</div>
+                                                </div>
+                                                <div className="space-y-2.5">
+                                                    {items.map((it, idx) => (
+                                                        <div key={idx} className="border-b border-gray-100 last:border-0 pb-2 last:pb-0">
+                                                            <div className="text-[12px] font-black text-gray-800 mb-0.5">{it.productName || '-'}</div>
+                                                            <div className="grid grid-cols-12 gap-1 items-center text-[10px]">
+                                                                <div className="col-span-3 min-w-0">
+                                                                    <span className="text-[10px] font-medium text-gray-500 italic truncate">{it.brand || '-'}</span>
                                                                 </div>
-                                                                <div className="flex items-center justify-between text-sm py-1 border-b border-gray-50/50">
-                                                                    <span className="font-bold text-gray-400 uppercase text-[11px] tracking-wider">Product :</span>
-                                                                    <span className="font-black text-gray-900 text-[13px]">{it.productName || '-'}</span>
+                                                                <div className="col-span-3 text-right">
+                                                                    <div className="font-bold text-gray-900">{parseFloat(it.quantity || 0).toLocaleString('en-US')}</div>
                                                                 </div>
-                                                                <div className="flex items-center justify-between text-sm py-1 border-b border-gray-50/50">
-                                                                    <span className="font-bold text-gray-400 uppercase text-[11px] tracking-wider">Brand :</span>
-                                                                    <span className="font-semibold text-gray-700 text-[13px]">{it.brand || '-'}</span>
+                                                                <div className="col-span-3 text-right">
+                                                                    <div className="font-medium text-blue-600 truncate">{parseFloat(it.unitPrice || 0).toLocaleString('en-IN')}</div>
                                                                 </div>
-                                                                <div className="flex items-center justify-between text-sm py-1 border-b border-gray-50/50">
-                                                                    <span className="font-bold text-gray-400 uppercase text-[11px] tracking-wider">UOM :</span>
-                                                                    <span className="font-bold text-blue-600 bg-blue-50/50 px-2.5 py-0.5 rounded text-[11px]">{activeUom}</span>
-                                                                </div>
-                                                                <div className="flex items-center justify-between text-sm py-1 border-b border-gray-50/50">
-                                                                    <span className="font-bold text-gray-400 uppercase text-[11px] tracking-wider">Qty :</span>
-                                                                    <span className="font-black text-gray-900 text-[13px]">{parseFloat(displayQty || 0).toLocaleString('en-US')}</span>
-                                                                </div>
-                                                                <div className="flex items-center justify-between text-sm py-1 border-b border-gray-50/50">
-                                                                    <span className="font-bold text-gray-400 uppercase text-[11px] tracking-wider">Rate :</span>
-                                                                    <span className="font-semibold text-gray-800 text-[13px]">৳{parseFloat(it.unitPrice || 0).toLocaleString('en-IN')}</span>
-                                                                </div>
-                                                                <div className="flex items-center justify-between text-sm pt-1.5">
-                                                                    <span className="font-bold text-gray-400 uppercase text-[11px] tracking-wider">Total :</span>
-                                                                    <span className="font-black text-emerald-600 text-[15px]">৳{itemTotal.toLocaleString('en-US')}</span>
+                                                                <div className="col-span-3 text-right">
+                                                                    <div className="font-black text-gray-900 truncate">৳{(parseFloat(it.quantity || 0) * parseFloat(it.unitPrice || 0)).toLocaleString('en-US')}</div>
                                                                 </div>
                                                             </div>
-                                                        );
-                                                    })}
+                                                        </div>
+                                                    ))}
                                                 </div>
                                             </div>
 
                                             {/* Money Summary */}
-                                            <div className="space-y-2 pt-3 border-t border-gray-50 mt-4">
-                                                <div className="sale-mgmt-mobile-money-card bg-red-50/40 border-red-100/50 flex items-center justify-between px-3.5 py-3">
-                                                    <span className="text-[12px] font-black text-red-600 uppercase tracking-widest">Discount :</span>
-                                                    <span className="text-[16px] font-black text-red-600">৳{parseFloat(sale.discount || 0).toLocaleString('en-IN')}</span>
+                                            <div className="grid grid-cols-2 gap-2 pt-3 border-t border-gray-50 mt-4">
+                                                <div className="sale-mgmt-mobile-money-card bg-red-50/40 border-red-100/50">
+                                                    <div className="sale-mgmt-mobile-label text-red-600">Discount</div>
+                                                    <div className="text-[14px] font-black text-red-600">৳{parseFloat(sale.discount || 0).toLocaleString('en-IN')}</div>
                                                 </div>
-                                                <div className="sale-mgmt-mobile-money-card bg-blue-50/40 border-blue-100/50 flex items-center justify-between px-3.5 py-3">
-                                                    <span className="text-[12px] font-black text-blue-600 uppercase tracking-widest">Total :</span>
-                                                    <span className="text-[16px] font-black text-gray-900">৳{parseFloat(sale.totalAmount).toLocaleString('en-IN')}</span>
+                                                <div className="sale-mgmt-mobile-money-card bg-blue-50/40 border-blue-100/50">
+                                                    <div className="sale-mgmt-mobile-label text-blue-600 mb-0">Total</div>
+                                                    <div className="text-[14px] font-black text-gray-900">৳{parseFloat(sale.totalAmount).toLocaleString('en-IN')}</div>
                                                 </div>
-                                                <div className="sale-mgmt-mobile-money-card bg-emerald-50/40 border-emerald-100/50 flex items-center justify-between px-3.5 py-3">
-                                                    <span className="text-[12px] font-black text-emerald-600 uppercase tracking-widest">Paid :</span>
-                                                    <span className="text-[16px] font-black text-emerald-700">৳{parseFloat(sale.paidAmount || 0).toLocaleString('en-IN')}</span>
+                                                <div className="sale-mgmt-mobile-money-card bg-emerald-50/40 border-emerald-100/50">
+                                                    <div className="sale-mgmt-mobile-label text-emerald-600">Paid</div>
+                                                    <div className="text-[14px] font-black text-emerald-700">৳{parseFloat(sale.paidAmount || 0).toLocaleString('en-IN')}</div>
                                                 </div>
-                                                <div className="sale-mgmt-mobile-money-card bg-orange-50/40 border-orange-100/50 flex items-center justify-between px-3.5 py-3">
-                                                    <span className="text-[12px] font-black text-orange-600 uppercase tracking-widest">Balance :</span>
-                                                    <span className="text-[16px] font-black text-orange-700">৳{parseFloat(sale.dueAmount || 0).toLocaleString('en-IN')}</span>
+                                                <div className="sale-mgmt-mobile-money-card bg-orange-50/40 border-orange-100/50">
+                                                    <div className="sale-mgmt-mobile-label text-orange-600">Balance</div>
+                                                    <div className="text-[14px] font-black text-orange-700">৳{parseFloat(sale.dueAmount || 0).toLocaleString('en-IN')}</div>
                                                 </div>
                                             </div>
                                         </>
