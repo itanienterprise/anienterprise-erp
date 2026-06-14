@@ -488,6 +488,8 @@ const SaleManagement = ({
     const [formData, setFormData] = useState({
         date: '',
         invoiceNo: '',
+        challanNo: '',
+        truckNo: '',
         customerId: '',
         companyName: '',
         customerName: '',
@@ -502,6 +504,7 @@ const SaleManagement = ({
         items: [{
             productId: '',
             productName: '',
+            lcNo: '',
             brandEntries: [{
                 brand: '',
                 brandName: '',
@@ -547,9 +550,7 @@ const SaleManagement = ({
         fetchImportersList();
         fetchPortsList();
         fetchCnfsList();
-        if (saleType === 'Border') {
-            fetchLCRecords();
-        }
+        fetchLCRecords();
     }, [saleType]); // Refetch if saleType changes
 
     const fetchLCRecords = async () => {
@@ -954,6 +955,7 @@ const SaleManagement = ({
             items: [...prev.items, {
                 productId: '',
                 productName: '',
+                lcNo: '',
                 brandEntries: [{
                     brand: '',
                     brandName: '',
@@ -1319,6 +1321,8 @@ const SaleManagement = ({
         setFormData({
             date: '',
             invoiceNo: '',
+            challanNo: '',
+            truckNo: '',
             customerId: '',
             companyName: '',
             customerName: '',
@@ -1333,6 +1337,7 @@ const SaleManagement = ({
             items: [{
                 productId: '',
                 productName: '',
+                lcNo: '',
                 brandEntries: [{
                     brand: '',
                     brandName: '',
@@ -1395,6 +1400,7 @@ const SaleManagement = ({
             initialItems = [{
                 productId: sale.productId,
                 productName: sale.productName,
+                lcNo: sale.lcNo || '',
                 brandEntries: [{
                     brand: sale.brand,
                     inhouseQty: sale.inhouseQty,
@@ -1410,11 +1416,18 @@ const SaleManagement = ({
         } else {
             // Check if items are flat or nested
             initialItems = initialItems.map(item => {
-                if (item.brandEntries) return item;
+                const itemLcNo = item.lcNo || sale.lcNo || '';
+                if (item.brandEntries) {
+                    return {
+                        ...item,
+                        lcNo: itemLcNo
+                    };
+                }
                 // Migrate previous flat multi-item to nested brand entries
                 return {
                     productId: item.productId,
                     productName: item.productName,
+                    lcNo: itemLcNo,
                     brandEntries: [{
                         brand: item.brand,
                         inhouseQty: item.inhouseQty,
@@ -1775,41 +1788,86 @@ const SaleManagement = ({
     };
 
     const handleLcSelect = (lc) => {
-        if (!lc) {
-            setFormData(prev => ({
-                ...prev,
-                lcNo: ''
-            }));
-            setLcSearch('');
-        } else {
-            setFormData(prev => {
-                const newData = {
+        if (saleType === 'Border') {
+            if (!lc) {
+                setFormData(prev => ({
                     ...prev,
-                    lcNo: lc.lcNo
-                };
+                    lcNo: ''
+                }));
+                setLcSearch('');
+            } else {
+                setFormData(prev => {
+                    const newData = {
+                        ...prev,
+                        lcNo: lc.lcNo
+                    };
 
-                // Auto-fill associated fields if they are empty
-                if (!newData.importer && lc.importerName) newData.importer = lc.importerName;
-                if (!newData.exporter && lc.exporterName) newData.exporter = lc.exporterName;
-                if (!newData.port && lc.port) newData.port = lc.port;
+                    // Auto-fill associated fields if they are empty
+                    if (!newData.importer && lc.importerName) newData.importer = lc.importerName;
+                    if (!newData.exporter && lc.exporterName) newData.exporter = lc.exporterName;
+                    if (!newData.port && lc.port) newData.port = lc.port;
 
-                // If items array is empty or has only one empty item, populate the first item's product
-                if (newData.items.length === 1 && !newData.items[0].productId && lc.productName) {
-                    const productObj = products.find(p => p.name === lc.productName);
-                    if (productObj) {
-                        newData.items[0] = {
-                            ...newData.items[0],
-                            productId: productObj._id,
-                            productName: productObj.name
-                        };
-                    } else {
-                        newData.items[0].productName = lc.productName;
+                    // If items array is empty or has only one empty item, populate the first item's product
+                    if (newData.items.length === 1 && !newData.items[0].productId && lc.productName) {
+                        const productObj = products.find(p => p.name === lc.productName);
+                        if (productObj) {
+                            newData.items[0] = {
+                                ...newData.items[0],
+                                productId: productObj._id,
+                                productName: productObj.name
+                            };
+                        } else {
+                            newData.items[0].productName = lc.productName;
+                        }
                     }
-                }
 
-                return newData;
-            });
-            setLcSearch('');
+                    return newData;
+                });
+                setLcSearch('');
+            }
+        } else {
+            // General sale (product-wise)
+            if (activeItemIndex === null) return;
+            if (!lc) {
+                setFormData(prev => {
+                    const newItems = [...prev.items];
+                    newItems[activeItemIndex] = {
+                        ...newItems[activeItemIndex],
+                        lcNo: ''
+                    };
+                    return { ...prev, items: newItems };
+                });
+                setLcSearch('');
+            } else {
+                setFormData(prev => {
+                    const newItems = [...prev.items];
+                    const item = { ...newItems[activeItemIndex], lcNo: lc.lcNo };
+
+                    const newData = {
+                        ...prev,
+                        items: newItems
+                    };
+
+                    if (!newData.importer && lc.importerName) newData.importer = lc.importerName;
+                    if (!newData.exporter && lc.exporterName) newData.exporter = lc.exporterName;
+                    if (!newData.port && lc.port) newData.port = lc.port;
+
+                    // Populate the active item's product
+                    if (!item.productId && lc.productName) {
+                        const productObj = products.find(p => p.name === lc.productName);
+                        if (productObj) {
+                            item.productId = productObj._id;
+                            item.productName = productObj.name;
+                        } else {
+                            item.productName = lc.productName;
+                        }
+                    }
+
+                    newItems[activeItemIndex] = item;
+                    return newData;
+                });
+                setLcSearch('');
+            }
         }
         setActiveDropdown(null);
     };
@@ -2104,8 +2162,17 @@ const SaleManagement = ({
                 if (!matches) return false;
             } else {
                 const inv = (sale.invoiceNo || '').toLowerCase();
+                const challan = (sale.challanNo || '').toLowerCase();
+                const truck = (sale.truckNo || '').toLowerCase();
                 const cname = (sale.companyName || sale.customerName || '').toLowerCase();
-                if (!inv.includes(q) && !cname.includes(q)) return false;
+                const itemsMatch = (sale.items || []).some(item => {
+                    const pName = (item.productName || item.product || '').toLowerCase();
+                    const itemLc = (item.lcNo || '').toLowerCase();
+                    return pName.includes(q) || itemLc.includes(q) || (item.brandEntries || []).some(e =>
+                        String(e.quantity || '').includes(q) || String(e.unitPrice || '').includes(q) || String(e.totalAmount || '').includes(q)
+                    );
+                });
+                if (!inv.includes(q) && !challan.includes(q) && !truck.includes(q) && !cname.includes(q) && !itemsMatch) return false;
             }
         }
         // Date range
@@ -2646,7 +2713,7 @@ const SaleManagement = ({
                         autoComplete="off"
                         className="grid grid-cols-1 md:grid-cols-2 gap-6 relative z-10"
                     >
-                        <div className={`grid grid-cols-1 ${saleType === 'Border' ? 'md:grid-cols-5' : 'md:grid-cols-6'} gap-4 col-span-2`}>
+                        <div className={`grid grid-cols-1 ${saleType === 'Border' ? 'md:grid-cols-5' : 'md:grid-cols-3'} gap-4 col-span-2`}>
                             <CustomDatePicker
                                 label="Date"
                                 name="date"
@@ -2655,7 +2722,7 @@ const SaleManagement = ({
                                 compact={true}
                                 readOnly={isFieldReadOnly(originalData?.date)}
                             />
-                            <div className="sale-mgmt-input-group">
+                            <div className="sale-mgmt-input-group" style={saleType !== 'Border' ? { display: 'none' } : {}}>
                                 <label className="sale-mgmt-label">Invoice No</label>
                                 <input autoComplete="off" type="text" name="invoiceNo" value={formData.invoiceNo} readOnly placeholder="Auto-generated" className="sale-mgmt-input sale-mgmt-input-readonly cursor-default" />
                             </div>
@@ -2721,6 +2788,35 @@ const SaleManagement = ({
                                         </div>
                                     )}
                                 </div>
+                            )}
+
+                            {saleType !== 'Border' && (
+                                <>
+                                    <div className="sale-mgmt-input-group">
+                                        <label className="sale-mgmt-label">Challan- No</label>
+                                        <input
+                                            autoComplete="off"
+                                            type="text"
+                                            name="challanNo"
+                                            value={formData.challanNo || ''}
+                                            onChange={handleInputChange}
+                                            placeholder="Challan No"
+                                            className="sale-mgmt-input"
+                                        />
+                                    </div>
+                                    <div className="sale-mgmt-input-group">
+                                        <label className="sale-mgmt-label">Truck No</label>
+                                        <input
+                                            autoComplete="off"
+                                            type="text"
+                                            name="truckNo"
+                                            value={formData.truckNo || ''}
+                                            onChange={handleInputChange}
+                                            placeholder="Truck No"
+                                            className="sale-mgmt-input"
+                                        />
+                                    </div>
+                                </>
                             )}
 
                             {/* Border Field: Importer */}
@@ -3220,9 +3316,85 @@ const SaleManagement = ({
                                             </button>
                                         )}
 
-                                        <div className={`${saleType === 'Border' ? 'flex flex-row items-center gap-4' : 'space-y-6'}`}>
+                                        <div className={`${saleType === 'Border' ? 'flex flex-row items-center gap-4' : 'flex flex-col md:flex-row md:items-center gap-4 mb-6'}`}>
+                                            {/* LC No Selection */}
+                                            {saleType !== 'Border' && (
+                                                <div className="space-y-1.5 relative px-4 lc-dropdown-container flex-1 md:max-w-md">
+                                                    <label className="sale-mgmt-item-label">LC No</label>
+                                                    <div className="relative">
+                                                        <input
+                                                            type="text"
+                                                            name="lcNo"
+                                                            placeholder={item.lcNo || "Search LC..."}
+                                                            value={activeDropdown === 'lcNo' && activeItemIndex === index ? lcSearch : (item.lcNo || '')}
+                                                            readOnly={isFieldReadOnly(originalData?.items?.[index]?.lcNo)}
+                                                            onChange={(e) => {
+                                                                if (isFieldReadOnly(originalData?.items?.[index]?.lcNo)) return;
+                                                                setLcSearch(e.target.value);
+                                                                setActiveDropdown('lcNo');
+                                                                setActiveItemIndex(index);
+                                                                setHighlightedIndex(-1);
+                                                                handleItemInputChange(index, null, { target: { name: 'lcNo', value: e.target.value } });
+                                                            }}
+                                                            autoComplete="off"
+                                                            onFocus={() => {
+                                                                if (isFieldReadOnly(originalData?.items?.[index]?.lcNo)) return;
+                                                                setLcSearch(item.lcNo || '');
+                                                                setActiveDropdown('lcNo');
+                                                                setActiveItemIndex(index);
+                                                                setHighlightedIndex(-1);
+                                                            }}
+                                                            onKeyDown={(e) => !isFieldReadOnly(originalData?.items?.[index]?.lcNo) && handleDropdownKeyDown(e, 'lcNo', getFilteredLCs(), handleLcSelect)}
+                                                            className={`sale-mgmt-input pr-14 ${item.lcNo ? 'placeholder:text-gray-900 placeholder:font-semibold' : 'placeholder:text-gray-400'} ${isFieldReadOnly(originalData?.items?.[index]?.lcNo) ? 'bg-gray-50' : ''}`}
+                                                        />
+                                                        <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-2">
+                                                            {item.lcNo && (
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => {
+                                                                        setActiveItemIndex(index);
+                                                                        handleLcSelect(null);
+                                                                    }}
+                                                                    className="text-gray-400 hover:text-red-500"
+                                                                >
+                                                                    <XIcon className="w-4 h-4" />
+                                                                </button>
+                                                            )}
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => {
+                                                                    setActiveDropdown(activeDropdown === 'lcNo' && activeItemIndex === index ? null : 'lcNo');
+                                                                    setActiveItemIndex(index);
+                                                                }}
+                                                                className="text-gray-300 hover:text-blue-500 transition-colors"
+                                                            >
+                                                                <ChevronDownIcon className={`w-4 h-4 transition-transform duration-200 ${activeDropdown === 'lcNo' && activeItemIndex === index ? 'rotate-180' : ''}`} />
+                                                            </button>
+                                                        </div>
+                                                    </div>
+                                                    {activeDropdown === 'lcNo' && activeItemIndex === index && getFilteredLCs().length > 0 && (
+                                                        <div className="absolute z-[60] w-full mt-1 bg-white border border-gray-100 rounded-xl shadow-xl max-h-48 overflow-y-auto py-1">
+                                                            {getFilteredLCs().map((lc, idx) => (
+                                                                <button
+                                                                    key={lc._id || `lc-${idx}`}
+                                                                    type="button"
+                                                                    onClick={() => handleLcSelect(lc)}
+                                                                    onMouseEnter={() => setHighlightedIndex(idx)}
+                                                                    className={`w-full px-4 py-2 text-left text-sm transition-colors font-medium ${item.lcNo === lc.lcNo ? 'bg-blue-50 text-blue-700' : highlightedIndex === idx ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-blue-50'}`}
+                                                                >
+                                                                    <div className="flex flex-col">
+                                                                        <span className="font-bold">{lc.lcNo}</span>
+                                                                        <span className="text-[10px] text-gray-500">{lc.importerName} | {lc.productName}</span>
+                                                                    </div>
+                                                                </button>
+                                                            ))}
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            )}
+
                                             {/* Product Selection */}
-                                            <div className={`space-y-1.5 relative px-4 product-dropdown-container ${saleType === 'Border' ? 'flex-1' : 'max-w-sm'}`}>
+                                            <div className={`space-y-1.5 relative px-4 product-dropdown-container ${saleType === 'Border' ? 'flex-1' : 'flex-1 md:max-w-md'}`}>
                                                 <label className="sale-mgmt-item-label">Product</label>
                                                 <div className="relative">
                                                     <input
@@ -3788,6 +3960,9 @@ const SaleManagement = ({
                                         <th className="sale-mgmt-th cursor-pointer group" onClick={() => handleSort('date')}>
                                             <div className="flex items-center">Date {renderSortIcon('date')}</div>
                                         </th>
+                                        <th className="sale-mgmt-th cursor-pointer group" onClick={() => handleSort('lcNo')}>
+                                            <div className="flex items-center">LC No {renderSortIcon('lcNo')}</div>
+                                        </th>
                                         <th className="sale-mgmt-th text-center cursor-pointer group" onClick={() => handleSort('invoiceNo')}>
                                             <div className="flex items-center justify-center">Invoice {renderSortIcon('invoiceNo')}</div>
                                         </th>
@@ -3799,6 +3974,12 @@ const SaleManagement = ({
                                         </th>
                                         <th className="sale-mgmt-th">Product</th>
                                         <th className="sale-mgmt-th">Brand</th>
+                                        <th className="sale-mgmt-th cursor-pointer group" onClick={() => handleSort('challanNo')}>
+                                            <div className="flex items-center">Challan No {renderSortIcon('challanNo')}</div>
+                                        </th>
+                                        <th className="sale-mgmt-th cursor-pointer group w-[100px] max-w-[100px] whitespace-normal" onClick={() => handleSort('truckNo')}>
+                                            <div className="flex items-center">Truck No {renderSortIcon('truckNo')}</div>
+                                        </th>
                                         <th className="sale-mgmt-th text-center font-bold">Quantity</th>
                                         <th className="sale-mgmt-th text-center font-bold">Rate</th>
                                         <th className="sale-mgmt-th text-center cursor-pointer group" onClick={() => handleSort('discount')}>
@@ -3819,9 +4000,9 @@ const SaleManagement = ({
                             </thead>
                             <tbody className="divide-y divide-gray-50">
                                 {isLoading ? (
-                                    <tr><td colSpan={saleType === 'Border' ? "15" : "12"} className="px-3 py-20 text-center text-gray-400 font-medium">Loading sales records...</td></tr>
+                                    <tr><td colSpan="15" className="px-3 py-20 text-center text-gray-400 font-medium">Loading sales records...</td></tr>
                                 ) : getFilteredData().length === 0 ? (
-                                    <tr><td colSpan={saleType === 'Border' ? "15" : "12"} className="px-3 py-20 text-center text-gray-400 font-medium">No sales records found</td></tr>
+                                    <tr><td colSpan="15" className="px-3 py-20 text-center text-gray-400 font-medium">No sales records found</td></tr>
                                 ) : getFilteredData().map((sale, index) => {
                                     const isExpanded = expandedRows.includes(sale._id);
                                     const isMultiple = (sale.items && sale.items.length > 0)
@@ -3950,6 +4131,19 @@ const SaleManagement = ({
                                             <td className="px-3 py-4 whitespace-nowrap">
                                                 <div className="text-[13px] font-medium text-gray-600">{formatDate(sale.date)}</div>
                                             </td>
+                                            <td className="px-3 py-4 whitespace-nowrap">
+                                                {isMultiple && !isExpanded ? (
+                                                    <span className="px-1.5 py-0.5 bg-blue-50 text-blue-600 border border-blue-100/50 rounded text-[9px] font-bold uppercase tracking-wider">Multiple</span>
+                                                ) : (
+                                                    <div className="flex flex-col gap-2">
+                                                        {items.map((it, idx) => (
+                                                            <div key={idx} className={`text-[13px] font-semibold text-gray-800 ${idx < items.length - 1 ? 'border-b border-gray-100 pb-1' : ''}`}>
+                                                                {it.lcNo ? it.lcNo.slice(-4) : (sale.lcNo ? sale.lcNo.slice(-4) : '-')}
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                )}
+                                            </td>
                                             <td className="px-3 py-4 whitespace-nowrap text-center">
                                                 <div className="text-[13px] font-semibold text-gray-800">{sale.invoiceNo || '-'}</div>
                                             </td>
@@ -3984,6 +4178,12 @@ const SaleManagement = ({
                                                         ))}
                                                     </div>
                                                 )}
+                                            </td>
+                                            <td className="px-3 py-4 whitespace-nowrap">
+                                                <div className="text-[13px] font-semibold text-gray-800">{sale.challanNo || '-'}</div>
+                                            </td>
+                                            <td className="px-3 py-4 whitespace-normal break-words w-[100px] max-w-[100px]">
+                                                <div className="text-[13px] font-semibold text-gray-800">{sale.truckNo || '-'}</div>
                                             </td>
                                             <td className="px-3 py-4 whitespace-nowrap text-center">
                                                 {isMultiple && !isExpanded ? (
@@ -4089,7 +4289,7 @@ const SaleManagement = ({
                             <div className="bg-white p-8 rounded-2xl border border-gray-100 text-center text-gray-400 font-medium shadow-sm">
                                 No sales records found
                             </div>
-                        ) : getFilteredData().map((sale, index) => {
+                        ) : getFilteredData().map((sale) => {
                             const isExpanded = expandedRows.includes(sale._id);
                             const isMultiple = (sale.items && sale.items.length > 0)
                                 ? sale.items.flatMap(item => (item.brandEntries || [])).length > 1
