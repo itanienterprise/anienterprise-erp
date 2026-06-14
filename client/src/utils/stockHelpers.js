@@ -315,11 +315,15 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
 
         const arrivalQty = stockFilters.warehouse
             ? safeParse(item.inHouseQuantity)
-            : (item.recordType === 'stock' ? safeParse(item.quantity) : 0);
+            : (item.recordType === 'stock'
+                ? safeParse(item.quantity)
+                : ((!item.lcNo || item.lcNo.trim() === '') ? safeParse(item.inHouseQuantity) : 0));
 
         const arrivalPkt = stockFilters.warehouse
             ? safeParse(item.inHousePacket)
-            : (item.recordType === 'stock' ? safeParse(item.packet) : 0);
+            : (item.recordType === 'stock'
+                ? safeParse(item.packet)
+                : ((!item.lcNo || item.lcNo.trim() === '') ? safeParse(item.inHousePacket) : 0));
 
         if (isBefore) {
             brandObj.openingQuantity += arrivalQty;
