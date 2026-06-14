@@ -1176,6 +1176,8 @@ const PaymentCollection = () => {
             {/* Add Collection Card (Style Match with Add Customer) */}
             {showAddModal && (
                 <div className="payment-form-container">
+                    <div className="payment-form-bg-orb payment-form-bg-orb-1"></div>
+                    <div className="payment-form-bg-orb payment-form-bg-orb-2"></div>
 
                     <div className="payment-form-header">
                         <div>

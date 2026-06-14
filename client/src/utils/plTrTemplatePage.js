@@ -26,22 +26,7 @@ const applyAlgerianFont = (doc, fontSize) => {
     return false;
 };
 
-/** Converts a numeric string like '03' or '05' to its English word equivalent in uppercase.
- *  Supports 0-99, which covers all practical demurrage/days values. */
-const numberToWords = (numStr) => {
-    const ones = ['ZERO', 'ONE', 'TWO', 'THREE', 'FOUR', 'FIVE', 'SIX', 'SEVEN', 'EIGHT', 'NINE',
-        'TEN', 'ELEVEN', 'TWELVE', 'THIRTEEN', 'FOURTEEN', 'FIFTEEN', 'SIXTEEN',
-        'SEVENTEEN', 'EIGHTEEN', 'NINETEEN'];
-    const tens = ['', '', 'TWENTY', 'THIRTY', 'FORTY', 'FIFTY', 'SIXTY', 'SEVENTY', 'EIGHTY', 'NINETY'];
-    const n = parseInt(numStr, 10);
-    if (isNaN(n) || n < 0 || n > 99) return String(numStr).toUpperCase();
-    if (n < 20) return ones[n];
-    const t = Math.floor(n / 10);
-    const o = n % 10;
-    return o === 0 ? tens[t] : `${tens[t]} ${ones[o]}`;
-};
-
-/** Overlay positions for Jain Parivahan TR template (ratios of page). */
+/** Overlay positions on full-page A4 landscape TR template (ratios of page). */
 const TR_TEMPLATE_LAYOUT = {
     valueX: 0.756,
     noY: 0.422,
@@ -65,67 +50,14 @@ const TR_TEMPLATE_LAYOUT = {
     descY: 0.680,
     valueFieldX: 0.18,
     valueFieldY: 0.895,
-    weightActualX: 0.580,
+    weightActualX: 0.535,
     weightStartY: 0.680,
     weightLineSpacing: 0.038,
     freightAmountX: 0.780,
-    freightAmountY: 0.690,
-    packagesX: 0.09,
-    packagesY: 0.720,
-    descMaxWidth: 0.40,
+    freightAmountY: 0.690
 };
 
-/** Overlay positions for Rinku Commercial Carrier TR template (ratios of page).
- *  All values are independent — adjust each ratio to match the Rinku form fields. */
-const RINKU_TEMPLATE_LAYOUT = {
-    valueX: 0.650,
-    noY: 0.425,
-    dateY: 0.450,
-    valueMaxWidth: 0.2,
-    consignorNameX: 0.25,
-    consignorNameY: 0.495,
-    consignorAddressX: 0.10,
-    consignorAddressY: 0.525,
-    consignorAddressMaxWidth: 0.5,  // wrap address across 2 lines on Rinku form (~134mm)
-    consigneeBankX: 0.20,
-    consigneeBankY: 0.565,
-    importerInfoX: 0.10,
-    importerInfoY: 0.595,
-    consignorMaxWidth: 0.72,
-    fromX: 0.630,
-    fromY: 0.517,
-    toX: 0.635,
-    toY: 0.590,
-    descLeftX: 0.10,
-    descRightX: 0.29,
-    descY: 0.690,
-    valueFieldX: 0.07,
-    valueFieldY: 0.930,
-    weightActualX: 0.505,
-    weightStartY: 0.690,
-    weightLineSpacing: 0.038,
-    freightAmountX: 0.665,
-    freightAmountY: 0.700,
-    packagesX: 0.065,
-    packagesY: 0.720,
-    demurrageX: 0.20,
-    demurrageY: 0.165,
-    daysX: 0.18,
-    daysY: 0.195,
-    descMaxWidth: 0.38,
-};
-
-/**
- * Returns the correct layout config for a given TR carrier name.
- * Add more carriers here as needed.
- */
-const getLayout = (trName) => {
-    const name = (trName || '').trim().toLowerCase();
-    if (name.includes('rinku')) return RINKU_TEMPLATE_LAYOUT;
-    return TR_TEMPLATE_LAYOUT;
-};
-
-const drawConsignmentNoteFields = (doc, record, pageX, pageY, pageWidth, pageHeight, trName) => {
+const drawConsignmentNoteFields = (doc, record, pageX, pageY, pageWidth, pageHeight) => {
     const trNo = String(record?.trNumber || '').trim();
     const trDate = formatTrDate(record?.trDate);
     const exporterName = String(record?.exporterName || '').trim();
@@ -139,7 +71,7 @@ const drawConsignmentNoteFields = (doc, record, pageX, pageY, pageWidth, pageHei
 
     if (!trNo && !trDate && !exporterName && !exporterAddress && !bankName && !partyName && !placeOfReceipt && !portOfDischarge) return;
 
-    const layout = getLayout(trName);
+    const layout = TR_TEMPLATE_LAYOUT;
 
     if (trNo || trDate) {
         const valueX = pageX + pageWidth * layout.valueX;
@@ -177,27 +109,15 @@ const drawConsignmentNoteFields = (doc, record, pageX, pageY, pageWidth, pageHei
             const addrX = pageX + pageWidth * layout.consignorAddressX;
             const addrY = pageY + pageHeight * layout.consignorAddressY;
 
-            if (layout.consignorAddressMaxWidth) {
-                // Rinku: use maxWidth so jsPDF wraps the address to ~2 lines
-                const addrMaxWidth = pageWidth * layout.consignorAddressMaxWidth;
-                const cleanAddress = exporterAddress
-                    .split(/[\r\n]+/)
-                    .map(line => line.trim())
-                    .filter(Boolean)
-                    .join(' ')
-                    .replace(/\s+/g, ' ');
-                doc.text(cleanAddress, addrX, addrY, { maxWidth: addrMaxWidth, charSpace: -0.15, lineHeightFactor: 1.5 });
-            } else {
-                // Default (Jain Parivahan): single line joined with commas
-                const cleanAddress = exporterAddress
-                    .split(/[\r\n]+/)
-                    .map(line => line.trim())
-                    .filter(Boolean)
-                    .join(', ')
-                    .replace(/,\s*,/g, ',')
-                    .replace(/\s+/g, ' ');
-                doc.text(cleanAddress, addrX, addrY, { charSpace: -0.15 });
-            }
+            const cleanAddress = exporterAddress
+                .split(/[\r\n]+/)
+                .map(line => line.trim())
+                .filter(Boolean)
+                .join(', ')
+                .replace(/,\s*,/g, ',')
+                .replace(/\s+/g, ' ');
+
+            doc.text(cleanAddress, addrX, addrY, { charSpace: -0.15 });
         }
     }
 
@@ -290,44 +210,6 @@ const drawConsignmentNoteFields = (doc, record, pageX, pageY, pageWidth, pageHei
             drawProduct(record.productsList[1], layout.descRightX);
         }
 
-        // Draw total bags and bag type in the leftmost column ("Packages")
-        let totalBags = 0;
-        record.productsList.forEach(prod => {
-            totalBags += parseInt(prod.bagCount) || 0;
-        });
-
-        if (totalBags > 0) {
-            const pX = pageX + pageWidth * layout.packagesX;
-            const pY = pageY + pageHeight * layout.packagesY;
-            const pLS = pageHeight * 0.025; // Snug vertical spacing for packages
-
-            const bagsFontSize = Math.max(11, Math.round(pageHeight * 0.055));
-            applyAlgerianFont(doc, bagsFontSize);
-            doc.setTextColor(0, 0, 0);
-
-            // Format bags number (e.g. "3,780")
-            const bagsText = `${totalBags.toLocaleString('en-US')}`;
-            doc.text(bagsText, pX, pY, { align: 'center', charSpace: -0.15 });
-
-            const rawBagType = String(record?.packingType || '').trim().toUpperCase();
-            const bagTypes = rawBagType
-                .split(',')
-                .map(t => t.trim())
-                .filter(Boolean);
-
-            let currentPackY = pY + pLS;
-            if (bagTypes.length > 0) {
-                const typeFontSize = Math.max(9, Math.round(pageHeight * 0.045));
-                applyAlgerianFont(doc, typeFontSize);
-                bagTypes.forEach((type, idx) => {
-                    const isLast = idx === bagTypes.length - 1;
-                    const lineText = isLast ? type : `${type} /`;
-                    doc.text(lineText, pX, currentPackY, { align: 'center', charSpace: -0.15 });
-                    currentPackY += pLS;
-                });
-            }
-        }
-
         // Draw L/C details under HS code
         const lcNo = String(record?.lcNo || '').trim().toUpperCase();
         const lcDate = String(record?.lcDate || '').trim().toUpperCase();
@@ -343,66 +225,59 @@ const drawConsignmentNoteFields = (doc, record, pageX, pageY, pageWidth, pageHei
             const x = pageX + pageWidth * layout.descLeftX;
             const startY = pageY + pageHeight * layout.descY;
             const lineSpacing = pageHeight * 0.0155; // Snug relative line spacing (~3.67mm)
-            let currentLineY = startY + 3 * lineSpacing;
-
-            const maxWidth = pageWidth * (layout.descMaxWidth || 0.40);
-
-            const drawWrappedLine = (text) => {
-                if (!text) return;
-                const lines = doc.splitTextToSize(text, maxWidth);
-                lines.forEach(line => {
-                    doc.text(line, x, currentLineY, { charSpace: -0.15 });
-                    currentLineY += lineSpacing;
-                });
-            };
+            const lcY = startY + 3 * lineSpacing;
 
             const lcText = `L.C NO- ${lcNo} DATE: ${lcDate} BANK BIN: ${bankBin}`;
-            drawWrappedLine(lcText);
+            doc.text(lcText, x, lcY, { charSpace: -0.15 });
 
+            let currentLineY = lcY + lineSpacing;
             if (bankName) {
                 const bankText = `OF ${bankName}${branchName ? `, ${branchName}` : ''}`;
-                drawWrappedLine(bankText);
+                doc.text(bankText, x, currentLineY, { charSpace: -0.15 });
+                currentLineY += lineSpacing;
             }
 
             const ircNo = String(record?.ircNo || '').trim().toUpperCase();
             if (ircNo) {
                 const ircText = `IMPORTER I.R.C NO- ${ircNo}`;
-                drawWrappedLine(ircText);
+                doc.text(ircText, x, currentLineY, { charSpace: -0.15 });
+                currentLineY += lineSpacing;
             }
 
             const tinNo = String(record?.tinNo || '').trim().toUpperCase();
             const binNo = String(record?.binNo || '').trim().toUpperCase();
             if (tinNo || binNo) {
                 const tinBinText = `IMPORTER'S TIN: ${tinNo} & BIN: ${binNo}`;
-                drawWrappedLine(tinBinText);
+                doc.text(tinBinText, x, currentLineY, { charSpace: -0.15 });
+                currentLineY += lineSpacing;
             }
 
             const piNo = String(record?.piNo || '').trim().toUpperCase();
             const piDate = String(record?.piDate || '').trim().toUpperCase();
             if (piNo || piDate) {
                 const piText = `PROFORMA INVOICE NO: ${piNo} DT: ${piDate}`;
-                drawWrappedLine(piText);
+                doc.text(piText, x, currentLineY, { charSpace: -0.15 });
+                currentLineY += lineSpacing;
             }
 
             const coverNote = String(record?.coverNote || '').trim().toUpperCase();
             if (coverNote) {
                 const coverNoteText = `UNDER INSURANCE COVER NOTE NO: ${coverNote}`;
-                drawWrappedLine(coverNoteText);
-            }
-
-            const amendmentLine = String(record?.amendmentLine || '').trim().toUpperCase();
-            if (amendmentLine) {
-                drawWrappedLine(amendmentLine);
+                doc.text(coverNoteText, x, currentLineY, { charSpace: -0.15 });
             }
         }
     }
 
     // Draw Net Weight and Gross Weight in the Weight / Actual column
     if (Array.isArray(record?.productsList) && record.productsList.length > 0) {
-        const hasNet = record.productsList.some(p => parseFloat(p.netWeight) > 0);
-        const hasGross = record.productsList.some(p => parseFloat(p.grossWeight) > 0);
+        let totalNetWeight = 0;
+        let totalGrossWeight = 0;
+        record.productsList.forEach(prod => {
+            totalNetWeight += parseFloat(prod.netWeight) || 0;
+            totalGrossWeight += parseFloat(prod.grossWeight) || 0;
+        });
 
-        if (hasNet || hasGross) {
+        if (totalNetWeight > 0 || totalGrossWeight > 0) {
             const wFontSize = Math.max(8.5, Math.round(pageHeight * 0.042));
             applyAlgerianFont(doc, wFontSize);
             doc.setTextColor(0, 0, 0);
@@ -413,51 +288,34 @@ const drawConsignmentNoteFields = (doc, record, pageX, pageY, pageWidth, pageHei
 
             let wY = wStartY;
 
-            if (hasNet) {
-                doc.text('NET WEIGHT (KG)', wX, wY, { align: 'center', charSpace: -0.15 });
+            if (totalNetWeight > 0) {
+                doc.text('NET WEIGHT(KG)', wX, wY, { charSpace: -0.15 });
                 wY += wLS * 0.7;
-
                 const wLargeFontSize = Math.max(11, Math.round(pageHeight * 0.055));
                 applyAlgerianFont(doc, wLargeFontSize);
-
-                record.productsList.forEach(prod => {
-                    const netW = parseFloat(prod.netWeight) || 0;
-                    if (netW > 0) {
-                        doc.text(netW.toLocaleString('en-IN', { minimumFractionDigits: 2 }), wX, wY, { align: 'center', charSpace: -0.15 });
-                        wY += wLS * 0.7;
-                    }
-                });
-
+                doc.text(totalNetWeight.toLocaleString('en-IN', { minimumFractionDigits: 2 }), wX, wY, { charSpace: -0.15 });
                 applyAlgerianFont(doc, wFontSize);
-                wY += wLS * 0.5; // Gap before gross weight label
+                wY += wLS * 1.1; // gap before gross weight
             }
 
-            if (hasGross) {
-                doc.text('GROSS WEIGHT (KG)', wX, wY, { align: 'center', charSpace: -0.15 });
+            if (totalGrossWeight > 0) {
+                doc.text('GROSS WEIGHT(KG)', wX, wY, { charSpace: -0.15 });
                 wY += wLS * 0.7;
-
                 const wLargeFontSize = Math.max(11, Math.round(pageHeight * 0.055));
                 applyAlgerianFont(doc, wLargeFontSize);
-
-                record.productsList.forEach(prod => {
-                    const grossW = parseFloat(prod.grossWeight) || 0;
-                    if (grossW > 0) {
-                        doc.text(grossW.toLocaleString('en-IN', { minimumFractionDigits: 2 }), wX, wY, { align: 'center', charSpace: -0.15 });
-                        wY += wLS * 0.7;
-                    }
-                });
+                doc.text(totalGrossWeight.toLocaleString('en-IN', { minimumFractionDigits: 2 }), wX, wY, { charSpace: -0.15 });
             }
         }
     }
 
     // Draw total freight in Amount to Pay / Rs. column
     if (Array.isArray(record?.productsList) && record.productsList.length > 0) {
-        const hasAnyFreight = record.productsList.some(prod => {
-            const frt = parseFloat(prod.totalFreight) || parseFloat(prod.freight) || 0;
-            return frt > 0;
+        let totalFreight = 0;
+        record.productsList.forEach(prod => {
+            totalFreight += parseFloat(prod.totalFreight) || parseFloat(prod.freight) || 0;
         });
 
-        if (hasAnyFreight) {
+        if (totalFreight > 0) {
             const fSmall = Math.max(11, Math.round(pageHeight * 0.055));
             applyAlgerianFont(doc, fSmall);
             doc.setTextColor(0, 0, 0);
@@ -466,17 +324,11 @@ const drawConsignmentNoteFields = (doc, record, pageX, pageY, pageWidth, pageHei
             let fY = pageY + pageHeight * layout.freightAmountY;
             const fLS = pageHeight * 0.038;
 
-            record.productsList.forEach((prod, idx) => {
-                const frt = parseFloat(prod.totalFreight) || parseFloat(prod.freight) || 0;
-                const formatted = frt.toLocaleString('en-IN', { minimumFractionDigits: 2 });
-                const isLast = idx === record.productsList.length - 1;
-                // Append " &" to the line if it is not the last freight item in the breakdown
-                const lineText = isLast ? formatted : `${formatted} $ &`;
-                doc.text(lineText, fX, fY, { charSpace: -0.15 });
-                fY += fLS * 0.85;
-            });
-
-            // Draw "FREIGHT" line under the values
+            // Line 1: value &
+            const freightFormatted = totalFreight.toLocaleString('en-IN', { minimumFractionDigits: 2 });
+            doc.text(`${freightFormatted} &`, fX, fY, { charSpace: -0.15 });
+            fY += fLS * 0.8;
+            // Line 2: FREIGHT
             doc.text('FREIGHT', fX, fY, { charSpace: -0.15 });
         }
     }
@@ -519,26 +371,6 @@ const drawConsignmentNoteFields = (doc, record, pageX, pageY, pageWidth, pageHei
             doc.text(valueText, valX, valY, { charSpace: -0.15 });
         }
     }
-
-    // Draw Demurrage and Days (Rinku only)
-    if (layout.demurrageX && layout.daysX) {
-        const demurrageVal = String(record?.demurrage || '03').trim().padStart(2, '0');
-        const daysVal = String(record?.days || '05').trim().padStart(2, '0');
-        const demurrageWord = numberToWords(demurrageVal);
-        const daysWord = numberToWords(daysVal);
-
-        const ddFontSize = Math.max(11, Math.round(pageHeight * 0.055));
-        applyAlgerianFont(doc, ddFontSize);
-        doc.setTextColor(0, 0, 0);
-
-        const dX = pageX + pageWidth * layout.demurrageX;
-        const dY = pageY + pageHeight * layout.demurrageY;
-        doc.text(`${demurrageVal} (${demurrageWord})`, dX, dY, { charSpace: -0.15 });
-
-        const dayX = pageX + pageWidth * layout.daysX;
-        const dayY = pageY + pageHeight * layout.daysY;
-        doc.text(`${daysVal} (${daysWord})`, dayX, dayY, { charSpace: -0.15 });
-    }
 };
 
 /**
@@ -569,7 +401,7 @@ export const appendTrTemplatePage = async (doc, record, trSetups = []) => {
         const fileType = imgProps.fileType || 'PNG';
 
         doc.addImage(trFormat, fileType, 0, 0, pageWidth, pageHeight);
-        drawConsignmentNoteFields(doc, record, 0, 0, pageWidth, pageHeight, trName);
+        drawConsignmentNoteFields(doc, record, 0, 0, pageWidth, pageHeight);
         return true;
     } catch (e) {
         console.error('Error adding TR template page:', e);

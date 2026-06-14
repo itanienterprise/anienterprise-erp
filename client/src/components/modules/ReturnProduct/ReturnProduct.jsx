@@ -566,6 +566,8 @@ const ReturnProduct = ({ currentUser }) => {
 
             {showForm ? (
                 <div className="return-product-form-container animate-in">
+                    <div className="return-product-form-bg-orb return-product-form-bg-orb-1"></div>
+                    <div className="return-product-form-bg-orb return-product-form-bg-orb-2"></div>
 
                     <div className="return-product-form-header">
                         <h3 className="return-product-form-title">

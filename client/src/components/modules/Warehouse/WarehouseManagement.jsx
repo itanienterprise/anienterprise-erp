@@ -1280,6 +1280,8 @@ const WarehouseManagement = ({ currentUser, damages, addNotification }) => {
             {
                 showWarehouseForm && (
                     <div className="warehouse-form-container">
+                        <div className="warehouse-form-bg-orb warehouse-form-bg-orb-1"></div>
+                        <div className="warehouse-form-bg-orb warehouse-form-bg-orb-2"></div>
 
                         <div className="warehouse-form-header">
                             <div>

@@ -65,9 +65,7 @@ const StockReport = ({
 
             // Filter brands within the product
             const filteredBrands = item.brandList.filter(brand =>
-                (brand.brand || '').toLowerCase().includes(query) ||
-                (brand.lcNos || []).some(lc => lc.toLowerCase().includes(query)) ||
-                matchesProduct
+                (brand.brand || '').toLowerCase().includes(query) || matchesProduct
             );
 
             if (filteredBrands.length > 0) {
@@ -518,7 +516,7 @@ const StockReport = ({
                         </div>
                         <input
                             type="text"
-                            placeholder="Find LC No, product or brand..."
+                            placeholder="Find product or brand..."
                             value={searchQuery}
                             onChange={(e) => setSearchQuery(e.target.value)}
                             className="block w-full pl-10 pr-10 py-2.5 bg-gray-50/50 border border-gray-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 transition-all font-bold placeholder:font-normal"

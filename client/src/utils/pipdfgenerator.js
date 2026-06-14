@@ -1,7 +1,7 @@
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 
-// Helper function to convert number to words for USD
+// Helper function to convert number to words for BDT
 const numberToWordsUSD = (amount) => {
     const units = ['', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine'];
     const teens = ['Ten', 'Eleven', 'Twelve', 'Thirteen', 'Fourteen', 'Fifteen', 'Sixteen', 'Seventeen', 'Eighteen', 'Nineteen'];
@@ -27,30 +27,34 @@ const numberToWordsUSD = (amount) => {
         return chunkStr;
     };
 
-    if (amount === 0) return 'Zero.';
+    if (amount === 0) return 'Zero Taka Only';
 
     const parts = amount.toFixed(2).split('.');
-    let dollar = parseInt(parts[0]);
-    let cents = parseInt(parts[1]);
+    let taka = parseInt(parts[0]);
+    let paisa = parseInt(parts[1]);
 
     let words = '';
 
-    if (dollar === 0) {
+    if (taka === 0) {
         words = 'Zero ';
     } else {
         let tw = '';
-        if (dollar >= 10000000) { tw += convertChunk(Math.floor(dollar / 10000000)) + 'Crore '; dollar %= 10000000; }
-        if (dollar >= 100000) { tw += convertChunk(Math.floor(dollar / 100000)) + 'Lakh '; dollar %= 100000; }
-        if (dollar >= 1000) { tw += convertChunk(Math.floor(dollar / 1000)) + 'Thousand '; dollar %= 1000; }
-        if (dollar > 0) { tw += convertChunk(dollar); }
+        if (taka >= 10000000) { tw += convertChunk(Math.floor(taka / 10000000)) + 'Crore '; taka %= 10000000; }
+        if (taka >= 100000) { tw += convertChunk(Math.floor(taka / 100000)) + 'Lakh '; taka %= 100000; }
+        if (taka >= 1000) { tw += convertChunk(Math.floor(taka / 1000)) + 'Thousand '; taka %= 1000; }
+        if (taka > 0) { tw += convertChunk(taka); }
         words = tw;
     }
 
-    if (cents > 0) {
-        words += 'And Cents ' + convertChunk(cents);
+    words += 'Taka ';
+
+    if (paisa > 0) {
+        words += 'And ' + convertChunk(paisa) + 'Paisa Only';
+    } else {
+        words += 'Only';
     }
 
-    return words.replace(/\s+/g, ' ').trim() + '.';
+    return words.replace(/\s+/g, ' ').trim();
 };
 
 export const generatePIPDF = (record) => {
@@ -130,57 +134,17 @@ export const generatePIPDF = (record) => {
     doc.setFontSize(9);
     doc.setFont("helvetica", "normal");
     let exporterInfo = record.exporterAddress || '';
-    const exporterPhone = record.exporterContact || '';
-    const exporterEmail = record.exporterEmail || '';
-    const expContactParts = [];
-    if (exporterPhone) expContactParts.push(`Phone: ${exporterPhone}`);
-    if (exporterEmail) expContactParts.push(`Email: ${exporterEmail}`);
-    const expContactLine = expContactParts.join(', ');
-    if (expContactLine) {
-        exporterInfo = exporterInfo.trim() + `\n${expContactLine}`;
-    }
+    if (record.exporterEmail) exporterInfo += `\nEmail: ${record.exporterEmail}`;
 
-    // Render exporter address: each logical line (split by \n) is compressed
-    // via charSpace to fit in one column-width if needed.
-    const exporterColWidth = leftColWidth - 10;
-    const exporterRawLines = exporterInfo.trim().split('\n');
-    const exporterCenterX = margin + leftColWidth / 2;
-    let expLineY = y + 21;
-    const expLineH = 4;
-    exporterRawLines.forEach(rawLine => {
-        const trimmed = rawLine.trim();
-        if (!trimmed) { expLineY += expLineH; return; }
-        const w = doc.getTextWidth(trimmed);
-        if (w > exporterColWidth) {
-            const cs = (exporterColWidth - w) / (trimmed.length - 1);
-            doc.text(trimmed, exporterCenterX, expLineY, { align: 'center', charSpace: cs });
-        } else {
-            doc.text(trimmed, exporterCenterX, expLineY, { align: 'center' });
-        }
-        expLineY += expLineH;
-    });
+    const exporterLines = doc.splitTextToSize(exporterInfo, leftColWidth - 10);
+    doc.text(exporterLines, margin + leftColWidth / 2, y + 21, { align: 'center' });
 
     // PI Info Content
-    const rawPiNumber = record.piNumber || '';
-    const isRevised = rawPiNumber.includes('(REVISED)');
-    const basePiNumber = rawPiNumber.replace('(REVISED)', '').trim();
-
-    doc.setFont("helvetica", "normal");
     doc.setFontSize(7);
     doc.text("Proforma Invoice No:", midX + 2, y + 5);
     doc.setFont("helvetica", "bold");
     doc.setFontSize(8);
-    doc.text(basePiNumber, midX + 28, y + 5);
-
-    if (isRevised) {
-        const piWidth = doc.getTextWidth(basePiNumber);
-        const centerX = midX + 28 + (piWidth / 2);
-        doc.setFont("helvetica", "bold");
-        doc.setFontSize(7);
-        doc.setTextColor(220, 38, 38);
-        doc.text("(REVISED)", centerX, y + 9, { align: 'center' });
-        doc.setTextColor(0, 0, 0);
-    }
+    doc.text(record.piNumber || '', midX + 28, y + 5);
 
     // Align Date label and value together at the right
     const dateVal = formatDate(record.date) || '';
@@ -205,14 +169,12 @@ export const generatePIPDF = (record) => {
     doc.setFontSize(8);
     doc.text(dateVal, midX + rightColWidth - 2, y + 5, { align: 'right' });
 
-    const validityY = isRevised ? (y + 13) : (y + 9);
-
     doc.setFont("helvetica", "normal");
     doc.setFontSize(7);
-    doc.text("Proforma Invoice Validity:", midX + 2, validityY);
+    doc.text("Proforma Invoice Validity:", midX + 2, y + 9);
     doc.setFont("helvetica", "bold");
     doc.setFontSize(8);
-    doc.text(formatDate(record.validityDate) || '', midX + rightColWidth - 2, validityY, { align: 'right' });
+    doc.text(formatDate(record.validityDate) || '', midX + rightColWidth - 2, y + 9, { align: 'right' });
 
     doc.line(midX, y + 18, pageWidth - margin, y + 18);
 
@@ -237,40 +199,8 @@ export const generatePIPDF = (record) => {
         termsText = termsText.split('\n')
             .filter(line => !line.trim().toLowerCase().startsWith('packing:'))
             .join('\n');
-    } else if (record.packingType) {
-        const formattedPacking = record.packingType.split(',').map(s => s.trim()).join(' / ');
-        termsText = termsText.split('\n')
-            .map(line => {
-                if (line.trim().toLowerCase().startsWith('packing:')) {
-                    return `Packing: ${formattedPacking}`;
-                }
-                return line;
-            })
-            .join('\n');
     }
-    // Split at AGAINST so the delivery clause always occupies exactly one line
-    // (compressed via charSpace if needed) and the rest wraps normally below.
-    const termsTextFormatted = termsText.replace(/ ?\n(?!Packing:)/g, ' ');
-    const termsMaxWidth = rightColWidth - 5;
-    const againstIdxT = termsTextFormatted.toUpperCase().indexOf('AGAINST');
-    let deliveryClause = '';
-    let deliveryCharSpace = 0;
-    let restTermsLines = [];
-    let termsRefLinesInRow2;
-    if (againstIdxT !== -1) {
-        deliveryClause = termsTextFormatted.substring(0, againstIdxT + 7).trim();
-        const restText = termsTextFormatted.substring(againstIdxT + 7).trimStart();
-        doc.setFont('helvetica', 'normal');
-        doc.setFontSize(9);
-        const dw = doc.getTextWidth(deliveryClause);
-        if (dw > termsMaxWidth) {
-            deliveryCharSpace = (termsMaxWidth - dw) / (deliveryClause.length - 1);
-        }
-        restTermsLines = restText ? doc.splitTextToSize(restText, termsMaxWidth) : [];
-        termsRefLinesInRow2 = [deliveryClause, ...restTermsLines];
-    } else {
-        termsRefLinesInRow2 = doc.splitTextToSize(termsTextFormatted, termsMaxWidth);
-    }
+    const termsRefLinesInRow2 = doc.splitTextToSize(termsText, rightColWidth - 5);
     const termsHeight = termsRefLinesInRow2.length * 4;
     const saftaHeight = showSafta ? 12 : 0;
     let row2Height = Math.max(55, 24 + termsHeight + saftaHeight);
@@ -296,17 +226,8 @@ export const generatePIPDF = (record) => {
     doc.setFont("helvetica", "normal");
     let importerInfo = record.partyAddress || '';
     importerInfo = importerInfo.trim();
-    const phone = record.partyContact || '';
-    const email = record.partyEmail || '';
-    const contactParts = [];
-    if (phone) contactParts.push(`Phone: ${phone}`);
-    if (email) contactParts.push(`Email: ${email}`);
-    const contactLine = contactParts.join(', ');
-    if (contactLine) {
-        importerInfo = importerInfo + `\n${contactLine}`;
-    }
 
-    const partyLines = doc.splitTextToSize(importerInfo.trim(), leftColWidth - 10);
+    const partyLines = doc.splitTextToSize(importerInfo, leftColWidth - 10);
     doc.text(partyLines, margin + leftColWidth / 2, y + 17, { align: 'center' });
 
     // Shipping Section 1 (Compact)
@@ -399,14 +320,7 @@ export const generatePIPDF = (record) => {
     doc.setFontSize(8);
     doc.text("Terms of Delivery and Payment", midX + 2, y + 14);
     doc.setFontSize(9);
-    if (deliveryClause) {
-        doc.text(deliveryClause, midX + 2, y + 20, { charSpace: deliveryCharSpace });
-        restTermsLines.forEach((line, idx) => {
-            doc.text(line, midX + 2, y + 20 + ((idx + 1) * 4));
-        });
-    } else {
-        doc.text(termsRefLinesInRow2, midX + 2, y + 20);
-    }
+    doc.text(termsRefLinesInRow2, midX + 2, y + 20);
 
     if (showSafta) {
         const saftaY = y + 20 + termsHeight + 4;
@@ -450,11 +364,7 @@ export const generatePIPDF = (record) => {
     }
     extraDescParts.push(bankLine);
     if (showPacking) {
-        if (record.packingType) {
-            extraDescParts.push(`EXPORT STANDARD PACKING: ${record.packingType.split(',').map(s => s.trim().toUpperCase()).join(' / ')}`);
-        } else {
-            extraDescParts.push("EXPORT STANDARD PACKING");
-        }
+        extraDescParts.push("EXPORT STANDARD PACKING");
     }
     const extraDescText = (extraDescParts.join("\n") + "\n" + (record.descriptionGoods || defaultDescLines)).trim();
 
@@ -732,40 +642,24 @@ export const generatePIPDF = (record) => {
             y = data.cursor.y;
         }
     });
-    y = doc.lastAutoTable.finalY;
 
     // Total Row & Amount in Words (Same row)
     const totalY = y;
 
     const wordsVal = numberToWordsUSD(parseFloat(record.grandTotal || 0));
-    const labelText = "Amount Chargeable in words: US Dollar: ";
+    const fullWordsText = `Amount Chargeable in words: US Dollar: ${wordsVal}`;
     const maxWordWidth = pageWidth - margin - 70 - (margin + 2); // 190 - 70 - 2 = 118
+    const wrappedWords = doc.splitTextToSize(fullWordsText, maxWordWidth);
 
-    // Measure label (normal) and value (bold) at font size 8.5
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(8.5);
-    const labelWidth = doc.getTextWidth(labelText);
-
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(8.5);
-    const valueWidth = doc.getTextWidth(wordsVal);
-    const availableForValue = maxWordWidth - labelWidth;
-
-    // Compress value via charSpace to always fit on the same line as the label
-    const valueCharSpace = valueWidth > availableForValue
-        ? (availableForValue - valueWidth) / (wordsVal.length - 1)
-        : 0;
-
-    const rowHeight = 9;
+    const rowHeight = wrappedWords.length > 1 ? 13 : 9;
     doc.line(margin, totalY, pageWidth - margin, totalY);
 
-    // 1. Draw label (normal) then value (bold) on the same line
+    // 1. Draw Amount in word on the LEFT
     doc.setFont("helvetica", "normal");
     doc.setFontSize(8.5);
-    doc.text(labelText, margin + 2, totalY + 5.5);
-
-    doc.setFont("helvetica", "bold");
-    doc.text(wordsVal, margin + 2 + labelWidth, totalY + 5.5, { charSpace: valueCharSpace });
+    wrappedWords.forEach((lineText, lIdx) => {
+        doc.text(lineText, margin + 2, totalY + 5.5 + (lIdx * 4.5));
+    });
 
     // 2. Draw TOTAL on the RIGHT
     doc.setFont("helvetica", "bold");
@@ -800,121 +694,121 @@ export const generatePIPDF = (record) => {
     if (style === 'Style 1 SAA') {
         // This generates the EXACT existing PDF layout (Buyer Left, Seller Right)
         doc.setFontSize(8.5);
-        doc.text("For,", margin + 2, y + 3);
+        doc.text("For,", margin + 2, y + 4);
 
         // Buyer signature (Left)
         if (record.partySignature) {
             try {
-                doc.addImage(record.partySignature, 'PNG', margin + 5, y + 3, 60, 12);
+                doc.addImage(record.partySignature, 'PNG', margin + 5, y + 4, 60, 12);
             } catch (e) {
                 console.error('Error adding importer signature to PDF:', e);
             }
         }
-        doc.line(margin + 5, y + 18, margin + 65, y + 18);
+        doc.line(margin + 5, y + 26, margin + 65, y + 26);
         doc.setFont("helvetica", "normal");
         doc.setFontSize(8.5);
-        doc.text("Signature", margin + 35, y + 22, { align: 'center' });
+        doc.text("Signature", margin + 35, y + 30, { align: 'center' });
         doc.setFont("helvetica", "bold");
         doc.setFontSize(11);
-        doc.text("Buyer", margin + 35, y + 26, { align: 'center' });
+        doc.text("Buyer", margin + 35, y + 35, { align: 'center' });
 
         // Seller signature (Right)
         if (record.exporterSignature) {
             try {
-                doc.addImage(record.exporterSignature, 'PNG', pageWidth - margin - 65, y + 1, 60, 18);
+                doc.addImage(record.exporterSignature, 'PNG', pageWidth - margin - 65, y + 2, 60, 18);
             } catch (e) {
                 console.error('Error adding exporter signature to PDF:', e);
             }
         }
-        doc.line(pageWidth - margin - 65, y + 18, pageWidth - margin - 5, y + 18);
+        doc.line(pageWidth - margin - 65, y + 26, pageWidth - margin - 5, y + 26);
         doc.setFont("helvetica", "normal");
         doc.setFontSize(8.5);
-        doc.text("Signature", pageWidth - margin - 35, y + 22, { align: 'center' });
+        doc.text("Signature", pageWidth - margin - 35, y + 30, { align: 'center' });
         doc.setFont("helvetica", "bold");
         doc.setFontSize(11);
-        doc.text("Seller", pageWidth - margin - 35, y + 26, { align: 'center' });
+        doc.text("Seller", pageWidth - margin - 35, y + 35, { align: 'center' });
 
     } else if (style === 'Style 2 AAS') {
         doc.setFontSize(8.5);
-        doc.text("For,", margin + 2, y + 3);
+        doc.text("For,", margin + 2, y + 4);
 
         // Seller signature (Left)
         if (record.exporterSignature) {
             try {
-                doc.addImage(record.exporterSignature, 'PNG', margin + 5, y + 1, 60, 18);
+                doc.addImage(record.exporterSignature, 'PNG', margin + 5, y + 2, 60, 18);
             } catch (e) {
                 console.error('Error adding exporter signature to PDF:', e);
             }
         }
-        doc.line(margin + 5, y + 18, margin + 65, y + 18);
+        doc.line(margin + 5, y + 26, margin + 65, y + 26);
         doc.setFont("helvetica", "normal");
         doc.setFontSize(8.5);
-        doc.text("Signature", margin + 35, y + 22, { align: 'center' });
+        doc.text("Signature", margin + 35, y + 30, { align: 'center' });
         doc.setFont("helvetica", "bold");
         doc.setFontSize(11);
-        doc.text("Seller", margin + 35, y + 26, { align: 'center' });
+        doc.text("Seller", margin + 35, y + 35, { align: 'center' });
 
         // Buyer signature (Right)
         if (record.partySignature) {
             try {
-                doc.addImage(record.partySignature, 'PNG', pageWidth - margin - 65, y + 3, 60, 12);
+                doc.addImage(record.partySignature, 'PNG', pageWidth - margin - 65, y + 4, 60, 12);
             } catch (e) {
                 console.error('Error adding importer signature to PDF:', e);
             }
         }
-        doc.line(pageWidth - margin - 65, y + 18, pageWidth - margin - 5, y + 18);
+        doc.line(pageWidth - margin - 65, y + 26, pageWidth - margin - 5, y + 26);
         doc.setFont("helvetica", "normal");
         doc.setFontSize(8.5);
-        doc.text("Signature", pageWidth - margin - 35, y + 22, { align: 'center' });
+        doc.text("Signature", pageWidth - margin - 35, y + 30, { align: 'center' });
         doc.setFont("helvetica", "bold");
         doc.setFontSize(11);
-        doc.text("Buyer", pageWidth - margin - 35, y + 26, { align: 'center' });
+        doc.text("Buyer", pageWidth - margin - 35, y + 35, { align: 'center' });
 
     } else {
         // Style 3 / Fallback - classic 3 column style with "Authorized Signatory" in the middle instead of "Advising Bank"
         doc.setFontSize(8.5);
-        doc.text("For,", margin + 2, y + 3);
+        doc.text("For,", margin + 2, y + 4);
 
         // Seller signature (Left)
         if (record.exporterSignature) {
             try {
-                doc.addImage(record.exporterSignature, 'PNG', margin + 5, y + 1, 50, 18);
+                doc.addImage(record.exporterSignature, 'PNG', margin + 5, y + 2, 50, 18);
             } catch (e) {
                 console.error('Error adding exporter signature to PDF:', e);
             }
         }
-        doc.line(margin + 5, y + 18, margin + 55, y + 18);
+        doc.line(margin + 5, y + 26, margin + 55, y + 26);
         doc.setFont("helvetica", "normal");
         doc.setFontSize(8.5);
-        doc.text("Signature", margin + 25, y + 22, { align: 'center' });
+        doc.text("Signature", margin + 25, y + 30, { align: 'center' });
         doc.setFont("helvetica", "bold");
         doc.setFontSize(11);
-        doc.text("Seller", margin + 25, y + 26, { align: 'center' });
+        doc.text("Seller", margin + 25, y + 35, { align: 'center' });
 
         // Authorized Signatory (Middle)
-        doc.line((pageWidth / 2) - 25, y + 18, (pageWidth / 2) + 25, y + 18);
+        doc.line((pageWidth / 2) - 25, y + 26, (pageWidth / 2) + 25, y + 26);
         doc.setFont("helvetica", "normal");
         doc.setFontSize(8.5);
-        doc.text("Signature", pageWidth / 2, y + 22, { align: 'center' });
+        doc.text("Signature", pageWidth / 2, y + 30, { align: 'center' });
         doc.setFont("helvetica", "bold");
         doc.setFontSize(11);
-        doc.text("Authorized Signature", pageWidth / 2, y + 26, { align: 'center' });
+        doc.text("Authorized Signature", pageWidth / 2, y + 35, { align: 'center' });
 
         // Buyer / Acceptor (Right)
         if (record.partySignature) {
             try {
-                doc.addImage(record.partySignature, 'PNG', pageWidth - margin - 55, y + 3, 50, 12);
+                doc.addImage(record.partySignature, 'PNG', pageWidth - margin - 55, y + 4, 50, 12);
             } catch (e) {
                 console.error('Error adding importer signature to PDF:', e);
             }
         }
-        doc.line(pageWidth - margin - 55, y + 18, pageWidth - margin - 5, y + 18);
+        doc.line(pageWidth - margin - 55, y + 26, pageWidth - margin - 5, y + 26);
         doc.setFont("helvetica", "normal");
         doc.setFontSize(8.5);
-        doc.text("Signature", pageWidth - margin - 30, y + 22, { align: 'center' });
+        doc.text("Signature", pageWidth - margin - 30, y + 30, { align: 'center' });
         doc.setFont("helvetica", "bold");
         doc.setFontSize(11);
-        doc.text("Buyer", pageWidth - margin - 30, y + 26, { align: 'center' });
+        doc.text("Buyer", pageWidth - margin - 30, y + 35, { align: 'center' });
     }
 
     // Opening in new tab instead of direct download

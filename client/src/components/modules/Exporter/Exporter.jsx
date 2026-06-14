@@ -37,7 +37,7 @@ const Exporter = ({
         address: '',
         contactPerson: '',
         email: '',
-        phone: '',
+        phone: '+880',
         bin: '',
         tin: '',
         irc: '',
@@ -151,7 +151,13 @@ const Exporter = ({
     };
 
     const handleInputChange = (e) => {
-        const { name, value } = e.target;
+        const { name } = e.target;
+        let { value } = e.target;
+        if (name === 'phone') {
+            if (!value.startsWith('+880')) value = '+880' + value.replace(/^\+880?/, '');
+            if (value.length <= 14) setFormData(prev => ({ ...prev, [name]: value }));
+            return;
+        }
         setFormData(prev => ({ ...prev, [name]: value }));
     };
 
@@ -184,6 +190,10 @@ const Exporter = ({
 
     const handleSubmit = async (e) => {
         e.preventDefault();
+        if (formData.phone.length !== 14) {
+            alert('Phone number must be exactly 14 characters long (e.g., +8801700000000)');
+            return;
+        }
         setIsSubmitting(true);
         setSubmitStatus(null);
         try {
@@ -204,7 +214,7 @@ const Exporter = ({
     };
 
     const resetForm = () => {
-        setFormData({ name: '', address: '', contactPerson: '', email: '', phone: '', bin: '', tin: '', irc: '', status: 'Active', signature: '' });
+        setFormData({ name: '', address: '', contactPerson: '', email: '', phone: '+880', bin: '', tin: '', irc: '', status: 'Active', signature: '' });
         setEditingId(null);
         setSubmitStatus(null);
     };
@@ -215,7 +225,7 @@ const Exporter = ({
             address: exporter.address || '',
             contactPerson: exporter.contactPerson || '',
             email: exporter.email || '',
-            phone: exporter.phone || '',
+            phone: exporter.phone || '+880',
             bin: exporter.bin || '',
             tin: exporter.tin || '',
             irc: exporter.irc || '',
@@ -301,6 +311,8 @@ const Exporter = ({
 
             {showForm && (
                 <div className="exporter-form-container">
+                    <div className="exporter-form-bg-orb exporter-form-bg-orb-1"></div>
+                    <div className="exporter-form-bg-orb exporter-form-bg-orb-2"></div>
                     <div className="exporter-form-header">
                         <h3 className="exporter-form-title">{editingId ? 'Edit Exporter' : 'New Exporter Registration'}</h3>
                         <button onClick={() => { setShowForm(false); resetForm(); }} className="exporter-form-close">
@@ -342,11 +354,11 @@ const Exporter = ({
                         </div>
                         <div className="exporter-form-field">
                             <label className="exporter-form-label">Email</label>
-                            <input type="email" name="email" value={formData.email} onChange={handleInputChange} placeholder="email@example.com" className="exporter-form-input" />
+                            <input type="email" name="email" value={formData.email} onChange={handleInputChange} required placeholder="email@example.com" className="exporter-form-input" />
                         </div>
                         <div className="exporter-form-field">
                             <label className="exporter-form-label">Phone</label>
-                            <input type="tel" name="phone" value={formData.phone} onChange={handleInputChange} placeholder="Enter Phone Number" className="exporter-form-input" />
+                            <input type="tel" name="phone" value={formData.phone} onChange={handleInputChange} required placeholder="+880..." className="exporter-form-input" />
                         </div>
                         <div className="exporter-form-field">
                             <label className="exporter-form-label">Status</label>
@@ -485,9 +497,11 @@ const Exporter = ({
                                                 <td className="exporter-table-cell">
                                                     <div className="exporter-table-actions">
                                                         <button onClick={(e) => { e.stopPropagation(); setViewData(exporter); }} className="exporter-action-btn hover:bg-gray-100 text-gray-400 hover:text-gray-600"><EyeIcon className="w-5 h-5" /></button>
-                                                        <button onClick={(e) => { e.stopPropagation(); handleEdit(exporter); }} className="exporter-action-btn exporter-action-edit"><EditIcon className="w-5 h-5" /></button>
                                                         {isAdmin && (
-                                                            <button onClick={(e) => { e.stopPropagation(); handleDelete(exporter._id); }} className="exporter-action-btn exporter-action-delete"><TrashIcon className="w-5 h-5" /></button>
+                                                            <>
+                                                                <button onClick={(e) => { e.stopPropagation(); handleEdit(exporter); }} className="exporter-action-btn exporter-action-edit"><EditIcon className="w-5 h-5" /></button>
+                                                                <button onClick={(e) => { e.stopPropagation(); handleDelete(exporter._id); }} className="exporter-action-btn exporter-action-delete"><TrashIcon className="w-5 h-5" /></button>
+                                                            </>
                                                         )}
                                                     </div>
                                                 </td>
@@ -574,19 +588,21 @@ const Exporter = ({
                                                         >
                                                             <EyeIcon className="w-4 h-4" /> View History
                                                         </button>
-                                                        <button
-                                                            onClick={(e) => { e.stopPropagation(); handleEdit(exporter); }}
-                                                            className="flex items-center justify-center gap-2 py-2.5 px-4 bg-blue-50 text-blue-700 rounded-xl text-xs font-black flex-1 hover:bg-blue-100 transition-all active:scale-95"
-                                                        >
-                                                            <EditIcon className="w-4 h-4" /> Edit
-                                                        </button>
                                                         {isAdmin && (
-                                                            <button
-                                                                onClick={(e) => { e.stopPropagation(); handleDelete(exporter._id); }}
-                                                                className="p-2.5 bg-red-50 text-red-600 rounded-xl hover:bg-red-100 transition-all active:scale-95"
-                                                            >
-                                                                <TrashIcon className="w-4 h-4" />
-                                                            </button>
+                                                            <>
+                                                                <button
+                                                                    onClick={(e) => { e.stopPropagation(); handleEdit(exporter); }}
+                                                                    className="flex items-center justify-center gap-2 py-2.5 px-4 bg-blue-50 text-blue-700 rounded-xl text-xs font-black flex-1 hover:bg-blue-100 transition-all active:scale-95"
+                                                                >
+                                                                    <EditIcon className="w-4 h-4" /> Edit
+                                                                </button>
+                                                                <button
+                                                                    onClick={(e) => { e.stopPropagation(); handleDelete(exporter._id); }}
+                                                                    className="p-2.5 bg-red-50 text-red-600 rounded-xl hover:bg-red-100 transition-all active:scale-95"
+                                                                >
+                                                                    <TrashIcon className="w-4 h-4" />
+                                                                </button>
+                                                            </>
                                                         )}
                                                     </div>
                                                 </div>

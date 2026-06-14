@@ -781,6 +781,8 @@ const Customer = ({
 
                 {showForm && (
                     <div className="customer-form-container">
+                        <div className="customer-form-bg-orb customer-form-bg-orb-1"></div>
+                        <div className="customer-form-bg-orb customer-form-bg-orb-2"></div>
 
                         <div className="customer-form-header">
                             <h3 className="customer-form-title">{editingId ? 'Edit Customer' : 'New Customer Registration'}</h3>
