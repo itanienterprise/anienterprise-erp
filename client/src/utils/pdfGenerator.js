@@ -466,7 +466,7 @@ export const generateLCReceiveReportPDF = (reportData, filters, summary) => {
                 const totalRowsForSubGroup = subGroup.brandDetails.length + (hasSubTotal ? 1 : 0);
                 let isFirstRowOfProduct = true;
 
-                subGroup.brandDetails.forEach((item, i) => {
+                subGroup.brandDetails.forEach((item) => {
                     const row = [];
 
                     // Group Columns: Date, LC No, Importer, BOE No, Truck, Product (Span across sub-group)
@@ -526,7 +526,7 @@ export const generateLCReceiveReportPDF = (reportData, filters, summary) => {
 
         // --- Totals for Footer ---
         const totalIHQuantity = reportData.reduce((sum, item) => sum + Math.max(0, getIHQty(item)), 0);
-        const totalIHPackets = reportData.reduce((sum, item) => sum + Math.max(0, getIHPkt(item)), 0);
+        // const totalIHPackets = reportData.reduce((sum, item) => sum + Math.max(0, getIHPkt(item)), 0);
         const totalShortage = reportData.reduce((sum, item) => sum + Math.max(0, parseFloat(item.sweepedQuantity) || 0), 0);
 
         // --- Table ---
@@ -1498,7 +1498,7 @@ export const generateWarehouseReportPDF = (displayGroups, filters, totals) => {
         const totalCardsWidth = (cardWidth * 2) + cardGap;
         let cardX = (pageWidth - totalCardsWidth) / 2; // Center horizontally
 
-        const drawSummaryCard = (x, y, title, pktVal, qtyVal, isBlue = false) => {
+        const drawSummaryCard = (x, y, title, pktVal, qtyVal) => {
             // Main card border and background
             doc.setDrawColor(200);
             doc.setLineWidth(0.2);
@@ -2628,36 +2628,36 @@ export const generateSalesReportPDF = (reportData, filters, summary, saleType = 
                 fontStyle: 'bold'
             },
             columnStyles: saleType === 'Border' ? {
-                0: { cellWidth: 10, halign: 'center' },     // SL
-                1: { cellWidth: 20, halign: 'center' },    // Date
-                2: { cellWidth: 25, halign: 'center' },    // LC No (Reduced)
-                3: { cellWidth: 30, noWrap: true },        // Importer
-                4: { cellWidth: 18, noWrap: true },        // Port
-                5: { cellWidth: 26, noWrap: true },        // IND C&F
-                6: { cellWidth: 26, noWrap: true },        // BD C&F
-                7: { cellWidth: 36, noWrap: true },        // Party Name
-                8: { cellWidth: 18, overflow: 'linebreak' }, // Product (Reduced)
-                9: { cellWidth: 22, halign: 'right' },     // Qty
-                10: { cellWidth: 12, halign: 'center' },   // Truck
-                11: { cellWidth: 18, halign: 'right' },    // Price (Reduced)
-                12: { cellWidth: 24, halign: 'right' }     // Total
-            } : {
                 0: { cellWidth: 8, halign: 'center' },     // SL
                 1: { cellWidth: 18, halign: 'center' },    // Date
-                2: { cellWidth: 15, halign: 'center' },    // LC No
-                3: { cellWidth: 17, halign: 'center' },    // Invoice
-                4: { cellWidth: 34 },                       // Company
-                5: { cellWidth: 24, overflow: 'linebreak' }, // Product
-                6: { cellWidth: 30, noWrap: false, overflow: 'linebreak' }, // Brand
-                7: { cellWidth: 18, overflow: 'linebreak' }, // Challan No
-                8: { cellWidth: 20, overflow: 'linebreak' }, // Truck No
-                9: { cellWidth: 17, halign: 'right' },     // Qty
-                10: { cellWidth: 14, halign: 'right' },    // Price
-                11: { cellWidth: 24, halign: 'right' },    // Total
-                12: { cellWidth: 20, halign: 'right' },    // Truck Fare
+                2: { cellWidth: 26, halign: 'center' },    // LC No
+                3: { cellWidth: 30, noWrap: true },        // Importer
+                4: { cellWidth: 16, noWrap: true },        // Port
+                5: { cellWidth: 26, noWrap: true },        // IND C&F
+                6: { cellWidth: 26, noWrap: true },        // BD C&F
+                7: { cellWidth: 35, noWrap: true },        // Party Name
+                8: { cellWidth: 18, overflow: 'linebreak' }, // Product
+                9: { cellWidth: 20, halign: 'right' },     // Qty
+                10: { cellWidth: 10, halign: 'center' },   // Truck
+                11: { cellWidth: 16, halign: 'right' },    // Price
+                12: { cellWidth: 28, halign: 'right' }     // Total
+            } : {
+                0: { cellWidth: 9, halign: 'center' },     // SL
+                1: { cellWidth: 18, halign: 'center' },    // Date
+                2: { cellWidth: 13, halign: 'center' },    // LC No
+                3: { cellWidth: 15, halign: 'center' },    // Invoice
+                4: { cellWidth: 36 },                       // Company
+                5: { cellWidth: 22, overflow: 'linebreak' }, // Product
+                6: { cellWidth: 28, noWrap: false, overflow: 'linebreak' }, // Brand
+                7: { cellWidth: 15, overflow: 'linebreak' }, // Challan No
+                8: { cellWidth: 16, overflow: 'linebreak' }, // Truck No
+                9: { cellWidth: 20, halign: 'right' },     // Qty
+                10: { cellWidth: 13, halign: 'right' },    // Price
+                11: { cellWidth: 25, halign: 'right' },    // Total
+                12: { cellWidth: 25, halign: 'right' },    // Truck Fare
                 13: { cellWidth: 28, halign: 'right' }     // Balance
             },
-            margin: { left: saleType === 'Border' ? (pageWidth - 277) / 2 : (pageWidth - 277) / 2, right: margin }
+            margin: { left: (pageWidth - 277) / 2, right: (pageWidth - 277) / 2 }
         });
 
         // --- Signatures ---
@@ -3511,7 +3511,7 @@ export const generateCnFHistoryReportPDF = (reportData, agentInfo, filters) => {
 
         // --- Data Preparation ---
         const sortedReportData = [...reportData].sort((a, b) => new Date(a.date) - new Date(b.date));
-        const tableRows = sortedReportData.map((row, index) => [
+        const tableRows = sortedReportData.map((row) => [
             formatDate(row.date),
             row.lcNo || '-',
             row.importer || '-',

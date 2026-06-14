@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { EditIcon, TrashIcon, XIcon, SearchIcon, FunnelIcon, ChevronDownIcon, ChevronUpIcon, EyeIcon, ReceiptIcon, BarChartIcon, TrendingUpIcon, DollarSignIcon, FileTextIcon, CheckIcon } from '../../Icons';
 import { generateSaleInvoicePDF } from '../../../utils/pdfGenerator';
 import { API_BASE_URL, SortIcon, formatDate } from '../../../utils/helpers';
-import { encryptData, decryptData } from '../../../utils/encryption';
+// import { encryptData, decryptData } from '../../../utils/encryption';
 import CustomDatePicker from '../../shared/CustomDatePicker';
 import axios from '../../../utils/api';
 import './SaleManagement.css';
@@ -49,11 +49,22 @@ const SaleManagement = ({
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [submitStatus, setSubmitStatus] = useState(null);
     const [viewData, setViewData] = useState(null);
-    const [customerSearch, setCustomerSearch] = useState('');
+    const [_customerSearch, setCustomerSearch] = useState('');
     const [expandedRows, setExpandedRows] = useState([]);
     const [showSaleFilterPanel, setShowSaleFilterPanel] = useState(false);
     const [saleFilterSearch, setSaleFilterSearch] = useState({ companySearch: '', invoiceSearch: '', portSearch: '', productSearch: '', indCnfSearch: '', bdCnfSearch: '' });
     const [activeFilterDropdown, setActiveFilterDropdown] = useState(null); // 'from', 'to', 'company', 'invoice', 'port', 'product', 'indCnf', 'bdCnf'
+    const [activeDropdown, setActiveDropdown] = useState(null);
+    const [highlightedIndex, setHighlightedIndex] = useState(-1);
+    const [companyNameSearch, setCompanyNameSearch] = useState('');
+    const [productSearch, setProductSearch] = useState('');
+    const [brandSearch, setBrandSearch] = useState('');
+    const [warehouseSearch, setWarehouseSearch] = useState('');
+    const [importerSearch, setImporterSearch] = useState('');
+    const [portSearch, setPortSearch] = useState('');
+    const [indCnfSearch, setIndCnfSearch] = useState('');
+    const [bdCnfSearch, setBdCnfSearch] = useState('');
+    const [exporterSearch, setExporterSearch] = useState('');
     const [isRequestedOnly, setIsRequestedOnly] = useState(false);
     const [originalData, setOriginalData] = useState(null);
     const [sortConfig, setSortConfig] = useState({ key: 'date', direction: 'desc' });
@@ -145,7 +156,7 @@ const SaleManagement = ({
                 // Update due amount
                 updatedSale.dueAmount = Math.max(0, (parseFloat(updatedSale.totalAmount) || 0) - (parseFloat(updatedSale.discount) || 0) - (parseFloat(updatedSale.paidAmount) || 0));
 
-                const { _id, createdAt, ...dataToSend } = updatedSale;
+                const { _id, createdAt: _createdAt, ...dataToSend } = updatedSale;
 
                 if (id) {
                     return axios.put(`${API_BASE_URL}/api/sales/${id}`, dataToSend);
@@ -213,7 +224,7 @@ const SaleManagement = ({
         return !!value;
     };
 
-    const fetchExporters = async () => {
+    async function fetchExporters() {
         try {
             const response = await axios.get(`${API_BASE_URL}/api/exporters`);
             setExportersList(Array.isArray(response.data) ? response.data : []);
@@ -224,6 +235,7 @@ const SaleManagement = ({
 
     useEffect(() => {
         if (saleType === 'Border') {
+            // eslint-disable-next-line react-hooks/set-state-in-effect
             fetchExporters();
         }
     }, [saleType]);
@@ -336,7 +348,7 @@ const SaleManagement = ({
         try {
             setIsSubmitting(true);
             const actionBy = currentUser ? (currentUser.name || currentUser.username || '') : '';
-            const { _id, createdAt, ...rest } = sale;
+            const { _id, createdAt: _createdAt, ...rest } = sale;
 
             const updatedData = {
                 ...rest,
@@ -553,7 +565,7 @@ const SaleManagement = ({
         fetchLCRecords();
     }, [saleType]); // Refetch if saleType changes
 
-    const fetchLCRecords = async () => {
+    async function fetchLCRecords() {
         try {
             const response = await axios.get(`${API_BASE_URL}/api/lc-management`);
             setLcRecords(Array.isArray(response.data) ? response.data : []);
@@ -576,11 +588,12 @@ const SaleManagement = ({
                 bdCnf: ''
             });
         }
+        // eslint-disable-next-line react-hooks/set-state-in-effect
         if (setSearchQuery) setSearchQuery('');
         setIsRequestedOnly(false);
     }, [saleType, setSaleFilters, setSearchQuery]);
 
-    const generateInvoiceNo = () => {
+    const _generateInvoiceNo = () => {
         const prefix = saleType === 'Border' ? 'BS' : 'GS';
         // Extract all numeric parts from invoice numbers starting with the same prefix
         const numbers = allSalesRecords
@@ -601,7 +614,7 @@ const SaleManagement = ({
     }, [showForm, editingId, saleType, allSalesRecords]);
     */
 
-    const fetchSales = async () => {
+    async function fetchSales() {
         setIsLoading(true);
         try {
             const response = await axios.get(`${API_BASE_URL}/api/sales`);
@@ -633,7 +646,7 @@ const SaleManagement = ({
         }
     };
 
-    const fetchCustomers = async () => {
+    async function fetchCustomers() {
         try {
             const response = await axios.get(`${API_BASE_URL}/api/customers`);
             setCustomers(Array.isArray(response.data) ? response.data : []);
@@ -642,7 +655,7 @@ const SaleManagement = ({
         }
     };
 
-    const fetchProducts = async () => {
+    async function fetchProducts() {
         try {
             const response = await axios.get(`${API_BASE_URL}/api/products`);
             setProducts(Array.isArray(response.data) ? response.data : []);
@@ -650,7 +663,7 @@ const SaleManagement = ({
             console.error('Error fetching products:', error);
         }
     };
-    const fetchWarehouses = async () => {
+    async function fetchWarehouses() {
         try {
             const response = await axios.get(`${API_BASE_URL}/api/warehouses`);
             setWarehouses(Array.isArray(response.data) ? response.data : []);
@@ -658,7 +671,7 @@ const SaleManagement = ({
             console.error('Error fetching warehouses:', error);
         }
     };
-    const fetchStockRecords = async () => {
+    async function fetchStockRecords() {
         try {
             const response = await axios.get(`${API_BASE_URL}/api/stock`);
             // Stock records are now decrypted server-side or by axios interceptor
@@ -669,7 +682,7 @@ const SaleManagement = ({
         }
     };
 
-    const fetchImportersList = async () => {
+    async function fetchImportersList() {
         try {
             const response = await axios.get(`${API_BASE_URL}/api/importers`);
             setImportersList(Array.isArray(response.data) ? response.data : []);
@@ -678,7 +691,7 @@ const SaleManagement = ({
         }
     };
 
-    const fetchPortsList = async () => {
+    async function fetchPortsList() {
         try {
             const response = await axios.get(`${API_BASE_URL}/api/ports`);
             setPortsList(Array.isArray(response.data) ? response.data : []);
@@ -687,7 +700,7 @@ const SaleManagement = ({
         }
     };
 
-    const fetchCnfsList = async () => {
+    async function fetchCnfsList() {
         try {
             const response = await axios.get(`${API_BASE_URL}/api/cnfs`);
             setCnfsList(Array.isArray(response.data) ? response.data : []);
@@ -703,6 +716,7 @@ const SaleManagement = ({
         // Skip stock calculations for Border Sales - they have no connection to stock/LC Receive
         if (formData.saleType === 'Border') return;
 
+        // eslint-disable-next-line react-hooks/set-state-in-effect
         setFormData(prev => {
             let hasChanges = false;
             const newItems = prev.items.map(item => {
@@ -1558,18 +1572,6 @@ const SaleManagement = ({
             return 0;
         });
     };
-
-    const [activeDropdown, setActiveDropdown] = useState(null);
-    const [highlightedIndex, setHighlightedIndex] = useState(-1);
-    const [companyNameSearch, setCompanyNameSearch] = useState('');
-    const [productSearch, setProductSearch] = useState('');
-    const [brandSearch, setBrandSearch] = useState('');
-    const [warehouseSearch, setWarehouseSearch] = useState('');
-    const [importerSearch, setImporterSearch] = useState('');
-    const [portSearch, setPortSearch] = useState('');
-    const [indCnfSearch, setIndCnfSearch] = useState('');
-    const [bdCnfSearch, setBdCnfSearch] = useState('');
-    const [exporterSearch, setExporterSearch] = useState('');
 
     // Handle outside clicks for dropdowns
     useEffect(() => {
