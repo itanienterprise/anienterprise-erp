@@ -49,6 +49,33 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
         return '-';
     };
 
+    const hasMatchingStock = (whItem) => {
+        if (!whItem.lcNo) return false;
+        const targetLc = whItem.lcNo.trim().toLowerCase();
+        const targetProd = (whItem.productName || whItem.product || '').trim().toLowerCase();
+        const targetBrand = (whItem.brand || '').trim().toLowerCase();
+
+        return stockRecords.some(item => {
+            const itemStatus = (item.status || '').toLowerCase();
+            if (itemStatus.includes('requested') || itemStatus.includes('rejected')) return false;
+
+            const itemLc = (item.lcNo || '').trim().toLowerCase();
+            if (itemLc !== targetLc) return false;
+
+            const itemProd = (item.productName || item.product || '').trim().toLowerCase();
+            if (itemProd !== targetProd) return false;
+
+            const itemBrand = (item.brand || '').trim().toLowerCase();
+            if (itemBrand === targetBrand) return true;
+
+            if (item.brandEntries && item.brandEntries.length > 0) {
+                return item.brandEntries.some(entry => (entry.brand || '').trim().toLowerCase() === targetBrand);
+            }
+
+            return false;
+        });
+    };
+
     const rawExpanded = [];
     const seenRecords = new Set();
     const consumedSales = new Set(); // Track consumed sale entries to prevent double-counting across quality grades
@@ -313,17 +340,19 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
             brandObj._damagesResolved = true;
         }
 
+        const isDirectEntry = !item.lcNo || item.lcNo.trim() === '' || !hasMatchingStock(item);
+
         const arrivalQty = stockFilters.warehouse
             ? safeParse(item.inHouseQuantity)
             : (item.recordType === 'stock'
                 ? safeParse(item.quantity)
-                : ((!item.lcNo || item.lcNo.trim() === '') ? safeParse(item.inHouseQuantity) : 0));
+                : (isDirectEntry ? safeParse(item.inHouseQuantity) : 0));
 
         const arrivalPkt = stockFilters.warehouse
             ? safeParse(item.inHousePacket)
             : (item.recordType === 'stock'
                 ? safeParse(item.packet)
-                : ((!item.lcNo || item.lcNo.trim() === '') ? safeParse(item.inHousePacket) : 0));
+                : (isDirectEntry ? safeParse(item.inHousePacket) : 0));
 
         if (isBefore) {
             brandObj.openingQuantity += arrivalQty;
